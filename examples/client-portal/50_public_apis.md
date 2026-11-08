@@ -855,15 +855,17 @@ The typed active `ProjectReference` list, by `project_id` ascending
 
 ### Observable effect
 
-One Registry request to the projects path (data-provider constant
-`REGISTRY_PROJECTS_PATH`) with no query parameters, under the Registry
-timeout (`REGISTRY_TIMEOUT_SECONDS`).
+One Registry request to the active-project path `projects/active`, the
+data-provider constants `REGISTRY_PROJECTS_PATH` and
+`REGISTRY_ACTIVE_SEGMENT` joined (owner 2026-11-08, Q12), with no query
+parameters, under the Registry timeout (`REGISTRY_TIMEOUT_SECONDS`).
 
 ### Enforces
 
 A6, A15, R0-08; A30 for the endpoint, read from the environment variable
-the data-provider constant `REGISTRY_BASE_URL_VARIABLE` names. Active-only selection happens while
-decoding, never as an upstream filter (A30, State 2).
+the data-provider constant `REGISTRY_BASE_URL_VARIABLE` names. The request
+names the active-project path (Q12, A6, A30); decoding still keeps only
+references whose status is `active`, with no query-parameter filter.
 
 ### Errors
 
@@ -2946,7 +2948,8 @@ target outside the project.
 
 ### State impact
 
-Replaces the expense's allocations; appends one `AuditRecord`.
+Replaces the Expense with a new `updated_at` and `updated_by` and replaces its
+allocations (owner 2026-11-08, Q03, A19); appends one `AuditRecord`.
 
 ## `public_op:expense_management.update_expense_document`
 

@@ -661,8 +661,9 @@ through `module:portal_store`'s section repository (Factory code
 
 1. The route authorizes with
    `capability:authorization_guard.authorize_staff_project_mutation`.
-   A recognition payload that arrives undecoded from the OCR service is
-   decoded at expense_intake's public boundary,
+   Apart from the route, a recognition payload that arrives undecoded at
+   `boundary:ocr_service` is decoded by that boundary, its caller, at
+   expense_intake's public boundary,
    `capability:expense_intake.decode_recognition_publication`, which refuses
    a malformed payload or a `contract_version` outside
    `SUPPORTED_OCR_CONTRACT_VERSIONS` with `ExpenseValidationError` before

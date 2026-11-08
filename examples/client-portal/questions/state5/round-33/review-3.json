@@ -1,0 +1,121 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:registry_gateway.list_active_projects",
+   "kind": "contradictory endpoint",
+   "text": "One Registry request to the projects path (data-provider constant\n`REGISTRY_PROJECTS_PATH`) with no query parameters, under the Registry\ntimeout (`REGISTRY_TIMEOUT_SECONDS`).",
+   "question": "Does the operation request `projects/active`, request plain `projects`, or treat `REGISTRY_PROJECTS_PATH` itself as the complete `projects/active` path? This conflicts with the received Registry v1 contract requiring `REGISTRY_PROJECTS_PATH` and `REGISTRY_ACTIVE_SEGMENT` to be joined.",
+   "options": [
+    "Join `REGISTRY_PROJECTS_PATH` and `REGISTRY_ACTIVE_SEGMENT` to request `projects/active`.",
+    "Define `REGISTRY_PROJECTS_PATH` as the complete `projects/active` path.",
+    "Request plain `projects` and filter active references while decoding."
+   ],
+   "default_guess": "Join `REGISTRY_PROJECTS_PATH` and `REGISTRY_ACTIVE_SEGMENT` and still defensively discard non-active references while decoding.",
+   "witness": {
+    "initial": "Registry v1 serves `projects/active` as a list of `ProjectReference` objects, while plain `projects` returns the different `ProjectSummary` shape.",
+    "events": [
+     "An authenticated administrator calls the active-project discovery route.",
+     "`registry_gateway.list_active_projects` constructs the Registry URL from the operation text."
+    ],
+    "outcomes": [
+     "The gateway requests `projects/active`, decodes the specified three-field objects and returns the active list.",
+     "The gateway requests plain `projects`; a non-empty response has the other shape and produces `schema_mismatch` and HTTP 502."
+    ],
+    "observer": "The administrator calling project discovery."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:registry_gateway.list_active_projects",
+   "kind": "contradictory filtering",
+   "text": "Active-only selection happens while\ndecoding, never as an upstream filter (A30, State 2).",
+   "question": "How can active selection be “never an upstream filter” when the received contract fixes the upstream endpoint as `projects/active`; is this sentence meant only to require defensive filtering of that endpoint's response?",
+   "options": [
+    "Call `projects/active` and additionally discard any returned reference whose status is not `active`.",
+    "Call plain `projects` so active-only selection occurs solely in the portal decoder.",
+    "Trust `projects/active` and perform no portal-side status filtering."
+   ],
+   "default_guess": "Call `projects/active` and defensively keep only references whose status is `active`.",
+   "witness": {
+    "initial": "The Registry has one active project and one archived project and exposes both the plain and active-list endpoints.",
+    "events": [
+     "An administrator requests active-project discovery.",
+     "The gateway chooses an endpoint and applies, or omits, decoder filtering."
+    ],
+    "outcomes": [
+     "The gateway calls `projects/active` and returns only the active project.",
+     "The gateway calls plain `projects` and either fails its strict decoder or derives a list from an endpoint the contract says is not read."
+    ],
+    "observer": "The administrator and Registry operator, who observe different requests and results."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: data_provider export and registry_gateway import surface",
+   "kind": "missing import contract",
+   "text": "path `projects/active` — the data-provider constants `REGISTRY_PROJECTS_PATH`\nand `REGISTRY_ACTIVE_SEGMENT` joined —",
+   "question": "Is `REGISTRY_ACTIVE_SEGMENT` an exported data-provider constant that `registry_gateway` must import, even though it is absent from the listed data-provider candidate public capabilities and from A30's Consequence list of generated constants?",
+   "options": [
+    "Add and import `REGISTRY_ACTIVE_SEGMENT`, with `REGISTRY_PROJECTS_PATH` holding `projects`.",
+    "Remove `REGISTRY_ACTIVE_SEGMENT` and make `REGISTRY_PROJECTS_PATH` hold `projects/active`.",
+    "Remove the segment and revert to the plain `projects` endpoint."
+   ],
+   "default_guess": "Add `REGISTRY_ACTIVE_SEGMENT` to the data-provider export surface and to `registry_gateway`'s authoritative `module_internal` import surface.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:expense_intake.decode_recognition_publication",
+   "kind": "contradictory caller",
+   "text": "`boundary:ocr_service`: the confirmed recognition the external OCR service\npublishes, before it reaches the consumer. The HTTP route decodes its request\nbody with its own model check; the consumer checks the version again.",
+   "question": "Who actually calls `decode_recognition_publication`, and at what point relative to staff authentication and project authorization? The received product text says the OCR service has no portal principal and authenticated staff submits the recognition, while the flow says the route calls this operation after its guard.",
+   "options": [
+    "`module:api` calls it after staff/project authorization and before `create_expense_from_recognition`.",
+    "The unauthenticated OCR-service boundary calls it before the portal route.",
+    "The HTTP framework alone decodes the body, so this public operation has no runtime caller."
+   ],
+   "default_guess": "Make `module:api` the caller after authorization, and declare `decode_recognition_publication` in the API consumer's import surface.",
+   "witness": {
+    "initial": "An OCR service produces a confirmed payload, but only a staff operator has portal credentials and expense-mutation authority.",
+    "events": [
+     "The OCR service supplies the payload to the staff workflow.",
+     "The payload contains a malformed required field.",
+     "The system chooses whether the public decoder runs before or after the authenticated route guard."
+    ],
+    "outcomes": [
+     "The unauthenticated boundary invokes the decoder and receives `ExpenseValidationError` without any staff authorization.",
+     "The staff route authenticates and authorizes first, then invokes the decoder and returns the validation refusal only to the authorized caller."
+    ],
+    "observer": "The OCR integration, staff caller and portal audit/transport boundary."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:expense_intake.decode_recognition_publication",
+   "kind": "underspecified decoding",
+   "text": "The undecoded payload, a JSON object.",
+   "question": "What exact JSON encodings, coercions and unknown-field policy define a valid `ConfirmedRecognitionPublication`, especially for `Decimal`, `date`, `datetime`, enum and nested item fields?",
+   "options": [
+    "Strict JSON types and formats only, with every unknown field rejected.",
+    "Use the request-model library's coercive validation, accepting values such as decimal strings and coercible dates.",
+    "Specify field-by-field accepted wire encodings and reject everything else."
+   ],
+   "default_guess": "Specify field-by-field wire encodings, accept decimal strings without float conversion, require ISO date/date-time strings and reject unknown fields.",
+   "witness": {
+    "initial": "Two otherwise identical complete payloads carry `total_amount` as the JSON string `\"12.34\"` rather than a JSON number.",
+    "events": [
+     "An authenticated staff caller submits the payload.",
+     "`decode_recognition_publication` validates it."
+    ],
+    "outcomes": [
+     "A coercive model decoder accepts the string and returns a publication with `Decimal('12.34')`.",
+     "A strict decoder rejects it with `ExpenseValidationError`."
+    ],
+    "observer": "The authenticated staff caller and OCR integration."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:registry_gateway.list_active_projects\",\"kind\":\"contradictory endpoint\",\"text\":\"One Registry request to the projects path (data-provider constant\\n`REGISTRY_PROJECTS_PATH`) with no query parameters, under the Registry\\ntimeout (`REGISTRY_TIMEOUT_SECONDS`).\",\"question\":\"Does the operation request `projects/active`, request plain `projects`, or treat `REGISTRY_PROJECTS_PATH` itself as the complete `projects/active` path? This conflicts with the received Registry v1 contract requiring `REGISTRY_PROJECTS_PATH` and `REGISTRY_ACTIVE_SEGMENT` to be joined.\",\"options\":[\"Join `REGISTRY_PROJECTS_PATH` and `REGISTRY_ACTIVE_SEGMENT` to request `projects/active`.\",\"Define `REGISTRY_PROJECTS_PATH` as the complete `projects/active` path.\",\"Request plain `projects` and filter active references while decoding.\"],\"default_guess\":\"Join `REGISTRY_PROJECTS_PATH` and `REGISTRY_ACTIVE_SEGMENT` and still defensively discard non-active references while decoding.\",\"witness\":{\"initial\":\"Registry v1 serves `projects/active` as a list of `ProjectReference` objects, while plain `projects` returns the different `ProjectSummary` shape.\",\"events\":[\"An authenticated administrator calls the active-project discovery route.\",\"`registry_gateway.list_active_projects` constructs the Registry URL from the operation text.\"],\"outcomes\":[\"The gateway requests `projects/active`, decodes the specified three-field objects and returns the active list.\",\"The gateway requests plain `projects`; a non-empty response has the other shape and produces `schema_mismatch` and HTTP 502.\"],\"observer\":\"The administrator calling project discovery.\"}},{\"subject\":\"public_op:registry_gateway.list_active_projects\",\"kind\":\"contradictory filtering\",\"text\":\"Active-only selection happens while\\ndecoding, never as an upstream filter (A30, State 2).\",\"question\":\"How can active selection be “never an upstream filter” when the received contract fixes the upstream endpoint as `projects/active`; is this sentence meant only to require defensive filtering of that endpoint's response?\",\"options\":[\"Call `projects/active` and additionally discard any returned reference whose status is not `active`.\",\"Call plain `projects` so active-only selection occurs solely in the portal decoder.\",\"Trust `projects/active` and perform no portal-side status filtering.\"],\"default_guess\":\"Call `projects/active` and defensively keep only references whose status is `active`.\",\"witness\":{\"initial\":\"The Registry has one active project and one archived project and exposes both the plain and active-list endpoints.\",\"events\":[\"An administrator requests active-project discovery.\",\"The gateway chooses an endpoint and applies, or omits, decoder filtering.\"],\"outcomes\":[\"The gateway calls `projects/active` and returns only the active project.\",\"The gateway calls plain `projects` and either fails its strict decoder or derives a list from an endpoint the contract says is not read.\"],\"observer\":\"The administrator and Registry operator, who observe different requests and results.\"}},{\"subject\":\"context: data_provider export and registry_gateway import surface\",\"kind\":\"missing import contract\",\"text\":\"path `projects/active` — the data-provider constants `REGISTRY_PROJECTS_PATH`\\nand `REGISTRY_ACTIVE_SEGMENT` joined —\",\"question\":\"Is `REGISTRY_ACTIVE_SEGMENT` an exported data-provider constant that `registry_gateway` must import, even though it is absent from the listed data-provider candidate public capabilities and from A30's Consequence list of generated constants?\",\"options\":[\"Add and import `REGISTRY_ACTIVE_SEGMENT`, with `REGISTRY_PROJECTS_PATH` holding `projects`.\",\"Remove `REGISTRY_ACTIVE_SEGMENT` and make `REGISTRY_PROJECTS_PATH` hold `projects/active`.\",\"Remove the segment and revert to the plain `projects` endpoint.\"],\"default_guess\":\"Add `REGISTRY_ACTIVE_SEGMENT` to the data-provider export surface and to `registry_gateway`'s authoritative `module_internal` import surface.\"},{\"subject\":\"public_op:expense_intake.decode_recognition_publication\",\"kind\":\"contradictory caller\",\"text\":\"`boundary:ocr_service`: the confirmed recognition the external OCR service\\npublishes, before it reaches the consumer. The HTTP route decodes its request\\nbody with its own model check; the consumer checks the version again.\",\"question\":\"Who actually calls `decode_recognition_publication`, and at what point relative to staff authentication and project authorization? The received product text says the OCR service has no portal principal and authenticated staff submits the recognition, while the flow says the route calls this operation after its guard.\",\"options\":[\"`module:api` calls it after staff/project authorization and before `create_expense_from_recognition`.\",\"The unauthenticated OCR-service boundary calls it before the portal route.\",\"The HTTP framework alone decodes the body, so this public operation has no runtime caller.\"],\"default_guess\":\"Make `module:api` the caller after authorization, and declare `decode_recognition_publication` in the API consumer's import surface.\",\"witness\":{\"initial\":\"An OCR service produces a confirmed payload, but only a staff operator has portal credentials and expense-mutation authority.\",\"events\":[\"The OCR service supplies the payload to the staff workflow.\",\"The payload contains a malformed required field.\",\"The system chooses whether the public decoder runs before or after the authenticated route guard.\"],\"outcomes\":[\"The unauthenticated boundary invokes the decoder and receives `ExpenseValidationError` without any staff authorization.\",\"The staff route authenticates and authorizes first, then invokes the decoder and returns the validation refusal only to the authorized caller.\"],\"observer\":\"The OCR integration, staff caller and portal audit/transport boundary.\"}},{\"subject\":\"public_op:expense_intake.decode_recognition_publication\",\"kind\":\"underspecified decoding\",\"text\":\"The undecoded payload, a JSON object.\",\"question\":\"What exact JSON encodings, coercions and unknown-field policy define a valid `ConfirmedRecognitionPublication`, especially for `Decimal`, `date`, `datetime`, enum and nested item fields?\",\"options\":[\"Strict JSON types and formats only, with every unknown field rejected.\",\"Use the request-model library's coercive validation, accepting values such as decimal strings and coercible dates.\",\"Specify field-by-field accepted wire encodings and reject everything else.\"],\"default_guess\":\"Specify field-by-field wire encodings, accept decimal strings without float conversion, require ISO date/date-time strings and reject unknown fields.\",\"witness\":{\"initial\":\"Two otherwise identical complete payloads carry `total_amount` as the JSON string `\\\"12.34\\\"` rather than a JSON number.\",\"events\":[\"An authenticated staff caller submits the payload.\",\"`decode_recognition_publication` validates it.\"],\"outcomes\":[\"A coercive model decoder accepts the string and returns a publication with `Decimal('12.34')`.\",\"A strict decoder rejects it with `ExpenseValidationError`.\"],\"observer\":\"The authenticated staff caller and OCR integration.\"}}]}",
+ "set_aside": []
+}

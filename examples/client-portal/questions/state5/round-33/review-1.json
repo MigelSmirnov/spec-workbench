@@ -1,0 +1,171 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:registry_gateway.list_active_projects",
+   "kind": "contradictory_endpoint",
+   "text": "One Registry request to the projects path (data-provider constant\n`REGISTRY_PROJECTS_PATH`) with no query parameters, under the Registry\ntimeout (`REGISTRY_TIMEOUT_SECONDS`).",
+   "question": "Does this operation request `projects`, `projects/active`, or `REGISTRY_PROJECTS_PATH` joined with `REGISTRY_ACTIVE_SEGMENT`, and must it still filter decoded entries by status?",
+   "options": [
+    "Request `projects/active` by joining `REGISTRY_PROJECTS_PATH` and `REGISTRY_ACTIVE_SEGMENT`, then defensively retain only `active` entries.",
+    "Make `REGISTRY_PROJECTS_PATH` itself equal `projects/active` and do not use a separate active segment.",
+    "Request plain `projects` and perform active-only selection entirely while decoding."
+   ],
+   "default_guess": "Join `REGISTRY_PROJECTS_PATH` with a declared `REGISTRY_ACTIVE_SEGMENT`, request `projects/active`, and defensively discard any non-active entry.",
+   "witness": {
+    "initial": "The Registry contains an active project and an archived project; `GET projects/active` returns `ProjectReference` objects, while plain `GET projects` returns the different `ProjectSummary` shape.",
+    "events": [
+     "An authenticated administrator calls the active-project discovery operation.",
+     "The gateway constructs the request path from the State 5 text."
+    ],
+    "outcomes": [
+     "Using `projects/active` returns the active project list.",
+     "Using only `REGISTRY_PROJECTS_PATH` as plain `projects` causes strict decoding to fail and returns `RegistryBoundaryError(schema_mismatch)`."
+    ],
+    "observer": "The administrator sees a successful list or a 502 response, and the Registry sees different requested paths."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "data_provider.REGISTRY_ACTIVE_SEGMENT",
+   "kind": "missing_constant_ownership",
+   "text": "One Registry request to the projects path (data-provider constant\n`REGISTRY_PROJECTS_PATH`) with no query parameters, under the Registry\ntimeout (`REGISTRY_TIMEOUT_SECONDS`).",
+   "question": "Earlier text requires `REGISTRY_PROJECTS_PATH` and `REGISTRY_ACTIVE_SEGMENT` to be joined, but the State 5 operation names only the first and the shown data-provider capability list does not export `REGISTRY_ACTIVE_SEGMENT`; is the active segment a separate owned constant or part of `REGISTRY_PROJECTS_PATH`?",
+   "options": [
+    "Add `REGISTRY_ACTIVE_SEGMENT` to the data-provider export and ownership mappings and import it in `registry_gateway`.",
+    "Define `REGISTRY_PROJECTS_PATH` as the complete `projects/active` path and remove every assertion that an active segment is joined.",
+    "Replace the constants with a fixed literal path in the gateway."
+   ],
+   "default_guess": "Add and export `REGISTRY_ACTIVE_SEGMENT`, then import and join it in `registry_gateway`.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:expense_intake.decode_recognition_publication",
+   "kind": "contradictory_caller",
+   "text": "`boundary:ocr_service`: the confirmed recognition the external OCR service\npublishes, before it reaches the consumer. The HTTP route decodes its request\nbody with its own model check; the consumer checks the version again.",
+   "question": "Is this operation called directly by the external OCR-service boundary, or by `module:api` while handling the authenticated staff submission required by R0-17 and the State 4 flow?",
+   "options": [
+    "`module:api` calls it on the authenticated staff request's raw recognition payload.",
+    "The OCR service calls it directly before any authenticated staff request.",
+    "The API request model performs all decoding and this public operation is removed."
+   ],
+   "default_guess": "Make `module:api` its caller after project authorization and describe the OCR service only as the source of payload facts, not as a portal caller.",
+   "witness": {
+    "initial": "The OCR service has produced a payload, but no authenticated staff member has submitted it.",
+    "events": [
+     "The OCR integration attempts to invoke the declared decoding boundary directly."
+    ],
+    "outcomes": [
+     "The State 5 Callers passage permits the OCR boundary to invoke decoding and receive a typed result or `ExpenseValidationError`.",
+     "R0-17 and the State 4 flow provide no OCR principal or direct boundary call; only an authenticated staff request through `module:api` can reach the decoder."
+    ],
+    "observer": "The OCR integration and API implementer see different callable boundaries and authorization sequencing."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:expense_intake.decode_recognition_publication",
+   "kind": "unknown_field_policy",
+   "text": "`ExpenseValidationError` for a payload that is not a complete\n`ConfirmedRecognitionPublication` and for a `contract_version` outside\n`SUPPORTED_OCR_CONTRACT_VERSIONS`. It carries no payload content.",
+   "question": "Must decoding reject JSON objects containing every required field plus unknown fields, or may it ignore/preserve unknown fields?",
+   "options": [
+    "Reject every unknown field.",
+    "Ignore unknown fields after validating all declared fields.",
+    "Permit only an explicitly named compatibility extension area."
+   ],
+   "default_guess": "Reject every unknown field so provider, confidence and raw-response fields cannot silently cross the boundary.",
+   "witness": {
+    "initial": "A payload contains every declared `ConfirmedRecognitionPublication` field and an additional field `extra_metadata`.",
+    "events": [
+     "The payload is passed to `decode_recognition_publication`."
+    ],
+    "outcomes": [
+     "A strict decoder raises `ExpenseValidationError` and returns no publication.",
+     "A permissive decoder ignores the extra field and returns a publication."
+    ],
+    "observer": "The submitting caller sees HTTP 422 or a successful decoded publication."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:expense_intake.decode_recognition_publication",
+   "kind": "wire_coercion_policy",
+   "text": "The undecoded payload, a JSON object.",
+   "question": "What exact JSON representations and coercions are accepted for `Decimal`, UUID, date, datetime, enum and integer fields when producing `ConfirmedRecognitionPublication`?",
+   "options": [
+    "Use strict JSON types and explicitly specified ISO/string encodings, with no general coercion.",
+    "Use the request-model library's default coercions.",
+    "Define an explicit field-by-field wire-decoding table."
+   ],
+   "default_guess": "Define field-by-field representations: ISO strings for UUID/date/datetime, JSON integers for integer fields, exact decimal parsing without a binary-float round trip, and no unrelated string-to-number coercion.",
+   "witness": {
+    "initial": "A complete payload supplies `total_amount` as the JSON string `\"10.00\"` rather than a JSON number.",
+    "events": [
+     "The payload is decoded by `decode_recognition_publication`."
+    ],
+    "outcomes": [
+     "A coercive model decoder accepts the string and returns `Decimal(\"10.00\")`.",
+     "A strict decoder raises `ExpenseValidationError` for the wrong JSON type."
+    ],
+    "observer": "The submitting caller sees success or HTTP 422."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:expense_management.replace_expense_allocations",
+   "kind": "contradictory_state_impact",
+   "text": "Replaces the expense's allocations; appends one `AuditRecord`.",
+   "question": "Does an accepted re-allocation also replace the `Expense` with new `updated_at` and `updated_by`, as A19 now requires, or does it change only allocation rows as this State impact says?",
+   "options": [
+    "Replace the Expense metadata and the complete allocation set, then return the replaced Expense in the aggregate.",
+    "Replace only the allocation set and leave Expense metadata unchanged."
+   ],
+   "default_guess": "Replace the Expense with the operation's instant and acting staff member as change metadata, replace all allocations, and return both changes in the aggregate.",
+   "witness": {
+    "initial": "An expense has `updated_at=t0`, `updated_by=A`, and allocations totaling its amount.",
+    "events": [
+     "At `t1`, staff member B submits an accepted replacement allocation list."
+    ],
+    "outcomes": [
+     "A19 replaces the Expense with `updated_at=t1` and `updated_by=B` and returns it with the new allocations.",
+     "The State 5 State impact replaces only allocations, leaving the Expense at `updated_at=t0`, `updated_by=A`."
+    ],
+    "observer": "The API caller reading `ExpenseOperationOutcome` and any later repository reader sees different Expense change metadata."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md Status",
+   "kind": "stale_operation_count",
+   "text": "One public operation per State 3 capability (100; the eight operations of the\nemail challenges and their delivery left with them on 2026-11-07,\n`00_product.md` R0-23), each proven by the State 4\nflows `50_api_plan.json` names.",
+   "question": "After adding `decode_recognition_publication` as a new State 3 capability and State 5 public operation, is the closed public-operation count still 100 or now 101?",
+   "options": [
+    "The count is 101 because the decoder is an additional public operation.",
+    "The count remains 100 because another named operation was removed or the decoder replaces an existing operation.",
+    "The decoder is not a State 3 public capability and should not be counted or listed as one."
+   ],
+   "default_guess": "Change the count to 101 unless the text names the operation that was removed or replaced.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:api.create_app",
+   "kind": "standard_violation",
+   "text": "`rules.http_router_backend`: every route row bound exactly once — staff,\nadministrator and producer bearer routes by the table, the seven viewer-cookie\nroutes by `api_irregular` — binary rows answered as plain responses, and one\nexception handler per `error_policy` mapping available to the module, any\nother failure the policy default (500).",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "The passage must either be backed by an authoritative `module_internal` edge from `api` to `api_irregular` listing exactly the endpoint symbols `api` directly binds, or be rewritten so `api` does not directly name or bind those symbols.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:expense_intake.decode_recognition_publication Callers",
+   "kind": "standard_violation",
+   "text": "`boundary:ocr_service`: the confirmed recognition the external OCR service\npublishes, before it reaches the consumer. The HTTP route decodes its request\nbody with its own model check; the consumer checks the version again.",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "Because the State 4 flow says the API route calls this operation, the passage must name `module:api` as a caller and the authoritative `module_internal` surface must include `expense_intake.decode_recognition_publication`; otherwise the route-call text must be removed.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:registry_gateway.list_active_projects\",\"kind\":\"contradictory_endpoint\",\"text\":\"One Registry request to the projects path (data-provider constant\\n`REGISTRY_PROJECTS_PATH`) with no query parameters, under the Registry\\ntimeout (`REGISTRY_TIMEOUT_SECONDS`).\",\"question\":\"Does this operation request `projects`, `projects/active`, or `REGISTRY_PROJECTS_PATH` joined with `REGISTRY_ACTIVE_SEGMENT`, and must it still filter decoded entries by status?\",\"options\":[\"Request `projects/active` by joining `REGISTRY_PROJECTS_PATH` and `REGISTRY_ACTIVE_SEGMENT`, then defensively retain only `active` entries.\",\"Make `REGISTRY_PROJECTS_PATH` itself equal `projects/active` and do not use a separate active segment.\",\"Request plain `projects` and perform active-only selection entirely while decoding.\"],\"default_guess\":\"Join `REGISTRY_PROJECTS_PATH` with a declared `REGISTRY_ACTIVE_SEGMENT`, request `projects/active`, and defensively discard any non-active entry.\",\"witness\":{\"initial\":\"The Registry contains an active project and an archived project; `GET projects/active` returns `ProjectReference` objects, while plain `GET projects` returns the different `ProjectSummary` shape.\",\"events\":[\"An authenticated administrator calls the active-project discovery operation.\",\"The gateway constructs the request path from the State 5 text.\"],\"outcomes\":[\"Using `projects/active` returns the active project list.\",\"Using only `REGISTRY_PROJECTS_PATH` as plain `projects` causes strict decoding to fail and returns `RegistryBoundaryError(schema_mismatch)`.\"],\"observer\":\"The administrator sees a successful list or a 502 response, and the Registry sees different requested paths.\"}},{\"subject\":\"data_provider.REGISTRY_ACTIVE_SEGMENT\",\"kind\":\"missing_constant_ownership\",\"text\":\"One Registry request to the projects path (data-provider constant\\n`REGISTRY_PROJECTS_PATH`) with no query parameters, under the Registry\\ntimeout (`REGISTRY_TIMEOUT_SECONDS`).\",\"question\":\"Earlier text requires `REGISTRY_PROJECTS_PATH` and `REGISTRY_ACTIVE_SEGMENT` to be joined, but the State 5 operation names only the first and the shown data-provider capability list does not export `REGISTRY_ACTIVE_SEGMENT`; is the active segment a separate owned constant or part of `REGISTRY_PROJECTS_PATH`?\",\"options\":[\"Add `REGISTRY_ACTIVE_SEGMENT` to the data-provider export and ownership mappings and import it in `registry_gateway`.\",\"Define `REGISTRY_PROJECTS_PATH` as the complete `projects/active` path and remove every assertion that an active segment is joined.\",\"Replace the constants with a fixed literal path in the gateway.\"],\"default_guess\":\"Add and export `REGISTRY_ACTIVE_SEGMENT`, then import and join it in `registry_gateway`.\"},{\"subject\":\"public_op:expense_intake.decode_recognition_publication\",\"kind\":\"contradictory_caller\",\"text\":\"`boundary:ocr_service`: the confirmed recognition the external OCR service\\npublishes, before it reaches the consumer. The HTTP route decodes its request\\nbody with its own model check; the consumer checks the version again.\",\"question\":\"Is this operation called directly by the external OCR-service boundary, or by `module:api` while handling the authenticated staff submission required by R0-17 and the State 4 flow?\",\"options\":[\"`module:api` calls it on the authenticated staff request's raw recognition payload.\",\"The OCR service calls it directly before any authenticated staff request.\",\"The API request model performs all decoding and this public operation is removed.\"],\"default_guess\":\"Make `module:api` its caller after project authorization and describe the OCR service only as the source of payload facts, not as a portal caller.\",\"witness\":{\"initial\":\"The OCR service has produced a payload, but no authenticated staff member has submitted it.\",\"events\":[\"The OCR integration attempts to invoke the declared decoding boundary directly.\"],\"outcomes\":[\"The State 5 Callers passage permits the OCR boundary to invoke decoding and receive a typed result or `ExpenseValidationError`.\",\"R0-17 and the State 4 flow provide no OCR principal or direct boundary call; only an authenticated staff request through `module:api` can reach the decoder.\"],\"observer\":\"The OCR integration and API implementer see different callable boundaries and authorization sequencing.\"}},{\"subject\":\"public_op:expense_intake.decode_recognition_publication\",\"kind\":\"unknown_field_policy\",\"text\":\"`ExpenseValidationError` for a payload that is not a complete\\n`ConfirmedRecognitionPublication` and for a `contract_version` outside\\n`SUPPORTED_OCR_CONTRACT_VERSIONS`. It carries no payload content.\",\"question\":\"Must decoding reject JSON objects containing every required field plus unknown fields, or may it ignore/preserve unknown fields?\",\"options\":[\"Reject every unknown field.\",\"Ignore unknown fields after validating all declared fields.\",\"Permit only an explicitly named compatibility extension area.\"],\"default_guess\":\"Reject every unknown field so provider, confidence and raw-response fields cannot silently cross the boundary.\",\"witness\":{\"initial\":\"A payload contains every declared `ConfirmedRecognitionPublication` field and an additional field `extra_metadata`.\",\"events\":[\"The payload is passed to `decode_recognition_publication`.\"],\"outcomes\":[\"A strict decoder raises `ExpenseValidationError` and returns no publication.\",\"A permissive decoder ignores the extra field and returns a publication.\"],\"observer\":\"The submitting caller sees HTTP 422 or a successful decoded publication.\"}},{\"subject\":\"public_op:expense_intake.decode_recognition_publication\",\"kind\":\"wire_coercion_policy\",\"text\":\"The undecoded payload, a JSON object.\",\"question\":\"What exact JSON representations and coercions are accepted for `Decimal`, UUID, date, datetime, enum and integer fields when producing `ConfirmedRecognitionPublication`?\",\"options\":[\"Use strict JSON types and explicitly specified ISO/string encodings, with no general coercion.\",\"Use the request-model library's default coercions.\",\"Define an explicit field-by-field wire-decoding table.\"],\"default_guess\":\"Define field-by-field representations: ISO strings for UUID/date/datetime, JSON integers for integer fields, exact decimal parsing without a binary-float round trip, and no unrelated string-to-number coercion.\",\"witness\":{\"initial\":\"A complete payload supplies `total_amount` as the JSON string `\\\"10.00\\\"` rather than a JSON number.\",\"events\":[\"The payload is decoded by `decode_recognition_publication`.\"],\"outcomes\":[\"A coercive model decoder accepts the string and returns `Decimal(\\\"10.00\\\")`.\",\"A strict decoder raises `ExpenseValidationError` for the wrong JSON type.\"],\"observer\":\"The submitting caller sees success or HTTP 422.\"}},{\"subject\":\"public_op:expense_management.replace_expense_allocations\",\"kind\":\"contradictory_state_impact\",\"text\":\"Replaces the expense's allocations; appends one `AuditRecord`.\",\"question\":\"Does an accepted re-allocation also replace the `Expense` with new `updated_at` and `updated_by`, as A19 now requires, or does it change only allocation rows as this State impact says?\",\"options\":[\"Replace the Expense metadata and the complete allocation set, then return the replaced Expense in the aggregate.\",\"Replace only the allocation set and leave Expense metadata unchanged.\"],\"default_guess\":\"Replace the Expense with the operation's instant and acting staff member as change metadata, replace all allocations, and return both changes in the aggregate.\",\"witness\":{\"initial\":\"An expense has `updated_at=t0`, `updated_by=A`, and allocations totaling its amount.\",\"events\":[\"At `t1`, staff member B submits an accepted replacement allocation list.\"],\"outcomes\":[\"A19 replaces the Expense with `updated_at=t1` and `updated_by=B` and returns it with the new allocations.\",\"The State 5 State impact replaces only allocations, leaving the Expense at `updated_at=t0`, `updated_by=A`.\"],\"observer\":\"The API caller reading `ExpenseOperationOutcome` and any later repository reader sees different Expense change metadata.\"}},{\"subject\":\"50_public_apis.md Status\",\"kind\":\"stale_operation_count\",\"text\":\"One public operation per State 3 capability (100; the eight operations of the\\nemail challenges and their delivery left with them on 2026-11-07,\\n`00_product.md` R0-23), each proven by the State 4\\nflows `50_api_plan.json` names.\",\"question\":\"After adding `decode_recognition_publication` as a new State 3 capability and State 5 public operation, is the closed public-operation count still 100 or now 101?\",\"options\":[\"The count is 101 because the decoder is an additional public operation.\",\"The count remains 100 because another named operation was removed or the decoder replaces an existing operation.\",\"The decoder is not a State 3 public capability and should not be counted or listed as one.\"],\"default_guess\":\"Change the count to 101 unless the text names the operation that was removed or replaced.\"},{\"subject\":\"public_op:api.create_app\",\"kind\":\"standard_violation\",\"text\":\"`rules.http_router_backend`: every route row bound exactly once — staff,\\nadministrator and producer bearer routes by the table, the seven viewer-cookie\\nroutes by `api_irregular` — binary rows answered as plain responses, and one\\nexception handler per `error_policy` mapping available to the module, any\\nother failure the policy default (500).\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"The passage must either be backed by an authoritative `module_internal` edge from `api` to `api_irregular` listing exactly the endpoint symbols `api` directly binds, or be rewritten so `api` does not directly name or bind those symbols.\"},{\"subject\":\"public_op:expense_intake.decode_recognition_publication Callers\",\"kind\":\"standard_violation\",\"text\":\"`boundary:ocr_service`: the confirmed recognition the external OCR service\\npublishes, before it reaches the consumer. The HTTP route decodes its request\\nbody with its own model check; the consumer checks the version again.\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"Because the State 4 flow says the API route calls this operation, the passage must name `module:api` as a caller and the authoritative `module_internal` surface must include `expense_intake.decode_recognition_publication`; otherwise the route-call text must be removed.\"}]}",
+ "set_aside": []
+}
