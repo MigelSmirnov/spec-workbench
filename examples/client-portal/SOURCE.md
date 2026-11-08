@@ -773,6 +773,111 @@ For the owner: the Registry URL is read from the environment by
 settings reader is a defect). Moving it into `RuntimeSettings` changes when and
 how a missing URL fails, so it is behaviour, not placement, and is left open.
 
+## Owner decisions of 2026-11-08 on the questions document (Q01–Q12)
+
+The owner accepted every recommendation of the questions document of
+2026-11-08 ("Принимаю"). Each is recorded in its owning state and decision:
+
+| # | decision | recorded in |
+|---|---|---|
+| Q01 | `set_expense_inclusion` sets `Expense.updated_by` to the acting context's actor on every accepted include/exclude, also an unchanged one, with the one `utc_now` instant as `updated_at` | State 1 M28, State 2 A19, IR `revise_expense_inclusion`, State 7 note |
+| Q02 | `update_expense_document` sets `ExpenseDocument.updated_by` to the acting context's actor on every accepted metadata update | State 1 M30, State 2 A19, IR `revise_expense_document`, State 7 |
+| Q03 | a re-allocation is a change of the Expense: new `updated_at`/`updated_by`, and `ExpenseAggregate.expense` is the replaced Expense | State 1 M28, State 2 A19, IR `revise_reallocated_expense`, `revise_expense_aggregate` |
+| Q04 | a new `ProgressPhoto` has `updated_at`/`updated_by` equal to `published_at`/`published_by` | State 1 M35, IR `build_progress_photo` |
+| Q05 | an imported `SectionPlan.updated_by` is `None` (M23: manual plans only); the author stays on `BudgetVersion.created_by_id`; `open_questions.md` Q11 stays open | State 1 M23, State 2 A18, IR `build_imported_section_plan` |
+| Q06 | the per-row `BudgetSectionView.has_unresolved_allocations` is always false; unresolved allocations show only in the overall count | State 1 derived views, State 2 A21, IR `build_budget_section_view` |
+| Q07 | answered again 2026-11-08 (the first choice, `PortalSection.display_name`, names a field `PortalSection` does not have): for a `section` target the name is the `display_name` of that section's `SectionPlan` in the project's active `BudgetVersion`, `None` without an active version or without a plan for the section, always `None` for `other_expenses`. `build_expense_view` passes the active version's plans (empty without one) to `_project_expense_summary`, which passes the name or `None` to `build_expense_allocation_view` | State 1 `ExpenseAllocationView` (condition withdrawn), State 2 A21, State 3 `derived_views`, State 5 `build_expense_view`, State 6 `_project_expense_summary` contract, IR `build_expense_allocation_view` (parameter), State 7 note, `spec/SEMANTIC_DIFF.md` (behaviour change) |
+| Q08 | readiness answers `HEALTH_OK_STATUS` (`ok`) only after the storage probe, with no external check | State 2 A25, IR `build_health_status`; the stale gap entry is gone with the gap list |
+| Q09 | A7 "decoding" is the public input decoding boundary `decode_recognition_publication` of `expense_intake`, refusing an unsupported version from `SUPPORTED_OCR_CONTRACT_VERSIONS` with `ExpenseValidationError`; the consumer re-check stays | State 2 A7, State 3 `expense_intake`, State 4 expense flow, State 5 (new internal-only operation), State 6 contract, State 7 notes |
+| Q10 | `create_expense_from_recognition` refuses an incomplete publication object (built bypassing validation) with `ExpenseValidationError` before projection and before any write, by checking that input shape | State 2 A7, State 4, State 5 errors, State 7 note |
+| Q11 | the Registry v1 wire contract is fixed: 16 positions, nested `project`, `project.project_id`, `is_active`, `registry_updated_at`; the three decoders stay LLM-generated, outside §6.13 | State 1 M17 (table), State 2 A6. `platform/manifest` belongs to the Factory and is not on the Workbench route: the manifest entry is a follow-up |
+| Q12 | `list_active_projects` reads the Registry path `projects/active` (`REGISTRY_PROJECTS_PATH` + new constant `REGISTRY_ACTIVE_SEGMENT`), not `projects` | data provider, State 1 M16, State 2 A6, State 7 note, `spec/SEMANTIC_DIFF.md` (behaviour change) |
+
+Behaviour changes against the running service: Q07 (a section allocation's name instead of `None`), Q09 (a new decoding boundary), Q10 (a typed refusal instead of an
+attribute error) and Q12 (the list path). Q01–Q04 and Q06, Q08 confirm the
+running service; Q05 changes a value no operation builds yet (Q11 open).
+
+### Migration onto `record_construction_backend/v1` (2026-11-08, night)
+
+The owner approved the structure (SPEC_STANDARD 6.13, Workbench #170). The
+gap list below became `70_record_construction_closure.json`; the list itself
+is removed (git keeps it at `7316b443`).
+
+- **Coverage.** 74 of the 84 sites are constructions a model-written module
+  makes; all 74 are builders now: 86 builders of the new emitted module
+  `record_builders` (core/record_builders, right after `data_provider`).
+  Excluded: the three Registry decoders (wire decoding, Q11, model-written)
+  and the seven `api`/`api_irregular` sites, which are the router's and the
+  viewer-cookie backend's own projections (SPEC_STANDARD 6.1) — the gap list
+  had counted them as LLM sites.
+- **Granularity.** One builder per distinct construction; equal constructions
+  share one builder, and three audit builders are shared by shape:
+  `build_project_audit_intent` (12 project operations: actor and project from
+  the `AuthorizedProjectContext`), `build_staff_audit_intent` (16 access
+  management operations: the administrator's `StaffActorContext`) and
+  `build_service_credential_audit_intent` (2). The action, entity kind and
+  entity id are parameters the operation chooses.
+- **Behaviour stays with the caller.** 84 field sources are behaviour and are
+  builder parameters: sums and counts, look-ups with absence, the audit action
+  or result chosen by outcome, session expiry (instant + lifetime constant),
+  the hashed password and normalized email, the next key version, a validated
+  amount, the operation's one clock reading (6.13 has no clock source).
+- **Private helpers as sources.** None remains a `call` source: each one the
+  gap list named (`_normalize_staff_email`, `_ordered_plans`,
+  `_find_unresolved_allocation_count`, `_next_key_version`, `_quantize_money`)
+  is owned by a module that consumes the same builder, reads the store or
+  rejects input, so 6.13 forbids it as a source; its value is computed by the
+  caller and passed. No helper had to become public. `validate_eur_amount`
+  (public) is not a source either: it raises a typed rejection, which is
+  behaviour, so the validated amount is passed (`build_work_payment`,
+  `revise_corrected_expense`, `build_manual_section_plan`).
+- **Removed helpers.** Eight private helpers whose whole job was one
+  construction left State 6: `_project_expense_intake`,
+  `_build_expense_aggregate`, `_build_audit_record`, `_build_staff_session`,
+  `_build_approved_snapshot`, `_build_import_record`,
+  `_build_replacement_allocations`, `_photo_mutation_result`; their callers
+  call the builder. `_build_viewer_session` stays: without it `viewer_access`
+  would expose 11 of 12 functions (State 6 `module_surface_not_deep`).
+- **Type findings of the dry run.**
+  `AuthorizedProjectContext.registry_status` (`str | None` into
+  `RegistryProjectStatus`): the narrowing happens after the absence
+  rejection, which is behaviour of `_context_from_validation`, so the
+  status is a builder parameter (lifting is the correct design here; the
+  Registry model keeps its wire type, Q11). `validate_eur_amount` with a
+  default parameter (twice): not a data source but a validation with a typed
+  rejection, so the caller validates and passes the amount (lifting is the
+  correct design; its contract is unchanged). `DocumentMutationResult.updated_at`
+  (`datetime | None` into `datetime`): not a 6.13 site — it is the router's
+  projection `_document_mutation_result` (6.1), which does not type-check its
+  paths; after Q02 an accepted update always sets the value, so nothing fails
+  at run time, but the narrowing stays in the router IR: reported, not
+  changed.
+- **Disposal.** Every field of every model-typed input is read or dropped with
+  a code of 6.13: the gap list's reasons where it gave one (its three
+  unmapped texts — "allocation has no project field; expense_id is its
+  provenance", "caller decides mutation", "not a context fact" — are
+  `not_in_target`), otherwise by kind: the fields of an authorization context
+  a builder does not read are `authorization_fact`, secrets and their hashes
+  `confidential`, an issued secret's hash read elsewhere `stored_elsewhere`,
+  a `file_ref` `binary_boundary`, anything else `not_in_target`.
+- **Tool gap.** The projector cannot place a module new to `module_order`
+  when the module paths have several roots, and keeps no import edges for a
+  module whose every contract is emitted:
+  `experiments/client-portal/frame_record_builders.py` places
+  `record_builders` and sets its one edge to `data_provider`
+  (`HEALTH_OK_STATUS`) — reported, not patched.
+- **Two IR defects found by the notes rewrite (coordinator, 2026-11-08).**
+  `confirmed_at` was copied into `ExpenseIntake` and `Expense` without
+  `convert: naive_utc`, while A28 stores a source-supplied instant offset-naive
+  UTC (as `photo_date` already had): both refs now convert.
+  `build_viewer_credential_issue` and `build_service_credential_issue` minted
+  `credential_id` themselves, but the secret must be issued for that id before
+  the builder runs, so authentication could never find the credential (an
+  impossible flow, not a behaviour choice): both builders take
+  `credential_id: UUID`, as `build_viewer_session` takes `session_id`; the
+  caller generates a fresh uuid4, issues the secret for it and passes both
+  (State 6 contracts, determinism now true, State 7 notes).
+
 ## Record construction: emitters first, gaps to the owner (2026-11-08)
 
 Owner correction of the same day: a prose map of which field comes from

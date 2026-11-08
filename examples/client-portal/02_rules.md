@@ -384,6 +384,18 @@ delegated.
 
 The failure kinds are the closed enumeration `= models.RegistryFailureKind`; each member names the failure it classifies, and the condition that selects a member is behaviour of the gateway's notes (SPEC_STANDARD §2: a condition that chooses what code does is prose, not a table). Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): `rules.registry_failure_translation` keyed the members by internal failure labels no code reads and is removed as a second home of the enumeration.
 
+Owner 2026-11-08 (Q11): the Registry v1 wire contract the three decoders of
+`registry_gateway` read is fixed exactly — 16 field positions, the nested
+`project` of the context answer with `project.project_id`, the validate
+answer's `is_active`, and `registry_updated_at` (State 1 M17, table). The
+decoders stay model-written: wire decoding is outside SPEC_STANDARD 6.13.
+Owner 2026-11-08 (Q12): the active-project list is read from the Registry
+path `projects/active` — the data-provider constants `REGISTRY_PROJECTS_PATH`
+and `REGISTRY_ACTIVE_SEGMENT` joined — because the plain `projects` path
+answers another shape (`ProjectSummary`) that fails strict decoding as soon
+as the list is not empty; the gateway still keeps only active references
+while decoding. This changes the running service (it requested `projects`).
+
 ## Accepted decision A7 — R7. Supported external contract versions
 
 ### Normative rules
@@ -395,6 +407,18 @@ snapshot_supported_contract_versions = {1}
 
 Closed sets; an unsupported version is a typed rejection, never a best-effort
 parse.
+
+"At decoding" means the public input decoding boundary of the recognition
+contract, owned by `expense_intake`: `decode_recognition_publication` turns an
+untrusted payload into a `ConfirmedRecognitionPublication` and refuses a
+malformed payload or a `contract_version` outside the one source
+`SUPPORTED_OCR_CONTRACT_VERSIONS` with `ExpenseValidationError`; the consumer
+`create_expense_from_recognition` checks the version again (owner
+2026-11-08, Q09). The consumer also refuses, with `ExpenseValidationError`
+before it projects anything and before any write, a publication object that
+lacks a field its model declares — one built bypassing validation — by
+checking that concrete input shape, never by catching a generic attribute
+error (owner 2026-11-08, Q10).
 
 A snapshot publication is first authorized by the import route, in A4's
 order with A12's scope: a failure of the bearer credential or of the
@@ -455,7 +479,7 @@ accepted; technical decisions delegated.
 
 ### Required tests
 
-- INV-031: a focused test at `_project_expense_intake` showing the invariant holds; a violating input is refused and changes nothing.
+- INV-031: a focused test at `decode_recognition_publication` and `create_expense_from_recognition` showing the invariant holds; a violating input is refused and changes nothing (the projection itself is the emitted `build_expense_intake` since 2026-11-08).
 - INV-031: the expense recognition check: an unconfirmed, incomplete,
   unsupported-version or provider-carrying result is refused at decoding, by
   `create_expense_from_recognition` and over HTTP, with every table
@@ -816,7 +840,7 @@ The accepted Factory spec extends `rules.binary_delivery_policy` (Factory `babd5
 
 ### Required tests
 
-- INV-034: a focused test at `_build_expense_aggregate` showing the invariant holds; a violating input is refused and changes nothing.
+- INV-034: a focused test at `create_expense_from_recognition` (the aggregate is built by the emitted `build_expense_aggregate` since 2026-11-08) showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-034 [witness: verification:expense_intake_uow_client_portal].
 
 ### Consequence
@@ -990,6 +1014,11 @@ The former ledger rows INV-020…INV-029 that no table of R1–R17 carries. Thei
 
 No value: each invariant is behaviour of its owning function and lands as a note or a property there (States 6–7). Data placement 2026-11-08 (SOURCE.md "Data placement"): the audit of an import takes its result and the source of its reason_code from the data-provider constant `IMPORT_OUTCOME_AUDIT`, keyed by `= models.ImportOutcome` and total (SPEC_STANDARD 6.10 version 2), values as `import_snapshot` stated them.
 
+Owner 2026-11-08 (Q05): an imported `SectionPlan` has `updated_by` `None` —
+State 1 M23 keeps that field for manual plans — and the author of an imported
+version stays on `BudgetVersion.created_by_id`. When an imported budget is
+built, and by which operation, remains open (Q11 of `open_questions.md`).
+
 ## Accepted decision A19 — Expense and allocation invariants
 
 ### Normative rules
@@ -1006,7 +1035,7 @@ The former ledger rows INV-030…INV-037 that no table of R1–R17 carries; prod
 ### Required tests
 
 - INV-032: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-033: a focused test at `_build_replacement_allocations` showing the invariant holds; a violating input is refused and changes nothing.
+- INV-033: a focused test at `replace_expense_allocations` and `correct_expense` (the new allocations are built by the emitted `build_replacement_allocations` since 2026-11-08) showing the invariant holds; a violating input is refused and changes nothing.
   Witness: `replace_expense_allocations` with the explicit amounts 150.00 to a section and 50.00 to other expenses persists exactly those two allocations, and a replacement of 1.00 against the 200.00 total is refused with `ExpenseValidationError` while the stored row counts stay unchanged; nothing spreads an amount (`verification/client_portal_expense_consumer_support.py`, run by the check) [witness: verification:expense_management_uow_client_portal].
 - INV-035: a focused test at `_project_expense_summary` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-036: a focused test at `validate_project_section` showing the invariant holds; a violating input is refused and changes nothing.
@@ -1017,6 +1046,17 @@ The former ledger rows INV-030…INV-037 that no table of R1–R17 carries; prod
 ### Consequence
 
 No value: each invariant is behaviour of its owning function and lands as a note or a property there (States 6–7).
+
+Owner 2026-11-08: every accepted include or exclude of an expense — also one
+that leaves `included` as it was — replaces the Expense with `included`,
+`updated_at` (the operation's one instant) and `updated_by` (the acting
+staff member) (Q01); every accepted metadata update of an expense document
+sets the document's `updated_by` to the acting staff member as well as its
+`updated_at` (Q02); a re-allocation is a change of the Expense: it replaces
+the Expense with new `updated_at` and `updated_by`, and the returned
+aggregate holds that replaced Expense with the new allocations (Q03). Q01
+and Q03 confirm the running service; Q02 likewise. No amount, provenance or
+allocation rule changes.
 
 ## Accepted decision A20 — Progress invariant
 
@@ -1069,6 +1109,22 @@ The former ledger rows INV-050 and INV-052; product text of State 0 ("Derived va
 ### Consequence
 
 No value: each invariant is behaviour of its owning function and lands as a note or a property there (States 6–7).
+
+Owner 2026-11-08 (Q06): a budget view row exists only for a section the
+viewed version plans, so its `has_unresolved_allocations` is always false;
+unresolved allocations show only in the view's overall
+`unresolved_allocation_count`.
+
+Owner 2026-11-08 (Q07, answered again after the first choice named a field
+`PortalSection` does not have): an expense allocation view's
+`section_display_name` for a `section` target is the `display_name` of the
+`SectionPlan` of that section in the project's active `BudgetVersion`; it is
+`None` when the project has no active version or that version has no plan for
+the section, and always `None` for an `other_expenses` target. The name is
+derived at read time from the active version's plans the expense view already
+reads (no stored copy); the State 1 condition "required iff target = section"
+is withdrawn. Behaviour change: the running service answers `None` for every
+allocation (`spec/SEMANTIC_DIFF.md`).
 
 ## Accepted decision A22 — Transaction guard policy (accepted Factory spec, 2026-07-25)
 
@@ -1156,6 +1212,16 @@ Normative value: `rules.model_immutability_policy` (Factory `bd561732`).
 
 `rules.model_immutability_policy`; State 1 models are frozen.
 
+Owner 2026-11-08: every record a model-written module built from its inputs
+is built by an emitted builder of `record_builders`
+(`rules.record_construction_backend`, SPEC_STANDARD 6.13): a new record or a
+replacement of a read one (`form: replace` keeps every unnamed field of the
+base) is constructed only there, the source of each field and the disposal of
+each input field are closed IR checked at the State 6 handoff, and a module
+given a builder of a model never constructs that model itself. A value
+computed by behaviour — a sum, a lookup, a condition, a validated amount, the
+operation's one clock reading — is a builder parameter its caller computes.
+
 ## Accepted decision A25 — HTTP transport policy (accepted Factory spec, 2026-07-31 to 2026-08-06)
 
 ### Normative rules
@@ -1210,6 +1276,11 @@ headers only. Normative value: `rules.http_transport_policy` (Factory
 
 `rules.http_transport_policy` with its runtime settings (A30); the
 deterministic HTTP router and the viewer cookie backend read it. Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): the values the generated transport guard and runtime read are data-provider constants: `API_PREFIX`, `VIEWER_ENTRY_PATH`, `VIEWER_LOGOUT_PATH`, `NO_STORE_PATHS`, `NO_STORE_CACHE_CONTROL`, `SECURITY_HEADERS`, `TRANSPORT_LOG_LABELS`, `HEALTH_LIVE_PATH`, `HEALTH_READY_PATH`, `HEALTH_OK_STATUS`, and `TRANSPORT_GUARD_STATUSES`, the status of each refusal of the guard keyed by `= models.TransportGuardRefusal`. Their former leaves (`public_api_prefix`, `security_headers`, `browser_session.logout_path`, `health.liveness_path`, `health.readiness_path`) leave the policy; the cookie name and attributes stay, the viewer cookie backend reads them.
+
+Owner 2026-11-08 (Q08): readiness answers the health status
+`HEALTH_OK_STATUS` (`ok`) only after the storage probe — one transaction
+opened and rolled back — succeeded, and checks no external service (no
+Registry, no storage of binaries).
 
 ## Accepted decision A26 — Exceptions carry data in fields, not messages (accepted Factory spec, 2026-08-03)
 

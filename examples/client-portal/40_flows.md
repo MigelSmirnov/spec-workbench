@@ -661,8 +661,19 @@ through `module:portal_store`'s section repository (Factory code
 
 1. The route authorizes with
    `capability:authorization_guard.authorize_staff_project_mutation`.
+   A recognition payload that arrives undecoded from the OCR service is
+   decoded at expense_intake's public boundary,
+   `capability:expense_intake.decode_recognition_publication`, which refuses
+   a malformed payload or a `contract_version` outside
+   `SUPPORTED_OCR_CONTRACT_VERSIONS` with `ExpenseValidationError` before
+   anything else runs (A7; owner 2026-11-08, Q09). The route's own request
+   decoding keeps its model check; the consumer below checks the version
+   again.
 2. `capability:expense_intake.create_expense_from_recognition` accepts only a
-   confirmed complete result of a supported contract version, validates the
+   confirmed complete result of a supported contract version — an object
+   lacking a field the model declares (built bypassing validation) is refused
+   with `ExpenseValidationError` before it is projected, with no write (A7;
+   owner 2026-11-08, Q10) — validates the
    total (`capability:financial_policy.validate_eur_amount`) and the explicit
    allocations — shape, exact sum, no proportional split, then every section
    of the project, read through `module:portal_store`'s section repository in

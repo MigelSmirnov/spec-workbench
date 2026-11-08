@@ -2735,6 +2735,48 @@ A18 stable section identity; another project's section is never disclosed.
 
 Read-only.
 
+## `public_op:expense_intake.decode_recognition_publication`
+
+### Owner
+
+`module:expense_intake`. Decode an untrusted OCR recognition payload into a
+`ConfirmedRecognitionPublication` of a supported contract version: the public
+input decoding boundary of A7 (owner 2026-11-08, Q09).
+
+### Callers
+
+`boundary:ocr_service`: the confirmed recognition the external OCR service
+publishes, before it reaches the consumer. The HTTP route decodes its request
+body with its own model check; the consumer checks the version again.
+
+### Inputs
+
+The undecoded payload, a JSON object.
+
+### Outputs
+
+The `ConfirmedRecognitionPublication` the payload describes.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A7: the closed set `SUPPORTED_OCR_CONTRACT_VERSIONS` is the one source of the
+accepted versions; an unsupported version is a typed rejection, never a
+best-effort parse.
+
+### Errors
+
+`ExpenseValidationError` for a payload that is not a complete
+`ConfirmedRecognitionPublication` and for a `contract_version` outside
+`SUPPORTED_OCR_CONTRACT_VERSIONS`. It carries no payload content.
+
+### State impact
+
+None: it reads nothing and writes nothing.
+
 ## `public_op:expense_intake.create_expense_from_recognition`
 
 ### Owner
@@ -2772,7 +2814,10 @@ A13 (`expense.create`).
 ### Errors
 
 `ExpenseValidationError` or `FinancialValidationError` for unsupported or
-incomplete input, a currency or an allocation mismatch;
+incomplete input, a currency or an allocation mismatch; a publication object
+that lacks a field its model declares (one built bypassing validation) is
+`ExpenseValidationError`, raised before the publication is projected and
+before any write (owner 2026-11-08, Q10);
 `ExpenseConflictError` for a replay with a different fingerprint.
 
 ### State impact
@@ -3429,7 +3474,11 @@ The `PortalStore` and an `AuthorizedProjectContext`.
 ### Outputs
 
 `ExpenseSummaryView`: every confirmed expense, excluded ones visible,
-included, excluded and other totals; no `file_ref`.
+included, excluded and other totals; no `file_ref`. A section allocation carries the
+`display_name` of that section's `SectionPlan` in the active version as
+`section_display_name`, `None` when there is no active version or no plan for
+the section; an `other_expenses` allocation carries `None` (owner Q07,
+2026-11-08; A21).
 
 ### Observable effect
 

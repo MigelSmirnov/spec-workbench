@@ -657,7 +657,9 @@ carry their own provenance).
   `status: str`.
 
 `status` carries the Registry's status string as received, the one
-pass-through status of the models. The portal acts only on the two values
+pass-through status of the models. The active-project list is read from
+the Registry path `projects/active` (owner 2026-11-08, Q12; the plain
+`projects` path answers another shape). The portal acts only on the two values
 of the closed `RegistryProjectStatus` (`active | archived`, M17): the
 active-project list keeps only references whose status is `active`, and
 wherever a status enters a portal context or answer
@@ -709,6 +711,34 @@ None.
 
 - `ProjectValidationResult` — `project_id: UUID`, `exists: bool`,
   `status: str | None`, `is_active: bool`, `failure: str | None`.
+
+**Registry v1 wire contract** (owner 2026-11-08, Q11). The three Registry
+answers the portal decodes have exactly these 16 field positions, with these
+names and this nesting (Registry v1; R0-04 of the Registry workbench case
+keeps context and validate field for field). A UUID travels as a string, a
+datetime as an ISO date-time, `None` as `null`.
+
+| # | answer | JSON path | portal field |
+|---|---|---|---|
+| 1–3 | `GET projects/active` → list, each element | `project_id`, `display_name`, `status` | `ProjectReference` |
+| 4 | `GET projects/{project_id}/validate` | `project_id` (the requested UUID) | `ProjectValidationResult.project_id` |
+| 5 | same | `exists` | `.exists` |
+| 6 | same | `status` (`null` when the project does not exist) | `.status` |
+| 7 | same | `is_active` (true only for status `active`; the wire name is `is_active`, never `active`) | `.is_active` |
+| 8 | same | `failure` (`null` when active, `not_found` when absent, `archived` otherwise) | `.failure` |
+| 9 | `GET projects/{project_id}/context` | `project` — a nested object, not a UUID and not flat fields | `ProjectContext.project` |
+| 10–12 | same | `project.project_id`, `project.display_name`, `project.status` | `ProjectReference` |
+| 13 | same | `address` | `.address` |
+| 14 | same | `customer_ref` (an opaque string or `null`, never client contact data) | `.customer_ref` |
+| 15 | same | `created_at` | `.created_at` |
+| 16 | same | `registry_updated_at` | `.registry_updated_at` |
+
+A validate answer with HTTP 200 also carries a negative result. The three
+decoders of `registry_gateway` stay model-written (wire decoding is outside
+SPEC_STANDARD 6.13); this table is what they decode. The Registry's plain
+`GET projects` answers another shape (`ProjectSummary`) and is not read
+(Q12). Recording this contract in the Factory's `platform/manifest` is a
+follow-up outside the Workbench route.
 
 - `RegistryFailureKind` — closed enum for boundary error translation:
   `invalid_uuid | not_found | archived | timeout | transport_error |
@@ -834,8 +864,10 @@ None.
 
 Repaired to R0-25 and the accepted `import_snapshot` (fresh record per
 classified attempt; replay names the existing snapshot; conflict names
-none) and `_build_approved_snapshot` (fresh `snapshot_id`). Owner 2026-11-06:
-current service behaviour accepted; technical decisions delegated.
+none) and `_build_approved_snapshot` (fresh `snapshot_id`; since 2026-11-08
+the emitted builder `build_approved_estimate_snapshot`, SPEC_STANDARD 6.13).
+Owner 2026-11-06: current service behaviour accepted; technical decisions
+delegated.
 
 ### Identity
 
@@ -1040,7 +1072,11 @@ None.
   (PortalSection), `display_name: str`, `sort_order: int`,
   `material_planned: Decimal`, `work_planned: Decimal`,
   `source_section_code: str | None` (imported provenance),
-  `updated_at`, `updated_by | None` (manual plans only).
+  `updated_at`, `updated_by | None` (manual plans only: an imported plan's
+  `updated_by` is `None` and its `updated_at` the import's instant; the
+  author of an imported version stays on `BudgetVersion.created_by_id`,
+  owner 2026-11-08, Q05; when an imported budget is built stays open
+  question Q11 of `open_questions.md`).
 - **Rules:** unique `(version_id, section_id)`; mutable only when its
   version is the manual version and the project is active; budget totals
   are always derived from plans, never stored. A manual plan is created or
@@ -1296,7 +1332,11 @@ None.
   allocation adjustment are one atomic operation (sum invariant holds at
   every commit point); a corrected total may be zero, never negative;
   exclusion removes the expense from totals but never
-  hides it.
+  hides it. `updated_at`/`updated_by` are `None` on a new Expense and are
+  set to the operation's one instant and the acting staff member by every
+  accepted correction, every accepted include or exclude — even one that
+  leaves `included` as it was (owner 2026-11-08, Q01) — and every accepted
+  re-allocation, which is a change of the Expense (owner 2026-11-08, Q03).
 
 ### Identity
 
@@ -1351,7 +1391,8 @@ entity
 
 The former continuity ("stays the same record while it is re-allocated")
 contradicted the replacement; the accepted spec replaces the set (notes
-`_build_replacement_allocations`: "the replacement path deletes then
+`_build_replacement_allocations`, since 2026-11-08 the emitted builder
+`build_replacement_allocations`: "the replacement path deletes then
 reinserts the whole allocation set", fresh uuid4 per allocation;
 `replace_expense_allocations`, `correct_expense`: audit `entity_id` is the
 expense). Owner 2026-11-06: current service behaviour accepted; technical
@@ -1387,7 +1428,10 @@ None.
   description/visibility on an active project; the record never embeds the
   binary or OCR working data. At creation `description` is the confirmed
   recognition's `document_type` and `client_visible` is true (R0-18); later
-  only staff edits change either.
+  only staff edits change either. `updated_at`/`updated_by` are `None` on a
+  new document; every accepted metadata update sets them to the operation's
+  one instant and the acting staff member, even when description and
+  visibility equal the stored ones (owner 2026-11-08, Q02).
 
 ### Carried changes
 
@@ -1627,6 +1671,12 @@ None.
   `published_at`; it has no `provenance_ref` (that field is the confirmed
   recognition's, kept on the Expense, R0-17) and does not keep the
   publication's `intake_source`.
+- **Change metadata:** a new photo's `updated_at` and `updated_by` equal its
+  `published_at` and `published_by` — the publication's one instant and the
+  publishing staff member — and are never `None` on a published photo; an
+  accepted update sets them again (owner 2026-11-08, Q04, which confirms the
+  running service; the Expense rule "None until amended" is not carried
+  over to photos).
 
 ### Carried changes
 
@@ -1935,7 +1985,10 @@ persisted, and none contains `file_ref`.
   `sort_order: int`, `material_planned: Decimal`,
   `material_actual: Decimal`, `material_remaining: Decimal` (may be negative),
   `work_planned: Decimal`, `completion_percent: int | None`,
-  `completed_work_value: Decimal | None`, `has_unresolved_allocations: bool`.
+  `completed_work_value: Decimal | None`, `has_unresolved_allocations: bool`
+  — always `false`: a row exists only for a section the viewed version plans,
+  so no allocation of that row is unresolved; unresolved allocations show
+  only in `BudgetView.unresolved_allocation_count` (owner 2026-11-08, Q06).
   `completed_work_value` is `None` exactly when `completion_percent` is
   `None`: a section without a progress record has no completed work value,
   never a zero (owner 2026-11-08, A9 INV-044).
@@ -1951,8 +2004,14 @@ persisted, and none contains `file_ref`.
 - `ExpenseAllocationView` fields: `allocation_id: UUID`,
   `target: AllocationTargetKind`, `section_id: UUID | None`
   `[closed-choice: required iff target = section]`,
-  `section_display_name: str | None` `[same condition]`, `amount: Decimal`,
+  `section_display_name: str | None`, `amount: Decimal`,
   `resolved_in_active_budget: bool`.
+- `section_display_name` (owner Q07, 2026-11-08): for a `section` target, the
+  `display_name` of the `SectionPlan` of that `section_id` in the project's
+  active `BudgetVersion`; `None` when the project has no active version or that
+  version has no plan for the section. For an `other_expenses` target it is
+  always `None`. The former condition "required iff target = section" is
+  withdrawn: a section allocation outside the active budget has no name.
 - `ExpenseDocumentView` fields: `document_id: UUID`,
   `description: str | None`, `client_visible: bool`. The client requests a binary by `document_id`;
   authorization is repeated at that endpoint.

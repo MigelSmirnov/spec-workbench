@@ -29,7 +29,11 @@ runs 37 modules: 19 of the former text, 17 added by the Factory, ten of them
 repositories, and `system_clock`. On 2026-11-08 the owner had the
 specification rebuilt by SPEC_STANDARD, starting with its data; the values
 generated code reads moved into `data_provider`, the deterministic
-provider module of SPEC_STANDARD 6.10. The case runs 38 modules.
+provider module of SPEC_STANDARD 6.10. On 2026-11-08 the owner approved the
+record construction structure of SPEC_STANDARD 6.13: every record a
+model-written module built from its inputs is built by an emitted builder of
+`record_builders`, so the source of each field is closed IR instead of prose.
+The case runs 39 modules.
 
 A module owns one hidden mechanism and has one reason to change; its public
 surface is smaller than what it hides. Each accepted decision has one primary
@@ -91,6 +95,7 @@ may know only modules on earlier lines, never one on a later line:
 ```text
 models
 data_provider
+record_builders
 system_clock
 credential_security, financial_policy
 audit_repository, project_tracking_repository, project_section_repository,
@@ -315,6 +320,135 @@ VIEWER_SESSION_TTL_DAYS
 WORK_BALANCE_LABEL_SIGNS
 ```
 
+## `record_builders`
+
+### Owns
+
+The record builders of `70_record_construction_closure.json`
+(`rules.record_construction_backend`, SPEC_STANDARD 6.13): one function per
+construction, each building one record of a State 1 model (or one per
+element of a collection) from its parameters, with the source of every field
+and the disposal of every input field fixed by the IR. Emitted
+deterministically (`python_record_builders_v1`), never model-written; owner
+2026-11-08.
+
+### Knows
+
+`models`, for the records it builds; `data_provider`, for the one constant
+an IR field names (`HEALTH_OK_STATUS`).
+
+### Must not own
+
+Any decision: which record to build, when, how many, a sum, a lookup, an
+ordering, a validation or a rejection, the time of an operation, a store,
+transaction or port. A value computed by behaviour reaches a builder as a
+parameter its caller computed; the one clock reading of an operation stays
+with the operation (A28).
+
+### Hides
+
+How each record is put together from its inputs: a consumer calls a builder
+by name and never constructs a record of a model whose builder it was given
+(`record_construction_bypassed`).
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: the one checked home of every field source of every
+  built record; a construction defect stops at the State 6 handoff
+  (RC001–RC015), not at generation
+
+### Candidate public capabilities
+
+```text
+build_approved_estimate_snapshot
+build_audit_record
+build_authorized_project_context
+build_bootstrap_audit_record
+build_bootstrap_staff_account
+build_budget_activation_result
+build_budget_section_view
+build_budget_version_detail
+build_budget_view_record
+build_client_viewer
+build_document_binary_reference
+build_expense_aggregate
+build_expense_allocation_view
+build_expense_document_view
+build_expense_intake
+build_expense_operation_outcome
+build_expense_summary_view
+build_expense_view_record
+build_health_status
+build_imported_section_plan
+build_manual_budget_version
+build_manual_portal_section
+build_manual_section_plan
+build_payment_summary_view
+build_photo_binary_reference
+build_photo_mutation_result
+build_photo_view
+build_producer_project_grant
+build_progress_photo
+build_progress_photo_view
+build_progress_section_view
+build_progress_view_record
+build_project_audit_intent
+build_project_list_item
+build_project_overview_record
+build_project_viewer_grant
+build_replacement_allocations
+build_section_progress
+build_service_actor_context
+build_service_credential_audit_intent
+build_service_credential_issue
+build_service_principal
+build_session_revocation_result
+build_snapshot_import_audit_intent
+build_snapshot_import_record
+build_snapshot_import_request
+build_snapshot_sections
+build_staff_account
+build_staff_account_view
+build_staff_actor_context
+build_staff_audit_intent
+build_staff_login_audit_intent
+build_staff_logout_audit_intent
+build_staff_mutation_request
+build_staff_project_assignment
+build_staff_read_request
+build_staff_session
+build_staff_session_grant
+build_viewer_actor_context
+build_viewer_credential_issue
+build_viewer_read_request
+build_viewer_session
+build_viewer_session_grant
+build_viewer_session_view
+build_work_balance_result
+build_work_payment
+revise_aggregate_expense
+revise_budget_version
+revise_client_viewer
+revise_corrected_expense
+revise_expense_aggregate
+revise_expense_document
+revise_expense_inclusion
+revise_producer_project_grant
+revise_progress_photo
+revise_project_viewer_grant
+revise_reallocated_expense
+revise_service_credential
+revise_service_principal
+revise_staff_email
+revise_staff_password
+revise_staff_project_assignment
+revise_staff_session
+revise_staff_status
+revise_viewer_access_credential
+revise_viewer_session
+```
+
 ## `system_clock`
 
 ### Owns
@@ -406,7 +540,7 @@ and the unavailable result where an input is missing.
 
 ### Knows
 
-`models`, `data_provider`.
+`models`, `data_provider`, `record_builders`.
 
 ### Must not own
 
@@ -920,7 +1054,7 @@ record itself, its `occurred_at` the bootstrap's one instant (A28), and
 
 ### Knows
 
-`models`, `data_provider`, `system_clock`.
+`models`, `data_provider`, `record_builders`, `system_clock`.
 
 ### Must not own
 
@@ -956,7 +1090,7 @@ observes it.
 
 ### Knows
 
-`models`, `data_provider`, `system_clock`, `registry_gateway`, `portal_store`.
+`models`, `data_provider`, `record_builders`, `system_clock`, `registry_gateway`, `portal_store`.
 
 ### Must not own
 
@@ -1000,7 +1134,7 @@ Factory `3080ef0dbe73`). Session TTL is A30's.
 
 ### Knows
 
-`models`, `data_provider`, `system_clock`, `credential_security`, `authorization_guard`,
+`models`, `data_provider`, `record_builders`, `system_clock`, `credential_security`, `authorization_guard`,
 `registry_gateway`, `audit_writer`, `portal_store`.
 
 ### Must not own
@@ -1047,7 +1181,7 @@ through `staff_identity`'s input boundary, hash the password through
 
 ### Knows
 
-`models`, `system_clock`, `credential_security`, `staff_identity`.
+`models`, `record_builders`, `system_clock`, `credential_security`, `staff_identity`.
 
 ### Must not own
 
@@ -1082,7 +1216,7 @@ revocation, viewer entry and session resolution, description and sign-out
 
 ### Knows
 
-`models`, `data_provider`, `system_clock`, `credential_security`, `authorization_guard`,
+`models`, `data_provider`, `record_builders`, `system_clock`, `credential_security`, `authorization_guard`,
 `registry_gateway`, `audit_writer`, `portal_store`.
 
 ### Must not own
@@ -1125,7 +1259,7 @@ revocation, producer grants, bearer authentication and producer scope.
 
 ### Knows
 
-`models`, `data_provider`, `system_clock`, `credential_security`, `authorization_guard`,
+`models`, `data_provider`, `record_builders`, `system_clock`, `credential_security`, `authorization_guard`,
 `registry_gateway`, `audit_writer`, `portal_store`.
 
 ### Must not own
@@ -1169,7 +1303,7 @@ import result.
 
 ### Knows
 
-`models`, `data_provider`, `system_clock`, `authorization_guard`, `financial_policy`,
+`models`, `data_provider`, `record_builders`, `system_clock`, `authorization_guard`, `financial_policy`,
 `audit_writer`, `portal_store`.
 
 ### Must not own
@@ -1205,7 +1339,7 @@ expense allocations left without a current section after a switch.
 
 ### Knows
 
-`models`, `system_clock`, `financial_policy`, `audit_writer`, `portal_store`.
+`models`, `record_builders`, `system_clock`, `financial_policy`, `audit_writer`, `portal_store`.
 
 ### Must not own
 
@@ -1244,7 +1378,7 @@ the access and visibility re-check before a document's content is read (A14).
 
 ### Knows
 
-`models`, `data_provider`, `system_clock`, `financial_policy`, `binary_storage`,
+`models`, `data_provider`, `record_builders`, `system_clock`, `financial_policy`, `binary_storage`,
 `audit_writer`, `portal_store`.
 
 ### Must not own
@@ -1279,13 +1413,18 @@ read_expense_document
 
 The Expense row of A8 and A7 for recognition: projection of the confirmed
 recognition request of an authenticated staff member into `ExpenseIntake`
-(R0-17), supported-version enforcement, rejection of provider and raw fields,
+(R0-17), supported-version enforcement — at its public decoding boundary,
+which turns an untrusted recognition payload into a
+`ConfirmedRecognitionPublication` and refuses a malformed payload or a
+`contract_version` outside `SUPPORTED_OCR_CONTRACT_VERSIONS` with
+`ExpenseValidationError` (owner 2026-11-08, Q09), and again in the consumer —,
+rejection of provider and raw fields,
 canonical intake fingerprint and replay classification, initial allocation and
 document consistency, and atomic creation of the aggregate with its audit.
 
 ### Knows
 
-`models`, `data_provider`, `system_clock`, `financial_policy`, `audit_writer`, `portal_store`,
+`models`, `data_provider`, `record_builders`, `system_clock`, `financial_policy`, `audit_writer`, `portal_store`,
 `expense_management`.
 
 ### Must not own
@@ -1305,6 +1444,7 @@ The projection of the recognition contract and the fingerprint.
 ### Candidate public capabilities
 
 ```text
+decode_recognition_publication
 create_expense_from_recognition
 ```
 
@@ -1318,7 +1458,7 @@ and the progress and payment lists.
 
 ### Knows
 
-`models`, `data_provider`, `system_clock`, `financial_policy`, `budget_management`,
+`models`, `data_provider`, `record_builders`, `system_clock`, `financial_policy`, `budget_management`,
 `audit_writer`, `portal_store`.
 
 ### Must not own
@@ -1357,7 +1497,7 @@ gallery's order of A27 is `derived_views`') and the access and visibility re-che
 
 ### Knows
 
-`models`, `system_clock`, `binary_storage`, `audit_writer`, `portal_store`.
+`models`, `record_builders`, `system_clock`, `binary_storage`, `audit_writer`, `portal_store`.
 
 ### Must not own
 
@@ -1391,11 +1531,13 @@ A15, A21 (derivation), A27 and the view part of A5: the viewer project list,
 the project overview with its project and availability (Factory
 `d2c4511ea119`), budget, expense, progress and payment views with their
 orderings, and explicit unavailable values. Inaccessible viewer projects are
-left out (Factory `00ac72f18d9c`).
+left out (Factory `00ac72f18d9c`). The expense view names a section allocation by the
+`display_name` of that section's plan in the active budget version it already
+reads, `None` without one (owner Q07, 2026-11-08).
 
 ### Knows
 
-`models`, `viewer_access`, `registry_gateway`, `financial_policy`,
+`models`, `record_builders`, `viewer_access`, `registry_gateway`, `financial_policy`,
 `portal_store`, `authorization_guard`.
 
 ### Must not own
@@ -1589,7 +1731,7 @@ readiness answers that change nothing. Factory `38626cc7be12`,
 
 ### Knows
 
-`models`, `data_provider`, `portal_store`, `api`, `transport_guard`, `runtime_settings`.
+`models`, `data_provider`, `record_builders`, `portal_store`, `api`, `transport_guard`, `runtime_settings`.
 
 ### Must not own
 
