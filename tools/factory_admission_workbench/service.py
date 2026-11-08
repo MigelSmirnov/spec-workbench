@@ -1323,6 +1323,75 @@ def _standard_backend_contracts_check(factory_root: Path, source_spec: object) -
     )
 
 
+RECORD_CONSTRUCTION_RULE = "record_construction_backend"
+RECORD_CONSTRUCTION_TOOL = "tools/generate_record_construction_draft.py"
+
+
+def _record_builders_check(factory_root: Path, source_spec: object) -> AdmissionCheck:
+    """FA023: the record builders module owns exactly the declared constructions,
+    and the target Factory emits them (SPEC_STANDARD §6.13).
+
+    The notes gate exempts every ``constructions`` key from State 7 notes as an
+    emitted scope; a builders module owning one function more would leave it
+    with neither a note nor an emitter, one fewer would leave a builder
+    nobody emits. The Factory side is read as literals (``RULE_KEY``,
+    ``EMITTER``) of its emitter tool, without running Factory code; the closed
+    form itself is judged by the Factory validator at FA005.
+    """
+    rules = source_spec.get("rules") if isinstance(source_spec, dict) else None
+    backend = rules.get(RECORD_CONSTRUCTION_RULE) if isinstance(rules, dict) else None
+    if backend is None:
+        return AdmissionCheck(
+            "FA023", CHECK_NOT_APPLICABLE, "Source declares no rules.record_construction_backend.", {},
+        )
+    problems: list[str] = []
+    wiring = backend.get("wiring") if isinstance(backend, dict) else None
+    module = wiring.get("module") if isinstance(wiring, dict) else None
+    constructions = backend.get("constructions") if isinstance(backend, dict) else None
+    emitter = (backend.get("backend") or {}).get("emitter") if isinstance(backend, dict) else None
+    functions = source_spec.get("module_functions") if isinstance(source_spec, dict) else None
+    functions = functions if isinstance(functions, dict) else {}
+    owned = functions.get(module) if isinstance(module, str) else None
+    builders = sorted(constructions) if isinstance(constructions, dict) else []
+    evidence: dict[str, Any] = {
+        "module": module,
+        "constructions": builders,
+        "module_functions": sorted(owned) if isinstance(owned, list) else owned,
+        "factory_tool": str(factory_root / RECORD_CONSTRUCTION_TOOL),
+    }
+    if not isinstance(module, str) or not builders:
+        problems.append("rules.record_construction_backend names no builders module or no constructions")
+    elif not isinstance(owned, list) or sorted(owned) != builders:
+        problems.append(f"module_functions.{module} is not exactly the constructions keys")
+    else:
+        elsewhere = sorted(
+            name for other, names in functions.items() if other != module and isinstance(names, list)
+            for name in names if name in builders
+        )
+        if elsewhere:
+            problems.append(f"builders also owned by another module: {', '.join(elsewhere)}")
+    try:
+        tree = ast.parse((factory_root / RECORD_CONSTRUCTION_TOOL).read_text(encoding="utf-8"))
+        factory_rule = _factory_literal(tree, "RULE_KEY")
+        factory_emitter = _factory_literal(tree, "EMITTER")
+    except FileNotFoundError:
+        problems.append(f"target Factory has no {RECORD_CONSTRUCTION_TOOL}")
+    except (OSError, SyntaxError, ValueError, MemoryError, RecursionError) as exc:
+        evidence["error"] = str(exc)
+        problems.append(f"{RECORD_CONSTRUCTION_TOOL} declares RULE_KEY/EMITTER in a form admission cannot read")
+    else:
+        evidence["factory_emitter"] = factory_emitter
+        if factory_rule != RECORD_CONSTRUCTION_RULE or factory_emitter != emitter:
+            problems.append(f"the target Factory emitter does not emit {emitter!r} for rules.{RECORD_CONSTRUCTION_RULE}")
+    if problems:
+        return AdmissionCheck("FA023", CHECK_BLOCK, "; ".join(problems) + ".", evidence)
+    return AdmissionCheck(
+        "FA023", CHECK_PASS,
+        "The record builders module owns exactly the declared constructions, and the target Factory emits them.",
+        evidence,
+    )
+
+
 def _factory_toolchain_check(factory_root: Path) -> AdmissionCheck:
     metadata = git_metadata(factory_root)
     required = [
@@ -1378,6 +1447,7 @@ def check(
         _language_check(source),
         _factory_standard_version_check(factory_root, source_standard_version),
         _standard_backend_contracts_check(factory_root, source_spec),
+        _record_builders_check(factory_root, source_spec),
         _implementation_obligations_check(source),
         _runtime_persistence_check(source_spec, case_root),
         _runtime_carrier_check(source_spec),
