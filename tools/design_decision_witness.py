@@ -287,6 +287,11 @@ def binding_material(case: Path, factory: Path | None = None) -> list[dict[str, 
                         else:
                             entry.update(status="available", files=files)
                         entry["command"] = list(command.get("command") or [])
+                        # how the check is run decides what it asserts: argv, the effective
+                        # working directory and every other field of its declaration
+                        cwd = base.relative_to(root).as_posix() if root in base.parents or base == root else str(base)
+                        entry["declaration"] = {**{k: v for k, v in command.items() if k != "name"},
+                                                "effective_cwd": cwd}
                 found.append(entry)
     return found
 

@@ -12,7 +12,10 @@ judged once per check, outside the document round:
   quoted. A quote is checked mechanically against the files; an answer whose
   quotes are not found is ``unverified``.
 - **Kept** under ``questions/checks/`` of the case, keyed by the sha256 of the
-  files and of the bound items with the invariants they name, as stated. It is judged again only when one of them
+  check's declaration (argv, effective cwd and the rest: a subset run asserts
+  less), of its files and of the bound items with the invariants they name,
+  as stated. An item left unverified is asked again on the next judgement,
+  the verified ones reused and the earlier attempt kept. It is judged again only when one of them
   changes; a judgement on other evidence is never the current one.
 - **Not judged**: material that cannot be given whole (unreadable, or over
   ``INPUT_LIMIT``) is ``not_checked``, with the reason, never truncated.
@@ -48,7 +51,8 @@ def group(materials: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     checks: dict[str, dict[str, Any]] = {}
     for entry in materials:
         check = checks.setdefault(entry["witness"], {"witness": entry["witness"], "status": "available",
-                                                     "reason": None, "files": [], "items": []})
+                                                     "reason": None, "files": [], "items": [],
+                                                     "declaration": entry.get("declaration")})
         if entry["status"] != "available" and check["status"] == "available":
             check.update(status=entry["status"], reason=entry.get("reason"))
         if not check["files"] and entry.get("files"):
@@ -61,6 +65,7 @@ def group(materials: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     for check in checks.values():
         check["items"].sort(key=lambda i: (i["decision"], i["item"]))
         check["digest"] = _sha(json.dumps({
+            "declaration": check["declaration"],  # argv and cwd: a subset run asserts less
             "files": sorted((f["path"], f["sha256"]) for f in check["files"]),
             "items": [(i["decision"], i["item"], i["statements"]) for i in check["items"]],
         }, ensure_ascii=False))
@@ -108,9 +113,15 @@ def judge_input(check: dict[str, Any]) -> str:
     items = "\n".join(f"I{n}: {i['decision']} binds {', '.join(i['invariants']) or 'its invariant'}: {i['item']}"
                       + "".join(f"\n    invariant: {s}" for s in i.get("statements") or [])
                       for n, i in enumerate(check["items"], 1))
+    run = ""
+    if check.get("declaration"):
+        run = ("=== HOW THE CHECK IS RUN (its declaration in the Factory verification config) ===\n\n"
+               + json.dumps(check["declaration"], ensure_ascii=False, indent=1) + "\n\n"
+               "Judge what this run executes: arguments that select a subset leave the rest unasserted.\n\n")
     files = "\n\n".join(f"--- {f['path']} sha256 {f['sha256']}" + (" (imported by the check)" if f.get("imported") else "")
                         + f" ---\n{f['text']}" for f in check["files"])
-    return f"=== REQUIRED TESTS ITEMS BOUND TO {check['witness']} ===\n\n{items}\n\n=== THE CHECK ===\n\n{files}"
+    return (f"=== REQUIRED TESTS ITEMS BOUND TO {check['witness']} ===\n\n{items}\n\n{run}"
+            f"=== THE CHECK ===\n\n{files}")
 
 
 def _parse(answer: str) -> dict[str, Any]:
@@ -122,23 +133,43 @@ def _parse(answer: str) -> dict[str, Any]:
     return found if isinstance(found, dict) else {}
 
 
-def judge_check(case: Path, provider: Any, check: dict[str, Any]) -> dict[str, Any]:
-    """Judge one check now and keep the record; a check not readable whole is not judged."""
+def _settled(record: dict[str, Any] | None) -> dict[tuple[str, str], dict[str, Any]]:
+    """The verified verdicts of a kept judgement: they are reused, never asked again."""
+    return {(v["decision"], v["item"]): v for v in (record or {}).get("verdicts") or []
+            if v.get("outcome") in OUTCOMES}
+
+
+def judge_check(case: Path, provider: Any, check: dict[str, Any],
+                previous: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Judge one check now and keep the record; a check not readable whole is not judged.
+
+    With ``previous`` (a kept judgement on the same digest with unverified
+    items), only those items are asked again; its verified verdicts are reused
+    and the earlier attempt is kept beside the new record.
+    """
     base = {"schema_version": SCHEMA, "witness": check["witness"], "digest": check["digest"],
+            "declaration": check.get("declaration"),
             "files": [{"path": f["path"], "sha256": f["sha256"]} for f in check["files"]],
             "items": check["items"]}
     if check["status"] != "available":
         return {**base, "status": "not_checked", "reason": check["reason"]}
-    text = judge_input(check)
+    settled = _settled(previous)
+    asked = [i for i in check["items"] if (i["decision"], i["item"]) not in settled]
+    text = judge_input({**check, "items": asked})
     if len(text) + len(INSTRUCTION) > INPUT_LIMIT:
         return {**base, "status": "not_checked",
                 "reason": f"{len(text)} characters exceed what one judgement is given whole ({INPUT_LIMIT})"}
     answer = provider.complete(INSTRUCTION, text)[0]
     given = {v.get("id"): v for v in _parse(answer).get("verdicts") or [] if isinstance(v, dict)}
     corpus = [_norm(f["text"]) for f in check["files"]]
+    answers = {(i["decision"], i["item"]): given.get(f"I{n}") or {} for n, i in enumerate(asked, 1)}
     verdicts = []
-    for n, item in enumerate(check["items"], 1):
-        found = given.get(f"I{n}") or {}
+    for item in check["items"]:
+        key = (item["decision"], item["item"])
+        if key in settled:
+            verdicts.append(settled[key])
+            continue
+        found = answers[key]
         outcome = found.get("outcome")
         quotes = [q for q in found.get("quotes") or [] if isinstance(q, str) and q.strip()]
         missing = [q for q in quotes if not any(_norm(q) in body for body in corpus)]
@@ -151,19 +182,26 @@ def judge_check(case: Path, provider: Any, check: dict[str, Any]) -> dict[str, A
             why = str(found.get("why") or "")
         verdicts.append({**item, "outcome": outcome, "quotes": quotes, "why": why})
     record = {**base, "status": "judged", "provider": getattr(provider, "name", "?"), "verdicts": verdicts,
-              "raw": answer}
+              "asked": [{"decision": i["decision"], "item": i["item"]} for i in asked], "raw": answer}
     path = record_path(case, check)
     path.parent.mkdir(parents=True, exist_ok=True)
+    if previous is not None and path.is_file():  # keep the earlier attempt
+        attempt = len(list(path.parent.glob(f"{check['digest']}.attempt-*.json"))) + 1
+        path.rename(path.with_name(f"{check['digest']}.attempt-{attempt}.json"))
     path.write_text(json.dumps(record, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return record
 
 
 def judge(case: Path, provider: Any, materials: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Judge every check that has no judgement on its current files and items."""
+    """Judge every check that has no judgement on its current declaration, files and
+    items, and ask again the items a kept judgement left unverified."""
     done = []
     for check in group(materials).values():
-        if current(case, check) is None:
+        kept = current(case, check)
+        if kept is None:
             done.append(judge_check(case, provider, check))
+        elif any(v.get("outcome") not in OUTCOMES for v in kept.get("verdicts") or []):
+            done.append(judge_check(case, provider, check, previous=kept))
     return done
 
 

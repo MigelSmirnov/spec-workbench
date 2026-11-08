@@ -939,6 +939,26 @@ def test_a_state7_module_review_is_asked_against_the_obligations_it_takes_part_i
 
 # ------------- review 5812269729: workbench gates and changed evidence
 
+def test_a_changed_run_command_judges_the_check_again(tmp_path, monkeypatch):
+    # review r4505323285, end to end through the Factory config
+    import yaml
+
+    _clean_gate(monkeypatch)
+    case = _case(tmp_path, SufficiencyProvider.ITEM)
+    factory = _factory_with_check(tmp_path, case)
+    monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
+    summary, provider = _ask(case)
+    assert len(provider.checks) == 1 and '"effective_cwd": "."' in provider.checks[0]
+    assert transition.run_check(case, "witness_material")["outcome"] == "closed"
+    config = factory / "verification" / "configs" / "Demo.yaml"
+    data = yaml.safe_load(config.read_text())
+    data["checks"]["commands"][0]["command"] += ["-k", "subset"]
+    _write(config, yaml.safe_dump(data))
+    assert transition.run_check(case, "witness_material")["outcome"] == "not_checked"   # old judgement not current
+    summary, provider = _ask(case)
+    assert len(provider.checks) == 1 and '"subset"' in provider.checks[0]
+
+
 def test_a_workbench_binding_is_judged_on_the_gate_implementation(tmp_path, monkeypatch):
     # review r4501770397: the gate's name was given, not what it checks
     _clean_gate(monkeypatch)

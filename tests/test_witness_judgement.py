@@ -13,10 +13,14 @@ import witness_judgement as wj  # noqa: E402
 CHECK = "def test_once():\n    assert ledger.record('a') is REFUSED  # INV-001\n"
 
 
+RUN = {"cwd": "../..", "command": ["python", "verification/once.py", "--full"], "effective_cwd": "."}
+
+
 def material(decision="A01", item="- INV-001: refused. [witness: verification:once]", text=CHECK,
-             statements=("INV-001: an entry is counted once",), status="available", reason=None):
+             statements=("INV-001: an entry is counted once",), status="available", reason=None,
+             declaration=RUN):
     return {"decision": decision, "witness": "verification:once", "item": item, "invariants": ["INV-001"],
-            "statements": list(statements), "status": status, "reason": reason,
+            "statements": list(statements), "status": status, "reason": reason, "declaration": declaration,
             "files": [{"path": "verification/once.py", "sha256": wj._sha(text), "text": text}]}
 
 
@@ -104,3 +108,36 @@ def test_every_item_bound_to_a_check_is_judged_in_one_request(tmp_path):
     assert len(provider.calls) == 1 and "I1: A01" in provider.calls[0] and "I2: A07" in provider.calls[0]
     assert "invariant: INV-001: an entry is counted once" in provider.calls[0]
     assert [r["outcome"] for r in wj.verdicts(tmp_path, materials)] == ["asserts", "asserts"]
+
+
+def test_a_changed_run_of_the_same_files_is_judged_again_and_shown(tmp_path):
+    # review r4505323285: --full -> a subset; files and items unchanged
+    provider = Provider(asserts())
+    wj.judge(tmp_path, provider, [material()])
+    assert '"--full"' in provider.calls[0] and '"effective_cwd": "."' in provider.calls[0]
+    subset = {**RUN, "command": ["pytest", "verification/once.py", "-k", "subset"]}
+    assert wj.verdicts(tmp_path, [material(declaration=subset)])[0]["outcome"] == "not_checked"
+    wj.judge(tmp_path, provider, [material(declaration=subset)])
+    assert len(provider.calls) == 2 and '"-k"' in provider.calls[1] and '"subset"' in provider.calls[1]
+    assert "arguments that select a subset leave the rest unasserted" in provider.calls[1]
+
+
+def test_an_unverified_answer_is_asked_again_and_verified_items_are_reused(tmp_path):
+    # review r4505323288: a bad quote must not become a permanent judgement
+    materials = [material(), material(decision="A07", item="- INV-001: kept. [witness: verification:once]")]
+    good = "assert ledger.record('a') is REFUSED  # INV-001"
+    first = Provider({"verdicts": [{"id": "I1", "outcome": "asserts", "quotes": [good], "why": "ok"},
+                                   {"id": "I2", "outcome": "asserts", "quotes": ["not in the file"], "why": "?"}]})
+    wj.judge(tmp_path, first, materials)
+    assert [r["outcome"] for r in wj.verdicts(tmp_path, materials)] == ["asserts", "not_checked"]
+    second = Provider(asserts(ids=("I1",)))
+    wj.judge(tmp_path, second, materials)
+    assert len(second.calls) == 1
+    assert "I1: A07" in second.calls[0] and "A01" not in second.calls[0]     # only the unverified item
+    assert [r["outcome"] for r in wj.verdicts(tmp_path, materials)] == ["asserts", "asserts"]
+    digest = wj.group(materials)["verification:once"]["digest"]
+    kept = tmp_path / "questions" / "checks" / "verification_once"
+    assert (kept / f"{digest}.attempt-1.json").is_file()                     # the earlier attempt is kept
+    third = Provider(asserts())
+    wj.judge(tmp_path, third, materials)
+    assert third.calls == []                                                 # all verified: reused

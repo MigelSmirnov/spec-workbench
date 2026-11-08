@@ -138,8 +138,11 @@ every Required tests item bound to it across all decisions, with the invariants
 each names as stated. For each item it answers `asserts`, `partial` or
 `does_not`, quoting the asserting lines; a quote not found in the files makes
 the answer unverified. The judgement is kept under `questions/checks/`, keyed
-by the sha256 of the files and of the bound items with their invariants, and
-made again only when one of them changes (`design_questions.py judge-checks`,
+by the sha256 of the check's declaration (argv, effective cwd and the rest of
+its entry: a subset run asserts less, and the judge is shown the run), of the
+files and of the bound items with their invariants, and made again only when
+one of them changes; an item left unverified is asked again on the next
+judgement, the verified ones reused and the earlier attempt kept (`design_questions.py judge-checks`,
 or at the start of a State 2 round). The round receives the verdicts only, one
 line per binding with its digest and outcome (`layer.verdicts`), never the
 code. `witness_material` stops the transition on a binding without a current
