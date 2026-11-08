@@ -1,39 +1,101 @@
 # Handoff — Client Portal (current)
 
-Replaces the handoff of 2026-11-07. State of `agent/client-portal` on
-2026-11-08 after the State 2 rounds 82-95 (on `404d1ccd`, origin/main with
-#161 and #162 merged), checked against the Factory
-checkout `code_factory_cp_witnesses` at origin/main `5a3bdec2`; the assembly
-result is `80_assembly.md`.
+Replaces the handoff of the morning of 2026-11-08. State of
+`agent/client-portal` on 2026-11-08 after the first pass on the single-round
+closure rule (Workbench #163, merged into the branch at `d407634a`), checked
+against the clean Factory checkout `code_factory_cp_witnesses` at origin/main
+`5a3bdec2`. The assembly, admission and diagnosis results are in
+`80_assembly.md`; the semantic diff against the accepted Factory spec
+459ac96c, for the owner, is `SEMANTIC_DIFF.md`.
 
 ## Where the case stands
 
-- Owner decision 2026-11-08 on A9/INV-044 is in the design (below).
-- Assembly ready: 15/15 checks, 0 errors. Imports closure ready (195/195
-  scopes, 0 stale, strict). `global_spec.json` equals its projection.
-- Witness judgement (Workbench #156-#158) ran: 68 bindings, 16 asserts,
-  52 partial, 0 does_not, 0 not_checked (below).
-- Only State 2 rounds were run (coordinator, 2026-11-08: the other states'
-  rounds still read the full texts and are to be cut down first). After
-  Workbench #161 (owner decision 2026-11-08, #147: whether a check asserts
-  is judged at State 8) the State 2 transition is ready (`invariant_tests`
-  closed, 32 decisions). Rounds 82-95 (below) closed the 17 units that
-  rounds 79-81 held open on check coverage. **State 2 is closed and
-  ready** (`status --state 2`: "every unit closed by two clear rounds on
-  its current text"; rounds 94 and 95 clear on the same text).
-- The 52 partial verdicts below are now a State 8 obligation
-  (`witness_material` at `state8_assembly`), Factory work in
-  code-factory #189; they no longer hold State 2.
-- Reopened and not asked: State 1 (`Projections and answers`: one clear
-  review of the two it needs), States 3 and 4 (`context`, earlier-layer
-  text changed), State 5 (`build_budget_view`, `build_progress_view`,
-  `context`), State 7 (`financial_policy`, `derived_views`). State 0 is
-  closed, and State 2 closed and ready after round 95.
-  `tools/authoring.py next client-portal` now stops at `state1_models`
-  (`Projections and answers`).
-- Stage 8.1 ledger and Factory admission were not run this pass
-  (coordinator). FA019 (State 2 rounds) and FA002 (no ledger) still block
-  as on 2026-11-07; FA015 unchanged.
+- **Ready for export, not exported.** States 0-7 are closed on their current
+  texts (`status` per state: closed, ready). `authoring next` stops at
+  `state8_assembly`, which is ready. Admission reads `READY_TO_EXPORT` (22
+  checks: 17 PASS, 5 NOT_APPLICABLE). The export command is prepared in
+  `80_assembly.md` and waits for the owner's approval. No export, Route B or
+  deploy was run.
+- `90_factory_target.json` names `factory_checks_issue`
+  MigelSmirnov/code-factory#189. The 54 partial witness verdicts are carried
+  there by `witness_material` and no longer block.
+- FA002 is closed by the Stage 8.1 ledger `81_module_review_status.json`.
+  FA015 is closed by type imports in the imports closure. FA019 is closed by
+  the rounds below.
+- The running service still differs from the spec until the next Route B:
+  the email routes, 0.00 instead of `None` (INV-044), direct clock reads
+  (`design_diagnose` Factory code check: 46 findings) and
+  `BootstrapAlreadyCompleted`.
+
+## Pass of 2026-11-08 on the single-round rule (#163)
+
+One round per change. A contradiction was fixed and then asked once on the
+fix. Every other judged topic got a disposition. Provider
+`codex-cli:gpt-5.6-sol:medium`. Input characters per request, measured with
+the wrapper around `design_questions.py`. The judge's files are written to
+its working directory and listed apart, not added in.
+
+| state, round | units | requests | review (each) | grouping | judge inline (instr + text); files apart | blocking | outcome |
+|---|---|---|---|---|---|---|---|
+| 3 r37 | context | 5 | 3 × 247,764 (35,993 + 211,771) | 2,858 | 33,163 (6,105 + 27,058); 1,034,298 | 2 | T2 contradiction fixed `43efdb67`; T4 gap carried to 7 |
+| 2 r96 | A28 (fix of r37 T2) | 5 | 3 × 65,944 (5,579 + 60,365) | 937 | 35,311 (6,296 + 29,015); 995,850 | 1 | T2 gap carried to factory_checks; no contradiction |
+| 3 r38 | context (fix) | 3 | 3 × 126,651 (4,193 + 122,458) | — | — | 0 | clear, r37 T2 not raised again |
+| 4 r40 | context | 5 | 3 × 242,913 (37,137 + 205,776) | 2,146 | 24,904 (6,101 + 18,803); 1,075,853 | 0 | clear |
+| 5 r28 | build_budget_view, build_progress_view, context | 5 | 3 × 307,759 (38,511 + 269,248) | 578 | 36,462 (6,134 + 30,328); 1,173,638 | 0 | clear |
+| 7 r17 | 12 modules | 40 | 36 reviews, 11,264-47,791 | 4 grouping/judge requests, 578-41,598 | — | 1 | staff_bootstrap_cli:T1 contradiction and photo_management:T1 gap, both fixed `8a9cf144` |
+| 7 r18 | photo_management, staff_bootstrap_cli (fix) | 6 | 3 × 16,933; 3 × 30,778 | — | — | 0 | clear |
+| 2 r97 | A28 (CLK-002 binding) | 3 | 3 × 65,096 (4,668 + 60,428) | — | — | 0 | clear |
+| 3 r39 | context (binding) | 5 | 3 × 125,799 (3,278 + 122,521) | 655 | 23,319 (6,105 + 17,214); 1,035,417 | 0 | clear |
+| 4 r41 | context (binding) | 3 | 3 × 114,915 (3,633 + 111,282) | — | — | 0 | clear |
+| 5 r29 | context (binding) | 5 | 3 × 122,360 (3,259 + 119,101) | 633 | 22,818 (6,134 + 16,684); 1,174,554 | 0 | clear |
+
+State 1 was already closed (round 47) when the pass started.
+
+Changes made in this pass:
+
+- **FA015 type imports** (`11f65b98`): `AuditRepository` `annotates`, basis
+  `contract` (the signature of `append_audit`), in budget_management,
+  expense_intake, expense_management, photo_management, project_tracking
+  (and its two operations), service_identity, snapshot_import,
+  staff_identity and viewer_access. `StaffBootstrapPort` in
+  `staff_bootstrap_cli.run_bootstrap_cli`. The earlier rejections ("the
+  value only passes through the call") judged the accepted code, not the
+  surface the slicer needs. The Workbench imports model can express this.
+- **A28 CLK-002 owners** (`43efdb67`, State 3 r37 T2): the clock source
+  gives one reading per call. The viewer-entry rate limit of A25 owns its
+  one reading per request and its window, as State 3 `system_clock`
+  "Must not own" requires.
+- **Supplied offset-aware times** (`e8499f77`, State 3 r37 T4 carried to 7).
+  Principle by the operating profile: one stored meaning per timestamp, the
+  instant. The notes of import_snapshot, create_expense_from_recognition,
+  publish_progress_photo and issue_service_credential convert an
+  offset-aware value to UTC, keeping its instant, before storing it
+  offset-naive. An offset-naive value is taken as UTC.
+- **State 7 r17 fixes** (`8a9cf144`): `AuditRecord` added to
+  `staff_bootstrap_cli`. Its prompt showed
+  `StaffBootstrapPort.create_if_empty(..., audit: AuditRecord)` once the port
+  was in its surface. `_classify_photo_replay` compares the supplied
+  `photo_date` in its stored form.
+- **CLK-002 bound** (`5ac1900d`) to `transport_guard_client_portal`, which
+  requires that a wall-clock jump does not release a limited viewer.
+  `decision_witness_resolution` had blocked: CLK-002 was added in rounds
+  92-95 without a binding.
+
+Carried by disposition (`design_questions.py carried`):
+
+- State 2 r96 T2 → `factory_checks` (code-factory #189): the CLK-002 witness
+  shows that the viewer-entry rate limit is the only caller of
+  `monotonic_seconds`.
+- State 3 r37 T4 → State 7: done in `e8499f77`; State 7 r17/r18 asked it.
+
+Witness verdicts after this pass: `judge-checks` re-judged the 18 bindings
+of the six checks whose items changed (6 requests, 13,131-83,366
+characters), then the three checks of the A28 Witnesses item (3 requests,
+13,626-29,396). In all: 69 bindings, 15 asserts, 54 partial, 0 does_not.
+A24 on `service_identity_consumer_uow` was `does_not` in the first run and
+`partial` after its file set changed (judge variance). The A28 Witnesses
+item names CLK-001 and CLK-002, so each of its three tags binds both
+invariants (protocol rule). All three are partial.
 
 ## INV-044: missing data must not look like zero (owner, 2026-11-08)
 
@@ -63,6 +125,10 @@ or deploy was done.
 progress is missing"). The check must assert `None`. A9's binding is kept.
 
 ## Witness verdicts (`design_questions.py judge-checks`)
+
+The table below is the judgement of the morning of 2026-11-08 (68 bindings).
+The current counts are in the pass above (69 bindings: 15 asserts, 54
+partial); every partial binding is carried to code-factory #189.
 
 Nine Required tests items named several checks for different invariants in
 one item; by the protocol each tag then binds all invariants of the item.
@@ -373,14 +439,33 @@ the State 2 edits enter the `context` of States 3-5. State 0 stays closed.
 
 ## Other open items
 
-- FA015: the Factory Spec Inspector requires a module importing
-  `append_audit` to import `AuditRepository` too (nine modules), and
-  `staff_bootstrap_cli` `StaffBootstrapPort`. Owner: imports closure, or
-  the Factory/Workbench rule discrepancy. Unchanged.
-- On the live code the Factory time-source gate blocks under
-  `rules.time_source_policy` until the next Route B regenerates the
-  consumers (`65_imports.json` marks the 45 uses `code_outdated`).
-- The workbench MCP `check_note_draft` answers from the pushed canonical
-  ref and refused ("authored sources do not project:
-  persistence/router/state6 handoff not ready") while this branch was
-  unpushed; the notes were checked with the local `design_notes --gate`.
+- **Export** waits for the owner (command in `80_assembly.md`). It targets
+  the clean checkout `code_factory_cp_witnesses`. The main `code_factory`
+  checkout is dirty (FA008 there) and was not used.
+- **Factory checks, code-factory #189** (owner: Factory): 54 partial
+  bindings (`transition.py --phase state8_assembly`), INV-044's `None`
+  assertion in `budget_derivation_client_portal`, and the CLK-002
+  sole-caller witness (State 2 r96 T2).
+- **Route B** (owner: coordinator, after export): the live code has 46
+  Factory code-check findings on the clock source and still serves the
+  removed email routes and the 0.00 of INV-044.
+- **Stage 8.1** evidence is the State 7 rounds and the emitter IR. No
+  separate per-module adversarial review was run (ledger `semantic_evidence`).
+- **Workbench gaps** (owner: Workbench):
+  - A witness-tag-only edit to a State 2 Required tests item reopens the
+    State 2 unit and the `context` of States 3-5. QUESTIONS.md says a
+    `[witness: …]` tag is only text of its item. Binding CLK-002 cost four
+    rounds (r97, r39, r41, r29), none of which raised anything.
+  - The per-binding judgement still has no form for joint coverage, and a tag
+    binds every invariant of its item (the A28 Witnesses item now binds
+    CLK-001 and CLK-002 to each of three checks).
+  - `imports_scope_stale` after a note edit has no command that re-records
+    `basis_sha256` once the author has re-read the candidates. `--draft`
+    leaves the stale hash; the hash was set by hand to the gate's `current`
+    value, with no candidate pending.
+  - The Factory slicer adds the signature types of a port's operations to a
+    prompt only in part: `StaffAccount` appeared in `staff_bootstrap_cli`'s
+    IMPORTS without a declaration, `AuditRecord` did not (Factory, to the
+    coordinator).
+- The workbench MCP `check_note_draft` answers from the pushed ref; the
+  notes of this pass were checked with the local `design_notes --gate`.
