@@ -1,7 +1,7 @@
 # Handoff — Client Portal (current)
 
 Replaces the handoff of 2026-11-07. State of `agent/client-portal` on
-2026-11-08 after the State 2 rounds 82-94 (on `404d1ccd`, origin/main with
+2026-11-08 after the State 2 rounds 82-95 (on `404d1ccd`, origin/main with
 #161 and #162 merged), checked against the Factory
 checkout `code_factory_cp_witnesses` at origin/main `5a3bdec2`; the assembly
 result is `80_assembly.md`.
@@ -17,11 +17,10 @@ result is `80_assembly.md`.
   rounds still read the full texts and are to be cut down first). After
   Workbench #161 (owner decision 2026-11-08, #147: whether a check asserts
   is judged at State 8) the State 2 transition is ready (`invariant_tests`
-  closed, 32 decisions). Rounds 82-94 (below) closed the 17 units that
-  rounds 79-81 held open on check coverage. Round 94 is clear (0
-  blocking); State 2 is still open only because A8, A18 and A28 need a
-  second clear review on their current text. Stopped by the coordinator
-  after round 94.
+  closed, 32 decisions). Rounds 82-95 (below) closed the 17 units that
+  rounds 79-81 held open on check coverage. **State 2 is closed and
+  ready** (`status --state 2`: "every unit closed by two clear rounds on
+  its current text"; rounds 94 and 95 clear on the same text).
 - The 52 partial verdicts below are now a State 8 obligation
   (`witness_material` at `state8_assembly`), Factory work in
   code-factory #189; they no longer hold State 2.
@@ -29,8 +28,9 @@ result is `80_assembly.md`.
   review of the two it needs), States 3 and 4 (`context`, earlier-layer
   text changed), State 5 (`build_budget_view`, `build_progress_view`,
   `context`), State 7 (`financial_policy`, `derived_views`). State 0 is
-  closed. `tools/authoring.py next client-portal` stops at
-  `state2_rules_decisions`.
+  closed, and State 2 closed and ready after round 95.
+  `tools/authoring.py next client-portal` now stops at `state1_models`
+  (`Projections and answers`).
 - Stage 8.1 ledger and Factory admission were not run this pass
   (coordinator). FA019 (State 2 rounds) and FA002 (no ledger) still block
   as on 2026-11-07; FA015 unchanged.
@@ -189,7 +189,7 @@ above, plus singletons on A28 (where in an operation the one wall reading
 happens; accepted forms of source-supplied datetimes) and A32 (whether the
 vulnerable-image rule covers builds or only deploys).
 
-## State 2 rounds 82-94 (2026-11-08, after #161)
+## State 2 rounds 82-95 (2026-11-08, after #161)
 
 Run with `--since 451ea6de` (the round-81 `closed_at`), provider
 `codex-cli:gpt-5.6-sol:medium`, 5 requests per round (3 reviews, grouping,
@@ -210,6 +210,7 @@ judge). Input characters per request:
 | 92 | 167,594 | 7,854 | 786,956 | 3 | A18, A28 |
 | 93 | 151,714 | 2,956 | 62,893 inline (6,296 + 56,597); files 981,942 apart | 2 | A18, A28 |
 | 94 | 167,917 | 2,204 | 70,834 inline (6,296 + 64,538); files 982,469 apart | 0 | — |
+| 95 | 167,917 | 2,364 | 65,030 inline (6,296 + 58,734); files 982,469 apart | 0 | — |
 
 Two attempts (rounds 83 and 85) failed after their three reviews on a
 review answer that was not valid JSON and saved nothing; they were rerun
@@ -356,7 +357,15 @@ Blocking 0, the round is clear; topics: A28 ×2 `judged_before`, A8
 `answered`, A8 ×2 `answered_later`. Open units: A8, A18, A28 (each needs
 a second clear review on its current text; A8 reopened by this edit).
 
-Reopened by these edits and not asked (coordinator: State 2 only): State 1
+Round 95 (confirmation, text unchanged since round 94): 6 requests — one
+review answered invalid JSON and was asked once more (#162 retry), so 4
+review requests of 167,917 (17,646 + 150,271); grouping 2,364; judge
+65,030 inline (6,296 + 58,734), files 982,469 apart. Blocking 0, clear;
+topics: A28 `later_state`, A28 `judged_before`, A8 `judged_before`, A8
+`answered`. Round closed; `status --state 2`: closed true, ready true.
+
+Reopened and not asked (coordinator: State 2 only; unchanged after round
+95, `status` per state): State 1
 (`Projections and answers`), States 3 and 4 (`context`), State 5
 (`build_budget_view`, `build_progress_view`, `context`), State 7
 (`financial_policy`, `derived_views`) — the same units as before round 82;
