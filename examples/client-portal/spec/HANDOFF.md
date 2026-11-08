@@ -1,7 +1,7 @@
 # Handoff — Client Portal (current)
 
 Replaces the handoff of 2026-11-07. State of `agent/client-portal` on
-2026-11-08 after the State 2 rounds 82-91 (on `fe8814d3`, origin/main with
+2026-11-08 after the State 2 rounds 82-92 (on `fe8814d3`, origin/main with
 #161 merged), checked against the Factory
 checkout `code_factory_cp_witnesses` at origin/main `5a3bdec2`; the assembly
 result is `80_assembly.md`.
@@ -17,11 +17,10 @@ result is `80_assembly.md`.
   rounds still read the full texts and are to be cut down first). After
   Workbench #161 (owner decision 2026-11-08, #147: whether a check asserts
   is judged at State 8) the State 2 transition is ready (`invariant_tests`
-  closed, 32 decisions). Rounds 82-91 (below) closed the 17 units that
-  rounds 79-81 held open on check coverage; State 2 is still open: 4 units
-  (Status, A18, A28, A32) need their second clear review, and A28 blocks
-  on two topics of round 91 (below). Stopped by the coordinator after
-  round 91 (ping-pong rule).
+  closed, 32 decisions). Rounds 82-92 (below) closed the 17 units that
+  rounds 79-81 held open on check coverage. After round 92 State 2 is
+  still open: A18 and A28 block (3 topics, below). Stopped by the
+  coordinator after round 92.
 - The 52 partial verdicts below are now a State 8 obligation
   (`witness_material` at `state8_assembly`), Factory work in
   code-factory #189; they no longer hold State 2.
@@ -189,7 +188,7 @@ above, plus singletons on A28 (where in an operation the one wall reading
 happens; accepted forms of source-supplied datetimes) and A32 (whether the
 vulnerable-image rule covers builds or only deploys).
 
-## State 2 rounds 82-91 (2026-11-08, after #161)
+## State 2 rounds 82-92 (2026-11-08, after #161)
 
 Run with `--since 451ea6de` (the round-81 `closed_at`), provider
 `codex-cli:gpt-5.6-sol:medium`, 5 requests per round (3 reviews, grouping,
@@ -207,6 +206,7 @@ judge). Input characters per request:
 | 89 | 169,061 | 2,231 | 761,508 | 4 | A28, A32 |
 | 90 | 169,950 | 4,753 | 769,344 | 2 | A32 |
 | 91 | 165,937 | 8,484 | 782,086 | 2 | A28 |
+| 92 | 167,594 | 7,854 | 786,956 | 3 | A18, A28 |
 
 Two attempts (rounds 83 and 85) failed after their three reviews on a
 review answer that was not valid JSON and saved nothing; they were rerun
@@ -265,8 +265,40 @@ Open after round 91 (blocking, A28), verbatim:
   raised the same; a CLK-002 added for it in rounds 82-90 was removed with
   the mechanics before round 91.)
 
-A32 no longer blocks (its round-91 topics are `later_state` or
-`answered`); Status, A18 and A32 need one more clear review.
+Round 92 (owner approved closing A28 on substance, coordinator
+2026-11-08): CLK-001 extended to every read of the current time, writing a
+timestamp or comparing it with a stored one (expiry checks included), one
+wall reading per operation from the clock source; new CLK-002 (owner: the
+clock source): elapsed durations are measured only through the clock
+source's monotonic reading, used within one process, never persisted and
+never compared with or mixed into wall-clock values. Required tests items
+at the same level. Round 91's two A28 topics did not recur (r92 T7
+`answered`, T17 `answered_later`). Status and A32 closed; open units A18,
+A28.
+
+Open after round 92 (blocking: 3), verbatim:
+
+- T11 (A18, consequential_gap) "INV-027 permissibility and handling of
+  stored derived values or caches": "The detailed test forbids every
+  stored derived-view value and answers the cache question, but the
+  generic Required-test sentence still requires refusal of an undefined
+  violating input to a read-only recomputation."
+- T15 (A28, consequential_gap) "CLK-001 architectural check prohibiting
+  direct host-clock reads outside the clock source": "The Required test
+  says how to observe an operation's clock-source use but does not say
+  what check demonstrates the global architectural prohibition on every
+  direct host-clock read."
+- T16 (A18, contradiction) "INV-020 behavior when an existing snapshot
+  identity is republished with conflicting content": "The unqualified
+  INV-020 Required-test outcome says a violating import changes nothing,
+  while the detailed required test expressly requires a changed
+  re-publication to append its import result and audit."
+
+T11 and T16 are about the generic migrated sentence "a focused test at X
+showing the invariant holds; a violating input is refused and changes
+nothing" in A18, against the detailed items; T15 asks how the check works
+(State 8 material by the coordinator's reading). Not edited (one round
+only).
 
 Reopened by these edits and not asked (coordinator: State 2 only): State 1
 (`Projections and answers`), States 3 and 4 (`context`), State 5
