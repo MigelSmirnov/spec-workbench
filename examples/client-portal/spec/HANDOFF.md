@@ -1,7 +1,7 @@
 # Handoff — Client Portal (current)
 
 Replaces the handoff of 2026-11-07. State of `agent/client-portal` on
-2026-11-08 after the State 2 rounds 82-93 (on `404d1ccd`, origin/main with
+2026-11-08 after the State 2 rounds 82-94 (on `404d1ccd`, origin/main with
 #161 and #162 merged), checked against the Factory
 checkout `code_factory_cp_witnesses` at origin/main `5a3bdec2`; the assembly
 result is `80_assembly.md`.
@@ -17,10 +17,11 @@ result is `80_assembly.md`.
   rounds still read the full texts and are to be cut down first). After
   Workbench #161 (owner decision 2026-11-08, #147: whether a check asserts
   is judged at State 8) the State 2 transition is ready (`invariant_tests`
-  closed, 32 decisions). Rounds 82-93 (below) closed the 17 units that
-  rounds 79-81 held open on check coverage. After round 93 State 2 is
-  still open: A18 and A28 block (2 topics, below). Stopped by the
-  coordinator after round 93.
+  closed, 32 decisions). Rounds 82-94 (below) closed the 17 units that
+  rounds 79-81 held open on check coverage. Round 94 is clear (0
+  blocking); State 2 is still open only because A8, A18 and A28 need a
+  second clear review on their current text. Stopped by the coordinator
+  after round 94.
 - The 52 partial verdicts below are now a State 8 obligation
   (`witness_material` at `state8_assembly`), Factory work in
   code-factory #189; they no longer hold State 2.
@@ -188,7 +189,7 @@ above, plus singletons on A28 (where in an operation the one wall reading
 happens; accepted forms of source-supplied datetimes) and A32 (whether the
 vulnerable-image rule covers builds or only deploys).
 
-## State 2 rounds 82-93 (2026-11-08, after #161)
+## State 2 rounds 82-94 (2026-11-08, after #161)
 
 Run with `--since 451ea6de` (the round-81 `closed_at`), provider
 `codex-cli:gpt-5.6-sol:medium`, 5 requests per round (3 reviews, grouping,
@@ -207,7 +208,8 @@ judge). Input characters per request:
 | 90 | 169,950 | 4,753 | 769,344 | 2 | A32 |
 | 91 | 165,937 | 8,484 | 782,086 | 2 | A28 |
 | 92 | 167,594 | 7,854 | 786,956 | 3 | A18, A28 |
-| 93 | 151,714 | 2,956 | 1,044,835 (6,296 + 56,597 + 981,942) | 2 | A18, A28 |
+| 93 | 151,714 | 2,956 | 62,893 inline (6,296 + 56,597); files 981,942 apart | 2 | A18, A28 |
+| 94 | 167,917 | 2,204 | 70,834 inline (6,296 + 64,538); files 982,469 apart | 0 | — |
 
 Two attempts (rounds 83 and 85) failed after their three reviews on a
 review answer that was not valid JSON and saved nothing; they were rerun
@@ -305,11 +307,11 @@ items at the "what must be shown" level beside their witness tags
 other than the clock source reads the host wall or monotonic clock directly.
 
 Round 93 sizes: each review 151,714 (12,622 instruction + 139,092 text);
-grouping 2,956; judge 6,296 instruction + 56,597 inline text, files 981,942
-separately (1,044,835 in all). Under #162 the judge's inline text fell from
-~227k to 57k and its files rose from 554k to 982k; the request total is
-3,741 below the 1,048,576 limit noted for rounds 79-81 (if that limit
-still applies to files passed separately).
+grouping 2,956; judge 62,893 inline (6,296 instruction + 56,597 text).
+Since #162 the judge's files (981,942) are written to its working
+directory and read by search, not sent in the prompt; they are not part
+of the request size. In rounds 82-92 the judge column above still adds
+them in.
 
 Open after round 93 (blocking: 2; open units A18, A28), verbatim:
 
@@ -333,6 +335,26 @@ Open after round 93 (blocking: 2; open units A18, A28), verbatim:
 Round 92's T11, T15, T16 did not recur as such (T16's replay question
 returned as T4 on the new text). No round-93 topic is about a bound
 check.
+
+Round 94 (coordinator, fixing both round-93 topics):
+- T4: the INV-020 item now says a same-content re-publication is an
+  idempotent replay and that either a replay or a conflict leaves the
+  snapshot unchanged, changes no business state and is recorded as its own
+  import result and `snapshot.import` audit. The same "nothing stored /
+  changes nothing" wording covered the classified snapshot replay in A8:
+  its table row, INV-021 and INV-021's generic Required tests item now say
+  the same (no snapshot stored, no business state changed, own import
+  result and audit; the request is answered with the result, not the
+  snapshot, `00_product.md`). The expense, photo and payment replay rows
+  of A8 were left as they are: no text records anything for them.
+- T7: CLK-002 and its Required tests item say one elapsed (monotonic)
+  reading per viewer-entry request, as the normative rule does.
+
+Round 94: 5 requests; reviews 167,917 each (17,646 + 150,271), grouping
+2,204, judge 70,834 inline (6,296 + 64,538), files 982,469 apart.
+Blocking 0, the round is clear; topics: A28 ×2 `judged_before`, A8
+`answered`, A8 ×2 `answered_later`. Open units: A8, A18, A28 (each needs
+a second clear review on its current text; A8 reopened by this edit).
 
 Reopened by these edits and not asked (coordinator: State 2 only): State 1
 (`Projections and answers`), States 3 and 4 (`context`), State 5
