@@ -1,0 +1,109 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "INV-027 ownership across persistence modules",
+   "kind": "missing owner",
+   "text": "no table stores a value of a derived view (a total or aggregate; an import's content fingerprint is not one)",
+   "question": "Which module owns and enforces the schema-wide prohibition on stored derived values and the recomputation requirement after writes to expenses, progress, payments, plans and budget-version activation, when A18 is primarily owned by budget_management but expense_repository and project_tracking_repository are not its consumers?",
+   "options": [
+    "Make the prohibition a cross-cutting obligation of every repository and verify it at persistence assembly",
+    "Make derived_views the primary owner of both recomputation and the prohibition on derived columns",
+    "Give portal_store or a named persistence-closure module ownership of the schema-wide rule",
+    "Limit A18 to budget tables and move the cross-domain rule to A21"
+   ],
+   "default_guess": "Make derived_views own recomputation, make every repository responsible for storing only owning records, and add a persistence-assembly verification covering every table.",
+   "witness": {
+    "initial": "An active budget has recorded progress and payments, and a repository schema is allowed to contain a cached completed-work or payment total.",
+    "events": [
+     "Staff changes section progress or activates another budget version.",
+     "derived_views builds the next project overview."
+    ],
+    "outcomes": [
+     "The view recomputes from owning rows and returns the new total.",
+     "The view or repository reads the stored aggregate and returns the stale total."
+    ],
+    "observer": "Staff and viewers reading the project overview"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "one wall-clock instant across authorization and mutation",
+   "kind": "unclear dependency direction",
+   "text": "that instant is every current time the operation uses",
+   "question": "For a project-scoped use case whose authorization_guard checks session expiry and whose owning module writes event timestamps, which module takes the operation's single wall reading, and how is that instant shared between the guard and the mutation?",
+   "options": [
+    "The owning use-case module reads once and passes the instant to authorization_guard",
+    "authorization_guard reads once and returns or propagates the instant to the owning use case",
+    "Treat authorization and the mutation as separate operations, each with its own wall reading"
+   ],
+   "default_guess": "The outer owning use case should read once, pass that instant into authorization_guard, and reuse it for its business timestamps; audit_writer may take its separately permitted reading.",
+   "witness": {
+    "initial": "A valid staff session expires at instant T, and the clock advances across T while a project mutation is being authorized.",
+    "events": [
+     "Staff submits a progress update just before T.",
+     "authorization_guard checks the session and the owning use case writes the progress timestamp."
+    ],
+    "outcomes": [
+     "One shared reading before T admits the mutation and gives its portal-owned timestamps that same pre-expiry instant.",
+     "Separate guard and use-case readings admit the mutation using a pre-T check but write its portal-owned timestamp after T; an implementation that takes the single reading after T rejects it instead."
+    ],
+    "observer": "The staff caller and anyone reading the stored progress and audit chronology"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "source-supplied datetime normalization",
+   "kind": "missing owner",
+   "text": "are kept as supplied: the same instant, stored offset-naive UTC like every persisted timestamp",
+   "question": "Which module owns validation and conversion of source-supplied approved_at, published_at, confirmed_at, photo_date and service-credential expires_at into offset-naive UTC while preserving the instant, given that models owns no behavior beyond closed-choice validation and system_clock must not own storage?",
+   "options": [
+    "Each owning use case normalizes its source-supplied datetimes",
+    "Request decoding normalizes every source datetime before constructing models",
+    "A shared time-normalization policy module performs the conversion",
+    "Only offset-naive UTC inputs are accepted, so no conversion occurs"
+   ],
+   "default_guess": "Each owning use case should apply one shared pure normalization rule before fingerprinting or persistence; system_clock should remain responsible only for host-clock readings.",
+   "witness": {
+    "initial": "A producer supplies published_at representing 10:00 UTC as 12:00 with a +02:00 offset.",
+    "events": [
+     "The producer publishes a snapshot.",
+     "snapshot_import canonicalizes it and persists the accepted snapshot."
+    ],
+    "outcomes": [
+     "The stored offset-naive value is 10:00, preserving the supplied instant.",
+     "The offset is merely removed and the stored value is 12:00, preserving the displayed wall reading instead."
+    ],
+    "observer": "The producer reading import history and staff comparing snapshot chronology"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "CLK-002 elapsed-clock responsibility",
+   "kind": "ownership contradiction",
+   "text": "Owner: the clock source.",
+   "question": "Does system_clock own CLK-002's one-reading-per-viewer-entry and rate-limit-window behavior, or does transport_guard own it, given that system_clock explicitly must not own how many readings an operation takes or the rate-limit window?",
+   "options": [
+    "system_clock owns only monotonic_seconds; transport_guard owns the one-read rule and rate-limit algorithm",
+    "system_clock owns and enforces one elapsed reading per request and exposes a rate-limit-oriented capability",
+    "Split CLK-002 into a clock-source invariant and a transport_guard invariant"
+   ],
+   "default_guess": "Split CLK-002: system_clock owns exclusive access to the host monotonic clock, while transport_guard owns taking exactly one reading per viewer-entry request and using it only for the rate-limit window.",
+   "witness": {
+    "initial": "A viewer-entry request arrives at the boundary of its rate-limit window while the monotonic clock advances.",
+    "events": [
+     "transport_guard evaluates the viewer-entry limit.",
+     "It obtains elapsed time either through one request reading or through multiple clock-source calls."
+    ],
+    "outcomes": [
+     "One request reading places the attempt consistently on one side of the window boundary.",
+     "Multiple readings place different parts of the same decision on opposite sides and may admit rather than refuse the attempt, or refuse rather than admit it."
+    ],
+    "observer": "The viewer attempting entry"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"INV-027 ownership across persistence modules\",\"kind\":\"missing owner\",\"text\":\"no table stores a value of a derived view (a total or aggregate; an import's content fingerprint is not one)\",\"question\":\"Which module owns and enforces the schema-wide prohibition on stored derived values and the recomputation requirement after writes to expenses, progress, payments, plans and budget-version activation, when A18 is primarily owned by budget_management but expense_repository and project_tracking_repository are not its consumers?\",\"options\":[\"Make the prohibition a cross-cutting obligation of every repository and verify it at persistence assembly\",\"Make derived_views the primary owner of both recomputation and the prohibition on derived columns\",\"Give portal_store or a named persistence-closure module ownership of the schema-wide rule\",\"Limit A18 to budget tables and move the cross-domain rule to A21\"],\"default_guess\":\"Make derived_views own recomputation, make every repository responsible for storing only owning records, and add a persistence-assembly verification covering every table.\",\"witness\":{\"initial\":\"An active budget has recorded progress and payments, and a repository schema is allowed to contain a cached completed-work or payment total.\",\"events\":[\"Staff changes section progress or activates another budget version.\",\"derived_views builds the next project overview.\"],\"outcomes\":[\"The view recomputes from owning rows and returns the new total.\",\"The view or repository reads the stored aggregate and returns the stale total.\"],\"observer\":\"Staff and viewers reading the project overview\"}},{\"unit\":\"context\",\"subject\":\"one wall-clock instant across authorization and mutation\",\"kind\":\"unclear dependency direction\",\"text\":\"that instant is every current time the operation uses\",\"question\":\"For a project-scoped use case whose authorization_guard checks session expiry and whose owning module writes event timestamps, which module takes the operation's single wall reading, and how is that instant shared between the guard and the mutation?\",\"options\":[\"The owning use-case module reads once and passes the instant to authorization_guard\",\"authorization_guard reads once and returns or propagates the instant to the owning use case\",\"Treat authorization and the mutation as separate operations, each with its own wall reading\"],\"default_guess\":\"The outer owning use case should read once, pass that instant into authorization_guard, and reuse it for its business timestamps; audit_writer may take its separately permitted reading.\",\"witness\":{\"initial\":\"A valid staff session expires at instant T, and the clock advances across T while a project mutation is being authorized.\",\"events\":[\"Staff submits a progress update just before T.\",\"authorization_guard checks the session and the owning use case writes the progress timestamp.\"],\"outcomes\":[\"One shared reading before T admits the mutation and gives its portal-owned timestamps that same pre-expiry instant.\",\"Separate guard and use-case readings admit the mutation using a pre-T check but write its portal-owned timestamp after T; an implementation that takes the single reading after T rejects it instead.\"],\"observer\":\"The staff caller and anyone reading the stored progress and audit chronology\"}},{\"unit\":\"context\",\"subject\":\"source-supplied datetime normalization\",\"kind\":\"missing owner\",\"text\":\"are kept as supplied: the same instant, stored offset-naive UTC like every persisted timestamp\",\"question\":\"Which module owns validation and conversion of source-supplied approved_at, published_at, confirmed_at, photo_date and service-credential expires_at into offset-naive UTC while preserving the instant, given that models owns no behavior beyond closed-choice validation and system_clock must not own storage?\",\"options\":[\"Each owning use case normalizes its source-supplied datetimes\",\"Request decoding normalizes every source datetime before constructing models\",\"A shared time-normalization policy module performs the conversion\",\"Only offset-naive UTC inputs are accepted, so no conversion occurs\"],\"default_guess\":\"Each owning use case should apply one shared pure normalization rule before fingerprinting or persistence; system_clock should remain responsible only for host-clock readings.\",\"witness\":{\"initial\":\"A producer supplies published_at representing 10:00 UTC as 12:00 with a +02:00 offset.\",\"events\":[\"The producer publishes a snapshot.\",\"snapshot_import canonicalizes it and persists the accepted snapshot.\"],\"outcomes\":[\"The stored offset-naive value is 10:00, preserving the supplied instant.\",\"The offset is merely removed and the stored value is 12:00, preserving the displayed wall reading instead.\"],\"observer\":\"The producer reading import history and staff comparing snapshot chronology\"}},{\"unit\":\"context\",\"subject\":\"CLK-002 elapsed-clock responsibility\",\"kind\":\"ownership contradiction\",\"text\":\"Owner: the clock source.\",\"question\":\"Does system_clock own CLK-002's one-reading-per-viewer-entry and rate-limit-window behavior, or does transport_guard own it, given that system_clock explicitly must not own how many readings an operation takes or the rate-limit window?\",\"options\":[\"system_clock owns only monotonic_seconds; transport_guard owns the one-read rule and rate-limit algorithm\",\"system_clock owns and enforces one elapsed reading per request and exposes a rate-limit-oriented capability\",\"Split CLK-002 into a clock-source invariant and a transport_guard invariant\"],\"default_guess\":\"Split CLK-002: system_clock owns exclusive access to the host monotonic clock, while transport_guard owns taking exactly one reading per viewer-entry request and using it only for the rate-limit window.\",\"witness\":{\"initial\":\"A viewer-entry request arrives at the boundary of its rate-limit window while the monotonic clock advances.\",\"events\":[\"transport_guard evaluates the viewer-entry limit.\",\"It obtains elapsed time either through one request reading or through multiple clock-source calls.\"],\"outcomes\":[\"One request reading places the attempt consistently on one side of the window boundary.\",\"Multiple readings place different parts of the same decision on opposite sides and may admit rather than refuse the attempt, or refuse rather than admit it.\"],\"observer\":\"The viewer attempting entry\"}}]}",
+ "set_aside": []
+}
