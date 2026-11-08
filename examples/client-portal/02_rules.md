@@ -1355,7 +1355,7 @@ reading equals `datetime.utcnow()` and the elapsed reading equals
   (the A25 viewer-entry window) come from the clock source's monotonic
   reading, one elapsed reading per viewer-entry request, are not persisted, and are not compared with or mixed into
   wall-clock values.
-- Witnesses, the focused Factory verification checks that assert it: CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal]; CLK-002 [witness: verification:transport_guard_client_portal].
 
 ### Consequence
 
