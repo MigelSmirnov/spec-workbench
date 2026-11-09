@@ -2,8 +2,26 @@
 
 ## Verdict
 
-**Closed (2026-11-09, second pass).** 39 modules reviewed: 39 `PASS`, 0
-`AMBIGUITY`, 0 pending, 0 stale. `81_module_review_status.json` records each
+**Closed (2026-11-09, third pass).** 39 modules reviewed: 39 `PASS`, 0
+`AMBIGUITY`, 0 pending, 0 stale.
+
+Third pass (2026-11-09, evening). Every packet changed, because every
+packet carries the State 2 decisions and the data closure, which changed
+with the retirement of 13 `rules` namespaces (`f8b269e6`), the binary
+storage settings (`6ac66aac`, binary_storage_backend v2) and the binary
+bounds start-up constraint (`db94be20`); the notes of 9 modules changed with
+the enum NAME rewrite (`e4f5be23`) and `_authorize_project_operation` with
+the begin note (`bc738392`). None of it leaves a mechanism open: the
+decisions' Normative rules are unchanged, a member named by NAME is the
+standard's form (§15.3.1), and the binary settings are an emitted backend's
+IR. Evidence: `module_review_workbench.review` 0 blocks for all 39 (the one
+`review` finding, `expense_intake` `decode_recognition_publication` not
+exported, is the internal-only operation of Q09); State 7 round 27 on the
+13 modules whose prompts changed: no open point. Packet hashes recomputed.
+The `financial_policy` prompt did not change; its round 23 T1-T3 (the
+Factory's own model_copy line) remain recorded, see `spec/HANDOFF.md`.
+
+Second pass: `81_module_review_status.json` records each
 verdict and its packet hash (`slice_sha256`, the FA002 rule over
 `build_slice`), recomputed on the spec after the State 7 rounds below.
 
