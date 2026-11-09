@@ -60,6 +60,7 @@ class Case:
     deterministic: set[str] = field(default_factory=set)  # contracts an emitter lowers from IR
     module_internal: dict[str, Any] = field(default_factory=dict)  # current, for drift
     factory_target: str | None = None
+    emitted: dict[str, str] = field(default_factory=dict)  # module -> the backend rule whose emitter writes it
 
     # -- ownership ---------------------------------------------------------
     def owner(self, symbol: str) -> str | None:
@@ -112,6 +113,24 @@ class Case:
             if scope is not None:
                 scope.notes.append((f"note:{scope.id}#{len(scope.notes) + 1}", note))
         return result
+
+    def note_module(self, note: Note) -> str | None:
+        """The module a note belongs to, whatever its scope (a deterministic contract too)."""
+        if note.scope in self.modules:
+            return note.scope
+        return self.owner(note.scope)
+
+    def required_imports(self, symbol: str, provider: str) -> bool:
+        """Whether the Factory requires the module to import ``symbol`` from ``provider``.
+
+        generate_agent.validate_generated_coverage demands an import for every
+        non-dotted contract of the local spec that imports.internal names; the
+        slicer (p060 imports.declared) puts a declared symbol's contract there
+        only when the symbol is a function of the provider that has a contract.
+        Classes (dotted method contracts), models, enums and constants are not
+        required imports.
+        """
+        return "." not in symbol and symbol in self.contracts and self.owner(symbol) == provider
 
     def _note_scope(self, note: Note, scopes: dict[str, Scope]) -> Scope | None:
         if note.scope in self.contracts:
@@ -197,6 +216,25 @@ def factory_target(project: Path) -> str | None:
     return value
 
 
+def emitted_modules(spec: dict[str, Any]) -> dict[str, str]:
+    """Modules a deterministic backend's emitter writes: ``rules.<key>.wiring.module``.
+
+    The Factory emitter writes such a module from its IR and its own template
+    (the router's delegates, the viewer-cookie boundary's session calls, the
+    binary storage's settings loader); the generator does not write it.
+    """
+    result: dict[str, str] = {}
+    rules = spec.get("rules") if isinstance(spec.get("rules"), dict) else {}
+    for key, backend in sorted(rules.items()):
+        if not isinstance(backend, dict) or not str(backend.get("kind") or "").endswith("_backend"):
+            continue
+        wiring = backend.get("wiring")
+        module = wiring.get("module") if isinstance(wiring, dict) else None
+        if isinstance(module, str) and module:
+            result.setdefault(module, str(key))
+    return result
+
+
 def load(project: Path) -> Case:
     """The case as State 8 will project it."""
     from notes_workbench import gate as notes_gate
@@ -230,4 +268,5 @@ def load(project: Path) -> Case:
         deterministic=set(notes_gate._load_deterministic_callable_scopes(project)),
         module_internal=imports.get("module_internal") or {},
         factory_target=factory_target(project),
+        emitted=emitted_modules(spec),
     )

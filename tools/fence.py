@@ -49,6 +49,7 @@ HINTS: dict[str, str] = {
     "imports_knows_uncovered": "accept the symbol the module takes from this State 3 collaborator, or reject the edge (symbol *, candidate knows) with a reason",
     "imports_code_undeclared": "the accepted code names this symbol: accept it into the scope that uses it, or reject it with a reason if the new specification drops it",
     "imports_code_unused": "drop the use, or record code_outdated with the reason the code lags the specification",
+    "imports_required_unnamed": "name the callable in the note of the operation that calls it, saying what it checks or returns and when (the imported X form); if the module no longer calls it, drop the use from 65_imports.json",
     "imports_projection_drift": "do not edit imports.module_internal by hand: change the decision in 65_imports.json and run tools/design_spec_projection.py <case> --apply",
     "imports_factory_unavailable": "make the Factory reachable (--factory-root or SPEC_WORKBENCH_FACTORY_ROOT) with a slicer report that has --code-root",
     "fresh_timestamp_without_source": "name the time source State 2 decided in the contract: a datetime parameter, a clock port retained by __init__, a declared time_source_policy authority, or a module-level clock (system_clock_backend v2-v5) the module depends on (State 3 Knows, then imports), or the call (a note naming the callee) to an operation that has a source and returns the timestamp; do not change the service's accepted behaviour to satisfy the check",
