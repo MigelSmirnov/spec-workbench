@@ -1,0 +1,226 @@
+{
+ "open_points": [
+  {
+   "subject": "02_rules.md:Classification principles and A30 Registry URL validation",
+   "kind": "contradictory_validation_time",
+   "text": "The start-up check refuses only a missing or empty\nvalue; which values the gateway accepts as a base URL and how it joins them\nwith the request paths stay the accepted gateway's (note `_registry_url`,\nthe Registry path constants), carried to States 6–7.",
+   "question": "Must `runtime_settings` validate that the deployment URL is a usable HTTP(S) base URL at start, as Classification principles says for deployment URLs, or must every non-empty value pass start-up and be rejected only by the gateway?",
+   "options": [
+    "Validate usability at start and refuse startup",
+    "Validate only presence at start; reject unusable values per Registry call"
+   ],
+   "default_guess": "Validate only presence at start because A30 is the more specific rule.",
+   "witness": {
+    "initial": "`REGISTRY_BASE_URL` is the non-empty value `not-a-url`; every other required setting is valid.",
+    "events": [
+     "The host operator starts the service.",
+     "A client invokes an operation that requires Registry validation."
+    ],
+    "outcomes": [
+     "Start-up refuses the deployment because a deployment URL is validated once at start.",
+     "Start-up succeeds; the later Registry call fails as `transport_error`."
+    ],
+    "observer": "The host operator and the API client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 CFG-002",
+   "kind": "contradictory_invalid_value_rule",
+   "text": "CFG-002: a required start-up variable that is missing or invalid stops\nthe start before any request is served; for the Registry URL the start-up\ncheck refuses only a missing or empty value, and an unusable non-empty URL\nfails each Registry call as `transport_error` (A6).",
+   "question": "Does “invalid” in the general rule exclude unusable non-empty Registry URLs, and if so what exact validity predicate applies to each required variable at start-up?",
+   "options": [
+    "Every semantically invalid required value stops start-up",
+    "Registry URL validity at start-up means only present and non-empty; other variables use their declared validators"
+   ],
+   "default_guess": "Treat the Registry URL as a stated exception whose start-up validator checks only presence and non-emptiness.",
+   "witness": {
+    "initial": "All required variables are present; `REGISTRY_BASE_URL` is non-empty but contains an unusable URL.",
+    "events": [
+     "The service performs CFG-002 start-up validation."
+    ],
+    "outcomes": [
+     "The general ‘missing or invalid’ clause stops start-up.",
+     "The Registry-specific clause permits start-up."
+    ],
+    "observer": "The host operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 CFG-002 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "CFG-002: `runtime_settings_client_portal`: for each required variable a\n  missing value and an invalid value stop start-up, a missing or empty\n  `REGISTRY_BASE_URL` stops it too, and a complete valid environment starts.",
+   "question": "What must the CFG-002 test demonstrate for an unusable but non-empty `REGISTRY_BASE_URL`, which the invariant says starts successfully and makes each Registry call fail as `transport_error`?",
+   "options": [
+    "Add a start-up-success plus Registry-call-transport_error case",
+    "Treat an unusable non-empty URL as an invalid value that stops start-up"
+   ],
+   "default_guess": "Add the start-up-success and per-call `transport_error` case.",
+   "unit": "?"
+  },
+  {
+   "subject": "Classification principles and A30 binary storage settings",
+   "kind": "runtime_setting_mutation_unspecified",
+   "text": "the two binary storage rows\n  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and\n  which the emitted `binary_storage` reads at each read, as the Factory's\n  binary storage backend is built (A14, A30).",
+   "question": "If either environment variable is removed or changed after successful start-up, what value and validation result governs the next binary read, and how is the start-up invariant `BINARY_MAX_READ_BYTES <= max_binary_response_bytes` preserved?",
+   "options": [
+    "Treat the process environment as immutable after start-up",
+    "Re-read and revalidate both variables and their cross-bound on every binary read",
+    "Cache the validated start-up values despite the statement that they are read at each read"
+   ],
+   "default_guess": "Re-read and revalidate both variables, refusing the binary read if either value or the cross-bound is invalid.",
+   "witness": {
+    "initial": "The service starts with `BINARY_MAX_READ_BYTES=1000` and `max_binary_response_bytes=2000`.",
+    "events": [
+     "The host environment changes `BINARY_MAX_READ_BYTES` to `3000` without restarting the process.",
+     "An authorized client requests a 2500-byte binary."
+    ],
+    "outcomes": [
+     "The read uses the start-up value and refuses the 2500-byte object.",
+     "The read uses 3000 and emits a response exceeding the configured 2000-byte response ceiling."
+    ],
+    "observer": "The authorized client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9 INV-037 and `correct_expense`",
+   "kind": "invariant_test_coverage",
+   "text": "`correct_expense` (total)",
+   "question": "When `correct_expense` changes a total together with replacement allocation amounts, must INV-037 test the replacement allocation amounts as well as the total?",
+   "options": [
+    "Test both the corrected total and every replacement allocation amount",
+    "Test only the corrected total because allocation validation is covered by `replace_expense_allocations`"
+   ],
+   "default_guess": "Test both because State 1 says the matching allocation adjustment is part of the same atomic correction operation.",
+   "witness": {
+    "initial": "An expense correction supplies a two-decimal total and a replacement allocation containing a half-cent value.",
+    "events": [
+     "A staff operator submits `correct_expense`.",
+     "The operation validates and stores the total and replacement allocations."
+    ],
+    "outcomes": [
+     "The allocation is quantized with `MONEY_ROUNDING` and stored at the required scale.",
+     "Only the total is validated; the allocation retains a different scale or rounding result."
+    ],
+    "observer": "Staff and clients reading the expense allocations"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9 INV-037 currency checks",
+   "kind": "test_input_undefined",
+   "text": "a check at `validate_eur_amount` and at each operation that accepts an amount",
+   "question": "For operations whose State 1 command/model carries only a `Decimal` and no currency field—such as `register_work_payment` and manual plan updates—what currency-refusal case must the required test exercise?",
+   "options": [
+    "Currencyless commands implicitly mean EUR and are tested only for scale and rounding",
+    "Add a currency field to every amount-bearing command",
+    "Apply foreign-currency tests only at boundaries that actually carry currency, while testing scale and rounding at all amount-bearing operations"
+   ],
+   "default_guess": "Apply foreign-currency tests only to currency-bearing boundaries and test scale/rounding everywhere else.",
+   "witness": {
+    "initial": "A caller prepares a work-payment request with `amount=10.00`; the State 1 request has no currency field.",
+    "events": [
+     "The caller submits the payment registration."
+    ],
+    "outcomes": [
+     "The operation treats the amount as implicitly EUR and accepts it.",
+     "The operation requires an unstated currency input so it can perform INV-037's per-operation currency check."
+    ],
+    "observer": "The API caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9 INV-037 negative rounding",
+   "kind": "invariant_test_gap",
+   "text": "a half-way value (for example 0.005 and 0.015) rounded half-up away from zero",
+   "question": "Must INV-037 demonstrate the negative half-way case, given that State 1 permits negative allocation amounts and `ROUND_HALF_UP` must round them away from zero?",
+   "options": [
+    "Test at least one negative midpoint such as `-0.005`",
+    "Positive midpoint examples are sufficient"
+   ],
+   "default_guess": "Test `-0.005` as well as positive midpoints.",
+   "witness": {
+    "initial": "An allocation amount of `-0.005` is accepted by the allocation model.",
+    "events": [
+     "A staff operator submits an allocation set whose amounts still sum to the expense total.",
+     "The amount is quantized to two fraction digits."
+    ],
+    "outcomes": [
+     "The amount becomes `-0.01`, rounding half-up away from zero.",
+     "The amount becomes `0.00`, because only positive half-way behavior was implemented."
+    ],
+    "observer": "Staff and clients reading the allocation"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9 INV-041 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "INV-041: a check against the rules table at `calculate_overall_progress` showing the invariant holds; a violating input is refused and changes nothing.",
+   "question": "What exact cases and assertions must show both parts of INV-041: per-section completed-work calculation and rounding, weighted overall progress with absent-progress sections excluded, and the unavailable result when the denominator is zero?",
+   "options": [
+    "Specify cases and expected results for every formula and unavailable condition",
+    "Test only `calculate_overall_progress` with an unspecified conforming and violating input"
+   ],
+   "default_guess": "Specify concrete cases for completed-work values, weighted progress, excluded missing progress, per-section rounding, and a zero denominator.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 password control-character policy",
+   "kind": "contradiction",
+   "text": "A new password is 12–128 Unicode code points, contains no NUL/control\n  characters, and is hashed exactly as supplied. The portal never trims,\n  casefolds, or Unicode-normalizes password plaintext. The refused control\n  characters are exactly the code points U+0000 to U+001F and U+007F (the\n  accepted `_validate_new_password`); every other code point, other Unicode\n  control and format characters included, is accepted.",
+   "question": "Does “contains no NUL/control characters” mean every Unicode control/format character is refused, or only U+0000–U+001F and U+007F are refused?",
+   "options": [
+    "Refuse exactly U+0000–U+001F and U+007F",
+    "Refuse all Unicode control characters",
+    "Refuse all Unicode control and format characters"
+   ],
+   "default_guess": "Refuse exactly U+0000–U+001F and U+007F, and replace the broader first sentence.",
+   "witness": {
+    "initial": "A new 12-code-point password contains U+0080 or U+200B and otherwise valid characters.",
+    "events": [
+     "A staff password-accepting operation validates the supplied plaintext."
+    ],
+    "outcomes": [
+     "It is refused because the password contains a Unicode control or format character.",
+     "It is accepted because the code point is outside U+0000–U+001F and U+007F."
+    ],
+    "observer": "The staff user or administrator submitting the password"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "02_rules.md:Classification principles",
+   "kind": "standard_violation",
+   "text": "a value that depends on the deployment (URLs, origins, hosts, size bounds,\n  rate limits) — a row of the start-up table `config.runtime_environment_variables`,\n  validated once at start by `runtime_settings` and read into a field of\n  `RuntimeSettings`; the one exception is the two binary storage rows\n  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and\n  which the emitted `binary_storage` reads at each read, as the Factory's\n  binary storage backend is built (A14, A30).",
+   "rule": "Таблица выше —\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The two deployment settings must become fields of the settings object read through the settings module, or be reclassified into another one of the three permitted value paths.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30 Carried changes",
+   "kind": "standard_violation",
+   "text": "`binary_read_limit_env_name`: the binary read limit is the environment\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\n  field; the emitted `binary_storage` reads it at each read through its\n  backend IR (Factory `a6916180314d`). No model-written module reads it.",
+   "rule": "Таблица выше —\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "`BINARY_MAX_READ_BYTES` must be delivered as a field of the settings object, or be given another permitted home and delivery path.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30 Consequence",
+   "kind": "standard_violation",
+   "text": "A deployment value is a row of `config.runtime_environment_variables` read once by `load_runtime_settings` into a field of `RuntimeSettings` (`database_url`, `environment`, `public_origin`, `trusted_hosts`, `allowed_origins`, `max_request_body_bytes`, `max_binary_response_bytes`, `production_logging`, the two viewer-entry limits and, since 2026-11-09, `registry_base_url`), except the two binary storage rows, which the emitted `binary_storage` reads.",
+   "rule": "Таблица выше —\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Remove the exception by putting both binary storage deployment values on the settings object, or assign them another permitted value path.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"02_rules.md:Classification principles and A30 Registry URL validation\",\"kind\":\"contradictory_validation_time\",\"text\":\"The start-up check refuses only a missing or empty\\nvalue; which values the gateway accepts as a base URL and how it joins them\\nwith the request paths stay the accepted gateway's (note `_registry_url`,\\nthe Registry path constants), carried to States 6–7.\",\"question\":\"Must `runtime_settings` validate that the deployment URL is a usable HTTP(S) base URL at start, as Classification principles says for deployment URLs, or must every non-empty value pass start-up and be rejected only by the gateway?\",\"options\":[\"Validate usability at start and refuse startup\",\"Validate only presence at start; reject unusable values per Registry call\"],\"default_guess\":\"Validate only presence at start because A30 is the more specific rule.\",\"witness\":{\"initial\":\"`REGISTRY_BASE_URL` is the non-empty value `not-a-url`; every other required setting is valid.\",\"events\":[\"The host operator starts the service.\",\"A client invokes an operation that requires Registry validation.\"],\"outcomes\":[\"Start-up refuses the deployment because a deployment URL is validated once at start.\",\"Start-up succeeds; the later Registry call fails as `transport_error`.\"],\"observer\":\"The host operator and the API client\"}},{\"subject\":\"A30 CFG-002\",\"kind\":\"contradictory_invalid_value_rule\",\"text\":\"CFG-002: a required start-up variable that is missing or invalid stops\\nthe start before any request is served; for the Registry URL the start-up\\ncheck refuses only a missing or empty value, and an unusable non-empty URL\\nfails each Registry call as `transport_error` (A6).\",\"question\":\"Does “invalid” in the general rule exclude unusable non-empty Registry URLs, and if so what exact validity predicate applies to each required variable at start-up?\",\"options\":[\"Every semantically invalid required value stops start-up\",\"Registry URL validity at start-up means only present and non-empty; other variables use their declared validators\"],\"default_guess\":\"Treat the Registry URL as a stated exception whose start-up validator checks only presence and non-emptiness.\",\"witness\":{\"initial\":\"All required variables are present; `REGISTRY_BASE_URL` is non-empty but contains an unusable URL.\",\"events\":[\"The service performs CFG-002 start-up validation.\"],\"outcomes\":[\"The general ‘missing or invalid’ clause stops start-up.\",\"The Registry-specific clause permits start-up.\"],\"observer\":\"The host operator\"}},{\"subject\":\"A30 CFG-002 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"CFG-002: `runtime_settings_client_portal`: for each required variable a\\n  missing value and an invalid value stop start-up, a missing or empty\\n  `REGISTRY_BASE_URL` stops it too, and a complete valid environment starts.\",\"question\":\"What must the CFG-002 test demonstrate for an unusable but non-empty `REGISTRY_BASE_URL`, which the invariant says starts successfully and makes each Registry call fail as `transport_error`?\",\"options\":[\"Add a start-up-success plus Registry-call-transport_error case\",\"Treat an unusable non-empty URL as an invalid value that stops start-up\"],\"default_guess\":\"Add the start-up-success and per-call `transport_error` case.\"},{\"subject\":\"Classification principles and A30 binary storage settings\",\"kind\":\"runtime_setting_mutation_unspecified\",\"text\":\"the two binary storage rows\\n  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and\\n  which the emitted `binary_storage` reads at each read, as the Factory's\\n  binary storage backend is built (A14, A30).\",\"question\":\"If either environment variable is removed or changed after successful start-up, what value and validation result governs the next binary read, and how is the start-up invariant `BINARY_MAX_READ_BYTES <= max_binary_response_bytes` preserved?\",\"options\":[\"Treat the process environment as immutable after start-up\",\"Re-read and revalidate both variables and their cross-bound on every binary read\",\"Cache the validated start-up values despite the statement that they are read at each read\"],\"default_guess\":\"Re-read and revalidate both variables, refusing the binary read if either value or the cross-bound is invalid.\",\"witness\":{\"initial\":\"The service starts with `BINARY_MAX_READ_BYTES=1000` and `max_binary_response_bytes=2000`.\",\"events\":[\"The host environment changes `BINARY_MAX_READ_BYTES` to `3000` without restarting the process.\",\"An authorized client requests a 2500-byte binary.\"],\"outcomes\":[\"The read uses the start-up value and refuses the 2500-byte object.\",\"The read uses 3000 and emits a response exceeding the configured 2000-byte response ceiling.\"],\"observer\":\"The authorized client\"}},{\"subject\":\"A9 INV-037 and `correct_expense`\",\"kind\":\"invariant_test_coverage\",\"text\":\"`correct_expense` (total)\",\"question\":\"When `correct_expense` changes a total together with replacement allocation amounts, must INV-037 test the replacement allocation amounts as well as the total?\",\"options\":[\"Test both the corrected total and every replacement allocation amount\",\"Test only the corrected total because allocation validation is covered by `replace_expense_allocations`\"],\"default_guess\":\"Test both because State 1 says the matching allocation adjustment is part of the same atomic correction operation.\",\"witness\":{\"initial\":\"An expense correction supplies a two-decimal total and a replacement allocation containing a half-cent value.\",\"events\":[\"A staff operator submits `correct_expense`.\",\"The operation validates and stores the total and replacement allocations.\"],\"outcomes\":[\"The allocation is quantized with `MONEY_ROUNDING` and stored at the required scale.\",\"Only the total is validated; the allocation retains a different scale or rounding result.\"],\"observer\":\"Staff and clients reading the expense allocations\"}},{\"subject\":\"A9 INV-037 currency checks\",\"kind\":\"test_input_undefined\",\"text\":\"a check at `validate_eur_amount` and at each operation that accepts an amount\",\"question\":\"For operations whose State 1 command/model carries only a `Decimal` and no currency field—such as `register_work_payment` and manual plan updates—what currency-refusal case must the required test exercise?\",\"options\":[\"Currencyless commands implicitly mean EUR and are tested only for scale and rounding\",\"Add a currency field to every amount-bearing command\",\"Apply foreign-currency tests only at boundaries that actually carry currency, while testing scale and rounding at all amount-bearing operations\"],\"default_guess\":\"Apply foreign-currency tests only to currency-bearing boundaries and test scale/rounding everywhere else.\",\"witness\":{\"initial\":\"A caller prepares a work-payment request with `amount=10.00`; the State 1 request has no currency field.\",\"events\":[\"The caller submits the payment registration.\"],\"outcomes\":[\"The operation treats the amount as implicitly EUR and accepts it.\",\"The operation requires an unstated currency input so it can perform INV-037's per-operation currency check.\"],\"observer\":\"The API caller\"}},{\"subject\":\"A9 INV-037 negative rounding\",\"kind\":\"invariant_test_gap\",\"text\":\"a half-way value (for example 0.005 and 0.015) rounded half-up away from zero\",\"question\":\"Must INV-037 demonstrate the negative half-way case, given that State 1 permits negative allocation amounts and `ROUND_HALF_UP` must round them away from zero?\",\"options\":[\"Test at least one negative midpoint such as `-0.005`\",\"Positive midpoint examples are sufficient\"],\"default_guess\":\"Test `-0.005` as well as positive midpoints.\",\"witness\":{\"initial\":\"An allocation amount of `-0.005` is accepted by the allocation model.\",\"events\":[\"A staff operator submits an allocation set whose amounts still sum to the expense total.\",\"The amount is quantized to two fraction digits.\"],\"outcomes\":[\"The amount becomes `-0.01`, rounding half-up away from zero.\",\"The amount becomes `0.00`, because only positive half-way behavior was implemented.\"],\"observer\":\"Staff and clients reading the allocation\"}},{\"subject\":\"A9 INV-041 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-041: a check against the rules table at `calculate_overall_progress` showing the invariant holds; a violating input is refused and changes nothing.\",\"question\":\"What exact cases and assertions must show both parts of INV-041: per-section completed-work calculation and rounding, weighted overall progress with absent-progress sections excluded, and the unavailable result when the denominator is zero?\",\"options\":[\"Specify cases and expected results for every formula and unavailable condition\",\"Test only `calculate_overall_progress` with an unspecified conforming and violating input\"],\"default_guess\":\"Specify concrete cases for completed-work values, weighted progress, excluded missing progress, per-section rounding, and a zero denominator.\"},{\"subject\":\"A16 password control-character policy\",\"kind\":\"contradiction\",\"text\":\"A new password is 12–128 Unicode code points, contains no NUL/control\\n  characters, and is hashed exactly as supplied. The portal never trims,\\n  casefolds, or Unicode-normalizes password plaintext. The refused control\\n  characters are exactly the code points U+0000 to U+001F and U+007F (the\\n  accepted `_validate_new_password`); every other code point, other Unicode\\n  control and format characters included, is accepted.\",\"question\":\"Does “contains no NUL/control characters” mean every Unicode control/format character is refused, or only U+0000–U+001F and U+007F are refused?\",\"options\":[\"Refuse exactly U+0000–U+001F and U+007F\",\"Refuse all Unicode control characters\",\"Refuse all Unicode control and format characters\"],\"default_guess\":\"Refuse exactly U+0000–U+001F and U+007F, and replace the broader first sentence.\",\"witness\":{\"initial\":\"A new 12-code-point password contains U+0080 or U+200B and otherwise valid characters.\",\"events\":[\"A staff password-accepting operation validates the supplied plaintext.\"],\"outcomes\":[\"It is refused because the password contains a Unicode control or format character.\",\"It is accepted because the code point is outside U+0000–U+001F and U+007F.\"],\"observer\":\"The staff user or administrator submitting the password\"}},{\"subject\":\"02_rules.md:Classification principles\",\"kind\":\"standard_violation\",\"text\":\"a value that depends on the deployment (URLs, origins, hosts, size bounds,\\n  rate limits) — a row of the start-up table `config.runtime_environment_variables`,\\n  validated once at start by `runtime_settings` and read into a field of\\n  `RuntimeSettings`; the one exception is the two binary storage rows\\n  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and\\n  which the emitted `binary_storage` reads at each read, as the Factory's\\n  binary storage backend is built (A14, A30).\",\"rule\":\"Таблица выше —\\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The two deployment settings must become fields of the settings object read through the settings module, or be reclassified into another one of the three permitted value paths.\"},{\"subject\":\"A30 Carried changes\",\"kind\":\"standard_violation\",\"text\":\"`binary_read_limit_env_name`: the binary read limit is the environment\\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\\n  field; the emitted `binary_storage` reads it at each read through its\\n  backend IR (Factory `a6916180314d`). No model-written module reads it.\",\"rule\":\"Таблица выше —\\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"`BINARY_MAX_READ_BYTES` must be delivered as a field of the settings object, or be given another permitted home and delivery path.\"},{\"subject\":\"A30 Consequence\",\"kind\":\"standard_violation\",\"text\":\"A deployment value is a row of `config.runtime_environment_variables` read once by `load_runtime_settings` into a field of `RuntimeSettings` (`database_url`, `environment`, `public_origin`, `trusted_hosts`, `allowed_origins`, `max_request_body_bytes`, `max_binary_response_bytes`, `production_logging`, the two viewer-entry limits and, since 2026-11-09, `registry_base_url`), except the two binary storage rows, which the emitted `binary_storage` reads.\",\"rule\":\"Таблица выше —\\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Remove the exception by putting both binary storage deployment values on the settings object, or assign them another permitted value path.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,205 @@
+{
+ "open_points": [
+  {
+   "subject": "02_rules.md:Classification principles and A30 Registry URL validation",
+   "kind": "contradiction",
+   "text": "a value that depends on the deployment (URLs, origins, hosts, size bounds,\n  rate limits) — a row of the start-up table `config.runtime_environment_variables`,\n  validated once at start by `runtime_settings` and read into a field of\n  `RuntimeSettings` / The start-up check refuses only a missing or empty\nvalue; which values the gateway accepts as a base URL and how it joins them\nwith the request paths stay the accepted gateway's",
+   "question": "Must every non-empty Registry URL be validated for usability at start-up, or may an unusable non-empty URL start the service and fail only when a Registry call is attempted?",
+   "options": [
+    "Validate URL usability at start-up and refuse start-up",
+    "Validate only presence/non-emptiness at start-up; classify unusability as transport_error per call"
+   ],
+   "default_guess": "Apply A30's more specific exception: start on any non-empty value and fail unusable values per call.",
+   "witness": {
+    "initial": "REGISTRY_BASE_URL is a non-empty unusable value such as ftp://registry.example.",
+    "events": [
+     "The host operator starts the service.",
+     "A client invokes an operation that requires Registry validation."
+    ],
+    "outcomes": [
+     "The general classification rule rejects start-up because the deployment URL is invalid.",
+     "A30 permits start-up because the value is non-empty; the later Registry call fails as transport_error."
+    ],
+    "observer": "The host operator at start-up and the API caller at the first Registry-dependent request"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 CFG-002 Required tests",
+   "kind": "contradictory refusal condition",
+   "text": "for each required variable a\n  missing value and an invalid value stop start-up, a missing or empty\n  `REGISTRY_BASE_URL` stops it too",
+   "question": "Does “for each required variable” include REGISTRY_BASE_URL, making every invalid Registry URL a start-up failure, or is REGISTRY_BASE_URL exempt so only missing and empty values stop start-up?",
+   "options": [
+    "All invalid Registry URL values stop start-up",
+    "Only missing or empty Registry URL values stop start-up; unusable non-empty values fail calls"
+   ],
+   "default_guess": "Treat REGISTRY_BASE_URL as the stated exception and change the general test wording to exclude it.",
+   "witness": {
+    "initial": "REGISTRY_BASE_URL is non-empty but has user information, for example https://user@registry.example.",
+    "events": [
+     "The start-up validation test loads the environment."
+    ],
+    "outcomes": [
+     "The “each required variable” clause expects start-up refusal because the value is invalid.",
+     "The Registry-specific rule expects start-up success and a later transport_error on each Registry call."
+    ],
+    "observer": "The deployer running the start-up check"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 binary storage environment rows",
+   "kind": "runtime reread semantics",
+   "text": "`load_runtime_settings` validates at start without a `RuntimeSettings`\n  field; the emitted `binary_storage` reads it at each read through its\n  backend IR",
+   "question": "After successful start-up, which value and validation result governs a binary read if BINARY_MAX_READ_BYTES or BINARY_STORAGE_ROOT changes, disappears, or becomes invalid in the process environment?",
+   "options": [
+    "Capture the validated start-up values and use them for the process lifetime",
+    "Re-read and revalidate the current environment on every binary read",
+    "Re-read on every binary read but assume the environment is immutable"
+   ],
+   "default_guess": "Capture validated values at start-up and pass them through settings.",
+   "witness": {
+    "initial": "The service starts with BINARY_MAX_READ_BYTES=1048576 and passes validation.",
+    "events": [
+     "The host changes the process-visible value to 1024 or an invalid string without restarting.",
+     "A user requests a 2048-byte authorized binary."
+    ],
+    "outcomes": [
+     "The read uses the validated start-up bound and succeeds.",
+     "The read uses the current environment and is refused or fails configuration parsing."
+    ],
+    "observer": "The binary requester and the service operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 PLAT-REG-005 Required tests",
+   "kind": "test matrix ambiguity",
+   "text": "a focused test of the three gateway operations against a stubbed Registry, one case per member of `RegistryFailureKind` the gateway raises",
+   "question": "Must every applicable failure kind be demonstrated independently for each of the three gateway operations, or is one demonstration per kind across the three operations sufficient?",
+   "options": [
+    "Test the full applicable failure-kind matrix for all three operations",
+    "Test each failure kind once across any of the three operations"
+   ],
+   "default_guess": "Test every applicable kind for each gateway operation because the invariant covers every failed Registry call.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9 INV-037 Required tests",
+   "kind": "ambiguous assertion target",
+   "text": "an accepted amount is returned as a `Decimal` with exactly `MONEY_FRACTION_DIGITS` fraction digits",
+   "question": "Is the Decimal return assertion required only for validate_eur_amount, for each operation's returned DTO, or for the monetary values persisted or derived by each operation?",
+   "options": [
+    "Only validate_eur_amount must directly return the normalized Decimal",
+    "Every named operation must return the normalized Decimal itself",
+    "Each operation may return its declared DTO but must persist or derive normalized Decimal values"
+   ],
+   "default_guess": "Require validate_eur_amount to return the Decimal and require operations to persist or derive normalized amounts without changing their declared result types.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9 INV-037 Required tests",
+   "kind": "incomplete rounding evidence",
+   "text": "a half-way value (for example 0.005 and 0.015) rounded half-up away from zero",
+   "question": "Must the test demonstrate half-way rounding on both positive and negative values, or are the two positive examples sufficient to establish “away from zero,” including for negative allocations and balances?",
+   "options": [
+    "Test positive and negative half-way values",
+    "Test only the positive examples"
+   ],
+   "default_guess": "Test both signs wherever negative monetary values are permitted.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9 INV-041 Required tests",
+   "kind": "underspecified invariant test",
+   "text": "a check against the rules table at `calculate_overall_progress` showing the invariant holds; a violating input is refused and changes nothing.",
+   "question": "What exact cases and expected results must demonstrate the completed-work and overall-progress formulas, omission of sections without progress, per-section rounding, zero-denominator unavailability, and the claimed violating-input refusal?",
+   "options": [
+    "Specify a concrete case for every branch of INV-041 and identify the violating input",
+    "Treat a generic comparison with the rules table as sufficient"
+   ],
+   "default_guess": "Specify concrete weighted, missing-progress, rounding, and zero-denominator cases; remove the refusal clause unless an actual invalid input is named.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 password control-character policy",
+   "kind": "contradiction",
+   "text": "contains no NUL/control\n  characters / The refused control\n  characters are exactly the code points U+0000 to U+001F and U+007F (the\n  accepted `_validate_new_password`); every other code point, other Unicode\n  control and format characters included, is accepted.",
+   "question": "Does “control characters” mean only U+0000–U+001F and U+007F, or are other Unicode control characters such as U+0080 also forbidden?",
+   "options": [
+    "Forbid exactly U+0000–U+001F and U+007F",
+    "Forbid every Unicode control character"
+   ],
+   "default_guess": "Use the explicit set and rewrite the earlier broad phrase so U+0080 and other listed exceptions are unambiguously accepted.",
+   "witness": {
+    "initial": "An administrator submits a 12-code-point new password containing U+0080 and no U+0000–U+001F or U+007F.",
+    "events": [
+     "The account-creation operation validates the new password."
+    ],
+    "outcomes": [
+     "The phrase “contains no NUL/control characters” causes rejection because U+0080 is a Unicode control character.",
+     "The explicit code-point rule and INV-019 require acceptance and hashing of the exact string."
+    ],
+    "observer": "The administrator creating the account and the eventual account holder"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "02_rules.md:Classification principles",
+   "kind": "standard_violation",
+   "text": "a value that depends on the deployment (URLs, origins, hosts, size bounds,\n  rate limits) — a row of the start-up table `config.runtime_environment_variables`,\n  validated once at start by `runtime_settings` and read into a field of\n  `RuntimeSettings`; the one exception is the two binary storage rows\n  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and\n  which the emitted `binary_storage` reads at each read, as the Factory's\n  binary storage backend is built (A14, A30).",
+   "rule": "Таблица выше —\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Remove the exception and make both deployment settings fields of the settings object, or reclassify them into another one of the three permitted paths.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30 Carried changes",
+   "kind": "standard_violation",
+   "text": "- `binary_read_limit_env_name`: the binary read limit is the environment\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\n  field; the emitted `binary_storage` reads it at each read through its\n  backend IR (Factory `a6916180314d`). No model-written module reads it.",
+   "rule": "Таблица выше —\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Make BINARY_MAX_READ_BYTES a field of the settings object used by generated code, or give it another permitted value path.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30 Consequence",
+   "kind": "standard_violation",
+   "text": "A deployment value is a row of `config.runtime_environment_variables` read once by `load_runtime_settings` into a field of `RuntimeSettings` (`database_url`, `environment`, `public_origin`, `trusted_hosts`, `allowed_origins`, `max_request_body_bytes`, `max_binary_response_bytes`, `production_logging`, the two viewer-entry limits and, since 2026-11-09, `registry_base_url`), except the two binary storage rows, which the emitted `binary_storage` reads.",
+   "rule": "Таблица выше —\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Remove the binary-storage exception and route both deployment values through fields of the settings object.",
+   "unit": "?"
+  },
+  {
+   "subject": "A4 Consequence",
+   "kind": "standard_violation",
+   "text": "The accepted spec's `rules.project_guard_sequence` records the same order and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).",
+   "rule": "Namespace `rules` или `config`, который не достижим ни одним из этих\nпутей, — мёртвые данные: факт остаётся решением дизайна и в спецификацию не\nкладётся, либо получает один из трёх путей.",
+   "section": "15.3.1",
+   "question": "Remove rules.project_guard_sequence from the specification and retain the order only as the design decision and note prose, or give it a valid reachable path.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 Consequence",
+   "kind": "standard_violation",
+   "text": "The accepted spec's `rules.registry_status_policy` records the same table and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).",
+   "rule": "Namespace `rules` или `config`, который не достижим ни одним из этих\nпутей, — мёртвые данные: факт остаётся решением дизайна и в спецификацию не\nкладётся, либо получает один из трёх путей.",
+   "section": "15.3.1",
+   "question": "Remove rules.registry_status_policy from the specification and retain the policy in note prose, or give it a valid reachable path.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9 Consequence",
+   "kind": "standard_violation",
+   "text": "The formulas stay behaviour of their notes; the remaining `rules.money_policy` leaves are the decision's record.",
+   "rule": "Namespace `rules` или `config`, который не достижим ни одним из этих\nпутей, — мёртвые данные: факт остаётся решением дизайна и в спецификацию не\nкладётся, либо получает один из трёх путей.",
+   "section": "15.3.1",
+   "question": "Remove the remaining dead rules.money_policy leaves from the specification and keep them only as design-decision prose, or assign them a permitted reachable path.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"02_rules.md:Classification principles and A30 Registry URL validation\",\"kind\":\"contradiction\",\"text\":\"a value that depends on the deployment (URLs, origins, hosts, size bounds,\\n  rate limits) — a row of the start-up table `config.runtime_environment_variables`,\\n  validated once at start by `runtime_settings` and read into a field of\\n  `RuntimeSettings` / The start-up check refuses only a missing or empty\\nvalue; which values the gateway accepts as a base URL and how it joins them\\nwith the request paths stay the accepted gateway's\",\"question\":\"Must every non-empty Registry URL be validated for usability at start-up, or may an unusable non-empty URL start the service and fail only when a Registry call is attempted?\",\"options\":[\"Validate URL usability at start-up and refuse start-up\",\"Validate only presence/non-emptiness at start-up; classify unusability as transport_error per call\"],\"default_guess\":\"Apply A30's more specific exception: start on any non-empty value and fail unusable values per call.\",\"witness\":{\"initial\":\"REGISTRY_BASE_URL is a non-empty unusable value such as ftp://registry.example.\",\"events\":[\"The host operator starts the service.\",\"A client invokes an operation that requires Registry validation.\"],\"outcomes\":[\"The general classification rule rejects start-up because the deployment URL is invalid.\",\"A30 permits start-up because the value is non-empty; the later Registry call fails as transport_error.\"],\"observer\":\"The host operator at start-up and the API caller at the first Registry-dependent request\"}},{\"subject\":\"A30 CFG-002 Required tests\",\"kind\":\"contradictory refusal condition\",\"text\":\"for each required variable a\\n  missing value and an invalid value stop start-up, a missing or empty\\n  `REGISTRY_BASE_URL` stops it too\",\"question\":\"Does “for each required variable” include REGISTRY_BASE_URL, making every invalid Registry URL a start-up failure, or is REGISTRY_BASE_URL exempt so only missing and empty values stop start-up?\",\"options\":[\"All invalid Registry URL values stop start-up\",\"Only missing or empty Registry URL values stop start-up; unusable non-empty values fail calls\"],\"default_guess\":\"Treat REGISTRY_BASE_URL as the stated exception and change the general test wording to exclude it.\",\"witness\":{\"initial\":\"REGISTRY_BASE_URL is non-empty but has user information, for example https://user@registry.example.\",\"events\":[\"The start-up validation test loads the environment.\"],\"outcomes\":[\"The “each required variable” clause expects start-up refusal because the value is invalid.\",\"The Registry-specific rule expects start-up success and a later transport_error on each Registry call.\"],\"observer\":\"The deployer running the start-up check\"}},{\"subject\":\"A30 binary storage environment rows\",\"kind\":\"runtime reread semantics\",\"text\":\"`load_runtime_settings` validates at start without a `RuntimeSettings`\\n  field; the emitted `binary_storage` reads it at each read through its\\n  backend IR\",\"question\":\"After successful start-up, which value and validation result governs a binary read if BINARY_MAX_READ_BYTES or BINARY_STORAGE_ROOT changes, disappears, or becomes invalid in the process environment?\",\"options\":[\"Capture the validated start-up values and use them for the process lifetime\",\"Re-read and revalidate the current environment on every binary read\",\"Re-read on every binary read but assume the environment is immutable\"],\"default_guess\":\"Capture validated values at start-up and pass them through settings.\",\"witness\":{\"initial\":\"The service starts with BINARY_MAX_READ_BYTES=1048576 and passes validation.\",\"events\":[\"The host changes the process-visible value to 1024 or an invalid string without restarting.\",\"A user requests a 2048-byte authorized binary.\"],\"outcomes\":[\"The read uses the validated start-up bound and succeeds.\",\"The read uses the current environment and is refused or fails configuration parsing.\"],\"observer\":\"The binary requester and the service operator\"}},{\"subject\":\"A6 PLAT-REG-005 Required tests\",\"kind\":\"test matrix ambiguity\",\"text\":\"a focused test of the three gateway operations against a stubbed Registry, one case per member of `RegistryFailureKind` the gateway raises\",\"question\":\"Must every applicable failure kind be demonstrated independently for each of the three gateway operations, or is one demonstration per kind across the three operations sufficient?\",\"options\":[\"Test the full applicable failure-kind matrix for all three operations\",\"Test each failure kind once across any of the three operations\"],\"default_guess\":\"Test every applicable kind for each gateway operation because the invariant covers every failed Registry call.\"},{\"subject\":\"A9 INV-037 Required tests\",\"kind\":\"ambiguous assertion target\",\"text\":\"an accepted amount is returned as a `Decimal` with exactly `MONEY_FRACTION_DIGITS` fraction digits\",\"question\":\"Is the Decimal return assertion required only for validate_eur_amount, for each operation's returned DTO, or for the monetary values persisted or derived by each operation?\",\"options\":[\"Only validate_eur_amount must directly return the normalized Decimal\",\"Every named operation must return the normalized Decimal itself\",\"Each operation may return its declared DTO but must persist or derive normalized Decimal values\"],\"default_guess\":\"Require validate_eur_amount to return the Decimal and require operations to persist or derive normalized amounts without changing their declared result types.\"},{\"subject\":\"A9 INV-037 Required tests\",\"kind\":\"incomplete rounding evidence\",\"text\":\"a half-way value (for example 0.005 and 0.015) rounded half-up away from zero\",\"question\":\"Must the test demonstrate half-way rounding on both positive and negative values, or are the two positive examples sufficient to establish “away from zero,” including for negative allocations and balances?\",\"options\":[\"Test positive and negative half-way values\",\"Test only the positive examples\"],\"default_guess\":\"Test both signs wherever negative monetary values are permitted.\"},{\"subject\":\"A9 INV-041 Required tests\",\"kind\":\"underspecified invariant test\",\"text\":\"a check against the rules table at `calculate_overall_progress` showing the invariant holds; a violating input is refused and changes nothing.\",\"question\":\"What exact cases and expected results must demonstrate the completed-work and overall-progress formulas, omission of sections without progress, per-section rounding, zero-denominator unavailability, and the claimed violating-input refusal?\",\"options\":[\"Specify a concrete case for every branch of INV-041 and identify the violating input\",\"Treat a generic comparison with the rules table as sufficient\"],\"default_guess\":\"Specify concrete weighted, missing-progress, rounding, and zero-denominator cases; remove the refusal clause unless an actual invalid input is named.\"},{\"subject\":\"A16 password control-character policy\",\"kind\":\"contradiction\",\"text\":\"contains no NUL/control\\n  characters / The refused control\\n  characters are exactly the code points U+0000 to U+001F and U+007F (the\\n  accepted `_validate_new_password`); every other code point, other Unicode\\n  control and format characters included, is accepted.\",\"question\":\"Does “control characters” mean only U+0000–U+001F and U+007F, or are other Unicode control characters such as U+0080 also forbidden?\",\"options\":[\"Forbid exactly U+0000–U+001F and U+007F\",\"Forbid every Unicode control character\"],\"default_guess\":\"Use the explicit set and rewrite the earlier broad phrase so U+0080 and other listed exceptions are unambiguously accepted.\",\"witness\":{\"initial\":\"An administrator submits a 12-code-point new password containing U+0080 and no U+0000–U+001F or U+007F.\",\"events\":[\"The account-creation operation validates the new password.\"],\"outcomes\":[\"The phrase “contains no NUL/control characters” causes rejection because U+0080 is a Unicode control character.\",\"The explicit code-point rule and INV-019 require acceptance and hashing of the exact string.\"],\"observer\":\"The administrator creating the account and the eventual account holder\"}},{\"subject\":\"02_rules.md:Classification principles\",\"kind\":\"standard_violation\",\"text\":\"a value that depends on the deployment (URLs, origins, hosts, size bounds,\\n  rate limits) — a row of the start-up table `config.runtime_environment_variables`,\\n  validated once at start by `runtime_settings` and read into a field of\\n  `RuntimeSettings`; the one exception is the two binary storage rows\\n  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and\\n  which the emitted `binary_storage` reads at each read, as the Factory's\\n  binary storage backend is built (A14, A30).\",\"rule\":\"Таблица выше —\\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Remove the exception and make both deployment settings fields of the settings object, or reclassify them into another one of the three permitted paths.\"},{\"subject\":\"A30 Carried changes\",\"kind\":\"standard_violation\",\"text\":\"- `binary_read_limit_env_name`: the binary read limit is the environment\\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\\n  field; the emitted `binary_storage` reads it at each read through its\\n  backend IR (Factory `a6916180314d`). No model-written module reads it.\",\"rule\":\"Таблица выше —\\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Make BINARY_MAX_READ_BYTES a field of the settings object used by generated code, or give it another permitted value path.\"},{\"subject\":\"A30 Consequence\",\"kind\":\"standard_violation\",\"text\":\"A deployment value is a row of `config.runtime_environment_variables` read once by `load_runtime_settings` into a field of `RuntimeSettings` (`database_url`, `environment`, `public_origin`, `trusted_hosts`, `allowed_origins`, `max_request_body_bytes`, `max_binary_response_bytes`, `production_logging`, the two viewer-entry limits and, since 2026-11-09, `registry_base_url`), except the two binary storage rows, which the emitted `binary_storage` reads.\",\"rule\":\"Таблица выше —\\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Remove the binary-storage exception and route both deployment values through fields of the settings object.\"},{\"subject\":\"A4 Consequence\",\"kind\":\"standard_violation\",\"text\":\"The accepted spec's `rules.project_guard_sequence` records the same order and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).\",\"rule\":\"Namespace `rules` или `config`, который не достижим ни одним из этих\\nпутей, — мёртвые данные: факт остаётся решением дизайна и в спецификацию не\\nкладётся, либо получает один из трёх путей.\",\"section\":\"15.3.1\",\"question\":\"Remove rules.project_guard_sequence from the specification and retain the order only as the design decision and note prose, or give it a valid reachable path.\"},{\"subject\":\"A5 Consequence\",\"kind\":\"standard_violation\",\"text\":\"The accepted spec's `rules.registry_status_policy` records the same table and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).\",\"rule\":\"Namespace `rules` или `config`, который не достижим ни одним из этих\\nпутей, — мёртвые данные: факт остаётся решением дизайна и в спецификацию не\\nкладётся, либо получает один из трёх путей.\",\"section\":\"15.3.1\",\"question\":\"Remove rules.registry_status_policy from the specification and retain the policy in note prose, or give it a valid reachable path.\"},{\"subject\":\"A9 Consequence\",\"kind\":\"standard_violation\",\"text\":\"The formulas stay behaviour of their notes; the remaining `rules.money_policy` leaves are the decision's record.\",\"rule\":\"Namespace `rules` или `config`, который не достижим ни одним из этих\\nпутей, — мёртвые данные: факт остаётся решением дизайна и в спецификацию не\\nкладётся, либо получает один из трёх путей.\",\"section\":\"15.3.1\",\"question\":\"Remove the remaining dead rules.money_policy leaves from the specification and keep them only as design-decision prose, or assign them a permitted reachable path.\"}]}",
+ "set_aside": []
+}

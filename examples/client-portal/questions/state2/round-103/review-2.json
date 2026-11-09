@@ -1,0 +1,131 @@
+{
+ "open_points": [
+  {
+   "subject": "02_rules.md:Classification principles",
+   "kind": "standard_violation",
+   "text": "- a value that depends on the deployment (URLs, origins, hosts, size bounds,\n  rate limits) — a row of the start-up table `config.runtime_environment_variables`,\n  validated once at start by `runtime_settings` and read into a field of\n  `RuntimeSettings`; the one exception is the two binary storage rows\n  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and\n  which the emitted `binary_storage` reads at each read, as the Factory's\n  binary storage backend is built (A14, A30).",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The two deployment-dependent binary storage values must become fields of the settings object, or be reclassified so that they use another one of the three permitted paths.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30: Configuration — binary_read_limit_env_name",
+   "kind": "standard_violation",
+   "text": "- `binary_read_limit_env_name`: the binary read limit is the environment\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\n  field; the emitted `binary_storage` reads it at each read through its\n  backend IR (Factory `a6916180314d`). No model-written module reads it.",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The binary read limit must reach generated code through a settings-object field, or be given another permitted home and delivery path.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30: Configuration — Consequence",
+   "kind": "standard_violation",
+   "text": "A deployment value is a row of `config.runtime_environment_variables` read once by `load_runtime_settings` into a field of `RuntimeSettings` (`database_url`, `environment`, `public_origin`, `trusted_hosts`, `allowed_origins`, `max_request_body_bytes`, `max_binary_response_bytes`, `production_logging`, the two viewer-entry limits and, since 2026-11-09, `registry_base_url`), except the two binary storage rows, which the emitted `binary_storage` reads.",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The exception must be removed and both binary storage deployment values assigned one of the three permitted paths to generated code.",
+   "unit": "?"
+  },
+  {
+   "subject": "02_rules.md:Classification principles — binary storage settings",
+   "kind": "runtime reread semantics",
+   "text": "validated once at start by `runtime_settings` and read into a field of\n  `RuntimeSettings`; the one exception is the two binary storage rows\n  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and\n  which the emitted `binary_storage` reads at each read",
+   "question": "After successful startup, what happens if either binary-storage environment value is missing, malformed, or changed when a binary read occurs?",
+   "options": [
+    "Capture the startup-validated values and use the captured values for every read",
+    "Re-read the environment and refuse that binary read if the current value is missing or invalid",
+    "Re-read the environment and let parsing or storage errors propagate"
+   ],
+   "default_guess": "Put both values in RuntimeSettings and use the values validated and captured at startup.",
+   "witness": {
+    "initial": "The service starts with valid BINARY_STORAGE_ROOT and BINARY_MAX_READ_BYTES values.",
+    "events": [
+     "The host operator or in-process runtime changes BINARY_MAX_READ_BYTES to an invalid value after startup.",
+     "An authenticated client requests a deliverable binary."
+    ],
+    "outcomes": [
+     "The read uses the value captured at startup and proceeds under the original bound.",
+     "The emitted binary_storage observes the new invalid value and refuses or errors during this read."
+    ],
+    "observer": "The authenticated client and the service operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30: CFG-002",
+   "kind": "contradictory startup refusal",
+   "text": "- CFG-002: a required start-up variable that is missing or invalid stops\n  the start before any request is served; for the Registry URL the start-up\n  check refuses only a missing or empty value, and an unusable non-empty URL\n  fails each Registry call as `transport_error` (A6).\n\n### Required tests\n\n- CFG-002: `runtime_settings_client_portal`: for each required variable a\n  missing value and an invalid value stop start-up, a missing or empty\n  `REGISTRY_BASE_URL` stops it too, and a complete valid environment starts.",
+   "question": "Does an unusable but non-empty REGISTRY_BASE_URL count as an invalid required variable that stops startup, or is it accepted at startup and translated to transport_error on each Registry call?",
+   "options": [
+    "Accept every non-empty Registry URL at startup and report an unusable one as transport_error per call",
+    "Reject an unusable Registry URL at startup like other invalid required variables"
+   ],
+   "default_guess": "Accept it at startup and report transport_error per Registry call, because the Registry-specific rule is more precise.",
+   "witness": {
+    "initial": "Every environment value is valid except REGISTRY_BASE_URL is the non-empty value ftp://registry.example.",
+    "events": [
+     "The service operator starts the service.",
+     "A client invokes an operation requiring Registry validation."
+    ],
+    "outcomes": [
+     "Startup succeeds; the Registry call fails as transport_error.",
+     "Startup is refused because a required variable is invalid, so the client cannot make the call."
+    ],
+    "observer": "The service operator and the client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16: Staff email and password policy",
+   "kind": "contradictory refusal set",
+   "text": "- A new password is 12–128 Unicode code points, contains no NUL/control\n  characters, and is hashed exactly as supplied. The portal never trims,\n  casefolds, or Unicode-normalizes password plaintext. The refused control\n  characters are exactly the code points U+0000 to U+001F and U+007F (the\n  accepted `_validate_new_password`); every other code point, other Unicode\n  control and format characters included, is accepted.",
+   "question": "Does “control characters” mean only U+0000–U+001F and U+007F, or all Unicode control characters?",
+   "options": [
+    "Refuse exactly U+0000–U+001F and U+007F and accept every other Unicode code point",
+    "Refuse every Unicode control character"
+   ],
+   "default_guess": "Treat the explicit code-point set as exhaustive and replace the broader “NUL/control characters” wording.",
+   "witness": {
+    "initial": "An administrator creates a staff account using a 12-code-point password containing U+0080.",
+    "events": [
+     "The administrator submits the account-creation request with that password."
+    ],
+    "outcomes": [
+     "The password is accepted because U+0080 is outside the explicitly refused set.",
+     "The password is refused because U+0080 is a Unicode control character and the password may contain no control characters."
+    ],
+    "observer": "The administrator creating the account"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9: INV-037 Required tests",
+   "kind": "incomplete invariant test coverage",
+   "text": "- INV-037: a check at `validate_eur_amount` and at each operation that accepts an amount — `create_expense_from_recognition` (total and allocation amounts), `correct_expense` (total), `replace_expense_allocations` (allocation amounts), `upsert_manual_section_plan` (its two planned amounts), `register_work_payment` (amount) and `import_snapshot` (the snapshot's currency and amounts) — with the values of the data-provider constants `MONEY_CURRENCY`, `MONEY_FRACTION_DIGITS` and `MONEY_ROUNDING`: an amount in a currency other than `MONEY_CURRENCY` is refused, never converted, and changes nothing; an accepted amount is returned as a `Decimal` with exactly `MONEY_FRACTION_DIGITS` fraction digits, a half-way value (for example 0.005 and 0.015) rounded half-up away from zero; and every derived money value (completed work value, balances) carries the same scale and rounding.",
+   "question": "Must the operation-level check also cover the monetary fields of normalized recognition items and the replacement allocation amounts supplied with correct_expense, and where must it observe the normalized Decimal when an operation does not return each accepted amount directly?",
+   "options": [
+    "Test every monetary input field accepted by each named operation and inspect the committed records or derived result",
+    "Test only the parenthetically listed fields and rely on validate_eur_amount for all omitted monetary fields",
+    "Test only validate_eur_amount for normalization and operation-level rejection for currency"
+   ],
+   "default_guess": "Test every monetary input field, including recognition item unit_price and line_total and any correction allocations, and assert normalization in the committed records plus derived outputs.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9: INV-037 Required tests — negative half-way rounding",
+   "kind": "underspecified invariant evidence",
+   "text": "a half-way value (for example 0.005 and 0.015) rounded half-up away from zero",
+   "question": "Must INV-037's required test include a negative half-way monetary value to demonstrate the stated away-from-zero behavior for negative allocation amounts?",
+   "options": [
+    "Include both positive and negative half-way values",
+    "Use only the two positive examples"
+   ],
+   "default_guess": "Include a negative half-way allocation as well as the positive examples, because allocations may be negative and positive examples do not demonstrate rounding away from zero on that domain.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"02_rules.md:Classification principles\",\"kind\":\"standard_violation\",\"text\":\"- a value that depends on the deployment (URLs, origins, hosts, size bounds,\\n  rate limits) — a row of the start-up table `config.runtime_environment_variables`,\\n  validated once at start by `runtime_settings` and read into a field of\\n  `RuntimeSettings`; the one exception is the two binary storage rows\\n  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and\\n  which the emitted `binary_storage` reads at each read, as the Factory's\\n  binary storage backend is built (A14, A30).\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The two deployment-dependent binary storage values must become fields of the settings object, or be reclassified so that they use another one of the three permitted paths.\"},{\"subject\":\"A30: Configuration — binary_read_limit_env_name\",\"kind\":\"standard_violation\",\"text\":\"- `binary_read_limit_env_name`: the binary read limit is the environment\\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\\n  field; the emitted `binary_storage` reads it at each read through its\\n  backend IR (Factory `a6916180314d`). No model-written module reads it.\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The binary read limit must reach generated code through a settings-object field, or be given another permitted home and delivery path.\"},{\"subject\":\"A30: Configuration — Consequence\",\"kind\":\"standard_violation\",\"text\":\"A deployment value is a row of `config.runtime_environment_variables` read once by `load_runtime_settings` into a field of `RuntimeSettings` (`database_url`, `environment`, `public_origin`, `trusted_hosts`, `allowed_origins`, `max_request_body_bytes`, `max_binary_response_bytes`, `production_logging`, the two viewer-entry limits and, since 2026-11-09, `registry_base_url`), except the two binary storage rows, which the emitted `binary_storage` reads.\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The exception must be removed and both binary storage deployment values assigned one of the three permitted paths to generated code.\"},{\"subject\":\"02_rules.md:Classification principles — binary storage settings\",\"kind\":\"runtime reread semantics\",\"text\":\"validated once at start by `runtime_settings` and read into a field of\\n  `RuntimeSettings`; the one exception is the two binary storage rows\\n  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and\\n  which the emitted `binary_storage` reads at each read\",\"question\":\"After successful startup, what happens if either binary-storage environment value is missing, malformed, or changed when a binary read occurs?\",\"options\":[\"Capture the startup-validated values and use the captured values for every read\",\"Re-read the environment and refuse that binary read if the current value is missing or invalid\",\"Re-read the environment and let parsing or storage errors propagate\"],\"default_guess\":\"Put both values in RuntimeSettings and use the values validated and captured at startup.\",\"witness\":{\"initial\":\"The service starts with valid BINARY_STORAGE_ROOT and BINARY_MAX_READ_BYTES values.\",\"events\":[\"The host operator or in-process runtime changes BINARY_MAX_READ_BYTES to an invalid value after startup.\",\"An authenticated client requests a deliverable binary.\"],\"outcomes\":[\"The read uses the value captured at startup and proceeds under the original bound.\",\"The emitted binary_storage observes the new invalid value and refuses or errors during this read.\"],\"observer\":\"The authenticated client and the service operator\"}},{\"subject\":\"A30: CFG-002\",\"kind\":\"contradictory startup refusal\",\"text\":\"- CFG-002: a required start-up variable that is missing or invalid stops\\n  the start before any request is served; for the Registry URL the start-up\\n  check refuses only a missing or empty value, and an unusable non-empty URL\\n  fails each Registry call as `transport_error` (A6).\\n\\n### Required tests\\n\\n- CFG-002: `runtime_settings_client_portal`: for each required variable a\\n  missing value and an invalid value stop start-up, a missing or empty\\n  `REGISTRY_BASE_URL` stops it too, and a complete valid environment starts.\",\"question\":\"Does an unusable but non-empty REGISTRY_BASE_URL count as an invalid required variable that stops startup, or is it accepted at startup and translated to transport_error on each Registry call?\",\"options\":[\"Accept every non-empty Registry URL at startup and report an unusable one as transport_error per call\",\"Reject an unusable Registry URL at startup like other invalid required variables\"],\"default_guess\":\"Accept it at startup and report transport_error per Registry call, because the Registry-specific rule is more precise.\",\"witness\":{\"initial\":\"Every environment value is valid except REGISTRY_BASE_URL is the non-empty value ftp://registry.example.\",\"events\":[\"The service operator starts the service.\",\"A client invokes an operation requiring Registry validation.\"],\"outcomes\":[\"Startup succeeds; the Registry call fails as transport_error.\",\"Startup is refused because a required variable is invalid, so the client cannot make the call.\"],\"observer\":\"The service operator and the client\"}},{\"subject\":\"A16: Staff email and password policy\",\"kind\":\"contradictory refusal set\",\"text\":\"- A new password is 12–128 Unicode code points, contains no NUL/control\\n  characters, and is hashed exactly as supplied. The portal never trims,\\n  casefolds, or Unicode-normalizes password plaintext. The refused control\\n  characters are exactly the code points U+0000 to U+001F and U+007F (the\\n  accepted `_validate_new_password`); every other code point, other Unicode\\n  control and format characters included, is accepted.\",\"question\":\"Does “control characters” mean only U+0000–U+001F and U+007F, or all Unicode control characters?\",\"options\":[\"Refuse exactly U+0000–U+001F and U+007F and accept every other Unicode code point\",\"Refuse every Unicode control character\"],\"default_guess\":\"Treat the explicit code-point set as exhaustive and replace the broader “NUL/control characters” wording.\",\"witness\":{\"initial\":\"An administrator creates a staff account using a 12-code-point password containing U+0080.\",\"events\":[\"The administrator submits the account-creation request with that password.\"],\"outcomes\":[\"The password is accepted because U+0080 is outside the explicitly refused set.\",\"The password is refused because U+0080 is a Unicode control character and the password may contain no control characters.\"],\"observer\":\"The administrator creating the account\"}},{\"subject\":\"A9: INV-037 Required tests\",\"kind\":\"incomplete invariant test coverage\",\"text\":\"- INV-037: a check at `validate_eur_amount` and at each operation that accepts an amount — `create_expense_from_recognition` (total and allocation amounts), `correct_expense` (total), `replace_expense_allocations` (allocation amounts), `upsert_manual_section_plan` (its two planned amounts), `register_work_payment` (amount) and `import_snapshot` (the snapshot's currency and amounts) — with the values of the data-provider constants `MONEY_CURRENCY`, `MONEY_FRACTION_DIGITS` and `MONEY_ROUNDING`: an amount in a currency other than `MONEY_CURRENCY` is refused, never converted, and changes nothing; an accepted amount is returned as a `Decimal` with exactly `MONEY_FRACTION_DIGITS` fraction digits, a half-way value (for example 0.005 and 0.015) rounded half-up away from zero; and every derived money value (completed work value, balances) carries the same scale and rounding.\",\"question\":\"Must the operation-level check also cover the monetary fields of normalized recognition items and the replacement allocation amounts supplied with correct_expense, and where must it observe the normalized Decimal when an operation does not return each accepted amount directly?\",\"options\":[\"Test every monetary input field accepted by each named operation and inspect the committed records or derived result\",\"Test only the parenthetically listed fields and rely on validate_eur_amount for all omitted monetary fields\",\"Test only validate_eur_amount for normalization and operation-level rejection for currency\"],\"default_guess\":\"Test every monetary input field, including recognition item unit_price and line_total and any correction allocations, and assert normalization in the committed records plus derived outputs.\"},{\"subject\":\"A9: INV-037 Required tests — negative half-way rounding\",\"kind\":\"underspecified invariant evidence\",\"text\":\"a half-way value (for example 0.005 and 0.015) rounded half-up away from zero\",\"question\":\"Must INV-037's required test include a negative half-way monetary value to demonstrate the stated away-from-zero behavior for negative allocation amounts?\",\"options\":[\"Include both positive and negative half-way values\",\"Use only the two positive examples\"],\"default_guess\":\"Include a negative half-way allocation as well as the positive examples, because allocations may be negative and positive examples do not demonstrate rounding away from zero on that domain.\"}]}",
+ "set_aside": []
+}
