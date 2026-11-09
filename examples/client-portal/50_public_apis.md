@@ -3915,12 +3915,14 @@ The in-memory viewer-entry attempt buckets only.
 
 ### Owner
 
-`module:runtime_settings`. Read, normalize, default and validate the deployment environment at each call: at start, by the bootstrap command, and by the Registry gateway at each Registry call.
+`module:runtime_settings`. Read, normalize, default and validate the deployment environment at each call: at start, by the bootstrap command, by the Registry gateway at each Registry call and by binary_storage at each binary read.
 
 ### Callers
 
-`module:runtime`, `module:staff_bootstrap_cli`, and `module:registry_gateway`
-for the Registry URL (owner 2026-11-09, A30).
+`module:runtime`, `module:staff_bootstrap_cli`, `module:registry_gateway`
+for the Registry URL (owner 2026-11-09, A30), and `module:binary_storage` at
+each binary read for the storage root and read bound (owner 2026-11-09, A14,
+A30).
 
 ### Inputs
 
@@ -3938,7 +3940,8 @@ None; no raw environment value is logged.
 ### Enforces
 
 A30 and R0-10; the viewer-entry rate limit comes only from its two variables;
-`rules.binary_delivery_policy.size_bounds.startup_consistency` is checked and
+the table's constraint that the binary read bound is no larger than the
+response ceiling (A14) is checked and
 neither bound is changed silently.
 
 ### Errors
