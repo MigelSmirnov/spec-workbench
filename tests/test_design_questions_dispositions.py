@@ -242,13 +242,105 @@ def test_a_topic_that_needs_nothing_and_an_unknown_topic_are_refused(tmp_path):
 
 def test_a_disposition_for_one_unit_leaves_the_others_of_the_topic_open(tmp_path):
     case = make_case(tmp_path)
-    loose = {"subject": "gap", "kind": "gap", "text": "Rule one keeps every thing.", "question": "?"}   # names no unit
-    summary = service.ask_round(case, 2, Provider([loose]))
-    assert set(summary["open_units"]) == set(summary["scope"])
+    both = [point("gap", "A01"), point("gap", "A02")]
+    summary = service.ask_round(case, 2, Provider(both))
+    assert summary["open_units"] == ["A01", "A02"]
     service.dispose(case, 2, "T1", "accepted", unit="A01", reason="A01 is fine")
-    assert "A01" not in service.status(case, 2)["open_units"]
+    assert service.status(case, 2)["open_units"] == ["A02"]
     with pytest.raises(service.QuestionRoundError, match="does not concern unit"):
         service.dispose(case, 2, "T1", "accepted", unit="A77", reason="r")
+
+
+# ---------------------------------------------------------------- topics naming no unit
+# client-portal State 1, 2026-11-09: unit-less contradictions of round 49 held all
+# thirteen reviewed units open; round 50 reviewed the three that changed and the
+# other ten stayed open with no round able to reach them.
+
+LOOSE = {"kind": "gap", "text": "Rule one keeps every thing."}   # names no unit
+
+
+def loose(subject: str) -> dict:
+    return {**LOOSE, "subject": subject, "question": f"{subject}?"}
+
+
+def test_a_topic_naming_no_unit_keeps_no_unit_open_and_is_disposed_as_itself(tmp_path):
+    case = make_case(tmp_path)
+    summary = service.ask_round(case, 2, Provider([loose("gap")]))
+    assert summary["open_units"] == [units.NO_UNIT]
+    assert summary["blocked_units"] == [units.NO_UNIT]
+    assert summary["awaiting_disposition"] == ["T1"]
+    status = service.status(case, 2)
+    assert status["open_units"] == [units.NO_UNIT]
+    assert status["awaiting_disposition"] == {units.NO_UNIT: ["T1"]}
+    with pytest.raises(service.QuestionRoundError, match="concerns no unit"):
+        service.dispose(case, 2, "T1", "accepted", unit="A01", reason="r")
+    service.dispose(case, 2, "T1", "carried", to="generation", what="which of a or b the code returns")
+    status = service.status(case, 2)
+    assert status["closed"] is True
+    assert status["unit_status"][units.NO_UNIT]["carried"] == [
+        {"topic": "T1", "to": "generation", "what": "which of a or b the code returns"}]
+    assert [row["topic"] for row in service.carried_items(case, to="generation")] == ["T1"]
+
+
+@pytest.mark.parametrize("disposition, extra", [
+    ("accepted", {"reason": "the owner's choice"}),
+    ("carried", {"to": "6", "what": "the contracts decide"}),
+])
+def test_a_topic_naming_no_unit_closes_with_any_disposition(tmp_path, disposition, extra):
+    case = make_case(tmp_path)
+    service.ask_round(case, 2, Provider([loose("hypothesis")]))
+    assert service.status(case, 2)["closed"] is False
+    service.dispose(case, 2, "T1", disposition, unit=units.NO_UNIT, **extra)
+    assert service.status(case, 2)["closed"] is True
+
+
+def test_a_contradiction_naming_no_unit_blocks_the_state_but_no_unit(tmp_path):
+    case = make_case(tmp_path)
+    summary = service.ask_round(case, 2, Provider([loose("contradiction"), point("gap")]))
+    assert summary["contradiction_units"] == [units.NO_UNIT]
+    ids = {t["topic"]: t["id"] for t in summary["topics"]}
+    status = service.status(case, 2)
+    assert status["closed"] is False
+    assert status["contradictions"] == {units.NO_UNIT: [ids["contradiction"]]}
+    with pytest.raises(service.QuestionRoundError, match="takes no disposition"):
+        service.dispose(case, 2, ids["contradiction"], "accepted", reason="r")
+    # only A01 holds a topic; the other units of the round closed
+    assert sorted(status["open_units"]) == sorted(["A01", units.NO_UNIT])
+    service.dispose(case, 2, ids["gap"], "accepted", reason="the owner's choice")
+    with pytest.raises(service.QuestionRoundError, match="no unit of State 2 needs a round"):
+        ask(case)
+    # a change of the text and one round on it that no longer raises it
+    (case / "02_rules.md").write_text(RULES.replace("Rule two drops a thing.", "Rule two keeps it too."),
+                                      encoding="utf-8")
+    summary = ask(case)
+    assert summary["scope"] == ["A02"] and summary["closed"] is True
+
+
+def test_unit_less_topics_of_an_earlier_round_hold_no_unchanged_unit(tmp_path):
+    # the State 1 shape: a round over every unit raises a contradiction naming no
+    # unit and one on A01; the fix changes A01 and its round raises nothing
+    case = make_case(tmp_path)
+    summary = service.ask_round(case, 2, Provider([loose("contradiction"), point("hypothesis")]))
+    assert len(summary["scope"]) > 2
+    (case / "02_rules.md").write_text(RULES.replace("Rule one keeps every thing.", "Rule one, as rule two allows."),
+                                      encoding="utf-8")
+    summary = ask(case)
+    assert summary["scope"] == ["A01"]
+    status = service.status(case, 2)
+    assert status["closed"] is True and status["open_units"] == []
+
+
+def test_a_legacy_round_keeps_a_unit_less_topic_on_every_reviewed_unit(tmp_path):
+    case = make_case(tmp_path)
+    keys = list(service.state_texts(case, 2).units)
+    gap = {"topic": "g", "runs": [1, 2], "id": "T1", "units": [units.UNKNOWN],
+           "judgement": {"kind": "consequential_gap", "verified": True, "blocking": True}}
+    _legacy(case, 1, keys, [gap], blocked=keys)
+    status = service.status(case, 2)
+    assert status["open_units"] == keys
+    assert units.NO_UNIT not in status["awaiting_disposition"]
+    service.dispose(case, 2, "T1", "accepted", round_name="round-01", reason="the owner's choice")
+    assert service.status(case, 2)["closed"] is True
 
 
 def test_the_cli_disposes_and_lists_what_was_carried(tmp_path, capsys):

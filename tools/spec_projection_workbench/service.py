@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import copy
 import difflib
 import json
@@ -9,6 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import design_record_construction
 import design_router_ir
 import design_stage6_contracts
 import design_stage6_data
@@ -647,7 +649,70 @@ def _place_record_builders_module(
         paths = {**paths, module: f"{parent}/{module}" if separator else module}
         _set(projected, "module_order", order)
         _set(projected, "module_paths", {name: paths[name] for name in order})
+    _project_builders_imports(projected, module, constructions)
     return {module: edges}
+
+
+def _stdlib_bound_names(lines: Any) -> set[str]:
+    """The names ``from <module> import ...`` lines bind. A bare module name or an
+    ``import <module>`` line binds no type name (SPEC_STANDARD §7)."""
+    bound: set[str] = set()
+    for line in lines if isinstance(lines, list) else []:
+        try:
+            tree = ast.parse(str(line))
+        except SyntaxError:
+            continue
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom) and node.module != "__future__":
+                bound.update(alias.asname or alias.name for alias in node.names)
+    return bound
+
+
+def _project_builders_imports(projected: dict[str, Any], module: str, constructions: dict[str, Any]) -> None:
+    """The builders module's import surface for the rest of the spec (SPEC_STANDARD 6.13, §7).
+
+    ``imports.internal[<wiring.module>]`` is the export surface its consumers
+    import: every builder a module consumes, sorted. A new surface is appended,
+    as every other owner's is. ``imports.stdlib`` gets a
+    ``from <source> import <names>`` line for each stdlib type a builder's
+    contract names that no line binds yet (a bare module name binds none, §7);
+    the lines already there are the accepted spec's and stay as they are.
+    """
+    imports = projected.get("imports")
+    if not isinstance(imports, dict):
+        return
+    internal = imports.get("internal")
+    if isinstance(internal, dict):
+        internal[module] = sorted(
+            str(name) for name, row in constructions.items()
+            if isinstance(row, dict) and row.get("consumers")
+        )
+
+    contracts = projected.get("contracts") if isinstance(projected.get("contracts"), dict) else {}
+    needed: dict[str, set[str]] = {}
+    for name in sorted(constructions):
+        signature = contracts.get(name)
+        if isinstance(signature, dict):
+            signature = signature.get("signature")
+        parsed = design_record_construction.parse_contract(signature)
+        if parsed is None:
+            continue
+        parameters, returns = parsed
+        for annotation in [*(kind for _, kind in parameters), returns]:
+            for type_name in design_record_construction.type_names(annotation):
+                source = design_record_construction.STDLIB_TYPE_SOURCES.get(type_name)
+                if source is not None:
+                    needed.setdefault(source, set()).add(type_name)
+    stdlib = imports.get("stdlib")
+    if not isinstance(stdlib, list):
+        return
+    bound = _stdlib_bound_names(stdlib) | _stdlib_bound_names(imports.get("third_party"))
+    added = [
+        f"from {source} import {', '.join(sorted(names - bound))}"
+        for source, names in sorted(needed.items()) if names - bound
+    ]
+    if added:
+        imports["stdlib"] = [*stdlib, *added]
 
 
 IMPORTS_TABLE = "65_imports.json"
@@ -1117,6 +1182,7 @@ def build_plan(project: Path) -> dict[str, Any]:
         "function_order",
         "imports.internal",
         "imports.module_internal",
+        "imports.stdlib",
         "module_functions",
         "module_order",
         "module_paths",

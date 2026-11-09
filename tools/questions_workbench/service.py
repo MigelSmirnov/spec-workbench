@@ -592,7 +592,7 @@ def _set_aside(review: dict[str, Any], scope: list[str], changed: dict[str, tupl
                current: dict[str, dict[str, str]] | None = None) -> None:
     """Keep the points about a unit under review; a point naming another unit is
     set aside, recorded in the review but not grouped. A point naming no unit is
-    kept and, when it blocks, keeps every unit under review open. A point on a
+    kept as ``?``; its topic closes as itself (units.NO_UNIT). A point on a
     unit reviewed for its change, quoting a passage of that unit away from the
     change, is set aside too."""
     changed, current = changed or {}, current or {}
@@ -771,7 +771,13 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     # never reviewed, changed since their latest review, or with evidence that
     # changed. A unit waiting for dispositions or for the fix of a
     # contradiction is not asked again on the same text.
-    scope = [key for key in read.units if before[key]["needs_round"]]
+    # the topics naming no unit are judged on the latest round only (units.NO_UNIT):
+    # this round supersedes them, as a unit's next review supersedes its topics;
+    # an unverified contradiction naming no unit is asked again over the units its round reviewed
+    no_unit = before.get(units.NO_UNIT)
+    again = (set(previous_summaries[-1].get("scope") or [])
+             if no_unit and no_unit["needs_round"] else set())
+    scope = [key for key in read.units if before[key]["needs_round"] or key in again]
     if not scope:
         if all(value["closed"] for value in before.values()):
             raise QuestionRoundError(f"every unit of State {state} is closed on its current text; nothing to ask")
@@ -849,8 +855,10 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     summary["closed"] = all(value["closed"] for value in after.values())
     summary["open_units"] = [key for key, value in after.items() if not value["closed"]]
     # what this round asks of the author: topics to dispose, units whose contradiction needs a fix
-    summary["awaiting_disposition"] = sorted({t for key in scope for t in after[key]["awaiting"]})
-    summary["contradiction_units"] = [key for key in scope if after[key]["contradictions"] or after[key]["unverified"]]
+    asked_keys = [*scope, *([units.NO_UNIT] if units.NO_UNIT in after else [])]
+    summary["awaiting_disposition"] = sorted({t for key in asked_keys for t in after[key]["awaiting"]})
+    summary["contradiction_units"] = [key for key in asked_keys
+                                      if after[key]["contradictions"] or after[key]["unverified"]]
     (directory / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return summary
 
@@ -928,7 +936,8 @@ def _closed_at(case: Path, state: int, summaries: list[dict[str, Any]]) -> str |
             return summary.get("ref") or "HEAD"
         digests = summary.get("units") or {}
         closing = summary.get("closed") or (digests and all(
-            units.unit_state(summaries[:index + 1], key, digest)["closed"] for key, digest in digests.items()))
+            units.unit_state(summaries[:index + 1], key, digest)["closed"] for key, digest in digests.items())
+            and units.no_unit_state(summaries[:index + 1])["closed"])
         if closing:
             directory = rounds_dir(case, state) / summary["round"]
             found = _git_out(case, "log", "-1", "--format=%H", "--", str(directory.resolve()))
@@ -1123,8 +1132,12 @@ def dispose(case: Path, state: int, topic_id: str, disposition: str, *, round_na
         raise QuestionRoundError(f"{topic_id} needs no disposition: "
                                  f"{(topic.get('judgement') or {}).get('kind') or 'it was not judged'}")
     concerned = units.topic_units(topic, list(summary.get("scope") or []))
+    if unit == units.NO_UNIT:
+        unit = None
     if unit is not None and unit not in concerned:
-        raise QuestionRoundError(f"{topic_id} does not concern unit {unit!r}; it concerns {', '.join(concerned)}")
+        raise QuestionRoundError(f"{topic_id} does not concern unit {unit!r}; it concerns "
+                                 + (", ".join(concerned) if concerned
+                                    else "no unit: dispose of it without --unit, as itself"))
     directory = rounds_dir(case, state) / summary["round"]
     entry: dict[str, Any] = {"topic": topic_id, "topic_text": topic.get("topic", ""),
                              **({"unit": unit} if unit else {}), "disposition": disposition}

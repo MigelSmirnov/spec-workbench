@@ -171,11 +171,12 @@ def test_a_point_about_a_closed_unit_is_set_aside(tmp_path):
     assert review["set_aside"][0]["unit"] == "A02"
 
 
-def test_a_blocking_point_that_names_no_unit_keeps_every_reviewed_unit_open(tmp_path):
+def test_a_blocking_point_that_names_no_unit_blocks_as_itself_not_every_reviewed_unit(tmp_path):
     case = _case(tmp_path)
     summary, _ = _ask(case, [_point("loose", None)], blocking={"loose"})
-    assert summary["blocked_units"] == sorted(summary["scope"])
+    assert summary["blocked_units"] == [units.NO_UNIT]
     assert summary["topics"][0]["units"] == [units.UNKNOWN]
+    assert not set(summary["open_units"]) & set(summary["scope"])
 
 
 def test_rounds_kept_before_units_do_not_close_a_unit(tmp_path):
