@@ -344,9 +344,11 @@ def test_uses_resolve_against_the_catalog_and_the_module_order():
 
     codes = set(_codes(service.analyze(case, table, NO_CODE)))
 
-    # the accepted call to use_widget also brings its signature types as undecided candidates
+    # the accepted call to use_widget also brings its signature types as undecided candidates,
+    # and no note of store names that callable
     assert codes == {"imports_basis_invalid", "imports_edge_forbidden", "imports_provider_wrong",
-                     "imports_symbol_unknown", "imports_use_invalid", "imports_candidate_undecided"}
+                     "imports_symbol_unknown", "imports_use_invalid", "imports_candidate_undecided",
+                     "imports_required_unnamed"}
 
 
 def test_code_unused_is_closed_by_code_outdated():
@@ -657,3 +659,114 @@ def test_a_negation_marks_only_the_symbol_it_governs(text, symbol, negative):
     case.exports["catalog"] = [*case.exports["catalog"], "make_widget_error"]
 
     assert _candidates(case, "consumer.add_case")[(symbol, "catalog")].negative is negative
+
+
+# -- required imports a note or contract must name (§7.1) ----------------------
+
+def _expense_case(notes=None) -> Case:
+    """client-portal a7cccf89: expense_intake imports validate_eur_amount, no note names it."""
+    case = _case(notes=notes if notes is not None else [
+        Note("use_widget", "MUST compare the cardinality of the value; it never calls make_widget.", "BEHAVIOR"),
+        Note("use_widget", "MUST read SANDBOX_TRAPPED_WITHOUT_ARGUMENT and CATALOG_VERSION.", "BEHAVIOR"),
+        Note("add_case", "MUST call store.record_change(change) once.", "BEHAVIOR"),
+    ])
+    case.modules.insert(1, "financial_policy")
+    case.module_functions["financial_policy"] = ["validate_eur_amount", "MONEY_CURRENCY"]
+    case.exports["financial_policy"] = ["validate_eur_amount", "MONEY_CURRENCY"]
+    case.contracts["validate_eur_amount"] = "(currency: str, amount: Decimal, strictly_positive: bool) -> None"
+    return case
+
+
+def _expense_table(case: Case) -> dict:
+    table = _closed_table(case)
+    scopes = case.scopes()
+    for scope_id in ("financial_policy", "financial_policy.validate_eur_amount"):
+        table["scopes"][scope_id] = {"basis_sha256": scopes[scope_id].basis_sha256, "uses": [], "rejected": []}
+    # the module scope keeps the use on the code's evidence after the note that named it went
+    table["scopes"]["consumer"]["uses"].append(
+        {"symbol": "validate_eur_amount", "provider": "financial_policy", "as": "calls", "basis": "code"})
+    return table
+
+
+EXPENSE_CODE = {**CODE, "financial_policy": {},
+                "consumer": {**CODE["consumer"], "financial_policy": ["validate_eur_amount"]}}
+
+
+def test_a_required_import_no_note_names_blocks_like_the_lost_amount_check():
+    case = _expense_case()
+    report = service.analyze(case, _expense_table(case), _code(**EXPENSE_CODE))
+
+    assert [(i["code"], i["subject"], i["symbol"], i["provider"], i["scopes"]) for i in report["findings"]] == [
+        ("imports_required_unnamed", "consumer", "validate_eur_amount", "financial_policy", ["consumer"])]
+    assert not report["summary"]["handoff_ready"]
+
+
+def test_a_note_that_names_the_required_import_closes_it():
+    case = _expense_case()
+    case.notes.append(Note("add_case", "MUST check the amount with the imported validate_eur_amount, "
+                                       "strictly positive, before recording.", "BEHAVIOR"))
+    table = _expense_table(case)
+    table["scopes"]["consumer.add_case"]["uses"].append(
+        {"symbol": "validate_eur_amount", "provider": "financial_policy", "as": "calls",
+         "basis": "note:consumer.add_case#2"})
+
+    assert _codes(service.analyze(case, table, _code(**EXPENSE_CODE))) == []
+
+
+def test_a_module_note_and_a_contract_of_the_module_name_it_too():
+    case = _expense_case()
+    case.notes.append(Note("consumer", "MUST check every amount with validate_eur_amount.", "BEHAVIOR"))
+    table = _expense_table(case)
+    table["scopes"]["consumer"]["basis_sha256"] = case.scopes()["consumer"].basis_sha256
+    table["scopes"]["consumer"]["uses"][-1]["basis"] = "note:consumer#1"
+    assert _codes(service.analyze(case, table, _code(**EXPENSE_CODE))) == []
+
+    case = _expense_case()
+    case.contracts["add_case"] = "(name: str, check: 'validate_eur_amount') -> None"
+    assert "imports_required_unnamed" not in _codes(service.analyze(case, _expense_table(case),
+                                                                    _code(**EXPENSE_CODE)))
+
+
+def test_a_name_inside_a_longer_identifier_does_not_name_the_import():
+    case = _expense_case()
+    case.notes.append(Note("add_case", "MUST NOT raise validate_eur_amount_error.", "BEHAVIOR"))
+    table = _expense_table(case)
+
+    assert "imports_required_unnamed" in _codes(service.analyze(case, table, _code(**EXPENSE_CODE)))
+
+
+def test_constants_models_and_classes_are_not_required_imports():
+    case = _expense_case()
+    case.module_functions["financial_policy"].append("AmountPolicy")
+    case.exports["financial_policy"].append("AmountPolicy")
+    case.contracts["AmountPolicy.check"] = "(self, amount: Decimal) -> None"
+    table = _expense_table(case)
+    table["scopes"]["financial_policy.AmountPolicy.check"] = {
+        "basis_sha256": case.scopes()["financial_policy.AmountPolicy.check"].basis_sha256,
+        "uses": [], "rejected": []}
+    table["scopes"]["consumer"]["uses"] = [
+        {"symbol": symbol, "provider": "financial_policy", "as": "reads", "basis": "code"}
+        for symbol in ("MONEY_CURRENCY", "AmountPolicy")] + [
+        {"symbol": "Part", "provider": "models", "as": "reads", "basis": "code"}]
+    code = {**EXPENSE_CODE, "consumer": {**CODE["consumer"], "models": [*CODE["consumer"]["models"], "Part"],
+                                         "financial_policy": ["AmountPolicy", "MONEY_CURRENCY"]}}
+
+    assert _codes(service.analyze(case, table, _code(**code))) == []
+
+
+def test_a_module_an_emitter_writes_is_not_judged():
+    case = _expense_case()
+    case.emitted = {"consumer": "http_router_backend"}
+
+    assert _codes(service.analyze(case, _expense_table(case), _code(**EXPENSE_CODE))) == []
+
+
+def test_emitted_modules_come_from_the_backend_wiring():
+    from imports_workbench.case import emitted_modules
+
+    assert emitted_modules({"rules": {
+        "http_router_backend": {"kind": "http_router_backend", "wiring": {"module": "api"}},
+        "time_source_policy": {"kind": "time_source_policy", "wiring": {"module": "clock"}},
+        "binary_storage_backend": {"kind": "binary_storage_backend", "wiring": {"module": "binary_storage"}},
+        "persistence_backend": {"kind": "persistence_backend"},
+    }}) == {"api": "http_router_backend", "binary_storage": "binary_storage_backend"}
