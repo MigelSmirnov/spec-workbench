@@ -41,6 +41,16 @@ A contradiction takes no disposition: it blocks until a round on the changed
 text no longer raises it. "Two clear rounds on the same text" is gone; it is
 what made ping-pong (client-portal State 2, rounds 82-90 on A28 and A32).
 
+A topic that names no unit under review (its points name none, ``?``) is
+closed as itself, under the key ``NO_UNIT``, and keeps no unit open: every
+round reviews the layer as a whole, so the state's latest round is its
+latest review. It needs its own disposition (fixed, carried, accepted), and
+a contradiction among such topics blocks the state until a round on a
+changed text no longer raises it. Until 2026-11-09 such a topic held every
+unit of its round open: on client-portal State 1 the unit-less
+contradictions of round 49 kept ten unchanged decisions open after round 50
+reviewed the three that changed, and no round could ever reach them.
+
 Rounds kept before this rule (no ``closure`` in their summary) keep the
 closure they gave: a unit closed by its two latest clear reviews on its
 current text stays closed and is never reopened by the new rule.
@@ -65,6 +75,8 @@ DECISION_KEY = re.compile(r"A\d+")
 SECTION_HEADING = re.compile(r"^##\s+(.*\S)\s*$")
 CONTEXT = "context"
 UNKNOWN = "?"
+# the closure key of the topics of a round that name no unit under review
+NO_UNIT = "(no unit)"
 
 # Summaries kept from 2026-11-08 close by one round with dispositions; a
 # summary without it was kept under the two-clear-rounds rule.
@@ -184,10 +196,20 @@ def _clear_for(summary: dict[str, Any], key: str) -> bool:
 
 
 def topic_units(topic: dict[str, Any], scope: list[str]) -> list[str]:
-    """The units a topic concerns: those it names under review, or every unit
-    under review when it names none."""
-    named = [u for u in topic.get("units") or [] if u in scope]
-    return named or list(scope)
+    """The units under review a topic names; [] when it names none: such a
+    topic closes as itself (``NO_UNIT``), not through the units."""
+    return [u for u in topic.get("units") or [] if u in scope]
+
+
+def _topic_concerns(topic: dict[str, Any], summary: dict[str, Any], key: str) -> bool:
+    """Whether a topic of `summary` keeps the unit `key` open. In a round kept
+    before the single-round rule a topic naming no unit concerned every unit
+    under review, and those rounds keep the closure they gave."""
+    scope = list(summary.get("scope") or [])
+    named = topic_units(topic, scope)
+    if not named and summary.get("closure") != CLOSURE_RULE:
+        return key in scope
+    return key in named
 
 
 def topic_need(topic: dict[str, Any], summary: dict[str, Any]) -> str | None:
@@ -214,7 +236,8 @@ def topic_need(topic: dict[str, Any], summary: dict[str, Any]) -> str | None:
 
 def disposed(summary: dict[str, Any], topic_id: str, unit: str) -> dict[str, Any] | None:
     """The author's disposition of a topic for a unit: one naming that unit,
-    or one naming no unit (it covers every unit of the topic)."""
+    or one naming no unit (it covers every unit of the topic, and is the
+    disposition of a topic that names none)."""
     found = None
     for entry in summary.get("dispositions") or []:
         if entry.get("topic") != topic_id:
@@ -265,17 +288,24 @@ def unit_state(summaries: list[dict[str, Any]], key: str, digest: str,
     if evidence is not None and evidence_changed(last, key, evidence):
         state["needs_round"] = EVIDENCE_CHANGED
         return state
-    scope = list(last.get("scope") or [])
-    for index, topic in enumerate(last.get("topics") or [], 1):
-        need = topic_need(topic, last)
-        if need is None or key not in topic_units(topic, scope):
+    _close_on_topics(state, last, key, lambda topic: _topic_concerns(topic, last, key))
+    return state
+
+
+def _close_on_topics(state: dict[str, Any], summary: dict[str, Any], key: str, concerns) -> None:
+    """Fill `state` from the topics of `summary` that `concerns` selects: the
+    contradictions it holds, the topics awaiting a disposition for `key`, and
+    what the dispositions carried; closed when nothing of it is left."""
+    for index, topic in enumerate(summary.get("topics") or [], 1):
+        need = topic_need(topic, summary)
+        if need is None or not concerns(topic):
             continue
         topic_id = str(topic.get("id") or f"#{index}")
         if need == CONTRADICTION:
             verified = (topic.get("judgement") or {}).get("verified", True)
             state["contradictions" if verified else "unverified"].append(topic_id)
             continue
-        entry = disposed(last, topic_id, key)
+        entry = disposed(summary, topic_id, key)
         if entry is None:
             state["awaiting"].append(topic_id)
         elif entry.get("disposition") == "carried":
@@ -284,12 +314,35 @@ def unit_state(summaries: list[dict[str, Any]], key: str, digest: str,
         state["needs_round"] = UNVERIFIED
     state["closed"] = not (state["contradictions"] or state["unverified"] or state["awaiting"])
     state["rule"] = CLOSURE_RULE if state["closed"] else None
+
+
+def no_unit_state(summaries: list[dict[str, Any]]) -> dict[str, Any]:
+    """The closure of the topics that name no unit under review (``NO_UNIT``),
+    in the shape of ``unit_state``. Every round reviews the layer as a whole,
+    so they are judged on the state's latest round only, if it was kept under
+    the single-round rule: a contradiction among them blocks until a round on
+    a changed text no longer raises it, any other needs its own disposition.
+    They keep no unit open."""
+    state: dict[str, Any] = {"closed": True, "rule": None, "round": None, "needs_round": None,
+                             "contradictions": [], "unverified": [], "awaiting": [], "carried": []}
+    last = summaries[-1] if summaries else None
+    if last is None or last.get("closure") != CLOSURE_RULE:
+        return state
+    state["round"] = last.get("round")
+    scope = list(last.get("scope") or [])
+    _close_on_topics(state, last, NO_UNIT, lambda topic: not topic_units(topic, scope))
     return state
 
 
 def states(summaries: list[dict[str, Any]], current: dict[str, dict[str, str]],
            evidence: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
-    return {key: unit_state(summaries, key, unit["digest"], evidence) for key, unit in current.items()}
+    """``unit_state`` of every unit, and ``NO_UNIT`` when the topics naming no
+    unit leave something open or carried."""
+    found = {key: unit_state(summaries, key, unit["digest"], evidence) for key, unit in current.items()}
+    layer = no_unit_state(summaries)
+    if not layer["closed"] or layer["carried"]:
+        found[NO_UNIT] = layer
+    return found
 
 
 def closed(summaries: list[dict[str, Any]], current: dict[str, dict[str, str]],
@@ -311,12 +364,11 @@ def evidence_changed(summary: dict[str, Any], key: str, evidence: dict[str, str]
 
 
 def blocked(topics: list[dict[str, Any]], scope: list[str]) -> list[str]:
-    """Units a round's blocking topics keep open. A blocking topic that names no
-    unit under review keeps every unit under review open."""
+    """Units a round's blocking topics keep open, and ``NO_UNIT`` when a
+    blocking topic names no unit under review: it blocks as itself."""
     hit: set[str] = set()
     for topic in topics:
         if not (topic.get("judgement") or {}).get("blocking"):
             continue
-        named = [u for u in topic.get("units") or [] if u in scope]
-        hit.update(named or scope)
+        hit.update(topic_units(topic, scope) or [NO_UNIT])
     return sorted(hit)
