@@ -176,7 +176,7 @@ consumer → provider → symbols map.
   viewer browser credential is the host-only cookie read only by
   `api_irregular`; service principals and staff present bearer headers read
   only by `api`.
-- **Data.** Every policy value generated code reads that is the same in every deployment — a threshold, a name, a path, a closed set or a table over a State 1 enumeration — is a typed constant of `data_provider`, imported by name; no other module holds or repeats it (SPEC_STANDARD 6.10, 15.4; 2026-11-08). A value that depends on the deployment is a field of `RuntimeSettings` instead (Configuration below; A30), such as the binary storage root and read bound.
+- **Data.** Every policy value model-written code reads that is the same in every deployment — a threshold, a name, a path, a closed set or a table over a State 1 enumeration — is a typed constant of `data_provider`, imported by name; no other module holds or repeats it (SPEC_STANDARD 6.10, 15.4; 2026-11-08). A value of a deterministic backend's IR is held only by the module emitted from it and by no constant: the media types, signatures and download names of `binary_storage` (`rules.binary_delivery_policy`), the table names of the repositories, the hashing parameters of `credential_security`. A value that depends on the deployment is a field of `RuntimeSettings` instead (Configuration below; A30), such as the binary storage root and read bound.
 - **Time.** Only `system_clock` reads the host clocks (A28). An operation
   that needs the current instant takes one wall reading from it and reuses
   it; the transport guard takes the elapsed reading for the viewer-entry
