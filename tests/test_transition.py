@@ -1015,6 +1015,36 @@ def test_a_dotted_class_method_in_a_note_is_a_call(tmp_path):
     assert flow_closure.coverage(case)["findings"] == []
 
 
+@pytest.mark.parametrize("note", [
+    # SPEC_STANDARD §2: a note has no method call and no dotted navigation; the
+    # method is named in prose with its receiver (client-portal kept one dotted
+    # PortalStore.begin in _authorize_project_operation for this tool alone)
+    "MUST open its transaction by calling begin on the store, which returns a ThingTransaction.",
+    "MUST open its transaction with begin of the store.",
+    "MUST open its transaction with begin of the imported ThingStore.",
+])
+def test_a_method_named_with_its_receiver_in_prose_is_a_call(tmp_path, note):
+    case = _flow_case(tmp_path, f"get_thing: [ORCHESTRATION] {note}\n")
+    assert flow_closure.coverage(case)["findings"] == []
+
+
+def test_a_receiver_named_by_its_accessor_resolves_to_the_class_the_accessor_returns():
+    owners = {"get_thing": "things", "ThingRepository.get": "thing_repository", "Other.get": "other"}
+    contracts = {"get_thing": "(store: ThingStore, name: str) -> Thing",
+                 "ThingTransaction.things": "(self) -> ThingRepository"}
+    edges = flow_closure.note_call_edges(
+        ["get_thing: [BEHAVIOR] MUST read through get of the things repository of that transaction."],
+        owners, contracts)
+    assert edges == {"get_thing": {"ThingRepository.get"}}
+
+
+def test_a_word_of_a_receiver_that_owns_no_such_method_is_not_a_call(tmp_path):
+    # `name of the store`: ThingStore has no method `name`, so nothing is obliged
+    case = _flow_case(tmp_path, "get_thing: [ORCHESTRATION] MUST record the name of the store.\n")
+    assert [f["capability"] for f in flow_closure.coverage(case)["findings"]] == [
+        "capability:thing_repository.create_thing_schema"]
+
+
 def test_without_a_caller_of_begin_the_backend_step_stays_unreached(tmp_path):
     case = _flow_case(tmp_path, "get_thing: [ORCHESTRATION] MUST return the thing.\n")
     report = flow_closure.coverage(case)
