@@ -3947,7 +3947,13 @@ neither bound is changed silently.
 ### Errors
 
 A missing, malformed or inconsistent value (a wildcard host or origin, binary
-bounds out of order) stops the start.
+bounds out of order) is refused with the one `ValueError` the emitted
+`runtime_settings` raises, naming the variable and never its value; the
+three causes are not told apart (Factory `generate_runtime_settings_draft.py`).
+At start the refusal stops the start (and the bootstrap command). A later
+call refuses only that call, never the running service: `binary_storage`
+answers the read as `BinaryStorageError` (A14), and `registry_gateway` lets
+it pass uncaught (its note).
 
 ### State impact
 
