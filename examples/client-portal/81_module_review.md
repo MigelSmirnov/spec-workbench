@@ -2,7 +2,58 @@
 
 ## Verdict
 
-**Open (2026-11-09).** 39 modules reviewed: 23 `PASS`, 16 `AMBIGUITY`, 0 pending,
+**Closed (2026-11-09, second pass).** 39 modules reviewed: 39 `PASS`, 0
+`AMBIGUITY`, 0 pending, 0 stale. `81_module_review_status.json` records each
+verdict and its packet hash (`slice_sha256`, the FA002 rule over
+`build_slice`), recomputed on the spec after the State 7 rounds below.
+
+The 16 `AMBIGUITY` verdicts of the first pass were closed by text, not by
+decision:
+
+- **Note forms (§2).** Dotted navigation removed from the 16 modules
+  (`54ebf13f`): "the X repository of that transaction", "begin of the
+  store", "rollback of that transaction", repository methods named bare. One
+  `PortalStore.begin` stays in `_authorize_project_operation`: the flow
+  closure reads an obliged call only from a dotted form, and without it ten
+  schema capabilities of the flows are unreached (tool gap, reported).
+  Values inline (status codes, quoted phrases, member lists) removed; every
+  rewritten note passed `check_note_draft`.
+- **Enumeration members.** A member of an enumeration whose values contain a
+  dot (`AuditAction`, `Capability`) is named by its value beside its address
+  (#167); a member of any other enumeration by the name the models emitter
+  writes, as the Factory prompt lists and asks for (round 23: 15
+  contradictions where plain members were named by value). In
+  `project_tracking` rounds 24–25 read even the value form, and then the
+  value-plus-name form, of two dotted actions as wrong; those two notes name
+  `PAYMENT_REGISTER` and `PROGRESS_UPDATE`, which the Factory validator
+  accepts since code-factory #194.
+- **Q10 (owner 2026-11-09).** `create_expense_from_recognition` re-validates
+  the publication model from the field values the instance dumps and refuses
+  a failure as `ExpenseValidationError`; no attribute probing. The owner's
+  `model_validate(instance, from_attributes=True)` would return an instance
+  of the model's own class unchanged under the emitted configuration
+  (pydantic 2.12, checked), so it would accept the incomplete object.
+- **Prompt `model_copy` line.** Factory #200 makes the line defer to the
+  builders; round 23 then judged that template line itself as an
+  unclassified note in `financial_policy` (three topics, open). It is the
+  Factory's text, not a slice text: `financial_policy` builds no record and
+  its six notes are unchanged. PASS, and the topics go to the Factory.
+- **IR defect** found by round 23: no builder for a replayed expense
+  outcome; `build_replayed_expense_operation_outcome` added (`0a1ee28f`).
+- **`ProgressPhoto.updated_at/updated_by`** stay nullable (owner
+  2026-11-09, #147). **Registry URL** read only through `runtime_settings`
+  (owner 2026-11-09, `3b943d13`).
+
+State 7 rounds (provider `codex-cli:gpt-5.6-sol:medium`): r23 33 blocking
+over 12 modules; r24 2 (`project_tracking`); r25 2 (`project_tracking`);
+r26 clear. Open after r26: `financial_policy` r23 T1–T3 (Factory template).
+
+## First pass (2026-11-09 morning), kept as history
+
+**Open.** 39 modules reviewed: 23 `PASS`, 16 `AMBIGUITY`.
+
+
+The first pass: 23 `PASS`, 16 `AMBIGUITY`, 0 pending,
 0 stale. `81_module_review_status.json` records each module's verdict and its
 packet hash (`slice_sha256`, computed by the FA002 rule from `build_slice`).
 FA002 therefore blocks admission, as it must: no `AMBIGUITY` below is decided
