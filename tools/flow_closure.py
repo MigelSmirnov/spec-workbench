@@ -17,6 +17,11 @@ design states it:
 - a note names the callee: bare (``create_audit_schema``), dotted
   (``PortalStore.begin``), or through a parameter of the scope's own contract
   (``store.begin()`` where the contract reads ``store: PortalStore``);
+- a note names a method in prose with its receiver, the form SPEC_STANDARD §2
+  leaves a note (no method call, no dotted navigation): ``begin of the store``,
+  ``calling begin on the store``. The receiver is a parameter of the scope's
+  contract, a class, or an accessor whose contract returns one class
+  (``get_project_section of the project_sections repository``);
 - a deterministic backend emits it (SPEC_STANDARD 6.12): the unit-of-work
   store's ``begin`` creates the schema of every accessor's repository, the
   bootstrap store's operation creates the schemas of the repositories it writes
@@ -45,6 +50,11 @@ SPEC_FILE = "global_spec.json"
 NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 DOTTED_RE = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b")
 TYPE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# `<method> of|on [the|that|this|its|each|a|an] [imported] <receiver>`: a call
+# addressed in prose, as SPEC_STANDARD §2 requires of a note
+OF_RECEIVER_RE = re.compile(
+    r"\b([A-Za-z_][A-Za-z0-9_]*)\s+(?:of|on)\s+(?:(?:the|that|this|its|each|a|an)\s+)?(?:imported\s+)?"
+    r"(?=([A-Za-z_][A-Za-z0-9_]*)\b)")
 
 
 def _plan_functions(project: Path) -> dict[str, str]:
@@ -217,6 +227,7 @@ def note_call_edges(lines: list[str], owners: dict[str, str],
     """The calls a list of note lines (``scope: body``) obliges: scope -> callees."""
     calls: dict[str, set[str]] = {}
     contracts = contracts or {}
+    accessors = _accessor_classes(contracts)
     for line in lines:
         line = str(line)
         if ":" not in line or line.startswith("#"):
@@ -231,9 +242,26 @@ def note_call_edges(lines: list[str], owners: dict[str, str],
             for candidate in (f"{receiver}.{method}", f"{receivers.get(receiver, '')}.{method}"):
                 if candidate in owners:
                     named.add(candidate)
+        for method, receiver in OF_RECEIVER_RE.findall(body):
+            classes = {receiver, receivers.get(receiver, ""), *accessors.get(receiver, ())}
+            named.update(f"{cls}.{method}" for cls in classes if cls and f"{cls}.{method}" in owners)
         for name in named - {scope_key}:
             calls.setdefault(scope_key, set()).add(name)
     return calls
+
+
+def _accessor_classes(contracts: dict[str, Any]) -> dict[str, set[str]]:
+    """method name -> the one class each contract of that name returns
+    (``PortalTransaction.project_sections -> ProjectSectionRepository``): the
+    receiver a note names as ``the project_sections repository``."""
+    found: dict[str, set[str]] = {}
+    for symbol, signature in contracts.items():
+        if "." not in str(symbol):
+            continue
+        returned = str(signature or "").partition("->")[2].strip()
+        if TYPE_NAME_RE.match(returned):
+            found.setdefault(str(symbol).rsplit(".", 1)[1], set()).add(returned)
+    return found
 
 
 def _non_http_ingress_roots(project: Path) -> set[str]:
