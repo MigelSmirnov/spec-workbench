@@ -1,0 +1,135 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "RuntimeSettings contents",
+   "kind": "contradiction",
+   "text": "the closed table `config.runtime_environment_variables`, defaults, normalization and the startup checks (A30), into `RuntimeSettings`",
+   "question": "Do the two binary-storage environment rows become fields of `RuntimeSettings`, or are they only validated at startup and then read independently by `binary_storage` as A30 says?",
+   "options": [
+    "Put every environment-table row, including both binary-storage values, into `RuntimeSettings`.",
+    "Validate the binary-storage rows at startup but omit them from `RuntimeSettings`; `binary_storage` reads them independently at each read."
+   ],
+   "default_guess": "Validate the binary-storage rows but omit them from `RuntimeSettings`, following A30's explicit exception."
+  },
+  {
+   "unit": "context",
+   "subject": "runtime_settings validation boundary",
+   "kind": "contradictory ownership boundary",
+   "text": "any check that uses a setting to decide what the portal does. The checks of the table itself are its own: each row's type, requiredness, normalization and accepted values",
+   "question": "What distinguishes a forbidden check that uses a setting to decide behavior from an owned accepted-value check that decides whether the service starts?",
+   "options": [
+    "`runtime_settings` may perform every check expressed by the environment table, even though failure stops startup; only post-load business-policy checks are forbidden.",
+    "`runtime_settings` may only parse and normalize values; checks whose result stops startup or changes runtime behavior belong elsewhere.",
+    "Enumerate the owned checks individually and forbid every unlisted check."
+   ],
+   "default_guess": "Treat every validation explicitly defined by the closed environment table as owned by `runtime_settings`, and forbid policy decisions after loading.",
+   "witness": {
+    "initial": "The environment supplies a syntactically valid numeric setting whose value violates a range or accepted-value rule.",
+    "events": [
+     "`module:runtime_settings` loads the environment during service startup.",
+     "An implementer classifies the range test either as table validation or as a check that uses a setting to decide what the portal does."
+    ],
+    "outcomes": [
+     "Startup is refused by `runtime_settings`.",
+     "The value is loaded and another module must accept or refuse it."
+    ],
+    "observer": "The host operator and any startup monitor"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "health operations",
+   "kind": "unnamed capability",
+   "text": "Liveness answers `ok` without reading anything. Readiness opens one `module:portal_store` transaction and rolls it back",
+   "question": "Which named capabilities execute the liveness answer, the readiness check, and the readiness transaction/rollback?",
+   "options": [
+    "Add separate `module:runtime` liveness and readiness capabilities, with readiness calling a named `module:portal_store` transaction capability.",
+    "Make `capability:runtime.create_runtime_app` also own all later health handling.",
+    "Name an API health-route capability that calls a runtime readiness operation."
+   ],
+   "default_guess": "Add separate runtime liveness and readiness capabilities and a named portal-store transaction operation."
+  },
+  {
+   "unit": "context",
+   "subject": "service-start orchestration",
+   "kind": "unnamed caller",
+   "text": "`capability:runtime_settings.load_runtime_settings` reads and validates the environment variables of A30; ... `capability:runtime.create_runtime_app` builds one `PortalStore`",
+   "question": "Which named operation calls `load_runtime_settings` and then passes its result to `create_runtime_app` during service startup?",
+   "options": [
+    "`capability:runtime.create_runtime_app` calls `load_runtime_settings` itself.",
+    "A separate runtime startup capability calls both operations.",
+    "The deployment process directly calls both capabilities in order."
+   ],
+   "default_guess": "Introduce or name one runtime startup capability that calls both operations in order."
+  },
+  {
+   "unit": "context",
+   "subject": "bootstrap configuration failure",
+   "kind": "missing exit outcome",
+   "text": "a missing or invalid required variable — and, since 2026-11-09, a missing, empty or whitespace-only Registry URL (A30) — ends it before any store exists",
+   "question": "What exit code and externally visible result does the bootstrap command produce when configuration loading fails?",
+   "options": [
+    "Map configuration rejection to exit code 2 as an input rejection.",
+    "Add a distinct exit code for configuration failure.",
+    "Terminate with an unhandled process failure outside the four-code contract."
+   ],
+   "default_guess": "Add a distinct, documented configuration-failure outcome rather than conflating host configuration with identity input.",
+   "witness": {
+    "initial": "The staff table is empty and `REGISTRY_BASE_URL` is missing.",
+    "events": [
+     "The host operator supplies matching email and password input.",
+     "`capability:staff_bootstrap_cli.run_bootstrap_cli` calls `capability:runtime_settings.load_runtime_settings`.",
+     "Configuration loading refuses the missing required variable."
+    ],
+    "outcomes": [
+     "The CLI returns exit code 2 by treating it as rejected input.",
+     "The CLI exits outside the documented 0–3 mapping because no listed outcome covers configuration failure."
+    ],
+    "observer": "The host operator and deployment script"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "bootstrap storage and hashing failures",
+   "kind": "unstated failure outcome",
+   "text": "hashes the password with `capability:credential_security.hash_password` ... opens its own connection, ensures the staff access and audit tables exist ... inserts the account and the audit and commits once",
+   "question": "What error and exit code result if password hashing, connection opening, schema creation, insertion, audit insertion, or commit fails?",
+   "options": [
+    "Add one bootstrap infrastructure-failure outcome and exit code, with the transaction rolled back.",
+    "Map all such failures to identity-input rejection and exit code 2.",
+    "Let the exception escape and leave its process exit status outside the closed bootstrap contract."
+   ],
+   "default_guess": "Define one non-disclosing bootstrap infrastructure failure with rollback and a distinct documented exit code.",
+   "witness": {
+    "initial": "The staff table is empty, configuration is valid, and the database becomes unavailable when the bootstrap store opens its connection.",
+    "events": [
+     "The host operator supplies matching valid credentials.",
+     "The CLI loads settings and calls `capability:staff_bootstrap.bootstrap_first_administrator`.",
+     "`module:staff_bootstrap_store` fails to open its connection before either insert."
+    ],
+    "outcomes": [
+     "The command maps the failure to one of the documented exit codes, though the text does not say which.",
+     "The storage exception escapes and the process produces an implementation-dependent exit status and message."
+    ],
+    "observer": "The host operator and deployment script"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "bootstrap store transaction",
+   "kind": "unnamed capability",
+   "text": "`module:staff_bootstrap_store` opens its own connection, ensures the staff access and audit tables exist with `capability:staff_access_repository.create_staff_access_schema` and `capability:audit_repository.create_audit_schema`, begins a write transaction no concurrent attempt can interleave, checks that the staff table is empty, inserts the account and the audit and commits once",
+   "question": "Which capability of `module:staff_bootstrap_store` performs the exclusive transaction, emptiness check, two inserts, and commit, and which operation calls it?",
+   "options": [
+    "Name one bootstrap-store capability called by `capability:staff_bootstrap.bootstrap_first_administrator`.",
+    "Make `capability:staff_bootstrap.bootstrap_first_administrator` execute the storage transaction directly.",
+    "Assign the transaction to a deterministic backend and name the emitted call."
+   ],
+   "default_guess": "Name one atomic bootstrap-store capability called by `capability:staff_bootstrap.bootstrap_first_administrator`."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"RuntimeSettings contents\",\"kind\":\"contradiction\",\"text\":\"the closed table `config.runtime_environment_variables`, defaults, normalization and the startup checks (A30), into `RuntimeSettings`\",\"question\":\"Do the two binary-storage environment rows become fields of `RuntimeSettings`, or are they only validated at startup and then read independently by `binary_storage` as A30 says?\",\"options\":[\"Put every environment-table row, including both binary-storage values, into `RuntimeSettings`.\",\"Validate the binary-storage rows at startup but omit them from `RuntimeSettings`; `binary_storage` reads them independently at each read.\"],\"default_guess\":\"Validate the binary-storage rows but omit them from `RuntimeSettings`, following A30's explicit exception.\"},{\"unit\":\"context\",\"subject\":\"runtime_settings validation boundary\",\"kind\":\"contradictory ownership boundary\",\"text\":\"any check that uses a setting to decide what the portal does. The checks of the table itself are its own: each row's type, requiredness, normalization and accepted values\",\"question\":\"What distinguishes a forbidden check that uses a setting to decide behavior from an owned accepted-value check that decides whether the service starts?\",\"options\":[\"`runtime_settings` may perform every check expressed by the environment table, even though failure stops startup; only post-load business-policy checks are forbidden.\",\"`runtime_settings` may only parse and normalize values; checks whose result stops startup or changes runtime behavior belong elsewhere.\",\"Enumerate the owned checks individually and forbid every unlisted check.\"],\"default_guess\":\"Treat every validation explicitly defined by the closed environment table as owned by `runtime_settings`, and forbid policy decisions after loading.\",\"witness\":{\"initial\":\"The environment supplies a syntactically valid numeric setting whose value violates a range or accepted-value rule.\",\"events\":[\"`module:runtime_settings` loads the environment during service startup.\",\"An implementer classifies the range test either as table validation or as a check that uses a setting to decide what the portal does.\"],\"outcomes\":[\"Startup is refused by `runtime_settings`.\",\"The value is loaded and another module must accept or refuse it.\"],\"observer\":\"The host operator and any startup monitor\"}},{\"unit\":\"context\",\"subject\":\"health operations\",\"kind\":\"unnamed capability\",\"text\":\"Liveness answers `ok` without reading anything. Readiness opens one `module:portal_store` transaction and rolls it back\",\"question\":\"Which named capabilities execute the liveness answer, the readiness check, and the readiness transaction/rollback?\",\"options\":[\"Add separate `module:runtime` liveness and readiness capabilities, with readiness calling a named `module:portal_store` transaction capability.\",\"Make `capability:runtime.create_runtime_app` also own all later health handling.\",\"Name an API health-route capability that calls a runtime readiness operation.\"],\"default_guess\":\"Add separate runtime liveness and readiness capabilities and a named portal-store transaction operation.\"},{\"unit\":\"context\",\"subject\":\"service-start orchestration\",\"kind\":\"unnamed caller\",\"text\":\"`capability:runtime_settings.load_runtime_settings` reads and validates the environment variables of A30; ... `capability:runtime.create_runtime_app` builds one `PortalStore`\",\"question\":\"Which named operation calls `load_runtime_settings` and then passes its result to `create_runtime_app` during service startup?\",\"options\":[\"`capability:runtime.create_runtime_app` calls `load_runtime_settings` itself.\",\"A separate runtime startup capability calls both operations.\",\"The deployment process directly calls both capabilities in order.\"],\"default_guess\":\"Introduce or name one runtime startup capability that calls both operations in order.\"},{\"unit\":\"context\",\"subject\":\"bootstrap configuration failure\",\"kind\":\"missing exit outcome\",\"text\":\"a missing or invalid required variable — and, since 2026-11-09, a missing, empty or whitespace-only Registry URL (A30) — ends it before any store exists\",\"question\":\"What exit code and externally visible result does the bootstrap command produce when configuration loading fails?\",\"options\":[\"Map configuration rejection to exit code 2 as an input rejection.\",\"Add a distinct exit code for configuration failure.\",\"Terminate with an unhandled process failure outside the four-code contract.\"],\"default_guess\":\"Add a distinct, documented configuration-failure outcome rather than conflating host configuration with identity input.\",\"witness\":{\"initial\":\"The staff table is empty and `REGISTRY_BASE_URL` is missing.\",\"events\":[\"The host operator supplies matching email and password input.\",\"`capability:staff_bootstrap_cli.run_bootstrap_cli` calls `capability:runtime_settings.load_runtime_settings`.\",\"Configuration loading refuses the missing required variable.\"],\"outcomes\":[\"The CLI returns exit code 2 by treating it as rejected input.\",\"The CLI exits outside the documented 0–3 mapping because no listed outcome covers configuration failure.\"],\"observer\":\"The host operator and deployment script\"}},{\"unit\":\"context\",\"subject\":\"bootstrap storage and hashing failures\",\"kind\":\"unstated failure outcome\",\"text\":\"hashes the password with `capability:credential_security.hash_password` ... opens its own connection, ensures the staff access and audit tables exist ... inserts the account and the audit and commits once\",\"question\":\"What error and exit code result if password hashing, connection opening, schema creation, insertion, audit insertion, or commit fails?\",\"options\":[\"Add one bootstrap infrastructure-failure outcome and exit code, with the transaction rolled back.\",\"Map all such failures to identity-input rejection and exit code 2.\",\"Let the exception escape and leave its process exit status outside the closed bootstrap contract.\"],\"default_guess\":\"Define one non-disclosing bootstrap infrastructure failure with rollback and a distinct documented exit code.\",\"witness\":{\"initial\":\"The staff table is empty, configuration is valid, and the database becomes unavailable when the bootstrap store opens its connection.\",\"events\":[\"The host operator supplies matching valid credentials.\",\"The CLI loads settings and calls `capability:staff_bootstrap.bootstrap_first_administrator`.\",\"`module:staff_bootstrap_store` fails to open its connection before either insert.\"],\"outcomes\":[\"The command maps the failure to one of the documented exit codes, though the text does not say which.\",\"The storage exception escapes and the process produces an implementation-dependent exit status and message.\"],\"observer\":\"The host operator and deployment script\"}},{\"unit\":\"context\",\"subject\":\"bootstrap store transaction\",\"kind\":\"unnamed capability\",\"text\":\"`module:staff_bootstrap_store` opens its own connection, ensures the staff access and audit tables exist with `capability:staff_access_repository.create_staff_access_schema` and `capability:audit_repository.create_audit_schema`, begins a write transaction no concurrent attempt can interleave, checks that the staff table is empty, inserts the account and the audit and commits once\",\"question\":\"Which capability of `module:staff_bootstrap_store` performs the exclusive transaction, emptiness check, two inserts, and commit, and which operation calls it?\",\"options\":[\"Name one bootstrap-store capability called by `capability:staff_bootstrap.bootstrap_first_administrator`.\",\"Make `capability:staff_bootstrap.bootstrap_first_administrator` execute the storage transaction directly.\",\"Assign the transaction to a deterministic backend and name the emitted call.\"],\"default_guess\":\"Name one atomic bootstrap-store capability called by `capability:staff_bootstrap.bootstrap_first_administrator`.\"}]}",
+ "set_aside": []
+}
