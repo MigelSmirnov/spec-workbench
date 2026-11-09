@@ -526,7 +526,7 @@ Repaired to the accepted spec: `create_service_principal` persists
 (the A11 cascade of a disabled service principal), and no operation
 changes the scope mode; `authorize_producer_scope` decides an
 `all_projects` principal by the Registry's active answer alone
-(`rules.producer_scope_policy`). Owner 2026-11-06: current service behaviour
+(State 2 A12). Owner 2026-11-06: current service behaviour
 accepted; technical decisions delegated.
 
 ### Identity

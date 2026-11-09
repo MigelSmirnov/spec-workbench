@@ -710,7 +710,7 @@ Q19.
 
 An archived Registry project is readable and refuses every mutation of its
 budget, snapshot import and activation, expense, document, progress, payment
-and photo records (accepted `rules.registry_status_policy`: archived reads,
+and photo records (State 2 A5: archived reads,
 never mutates), with one named exception: a staff read of a project's
 progress list, when the project has no manual budget version yet, creates
 that empty manual budget version, also for an archived project (Factory code

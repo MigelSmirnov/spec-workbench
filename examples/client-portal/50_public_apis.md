@@ -904,7 +904,7 @@ One Registry request to the project's validate path (data-provider constants
 ### Enforces
 
 A6, A5: the portal never creates a `project_id` and never reads Registry
-storage; the lifecycle decision is its caller's (`rules.registry_status_policy`).
+storage; the lifecycle decision is its caller's (A5).
 
 ### Errors
 
@@ -1093,7 +1093,7 @@ One Registry validation, after its own transaction closed.
 
 ### Enforces
 
-A4: `rules.project_guard_sequence` in order — `valid_session`,
+A4: the guard steps in order — `valid_session`,
 `active_principal`, `project_access`, `required_capability`,
 `registry_lifecycle` — first failure winning; session, account and
 assignment are read from persistence in one transaction; an administrator
@@ -2421,7 +2421,7 @@ The `PortalStore`, the `ServiceActorContext` and the `project_id`.
 
 ### Outputs
 
-A yes-or-no answer, the decision of `rules.producer_scope_policy`: for an
+A yes-or-no answer, the decision of A12: for an
 all-projects scope, yes exactly when the Registry reports the project
 active; for a granted-projects scope, yes exactly when an active unrevoked
 grant exists for this principal and project. A project the scope does not

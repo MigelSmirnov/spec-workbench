@@ -50,15 +50,33 @@ The former status, kept:
 >    has no password reset and sends no email.*
 > 3. **Config default values below were confirmed by the product owner on
 >    2026-07-19.** They remain runtime knobs, not architecture.
+>
+>    *Narrowed on 2026-11-08 (A30): the confirmed values stay, but the Registry
+>    timeout, the session lifetimes and the credential entropy are release
+>    constants a deployment cannot change; only the environment values of A30
+>    are deployment settings.*
 
 ## Classification principles
 
-- `config` — deployment/runtime knobs that change without redesign (URLs,
-  timeouts, TTLs, rate limits, hashing parameters).
-- `rules` — closed normative semantics: capability tables, transition
-  tables, translation tables, policy constants (rounding, identity keys).
-- `models` — typed schemas and closed enums (already in `10_models.md`).
-- `notes` — behavior that applies the above (States 6–7).
+Since 2026-11-08 (SPEC_STANDARD 15.2, 15.3.1) a value generated code reads
+has one of three homes, and the decision that owns it names that home:
+
+- a closed set of variants (statuses, kinds, codes) — an enumeration of
+  `models`, named by the model;
+- a constant or policy table that is the same in every environment and
+  changes only by a product decision (thresholds, names, paths, timeouts,
+  lifetimes, transition and capability tables) — a typed constant of the
+  deterministic `data_provider`, imported by name;
+- a value that depends on the deployment (URLs, origins, hosts, size bounds,
+  rate limits) — a row of the start-up table `config.runtime_environment_variables`,
+  read once by `runtime_settings` into a field of `RuntimeSettings`.
+
+The IR a deterministic backend is emitted from (`rules.*_backend` and the
+policies such a backend reads) is read only by that backend. Behaviour that
+applies the values — a condition that chooses what code does — is prose of
+the State 7 notes (SPEC_STANDARD §2). The former split (`config` for
+deployment knobs including timeouts and TTLs, `rules` for every closed
+table) is withdrawn.
 
 ## Invariant ledger overview
 
@@ -106,7 +124,7 @@ portal.estimate_snapshot.activate
 
 ### Required tests
 
-- INV-002: a check against the capability sets of this decision, held by the data-provider constant `CAPABILITY_SET_MEMBERS`, at `_require_capability` showing the invariant holds; a violating input is refused and changes nothing.
+- INV-002: a check at `_require_capability` and `authorize_access_management`: for every principal kind and role, the capability set decided is exactly the one `CAPABILITY_SET_MEMBERS` gives for its `CapabilitySet` (the administrator's being the operator set together with the administrator additions), over every member of `Capability`; and a request that carries its own role, capability or principal-kind claim (a header, a body field, a query value) changes no decision: an operator presenting an administrator claim is refused access management, and a viewer presenting a manage capability is refused the mutation, each changing nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-002 [witness: verification:authorization_guard_client_portal].
 
 ### Consequence
@@ -133,7 +151,7 @@ capability is never read from request data.
 
 ### Required tests
 
-- INV-007: a check against the capability sets of A2, held by the data-provider constant `CAPABILITY_SET_MEMBERS`, at `_require_capability` showing the invariant holds; a violating input is refused and changes nothing.
+- INV-007: a check at `_require_capability` that the viewer set of `CAPABILITY_SET_MEMBERS` holds only `*.read` members of `Capability` and none of `*.manage`, `portal.access.manage` or the estimate-snapshot import and activation members; and, through the viewer routes, that a viewer session can reach no mutation of portal data and no access-management operation: each such attempt is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-007 [witness: verification:authorization_guard_client_portal].
 
 ### Consequence
@@ -242,7 +260,7 @@ the challenges (owner 2026-11-07, A3 "Carried changes").
 
 ### Consequence
 
-The table is rules data: `rules.project_guard_sequence` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+The sequence is behaviour, not data: an order of steps that chooses what the guard does is prose of the State 7 notes (SPEC_STANDARD §2), stated by the notes of `_authorize_project_operation` and of the operations each flow names. The accepted spec's `rules.project_guard_sequence` records the same order and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
 
 ## Accepted decision A5 — R5. Registry status policy
 
@@ -322,7 +340,7 @@ accepted; technical decisions delegated.
 
 ### Consequence
 
-The table is rules data: `rules.registry_status_policy` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+The policy is behaviour, not data: which Registry state admits a read or a mutation chooses what the guard does, and is stated as prose by the notes of `_authorize_project_operation`, `_context_from_validation` and the operations that read `registry_status` (SPEC_STANDARD §2); the states are the enumeration `= models.RegistryProjectStatus`. The accepted spec's `rules.registry_status_policy` records the same table and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
 
 ## Accepted decision A6 — R6. Registry failure translation (gateway-owned)
 
@@ -382,7 +400,7 @@ delegated.
 
 ### Required tests
 
-- PLAT-REG-005: a focused test at `_translate_registry_failure` showing the invariant holds; a violating input is refused and changes nothing.
+- PLAT-REG-005: a focused test of the three gateway operations against a stubbed Registry, one case per member of `RegistryFailureKind` the gateway raises: a request timeout gives `timeout`; a connection failure and an unusable Registry URL give `transport_error`; an HTTP 404 gives `not_found`; any other non-success status gives `http_error`; an undecodable or invalid body gives `schema_mismatch`; a decoded answer for another project gives `identity_mismatch`. Each raises `RegistryBoundaryError` with exactly that kind and returns no value: no cached, client-supplied or fabricated context and no default answer. A malformed identifier is refused at request decoding before any Registry call, so `invalid_uuid` is never raised (above).
 - Witnesses, the focused Factory verification checks that assert it: PLAT-REG-005 [witness: verification:derived_views_uow_client_portal]; PLAT-REG-005 [witness: verification:api_transport_financial_policy_registry_gateway_client_portal].
 
 ### Consequence
@@ -539,7 +557,7 @@ current service behaviour accepted; technical decisions delegated).
 
 ### Consequence
 
-The table is rules data: `rules.idempotency_identities` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+The identities are behaviour, not data: which fields make a repeated request the same request is stated as prose by the notes of the operations this decision's tests name (SPEC_STANDARD §2). The accepted spec's `rules.idempotency_identities` records the same table and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
 
 ## Accepted decision A9 — R9. Money policy
 
@@ -590,7 +608,7 @@ running service still returns 0 until the next Route B regenerates
 
 ### Required tests
 
-- INV-037: a check against the money values of this decision, held by the data-provider constants `MONEY_CURRENCY`, `MONEY_FRACTION_DIGITS` and `MONEY_ROUNDING`, at `validate_eur_amount` showing the invariant holds; a violating input is refused and changes nothing.
+- INV-037: a check at `validate_eur_amount` and at each operation that accepts an amount, with the values of the data-provider constants `MONEY_CURRENCY`, `MONEY_FRACTION_DIGITS` and `MONEY_ROUNDING`: an amount in a currency other than `MONEY_CURRENCY` is refused, never converted, and changes nothing; an accepted amount is returned as a `Decimal` with exactly `MONEY_FRACTION_DIGITS` fraction digits, a half-way value (for example 0.005 and 0.015) rounded half-up away from zero; and every derived money value (completed work value, balances) carries the same scale and rounding.
 - INV-041: a check against the rules table at `calculate_overall_progress` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-044: the ledger's property at `calculate_material_balance` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-037 [witness: verification:project_tracking_audit_writer_sqlite_uow_client_portal].
@@ -727,7 +745,7 @@ is reached only if access changed in between (Q20). Owner 2026-11-06: current se
 
 ### Consequence
 
-The table is rules data: `rules.producer_scope_policy` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+The rule is behaviour, not data: which scope admits which project is stated as prose by the notes of `authorize_producer_scope` and `authorize_snapshot_import` (SPEC_STANDARD §2); the scopes are the enumeration `= models.ProducerScopeMode`. The accepted spec's `rules.producer_scope_policy` records the same rule and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
 
 ## Accepted decision A13 — R13. Audit action catalog (closed)
 
@@ -845,12 +863,12 @@ The accepted Factory spec extends `rules.binary_delivery_policy` (Factory `babd5
 
 ### Required tests
 
-- INV-034: a focused test at `create_expense_from_recognition` (the aggregate is built by the emitted `build_expense_aggregate` since 2026-11-08) showing the invariant holds; a violating input is refused and changes nothing.
+- INV-034: a focused test at `create_expense_from_recognition` (the aggregate is built by the emitted `build_expense_aggregate` since 2026-11-08): an expense created with one allocation and one created with several allocations each has exactly one `ExpenseDocument`, which names the expense; the document record holds the opaque `file_ref` and no binary content; and replacing the expense's allocations leaves that one document unchanged.
 - Witnesses, the focused Factory verification checks that assert it: INV-034 [witness: verification:expense_intake_uow_client_portal].
 
 ### Consequence
 
-The table is rules data: `rules.binary_delivery_policy` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+`rules.binary_delivery_policy` (media types and signatures per object kind, download name, disposition, the read bound's start-up consistency) is IR read only by the deterministic `binary_storage` backend, which `binary_storage` is emitted from (`rules.binary_storage_backend`); no model-written module reads it. A model-written owner (`read_expense_document`, `read_progress_photo`) hands `read_binary` an authorized reference and returns the payload it answers, whose media type, download name and disposition the emitted module decided. The two storage variables are rows of the start-up table (A30).
 
 ## Accepted decision A15 — R15. Deterministic project-list ordering
 
@@ -884,7 +902,7 @@ The table is rules data: `rules.binary_delivery_policy` (SPEC_STANDARD 15.3.1, a
 
 ### Consequence
 
-The table is rules data: `rules.project_list_ordering` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+The ordering is behaviour, not data: it is stated as prose by the notes of the functions this decision's tests name (SPEC_STANDARD §2). The accepted spec's `rules.project_list_ordering` records the same ordering and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
 
 ## Accepted decision A16 — R16. Staff email and password policy
 
@@ -924,7 +942,7 @@ behaviour accepted; technical decisions delegated.
 ### Required tests
 
 - INV-018: a check against the rules table at `_normalize_staff_email` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-019: a check against the password bounds of this decision, held by the data-provider constants `PASSWORD_MIN_CODEPOINTS` and `PASSWORD_MAX_CODEPOINTS`, at `_validate_new_password` showing the invariant holds; a violating input is refused and changes nothing.
+- INV-019: a check at `_validate_new_password` and the operations that accept a new password, with the bounds of the data-provider constants `PASSWORD_MIN_CODEPOINTS` and `PASSWORD_MAX_CODEPOINTS`: passwords of one code point below the minimum and one above the maximum are refused and change nothing, the minimum and the maximum are accepted; a password containing a NUL or another control character is refused and changes nothing; a password with surrounding whitespace, a case variant and a password in a non-normalized Unicode form are each accepted and stored as the hash of exactly the supplied string, so that the supplied string verifies and its trimmed, casefolded or normalized variant does not.
 - Witnesses, the focused Factory verification checks that assert it: INV-018 [witness: verification:staff_identity_uow_client_portal].
 - Witnesses, the focused Factory verification checks that assert it: INV-019 [witness: verification:credential_security_policy_client_portal].
 
@@ -959,7 +977,7 @@ The password bounds, which generated code reads, are the data-provider constants
 
 ### Consequence
 
-The table is rules data: `rules.verification_envelope_policy` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+The envelope is behaviour of the emitted `credential_security` (its backend IR `rules.credential_security_backend`) and of the notes of the operations this decision's tests name (SPEC_STANDARD §2). The accepted spec's `rules.verification_envelope_policy` records the same policy and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
 
 ## Accepted decision A18 — Budget and snapshot invariants
 
@@ -1164,8 +1182,7 @@ carried verbatim at assembly (Factory `0baceacc`).
 
 ### Consequence
 
-`rules.transaction_guard_policy`, a rules table; the guard notes of every
-use case address it.
+The guard is behaviour, not data: the notes of every use case state it as prose (SPEC_STANDARD §2), and the transaction itself is the emitted unit of work (`rules.sqlite_unit_of_work_backend`). The accepted spec's `rules.transaction_guard_policy` records the same policy and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
 
 ## Accepted decision A23 — Audit entity id policy (accepted Factory spec, 2026-07-26)
 
@@ -1175,7 +1192,7 @@ use case address it.
 identifier, produced by converting the UUID to a string; it is absent only
 when the audited entity has no identifier of its own. A UUID object, a
 hyphen-stripped, truncated or upper-cased form, or another entity's
-identifier is forbidden. Normative value: `rules.audit_entity_id_policy`
+identifier is forbidden. Recorded in the accepted spec as `rules.audit_entity_id_policy`
 (Factory `0f9ae3ae`).
 
 ### Formal invariants
@@ -1192,7 +1209,7 @@ identifier is forbidden. Normative value: `rules.audit_entity_id_policy`
 
 ### Consequence
 
-`rules.audit_entity_id_policy`; every audit-appending note addresses it.
+Which entity an audit names is behaviour of the audit-appending notes, which pass the `AuditEntityKind` member and the entity id to the emitted audit builders of `record_builders` (SPEC_STANDARD §2, §6.13). The accepted spec's `rules.audit_entity_id_policy` records the same policy and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
 
 ## Accepted decision A24 — Records are immutable values (accepted Factory spec, 2026-07-26)
 
@@ -1201,7 +1218,7 @@ identifier is forbidden. Normative value: `rules.audit_entity_id_policy`
 Model instances are frozen. No code assigns to a field of an argument or of a
 value read from a repository, and no result travels back to a caller through
 a mutated input. A changed value is a new instance built from the old one.
-Normative value: `rules.model_immutability_policy` (Factory `bd561732`).
+Recorded in the accepted spec as `rules.model_immutability_policy` (Factory `bd561732`).
 
 ### Formal invariants
 
@@ -1215,7 +1232,7 @@ Normative value: `rules.model_immutability_policy` (Factory `bd561732`).
 
 ### Consequence
 
-`rules.model_immutability_policy`; State 1 models are frozen.
+State 1 models are frozen by the emitted `models`, and new and replaced records are built by the emitted builders below. The accepted spec's `rules.model_immutability_policy` records the same policy and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
 
 Owner 2026-11-08: every record a model-written module built from its inputs
 is built by an emitted builder of `record_builders`
@@ -1240,8 +1257,9 @@ client network address and route, with bounded memory and a concealed answer,
 the address read only from the connection, never from a forwarded header,
 cookie or secret. An entry attempt over the limit is refused before any
 code verification and creates no session; the limiter's algorithm, its
-bound and its answer are those of the accepted transport guard
-(`rules.http_transport_policy.limits.viewer_entry`), with the values of
+bound and its answer are those of the accepted transport guard, stated by
+the notes of `transport_guard` (recorded in the accepted spec as
+`rules.http_transport_policy.limits.viewer_entry`), with the values of
 A30, carried to States 6–7. Logs redact authorization, cookie and secret-like names.
 Fixed security headers are sent on every answer, and credential and
 session answers are not cached; the header list and the answers it covers
@@ -1252,9 +1270,9 @@ viewer browser session is the host-only cookie of R0-09; a viewer sign-out
 must come from the canonical public origin (viewer entry is not
 origin-checked), compared by scheme, host
 and effective port, with no pattern matching. The trusted-host, CORS and public-origin
-settings and their checks are those of the accepted transport guard
-(`rules.http_transport_policy`), carried to States 6–7. Service principals use bearer
-headers only. Normative value: `rules.http_transport_policy` (Factory
+settings and their checks are those of the accepted transport guard,
+stated by the notes of `transport_guard`, carried to States 6–7. Service principals use bearer
+headers only. Recorded in the accepted spec as `rules.http_transport_policy` (Factory
 `38626cc7`, `21658368`, `e8a61895`, `35a0a09c`, `dc351917`, `51d19fdf`).
 
 ### Formal invariants
@@ -1279,8 +1297,18 @@ headers only. Normative value: `rules.http_transport_policy` (Factory
 
 ### Consequence
 
-`rules.http_transport_policy` with its runtime settings (A30); the
-deterministic HTTP router and the viewer cookie backend read it. Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): the values the generated transport guard and runtime read are data-provider constants: `API_PREFIX`, `VIEWER_ENTRY_PATH`, `VIEWER_LOGOUT_PATH`, `NO_STORE_PATHS`, `NO_STORE_CACHE_CONTROL`, `SECURITY_HEADERS`, `TRANSPORT_LOG_LABELS`, `HEALTH_LIVE_PATH`, `HEALTH_READY_PATH`, `HEALTH_OK_STATUS`, and `TRANSPORT_GUARD_STATUSES`, the status of each refusal of the guard keyed by `= models.TransportGuardRefusal`. Their former leaves (`public_api_prefix`, `security_headers`, `browser_session.logout_path`, `health.liveness_path`, `health.readiness_path`) leave the policy; the cookie name and attributes stay, the viewer cookie backend reads them.
+The values reach code by the paths of SPEC_STANDARD 15.3.1. The deployment
+values are fields of the `RuntimeSettings` that `install_transport_guards`
+and `create_runtime_app` are handed: `trusted_hosts`, `allowed_origins`,
+`public_origin`, `max_request_body_bytes`, `max_binary_response_bytes`,
+`production_logging`, `viewer_entry_rate_limit_attempts` and
+`viewer_entry_rate_limit_window_seconds` (A30). The release values are the
+data-provider constants below, which the model-written `transport_guard` and
+`runtime` import. What remains of `rules.http_transport_policy` — the viewer
+cookie name, attributes and extraction — is IR read only by the deterministic
+viewer cookie backend that `api_irregular` is emitted with
+(`rules.viewer_cookie_transport_backend`); no model-written module reads it.
+Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): the values the generated transport guard and runtime read are data-provider constants: `API_PREFIX`, `VIEWER_ENTRY_PATH`, `VIEWER_LOGOUT_PATH`, `NO_STORE_PATHS`, `NO_STORE_CACHE_CONTROL`, `SECURITY_HEADERS`, `TRANSPORT_LOG_LABELS`, `HEALTH_LIVE_PATH`, `HEALTH_READY_PATH`, `HEALTH_OK_STATUS`, and `TRANSPORT_GUARD_STATUSES`, the status of each refusal of the guard keyed by `= models.TransportGuardRefusal`. Their former leaves (`public_api_prefix`, `security_headers`, `browser_session.logout_path`, `health.liveness_path`, `health.readiness_path`) leave the policy; the cookie name and attributes stay, the viewer cookie backend reads them.
 
 Owner 2026-11-08 (Q08): readiness answers the health status
 `HEALTH_OK_STATUS` (`ok`) only after the storage probe — one transaction
@@ -1294,7 +1322,7 @@ Registry, no storage of binaries).
 An exception message is never a data channel. `RegistryBoundaryError` carries
 its `RegistryFailureKind` in a `kind` field and `SnapshotContentRejected` its
 `ImportRejectReason` in a `reason` field; callers classify by the field.
-Normative value: `rules.exception_payload_policy` (Factory `a12937fd`).
+Recorded in the accepted spec as `rules.exception_payload_policy` (Factory `a12937fd`).
 
 ### Formal invariants
 
@@ -1308,7 +1336,7 @@ Normative value: `rules.exception_payload_policy` (Factory `a12937fd`).
 
 ### Consequence
 
-`rules.exception_payload_policy`.
+The exception fields are State 6 contracts and the payload rules are prose of the notes that raise each exception (SPEC_STANDARD §2). The accepted spec's `rules.exception_payload_policy` records the same policy and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
 
 ## Accepted decision A27 — Derived view orderings (accepted Factory spec, 2026-08-09; owner 2026-11-06)
 
@@ -1339,8 +1367,7 @@ delegated; answers OQ-18 and `open_questions.md` Q18).
 
 ### Consequence
 
-`rules.derived_view_ordering`; `01_models.md` "Projections and answers"
-records the replacement.
+The orderings are behaviour, stated as prose by the notes of the functions that build each view (SPEC_STANDARD §2); `01_models.md` "Projections and answers" records the replacement. The accepted spec's `rules.derived_view_ordering` records the same orderings and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
 
 ## Accepted decision A28 — Clock policy (accepted Factory spec, 2026-08-09; one clock source, coordinator 2026-11-07)
 
@@ -1367,7 +1394,7 @@ persisted timestamp and a second clock read by the operation itself are
 forbidden. The one exception is the `occurred_at` of an audit record appended
 through the audit writer: the writer takes it when it appends (Factory
 code `application/audit_writer.py` 136); the bootstrap, which builds its
-own audit, keeps its one instant. Normative value: `rules.clock_policy` (Factory `c92b6878`). This
+own audit, keeps its one instant (Factory `c92b6878`). This
 narrows the former convention "Timestamps are timezone-aware UTC" of State 1:
 the instants are UTC, their stored form is offset-naive.
 
@@ -1389,8 +1416,11 @@ clock itself:
   and never ordered against a persisted record.
 
 How many readings an operation takes and which instant it reuses stay the
-rules above. Normative value: `rules.time_source_policy` and
-`rules.system_clock_backend` (SPEC_STANDARD §6.9 version 5).
+rules above. The clock source is the emitted module `system_clock`
+(SPEC_STANDARD §6.9 version 5); every other module obtains time by calling its
+two emitted functions, `utc_now` for the wall instant and
+`monotonic_seconds` for the elapsed reading, which the notes of each
+consumer name and import.
 
 ### Carried changes
 
@@ -1438,7 +1468,7 @@ reading equals `datetime.utcnow()` and the elapsed reading equals
 
 ### Consequence
 
-`rules.clock_policy`; `rules.time_source_policy`; `rules.system_clock_backend`.
+Consumers import the emitted `utc_now` and `monotonic_seconds` of `system_clock` and name them in their notes; nothing else delivers time to generated code. `rules.system_clock_backend` and `rules.time_source_policy` are the IR `system_clock` is emitted from and the Factory's time-source gate reads; no model-written module reads them. `rules.clock_policy` is the accepted spec's record of the rules above (Factory `c92b6878`), carried unchanged; no module reads it, and the representation it records is the one `utc_now` returns.
 
 ## Accepted decision A29 — First-administrator bootstrap policy (accepted Factory spec, 2026-08-17)
 
@@ -1537,9 +1567,11 @@ the Registry path constants), carried to States 6–7.
   service's pinned hashing library (A32), carried to States 6–7; a change
   of them is a Factory route change (A32). Owner 2026-11-06: current
   service behaviour accepted; technical decisions delegated.
-- `binary_read_limit_env_name` now addresses its environment variable entry,
-  `= config.runtime_environment_variables.variables.BINARY_MAX_READ_BYTES`
-  (Factory `a6916180314d`).
+- `binary_read_limit_env_name`: the binary read limit is the environment
+  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that
+  `load_runtime_settings` validates at start without a `RuntimeSettings`
+  field; the emitted `binary_storage` reads it at each read through its
+  backend IR (Factory `a6916180314d`). No model-written module reads it.
 - Registry paths (accepted `config.registry_request_paths`, since 2026-11-08
   the data-provider constants of the Consequence): the paths are fixed as
   `projects/active` for the active list (owner 2026-11-08, Q12, A6: the
@@ -1558,19 +1590,38 @@ the Registry path constants), carried to States 6–7.
 
 ### Formal invariants
 
-- The existence of every timeout, TTL, rate limit and bound is invariant; its
-  value is configuration.
+- CFG-001: every timeout, TTL, rate limit and bound below exists and is
+  applied; its value is the data-provider constant or the start-up setting
+  this decision names: the Registry request timeout
+  (`REGISTRY_TIMEOUT_SECONDS`), the staff and viewer session lifetimes
+  (`STAFF_SESSION_TTL_HOURS`, `VIEWER_SESSION_TTL_DAYS`), the viewer-entry
+  rate limit (`viewer_entry_rate_limit_attempts` within
+  `viewer_entry_rate_limit_window_seconds`), the request body bound
+  (`max_request_body_bytes`), the binary response bound
+  (`max_binary_response_bytes`) and the binary read bound
+  (`BINARY_MAX_READ_BYTES`).
+- CFG-002: a required start-up variable that is missing or invalid, the
+  Registry URL among them, stops the start before any request is served.
 
 ### Required tests
 
-- `runtime_settings_client_portal`: an invalid or missing required variable
-  stops start-up.
-- Witnesses, the focused Factory verification checks that assert it: required configuration [witness: verification:runtime_settings_client_portal].
-- Witnesses, the focused Factory verification checks that assert it: bound existence [witness: verification:binary_storage_content_client_portal].
+- CFG-001: one check per bound, each with the bound at its value: a Registry
+  request that outlasts the timeout fails as the `timeout` member of
+  `RegistryFailureKind`; a staff session and a viewer session are refused
+  from the instant their issue time plus their lifetime is reached; the
+  viewer-entry attempt after the limit within the window is refused and
+  creates no session; a request body over its bound and a binary over its
+  read bound are refused before the handler or the response; and the start
+  is refused when the read bound exceeds the response bound.
+- CFG-002: `runtime_settings_client_portal`: for each required variable,
+  `REGISTRY_BASE_URL` included, a missing value and an invalid value stop
+  start-up, and a complete valid environment starts.
+- Witnesses, the focused Factory verification checks that assert it: CFG-002 [witness: verification:runtime_settings_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: CFG-001 [witness: verification:binary_storage_content_client_portal].
 
 ### Consequence
 
-`config.*` (SPEC_STANDARD 15.3.1, runtime settings and configuration). Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): the Registry request paths and timeout, the staff and viewer session lifetimes and the credential entropy have the same value in every environment and change only by a decision about the product, so by SPEC_STANDARD 15.2 (check 4 before 3) they are data-provider constants that generated code imports (`REGISTRY_PROJECTS_PATH`, `REGISTRY_ACTIVE_SEGMENT` (Q12), `REGISTRY_CONTEXT_SEGMENT`, `REGISTRY_VALIDATE_SEGMENT`, `REGISTRY_TIMEOUT_SECONDS`, `STAFF_SESSION_TTL_HOURS`, `VIEWER_SESSION_TTL_DAYS`, `CREDENTIAL_SECRET_BYTES`), values unchanged; the path templates are split into a path and three segments (the active one added by Q12), because a template is not data (15.11). The Registry URL itself is an environment value: since the owner's decision of 2026-11-09 it is the `registry_base_url` field of `RuntimeSettings`, a required row of the start-up table, and the data-provider constant `REGISTRY_BASE_URL_VARIABLE` that named the variable for the gateway is removed (SPEC_STANDARD 6.11).
+Each value reaches code by one path of SPEC_STANDARD 15.3.1. A deployment value is a row of `config.runtime_environment_variables` read once by `load_runtime_settings` into a field of `RuntimeSettings` (`database_url`, `environment`, `public_origin`, `trusted_hosts`, `allowed_origins`, `max_request_body_bytes`, `max_binary_response_bytes`, `production_logging`, the two viewer-entry limits and, since 2026-11-09, `registry_base_url`), except the two binary storage rows, which the emitted `binary_storage` reads. A release value is a data-provider constant generated code imports (below). The storage table names of `config.persistence` are read only by the emitted repositories, through the persistence backend IR; `config.credential_hash_scheme` only by the emitted `credential_security`. No model-written note names a `config` address. Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): the Registry request paths and timeout, the staff and viewer session lifetimes and the credential entropy have the same value in every environment and change only by a decision about the product, so by SPEC_STANDARD 15.2 (check 4 before 3) they are data-provider constants that generated code imports (`REGISTRY_PROJECTS_PATH`, `REGISTRY_ACTIVE_SEGMENT` (Q12), `REGISTRY_CONTEXT_SEGMENT`, `REGISTRY_VALIDATE_SEGMENT`, `REGISTRY_TIMEOUT_SECONDS`, `STAFF_SESSION_TTL_HOURS`, `VIEWER_SESSION_TTL_DAYS`, `CREDENTIAL_SECRET_BYTES`), values unchanged; the path templates are split into a path and three segments (the active one added by Q12), because a template is not data (15.11). The Registry URL itself is an environment value: since the owner's decision of 2026-11-09 it is the `registry_base_url` field of `RuntimeSettings`, a required row of the start-up table, and the data-provider constant `REGISTRY_BASE_URL_VARIABLE` that named the variable for the gateway is removed (SPEC_STANDARD 6.11).
 
 ## Accepted decision A31 — Security review of the migrated case
 

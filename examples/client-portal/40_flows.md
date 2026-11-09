@@ -7,7 +7,7 @@ Migrated on 2026-11-06 from the former `spec/40_flows.md` (authoring pass of
 `projects/client_portal_sandbox/specs/base/global_spec.json` (sha256
 `459ac96c4b8febc629c81178c9d0a84ee072d1662dc52f44d74fb0993cb3c2c7`): its
 routes (`rules.http_router_backend`), its guard order
-(`rules.project_guard_sequence`) and the notes of the operations each flow
+(State 2 A4) and the notes of the operations each flow
 names. The flows are those of `40_flow_plan.json`, walked against the State 3
 ownership of `30_modules.md`. They name who triggers, what crosses each
 boundary, who decides next and who produces each result and each failure.
