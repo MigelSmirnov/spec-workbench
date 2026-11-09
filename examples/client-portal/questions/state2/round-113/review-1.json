@@ -1,0 +1,83 @@
+{
+ "open_points": [
+  {
+   "subject": "A14/A30 runtime-settings revalidation during binary reads",
+   "kind": "undefined_runtime_failure",
+   "text": "The start-up check that the read bound is no larger than the response ceiling is a constraint of that table (`BINARY_MAX_READ_BYTES` less than or equal to `MAX_BINARY_RESPONSE_BYTES`), checked by `runtime_settings` at each `load_runtime_settings`, so a violating deployment does not start; `binary_storage` applies only the read bound, at each read.",
+   "question": "If the deployment passed start-up but `load_runtime_settings` finds the bound relation invalid during a later binary read, does only that read fail, does the service terminate, or is the last valid configuration retained; and which typed failure reaches the caller?",
+   "options": [
+    "Fail the current read with a configuration failure and keep the service running",
+    "Terminate or make the service unavailable because the deployment is now invalid",
+    "Keep using the last successfully loaded settings"
+   ],
+   "default_guess": "Fail the current read with a configuration failure and keep the service running.",
+   "witness": {
+    "initial": "The service starts with BINARY_MAX_READ_BYTES=1048576 and MAX_BINARY_RESPONSE_BYTES=2097152.",
+    "events": [
+     "A deployment operator changes the values visible to `load_runtime_settings` to BINARY_MAX_READ_BYTES=4194304 and MAX_BINARY_RESPONSE_BYTES=2097152 without restarting the process.",
+     "An authorized client requests an existing deliverable binary."
+    ],
+    "outcomes": [
+     "`load_runtime_settings` rejects the current request, the client receives a typed failure, and the process remains available.",
+     "The invalid relation is treated as a start-up invariant failure: the process terminates or readiness fails, rather than returning an ordinary per-read failure."
+    ],
+    "observer": "The requesting client and the deployment operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "CFG-001 Required tests",
+   "kind": "missing_invariant_test",
+   "text": "and the start is refused when the read bound exceeds the response bound, which is how `max_binary_response_bytes` is applied: no module compares a response with it, and every binary sent is within the read bound and so within it.",
+   "question": "What Required test must show that `binary_storage` actually calls `load_runtime_settings` at each read and rechecks the read-bound/response-ceiling constraint after a successful start, rather than caching the start-up result?",
+   "options": [
+    "Change the environment after a successful start and show the next binary read is refused",
+    "Instrument `load_runtime_settings` and show one call for every binary read",
+    "State that runtime settings are immutable after start and remove the per-read revalidation requirement"
+   ],
+   "default_guess": "Add a test that starts with valid bounds, changes them to an invalid relation, and proves the next binary read invokes `load_runtime_settings` and is refused.",
+   "witness": {
+    "initial": "The service starts with a valid read bound no larger than the response ceiling and contains an authorized binary within both bounds.",
+    "events": [
+     "A test performs one successful binary read.",
+     "The test changes the settings source so the read bound exceeds the response ceiling.",
+     "The test performs a second authorized binary read."
+    ],
+    "outcomes": [
+     "An implementation that reloads settings at each read refuses the second read.",
+     "An implementation that validated only at start or cached `RuntimeSettings` returns the binary; the listed Required test still passes because it tests only start-up refusal."
+    ],
+    "observer": "The binary client and the verification suite"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A14/A30 precedence of binary-read checks",
+   "kind": "check_precedence",
+   "text": "The start-up check that the read bound is no larger than the response ceiling is a constraint of that table (`BINARY_MAX_READ_BYTES` less than or equal to `MAX_BINARY_RESPONSE_BYTES`), checked by `runtime_settings` at each `load_runtime_settings`, so a violating deployment does not start; `binary_storage` applies only the read bound, at each read.",
+   "question": "When a per-read settings load finds an invalid bound relation and the referenced binary would also fail storage resolution, size, or signature validation, which check wins and which failure is returned?",
+   "options": [
+    "Settings validation runs first and masks every storage/content failure",
+    "Storage resolution runs first, with settings validation performed only when applying the size bound",
+    "The failures have an explicitly defined precedence by category"
+   ],
+   "default_guess": "Load and validate runtime settings before touching storage, so the configuration failure wins.",
+   "witness": {
+    "initial": "The service has started, an authorized document references a missing file, and the settings source now has BINARY_MAX_READ_BYTES greater than MAX_BINARY_RESPONSE_BYTES.",
+    "events": [
+     "An authorized client requests that document.",
+     "`binary_storage` loads settings and attempts to resolve the file in an implementation-defined order."
+    ],
+    "outcomes": [
+     "Settings are validated first, so the request reports the runtime-configuration failure without checking the file.",
+     "The file is resolved first, so the request follows the missing-document refusal path and the invalid bound relation is not observable for this request."
+    ],
+    "observer": "The requesting client and operational monitoring"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A14/A30 runtime-settings revalidation during binary reads\",\"kind\":\"undefined_runtime_failure\",\"text\":\"The start-up check that the read bound is no larger than the response ceiling is a constraint of that table (`BINARY_MAX_READ_BYTES` less than or equal to `MAX_BINARY_RESPONSE_BYTES`), checked by `runtime_settings` at each `load_runtime_settings`, so a violating deployment does not start; `binary_storage` applies only the read bound, at each read.\",\"question\":\"If the deployment passed start-up but `load_runtime_settings` finds the bound relation invalid during a later binary read, does only that read fail, does the service terminate, or is the last valid configuration retained; and which typed failure reaches the caller?\",\"options\":[\"Fail the current read with a configuration failure and keep the service running\",\"Terminate or make the service unavailable because the deployment is now invalid\",\"Keep using the last successfully loaded settings\"],\"default_guess\":\"Fail the current read with a configuration failure and keep the service running.\",\"witness\":{\"initial\":\"The service starts with BINARY_MAX_READ_BYTES=1048576 and MAX_BINARY_RESPONSE_BYTES=2097152.\",\"events\":[\"A deployment operator changes the values visible to `load_runtime_settings` to BINARY_MAX_READ_BYTES=4194304 and MAX_BINARY_RESPONSE_BYTES=2097152 without restarting the process.\",\"An authorized client requests an existing deliverable binary.\"],\"outcomes\":[\"`load_runtime_settings` rejects the current request, the client receives a typed failure, and the process remains available.\",\"The invalid relation is treated as a start-up invariant failure: the process terminates or readiness fails, rather than returning an ordinary per-read failure.\"],\"observer\":\"The requesting client and the deployment operator\"}},{\"subject\":\"CFG-001 Required tests\",\"kind\":\"missing_invariant_test\",\"text\":\"and the start is refused when the read bound exceeds the response bound, which is how `max_binary_response_bytes` is applied: no module compares a response with it, and every binary sent is within the read bound and so within it.\",\"question\":\"What Required test must show that `binary_storage` actually calls `load_runtime_settings` at each read and rechecks the read-bound/response-ceiling constraint after a successful start, rather than caching the start-up result?\",\"options\":[\"Change the environment after a successful start and show the next binary read is refused\",\"Instrument `load_runtime_settings` and show one call for every binary read\",\"State that runtime settings are immutable after start and remove the per-read revalidation requirement\"],\"default_guess\":\"Add a test that starts with valid bounds, changes them to an invalid relation, and proves the next binary read invokes `load_runtime_settings` and is refused.\",\"witness\":{\"initial\":\"The service starts with a valid read bound no larger than the response ceiling and contains an authorized binary within both bounds.\",\"events\":[\"A test performs one successful binary read.\",\"The test changes the settings source so the read bound exceeds the response ceiling.\",\"The test performs a second authorized binary read.\"],\"outcomes\":[\"An implementation that reloads settings at each read refuses the second read.\",\"An implementation that validated only at start or cached `RuntimeSettings` returns the binary; the listed Required test still passes because it tests only start-up refusal.\"],\"observer\":\"The binary client and the verification suite\"}},{\"subject\":\"A14/A30 precedence of binary-read checks\",\"kind\":\"check_precedence\",\"text\":\"The start-up check that the read bound is no larger than the response ceiling is a constraint of that table (`BINARY_MAX_READ_BYTES` less than or equal to `MAX_BINARY_RESPONSE_BYTES`), checked by `runtime_settings` at each `load_runtime_settings`, so a violating deployment does not start; `binary_storage` applies only the read bound, at each read.\",\"question\":\"When a per-read settings load finds an invalid bound relation and the referenced binary would also fail storage resolution, size, or signature validation, which check wins and which failure is returned?\",\"options\":[\"Settings validation runs first and masks every storage/content failure\",\"Storage resolution runs first, with settings validation performed only when applying the size bound\",\"The failures have an explicitly defined precedence by category\"],\"default_guess\":\"Load and validate runtime settings before touching storage, so the configuration failure wins.\",\"witness\":{\"initial\":\"The service has started, an authorized document references a missing file, and the settings source now has BINARY_MAX_READ_BYTES greater than MAX_BINARY_RESPONSE_BYTES.\",\"events\":[\"An authorized client requests that document.\",\"`binary_storage` loads settings and attempts to resolve the file in an implementation-defined order.\"],\"outcomes\":[\"Settings are validated first, so the request reports the runtime-configuration failure without checking the file.\",\"The file is resolved first, so the request follows the missing-document refusal path and the invalid bound relation is not observable for this request.\"],\"observer\":\"The requesting client and operational monitoring\"}}]}",
+ "set_aside": []
+}
