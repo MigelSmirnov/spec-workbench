@@ -213,7 +213,8 @@ def _precedents(case: Path, state: int) -> list[dict[str, Any]]:
     rounds = sorted(rounds_dir(case, state).glob("round-*/summary.json"), key=_round_number)
     found: list[dict[str, Any]] = []
     seen: set[str] = set()
-    judged = [json.loads(p.read_text(encoding="utf-8")) for p in rounds]
+    # a re-judgement asked no reviewer: its topics are an earlier round's (units.REJUDGE)
+    judged = units.asked([json.loads(p.read_text(encoding="utf-8")) for p in rounds])
     evidence_of = {s["round"]: s.get("unit_evidence") or {} for s in judged if "round" in s}
     for summary in [s for s in judged if "judge" in s][-PRECEDENT_ROUNDS:][::-1]:
         for topic in summary.get("topics", []):
@@ -686,7 +687,7 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
 
 def _previous_hypotheses(case: Path, state: int) -> list[tuple[str, str]]:
     """The hypotheses of the state's latest round: topics judged without a witness."""
-    summaries = _summaries(case, state)
+    summaries = units.asked(_summaries(case, state))
     if not summaries:
         return []
     return [(t["topic"], (t.get("judgement") or {}).get("witness_missing") or (t.get("judgement") or {}).get("why", ""))
@@ -796,8 +797,9 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     # this round supersedes them, as a unit's next review supersedes its topics;
     # an unverified contradiction naming no unit is asked again over the units its round reviewed
     no_unit = before.get(units.NO_UNIT)
-    again = (set(previous_summaries[-1].get("scope") or [])
-             if no_unit and no_unit["needs_round"] else set())
+    asked_before = units.asked(previous_summaries)
+    again = (set(asked_before[-1].get("scope") or [])
+             if no_unit and no_unit["needs_round"] and asked_before else set())
     scope = [key for key in read.units if before[key]["needs_round"] or key in again]
     if not scope:
         if all(value["closed"] for value in before.values()):
@@ -850,6 +852,8 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
                            if "failed" in r],
         "since": since,
         "judge": judged,
+        # the rules its verdicts were checked under (judge.RULES_VERSION, the sections' digest)
+        "judge_rules": judge.rules_record(prompts.standard_text(documents.standard_sections(state)) or None),
         "repeated_topics": len(repeated),
         "witness_singletons": sum(1 for t in repeated if len(t["runs"]) < REPEATED),
         "hypothesis_topics": sum(1 for t in repeated if t["judgement"].get("kind") == judge.HYPOTHESIS),
@@ -896,6 +900,155 @@ def judge_checks(case: Path, state: int, provider: Provider) -> list[dict[str, A
     if not transition.judges_witnesses(transition.load_sequence(), state):
         return []
     return witness_judgement.judge(case, provider, design_decision_witness.binding_material(case))
+
+
+REJUDGE_PROVIDER = "rejudge: judge.check under the current rules, no model asked"
+
+
+def _current_rules(state: int) -> dict[str, Any]:
+    return judge.rules_record(prompts.standard_text(documents.standard_sections(state)) or None)
+
+
+def _rejudgeable(state: int, summaries: list[dict[str, Any]], per_unit: dict[str, dict[str, Any]]) -> list[str]:
+    """Open units that `rejudge` can check again: State 7 modules held open on
+    the text they were reviewed on by verdicts kept under other judge rules."""
+    if state != documents.MODULE_STATE:
+        return []
+    rules = _current_rules(state)
+    found = []
+    for key, value in per_unit.items():
+        if value["closed"] or value["needs_round"] or key == units.NO_UNIT:
+            continue
+        latest = units.latest_review(summaries, key)
+        if latest is not None and "judge" in latest and latest.get("judge_rules") != rules:
+            found.append(key)
+    return found
+
+
+def rejudge(case: Path, state: int, unit: str, factory_root: Path | None = None) -> dict[str, Any]:
+    """Check the verdicts of one unchanged unit's latest round again under the
+    current judge rules, and keep the result as a new round.
+
+    A recorded verdict was revisited only when the unit's text changed
+    (units.unit_state), so a change of the rules the judge's answers are checked
+    by reached no unit whose text stayed: client-portal State 7 round 23 held
+    `financial_policy` on T1-T3, three "violations" of the Factory's own
+    `model_copy` line that #175 keeps as `generator_text`, because the module's
+    prompt never changed. A re-judgement asks no model. It takes the judge's
+    answer the round kept (``judge.modules.<unit>.raw``) and applies
+    `judge.check` to it again, on the unit's current text — the very text the
+    round judged, by its digest — with the current SPEC_STANDARD sections and
+    the module's notes. The new round reviews only that unit and keeps, per
+    topic, the verdict it replaces (``rejudged``); the earlier round stays as
+    it was written, its dispositions are carried over (``rejudged_from``).
+
+    Only State 7: a module's verdicts rest on its prompt alone. A document
+    state's verdicts also rest on the earlier and later states' texts as they
+    were then; a change there is asked by a round.
+    """
+    if state != documents.MODULE_STATE:
+        raise QuestionRoundError(
+            f"rejudge checks State {documents.MODULE_STATE} verdicts again; a verdict of State {state} rests on "
+            "the texts of other states as they were at its round, and a change there is asked by a round")
+    read = state_texts(case, state, factory_root)
+    if unit not in read.units:
+        raise QuestionRoundError(f"State {state} has no unit {unit!r}; units: {', '.join(read.units)}")
+    summaries = unit_summaries(case, state)
+    last = units.latest_review(summaries, unit)
+    if last is None or "judge" not in last:
+        raise QuestionRoundError(f"{unit} has no judged round to check again; ask a round")
+    digest = read.units[unit]["digest"]
+    if last["units"][unit] != digest:
+        raise QuestionRoundError(f"{unit} changed since {last['round']}: a changed text is asked by a round")
+    evidence = unit_evidence(case, state)
+    if evidence is not None and units.evidence_changed(last, unit, evidence):
+        raise QuestionRoundError(f"the evidence of {unit} changed since {last['round']}: ask a round")
+    if last.get("since"):
+        raise QuestionRoundError(f"{last['round']} was asked --since a closure: its verdicts rest on the text of "
+                                 "then, which a re-judgement does not rebuild; ask a round")
+    standard = prompts.standard_text(documents.standard_sections(state)) or None
+    rules = judge.rules_record(standard)
+    if last.get("judge_rules") == rules:
+        raise QuestionRoundError(f"{last['round']} judged {unit} under the current judge rules; nothing to check "
+                                 "again")
+    kept = ((last.get("judge") or {}).get("modules") or {}).get(unit) or {}
+    if not kept.get("raw"):
+        raise QuestionRoundError(f"{last['round']} keeps no judge answer for {unit}; ask a round")
+    answers = {j.get("id"): j for j in _json_object(kept["raw"]).get("judgements") or [] if isinstance(j, dict)}
+    text = read.units[unit]["text"]
+    spec_notes = _spec_notes(case)
+    notes = "\n".join(prompts.notes_in_prompt(spec_notes, text)) if spec_notes is not None else None
+    topics: list[dict[str, Any]] = []
+    for topic in last.get("topics") or []:
+        if unit not in (topic.get("units") or []):
+            continue
+        again = json.loads(json.dumps(topic))
+        before = topic.get("judgement")
+        if isinstance(before, dict):
+            answer = answers.get(str(topic.get("id") or "").split(":", 1)[-1])
+            precedent = before.get("precedent")
+            offered = ({str(answer.get("precedent")): precedent}
+                       if isinstance(answer, dict) and isinstance(precedent, dict) else {})
+            # as _module_round judged it: the prompt is the whole text and the state's own
+            again["judgement"] = judge.check(answer, state, text, None, None, offered, text,
+                                             earlier_texts="", standard=standard, violation_texts=notes)
+            again["rejudged"] = {"round": last["round"], "judge_rules": last.get("judge_rules"),
+                                 "judgement": before}
+        topics.append(again)
+    ids = {str(t.get("id")) for t in topics}
+    carried = [{**entry, "rejudged_from": last["round"]} for entry in last.get("dispositions") or []
+               if str(entry.get("topic")) in ids]
+    judged = [t for t in topics if "judgement" in t]
+    blocking = [t for t in judged if t["judgement"]["blocking"]]
+    directory = _next_round(case, state)
+    summary: dict[str, Any] = {
+        "schema_version": SCHEMA,
+        "closure": units.CLOSURE_RULE,
+        "state": state,
+        "round": directory.name,
+        "provider": REJUDGE_PROVIDER,
+        "documents": read.digests,
+        units.REJUDGE: {"of": last["round"], "unit": unit, "judge_rules": last.get("judge_rules")},
+        "reviews": 0,
+        "points": [],
+        "failed_reviews": [],
+        "since": None,
+        "judge": {"provider": REJUDGE_PROVIDER,
+                  "modules": {unit: {"raw": kept["raw"], "from": kept.get("from") or last["round"]}}},
+        "judge_rules": rules,
+        "repeated_topics": len(judged),
+        "witness_singletons": 0,
+        "hypothesis_topics": sum(1 for t in judged if t["judgement"].get("kind") == judge.HYPOTHESIS),
+        "blocking_topics": len(blocking),
+        "deferred_topics": 0,
+        "clear": not blocking,
+        "closed": False,
+        "units": {key: value["digest"] for key, value in read.units.items()},
+        "scope": [unit],
+        "changed_units": [],
+        "referenced_by_change": {},
+        "blocked_units": units.blocked(judged, [unit]),
+        "set_aside": [],
+        "topics": topics,
+        "unit_evidence": {unit: last["unit_evidence"][unit]} if unit in (last.get("unit_evidence") or {}) else {},
+        "evidence_reopened": [],
+    }
+    after = units.states(summaries + [{**summary, "dispositions": carried}], read.units, evidence)
+    summary["closed"] = all(value["closed"] for value in after.values())
+    summary["open_units"] = [key for key, value in after.items() if not value["closed"]]
+    summary["awaiting_disposition"] = sorted(after[unit]["awaiting"])
+    summary["contradiction_units"] = [unit] if after[unit]["contradictions"] or after[unit]["unverified"] else []
+    directory.mkdir(parents=True)
+    (directory / PROMPTS_DIR).mkdir()
+    (directory / PROMPTS_DIR / f"{unit}.txt").write_text(text, encoding="utf-8")
+    if carried:
+        payload = {"schema_version": DISPOSITIONS_SCHEMA, "state": state, "round": directory.name,
+                   "dispositions": carried}
+        (directory / DISPOSITIONS_FILE).write_text(json.dumps(payload, ensure_ascii=False, indent=1) + "\n",
+                                                   encoding="utf-8")
+    (directory / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n",
+                                            encoding="utf-8")
+    return summary
 
 
 def unit_evidence(case: Path, state: int) -> dict[str, str] | None:
@@ -1014,12 +1167,17 @@ def _status(case: Path, state: int, factory_root: Path | None = None) -> dict[st
     per_unit = units.states(summaries, read.units, evidence)
     open_units = [key for key, value in per_unit.items() if not value["closed"]]
     changed = [key for key in open_units if per_unit[key]["needs_round"] == units.CHANGED]
+    rejudge = _rejudgeable(state, summaries, per_unit)
+    reason = _units_reason(per_unit)
+    if rejudge:
+        reason += (f"; {len(rejudge)} open on verdicts kept under other judge rules ({', '.join(rejudge)}): "
+                   f"design_questions.py rejudge --state {state} --unit <unit> checks them under the current rules")
     return {
         **base,
         "closed": not open_units,
         "stale": stale,
         "carried": str(summaries[0].get("round", "")).startswith(CARRIED),
-        "reason": _units_reason(per_unit),
+        "reason": reason,
         "open_units": open_units,
         "changed_units": changed,
         # reviewed on their text, reopened because the checks their bindings name changed
@@ -1028,6 +1186,8 @@ def _status(case: Path, state: int, factory_root: Path | None = None) -> dict[st
         "unit_status": {key: _unit_row(value) for key, value in per_unit.items()
                         if not value["closed"] or value["carried"]},
         "needs_round": [key for key in open_units if per_unit[key]["needs_round"]],
+        # open on the text it was reviewed on, by verdicts kept under other judge rules (rejudge)
+        "needs_rejudge": rejudge,
         "contradictions": {key: per_unit[key]["contradictions"] + per_unit[key]["unverified"]
                            for key in open_units if per_unit[key]["contradictions"] or per_unit[key]["unverified"]},
         "awaiting_disposition": {key: per_unit[key]["awaiting"] for key in open_units if per_unit[key]["awaiting"]},
@@ -1135,7 +1295,8 @@ def dispose(case: Path, state: int, topic_id: str, disposition: str, *, round_na
     if not summaries:
         raise QuestionRoundError(f"State {state} has no question round")
     if round_name is None:
-        summary = summaries[-1]
+        # the latest round holding the topic: a re-judgement of one unit may be newer
+        summary = next((s for s in reversed(summaries) if _topic(s, topic_id)), summaries[-1])
     else:
         summary = next((s for s in summaries if s.get("round") == round_name), None)
         if summary is None:
@@ -1200,6 +1361,8 @@ def carried_items(case: Path, to: int | str | None = None) -> list[dict[str, Any
             continue
         for entry in _dispositions(directory):
             if entry.get("disposition") != "carried" or (to is not None and entry.get("to") != to):
+                continue
+            if entry.get("rejudged_from"):  # listed once, in the round it was given in
                 continue
             found.append({"state": int(state_name), "round": directory.name,
                           **{k: entry.get(k) for k in ("topic", "topic_text", "unit", "to", "what")}})

@@ -10,6 +10,7 @@
         (--fixed <commit> | --carried <later state|generation|factory_checks|deploy> --what <text>
          | --accepted <reason>) [--round round-07] [--unit A5]
     python tools/design_questions.py carried examples/<case> [--to factory_checks]
+    python tools/design_questions.py rejudge examples/<case> --state 7 --unit <module>
 
 `ask` runs one round (several independent reviews, grouped into topics; topics
 raised by two reviews are judged) and keeps it under
@@ -25,6 +26,10 @@ precedent is offered. It measures a change of the round's own instruction and
 logs the input size of every request.
 
 `dispose` records the author's disposition of a judged topic beside its round.
+`rejudge` checks the kept judge answers of one unchanged State 7 module's
+latest round again under the current judge rules (judge.RULES_VERSION and the
+standard sections) and keeps the result as a new round that asks no model; the
+earlier round stays as written. `status` names the modules it applies to.
 `status` exits 0 when the state is closed — every unit's latest round on its
 current text raised no open contradiction and every other judged topic of it
 has a disposition (units closed by two clear rounds before 2026-11-08 stay
@@ -118,6 +123,12 @@ def main(argv: list[str] | None = None) -> int:
     kind.add_argument("--accepted", metavar="REASON", help="the author's reason to accept it as it stands")
     dispose.add_argument("--what", help="with --carried: what the receiving layer must decide")
     dispose.add_argument("--json", action="store_true")
+    again = sub.add_parser("rejudge", help="check one unchanged module's kept verdicts under the current judge rules")
+    again.add_argument("case", type=Path)
+    again.add_argument("--state", type=int, required=True)
+    again.add_argument("--unit", required=True, help="the unit (State 7: the module) whose latest round to check")
+    again.add_argument("--factory-root", type=Path, help="the Factory that builds the State 7 prompts")
+    again.add_argument("--json", action="store_true")
     listing = sub.add_parser("carried", help="list what the authors' dispositions carried to later layers")
     listing.add_argument("case", type=Path)
     listing.add_argument("--to", help="a state number, generation, factory_checks or deploy")
@@ -153,6 +164,20 @@ def main(argv: list[str] | None = None) -> int:
                   else f"{entry['topic']}: {entry['disposition']}"
                        + (f" for {entry['unit']}" if entry.get("unit") else ""))
             return 0
+        if args.command == "rejudge":
+            summary = service.rejudge(args.case, args.state, args.unit, args.factory_root)
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                print(f"State {summary['state']} {summary['round']}: {args.unit} re-judged from "
+                      f"{summary['rejudge']['of']} under judge rules v{summary['judge_rules']['version']}")
+                for topic in summary["topics"]:
+                    j, was = topic.get("judgement") or {}, (topic.get("rejudged") or {}).get("judgement") or {}
+                    print(f"  {topic.get('id')}: {was.get('kind')}{' BLOCKING' if was.get('blocking') else ''}"
+                          f" -> {j.get('kind')}{' BLOCKING' if j.get('blocking') else ''}")
+                print(f"  {args.unit}: {'open' if args.unit in summary['open_units'] else 'closed'}; "
+                      f"state closed={str(summary['closed']).lower()}")
+            return 0 if args.unit not in summary["open_units"] else 1
         if args.command == "carried":
             to = None if args.to is None else (int(args.to.removeprefix("state")) if args.to.removeprefix("state").isdigit()
                                                else args.to)
