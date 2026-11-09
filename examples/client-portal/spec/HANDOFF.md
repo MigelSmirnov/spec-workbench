@@ -8,7 +8,36 @@ merged: accepted spec `018b2e2e`). The assembly, admission and diagnosis
 results are in `80_assembly.md`; the semantic diff, for the owner, is
 `SEMANTIC_DIFF.md` (against `018b2e2e` first, then against `459ac96c`).
 
-## READY_TO_EXPORT (2026-11-09, late) — read this first
+## Re-export after the Route B stop at expense_intake (2026-11-09, night) — read this first
+
+`3fd38bcc` was exported (code-factory #203, with #204 config and #205 v1
+catalog proof, all merged). Route B generated 28 modules and stopped at
+`expense_intake`: "missing required import: validate_eur_amount from
+domain.financial_policy" — the import was declared but no note obliged it
+(the note was lost in `a7cccf89`).
+
+Sweep (by hand; no tool reports it yet — a tool PR is proposed): imported
+callables of model-written modules that no note or contract of the module
+names, i.e. what Factory `validate_generated_coverage` requires to be
+imported. 22 hits in 12 modules; the accepted code calls every one, so all
+are behaviour to name, none dropped:
+expense_intake validate_eur_amount (lost; note restored: after the context
+checks, before projection, strictly positive, FinancialValidationError
+propagates); snapshot_import and budget_management validate_eur_amount;
+append_audit in staff_identity, viewer_access, service_identity,
+snapshot_import, budget_management, expense_management, expense_intake,
+photo_management; authorize_access_management (staff_identity,
+viewer_access, service_identity); conceal_authentication_failure
+(viewer_access, service_identity); validate_project_reference
+(authorization_guard); parse_verification_secret, verify_secret
+(service_identity); _normalize_staff_email, _validate_new_password
+(staff_bootstrap); load_runtime_settings (staff_bootstrap_cli).
+Commits `2ac4a641`, `a5e4f58c`, `587ef729`, `75387ade`. Re-sweep 0 hits.
+State 7 rounds 29–31 closed; Stage 8.1 39/39 PASS; admission
+READY_TO_EXPORT 18/0/0 against Factory `6a27ae44`. `global_spec.json`
+sha256 `b3bfb504…`.
+
+## READY_TO_EXPORT (2026-11-09, late)
 
 Admission `--update-existing` (no export): **READY_TO_EXPORT**, 18 PASS, 0
 blocks, 0 warnings, against Factory `code_factory_cp_witnesses` at origin/main
