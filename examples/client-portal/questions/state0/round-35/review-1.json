@@ -1,0 +1,169 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "R0-10 Registry configuration input",
+   "kind": "unnamed input",
+   "text": "the Registry address among them",
+   "question": "What is the exact environment-variable name that supplies the Registry address?",
+   "options": [
+    "Use a newly specified canonical variable name",
+    "Reuse an existing but unstated variable name",
+    "Accept one of several aliases"
+   ],
+   "default_guess": "Use REGISTRY_BASE_URL as the single canonical variable."
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "R0-10 Registry address validation",
+   "kind": "undefined validation",
+   "text": "which it validates when it starts (the Registry address among them",
+   "question": "What makes a Registry address valid: which schemes, host forms, ports, paths, query strings, fragments, embedded credentials, empty values and whitespace are accepted?",
+   "options": [
+    "Require an absolute HTTP or HTTPS base URL with no credentials, query or fragment",
+    "Require HTTPS and a host only",
+    "Accept any syntactically parseable absolute URL",
+    "Check only that the value is nonempty"
+   ],
+   "default_guess": "Require a nonempty absolute HTTP or HTTPS URL with a host and no embedded credentials, query or fragment.",
+   "witness": {
+    "initial": "The Registry environment variable contains a syntactically valid FTP URL.",
+    "events": [
+     "The host operator starts the portal."
+    ],
+    "outcomes": [
+     "Startup rejects the unsupported scheme and the service never listens.",
+     "Startup accepts the parseable URL and Registry calls later fail."
+    ],
+    "observer": "The host operator and readiness monitor"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "R0-10 Registry startup validation depth",
+   "kind": "unclear external check",
+   "text": "which it validates when it starts",
+   "question": "Does startup validate only the Registry address value, or must it also resolve, connect to or successfully call the Registry?",
+   "options": [
+    "Validate syntax only",
+    "Resolve DNS but do not connect",
+    "Require a successful Registry health or capability call",
+    "Require network connection without an application-level response"
+   ],
+   "default_guess": "Validate syntax only; report Registry availability through readiness and call failures.",
+   "witness": {
+    "initial": "A valid Registry address is configured, but the Registry is temporarily unavailable.",
+    "events": [
+     "The host operator starts the portal while the Registry is down."
+    ],
+    "outcomes": [
+     "The portal starts because the address is syntactically valid.",
+     "The portal refuses to start because it cannot reach the Registry."
+    ],
+    "observer": "The host operator and users of operations that do not need the Registry"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "R0-10 missing Registry address failure",
+   "kind": "unspecified failure contract",
+   "text": "its absence stops the start",
+   "question": "How is the startup refusal exposed: exit status, diagnostic destination and content, and redaction requirements?",
+   "options": [
+    "Exit nonzero with a stable error code and a redacted stderr or structured-log diagnostic",
+    "Exit nonzero with an implementation-defined diagnostic",
+    "Remain running but never become ready",
+    "Terminate without a diagnostic"
+   ],
+   "default_guess": "Exit nonzero before listening and emit a stable, redacted configuration-error diagnostic naming the missing variable.",
+   "witness": {
+    "initial": "The Registry address variable is absent.",
+    "events": [
+     "A deployment script starts the portal and captures its exit status and logs."
+    ],
+    "outcomes": [
+     "The process exits with a documented configuration exit code and identifies the missing variable.",
+     "The process exits with a generic status or no usable diagnostic."
+    ],
+    "observer": "The deployment script and host operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "R0-10 meaning of absent Registry address",
+   "kind": "undefined absence",
+   "text": "its absence stops the start",
+   "question": "Are an unset variable, an empty string, a whitespace-only string and a value removed by interpolation all treated as absence, or do some proceed to ordinary address validation?",
+   "options": [
+    "Treat unset, empty and whitespace-only values as absent",
+    "Only an unset variable is absent",
+    "Treat unset and empty as absent but validate whitespace as a supplied value"
+   ],
+   "default_guess": "Trim the value and treat unset, empty and whitespace-only values as absent.",
+   "witness": {
+    "initial": "The Registry environment variable exists with an empty value.",
+    "events": [
+     "The host operator starts the portal."
+    ],
+    "outcomes": [
+     "Startup reports the Registry address as absent.",
+     "Startup treats the address as supplied and reports a different validation failure or accepts it."
+    ],
+    "observer": "The host operator and deployment automation"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "R0-10 Registry configuration lifetime",
+   "kind": "unspecified reload semantics",
+   "text": "configured only by environment variables, which it validates when it starts",
+   "question": "Is the validated Registry address captured for the process lifetime, re-read for every Registry call, or reloadable without restarting?",
+   "options": [
+    "Capture it once at startup and require restart for changes",
+    "Re-read the environment at every Registry call",
+    "Support an explicit configuration reload"
+   ],
+   "default_guess": "Capture the validated address once at startup and require a restart to change it.",
+   "witness": {
+    "initial": "The portal has started with Registry address A.",
+    "events": [
+     "The running process's environment is changed to address B.",
+     "A staff member performs an operation that calls the Registry."
+    ],
+    "outcomes": [
+     "The call goes to A because startup captured the configuration.",
+     "The call goes to B because each call reads the environment."
+    ],
+    "observer": "The staff member and operators of Registries A and B"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "R0-10 startup refusal atomicity",
+   "kind": "unspecified side effects",
+   "text": "its absence stops the start",
+   "question": "Must the missing-address check occur before every startup side effect, including opening or migrating SQLite and creating or inspecting the binary root?",
+   "options": [
+    "Validate all required environment configuration before any persistent side effect",
+    "Allow local storage initialization before configuration validation",
+    "Only require failure before the service begins accepting requests"
+   ],
+   "default_guess": "Validate all required environment configuration before opening, creating or migrating persistent storage and before binding a listener.",
+   "witness": {
+    "initial": "The Registry address is absent and the SQLite database requires a migration.",
+    "events": [
+     "The host operator starts the portal.",
+     "Startup detects the missing Registry address."
+    ],
+    "outcomes": [
+     "The process exits without changing the database.",
+     "The process migrates the database and then exits before serving requests."
+    ],
+    "observer": "The host operator and the next process version that opens the database"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Decisions\",\"subject\":\"R0-10 Registry configuration input\",\"kind\":\"unnamed input\",\"text\":\"the Registry address among them\",\"question\":\"What is the exact environment-variable name that supplies the Registry address?\",\"options\":[\"Use a newly specified canonical variable name\",\"Reuse an existing but unstated variable name\",\"Accept one of several aliases\"],\"default_guess\":\"Use REGISTRY_BASE_URL as the single canonical variable.\"},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"R0-10 Registry address validation\",\"kind\":\"undefined validation\",\"text\":\"which it validates when it starts (the Registry address among them\",\"question\":\"What makes a Registry address valid: which schemes, host forms, ports, paths, query strings, fragments, embedded credentials, empty values and whitespace are accepted?\",\"options\":[\"Require an absolute HTTP or HTTPS base URL with no credentials, query or fragment\",\"Require HTTPS and a host only\",\"Accept any syntactically parseable absolute URL\",\"Check only that the value is nonempty\"],\"default_guess\":\"Require a nonempty absolute HTTP or HTTPS URL with a host and no embedded credentials, query or fragment.\",\"witness\":{\"initial\":\"The Registry environment variable contains a syntactically valid FTP URL.\",\"events\":[\"The host operator starts the portal.\"],\"outcomes\":[\"Startup rejects the unsupported scheme and the service never listens.\",\"Startup accepts the parseable URL and Registry calls later fail.\"],\"observer\":\"The host operator and readiness monitor\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"R0-10 Registry startup validation depth\",\"kind\":\"unclear external check\",\"text\":\"which it validates when it starts\",\"question\":\"Does startup validate only the Registry address value, or must it also resolve, connect to or successfully call the Registry?\",\"options\":[\"Validate syntax only\",\"Resolve DNS but do not connect\",\"Require a successful Registry health or capability call\",\"Require network connection without an application-level response\"],\"default_guess\":\"Validate syntax only; report Registry availability through readiness and call failures.\",\"witness\":{\"initial\":\"A valid Registry address is configured, but the Registry is temporarily unavailable.\",\"events\":[\"The host operator starts the portal while the Registry is down.\"],\"outcomes\":[\"The portal starts because the address is syntactically valid.\",\"The portal refuses to start because it cannot reach the Registry.\"],\"observer\":\"The host operator and users of operations that do not need the Registry\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"R0-10 missing Registry address failure\",\"kind\":\"unspecified failure contract\",\"text\":\"its absence stops the start\",\"question\":\"How is the startup refusal exposed: exit status, diagnostic destination and content, and redaction requirements?\",\"options\":[\"Exit nonzero with a stable error code and a redacted stderr or structured-log diagnostic\",\"Exit nonzero with an implementation-defined diagnostic\",\"Remain running but never become ready\",\"Terminate without a diagnostic\"],\"default_guess\":\"Exit nonzero before listening and emit a stable, redacted configuration-error diagnostic naming the missing variable.\",\"witness\":{\"initial\":\"The Registry address variable is absent.\",\"events\":[\"A deployment script starts the portal and captures its exit status and logs.\"],\"outcomes\":[\"The process exits with a documented configuration exit code and identifies the missing variable.\",\"The process exits with a generic status or no usable diagnostic.\"],\"observer\":\"The deployment script and host operator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"R0-10 meaning of absent Registry address\",\"kind\":\"undefined absence\",\"text\":\"its absence stops the start\",\"question\":\"Are an unset variable, an empty string, a whitespace-only string and a value removed by interpolation all treated as absence, or do some proceed to ordinary address validation?\",\"options\":[\"Treat unset, empty and whitespace-only values as absent\",\"Only an unset variable is absent\",\"Treat unset and empty as absent but validate whitespace as a supplied value\"],\"default_guess\":\"Trim the value and treat unset, empty and whitespace-only values as absent.\",\"witness\":{\"initial\":\"The Registry environment variable exists with an empty value.\",\"events\":[\"The host operator starts the portal.\"],\"outcomes\":[\"Startup reports the Registry address as absent.\",\"Startup treats the address as supplied and reports a different validation failure or accepts it.\"],\"observer\":\"The host operator and deployment automation\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"R0-10 Registry configuration lifetime\",\"kind\":\"unspecified reload semantics\",\"text\":\"configured only by environment variables, which it validates when it starts\",\"question\":\"Is the validated Registry address captured for the process lifetime, re-read for every Registry call, or reloadable without restarting?\",\"options\":[\"Capture it once at startup and require restart for changes\",\"Re-read the environment at every Registry call\",\"Support an explicit configuration reload\"],\"default_guess\":\"Capture the validated address once at startup and require a restart to change it.\",\"witness\":{\"initial\":\"The portal has started with Registry address A.\",\"events\":[\"The running process's environment is changed to address B.\",\"A staff member performs an operation that calls the Registry.\"],\"outcomes\":[\"The call goes to A because startup captured the configuration.\",\"The call goes to B because each call reads the environment.\"],\"observer\":\"The staff member and operators of Registries A and B\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"R0-10 startup refusal atomicity\",\"kind\":\"unspecified side effects\",\"text\":\"its absence stops the start\",\"question\":\"Must the missing-address check occur before every startup side effect, including opening or migrating SQLite and creating or inspecting the binary root?\",\"options\":[\"Validate all required environment configuration before any persistent side effect\",\"Allow local storage initialization before configuration validation\",\"Only require failure before the service begins accepting requests\"],\"default_guess\":\"Validate all required environment configuration before opening, creating or migrating persistent storage and before binding a listener.\",\"witness\":{\"initial\":\"The Registry address is absent and the SQLite database requires a migration.\",\"events\":[\"The host operator starts the portal.\",\"Startup detects the missing Registry address.\"],\"outcomes\":[\"The process exits without changing the database.\",\"The process migrates the database and then exits before serving requests.\"],\"observer\":\"The host operator and the next process version that opens the database\"}}]}",
+ "set_aside": []
+}
