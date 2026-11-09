@@ -1,0 +1,188 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "validation_precedence",
+   "text": "A missing, malformed or inconsistent value (a wildcard host or origin, binary\nbounds out of order) is refused with the one `ValueError` the emitted\n`runtime_settings` raises, naming the variable and never its value; the\nthree causes are not told apart",
+   "question": "When several environment values are invalid in one call, which variable must the single ValueError name?",
+   "options": [
+    "Validate rows in the closed table's declared order and name the first failure",
+    "Use a separately specified validation order",
+    "Collect all failures and name every affected variable"
+   ],
+   "default_guess": "Validate in the closed table's declared order and name the first failure.",
+   "witness": {
+    "initial": "The environment simultaneously lacks one required variable and contains a wildcard trusted host.",
+    "events": [
+     "runtime calls load_runtime_settings during start-up",
+     "One implementation checks required variables first; another checks trusted hosts first"
+    ],
+    "outcomes": [
+     "ValueError names the missing required variable",
+     "ValueError names the trusted-host variable"
+    ],
+    "observer": "The host operator and any deployment script or test inspecting the exception"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "multi_variable_error",
+   "text": "binary\nbounds out of order) is refused with the one `ValueError` the emitted\n`runtime_settings` raises, naming the variable and never its value",
+   "question": "Which variable is named when the inconsistency is the relation between `BINARY_MAX_READ_BYTES` and `MAX_BINARY_RESPONSE_BYTES`?",
+   "options": [
+    "Name `BINARY_MAX_READ_BYTES`",
+    "Name `MAX_BINARY_RESPONSE_BYTES`",
+    "Name both variables"
+   ],
+   "default_guess": "Name `BINARY_MAX_READ_BYTES`, because it is the bound constrained not to exceed the response ceiling.",
+   "witness": {
+    "initial": "Both binary bounds are individually valid positive integers, but the read bound exceeds the response ceiling.",
+    "events": [
+     "runtime calls load_runtime_settings",
+     "The relational validation detects the inconsistent pair"
+    ],
+    "outcomes": [
+     "ValueError names `BINARY_MAX_READ_BYTES`",
+     "ValueError names `MAX_BINARY_RESPONSE_BYTES`"
+    ],
+    "observer": "The host operator diagnosing the failed start"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "error_payload_contradiction",
+   "text": "is refused with the one `ValueError` the emitted\n`runtime_settings` raises, naming the variable and never its value; the\nthree causes are not told apart",
+   "question": "Where and in what exact form is the variable name carried, while satisfying A26's rule that an exception message is never a data channel and ensuring that missing, malformed and inconsistent causes remain indistinguishable?",
+   "options": [
+    "Use one cause-neutral message containing the variable name",
+    "Attach the variable name as a ValueError field and keep the message cause-neutral and data-free",
+    "Put the variable name and cause-specific wording in the message"
+   ],
+   "default_guess": "Attach a `variable_name` field to the ValueError and use one generic message for every cause.",
+   "witness": {
+    "initial": "`REGISTRY_BASE_URL` is missing.",
+    "events": [
+     "load_runtime_settings raises ValueError",
+     "A caller catches it and examines both its message and attributes"
+    ],
+    "outcomes": [
+     "The variable name is present in the exception message, as the State 5 wording naturally permits but A26 forbids as a data channel",
+     "The message is generic and the variable name is carried in a field, following A26, although State 5 defines no such field"
+    ],
+    "observer": "The caller, logs, and the host operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings and staff_bootstrap_cli.run_bootstrap_cli",
+   "kind": "bootstrap_exit_unspecified",
+   "text": "At start the refusal stops the start (and the bootstrap command).",
+   "question": "Which closed bootstrap outcome and exit code represents a ValueError from loading runtime settings?",
+   "options": [
+    "Map it to exit code 1",
+    "Map it to exit code 2",
+    "Map it to exit code 3",
+    "Add a new bootstrap outcome and exit code",
+    "Let ValueError escape, leaving the closed exit-code contract"
+   ],
+   "default_guess": "Let ValueError escape and terminate the process non-zero until the bootstrap contract assigns a dedicated outcome.",
+   "witness": {
+    "initial": "The staff table is empty, but a required runtime variable is missing.",
+    "events": [
+     "The host operator runs the bootstrap command",
+     "staff_bootstrap_cli calls load_runtime_settings before creating a store",
+     "load_runtime_settings raises ValueError"
+    ],
+    "outcomes": [
+     "The CLI maps the failure to one of the four documented exit codes",
+     "The ValueError escapes and the process terminates with an implementation/runtime-selected code"
+    ],
+    "observer": "The host operator and deployment script branching on the command's exit code"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings and registry_gateway",
+   "kind": "contradictory_error_translation",
+   "text": "and `registry_gateway` lets\nit pass uncaught (its note).",
+   "question": "Does a settings ValueError raised during a Registry call escape unchanged, or must registry_gateway translate it to `RegistryBoundaryError(kind=transport_error)` under A6's rule that every failed Registry call has exactly one RegistryFailureKind?",
+   "options": [
+    "Let ValueError escape unchanged",
+    "Translate it to `RegistryBoundaryError` with `kind=transport_error`"
+   ],
+   "default_guess": "Follow the changed State 5 passage and let ValueError escape unchanged.",
+   "witness": {
+    "initial": "The service started with valid settings; later, before a Registry call, `REGISTRY_BASE_URL` is removed from the process environment.",
+    "events": [
+     "A caller invokes a Registry gateway operation",
+     "registry_gateway calls load_runtime_settings",
+     "load_runtime_settings raises ValueError"
+    ],
+    "outcomes": [
+     "The caller receives the uncaught ValueError required by the changed State 5 passage",
+     "The caller receives `RegistryBoundaryError(kind=transport_error)` required by A6's exhaustive Registry failure translation"
+    ],
+    "observer": "The Registry gateway caller and ultimately the API client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "registry_gateway caller handling",
+   "kind": "uncaught_boundary_outcome",
+   "text": "`registry_gateway` lets\nit pass uncaught (its note).",
+   "question": "What externally observable answer results when an uncaught settings ValueError propagates out of a Registry-backed API operation?",
+   "options": [
+    "A generic HTTP 500 response with the normal disclosure protections",
+    "A typed Registry boundary response",
+    "A configuration-specific response",
+    "Process or request-task termination without a defined HTTP answer"
+   ],
+   "default_guess": "Return the framework's generic HTTP 500 response without disclosing the exception or configuration.",
+   "witness": {
+    "initial": "The running service has an invalid environment value when a Registry-backed HTTP request arrives.",
+    "events": [
+     "The API handler calls registry_gateway",
+     "registry_gateway calls load_runtime_settings",
+     "ValueError propagates uncaught from registry_gateway"
+    ],
+    "outcomes": [
+     "The transport converts it to a generic concealed HTTP 500 response",
+     "The transport has no matching error mapping and produces a framework-dependent answer"
+    ],
+    "observer": "The HTTP client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "binary_storage handling of load_runtime_settings failure",
+   "kind": "exception_wrapping",
+   "text": "`binary_storage`\nanswers the read as `BinaryStorageError` (A14)",
+   "question": "Must binary_storage suppress, chain, or copy the underlying ValueError when converting it to BinaryStorageError, and may the resulting error expose the variable name?",
+   "options": [
+    "Raise BinaryStorageError from None with a fixed generic payload",
+    "Chain the ValueError as the cause",
+    "Copy the safe variable name into BinaryStorageError without chaining"
+   ],
+   "default_guess": "Raise a fixed BinaryStorageError from None so the storage boundary exposes neither configuration details nor a second observable exception type.",
+   "witness": {
+    "initial": "A binary read is authorized, but `BINARY_STORAGE_ROOT` has become missing since start-up.",
+    "events": [
+     "binary_storage calls load_runtime_settings",
+     "load_runtime_settings raises ValueError naming `BINARY_STORAGE_ROOT`",
+     "binary_storage converts the failure to BinaryStorageError"
+    ],
+    "outcomes": [
+     "The caller and logs can inspect the chained ValueError and its variable name",
+     "Only a generic BinaryStorageError is observable"
+    ],
+    "observer": "The binary read owner, error middleware, and service operator"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"validation_precedence\",\"text\":\"A missing, malformed or inconsistent value (a wildcard host or origin, binary\\nbounds out of order) is refused with the one `ValueError` the emitted\\n`runtime_settings` raises, naming the variable and never its value; the\\nthree causes are not told apart\",\"question\":\"When several environment values are invalid in one call, which variable must the single ValueError name?\",\"options\":[\"Validate rows in the closed table's declared order and name the first failure\",\"Use a separately specified validation order\",\"Collect all failures and name every affected variable\"],\"default_guess\":\"Validate in the closed table's declared order and name the first failure.\",\"witness\":{\"initial\":\"The environment simultaneously lacks one required variable and contains a wildcard trusted host.\",\"events\":[\"runtime calls load_runtime_settings during start-up\",\"One implementation checks required variables first; another checks trusted hosts first\"],\"outcomes\":[\"ValueError names the missing required variable\",\"ValueError names the trusted-host variable\"],\"observer\":\"The host operator and any deployment script or test inspecting the exception\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"multi_variable_error\",\"text\":\"binary\\nbounds out of order) is refused with the one `ValueError` the emitted\\n`runtime_settings` raises, naming the variable and never its value\",\"question\":\"Which variable is named when the inconsistency is the relation between `BINARY_MAX_READ_BYTES` and `MAX_BINARY_RESPONSE_BYTES`?\",\"options\":[\"Name `BINARY_MAX_READ_BYTES`\",\"Name `MAX_BINARY_RESPONSE_BYTES`\",\"Name both variables\"],\"default_guess\":\"Name `BINARY_MAX_READ_BYTES`, because it is the bound constrained not to exceed the response ceiling.\",\"witness\":{\"initial\":\"Both binary bounds are individually valid positive integers, but the read bound exceeds the response ceiling.\",\"events\":[\"runtime calls load_runtime_settings\",\"The relational validation detects the inconsistent pair\"],\"outcomes\":[\"ValueError names `BINARY_MAX_READ_BYTES`\",\"ValueError names `MAX_BINARY_RESPONSE_BYTES`\"],\"observer\":\"The host operator diagnosing the failed start\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"error_payload_contradiction\",\"text\":\"is refused with the one `ValueError` the emitted\\n`runtime_settings` raises, naming the variable and never its value; the\\nthree causes are not told apart\",\"question\":\"Where and in what exact form is the variable name carried, while satisfying A26's rule that an exception message is never a data channel and ensuring that missing, malformed and inconsistent causes remain indistinguishable?\",\"options\":[\"Use one cause-neutral message containing the variable name\",\"Attach the variable name as a ValueError field and keep the message cause-neutral and data-free\",\"Put the variable name and cause-specific wording in the message\"],\"default_guess\":\"Attach a `variable_name` field to the ValueError and use one generic message for every cause.\",\"witness\":{\"initial\":\"`REGISTRY_BASE_URL` is missing.\",\"events\":[\"load_runtime_settings raises ValueError\",\"A caller catches it and examines both its message and attributes\"],\"outcomes\":[\"The variable name is present in the exception message, as the State 5 wording naturally permits but A26 forbids as a data channel\",\"The message is generic and the variable name is carried in a field, following A26, although State 5 defines no such field\"],\"observer\":\"The caller, logs, and the host operator\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings and staff_bootstrap_cli.run_bootstrap_cli\",\"kind\":\"bootstrap_exit_unspecified\",\"text\":\"At start the refusal stops the start (and the bootstrap command).\",\"question\":\"Which closed bootstrap outcome and exit code represents a ValueError from loading runtime settings?\",\"options\":[\"Map it to exit code 1\",\"Map it to exit code 2\",\"Map it to exit code 3\",\"Add a new bootstrap outcome and exit code\",\"Let ValueError escape, leaving the closed exit-code contract\"],\"default_guess\":\"Let ValueError escape and terminate the process non-zero until the bootstrap contract assigns a dedicated outcome.\",\"witness\":{\"initial\":\"The staff table is empty, but a required runtime variable is missing.\",\"events\":[\"The host operator runs the bootstrap command\",\"staff_bootstrap_cli calls load_runtime_settings before creating a store\",\"load_runtime_settings raises ValueError\"],\"outcomes\":[\"The CLI maps the failure to one of the four documented exit codes\",\"The ValueError escapes and the process terminates with an implementation/runtime-selected code\"],\"observer\":\"The host operator and deployment script branching on the command's exit code\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings and registry_gateway\",\"kind\":\"contradictory_error_translation\",\"text\":\"and `registry_gateway` lets\\nit pass uncaught (its note).\",\"question\":\"Does a settings ValueError raised during a Registry call escape unchanged, or must registry_gateway translate it to `RegistryBoundaryError(kind=transport_error)` under A6's rule that every failed Registry call has exactly one RegistryFailureKind?\",\"options\":[\"Let ValueError escape unchanged\",\"Translate it to `RegistryBoundaryError` with `kind=transport_error`\"],\"default_guess\":\"Follow the changed State 5 passage and let ValueError escape unchanged.\",\"witness\":{\"initial\":\"The service started with valid settings; later, before a Registry call, `REGISTRY_BASE_URL` is removed from the process environment.\",\"events\":[\"A caller invokes a Registry gateway operation\",\"registry_gateway calls load_runtime_settings\",\"load_runtime_settings raises ValueError\"],\"outcomes\":[\"The caller receives the uncaught ValueError required by the changed State 5 passage\",\"The caller receives `RegistryBoundaryError(kind=transport_error)` required by A6's exhaustive Registry failure translation\"],\"observer\":\"The Registry gateway caller and ultimately the API client\"}},{\"subject\":\"registry_gateway caller handling\",\"kind\":\"uncaught_boundary_outcome\",\"text\":\"`registry_gateway` lets\\nit pass uncaught (its note).\",\"question\":\"What externally observable answer results when an uncaught settings ValueError propagates out of a Registry-backed API operation?\",\"options\":[\"A generic HTTP 500 response with the normal disclosure protections\",\"A typed Registry boundary response\",\"A configuration-specific response\",\"Process or request-task termination without a defined HTTP answer\"],\"default_guess\":\"Return the framework's generic HTTP 500 response without disclosing the exception or configuration.\",\"witness\":{\"initial\":\"The running service has an invalid environment value when a Registry-backed HTTP request arrives.\",\"events\":[\"The API handler calls registry_gateway\",\"registry_gateway calls load_runtime_settings\",\"ValueError propagates uncaught from registry_gateway\"],\"outcomes\":[\"The transport converts it to a generic concealed HTTP 500 response\",\"The transport has no matching error mapping and produces a framework-dependent answer\"],\"observer\":\"The HTTP client\"}},{\"subject\":\"binary_storage handling of load_runtime_settings failure\",\"kind\":\"exception_wrapping\",\"text\":\"`binary_storage`\\nanswers the read as `BinaryStorageError` (A14)\",\"question\":\"Must binary_storage suppress, chain, or copy the underlying ValueError when converting it to BinaryStorageError, and may the resulting error expose the variable name?\",\"options\":[\"Raise BinaryStorageError from None with a fixed generic payload\",\"Chain the ValueError as the cause\",\"Copy the safe variable name into BinaryStorageError without chaining\"],\"default_guess\":\"Raise a fixed BinaryStorageError from None so the storage boundary exposes neither configuration details nor a second observable exception type.\",\"witness\":{\"initial\":\"A binary read is authorized, but `BINARY_STORAGE_ROOT` has become missing since start-up.\",\"events\":[\"binary_storage calls load_runtime_settings\",\"load_runtime_settings raises ValueError naming `BINARY_STORAGE_ROOT`\",\"binary_storage converts the failure to BinaryStorageError\"],\"outcomes\":[\"The caller and logs can inspect the chained ValueError and its variable name\",\"Only a generic BinaryStorageError is observable\"],\"observer\":\"The binary read owner, error middleware, and service operator\"}}]}",
+ "set_aside": []
+}
