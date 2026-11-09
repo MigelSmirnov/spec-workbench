@@ -935,7 +935,17 @@ delegation, values unchanged against the accepted code:
   emitter writes (`the EXPENSE member of = models.AuditEntityKind`),
   because the Factory prompt lists those names and asks for them exactly,
   and round 23 read a value-named plain member as a second member (15
-  contradictions).
+  contradictions). Superseded the same day by the owner's decision below.
+- **Enumeration members by declared NAME** (owner, approved 2026-11-09):
+  every member of every enumeration is named in the notes by its declared
+  NAME (`the EXPENSE member of = models.AuditEntityKind`), `AuditAction` and
+  `Capability` included (`the VIEWER_CREATE member of = models.AuditAction`,
+  `the PORTAL_ACCESS_MANAGE member of = models.Capability`); the value is
+  only a complement where a note needs it. The NAME is the one the models
+  emitter writes (Factory `tools/generate_models_draft.py`
+  `uppercase_enum_member_name`: upper case, dot to underscore). 63 notes
+  rewritten (71 members); each passed `check_note_draft`. The standard,
+  lint and Factory validator side is a separate tool PR.
 
 ## Record construction: emitters first, gaps to the owner (2026-11-08)
 

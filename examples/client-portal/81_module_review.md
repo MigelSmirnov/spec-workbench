@@ -26,7 +26,10 @@ decision:
   `project_tracking` rounds 24–25 read even the value form, and then the
   value-plus-name form, of two dotted actions as wrong; those two notes name
   `PAYMENT_REGISTER` and `PROGRESS_UPDATE`, which the Factory validator
-  accepts since code-factory #194.
+  accepts since code-factory #194. Owner decision 2026-11-09: every member
+  is named by its declared NAME, `AuditAction` and `Capability` included;
+  the 63 notes that still named a dotted member by value are rewritten
+  (SOURCE.md "Owner decisions of 2026-11-09").
 - **Q10 (owner 2026-11-09).** `create_expense_from_recognition` re-validates
   the publication model from the field values the instance dumps and refuses
   a failure as `ExpenseValidationError`; no attribute probing. The owner's
