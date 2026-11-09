@@ -360,7 +360,13 @@ document preamble, and `context` — whether the earlier states' texts and this
 state agree. A round asks only about the units that need a round: each point
 names its unit, and a point about another unit is set aside (kept in the
 review, not grouped). A topic keeps open only the units its points name; one
-that names none concerns every reviewed unit. A unit is closed by its latest
+that names none keeps no unit open and closes as itself (`(no unit)` in
+`status`): it is judged on the state's latest round, needs its own
+disposition, and a contradiction among such topics blocks the state until a
+round on a changed text no longer raises it; the next round supersedes it,
+as a unit's next review supersedes that unit's topics (2026-11-09: on
+client-portal State 1 such topics of round 49 had kept ten unchanged
+decisions open with no round able to reach them). A unit is closed by its latest
 round on its current text (below); the state is closed when every unit is.
 Editing one section reopens that section; editing an earlier state reopens
 `context`. Decided by the owner 2026-10-06 for State 2; one round per change
