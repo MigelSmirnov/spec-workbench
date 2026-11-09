@@ -77,7 +77,7 @@ for liveness or readiness (R0-10, R0-11).
 
 ### Boundary
 
-`module:runtime_settings` owns reading the environment, at start and again whenever a module calls it (`module:registry_gateway` at each Registry call, A30): the closed table
+`module:runtime_settings` owns reading the environment, at start and again whenever a module calls it (the Registry gateway at each Registry call, A30): the closed table
 `config.runtime_environment_variables`, defaults, normalization and the
 startup checks (A30), into `RuntimeSettings`. `module:runtime` owns the
 running application: one `PortalStore`, the inner application of `module:api`
