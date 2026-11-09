@@ -26,11 +26,11 @@ _ENUM_ADDRESS = re.compile(r"=\s*models\.([A-Za-z_][A-Za-z0-9_]*)")
 def addressed_enum_values(text: str, enums: dict[str, Any]) -> set[str]:
     """The declared values of every enumeration the note addresses (``= models.X``).
 
-    A note names an enum member by its value next to the enumeration's address
-    (SPEC_STANDARD §5: an enum is a closed list of values; §6.10 v2: a member is
-    its value, ``OrderStatus('shipped')``; §15.3.1: the enumeration is
-    addressed whole). A value such as ``expense.create`` is that member, not
-    navigation over a value (§2), so no attribute check reads it.
+    A note names an enum member by its NAME next to the enumeration's address,
+    and may add its value beside the name (SPEC_STANDARD §15.3.1). A value such
+    as ``expense.create`` is then that member's value, not navigation over a
+    value (§2), so no attribute check reads it; a member named by its value
+    alone is lint L6's finding (notes_authoring.lint), not an unknown attribute.
     """
     values: set[str] = set()
     for name in _ENUM_ADDRESS.findall(text):
