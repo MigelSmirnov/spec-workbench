@@ -96,6 +96,22 @@ NEVER_REVIEWED = "never reviewed"
 CHANGED = "changed since its latest review"
 EVIDENCE_CHANGED = "the evidence its bindings rest on changed"
 UNVERIFIED = "a contradiction whose quotes were not verified"
+# A round that asked no reviewer: it checks the judgements of one unchanged
+# unit's latest round again under the current judge rules (service.rejudge).
+# It is that unit's latest review; it reviews nothing else, so the topics that
+# name no unit and the precedents are read from the rounds that asked.
+REJUDGE = "rejudge"
+
+
+def asked(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The rounds that asked reviewers, without the re-judgements."""
+    return [s for s in summaries if not s.get(REJUDGE)]
+
+
+def latest_review(summaries: list[dict[str, Any]], key: str) -> dict[str, Any] | None:
+    """The latest round that reviewed the unit `key` (or re-judged it)."""
+    reviewed = [s for s in summaries if key in (s.get("scope") or []) and key in (s.get("units") or {})]
+    return reviewed[-1] if reviewed else None
 
 
 def _digest(text: str) -> str:
@@ -319,13 +335,15 @@ def _close_on_topics(state: dict[str, Any], summary: dict[str, Any], key: str, c
 def no_unit_state(summaries: list[dict[str, Any]]) -> dict[str, Any]:
     """The closure of the topics that name no unit under review (``NO_UNIT``),
     in the shape of ``unit_state``. Every round reviews the layer as a whole,
-    so they are judged on the state's latest round only, if it was kept under
+    so they are judged on the state's latest round that asked reviewers (a
+    re-judgement reviews one unit, ``REJUDGE``) only, if it was kept under
     the single-round rule: a contradiction among them blocks until a round on
     a changed text no longer raises it, any other needs its own disposition.
     They keep no unit open."""
     state: dict[str, Any] = {"closed": True, "rule": None, "round": None, "needs_round": None,
                              "contradictions": [], "unverified": [], "awaiting": [], "carried": []}
-    last = summaries[-1] if summaries else None
+    rounds = asked(summaries)
+    last = rounds[-1] if rounds else None
     if last is None or last.get("closure") != CLOSURE_RULE:
         return state
     state["round"] = last.get("round")
