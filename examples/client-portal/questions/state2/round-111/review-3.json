@@ -1,0 +1,241 @@
+{
+ "open_points": [
+  {
+   "subject": "A30 — CFG-002 start-up validation",
+   "kind": "validation_definition",
+   "text": "`BINARY_STORAGE_ROOT` is a required string row kept as supplied: a missing, empty or whitespace-only value stops the start (CFG-002); the start checks nothing about the path itself.",
+   "question": "For CFG-002 and its Required tests, is every nonblank string a valid start-up value even when it is malformed as an operating-system path, contains a NUL, does not exist, names a file, or is inaccessible?",
+   "options": [
+    "Only missing, empty, and whitespace-only values are invalid at start; every other string starts and any path failure occurs on read.",
+    "Values that the path library cannot represent are also invalid at start, while existence, directory type, and access remain read-time checks.",
+    "Any unusable path is invalid and must stop start-up."
+   ],
+   "default_guess": "Treat only missing, empty, whitespace-only, or unrepresentable path strings as start-up errors; do not check filesystem state until a read.",
+   "witness": {
+    "initial": "BINARY_STORAGE_ROOT is a nonblank string naming a nonexistent directory.",
+    "events": [
+     "The host operator starts the service with an otherwise complete environment."
+    ],
+    "outcomes": [
+     "The value is syntactically valid, so the service starts; a later binary read raises BinaryStorageError.",
+     "The root is an invalid required value, so CFG-002 stops start-up."
+    ],
+    "observer": "The host operator and readiness monitoring"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 — binary-storage containment",
+   "kind": "containment_semantics",
+   "text": "Each read resolves the stored `file_ref` under that root as given (a relative root against the process's working directory) and refuses a reference outside it;",
+   "question": "Is containment determined lexically after joining and normalizing path components, or from the canonical filesystem targets after resolving symlinks, and may the root itself be a symlink?",
+   "options": [
+    "Canonicalize both root and target and require the target's resolved path to be a descendant of the resolved root.",
+    "Use normalized lexical paths without following symlinks.",
+    "Reject every symlink in either the root or any target component."
+   ],
+   "default_guess": "Resolve the root canonically, reject symlinks in the requested path, and require the opened target to remain beneath the canonical root.",
+   "witness": {
+    "initial": "The root is `/srv/binaries`; `/srv/binaries/doc` is a symlink to `/etc/passwd`; a stored `file_ref` is `doc`.",
+    "events": [
+     "An authorized client requests the object.",
+     "binary_storage joins the root and file_ref and applies its containment rule."
+    ],
+    "outcomes": [
+     "A lexical descendant check accepts the path and returns bytes from outside the root.",
+     "A canonical or no-symlink check refuses the reference as escaping the root."
+    ],
+    "observer": "The requesting client and the host whose outside file may be disclosed"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 — absolute file references",
+   "kind": "refusal_condition",
+   "text": "Each read resolves the stored `file_ref` under that root as given (a relative root against the process's working directory) and refuses a reference outside it;",
+   "question": "Must every `file_ref` be relative, or is an absolute `file_ref` accepted when it points inside the configured root?",
+   "options": [
+    "Reject every absolute file_ref.",
+    "Accept an absolute file_ref if its resolved target is inside the root.",
+    "Treat an absolute file_ref as text relative to the root rather than with normal path-join semantics."
+   ],
+   "default_guess": "Require file_ref to be relative and reject every absolute value.",
+   "witness": {
+    "initial": "The root is `/srv/binaries`, and the stored file_ref is `/srv/binaries/a.pdf`.",
+    "events": [
+     "An authorized client requests the document."
+    ],
+    "outcomes": [
+     "The absolute reference is inside the root and the document is returned.",
+     "Absolute references are forbidden regardless of their target and the read is refused."
+    ],
+    "observer": "The requesting client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 — relative-root anchoring",
+   "kind": "resolution_time",
+   "text": "Each read resolves the stored `file_ref` under that root as given (a relative root against the process's working directory)",
+   "question": "At what point is a relative root anchored to the process working directory: start-up, each `load_runtime_settings` call, or each filesystem access?",
+   "options": [
+    "Anchor it once during start-up.",
+    "Anchor it when settings are loaded for each read.",
+    "Resolve it against the working directory at the final filesystem access."
+   ],
+   "default_guess": "Convert the root to an absolute path when settings are loaded for the read and use that value consistently for the whole read.",
+   "witness": {
+    "initial": "BINARY_STORAGE_ROOT is `data`; the process starts in `/app`, where `/app/data/x` exists, and later its working directory becomes `/tmp`, where `/tmp/data/x` contains different bytes.",
+    "events": [
+     "The service starts.",
+     "Another component changes the process working directory.",
+     "An authorized client requests file_ref `x`."
+    ],
+    "outcomes": [
+     "A root anchored at start reads `/app/data/x`.",
+     "A root resolved at read time reads `/tmp/data/x`."
+    ],
+    "observer": "The requesting client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 — readable root",
+   "kind": "vague_predicate",
+   "text": "a root that does not exist, is not a directory or cannot be read fails each binary read as `BinaryStorageError`, never the start",
+   "question": "What exact check makes a directory root readable: directory-list permission, traversal permission, an access-check result, or successful opening of the requested file through it?",
+   "options": [
+    "Require the root to pass an explicit read/list permission check.",
+    "Require only traversal and successful opening of the requested file.",
+    "Attempt to open the root as a directory and classify the resulting operating-system errors."
+   ],
+   "default_guess": "Open the root as a directory under the service identity and require safe traversal to the requested file; do not require directory listing when a known child is readable.",
+   "witness": {
+    "initial": "The root directory permits traversal but not listing, and the requested regular file beneath it is readable by the service.",
+    "events": [
+     "An authorized client requests that known file."
+    ],
+    "outcomes": [
+     "An implementation that requires root read/list permission raises BinaryStorageError.",
+     "An implementation that requires only traversal and file access returns the payload."
+    ],
+    "observer": "The requesting client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 — file_ref target type",
+   "kind": "uncovered_case",
+   "text": "Each read resolves the stored `file_ref` under that root as given (a relative root against the process's working directory) and refuses a reference outside it; a root that does not exist, is not a directory or cannot be read fails each binary read as `BinaryStorageError`, never the start",
+   "question": "Which target filesystem objects are valid binary sources, and how are a directory, FIFO, socket, device, broken symlink, unreadable file, or disappearing file classified?",
+   "options": [
+    "Only an existing readable regular file is accepted; every other target produces BinaryStorageError.",
+    "Any object the operating system allows the service to open and read is accepted.",
+    "Missing targets use the missing-source failure of A14, while other target-type and access failures use BinaryStorageError."
+   ],
+   "default_guess": "Accept only a regular file opened without following symlinks; classify a missing target through A14's missing-source outcome and all other unsafe or unreadable targets as BinaryStorageError.",
+   "witness": {
+    "initial": "The root exists and contains a FIFO named `photo`; the stored file_ref is `photo`.",
+    "events": [
+     "An authorized client requests the photo while no FIFO writer exists."
+    ],
+    "outcomes": [
+     "A regular-file-only implementation refuses immediately with BinaryStorageError.",
+     "An implementation that accepts any readable path opens the FIFO and blocks waiting for bytes."
+    ],
+    "observer": "The requesting client and service availability monitoring"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 — outside-root refusal",
+   "kind": "unspecified_outcome",
+   "text": "and refuses a reference outside it;",
+   "question": "What exact binary-storage outcome or exception represents an outside-root reference, and is it the same BinaryStorageError used for an unusable root, the missing-source outcome of A14, or a distinct integrity/refusal outcome?",
+   "options": [
+    "Raise BinaryStorageError.",
+    "Report the same unavailable/not-found result as a missing source object.",
+    "Use a distinct unsafe-reference error that owning modules map according to object kind."
+   ],
+   "default_guess": "Raise a distinct unsafe-reference subtype of BinaryStorageError so callers can conceal document reads and expose only the approved photo storage-unavailable response.",
+   "witness": {
+    "initial": "An authorized binary reference contains file_ref `../secret`.",
+    "events": [
+     "The owning module calls binary_storage for the reference."
+    ],
+    "outcomes": [
+     "binary_storage raises BinaryStorageError.",
+     "binary_storage reports the object as missing or unavailable under A14."
+    ],
+    "observer": "The owning expense or photo module, and potentially the API client after translation"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 — binary-read check precedence",
+   "kind": "check_precedence",
+   "text": "Each read resolves the stored `file_ref` under that root as given (a relative root against the process's working directory) and refuses a reference outside it; a root that does not exist, is not a directory or cannot be read fails each binary read as `BinaryStorageError`, never the start",
+   "question": "When both the root and the reference are invalid, which check has precedence: root existence/type/access, file_ref syntax and absoluteness, or outside-root containment?",
+   "options": [
+    "Validate and open the root before inspecting file_ref.",
+    "Validate file_ref syntax and containment before checking root state.",
+    "Use a fixed sequence of root syntax, file_ref syntax, root state, containment, and target access."
+   ],
+   "default_guess": "Use a fixed sequence: parse root and file_ref, reject absolute or traversal-shaped file_ref, open the root safely, then resolve and open the target beneath it.",
+   "witness": {
+    "initial": "The configured root does not exist and the stored file_ref is `../secret`.",
+    "events": [
+     "An authorized client requests the binary."
+    ],
+    "outcomes": [
+     "Root-first checking raises the unusable-root BinaryStorageError.",
+     "Reference-first checking refuses an outside-root reference."
+    ],
+    "observer": "The binary-storage caller and diagnostics"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 — containment race",
+   "kind": "atomicity_gap",
+   "text": "Each read resolves the stored `file_ref` under that root as given (a relative root against the process's working directory) and refuses a reference outside it;",
+   "question": "Must the containment guarantee remain true if a path component is replaced or a symlink is retargeted between validation and opening the file?",
+   "options": [
+    "The implementation must use race-resistant directory-relative opening so the opened object is guaranteed to remain under the root.",
+    "A check followed by an ordinary path open is sufficient.",
+    "The service assumes no concurrent filesystem mutation beneath the root."
+   ],
+   "default_guess": "Require race-resistant directory-relative opening with no symlink traversal.",
+   "witness": {
+    "initial": "A path beneath the root passes containment validation; an actor able to modify the binary directory can replace a checked component with a symlink to an outside file.",
+    "events": [
+     "binary_storage validates the path.",
+     "The actor replaces the component.",
+     "binary_storage opens the path."
+    ],
+    "outcomes": [
+     "A check-then-open implementation returns bytes from outside the root.",
+     "A directory-relative race-resistant implementation refuses or continues opening the already validated in-root object."
+    ],
+    "observer": "The requesting client and the host whose outside file may be disclosed"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A31 — files_artifacts security review",
+   "kind": "stale_resolution_reference",
+   "text": "- files_artifacts: APPLICABLE; references: A14; affected: M30, M35, binary storage root, and the hand-over of placed binaries that stays Q12 (R0-13)",
+   "question": "After A30 became the decision defining root validation, containment, and read-time root failures, must this security-review category resolve to both A14 and A30 rather than A14 alone?",
+   "options": [
+    "Add A30 to the references because it now owns security-relevant root behavior.",
+    "Keep A14 alone because its Consequence indirectly cites A30.",
+    "Move all root behavior into A14 so A14 remains the sole resolving decision."
+   ],
+   "default_guess": "Reference both A14 and A30 explicitly.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A30 — CFG-002 start-up validation\",\"kind\":\"validation_definition\",\"text\":\"`BINARY_STORAGE_ROOT` is a required string row kept as supplied: a missing, empty or whitespace-only value stops the start (CFG-002); the start checks nothing about the path itself.\",\"question\":\"For CFG-002 and its Required tests, is every nonblank string a valid start-up value even when it is malformed as an operating-system path, contains a NUL, does not exist, names a file, or is inaccessible?\",\"options\":[\"Only missing, empty, and whitespace-only values are invalid at start; every other string starts and any path failure occurs on read.\",\"Values that the path library cannot represent are also invalid at start, while existence, directory type, and access remain read-time checks.\",\"Any unusable path is invalid and must stop start-up.\"],\"default_guess\":\"Treat only missing, empty, whitespace-only, or unrepresentable path strings as start-up errors; do not check filesystem state until a read.\",\"witness\":{\"initial\":\"BINARY_STORAGE_ROOT is a nonblank string naming a nonexistent directory.\",\"events\":[\"The host operator starts the service with an otherwise complete environment.\"],\"outcomes\":[\"The value is syntactically valid, so the service starts; a later binary read raises BinaryStorageError.\",\"The root is an invalid required value, so CFG-002 stops start-up.\"],\"observer\":\"The host operator and readiness monitoring\"}},{\"subject\":\"A30 — binary-storage containment\",\"kind\":\"containment_semantics\",\"text\":\"Each read resolves the stored `file_ref` under that root as given (a relative root against the process's working directory) and refuses a reference outside it;\",\"question\":\"Is containment determined lexically after joining and normalizing path components, or from the canonical filesystem targets after resolving symlinks, and may the root itself be a symlink?\",\"options\":[\"Canonicalize both root and target and require the target's resolved path to be a descendant of the resolved root.\",\"Use normalized lexical paths without following symlinks.\",\"Reject every symlink in either the root or any target component.\"],\"default_guess\":\"Resolve the root canonically, reject symlinks in the requested path, and require the opened target to remain beneath the canonical root.\",\"witness\":{\"initial\":\"The root is `/srv/binaries`; `/srv/binaries/doc` is a symlink to `/etc/passwd`; a stored `file_ref` is `doc`.\",\"events\":[\"An authorized client requests the object.\",\"binary_storage joins the root and file_ref and applies its containment rule.\"],\"outcomes\":[\"A lexical descendant check accepts the path and returns bytes from outside the root.\",\"A canonical or no-symlink check refuses the reference as escaping the root.\"],\"observer\":\"The requesting client and the host whose outside file may be disclosed\"}},{\"subject\":\"A30 — absolute file references\",\"kind\":\"refusal_condition\",\"text\":\"Each read resolves the stored `file_ref` under that root as given (a relative root against the process's working directory) and refuses a reference outside it;\",\"question\":\"Must every `file_ref` be relative, or is an absolute `file_ref` accepted when it points inside the configured root?\",\"options\":[\"Reject every absolute file_ref.\",\"Accept an absolute file_ref if its resolved target is inside the root.\",\"Treat an absolute file_ref as text relative to the root rather than with normal path-join semantics.\"],\"default_guess\":\"Require file_ref to be relative and reject every absolute value.\",\"witness\":{\"initial\":\"The root is `/srv/binaries`, and the stored file_ref is `/srv/binaries/a.pdf`.\",\"events\":[\"An authorized client requests the document.\"],\"outcomes\":[\"The absolute reference is inside the root and the document is returned.\",\"Absolute references are forbidden regardless of their target and the read is refused.\"],\"observer\":\"The requesting client\"}},{\"subject\":\"A30 — relative-root anchoring\",\"kind\":\"resolution_time\",\"text\":\"Each read resolves the stored `file_ref` under that root as given (a relative root against the process's working directory)\",\"question\":\"At what point is a relative root anchored to the process working directory: start-up, each `load_runtime_settings` call, or each filesystem access?\",\"options\":[\"Anchor it once during start-up.\",\"Anchor it when settings are loaded for each read.\",\"Resolve it against the working directory at the final filesystem access.\"],\"default_guess\":\"Convert the root to an absolute path when settings are loaded for the read and use that value consistently for the whole read.\",\"witness\":{\"initial\":\"BINARY_STORAGE_ROOT is `data`; the process starts in `/app`, where `/app/data/x` exists, and later its working directory becomes `/tmp`, where `/tmp/data/x` contains different bytes.\",\"events\":[\"The service starts.\",\"Another component changes the process working directory.\",\"An authorized client requests file_ref `x`.\"],\"outcomes\":[\"A root anchored at start reads `/app/data/x`.\",\"A root resolved at read time reads `/tmp/data/x`.\"],\"observer\":\"The requesting client\"}},{\"subject\":\"A30 — readable root\",\"kind\":\"vague_predicate\",\"text\":\"a root that does not exist, is not a directory or cannot be read fails each binary read as `BinaryStorageError`, never the start\",\"question\":\"What exact check makes a directory root readable: directory-list permission, traversal permission, an access-check result, or successful opening of the requested file through it?\",\"options\":[\"Require the root to pass an explicit read/list permission check.\",\"Require only traversal and successful opening of the requested file.\",\"Attempt to open the root as a directory and classify the resulting operating-system errors.\"],\"default_guess\":\"Open the root as a directory under the service identity and require safe traversal to the requested file; do not require directory listing when a known child is readable.\",\"witness\":{\"initial\":\"The root directory permits traversal but not listing, and the requested regular file beneath it is readable by the service.\",\"events\":[\"An authorized client requests that known file.\"],\"outcomes\":[\"An implementation that requires root read/list permission raises BinaryStorageError.\",\"An implementation that requires only traversal and file access returns the payload.\"],\"observer\":\"The requesting client\"}},{\"subject\":\"A30 — file_ref target type\",\"kind\":\"uncovered_case\",\"text\":\"Each read resolves the stored `file_ref` under that root as given (a relative root against the process's working directory) and refuses a reference outside it; a root that does not exist, is not a directory or cannot be read fails each binary read as `BinaryStorageError`, never the start\",\"question\":\"Which target filesystem objects are valid binary sources, and how are a directory, FIFO, socket, device, broken symlink, unreadable file, or disappearing file classified?\",\"options\":[\"Only an existing readable regular file is accepted; every other target produces BinaryStorageError.\",\"Any object the operating system allows the service to open and read is accepted.\",\"Missing targets use the missing-source failure of A14, while other target-type and access failures use BinaryStorageError.\"],\"default_guess\":\"Accept only a regular file opened without following symlinks; classify a missing target through A14's missing-source outcome and all other unsafe or unreadable targets as BinaryStorageError.\",\"witness\":{\"initial\":\"The root exists and contains a FIFO named `photo`; the stored file_ref is `photo`.\",\"events\":[\"An authorized client requests the photo while no FIFO writer exists.\"],\"outcomes\":[\"A regular-file-only implementation refuses immediately with BinaryStorageError.\",\"An implementation that accepts any readable path opens the FIFO and blocks waiting for bytes.\"],\"observer\":\"The requesting client and service availability monitoring\"}},{\"subject\":\"A30 — outside-root refusal\",\"kind\":\"unspecified_outcome\",\"text\":\"and refuses a reference outside it;\",\"question\":\"What exact binary-storage outcome or exception represents an outside-root reference, and is it the same BinaryStorageError used for an unusable root, the missing-source outcome of A14, or a distinct integrity/refusal outcome?\",\"options\":[\"Raise BinaryStorageError.\",\"Report the same unavailable/not-found result as a missing source object.\",\"Use a distinct unsafe-reference error that owning modules map according to object kind.\"],\"default_guess\":\"Raise a distinct unsafe-reference subtype of BinaryStorageError so callers can conceal document reads and expose only the approved photo storage-unavailable response.\",\"witness\":{\"initial\":\"An authorized binary reference contains file_ref `../secret`.\",\"events\":[\"The owning module calls binary_storage for the reference.\"],\"outcomes\":[\"binary_storage raises BinaryStorageError.\",\"binary_storage reports the object as missing or unavailable under A14.\"],\"observer\":\"The owning expense or photo module, and potentially the API client after translation\"}},{\"subject\":\"A30 — binary-read check precedence\",\"kind\":\"check_precedence\",\"text\":\"Each read resolves the stored `file_ref` under that root as given (a relative root against the process's working directory) and refuses a reference outside it; a root that does not exist, is not a directory or cannot be read fails each binary read as `BinaryStorageError`, never the start\",\"question\":\"When both the root and the reference are invalid, which check has precedence: root existence/type/access, file_ref syntax and absoluteness, or outside-root containment?\",\"options\":[\"Validate and open the root before inspecting file_ref.\",\"Validate file_ref syntax and containment before checking root state.\",\"Use a fixed sequence of root syntax, file_ref syntax, root state, containment, and target access.\"],\"default_guess\":\"Use a fixed sequence: parse root and file_ref, reject absolute or traversal-shaped file_ref, open the root safely, then resolve and open the target beneath it.\",\"witness\":{\"initial\":\"The configured root does not exist and the stored file_ref is `../secret`.\",\"events\":[\"An authorized client requests the binary.\"],\"outcomes\":[\"Root-first checking raises the unusable-root BinaryStorageError.\",\"Reference-first checking refuses an outside-root reference.\"],\"observer\":\"The binary-storage caller and diagnostics\"}},{\"subject\":\"A30 — containment race\",\"kind\":\"atomicity_gap\",\"text\":\"Each read resolves the stored `file_ref` under that root as given (a relative root against the process's working directory) and refuses a reference outside it;\",\"question\":\"Must the containment guarantee remain true if a path component is replaced or a symlink is retargeted between validation and opening the file?\",\"options\":[\"The implementation must use race-resistant directory-relative opening so the opened object is guaranteed to remain under the root.\",\"A check followed by an ordinary path open is sufficient.\",\"The service assumes no concurrent filesystem mutation beneath the root.\"],\"default_guess\":\"Require race-resistant directory-relative opening with no symlink traversal.\",\"witness\":{\"initial\":\"A path beneath the root passes containment validation; an actor able to modify the binary directory can replace a checked component with a symlink to an outside file.\",\"events\":[\"binary_storage validates the path.\",\"The actor replaces the component.\",\"binary_storage opens the path.\"],\"outcomes\":[\"A check-then-open implementation returns bytes from outside the root.\",\"A directory-relative race-resistant implementation refuses or continues opening the already validated in-root object.\"],\"observer\":\"The requesting client and the host whose outside file may be disclosed\"}},{\"subject\":\"A31 — files_artifacts security review\",\"kind\":\"stale_resolution_reference\",\"text\":\"- files_artifacts: APPLICABLE; references: A14; affected: M30, M35, binary storage root, and the hand-over of placed binaries that stays Q12 (R0-13)\",\"question\":\"After A30 became the decision defining root validation, containment, and read-time root failures, must this security-review category resolve to both A14 and A30 rather than A14 alone?\",\"options\":[\"Add A30 to the references because it now owns security-relevant root behavior.\",\"Keep A14 alone because its Consequence indirectly cites A30.\",\"Move all root behavior into A14 so A14 remains the sole resolving decision.\"],\"default_guess\":\"Reference both A14 and A30 explicitly.\"}]}",
+ "set_aside": []
+}

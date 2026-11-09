@@ -1,0 +1,218 @@
+{
+ "open_points": [
+  {
+   "subject": "A30",
+   "kind": "containment_semantics",
+   "text": "Each read resolves the stored\n  `file_ref` under that root as given (a relative root against the\n  process's working directory) and refuses a reference outside it",
+   "question": "Is containment determined lexically or after canonical filesystem resolution, including symlinks, `..`, absolute references and platform-specific separators?",
+   "options": [
+    "Reject when normalized lexical path escapes the root",
+    "Resolve symlinks and require the canonical target to remain under the canonical root",
+    "Reject absolute references, traversal components and symlinks categorically"
+   ],
+   "default_guess": "Canonicalize the root and target, reject absolute `file_ref` values, and require the resolved target to remain beneath the resolved root.",
+   "witness": {
+    "initial": "`BINARY_STORAGE_ROOT=/srv/binaries`; `/srv/binaries/link` is a symlink to `/etc`; stored `file_ref` is `link/passwd`.",
+    "events": [
+     "An authorized client requests the binary.",
+     "`binary_storage` resolves the stored reference."
+    ],
+    "outcomes": [
+     "A lexical-prefix implementation accepts the reference and reads outside the configured root.",
+     "A canonical-containment implementation refuses the reference."
+    ],
+    "observer": "The requesting client and the service operator see disclosure versus refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30",
+   "kind": "relative_root_binding",
+   "text": "a relative root against the\n  process's working directory",
+   "question": "At what time is a relative root bound to a working directory: settings load, application start, or every binary read, and may a later working-directory change alter the storage root?",
+   "options": [
+    "Resolve once at application start",
+    "Resolve on every `load_runtime_settings` call",
+    "Resolve on every filesystem access"
+   ],
+   "default_guess": "Resolve it once when runtime settings are loaded for startup and retain the resulting absolute root.",
+   "witness": {
+    "initial": "The service starts in `/opt/portal` with `BINARY_STORAGE_ROOT=data`; both `/opt/portal/data/x` and `/tmp/data/x` exist with different bytes.",
+    "events": [
+     "The process starts successfully.",
+     "A library changes the process working directory to `/tmp`.",
+     "A client requests the binary whose `file_ref` is `x`."
+    ],
+    "outcomes": [
+     "An implementation that captured the startup directory returns `/opt/portal/data/x`.",
+     "An implementation that resolves at read time returns `/tmp/data/x`."
+    ],
+    "observer": "The client receives different content."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30",
+   "kind": "refusal_error",
+   "text": "refuses a reference outside it",
+   "question": "What exact failure type and externally observable response must an outside-root reference produce?",
+   "options": [
+    "Raise `BinaryStorageError`",
+    "Treat it as a missing source object",
+    "Use the object-kind-specific concealed document refusal or explicit photo storage-unavailable response directly"
+   ],
+   "default_guess": "Raise `BinaryStorageError` internally and let the owning document or photo operation apply its specified external concealment policy.",
+   "witness": {
+    "initial": "An authorized expense document stores `file_ref=../secret.pdf`.",
+    "events": [
+     "The client requests the document.",
+     "The storage boundary detects that the reference escapes the root."
+    ],
+    "outcomes": [
+     "The request is mapped to the same concealed response as an unknown or unavailable document.",
+     "The request exposes a storage-unavailable failure because it is treated as `BinaryStorageError` without document-specific concealment."
+    ],
+    "observer": "The client can distinguish the responses."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30",
+   "kind": "check_precedence",
+   "text": "a root\n  that does not exist, is not a directory or cannot be read fails each\n  binary read as `BinaryStorageError`, never the start",
+   "question": "In what order are settings validation, root validation, reference-containment checking, source existence, size enforcement and content-type recognition performed when more than one condition fails?",
+   "options": [
+    "Validate the root before inspecting `file_ref`",
+    "Reject an escaping `file_ref` before touching the root",
+    "Follow the emitted backend's current check order and state it explicitly"
+   ],
+   "default_guess": "Load settings, validate the root, validate canonical containment, open/read within the size bound, then recognize content type.",
+   "witness": {
+    "initial": "The configured root does not exist and the stored `file_ref` is `../outside.pdf`.",
+    "events": [
+     "An authorized client requests the binary."
+    ],
+    "outcomes": [
+     "Root-first checking raises `BinaryStorageError` for the unavailable root.",
+     "Containment-first checking refuses the escaping reference using its separate refusal mapping."
+    ],
+    "observer": "The client or operator sees a different error classification and diagnostic."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30",
+   "kind": "vague_refusal_condition",
+   "text": "cannot be read",
+   "question": "What exact filesystem condition makes the root unreadable: failed metadata access, missing read permission, missing traversal permission, inability to list it, or failure to open the requested object?",
+   "options": [
+    "Require read and traversal permissions on the root",
+    "Require successful directory listing",
+    "Do not pre-check permissions; classify a filesystem access failure while opening the requested object"
+   ],
+   "default_guess": "Do not use a separate permission probe; treat failure to traverse or open the requested object due to root accessibility as `BinaryStorageError`.",
+   "witness": {
+    "initial": "The root is a directory with read permission but without traversal permission for the service identity.",
+    "events": [
+     "The service starts.",
+     "An authorized binary read is attempted."
+    ],
+    "outcomes": [
+     "A check of readability alone accepts the root and later reports the object as missing or inaccessible.",
+     "A traversal-aware implementation classifies the root as unreadable and raises `BinaryStorageError`."
+    ],
+    "observer": "The client and service operator see different failure classifications."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30",
+   "kind": "runtime_configuration_failure",
+   "text": "The emitted\n  `binary_storage` takes both from the settings `load_runtime_settings`\n  returns, which it calls at each read",
+   "question": "If `BINARY_STORAGE_ROOT` or `BINARY_MAX_READ_BYTES` becomes missing, empty or malformed after startup, what does that binary read return, and is the settings-loading failure translated to `BinaryStorageError`?",
+   "options": [
+    "Translate every per-read settings failure to `BinaryStorageError`",
+    "Propagate the runtime-settings validation error",
+    "Treat startup settings as immutable and do not reread the environment"
+   ],
+   "default_guess": "Translate a per-read settings-loading failure to `BinaryStorageError` while retaining the startup validation failure for initial load.",
+   "witness": {
+    "initial": "The service starts with valid binary settings.",
+    "events": [
+     "The host removes `BINARY_STORAGE_ROOT` from the process environment.",
+     "An authorized client requests a binary."
+    ],
+    "outcomes": [
+     "The per-read loader raises an unhandled configuration-validation error.",
+     "`binary_storage` translates the failed settings load to `BinaryStorageError`."
+    ],
+    "observer": "The client and service operator see different error types and response handling."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30",
+   "kind": "invariant_test_ambiguity",
+   "text": "for each required variable\n  other than `REGISTRY_BASE_URL` a missing value and an invalid value stop\n  start-up",
+   "question": "For `BINARY_STORAGE_ROOT`, does “invalid value” mean only an empty or whitespace-only string, or also a nonexistent, non-directory or unreadable path, which the new rule says never stops startup?",
+   "options": [
+    "Only missing, empty and whitespace-only strings are invalid at startup",
+    "Filesystem-invalid roots are also invalid startup values",
+    "List separate syntactic startup-invalid and read-time-invalid cases in CFG-002"
+   ],
+   "default_guess": "Define startup invalidity as missing, empty or whitespace-only only, and explicitly test that nonexistent, non-directory and inaccessible roots pass startup but fail a read.",
+   "witness": {
+    "initial": "`BINARY_STORAGE_ROOT=/absent`, and `/absent` does not exist; all other settings are valid.",
+    "events": [
+     "The bootstrap command loads runtime settings."
+    ],
+    "outcomes": [
+     "A test author reading “invalid value” expects startup refusal.",
+     "A test author following “never the start” expects startup success and a later `BinaryStorageError` on each read."
+    ],
+    "observer": "The deployment test suite and operator observe opposite startup outcomes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30",
+   "kind": "contradiction",
+   "text": "The service is\nconfigured only by environment variables, which it validates when it starts",
+   "question": "Must State 0 R0-10 be narrowed to say startup validates the binary-root row only as a required nonblank string, since A30 now requires filesystem validity to be checked only during reads?",
+   "options": [
+    "Narrow R0-10 to syntactic environment validation at startup",
+    "Validate the root path at startup, contrary to the new A30 passage",
+    "State explicitly that filesystem usability is not part of environment-variable validation"
+   ],
+   "default_guess": "Narrow R0-10 and state that startup validation checks presence and string form, while root filesystem usability is deliberately deferred to each read.",
+   "witness": {
+    "initial": "The environment contains nonblank `BINARY_STORAGE_ROOT=/missing`, which does not exist.",
+    "events": [
+     "The service starts with no binary request yet."
+    ],
+    "outcomes": [
+     "R0-10's unqualified startup-validation statement is read to require refusal.",
+     "A30 requires startup to succeed because path existence is never checked at startup."
+    ],
+    "observer": "The deployment operator sees whether the service starts."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A31",
+   "kind": "ownership_reference",
+   "text": "files_artifacts: APPLICABLE; references: A14; affected: M30, M35, binary storage root, and the hand-over of placed binaries that stays Q12 (R0-13)",
+   "question": "Must the files/artifacts security-review row also reference A30 now that A30 owns the binary-root configuration, containment refusal and read-time root failures?",
+   "options": [
+    "Add A30 to the references",
+    "Move all binary-root security ownership into A14",
+    "State which root concerns A14 owns and which A30 owns"
+   ],
+   "default_guess": "Add A30 to the row's references while retaining A14 for authorization and delivery policy.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A30\",\"kind\":\"containment_semantics\",\"text\":\"Each read resolves the stored\\n  `file_ref` under that root as given (a relative root against the\\n  process's working directory) and refuses a reference outside it\",\"question\":\"Is containment determined lexically or after canonical filesystem resolution, including symlinks, `..`, absolute references and platform-specific separators?\",\"options\":[\"Reject when normalized lexical path escapes the root\",\"Resolve symlinks and require the canonical target to remain under the canonical root\",\"Reject absolute references, traversal components and symlinks categorically\"],\"default_guess\":\"Canonicalize the root and target, reject absolute `file_ref` values, and require the resolved target to remain beneath the resolved root.\",\"witness\":{\"initial\":\"`BINARY_STORAGE_ROOT=/srv/binaries`; `/srv/binaries/link` is a symlink to `/etc`; stored `file_ref` is `link/passwd`.\",\"events\":[\"An authorized client requests the binary.\",\"`binary_storage` resolves the stored reference.\"],\"outcomes\":[\"A lexical-prefix implementation accepts the reference and reads outside the configured root.\",\"A canonical-containment implementation refuses the reference.\"],\"observer\":\"The requesting client and the service operator see disclosure versus refusal.\"}},{\"subject\":\"A30\",\"kind\":\"relative_root_binding\",\"text\":\"a relative root against the\\n  process's working directory\",\"question\":\"At what time is a relative root bound to a working directory: settings load, application start, or every binary read, and may a later working-directory change alter the storage root?\",\"options\":[\"Resolve once at application start\",\"Resolve on every `load_runtime_settings` call\",\"Resolve on every filesystem access\"],\"default_guess\":\"Resolve it once when runtime settings are loaded for startup and retain the resulting absolute root.\",\"witness\":{\"initial\":\"The service starts in `/opt/portal` with `BINARY_STORAGE_ROOT=data`; both `/opt/portal/data/x` and `/tmp/data/x` exist with different bytes.\",\"events\":[\"The process starts successfully.\",\"A library changes the process working directory to `/tmp`.\",\"A client requests the binary whose `file_ref` is `x`.\"],\"outcomes\":[\"An implementation that captured the startup directory returns `/opt/portal/data/x`.\",\"An implementation that resolves at read time returns `/tmp/data/x`.\"],\"observer\":\"The client receives different content.\"}},{\"subject\":\"A30\",\"kind\":\"refusal_error\",\"text\":\"refuses a reference outside it\",\"question\":\"What exact failure type and externally observable response must an outside-root reference produce?\",\"options\":[\"Raise `BinaryStorageError`\",\"Treat it as a missing source object\",\"Use the object-kind-specific concealed document refusal or explicit photo storage-unavailable response directly\"],\"default_guess\":\"Raise `BinaryStorageError` internally and let the owning document or photo operation apply its specified external concealment policy.\",\"witness\":{\"initial\":\"An authorized expense document stores `file_ref=../secret.pdf`.\",\"events\":[\"The client requests the document.\",\"The storage boundary detects that the reference escapes the root.\"],\"outcomes\":[\"The request is mapped to the same concealed response as an unknown or unavailable document.\",\"The request exposes a storage-unavailable failure because it is treated as `BinaryStorageError` without document-specific concealment.\"],\"observer\":\"The client can distinguish the responses.\"}},{\"subject\":\"A30\",\"kind\":\"check_precedence\",\"text\":\"a root\\n  that does not exist, is not a directory or cannot be read fails each\\n  binary read as `BinaryStorageError`, never the start\",\"question\":\"In what order are settings validation, root validation, reference-containment checking, source existence, size enforcement and content-type recognition performed when more than one condition fails?\",\"options\":[\"Validate the root before inspecting `file_ref`\",\"Reject an escaping `file_ref` before touching the root\",\"Follow the emitted backend's current check order and state it explicitly\"],\"default_guess\":\"Load settings, validate the root, validate canonical containment, open/read within the size bound, then recognize content type.\",\"witness\":{\"initial\":\"The configured root does not exist and the stored `file_ref` is `../outside.pdf`.\",\"events\":[\"An authorized client requests the binary.\"],\"outcomes\":[\"Root-first checking raises `BinaryStorageError` for the unavailable root.\",\"Containment-first checking refuses the escaping reference using its separate refusal mapping.\"],\"observer\":\"The client or operator sees a different error classification and diagnostic.\"}},{\"subject\":\"A30\",\"kind\":\"vague_refusal_condition\",\"text\":\"cannot be read\",\"question\":\"What exact filesystem condition makes the root unreadable: failed metadata access, missing read permission, missing traversal permission, inability to list it, or failure to open the requested object?\",\"options\":[\"Require read and traversal permissions on the root\",\"Require successful directory listing\",\"Do not pre-check permissions; classify a filesystem access failure while opening the requested object\"],\"default_guess\":\"Do not use a separate permission probe; treat failure to traverse or open the requested object due to root accessibility as `BinaryStorageError`.\",\"witness\":{\"initial\":\"The root is a directory with read permission but without traversal permission for the service identity.\",\"events\":[\"The service starts.\",\"An authorized binary read is attempted.\"],\"outcomes\":[\"A check of readability alone accepts the root and later reports the object as missing or inaccessible.\",\"A traversal-aware implementation classifies the root as unreadable and raises `BinaryStorageError`.\"],\"observer\":\"The client and service operator see different failure classifications.\"}},{\"subject\":\"A30\",\"kind\":\"runtime_configuration_failure\",\"text\":\"The emitted\\n  `binary_storage` takes both from the settings `load_runtime_settings`\\n  returns, which it calls at each read\",\"question\":\"If `BINARY_STORAGE_ROOT` or `BINARY_MAX_READ_BYTES` becomes missing, empty or malformed after startup, what does that binary read return, and is the settings-loading failure translated to `BinaryStorageError`?\",\"options\":[\"Translate every per-read settings failure to `BinaryStorageError`\",\"Propagate the runtime-settings validation error\",\"Treat startup settings as immutable and do not reread the environment\"],\"default_guess\":\"Translate a per-read settings-loading failure to `BinaryStorageError` while retaining the startup validation failure for initial load.\",\"witness\":{\"initial\":\"The service starts with valid binary settings.\",\"events\":[\"The host removes `BINARY_STORAGE_ROOT` from the process environment.\",\"An authorized client requests a binary.\"],\"outcomes\":[\"The per-read loader raises an unhandled configuration-validation error.\",\"`binary_storage` translates the failed settings load to `BinaryStorageError`.\"],\"observer\":\"The client and service operator see different error types and response handling.\"}},{\"subject\":\"A30\",\"kind\":\"invariant_test_ambiguity\",\"text\":\"for each required variable\\n  other than `REGISTRY_BASE_URL` a missing value and an invalid value stop\\n  start-up\",\"question\":\"For `BINARY_STORAGE_ROOT`, does “invalid value” mean only an empty or whitespace-only string, or also a nonexistent, non-directory or unreadable path, which the new rule says never stops startup?\",\"options\":[\"Only missing, empty and whitespace-only strings are invalid at startup\",\"Filesystem-invalid roots are also invalid startup values\",\"List separate syntactic startup-invalid and read-time-invalid cases in CFG-002\"],\"default_guess\":\"Define startup invalidity as missing, empty or whitespace-only only, and explicitly test that nonexistent, non-directory and inaccessible roots pass startup but fail a read.\",\"witness\":{\"initial\":\"`BINARY_STORAGE_ROOT=/absent`, and `/absent` does not exist; all other settings are valid.\",\"events\":[\"The bootstrap command loads runtime settings.\"],\"outcomes\":[\"A test author reading “invalid value” expects startup refusal.\",\"A test author following “never the start” expects startup success and a later `BinaryStorageError` on each read.\"],\"observer\":\"The deployment test suite and operator observe opposite startup outcomes.\"}},{\"subject\":\"A30\",\"kind\":\"contradiction\",\"text\":\"The service is\\nconfigured only by environment variables, which it validates when it starts\",\"question\":\"Must State 0 R0-10 be narrowed to say startup validates the binary-root row only as a required nonblank string, since A30 now requires filesystem validity to be checked only during reads?\",\"options\":[\"Narrow R0-10 to syntactic environment validation at startup\",\"Validate the root path at startup, contrary to the new A30 passage\",\"State explicitly that filesystem usability is not part of environment-variable validation\"],\"default_guess\":\"Narrow R0-10 and state that startup validation checks presence and string form, while root filesystem usability is deliberately deferred to each read.\",\"witness\":{\"initial\":\"The environment contains nonblank `BINARY_STORAGE_ROOT=/missing`, which does not exist.\",\"events\":[\"The service starts with no binary request yet.\"],\"outcomes\":[\"R0-10's unqualified startup-validation statement is read to require refusal.\",\"A30 requires startup to succeed because path existence is never checked at startup.\"],\"observer\":\"The deployment operator sees whether the service starts.\"}},{\"subject\":\"A31\",\"kind\":\"ownership_reference\",\"text\":\"files_artifacts: APPLICABLE; references: A14; affected: M30, M35, binary storage root, and the hand-over of placed binaries that stays Q12 (R0-13)\",\"question\":\"Must the files/artifacts security-review row also reference A30 now that A30 owns the binary-root configuration, containment refusal and read-time root failures?\",\"options\":[\"Add A30 to the references\",\"Move all binary-root security ownership into A14\",\"State which root concerns A14 owns and which A30 owns\"],\"default_guess\":\"Add A30 to the row's references while retaining A14 for authorization and delivery policy.\"}]}",
+ "set_aside": []
+}
