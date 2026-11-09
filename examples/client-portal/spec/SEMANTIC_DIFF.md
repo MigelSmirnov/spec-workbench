@@ -1,5 +1,33 @@
 # Что меняется в спецификации клиентского портала
 
+## Binary storage settings read through runtime_settings (2026-11-09; не экспортировано)
+
+**Изменение поведения (узкое).** Решение владельца 2026-11-09 (одобрено),
+Factory code-factory #201: детерминированный `binary_storage` берёт корень
+хранилища и предел чтения через `runtime_settings` (SPEC_STANDARD §6.11).
+
+- **Было (принятая спека `018b2e2e`, работающий сервис):** строки
+  `BINARY_STORAGE_ROOT` и `BINARY_MAX_READ_BYTES` таблицы запуска имели
+  `target: validation_only`: старт их проверял, а эмитированный
+  `binary_storage` (`binary_storage_backend` v1) сам читал обе переменные
+  окружения при каждом чтении (`adapters/binary_storage.py`).
+- **Стало:** обе строки читаются в поля `RuntimeSettings.binary_storage_root`
+  (`str`) и `RuntimeSettings.binary_max_read_bytes` (`int`);
+  `binary_storage_backend` schema_version 2 (эмиттер
+  `python_filesystem_binary_storage_settings_v1`) называет их в `settings` и
+  вызывает `load_runtime_settings` при каждом чтении. Отсутствующая или
+  неверная настройка теперь всплывает через `load_runtime_settings`: на старте
+  — как и раньше, остановкой старта; при чтении — ошибкой загрузки настроек,
+  которую модуль отдаёт как `BinaryStorageError` (раньше — его собственная
+  проверка переменной, тот же `BinaryStorageError`). Клиент видит то же.
+- **Структура:** ребро `binary_storage → runtime_settings`
+  (`imports.module_internal`, `65_imports.json`, `code_outdated` против кода
+  `459ac96c`); State 3 `binary_storage` знает `runtime_settings`.
+
+Происхождение: владелец 2026-11-09; A14, A30 (`02_rules.md`), State 3
+(`30_modules.md`), State 1 (`01_models.md`), `60_data_closure.json`,
+`60_model_closure_contracts.json`; закрывает State 2 r103/r107–r109 (FA019).
+
 ## Registry URL read through runtime_settings (2026-11-09; не экспортировано)
 
 **Изменение поведения.** Решение владельца 2026-11-09 (одобрено): адрес

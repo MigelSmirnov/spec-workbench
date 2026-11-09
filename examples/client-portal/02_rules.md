@@ -70,11 +70,11 @@ has one of three homes, and the decision that owns it names that home:
 - a value that depends on the deployment (URLs, origins, hosts, size bounds,
   rate limits) — a row of the start-up table `config.runtime_environment_variables`,
   validated by `runtime_settings` at each call of `load_runtime_settings` (at
-  start, by the bootstrap command, and by `registry_gateway` at each Registry
-  call) and read into a field of `RuntimeSettings`; the one exception is the two binary storage rows
-  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and
-  which the emitted `binary_storage` reads at each read, as the Factory's
-  binary storage backend is built (A14, A30).
+  start, by the bootstrap command, by `registry_gateway` at each Registry
+  call and by the emitted `binary_storage` at each binary read) and read
+  into a field of `RuntimeSettings`; no other module reads the environment
+  (A14, A30; owner 2026-11-09: the binary storage rows too, SPEC_STANDARD
+  6.11).
 
 The IR a deterministic backend is emitted from (`rules.*_backend` and the
 policies such a backend reads) is read only by that backend. Behaviour that
@@ -1587,10 +1587,15 @@ the Registry path constants), carried to States 6–7.
   of them is a Factory route change (A32). Owner 2026-11-06: current
   service behaviour accepted; technical decisions delegated.
 - `binary_read_limit_env_name`: the binary read limit is the environment
-  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that
-  `load_runtime_settings` validates at start without a `RuntimeSettings`
-  field; the emitted `binary_storage` reads it at each read through its
-  backend IR (Factory `a6916180314d`). No model-written module reads it.
+  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table read
+  into the `binary_max_read_bytes` field of `RuntimeSettings`; the storage
+  root `BINARY_STORAGE_ROOT` likewise into `binary_storage_root`. The emitted
+  `binary_storage` takes both from the settings `load_runtime_settings`
+  returns, which it calls at each read, as its backend IR
+  (`binary_storage_backend` schema version 2, `settings`) names them, and
+  reads no environment itself (owner 2026-11-09, SPEC_STANDARD 6.11;
+  Factory code-factory #201). Until then it read both variables itself
+  (Factory `a6916180314d`). No model-written module reads them.
 - Registry paths (accepted `config.registry_request_paths`, since 2026-11-08
   the data-provider constants of the Consequence): the paths are fixed as
   `projects/active` for the active list (owner 2026-11-08, Q12, A6: the
@@ -1647,7 +1652,7 @@ the Registry path constants), carried to States 6–7.
 
 ### Consequence
 
-Each value reaches code by one path of SPEC_STANDARD 15.3.1. A deployment value is a row of `config.runtime_environment_variables` read only by `load_runtime_settings`, into a field of `RuntimeSettings` (`database_url`, `environment`, `public_origin`, `trusted_hosts`, `allowed_origins`, `max_request_body_bytes`, `max_binary_response_bytes`, `production_logging`, the two viewer-entry limits and, since 2026-11-09, `registry_base_url`), except the two binary storage rows, which the emitted `binary_storage` reads. A release value is a data-provider constant generated code imports (below). The storage table names of `config.persistence` are read only by the emitted repositories, through the persistence backend IR; `config.credential_hash_scheme` only by the emitted `credential_security`. No model-written note names a `config` address. Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): the Registry request paths and timeout, the staff and viewer session lifetimes and the credential entropy have the same value in every environment and change only by a decision about the product, so by SPEC_STANDARD 15.2 (check 4 before 3) they are data-provider constants that generated code imports (`REGISTRY_PROJECTS_PATH`, `REGISTRY_ACTIVE_SEGMENT` (Q12), `REGISTRY_CONTEXT_SEGMENT`, `REGISTRY_VALIDATE_SEGMENT`, `REGISTRY_TIMEOUT_SECONDS`, `STAFF_SESSION_TTL_HOURS`, `VIEWER_SESSION_TTL_DAYS`, `CREDENTIAL_SECRET_BYTES`), values unchanged; the path templates are split into a path and three segments (the active one added by Q12), because a template is not data (15.11). The Registry URL itself is an environment value: since the owner's decision of 2026-11-09 it is the `registry_base_url` field of `RuntimeSettings`, a required row of the start-up table, and the data-provider constant `REGISTRY_BASE_URL_VARIABLE` that named the variable for the gateway is removed (SPEC_STANDARD 6.11).
+Each value reaches code by one path of SPEC_STANDARD 15.3.1. A deployment value is a row of `config.runtime_environment_variables` read only by `load_runtime_settings`, into a field of `RuntimeSettings` (`database_url`, `environment`, `public_origin`, `trusted_hosts`, `allowed_origins`, `max_request_body_bytes`, `max_binary_response_bytes`, `production_logging`, the two viewer-entry limits and, since 2026-11-09, `registry_base_url`, `binary_storage_root` and `binary_max_read_bytes`); the emitted `binary_storage` reads the last two from the settings `load_runtime_settings` returns, like every other reader. A release value is a data-provider constant generated code imports (below). The storage table names of `config.persistence` are read only by the emitted repositories, through the persistence backend IR; `config.credential_hash_scheme` only by the emitted `credential_security`. No model-written note names a `config` address. Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): the Registry request paths and timeout, the staff and viewer session lifetimes and the credential entropy have the same value in every environment and change only by a decision about the product, so by SPEC_STANDARD 15.2 (check 4 before 3) they are data-provider constants that generated code imports (`REGISTRY_PROJECTS_PATH`, `REGISTRY_ACTIVE_SEGMENT` (Q12), `REGISTRY_CONTEXT_SEGMENT`, `REGISTRY_VALIDATE_SEGMENT`, `REGISTRY_TIMEOUT_SECONDS`, `STAFF_SESSION_TTL_HOURS`, `VIEWER_SESSION_TTL_DAYS`, `CREDENTIAL_SECRET_BYTES`), values unchanged; the path templates are split into a path and three segments (the active one added by Q12), because a template is not data (15.11). The Registry URL itself is an environment value: since the owner's decision of 2026-11-09 it is the `registry_base_url` field of `RuntimeSettings`, a required row of the start-up table, and the data-provider constant `REGISTRY_BASE_URL_VARIABLE` that named the variable for the gateway is removed (SPEC_STANDARD 6.11).
 
 ## Accepted decision A31 — Security review of the migrated case
 

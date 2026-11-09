@@ -189,13 +189,14 @@ consumer → provider → symbols map.
   each Registry call: the call reads and validates the environment again
   through `runtime_settings`, the same environment the start validated, and
   no settings object is handed to the gateway or cached by it (A6, A30; owner 2026-11-09: the Registry URL is read only through
-  `runtime_settings`, SPEC_STANDARD 6.11). One exception is kept from the
-  running service: the emitted `binary_storage` reads `BINARY_STORAGE_ROOT`
-  and `BINARY_MAX_READ_BYTES` at each binary read, as its backend IR names
-  them, refusing that read when a value is missing or unusable; both are
-  rows of the start-up table too (Factory code
-  `adapters/binary_storage.py`; owner 2026-11-06: current service
-  behaviour accepted; technical decisions delegated).
+  `runtime_settings`, SPEC_STANDARD 6.11). The emitted `binary_storage`
+  takes the storage root and the read limit the same way, from the
+  `binary_storage_root` and `binary_max_read_bytes` fields of the settings
+  `load_runtime_settings` returns, which it calls at each binary read, and
+  refuses that read as `BinaryStorageError` when the settings cannot be
+  loaded (owner 2026-11-09; `binary_storage_backend` schema version 2).
+  The running service's `adapters/binary_storage.py` still reads the two
+  variables itself until the next Route B regenerates it.
 
 ## Changes against the former text
 
@@ -1035,11 +1036,12 @@ local binary root (R0-10), the read bound, recognition of the media type from
 the leading signature bytes against the closed list per object kind, the
 download name, and translation of a missing or unreadable object to
 `BinaryStorageError`. `rules.binary_storage_backend` (Factory
-`8387e0a3d7fe`). Read only: it writes no binary content (R0-13, Q12).
+`8387e0a3d7fe`; schema version 2 since 2026-11-09, its settings read
+through `runtime_settings`). Read only: it writes no binary content (R0-13, Q12).
 
 ### Knows
 
-`models`.
+`models`, `runtime_settings` (`load_runtime_settings`, owner 2026-11-09).
 
 ### Must not own
 
@@ -1721,7 +1723,8 @@ A30's environment part: load, normalize, default and validate the closed
 table `config.runtime_environment_variables` into `RuntimeSettings` at each
 call of `load_runtime_settings` — once at start by `runtime` and by the
 bootstrap command, and again at each Registry call by `registry_gateway`
-(owner 2026-11-09) — including the startup consistency of the binary bounds (A14). Factory
+and at each binary read by the emitted `binary_storage` (owner 2026-11-09)
+— including the startup consistency of the binary bounds (A14). Factory
 `38626cc7be12`.
 
 ### Knows

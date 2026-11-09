@@ -2192,7 +2192,9 @@ The former "Candidate constants and catalogs (→ State 2)", kept:
   principal transitions are data-provider constants; the Registry failure
   kinds are the enumeration `RegistryFailureKind` alone; the Registry URL and
   the binary read limit stay environment values, the URL read into the
-  `registry_base_url` field of `RuntimeSettings` (owner 2026-11-09, A30).
+  `registry_base_url` field of `RuntimeSettings` (owner 2026-11-09, A30),
+  the binary storage root and read limit into its `binary_storage_root` and
+  `binary_max_read_bytes` fields (owner 2026-11-09, A14, A30).
 
 ## Data-provider enumerations and row models (2026-11-08)
 
