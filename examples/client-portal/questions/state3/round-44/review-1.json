@@ -1,0 +1,134 @@
+{
+ "open_points": [
+  {
+   "subject": "30_modules.md:Dependency direction",
+   "kind": "contradictory_authority",
+   "text": "Each module's `Knows` section names exactly the modules it imports (the\naccepted `imports.module_internal`, plus the one edge `api` → `api_irregular`\nof the running code). Lines of the list are layers, not an\nassertion that every module imports every earlier one. `Knows` is the\nmodule-level edge only: which symbols a consumer imports from each provider\nis the imports closure (`65_imports.json`, projected into\n`imports.module_internal`, SPEC_STANDARD §7), the one authoritative\nconsumer → provider → symbols map.",
+   "question": "Is `api` → `api_irregular` declared in the authoritative `imports.module_internal` map, or is it an exception that exists only in running code?",
+   "options": [
+    "Declare the edge and its exact symbols in `imports.module_internal`.",
+    "Keep it outside `imports.module_internal` as a special running-code edge.",
+    "Remove the direct import and route the dependency through another module."
+   ],
+   "default_guess": "Declare the minimal `api` → `api_irregular` symbol surface in `imports.module_internal` and remove the exception.",
+   "witness": {
+    "initial": "Strict import projection is enabled for `api`.",
+    "events": [
+     "The projector builds `api` from the declared `imports.module_internal`.",
+     "`api` reaches the viewer-boundary operation currently supplied by `api_irregular`."
+    ],
+    "outcomes": [
+     "Treating `imports.module_internal` as authoritative imports the declared `api_irregular` symbols and the module loads.",
+     "Treating the running-code edge as an undeclared exception leaves the symbols unavailable and the generated `api` module is rejected or fails to load."
+    ],
+    "observer": "The build and any caller of a viewer route through `api`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Facts several modules touch, and their one owner",
+   "kind": "configuration_lifecycle",
+   "text": "Environment values are read once, by `runtime_settings`,\n  into `RuntimeSettings`; other modules read `config.*` constants or the\n  settings they are handed, never the environment. `registry_gateway`\n  takes the Registry URL from the `registry_base_url` field of the\n  `RuntimeSettings` that `load_runtime_settings` returns, which it calls",
+   "question": "Does `registry_gateway` call `load_runtime_settings` itself, or is it handed the already-loaded `RuntimeSettings` or URL by the composition root; and if it calls the loader, what guarantees the environment is read only once at startup?",
+   "options": [
+    "`runtime` calls `load_runtime_settings` once and injects `RuntimeSettings` into `registry_gateway`.",
+    "`registry_gateway` calls an idempotent cached loader whose first call occurs during startup.",
+    "Each gateway operation calls `load_runtime_settings` and rereads the environment."
+   ],
+   "default_guess": "Load once in `runtime` and inject the immutable `RuntimeSettings` into the gateway.",
+   "witness": {
+    "initial": "The service starts with `REGISTRY_BASE_URL=https://registry-a.example`, then a Registry operation is requested.",
+    "events": [
+     "The composition root obtains runtime settings to create the application.",
+     "`registry_gateway` needs the Registry URL for the operation."
+    ],
+    "outcomes": [
+     "With injection, the gateway uses the one startup value and performs no second settings load.",
+     "With a direct uncached call, the gateway reads the environment again and may use a different value or fail after startup."
+    ],
+    "observer": "The Registry server receiving the request and the portal caller receiving its result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Facts several modules touch, and their one owner",
+   "kind": "post_start_configuration_consistency",
+   "text": "One exception is kept from the\n  running service: the emitted `binary_storage` reads `BINARY_STORAGE_ROOT`\n  and `BINARY_MAX_READ_BYTES` at each binary read, as its backend IR names\n  them, refusing that read when a value is missing or unusable; both are\n  rows of the start-up table too",
+   "question": "After startup validation, if either environment value changes, must a binary read use the startup-validated value, use and revalidate the current value including its relationship to `max_binary_response_bytes`, or refuse because configuration changed?",
+   "options": [
+    "Freeze both startup-validated values and pass them to `binary_storage`.",
+    "Reread both values and repeat all validation, including the read-bound versus response-bound consistency check, on every read.",
+    "Reread them but validate only that each current value is individually usable.",
+    "Detect any change from startup and refuse the read."
+   ],
+   "default_guess": "Freeze the startup-validated values; if per-read rereading is required, repeat the full cross-bound validation before reading.",
+   "witness": {
+    "initial": "Startup succeeds with `BINARY_MAX_READ_BYTES` below `max_binary_response_bytes`.",
+    "events": [
+     "After startup, the process environment value of `BINARY_MAX_READ_BYTES` is changed to a larger positive value above the response bound.",
+     "A user requests an authorized binary whose size lies between the old response bound and the new read bound."
+    ],
+    "outcomes": [
+     "Using the startup value or repeating the consistency check refuses the binary before response emission.",
+     "Using the new individually valid read bound reads content that the startup consistency invariant was meant to exclude, leaving later code to reject it or emit an oversize response."
+    ],
+    "observer": "The requesting user and the binary-response boundary."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`data_provider`",
+   "kind": "contradictory_ownership",
+   "text": "The typed constants of `70_data_provider_closure.json`, the one home of each\nvalue generated code reads (SPEC_STANDARD 6.10 version 2, 15.3.1): the money\nvalues and work-balance signs (A9), the Registry variable, paths and timeout\n(A6, A30)",
+   "question": "What does `the Registry variable` mean after `REGISTRY_BASE_URL_VARIABLE` was removed and the Registry URL became the `registry_base_url` field of `RuntimeSettings`; does `data_provider` still own any Registry environment-variable name?",
+   "options": [
+    "No Registry environment-variable constant remains; `runtime_settings` and the startup table alone own the name and value.",
+    "`data_provider` still exports `REGISTRY_BASE_URL_VARIABLE` while the URL value comes from `RuntimeSettings`.",
+    "The phrase refers only to Registry path and timeout constants and must be rewritten accordingly."
+   ],
+   "default_guess": "Remove `the Registry variable` from `data_provider` ownership and state that it owns only the Registry path segments and timeout.",
+   "witness": {
+    "initial": "Generated gateway code is being assembled after the 2026-11-09 URL change.",
+    "events": [
+     "The assembler reads the `data_provider` ownership statement.",
+     "It wires the gateway's Registry URL source."
+    ],
+    "outcomes": [
+     "One implementation imports a retained `REGISTRY_BASE_URL_VARIABLE` and uses it to locate the environment value.",
+     "Another imports no such constant and reads `RuntimeSettings.registry_base_url` exclusively."
+    ],
+    "observer": "The strict-import build and deployments whose Registry URL is configured."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "missing_export",
+   "text": "REGISTRY_CONTEXT_SEGMENT\nREGISTRY_PROJECTS_PATH\nREGISTRY_TIMEOUT_SECONDS\nREGISTRY_VALIDATE_SEGMENT",
+   "question": "Where is the earlier-state constant `REGISTRY_ACTIVE_SEGMENT`, required to form the decided `projects/active` endpoint, owned and exported in State 3, and must `registry_gateway` import it?",
+   "options": [
+    "Add `REGISTRY_ACTIVE_SEGMENT` to `data_provider`'s public surface and to the gateway's minimal import surface.",
+    "Make `REGISTRY_PROJECTS_PATH` contain the complete `projects/active` path and remove the separate-segment decision.",
+    "Have `registry_gateway` hard-code the active segment.",
+    "Use the plain `projects` endpoint despite the earlier decision."
+   ],
+   "default_guess": "Export `REGISTRY_ACTIVE_SEGMENT` from `data_provider` and declare it in the gateway's minimal imports.",
+   "witness": {
+    "initial": "The Registry contains at least one active project, and its plain `projects` response has the different `ProjectSummary` shape described by the earlier state.",
+    "events": [
+     "`registry_gateway.list_active_projects` constructs its request path from the State 3 public constants.",
+     "The gateway requests and decodes the response."
+    ],
+    "outcomes": [
+     "Adding and joining `REGISTRY_ACTIVE_SEGMENT` calls `projects/active` and decodes `ProjectReference` values.",
+     "Using only the listed path constants calls `projects` or hard-codes an unowned segment; the former receives the wrong shape and fails strict decoding."
+    ],
+    "observer": "The Registry and callers listing active projects."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"30_modules.md:Dependency direction\",\"kind\":\"contradictory_authority\",\"text\":\"Each module's `Knows` section names exactly the modules it imports (the\\naccepted `imports.module_internal`, plus the one edge `api` → `api_irregular`\\nof the running code). Lines of the list are layers, not an\\nassertion that every module imports every earlier one. `Knows` is the\\nmodule-level edge only: which symbols a consumer imports from each provider\\nis the imports closure (`65_imports.json`, projected into\\n`imports.module_internal`, SPEC_STANDARD §7), the one authoritative\\nconsumer → provider → symbols map.\",\"question\":\"Is `api` → `api_irregular` declared in the authoritative `imports.module_internal` map, or is it an exception that exists only in running code?\",\"options\":[\"Declare the edge and its exact symbols in `imports.module_internal`.\",\"Keep it outside `imports.module_internal` as a special running-code edge.\",\"Remove the direct import and route the dependency through another module.\"],\"default_guess\":\"Declare the minimal `api` → `api_irregular` symbol surface in `imports.module_internal` and remove the exception.\",\"witness\":{\"initial\":\"Strict import projection is enabled for `api`.\",\"events\":[\"The projector builds `api` from the declared `imports.module_internal`.\",\"`api` reaches the viewer-boundary operation currently supplied by `api_irregular`.\"],\"outcomes\":[\"Treating `imports.module_internal` as authoritative imports the declared `api_irregular` symbols and the module loads.\",\"Treating the running-code edge as an undeclared exception leaves the symbols unavailable and the generated `api` module is rejected or fails to load.\"],\"observer\":\"The build and any caller of a viewer route through `api`.\"}},{\"subject\":\"30_modules.md:Facts several modules touch, and their one owner\",\"kind\":\"configuration_lifecycle\",\"text\":\"Environment values are read once, by `runtime_settings`,\\n  into `RuntimeSettings`; other modules read `config.*` constants or the\\n  settings they are handed, never the environment. `registry_gateway`\\n  takes the Registry URL from the `registry_base_url` field of the\\n  `RuntimeSettings` that `load_runtime_settings` returns, which it calls\",\"question\":\"Does `registry_gateway` call `load_runtime_settings` itself, or is it handed the already-loaded `RuntimeSettings` or URL by the composition root; and if it calls the loader, what guarantees the environment is read only once at startup?\",\"options\":[\"`runtime` calls `load_runtime_settings` once and injects `RuntimeSettings` into `registry_gateway`.\",\"`registry_gateway` calls an idempotent cached loader whose first call occurs during startup.\",\"Each gateway operation calls `load_runtime_settings` and rereads the environment.\"],\"default_guess\":\"Load once in `runtime` and inject the immutable `RuntimeSettings` into the gateway.\",\"witness\":{\"initial\":\"The service starts with `REGISTRY_BASE_URL=https://registry-a.example`, then a Registry operation is requested.\",\"events\":[\"The composition root obtains runtime settings to create the application.\",\"`registry_gateway` needs the Registry URL for the operation.\"],\"outcomes\":[\"With injection, the gateway uses the one startup value and performs no second settings load.\",\"With a direct uncached call, the gateway reads the environment again and may use a different value or fail after startup.\"],\"observer\":\"The Registry server receiving the request and the portal caller receiving its result.\"}},{\"subject\":\"30_modules.md:Facts several modules touch, and their one owner\",\"kind\":\"post_start_configuration_consistency\",\"text\":\"One exception is kept from the\\n  running service: the emitted `binary_storage` reads `BINARY_STORAGE_ROOT`\\n  and `BINARY_MAX_READ_BYTES` at each binary read, as its backend IR names\\n  them, refusing that read when a value is missing or unusable; both are\\n  rows of the start-up table too\",\"question\":\"After startup validation, if either environment value changes, must a binary read use the startup-validated value, use and revalidate the current value including its relationship to `max_binary_response_bytes`, or refuse because configuration changed?\",\"options\":[\"Freeze both startup-validated values and pass them to `binary_storage`.\",\"Reread both values and repeat all validation, including the read-bound versus response-bound consistency check, on every read.\",\"Reread them but validate only that each current value is individually usable.\",\"Detect any change from startup and refuse the read.\"],\"default_guess\":\"Freeze the startup-validated values; if per-read rereading is required, repeat the full cross-bound validation before reading.\",\"witness\":{\"initial\":\"Startup succeeds with `BINARY_MAX_READ_BYTES` below `max_binary_response_bytes`.\",\"events\":[\"After startup, the process environment value of `BINARY_MAX_READ_BYTES` is changed to a larger positive value above the response bound.\",\"A user requests an authorized binary whose size lies between the old response bound and the new read bound.\"],\"outcomes\":[\"Using the startup value or repeating the consistency check refuses the binary before response emission.\",\"Using the new individually valid read bound reads content that the startup consistency invariant was meant to exclude, leaving later code to reject it or emit an oversize response.\"],\"observer\":\"The requesting user and the binary-response boundary.\"}},{\"subject\":\"30_modules.md:`data_provider`\",\"kind\":\"contradictory_ownership\",\"text\":\"The typed constants of `70_data_provider_closure.json`, the one home of each\\nvalue generated code reads (SPEC_STANDARD 6.10 version 2, 15.3.1): the money\\nvalues and work-balance signs (A9), the Registry variable, paths and timeout\\n(A6, A30)\",\"question\":\"What does `the Registry variable` mean after `REGISTRY_BASE_URL_VARIABLE` was removed and the Registry URL became the `registry_base_url` field of `RuntimeSettings`; does `data_provider` still own any Registry environment-variable name?\",\"options\":[\"No Registry environment-variable constant remains; `runtime_settings` and the startup table alone own the name and value.\",\"`data_provider` still exports `REGISTRY_BASE_URL_VARIABLE` while the URL value comes from `RuntimeSettings`.\",\"The phrase refers only to Registry path and timeout constants and must be rewritten accordingly.\"],\"default_guess\":\"Remove `the Registry variable` from `data_provider` ownership and state that it owns only the Registry path segments and timeout.\",\"witness\":{\"initial\":\"Generated gateway code is being assembled after the 2026-11-09 URL change.\",\"events\":[\"The assembler reads the `data_provider` ownership statement.\",\"It wires the gateway's Registry URL source.\"],\"outcomes\":[\"One implementation imports a retained `REGISTRY_BASE_URL_VARIABLE` and uses it to locate the environment value.\",\"Another imports no such constant and reads `RuntimeSettings.registry_base_url` exclusively.\"],\"observer\":\"The strict-import build and deployments whose Registry URL is configured.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"missing_export\",\"text\":\"REGISTRY_CONTEXT_SEGMENT\\nREGISTRY_PROJECTS_PATH\\nREGISTRY_TIMEOUT_SECONDS\\nREGISTRY_VALIDATE_SEGMENT\",\"question\":\"Where is the earlier-state constant `REGISTRY_ACTIVE_SEGMENT`, required to form the decided `projects/active` endpoint, owned and exported in State 3, and must `registry_gateway` import it?\",\"options\":[\"Add `REGISTRY_ACTIVE_SEGMENT` to `data_provider`'s public surface and to the gateway's minimal import surface.\",\"Make `REGISTRY_PROJECTS_PATH` contain the complete `projects/active` path and remove the separate-segment decision.\",\"Have `registry_gateway` hard-code the active segment.\",\"Use the plain `projects` endpoint despite the earlier decision.\"],\"default_guess\":\"Export `REGISTRY_ACTIVE_SEGMENT` from `data_provider` and declare it in the gateway's minimal imports.\",\"witness\":{\"initial\":\"The Registry contains at least one active project, and its plain `projects` response has the different `ProjectSummary` shape described by the earlier state.\",\"events\":[\"`registry_gateway.list_active_projects` constructs its request path from the State 3 public constants.\",\"The gateway requests and decodes the response.\"],\"outcomes\":[\"Adding and joining `REGISTRY_ACTIVE_SEGMENT` calls `projects/active` and decodes `ProjectReference` values.\",\"Using only the listed path constants calls `projects` or hard-codes an unowned segment; the former receives the wrong shape and fails strict decoding.\"],\"observer\":\"The Registry and callers listing active projects.\"}}]}",
+ "set_aside": []
+}

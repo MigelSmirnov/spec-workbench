@@ -1,0 +1,119 @@
+{
+ "open_points": [
+  {
+   "subject": "api → api_irregular import",
+   "kind": "standard_violation",
+   "text": "Each module's `Knows` section names exactly the modules it imports (the\naccepted `imports.module_internal`, plus the one edge `api` → `api_irregular`\nof the running code).",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Declare the `api` → `api_irregular` symbols in `imports.module_internal`, or remove the runtime import, so no internal edge exists outside the authoritative map.",
+   "unit": "?"
+  },
+  {
+   "subject": "Registry URL delivery to registry_gateway",
+   "kind": "contradictory dependency lifecycle",
+   "text": "`registry_gateway`\n  takes the Registry URL from the `registry_base_url` field of the\n  `RuntimeSettings` that `load_runtime_settings` returns, which it calls",
+   "question": "Who calls `load_runtime_settings`, when is it called, and how does the resulting `RuntimeSettings` reach `registry_gateway` without contradicting the rule that environment values are read once at startup?",
+   "options": [
+    "`runtime` calls it once and injects `RuntimeSettings` into the gateway",
+    "`registry_gateway` calls it once during startup and retains the result",
+    "Each gateway operation calls it, rereading the environment"
+   ],
+   "default_guess": "Have `runtime` call it once at startup and inject the resulting settings; then `registry_gateway` should depend on the `RuntimeSettings` model rather than on `load_runtime_settings`.",
+   "witness": {
+    "initial": "The service starts with REGISTRY_BASE_URL pointing to Registry A, then the process environment is changed to Registry B without restarting.",
+    "events": [
+     "`runtime` starts the service and startup configuration succeeds.",
+     "A caller invokes `list_active_projects` after the environment change.",
+     "`registry_gateway` obtains the Registry URL according to its implementation's reading of “which it calls”."
+    ],
+    "outcomes": [
+     "The gateway uses the startup `RuntimeSettings` and calls Registry A.",
+     "The gateway calls `load_runtime_settings` again and calls Registry B."
+    ],
+    "observer": "The caller and the operators of Registries A and B see different projects and requests."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "REGISTRY_BASE_URL_VARIABLE ownership",
+   "kind": "ownership contradiction",
+   "text": "the Registry variable, paths and timeout\n(A6, A30)",
+   "question": "Does `data_provider` still own a Registry environment-variable-name constant, or does `runtime_settings` exclusively own the `REGISTRY_BASE_URL` row now that `REGISTRY_BASE_URL_VARIABLE` is removed?",
+   "options": [
+    "Only `runtime_settings` owns the environment row; `data_provider` owns only Registry paths and timeout",
+    "`data_provider` still exports a constant naming `REGISTRY_BASE_URL`",
+    "Both modules repeat the variable name"
+   ],
+   "default_guess": "Remove “the Registry variable” from `data_provider` ownership and keep the environment row solely under `runtime_settings`.",
+   "witness": {
+    "initial": "A generator implements Registry configuration after the stated removal of `REGISTRY_BASE_URL_VARIABLE`.",
+    "events": [
+     "It reads the `data_provider` ownership prose saying that module owns the Registry variable.",
+     "It reads the candidate exports, where `REGISTRY_BASE_URL_VARIABLE` is absent.",
+     "It reads A30, which assigns the environment row and resulting field to `runtime_settings`."
+    ],
+    "outcomes": [
+     "The generator recreates and imports `REGISTRY_BASE_URL_VARIABLE` from `data_provider`.",
+     "The generator uses only `RuntimeSettings.registry_base_url` and creates no such constant."
+    ],
+    "observer": "The import projector and maintainers see different public APIs and dependency graphs."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "REGISTRY_ACTIVE_SEGMENT export",
+   "kind": "missing dependency symbol",
+   "text": "REGISTRY_CONTEXT_SEGMENT\nREGISTRY_PROJECTS_PATH\nREGISTRY_TIMEOUT_SECONDS\nREGISTRY_VALIDATE_SEGMENT",
+   "question": "Is `REGISTRY_ACTIVE_SEGMENT` a public `data_provider` constant that `registry_gateway` must import, or must the gateway obtain the `projects/active` path some other way?",
+   "options": [
+    "Add and import `REGISTRY_ACTIVE_SEGMENT`",
+    "Make `REGISTRY_PROJECTS_PATH` contain the complete `projects/active` path",
+    "Hard-code `active` inside `registry_gateway`"
+   ],
+   "default_guess": "Add `REGISTRY_ACTIVE_SEGMENT` and have `registry_gateway` join it to `REGISTRY_PROJECTS_PATH`, as A6 and A30 describe.",
+   "witness": {
+    "initial": "The Registry's plain `projects` endpoint returns `ProjectSummary`, while `projects/active` returns the shape decoded as `ProjectReference`.",
+    "events": [
+     "A caller invokes `list_active_projects`.",
+     "The gateway constructs the request path from the State 3 public capabilities."
+    ],
+    "outcomes": [
+     "With an active-segment constant, it requests `projects/active` and decodes the result.",
+     "Without that export, an implementer uses `projects` or hard-codes a path, producing a schema failure or an undeclared duplicated value."
+    ],
+    "observer": "The caller sees either an active-project list or `schema_mismatch`; the import checker sees different dependencies."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "credential_security entropy dependency",
+   "kind": "unclear dependency direction",
+   "text": "### Knows\n\n`models`.",
+   "question": "Which module reads `CREDENTIAL_SECRET_BYTES`, and how does the configured entropy reach `credential_security.issue_verification_secret`?",
+   "options": [
+    "`credential_security` imports `CREDENTIAL_SECRET_BYTES` from `data_provider`",
+    "Each issuing identity module imports the constant and passes it as a parameter",
+    "The deterministic credential-security backend embeds the value despite A30 calling it a data-provider constant"
+   ],
+   "default_guess": "Make `credential_security` know `data_provider` and import `CREDENTIAL_SECRET_BYTES` directly, because it owns random-secret generation and the constant is the release value governing that mechanism.",
+   "witness": {
+    "initial": "A release changes `CREDENTIAL_SECRET_BYTES` while viewer, staff and service secret issuance remain enabled.",
+    "events": [
+     "A caller asks an identity module to issue a credential or session secret.",
+     "The identity module calls `issue_verification_secret`.",
+     "The implementation chooses where the entropy value is read because State 3 names no path from its owner to `credential_security`."
+    ],
+    "outcomes": [
+     "`credential_security` imports the new constant and every issued secret uses the new entropy.",
+     "A caller passes a value or the backend embeds one, allowing different issuing paths to retain an old or duplicated value."
+    ],
+    "observer": "Security verification and maintainers inspecting issued-secret lengths see the difference."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"api → api_irregular import\",\"kind\":\"standard_violation\",\"text\":\"Each module's `Knows` section names exactly the modules it imports (the\\naccepted `imports.module_internal`, plus the one edge `api` → `api_irregular`\\nof the running code).\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Declare the `api` → `api_irregular` symbols in `imports.module_internal`, or remove the runtime import, so no internal edge exists outside the authoritative map.\"},{\"subject\":\"Registry URL delivery to registry_gateway\",\"kind\":\"contradictory dependency lifecycle\",\"text\":\"`registry_gateway`\\n  takes the Registry URL from the `registry_base_url` field of the\\n  `RuntimeSettings` that `load_runtime_settings` returns, which it calls\",\"question\":\"Who calls `load_runtime_settings`, when is it called, and how does the resulting `RuntimeSettings` reach `registry_gateway` without contradicting the rule that environment values are read once at startup?\",\"options\":[\"`runtime` calls it once and injects `RuntimeSettings` into the gateway\",\"`registry_gateway` calls it once during startup and retains the result\",\"Each gateway operation calls it, rereading the environment\"],\"default_guess\":\"Have `runtime` call it once at startup and inject the resulting settings; then `registry_gateway` should depend on the `RuntimeSettings` model rather than on `load_runtime_settings`.\",\"witness\":{\"initial\":\"The service starts with REGISTRY_BASE_URL pointing to Registry A, then the process environment is changed to Registry B without restarting.\",\"events\":[\"`runtime` starts the service and startup configuration succeeds.\",\"A caller invokes `list_active_projects` after the environment change.\",\"`registry_gateway` obtains the Registry URL according to its implementation's reading of “which it calls”.\"],\"outcomes\":[\"The gateway uses the startup `RuntimeSettings` and calls Registry A.\",\"The gateway calls `load_runtime_settings` again and calls Registry B.\"],\"observer\":\"The caller and the operators of Registries A and B see different projects and requests.\"}},{\"subject\":\"REGISTRY_BASE_URL_VARIABLE ownership\",\"kind\":\"ownership contradiction\",\"text\":\"the Registry variable, paths and timeout\\n(A6, A30)\",\"question\":\"Does `data_provider` still own a Registry environment-variable-name constant, or does `runtime_settings` exclusively own the `REGISTRY_BASE_URL` row now that `REGISTRY_BASE_URL_VARIABLE` is removed?\",\"options\":[\"Only `runtime_settings` owns the environment row; `data_provider` owns only Registry paths and timeout\",\"`data_provider` still exports a constant naming `REGISTRY_BASE_URL`\",\"Both modules repeat the variable name\"],\"default_guess\":\"Remove “the Registry variable” from `data_provider` ownership and keep the environment row solely under `runtime_settings`.\",\"witness\":{\"initial\":\"A generator implements Registry configuration after the stated removal of `REGISTRY_BASE_URL_VARIABLE`.\",\"events\":[\"It reads the `data_provider` ownership prose saying that module owns the Registry variable.\",\"It reads the candidate exports, where `REGISTRY_BASE_URL_VARIABLE` is absent.\",\"It reads A30, which assigns the environment row and resulting field to `runtime_settings`.\"],\"outcomes\":[\"The generator recreates and imports `REGISTRY_BASE_URL_VARIABLE` from `data_provider`.\",\"The generator uses only `RuntimeSettings.registry_base_url` and creates no such constant.\"],\"observer\":\"The import projector and maintainers see different public APIs and dependency graphs.\"}},{\"subject\":\"REGISTRY_ACTIVE_SEGMENT export\",\"kind\":\"missing dependency symbol\",\"text\":\"REGISTRY_CONTEXT_SEGMENT\\nREGISTRY_PROJECTS_PATH\\nREGISTRY_TIMEOUT_SECONDS\\nREGISTRY_VALIDATE_SEGMENT\",\"question\":\"Is `REGISTRY_ACTIVE_SEGMENT` a public `data_provider` constant that `registry_gateway` must import, or must the gateway obtain the `projects/active` path some other way?\",\"options\":[\"Add and import `REGISTRY_ACTIVE_SEGMENT`\",\"Make `REGISTRY_PROJECTS_PATH` contain the complete `projects/active` path\",\"Hard-code `active` inside `registry_gateway`\"],\"default_guess\":\"Add `REGISTRY_ACTIVE_SEGMENT` and have `registry_gateway` join it to `REGISTRY_PROJECTS_PATH`, as A6 and A30 describe.\",\"witness\":{\"initial\":\"The Registry's plain `projects` endpoint returns `ProjectSummary`, while `projects/active` returns the shape decoded as `ProjectReference`.\",\"events\":[\"A caller invokes `list_active_projects`.\",\"The gateway constructs the request path from the State 3 public capabilities.\"],\"outcomes\":[\"With an active-segment constant, it requests `projects/active` and decodes the result.\",\"Without that export, an implementer uses `projects` or hard-codes a path, producing a schema failure or an undeclared duplicated value.\"],\"observer\":\"The caller sees either an active-project list or `schema_mismatch`; the import checker sees different dependencies.\"}},{\"subject\":\"credential_security entropy dependency\",\"kind\":\"unclear dependency direction\",\"text\":\"### Knows\\n\\n`models`.\",\"question\":\"Which module reads `CREDENTIAL_SECRET_BYTES`, and how does the configured entropy reach `credential_security.issue_verification_secret`?\",\"options\":[\"`credential_security` imports `CREDENTIAL_SECRET_BYTES` from `data_provider`\",\"Each issuing identity module imports the constant and passes it as a parameter\",\"The deterministic credential-security backend embeds the value despite A30 calling it a data-provider constant\"],\"default_guess\":\"Make `credential_security` know `data_provider` and import `CREDENTIAL_SECRET_BYTES` directly, because it owns random-secret generation and the constant is the release value governing that mechanism.\",\"witness\":{\"initial\":\"A release changes `CREDENTIAL_SECRET_BYTES` while viewer, staff and service secret issuance remain enabled.\",\"events\":[\"A caller asks an identity module to issue a credential or session secret.\",\"The identity module calls `issue_verification_secret`.\",\"The implementation chooses where the entropy value is read because State 3 names no path from its owner to `credential_security`.\"],\"outcomes\":[\"`credential_security` imports the new constant and every issued secret uses the new entropy.\",\"A caller passes a value or the backend embeds one, allowing different issuing paths to retain an old or duplicated value.\"],\"observer\":\"Security verification and maintainers inspecting issued-secret lengths see the difference.\"}}]}",
+ "set_aside": []
+}

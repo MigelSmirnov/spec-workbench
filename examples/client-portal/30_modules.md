@@ -127,8 +127,9 @@ staff_bootstrap_cli
 ```
 
 Each module's `Knows` section names exactly the modules it imports (the
-accepted `imports.module_internal`, plus the one edge `api` → `api_irregular`
-of the running code). Lines of the list are layers, not an
+`imports.module_internal` the imports closure projects, which since
+2026-11-08 carries the edge `api` → `api_irregular` of the running code as
+well). Lines of the list are layers, not an
 assertion that every module imports every earlier one. `Knows` is the
 module-level edge only: which symbols a consumer imports from each provider
 is the imports closure (`65_imports.json`, projected into
@@ -180,12 +181,14 @@ consumer → provider → symbols map.
   that needs the current instant takes one wall reading from it and reuses
   it; the transport guard takes the elapsed reading for the viewer-entry
   window from it. No other module reads a host clock.
-- **Configuration.** Environment values are read once, by `runtime_settings`,
-  into `RuntimeSettings`; other modules read `config.*` constants or the
+- **Configuration.** Environment values are read only by `runtime_settings`,
+  into `RuntimeSettings`; other modules import data-provider constants or read the
   settings they are handed, never the environment. `registry_gateway`
   takes the Registry URL from the `registry_base_url` field of the
-  `RuntimeSettings` that `load_runtime_settings` returns, which it calls
-  (A6, A30; owner 2026-11-09: the Registry URL is read only through
+  `RuntimeSettings` that `load_runtime_settings` returns, which it calls at
+  each Registry call: the call reads and validates the environment again
+  through `runtime_settings`, the same environment the start validated, and
+  no settings object is handed to the gateway or cached by it (A6, A30; owner 2026-11-09: the Registry URL is read only through
   `runtime_settings`, SPEC_STANDARD 6.11). One exception is kept from the
   running service: the emitted `binary_storage` reads `BINARY_STORAGE_ROOT`
   and `BINARY_MAX_READ_BYTES` at each binary read, as its backend IR names
@@ -263,7 +266,7 @@ authorization, cross-record uniqueness or any lifecycle transition.
 
 The typed constants of `70_data_provider_closure.json`, the one home of each
 value generated code reads (SPEC_STANDARD 6.10 version 2, 15.3.1): the money
-values and work-balance signs (A9), the Registry variable, paths and timeout
+values and work-balance signs (A9), the Registry paths and timeout
 (A6, A30), the session lifetimes and credential entropy (A30), the audit
 significance (A13), the capability sets (A2), the staff and principal
 transitions (A3), the password bounds (A16), the supported contract versions
@@ -1648,7 +1651,8 @@ version and the administrator project list are the accepted ones (Factory
 `photo_management`, `derived_views`, `portal_store`,
 `financial_policy`, `registry_gateway`, `api_irregular` (the running router
 mounts the seven viewer endpoints, Factory code `api/router.py` 22; the
-accepted `imports.module_internal` lacks this edge, see `SOURCE.md`).
+accepted spec `459ac96c` lacked this edge, `SOURCE.md`; the imports closure
+now carries it in `imports.module_internal`).
 
 ### Must not own
 
