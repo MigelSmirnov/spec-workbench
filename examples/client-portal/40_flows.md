@@ -91,8 +91,9 @@ creates every repository schema when a transaction begins. Crossing models:
 1. `capability:runtime_settings.load_runtime_settings` reads and validates the
    environment variables of A30; a missing, malformed or inconsistent one (a
    wildcard host or origin, binary bounds out of order) stops the start
-   before any request is served. The Registry endpoint is not one of them:
-   the service starts without it (A6).
+   before any request is served. The Registry URL is one of them since the
+   owner's decision of 2026-11-09 (A6, A30): the service does not start
+   without it.
 2. `capability:runtime.create_runtime_app` builds one `PortalStore` from the
    settings, builds the inner application with
    `capability:api.create_app`, installs

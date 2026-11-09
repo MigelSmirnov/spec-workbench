@@ -1,5 +1,37 @@
 # Что меняется в спецификации клиентского портала
 
+## Registry URL read through runtime_settings (2026-11-09; не экспортировано)
+
+**Изменение поведения.** Решение владельца 2026-11-09 (одобрено): адрес
+Registry читается только через `runtime_settings` (SPEC_STANDARD §6.11:
+второго читателя окружения не бывает).
+
+- **Было (принятая спека `018b2e2e`, работающий сервис):** сервис стартует
+  без `REGISTRY_BASE_URL`; шлюз `registry_gateway` сам читает переменную при
+  каждом запросе к Registry, и при её отсутствии каждый такой запрос падает
+  ошибкой `RegistryBoundaryError` с видом `transport_error` (A6, прежний
+  текст A30; код `adapters/registry_gateway.py` `_registry_url`).
+- **Стало:** `REGISTRY_BASE_URL` — обязательная строка таблицы запуска
+  `config.runtime_environment_variables`, читается в поле
+  `RuntimeSettings.registry_base_url`. Отсутствующее или пустое значение
+  останавливает старт сервиса (R0-10), а не отдельный запрос. Шлюз берёт
+  адрес из настроек, которые возвращает `load_runtime_settings`, и сам
+  окружение не читает. Неподходящий адрес (не http/https, с userinfo)
+  по-прежнему отклоняется при запросе как `transport_error`.
+- **Следствие для команды `staff_bootstrap_cli`:** она тоже читает настройки
+  через `load_runtime_settings`, поэтому без `REGISTRY_BASE_URL` теперь не
+  запускается и она.
+- **Структура:** константа поставщика данных `REGISTRY_BASE_URL_VARIABLE`
+  удалена; `runtime_settings` стоит в `module_order` перед
+  `registry_gateway`; импорт `load_runtime_settings` в `_registry_url`
+  (`65_imports.json`, `code_outdated` против кода `459ac96c`).
+
+Происхождение: владелец 2026-11-09; A6, A30 (`02_rules.md`), State 3
+«Configuration» и порядок модулей (`30_modules.md`), State 4
+`flow:start_service_and_answer_health` (`40_flows.md`), State 5 `load_runtime_settings` и
+`list_active_projects` (`50_public_apis.md`), ноты `registry_gateway`
+(`80_notes.md`), `SOURCE.md` «Data placement»; в State 2 раунд r101 T14.
+
 ## Построение записей эмиттером `record_builders` (2026-11-08/09; не экспортировано)
 
 Каждую запись, которую модуль, написанный моделью, строит из входов, теперь

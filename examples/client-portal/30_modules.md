@@ -90,13 +90,17 @@ dependency pins and their check, is a deployment process.
 ## Dependency direction
 
 The portal is one process. The order is the accepted `module_order`; a module
-may know only modules on earlier lines, never one on a later line:
+may know only modules on earlier lines, never one on a later line. One move
+against it: `runtime_settings`, which knows only `models`, stands before
+`registry_gateway` since the owner's decision of 2026-11-09, because the
+gateway takes the Registry URL from it (A30):
 
 ```text
 models
 data_provider
 record_builders
 system_clock
+runtime_settings
 credential_security, financial_policy
 audit_repository, project_tracking_repository, project_section_repository,
   budget_repository, snapshot_import_repository, expense_repository,
@@ -117,7 +121,7 @@ project_tracking, photo_management
 derived_views
 api_irregular
 api
-transport_guard, runtime_settings
+transport_guard
 runtime
 staff_bootstrap_cli
 ```
@@ -178,12 +182,15 @@ consumer → provider → symbols map.
   window from it. No other module reads a host clock.
 - **Configuration.** Environment values are read once, by `runtime_settings`,
   into `RuntimeSettings`; other modules read `config.*` constants or the
-  settings they are handed, never the environment, with two exceptions
-  kept from the running service: `registry_gateway` reads
-  `REGISTRY_BASE_URL` at each Registry call (A6, A30) and `binary_storage`
-  reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` at each binary
-  read, each refusing that call when its value is missing or unusable
-  (Factory code `adapters/registry_gateway.py` `_registry_url`,
+  settings they are handed, never the environment. `registry_gateway`
+  takes the Registry URL from the `registry_base_url` field of the
+  `RuntimeSettings` that `load_runtime_settings` returns, which it calls
+  (A6, A30; owner 2026-11-09: the Registry URL is read only through
+  `runtime_settings`, SPEC_STANDARD 6.11). One exception is kept from the
+  running service: the emitted `binary_storage` reads `BINARY_STORAGE_ROOT`
+  and `BINARY_MAX_READ_BYTES` at each binary read, as its backend IR names
+  them, refusing that read when a value is missing or unusable; both are
+  rows of the start-up table too (Factory code
   `adapters/binary_storage.py`; owner 2026-11-06: current service
   behaviour accepted; technical decisions delegated).
 
@@ -306,7 +313,6 @@ NO_STORE_PATHS
 PASSWORD_MAX_CODEPOINTS
 PASSWORD_MIN_CODEPOINTS
 PRINCIPAL_STATUS_TRANSITIONS
-REGISTRY_BASE_URL_VARIABLE
 REGISTRY_CONTEXT_SEGMENT
 REGISTRY_PROJECTS_PATH
 REGISTRY_TIMEOUT_SECONDS
@@ -992,7 +998,7 @@ the `kind` field of `RegistryBoundaryError` (A26).
 
 ### Knows
 
-`models`, `data_provider`.
+`models`, `data_provider`, `runtime_settings` (the Registry URL, A30).
 
 ### Must not own
 

@@ -2189,7 +2189,8 @@ The former "Candidate constants and catalogs (→ State 2)", kept:
   money policy values, contract versions, capability sets and the staff and
   principal transitions are data-provider constants; the Registry failure
   kinds are the enumeration `RegistryFailureKind` alone; the Registry URL and
-  the binary read limit stay environment values.
+  the binary read limit stay environment values, the URL read into the
+  `registry_base_url` field of `RuntimeSettings` (owner 2026-11-09, A30).
 
 ## Data-provider enumerations and row models (2026-11-08)
 

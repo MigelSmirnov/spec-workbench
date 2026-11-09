@@ -357,10 +357,15 @@ sets `is_active = true` exactly when `status` is `active` (Registry v1
 `validate_project_reference`). The portal does not check the fields of an
 answer against each other: each caller acts on the field A5 names for it,
 whatever the others say (Factory code `application/authorization_guard.py`,
-`application/staff_identity.py`, `application/viewer_access.py`). The Registry endpoint is not a start-up variable of
-A30: the service starts without it, and a Registry call made while it is
-missing or unusable fails as `transport_error` (Factory code
-`adapters/registry_gateway.py` `_registry_url`; owner 2026-11-06: current service behaviour accepted; technical decisions delegated).
+`application/staff_identity.py`, `application/viewer_access.py`). The Registry URL is a required start-up variable of
+A30 (owner 2026-11-09): the service does not start without it, and the
+gateway takes it from the settings, never from the environment. A Registry
+call made while the URL is unusable (not an http or https base URL, or
+carrying user information) fails as `transport_error`, as before (Factory
+code `adapters/registry_gateway.py` `_registry_url`). Until 2026-11-09 the
+service started without the URL and a call made while it was missing failed
+as `transport_error` (owner 2026-11-06: current service behaviour accepted);
+the owner changed that on 2026-11-09 (`SEMANTIC_DIFF.md`).
 
 ### Carried changes
 
@@ -1495,7 +1500,7 @@ The former configuration, kept (owner-confirmed defaults, R0-06):
 Values with confirmed defaults:
 
 ```text
-registry_endpoint_env_name            = REGISTRY_BASE_URL
+registry_endpoint_env_name            = REGISTRY_BASE_URL (required start-up variable since 2026-11-09)
 registry_timeout_seconds               = 5
 staff_session_ttl_hours                = 12
 viewer_session_ttl_days                = 30
@@ -1508,14 +1513,20 @@ The *existence* of a timeout/TTL/rate limit is an invariant. The running
 service reads none of the first five values from its environment (only the
 URL `REGISTRY_BASE_URL` names): a deployment cannot change them, a release
 does. Since 2026-11-08 they are data-provider constants (Consequence); the
-owner's defaults are their values. `REGISTRY_BASE_URL` is read by the Registry
-gateway at each call, not at start-up: it is no required start-up variable,
-and its absence fails only Registry calls (A6). It is therefore no variable
-of `config.runtime_environment_variables`, the table whose variables R0-10's
-start-up check covers. Which values the gateway
-accepts and how it joins them with the request paths are the accepted
-gateway's (note `_registry_url`, the Registry path constants), carried
-to States 6–7.
+owner's defaults are their values.
+
+The Registry URL is read only through `runtime_settings` (owner decision
+2026-11-09, SPEC_STANDARD 6.11: a second reader of the environment is a
+defect). `REGISTRY_BASE_URL` is a required variable of the start-up table that
+R0-10's check covers, read into the `registry_base_url` field of
+`RuntimeSettings`: a missing or empty value stops the start, and the Registry
+gateway takes the value from the settings `load_runtime_settings` returns,
+never from the environment. Before this decision the gateway read the
+variable itself at each call, and its absence failed only Registry calls
+(`SEMANTIC_DIFF.md`). The start-up check refuses only a missing or empty
+value; which values the gateway accepts as a base URL and how it joins them
+with the request paths stay the accepted gateway's (note `_registry_url`,
+the Registry path constants), carried to States 6–7.
 
 ### Carried changes
 
@@ -1559,7 +1570,7 @@ to States 6–7.
 
 ### Consequence
 
-`config.*` (SPEC_STANDARD 15.3.1, runtime settings and configuration). Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): the Registry variable name, request paths and timeout, the staff and viewer session lifetimes and the credential entropy have the same value in every environment and change only by a decision about the product, so by SPEC_STANDARD 15.2 (check 4 before 3) they are data-provider constants that generated code imports (`REGISTRY_BASE_URL_VARIABLE`, `REGISTRY_PROJECTS_PATH`, `REGISTRY_ACTIVE_SEGMENT` (Q12), `REGISTRY_CONTEXT_SEGMENT`, `REGISTRY_VALIDATE_SEGMENT`, `REGISTRY_TIMEOUT_SECONDS`, `STAFF_SESSION_TTL_HOURS`, `VIEWER_SESSION_TTL_DAYS`, `CREDENTIAL_SECRET_BYTES`), values unchanged; the path templates are split into a path and three segments (the active one added by Q12), because a template is not data (15.11). The Registry URL itself stays an environment value read by the gateway; SOURCE.md records that it is read outside `runtime_settings` (SPEC_STANDARD 6.11), an owner question.
+`config.*` (SPEC_STANDARD 15.3.1, runtime settings and configuration). Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): the Registry request paths and timeout, the staff and viewer session lifetimes and the credential entropy have the same value in every environment and change only by a decision about the product, so by SPEC_STANDARD 15.2 (check 4 before 3) they are data-provider constants that generated code imports (`REGISTRY_PROJECTS_PATH`, `REGISTRY_ACTIVE_SEGMENT` (Q12), `REGISTRY_CONTEXT_SEGMENT`, `REGISTRY_VALIDATE_SEGMENT`, `REGISTRY_TIMEOUT_SECONDS`, `STAFF_SESSION_TTL_HOURS`, `VIEWER_SESSION_TTL_DAYS`, `CREDENTIAL_SECRET_BYTES`), values unchanged; the path templates are split into a path and three segments (the active one added by Q12), because a template is not data (15.11). The Registry URL itself is an environment value: since the owner's decision of 2026-11-09 it is the `registry_base_url` field of `RuntimeSettings`, a required row of the start-up table, and the data-provider constant `REGISTRY_BASE_URL_VARIABLE` that named the variable for the gateway is removed (SPEC_STANDARD 6.11).
 
 ## Accepted decision A31 — Security review of the migrated case
 

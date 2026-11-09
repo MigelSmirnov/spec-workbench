@@ -862,8 +862,9 @@ parameters, under the Registry timeout (`REGISTRY_TIMEOUT_SECONDS`).
 
 ### Enforces
 
-A6, A15, R0-08; A30 for the endpoint, read from the environment variable
-the data-provider constant `REGISTRY_BASE_URL_VARIABLE` names. The request
+A6, A15, R0-08; A30 for the endpoint, the `registry_base_url` field of the
+`RuntimeSettings` that `runtime_settings.load_runtime_settings` returns
+(owner 2026-11-09). The request
 names the active-project path (Q12, A6, A30); decoding still keeps only
 references whose status is `active`, with no query-parameter filter.
 
@@ -3918,7 +3919,8 @@ The in-memory viewer-entry attempt buckets only.
 
 ### Callers
 
-`module:runtime`, `module:staff_bootstrap_cli`.
+`module:runtime`, `module:staff_bootstrap_cli`, and `module:registry_gateway`
+for the Registry URL (owner 2026-11-09, A30).
 
 ### Inputs
 

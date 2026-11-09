@@ -726,7 +726,7 @@ tools); the projection reproduces `global_spec.json` unchanged.
 | D01 currency | `MONEY_CURRENCY` (A9) |
 | D02 precision, rounding | `MONEY_FRACTION_DIGITS`, `MONEY_ROUNDING` (A9); the formulas stay behaviour |
 | D03 balance sign → label | `WORK_BALANCE_LABEL_SIGNS`, keyed by `WorkBalanceLabel`, total |
-| D04 Registry variable | `REGISTRY_BASE_URL_VARIABLE` |
+| D04 Registry variable | `REGISTRY_BASE_URL_VARIABLE` until 2026-11-09; since then the `REGISTRY_BASE_URL` row of the start-up table, read into `RuntimeSettings.registry_base_url` (owner decision below) |
 | D05 Registry paths | `REGISTRY_PROJECTS_PATH`, `REGISTRY_CONTEXT_SEGMENT`, `REGISTRY_VALIDATE_SEGMENT` |
 | D06 Registry timeout | `REGISTRY_TIMEOUT_SECONDS` |
 | D07 failure → kind | `= models.RegistryFailureKind`; condition → member stays prose (§2); `rules.registry_failure_translation` removed |
@@ -768,10 +768,20 @@ operating profile — a few clients, one process, SQLite, simplicity first):
 - An integer allow-list is a `record_tuple` of `SupportedContractVersion`:
   6.10 has no integer tuple.
 
-For the owner: the Registry URL is read from the environment by
+For the owner: the Registry URL was read from the environment by
 `registry_gateway`, outside `runtime_settings` (SPEC_STANDARD 6.11: a second
 settings reader is a defect). Moving it into `RuntimeSettings` changes when and
-how a missing URL fails, so it is behaviour, not placement, and is left open.
+how a missing URL fails, so it is behaviour, not placement, and was left open.
+
+Owner decision 2026-11-09 (approved): the Registry URL is read only through
+`runtime_settings`. `REGISTRY_BASE_URL` is a required row of
+`config.runtime_environment_variables` with the target
+`RuntimeSettings.registry_base_url` (`60_data_closure.json`,
+`60_model_closure_contracts.json`); `_registry_url` takes it from the settings
+`load_runtime_settings` returns; the data-provider constant
+`REGISTRY_BASE_URL_VARIABLE` is removed; `runtime_settings` moves before
+`registry_gateway` in `module_order`. A missing value now stops the start
+instead of failing each Registry request (A6, A30; `SEMANTIC_DIFF.md`).
 
 ## Owner decisions of 2026-11-08 on the questions document (Q01–Q12)
 
