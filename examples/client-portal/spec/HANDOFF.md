@@ -8,7 +8,77 @@ merged: accepted spec `018b2e2e`). The assembly, admission and diagnosis
 results are in `80_assembly.md`; the semantic diff, for the owner, is
 `SEMANTIC_DIFF.md` (against `018b2e2e` first, then against `459ac96c`).
 
-## Toward READY_TO_EXPORT (2026-11-09) — read this first
+## Toward READY_TO_EXPORT (2026-11-09, evening) — read this first
+
+Branch `agent/client-portal`, Workbench main `bcd03125` merged (#175, #176,
+#177). Factory checkout for prompts and checks: `code_factory_cp_witnesses`
+detached at origin/main `ae0726fd` (#201). Question rounds need
+`SPEC_WORKBENCH_FACTORY_ROOT` set to that checkout (without it the State 7
+prompts are built by the sibling `code_factory`, whose normalizer rejects
+binary_storage_backend v2). Not exported; no Route B, no PR merged.
+`global_spec.json` sha256 `3fd38bcc…`.
+
+Done (owner decisions of 2026-11-09, each its own commit):
+
+- `9d6e18a2` Q10: the owner confirmed the re-validation from the
+  instance's dumped field values (A7, `SOURCE.md`).
+- `e4f5be23` enum members by declared NAME everywhere: 63 notes, 71
+  `AuditAction`/`Capability` members (`VIEWER_CREATE`,
+  `PORTAL_ACCESS_MANAGE`, …); `check_note_draft` and lint L6: 0 blocking.
+- `f8b269e6` 13 `rules` namespaces without a reader retired through
+  `60_data_closure.json` `retired` (audit_entity_id_policy,
+  audit_result_reason_policy, clock_policy, derived_view_ordering,
+  idempotency_identities, money_policy, producer_scope_policy,
+  project_guard_sequence, project_list_ordering, registry_status_policy,
+  staff_identity_input_policy, status_transitions,
+  verification_envelope_policy); decisions' Consequences rewritten.
+  **Kept**: `transaction_guard_policy`, `model_immutability_policy` (read by
+  `kind` by Factory `tools/code_invariant_gates.py`) and
+  `exception_payload_policy` (activation key of
+  `verification/exception_payload_check.py`) — see owner question 1.
+- `6ac66aac` binary_storage through `runtime_settings` (#201):
+  `RuntimeSettings.binary_storage_root`/`binary_max_read_bytes`, the two
+  rows target them, `binary_storage_backend` schema_version 2,
+  `imports.module_internal.binary_storage.runtime_settings`
+  (`SEMANTIC_DIFF.md`). Closes the State 2 FA019 item of the morning.
+- `bc738392` the last dotted `PortalStore.begin` removed (#176): flow
+  closure 0 stops; 33 import scopes re-decided (hash only).
+- `db94be20` found while closing State 3: the case spec never declared the
+  start-up table constraint `BINARY_MAX_READ_BYTES <= MAX_BINARY_RESPONSE_BYTES`
+  that A14 requires and the running `runtime/settings.py` has; the current
+  Factory emitter compiles it only from the table, so a regeneration would
+  have dropped it. Declared (`constraints`, `constraint_kinds`).
+
+Rounds (one state at a time): State 2 r110–r113 closed (T6/r111 fixes,
+path handling carried to generation, the constraint test carried to
+factory_checks); State 1 r53 clear; State 3 r50–r52 closed; State 4 r49
+clear; State 5 r37–r41 closed (callers, refusal of `load_runtime_settings`);
+State 6 has no document; State 7 r27: the 13 changed modules clear.
+Stage 8.1 third pass: 39/39 PASS, hashes current (`81_module_review.md`).
+Checks: assembly 15/15, imports strict_ready, slices 39/39 0 findings,
+projection in sync, notes gate 1086/0 blocks.
+
+Admission `--update-existing` (no export): BLOCKED, 17 PASS, 1 block:
+FA019 State 7 `financial_policy` (round 23 T1–T3, the Factory prompt's
+model_copy line). FA002 PASS.
+
+For the owner / tools:
+
+1. **Three Factory-gate namespaces** (State 2 r110 T2–T4, verified
+   §15.3.1 "dead data"): retire them (the two code-invariant checks and the
+   exception payload check go dormant for this project), or a
+   standard/tool change that names a policy a Factory gate reads as an
+   allowed home (like `time_source_policy`). The later State 2 rounds,
+   which review only changed units, did not raise them again, so State 2
+   shows closed; the finding stands.
+2. **Tool gap (#175 follow-up)**: a recorded State 7 verdict is revisited
+   only when the unit's prompt changes (`questions_workbench/units.py`
+   `unit_state`), so `financial_policy`'s r23 T1–T3, which #175 would judge
+   `generator_text`, stay open and block FA019. Needs a re-judge of an
+   unchanged unit (or `ask --module` outside `--probe`); no case text
+   change is justified.
+
+## Toward READY_TO_EXPORT (2026-11-09, morning)
 
 Branch `agent/client-portal`, Workbench main merged (#173, #174). Factory
 checkout for prompts and checks: `code_factory_cp_witnesses` detached at
