@@ -21,6 +21,11 @@ exported, is the internal-only operation of Q09); State 7 round 27 on the
 The `financial_policy` prompt did not change; its round 23 T1-T3 (the
 Factory's own model_copy line) remain recorded, see `spec/HANDOFF.md`.
 
+After `bbe9bb0f` (three State 2 Consequences now cite the §15.3.1 fourth
+home, text only) the packets were recomputed once more: 0 blocks, verdicts
+unchanged. `financial_policy`'s round 23 T1–T3 were re-judged
+`generator_text` in State 7 round 28 (spec-workbench #178).
+
 Second pass: `81_module_review_status.json` records each
 verdict and its packet hash (`slice_sha256`, the FA002 rule over
 `build_slice`), recomputed on the spec after the State 7 rounds below.
