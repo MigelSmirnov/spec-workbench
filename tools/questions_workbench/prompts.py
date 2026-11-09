@@ -102,10 +102,24 @@ prompt, the contract or note of the function that should carry it, and in
 {listing}"""
 
 
+MODULE_NOTES_ONLY = """
+
+The rules below are the rules the module's notes are written by. The notes are
+the requirement lines of the prompt, each `<function, Class.method or
+module>: [CLASS] …`; they are the only text of the prompt authored in the
+design. Every other passage — imports, contracts, model surfaces, the static
+gate contract, the records built for this module and the closing generation
+instructions — is the Factory's own text, the same for every module: never
+report it as a standard_violation. A note that contradicts it is still a
+contradiction."""
+
+
 def module_ask_instruction(state: int, scope: str, diff: str | None = None,
                            obligations: list[str] | None = None,
                            sections: list[dict[str, str]] | None = None) -> str:
-    instruction = MODULE_ASK.format(state=state, scope=scope) + standard_ask(sections, "the prompt")
+    instruction = MODULE_ASK.format(state=state, scope=scope)
+    if sections:
+        instruction += MODULE_NOTES_ONLY + standard_ask(sections, "the notes of the prompt")
     if obligations:
         instruction += MODULE_OBLIGATIONS.format(listing="\n".join(obligations))
     return instruction + (MODULE_CHANGE.format(diff=diff) if diff is not None else "")
@@ -118,8 +132,37 @@ out; these results say the design does not yet.
 {listing}"""
 
 
-def module_layer_judge(obligations: list[str]) -> str | None:
-    return MODULE_LAYER_JUDGE.format(listing="\n".join(obligations)) if obligations else None
+MODULE_NOTES_JUDGE = """=== THIS MODULE'S NOTES (the design text of the prompt) ===
+
+Only these lines of the prompt are notes, authored in the case. Every other
+passage of the prompt — its imports, contracts, model surfaces, the static gate
+contract, the records built for the module and the closing instructions — is
+the Factory's own text, written for every module. A rule of the SPEC_STANDARD
+sections is a rule for these notes: a passage outside them is never a
+standard_violation (it is checked: such a judgement is recorded as the
+generator's text and asks nothing). A note that contradicts the Factory's text
+is still a contradiction.
+{listing}"""
+
+
+def module_layer_judge(obligations: list[str], notes: list[str] | None = None) -> str | None:
+    blocks = []
+    if obligations:
+        blocks.append(MODULE_LAYER_JUDGE.format(listing="\n".join(obligations)))
+    if notes is not None:
+        blocks.append(MODULE_NOTES_JUDGE.format(listing="\n".join(notes) or "(none)"))
+    return "\n\n".join(blocks) or None
+
+
+def notes_in_prompt(notes: list[str], prompt: str) -> list[str]:
+    """The specification's notes the prompt carries, in specification order: the
+    module's notes as its generator reads them. Found as text, whitespace and
+    code marks aside (judge._norm), so no section header of the Factory's
+    prompt is relied on."""
+    from .judge import _norm
+
+    body = _norm(prompt)
+    return [note for note in notes if _norm(note) and _norm(note) in body]
 
 
 def module_input(module: str, prompt: str) -> str:

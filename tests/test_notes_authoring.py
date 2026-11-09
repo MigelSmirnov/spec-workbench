@@ -215,6 +215,42 @@ def test_l4_claimed_order_must_be_the_declared_one():
     assert [f["code"] for f in bad["findings"] if f["rule"] == "L4"] == ["claimed_order_differs"]
 
 
+# ── L6: a member is named by its NAME (SPEC_STANDARD §15.3.1, owner 2026-11-09) ──
+
+ACTION = {"kind": "enum", "values": ["expense.create", "staff.login", "staff.login_failed", "pending"]}
+
+
+def _l6(text: str, model: dict = ACTION) -> list[dict]:
+    spec = {**SPEC, "models": {**SPEC["models"], "AuditAction": model}}
+    return [f for f in lint([_note("load_rows", text)], spec)["findings"] if f["rule"] == "L6"]
+
+
+def test_l6_member_names_are_the_emitters():
+    index = SpecIndex.build({"models": {"AuditAction": ACTION, "Kind": {
+        "kind": "enum", "values": ["a.b", "c"], "member_names": ["FIRST", "second"]}}})
+    assert index.member_names["AuditAction"] == {"expense.create": "EXPENSE_CREATE", "staff.login": "STAFF_LOGIN",
+                                                 "staff.login_failed": "STAFF_LOGIN_FAILED", "pending": "PENDING"}
+    assert index.member_names["Kind"] == {"a.b": "FIRST", "c": "SECOND"}
+
+
+def test_l6_a_member_named_by_its_value_alone_blocks_with_its_name():
+    [finding] = _l6("MUST append the expense.create member of = models.AuditAction.")
+    assert (finding["code"], finding["severity"], finding["member"]) == ("enum_member_by_value", "block", "EXPENSE_CREATE")
+    # a longer value is not its prefix's member
+    assert [f["value"] for f in _l6("MUST append the staff.login_failed member of = models.AuditAction")] == [
+        "staff.login_failed"]
+
+
+@pytest.mark.parametrize("text", [
+    "MUST append the EXPENSE_CREATE member of = models.AuditAction.",
+    "MUST append the EXPENSE_CREATE member (value expense.create) of = models.AuditAction.",
+    "MUST append the PENDING member of = models.AuditAction while pending.",  # an identifier value is prose too
+    "MUST read expense.create without the enumeration's address.",  # navigation: the attribute check's
+])
+def test_l6_the_name_the_name_with_its_value_and_prose_pass(text):
+    assert _l6(text) == []
+
+
 def test_l5_diverged_copies_block_and_equal_copies_only_report():
     span = "MUST sort the rows by the declared keys before hashing them so that equal content"
     same = [_note("load_rows", f"{span}: by (row_id, row_name, row_kind)"),
