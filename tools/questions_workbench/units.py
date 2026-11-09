@@ -85,7 +85,7 @@ CLOSURE_RULE = "single_round"
 # topic, a later state owns it, a precedent on unchanged passages settled it,
 # no one acts on it, or the change did not touch it.
 SETTLED_KINDS = frozenset({"answered", "answered_later", "judged_before", "later_state", "indifferent",
-                           "preexisting"})
+                           "preexisting", "generator_text"})
 CONTRADICTION = "contradiction"
 # A verified violation of the state's SPEC_STANDARD sections asks what a
 # contradiction asks: a change of the text and one round on it (judge.py).

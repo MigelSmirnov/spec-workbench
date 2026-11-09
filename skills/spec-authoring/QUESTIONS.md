@@ -542,7 +542,24 @@ A verified violation blocks like a contradiction, in every state and without
 a witness — the rule is the standard's, not an outcome the texts allow. It
 takes no disposition, `accepted` included, and closes when the text changes and
 the one round on that change no longer raises it. One whose quotes fail is not
-downgraded either. Each phase gets only the sections it lists, never the whole
+downgraded either.
+
+In State 7 only the module's notes are design text. The prompt also carries
+the Factory's own text — imports, contracts and model surfaces it cuts from the
+specification, the static gate contract and the closing generation
+instructions, the same for every module — which no author of the case changes
+and the rules of a note do not reach. The reviewer is told so, and the judge
+gets the module's notes listed apart (the specification's notes the prompt
+carries, `prompts.notes_in_prompt`). `judge.check` holds it mechanically: a
+verified violation whose passage is not found in those notes is kept as
+`generator_text` (`claimed_kind: standard_violation`, `outside_notes`) — not
+blocking, asking for no disposition. A contradiction between a note and that
+text still blocks: the note is what can change. Why: client-portal State 7
+round 23 held `financial_policy` on three §2 "violations" (T1–T3) of the
+Factory's `model_copy` instruction (code-factory#200) — no prefix, no
+modality, a method call — while the module's six notes were unchanged.
+
+Each phase gets only the sections it lists, never the whole
 standard: State 7 about 20 000 characters (§2 8 232, §15.3.1 3 168, §7 6 557,
 §15.9 1 974) on top of a module prompt of 8 000–40 000; State 1 6 611; State 2
 3 168; State 3 6 557; State 5 8 446; States 0 and 4 list none and are asked as

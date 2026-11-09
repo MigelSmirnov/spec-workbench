@@ -178,6 +178,81 @@ def test_contradictions_are_judged_as_before_beside_the_sections(tmp_path, monke
     assert "standard_violation" not in judged["surface"]
 
 
+# 3b. In State 7 only the module's notes are design text
+
+
+# the Factory's own closing instruction (code-factory#200), not a note of any module
+BOILERPLATE = ("Any other model value: derive a changed value with value.model_copy(update={...}) "
+               "or construct a new instance.")
+
+
+def test_a_state7_violation_quoting_no_note_is_the_generators_text_and_asks_nothing():
+    prompt = f"Module: store\nNOTES:\n- save: {PASSAGE}\n\n{BOILERPLATE}\n"
+    notes = f"- save: {PASSAGE}"
+    given = f"## 2. notes\n{RULE}\n"
+    kept = judge.check(_violation(quotes=[BOILERPLATE]), 7, prompt, None, standard=given, violation_texts=notes)
+    assert kept["kind"] == judge.GENERATOR_TEXT and kept["claimed_kind"] == "standard_violation"
+    assert kept["verified"] is True and kept["blocking"] is False and "outside_notes" in kept
+    # a violation in a note still blocks, quoted with the prompt's bullet or without
+    for quotes in ([PASSAGE], [f"- save: {PASSAGE}"]):
+        kept = judge.check(_violation(quotes=quotes), 7, prompt, None, standard=given,
+                           violation_texts=f"save: {PASSAGE}")
+        assert kept["kind"] == "standard_violation" and kept["blocking"] is True
+    # a passage found nowhere is still unverified, and blocks
+    kept = judge.check(_violation(quotes=["A passage the prompt does not hold."]), 7, prompt, None,
+                       standard=given, violation_texts=notes)
+    assert kept["verified"] is False and kept["blocking"] is True
+
+
+def test_notes_in_prompt_are_the_specification_notes_the_prompt_carries():
+    notes = ["save: [BEHAVIOR] MUST keep `the record`.", "serve: [BEHAVIOR] MUST serve."]
+    prompt = "IMPORTS:\n...\nREQUIREMENTS (notes — implement these):\n- save: [BEHAVIOR] MUST keep the record.\n"
+    assert prompts.notes_in_prompt(notes, prompt) == ["save: [BEHAVIOR] MUST keep `the record`."]
+
+
+def test_the_state7_reviewer_and_judge_are_told_only_the_notes_are_design_text():
+    sections = documents.standard_sections(7)
+    instruction = prompts.module_ask_instruction(7, documents.question_scope(7), None, None, sections)
+    assert "never\nreport it as a standard_violation" in instruction
+    assert "breaks a rule of\nthese sections" in instruction and "the notes of the prompt" in instruction
+    layer = prompts.module_layer_judge([], ["- save: x"])
+    assert "THIS MODULE'S NOTES" in layer and "- save: x" in layer
+    assert prompts.module_layer_judge([]) is None
+
+
+class QuotingBoilerplate(Judging):
+    """Judges every topic a standard_violation of the Factory's closing instruction."""
+
+    def complete(self, instruction, text):
+        if instruction.startswith("You judge the topics"):
+            self.judged.append(text)
+            ids = [line.split(": ", 1)[0] for line in text.split("=== TOPICS TO JUDGE ===")[1].splitlines()
+                   if line[:1] == "T"]
+            return json.dumps({"judgements": [
+                {"id": tid, "kind": "standard_violation", "quotes": [BOILERPLATE], "rule": RULE, "section": "2"}
+                for tid in ids]}), {}
+        return super().complete(instruction, text)
+
+
+def test_a_round_does_not_hold_a_module_on_the_factorys_own_instruction(tmp_path, monkeypatch):
+    """client-portal State 7 round 23, `financial_policy` T1-T3: the judge read the
+    Factory's `model_copy` line as an unclassified note with code syntax."""
+    case, factory = _notes_case(tmp_path, monkeypatch)
+    (factory / "tools/generate_agent.py").write_text(
+        "def build_prompt(local_spec, models_code=None):\n"
+        "    return ('Module: ' + local_spec['module_name'] + '\\nNOTES:\\n' + '\\n'.join(local_spec['notes'])\n"
+        f"            + '\\n\\n' + {BOILERPLATE!r} + '\\n')\n", encoding="utf-8")
+    provider = QuotingBoilerplate([{**_point("model_copy", text=BOILERPLATE), "kind": "standard_violation",
+                                    "rule": RULE, "section": "2"}], {"model_copy": RULE})
+    summary = service.ask_round(case, 7, provider, factory_root=factory)
+    assert all("THIS MODULE'S NOTES" in t for t in provider.judged)
+    assert "- save: [PRECONDITION] The record fits the size limit." in provider.judged[0]
+    kinds = {t["units"][0]: t["judgement"]["kind"] for t in summary["topics"]}
+    assert kinds == {"store": judge.GENERATOR_TEXT, "surface": judge.GENERATOR_TEXT}
+    assert summary["blocking_topics"] == 0 and summary["contradiction_units"] == []
+    assert service.status(case, 7, factory)["closed"] is True
+
+
 # 4. A probe asks closed modules and records nothing in the case
 
 
