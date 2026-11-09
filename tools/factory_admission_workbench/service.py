@@ -916,8 +916,8 @@ def _factory_slices_check(
     return AdmissionCheck(
         "FA018",
         CHECK_PASS if ready else CHECK_BLOCK,
-        "The Factory cuts every module; no induced import collides with a name, no slice carries a value, and "
-        "every changed data address reaches a module."
+        "The Factory cuts every module; no induced import collides with a name, no slice carries a value, "
+        "every changed data address reaches a module, and every rules namespace has a reader."
         if ready
         else "The Factory's own local specifications would stop generation.",
         {"summary": report["summary"], "findings": report["findings"]},
