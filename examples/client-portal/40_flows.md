@@ -158,7 +158,9 @@ No HTTP route reaches this flow.
    store exists.
 2. It resolves the database through
    `capability:runtime_settings.load_runtime_settings` and builds the
-   bootstrap store.
+   bootstrap store. The command loads the same start-up table as the
+   service, so a missing or invalid required variable — the Registry URL
+   among them since 2026-11-09 (A30) — ends it before any store exists.
 3. `capability:staff_bootstrap.bootstrap_first_administrator` normalizes and
    validates the email and password, hashes the password with
    `capability:credential_security.hash_password`, and builds one active
