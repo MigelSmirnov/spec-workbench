@@ -1,0 +1,160 @@
+{
+ "open_points": [
+  {
+   "subject": "A30 binary_storage file_ref resolution",
+   "kind": "undefined resolution policy",
+   "text": "How a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`, not of this decision: the deterministic backend decides it from its IR, as for the media types (A14), and answers every such failure as `BinaryStorageError`",
+   "question": "What exact algorithm interprets `file_ref`, including absolute references, empty references, `.` and `..` components, separator normalization, and the containment check under `BINARY_STORAGE_ROOT`?",
+   "options": [
+    "Accept only normalized relative references and reject any absolute or parent-traversing reference",
+    "Join the supplied reference to the root and accept it when the normalized result is inside the root",
+    "Treat `file_ref` as an opaque backend key under rules encoded explicitly in the backend IR"
+   ],
+   "default_guess": "Accept only non-empty relative references, normalize them, reject absolute and parent-traversing forms, and require the resolved target to remain inside the root.",
+   "witness": {
+    "initial": "`BINARY_STORAGE_ROOT` is `/srv/portal`, a readable JPEG exists at `/srv/outside/photo.jpg`, and an authorized visible ProgressPhoto stores `file_ref = ../outside/photo.jpg`.",
+    "events": [
+     "An authenticated viewer requests that photo by `photo_id`.",
+     "The owning photo module authorizes the request and hands the stored reference to `binary_storage`."
+    ],
+    "outcomes": [
+     "The storage implementation normalizes the joined path, sees that it escapes the root, and raises `BinaryStorageError`; the caller receives the explicit storage-unavailable failure.",
+     "The storage implementation treats the supplied relative reference as a path to open and returns the bytes from `/srv/outside/photo.jpg`."
+    ],
+    "observer": "The authenticated viewer sees failure versus the outside file's bytes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 binary_storage symbolic-link containment",
+   "kind": "undefined symlink policy",
+   "text": "How a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`, not of this decision",
+   "question": "Is containment checked lexically or against the final filesystem object after resolving symbolic links, and are symbolic links inside the storage root permitted at all?",
+   "options": [
+    "Reject every symbolic link encountered",
+    "Allow symbolic links only when the fully resolved target remains under the resolved root",
+    "Use lexical containment and permit a link inside the root to target an object outside it"
+   ],
+   "default_guess": "Resolve the root and target canonically, allow links only when the final target remains beneath the resolved root, and otherwise raise `BinaryStorageError`.",
+   "witness": {
+    "initial": "The storage root is `/srv/portal`; `/srv/portal/photo.jpg` is a symbolic link to the readable `/srv/outside/private.jpg`; an authorized visible ProgressPhoto stores `file_ref = photo.jpg`.",
+    "events": [
+     "An authenticated viewer requests the photo.",
+     "The authorized reference reaches `binary_storage`."
+    ],
+    "outcomes": [
+     "A lexical containment implementation opens the link and returns `/srv/outside/private.jpg`.",
+     "A resolved-target containment implementation refuses the escaping link with `BinaryStorageError`."
+    ],
+    "observer": "The authenticated viewer sees private bytes versus a storage-unavailable failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 binary_storage filesystem object eligibility",
+   "kind": "undefined refusal conditions",
+   "text": "which filesystem conditions fail it",
+   "question": "Which target and root conditions must produce `BinaryStorageError`, including a non-directory root, unreadable components, directories, FIFOs, sockets, devices, broken links, and non-regular target files?",
+   "options": [
+    "Only regular readable files are eligible; every other filesystem object or access condition fails",
+    "Any object from which bytes can be read is eligible",
+    "The backend IR enumerates eligible object types and failure conditions"
+   ],
+   "default_guess": "Require an existing readable regular file beneath an existing readable directory root; reject every other object type and filesystem access failure.",
+   "witness": {
+    "initial": "The root is a directory and the stored `file_ref` names a FIFO under it; the temporary operator-placement route supplies JPEG bytes through that FIFO when it is opened.",
+    "events": [
+     "An authorized viewer requests the visible photo.",
+     "`binary_storage` resolves the FIFO and attempts the read."
+    ],
+    "outcomes": [
+     "An implementation that accepts any readable object consumes the FIFO bytes and returns the image.",
+     "An implementation that requires a regular file rejects the FIFO with `BinaryStorageError`."
+    ],
+    "observer": "The viewer sees the image versus a storage-unavailable failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 binary_storage race-safe containment",
+   "kind": "undefined check/open atomicity",
+   "text": "How a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`",
+   "question": "Must containment validation and opening the object be race-safe against a path component or symbolic link being replaced between check and read?",
+   "options": [
+    "Open through directory file descriptors with no-follow constraints so the checked object is the object read",
+    "Resolve and check a path, then open it by pathname",
+    "Assume the external placement actor never changes paths during a read"
+   ],
+   "default_guess": "Use a race-safe open rooted at the storage directory and read from the verified file descriptor.",
+   "witness": {
+    "initial": "An authorized photo refers to `current/photo.jpg` under the root; the initially resolved file is inside the root, and the operator controls the temporary placement directory.",
+    "events": [
+     "A viewer starts a photo read.",
+     "`binary_storage` validates that `current/photo.jpg` resolves inside the root.",
+     "Before pathname opening, the operator replaces `current` with a symbolic link to an outside directory containing `photo.jpg`.",
+     "The read continues."
+    ],
+    "outcomes": [
+     "A check-then-open implementation follows the replacement and returns the outside file.",
+     "A rooted, race-safe open either reads the originally verified object or raises `BinaryStorageError`."
+    ],
+    "observer": "The viewer sees outside bytes versus the intended object or a storage-unavailable failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 binary_storage failure precedence",
+   "kind": "undefined check order",
+   "text": "the deterministic backend decides it from its IR, as for the media types (A14), and answers every such failure as `BinaryStorageError`",
+   "question": "What is the required order among reference validation, containment, filesystem opening, bounded reading, size rejection, signature/media-type recognition, and final payload construction when more than one condition would refuse the read?",
+   "options": [
+    "Validate reference and containment, securely open, enforce the byte bound while reading, then recognize the media type",
+    "Open and recognize the signature before enforcing the complete-size bound",
+    "Specify an explicit precedence table in the backend IR"
+   ],
+   "default_guess": "Validate the reference and containment first, securely open a regular file, enforce the size bound during the bounded read, and only then recognize its media type.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30 CFG-002 validity of BINARY_STORAGE_ROOT",
+   "kind": "vague invalidity and test oracle",
+   "text": "`BINARY_STORAGE_ROOT` is a required string row kept as supplied: a missing, empty or whitespace-only value stops the start (CFG-002); the start checks nothing about the path itself.\n- CFG-002: a required start-up variable that is missing or invalid stops the start before any request is served\n- CFG-002: `runtime_settings_client_portal`: for each required variable other than `REGISTRY_BASE_URL` a missing value and an invalid value stop start-up",
+   "question": "For `BINARY_STORAGE_ROOT`, does “invalid value” mean only an empty or whitespace-only string, or does it include any path property; exactly which invalid case must the CFG-002 test demonstrate without contradicting “the start checks nothing about the path itself”?",
+   "options": [
+    "Only missing, empty, and whitespace-only values are invalid at startup; every other string starts regardless of the filesystem",
+    "Path existence, directory type, readability, and containment suitability are startup validity conditions",
+    "The invariant and test exclude filesystem validity explicitly and test only row-level string validation"
+   ],
+   "default_guess": "Define startup invalidity for this row as missing, empty, or whitespace-only and state explicitly that nonexistent, non-directory, and unreadable paths are accepted at startup and fail only on reads.",
+   "witness": {
+    "initial": "The environment supplies `BINARY_STORAGE_ROOT=/srv/portal-missing`, and that path does not exist; all other required variables are valid.",
+    "events": [
+     "The host operator starts the service.",
+     "The startup settings check evaluates `BINARY_STORAGE_ROOT`."
+    ],
+    "outcomes": [
+     "Following “the start checks nothing about the path itself,” startup succeeds and a later binary read raises `BinaryStorageError`.",
+     "Treating a nonexistent root as the required variable's “invalid value,” the CFG-002 check stops startup before serving requests."
+    ],
+    "observer": "The host operator sees a running service versus startup refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Classification principles and A30 binary_storage ownership",
+   "kind": "contradictory specification location",
+   "text": "Behaviour that applies the values — a condition that chooses what code does — is prose of the State 7 notes (SPEC_STANDARD §2).\nHow a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`, not of this decision: the deterministic backend decides it from its IR",
+   "question": "Is file-resolution and filesystem-refusal behaviour decided by the deterministic backend IR in State 2, or must it be stated as behavioural prose in the State 7 notes; which text is authoritative?",
+   "options": [
+    "State 2 defines the complete backend IR policy and State 7 merely names the emitted symbol",
+    "State 7 notes define the conditions and precedence",
+    "The classification principle is narrowed explicitly so emitted deterministic backends may own behavioural conditions in IR"
+   ],
+   "default_guess": "Narrow the classification principle explicitly for deterministic emitted backends, then put the complete resolution, containment, filesystem-condition, and precedence policy in the backend IR before handoff.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A30 binary_storage file_ref resolution\",\"kind\":\"undefined resolution policy\",\"text\":\"How a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`, not of this decision: the deterministic backend decides it from its IR, as for the media types (A14), and answers every such failure as `BinaryStorageError`\",\"question\":\"What exact algorithm interprets `file_ref`, including absolute references, empty references, `.` and `..` components, separator normalization, and the containment check under `BINARY_STORAGE_ROOT`?\",\"options\":[\"Accept only normalized relative references and reject any absolute or parent-traversing reference\",\"Join the supplied reference to the root and accept it when the normalized result is inside the root\",\"Treat `file_ref` as an opaque backend key under rules encoded explicitly in the backend IR\"],\"default_guess\":\"Accept only non-empty relative references, normalize them, reject absolute and parent-traversing forms, and require the resolved target to remain inside the root.\",\"witness\":{\"initial\":\"`BINARY_STORAGE_ROOT` is `/srv/portal`, a readable JPEG exists at `/srv/outside/photo.jpg`, and an authorized visible ProgressPhoto stores `file_ref = ../outside/photo.jpg`.\",\"events\":[\"An authenticated viewer requests that photo by `photo_id`.\",\"The owning photo module authorizes the request and hands the stored reference to `binary_storage`.\"],\"outcomes\":[\"The storage implementation normalizes the joined path, sees that it escapes the root, and raises `BinaryStorageError`; the caller receives the explicit storage-unavailable failure.\",\"The storage implementation treats the supplied relative reference as a path to open and returns the bytes from `/srv/outside/photo.jpg`.\"],\"observer\":\"The authenticated viewer sees failure versus the outside file's bytes.\"}},{\"subject\":\"A30 binary_storage symbolic-link containment\",\"kind\":\"undefined symlink policy\",\"text\":\"How a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`, not of this decision\",\"question\":\"Is containment checked lexically or against the final filesystem object after resolving symbolic links, and are symbolic links inside the storage root permitted at all?\",\"options\":[\"Reject every symbolic link encountered\",\"Allow symbolic links only when the fully resolved target remains under the resolved root\",\"Use lexical containment and permit a link inside the root to target an object outside it\"],\"default_guess\":\"Resolve the root and target canonically, allow links only when the final target remains beneath the resolved root, and otherwise raise `BinaryStorageError`.\",\"witness\":{\"initial\":\"The storage root is `/srv/portal`; `/srv/portal/photo.jpg` is a symbolic link to the readable `/srv/outside/private.jpg`; an authorized visible ProgressPhoto stores `file_ref = photo.jpg`.\",\"events\":[\"An authenticated viewer requests the photo.\",\"The authorized reference reaches `binary_storage`.\"],\"outcomes\":[\"A lexical containment implementation opens the link and returns `/srv/outside/private.jpg`.\",\"A resolved-target containment implementation refuses the escaping link with `BinaryStorageError`.\"],\"observer\":\"The authenticated viewer sees private bytes versus a storage-unavailable failure.\"}},{\"subject\":\"A30 binary_storage filesystem object eligibility\",\"kind\":\"undefined refusal conditions\",\"text\":\"which filesystem conditions fail it\",\"question\":\"Which target and root conditions must produce `BinaryStorageError`, including a non-directory root, unreadable components, directories, FIFOs, sockets, devices, broken links, and non-regular target files?\",\"options\":[\"Only regular readable files are eligible; every other filesystem object or access condition fails\",\"Any object from which bytes can be read is eligible\",\"The backend IR enumerates eligible object types and failure conditions\"],\"default_guess\":\"Require an existing readable regular file beneath an existing readable directory root; reject every other object type and filesystem access failure.\",\"witness\":{\"initial\":\"The root is a directory and the stored `file_ref` names a FIFO under it; the temporary operator-placement route supplies JPEG bytes through that FIFO when it is opened.\",\"events\":[\"An authorized viewer requests the visible photo.\",\"`binary_storage` resolves the FIFO and attempts the read.\"],\"outcomes\":[\"An implementation that accepts any readable object consumes the FIFO bytes and returns the image.\",\"An implementation that requires a regular file rejects the FIFO with `BinaryStorageError`.\"],\"observer\":\"The viewer sees the image versus a storage-unavailable failure.\"}},{\"subject\":\"A30 binary_storage race-safe containment\",\"kind\":\"undefined check/open atomicity\",\"text\":\"How a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`\",\"question\":\"Must containment validation and opening the object be race-safe against a path component or symbolic link being replaced between check and read?\",\"options\":[\"Open through directory file descriptors with no-follow constraints so the checked object is the object read\",\"Resolve and check a path, then open it by pathname\",\"Assume the external placement actor never changes paths during a read\"],\"default_guess\":\"Use a race-safe open rooted at the storage directory and read from the verified file descriptor.\",\"witness\":{\"initial\":\"An authorized photo refers to `current/photo.jpg` under the root; the initially resolved file is inside the root, and the operator controls the temporary placement directory.\",\"events\":[\"A viewer starts a photo read.\",\"`binary_storage` validates that `current/photo.jpg` resolves inside the root.\",\"Before pathname opening, the operator replaces `current` with a symbolic link to an outside directory containing `photo.jpg`.\",\"The read continues.\"],\"outcomes\":[\"A check-then-open implementation follows the replacement and returns the outside file.\",\"A rooted, race-safe open either reads the originally verified object or raises `BinaryStorageError`.\"],\"observer\":\"The viewer sees outside bytes versus the intended object or a storage-unavailable failure.\"}},{\"subject\":\"A30 binary_storage failure precedence\",\"kind\":\"undefined check order\",\"text\":\"the deterministic backend decides it from its IR, as for the media types (A14), and answers every such failure as `BinaryStorageError`\",\"question\":\"What is the required order among reference validation, containment, filesystem opening, bounded reading, size rejection, signature/media-type recognition, and final payload construction when more than one condition would refuse the read?\",\"options\":[\"Validate reference and containment, securely open, enforce the byte bound while reading, then recognize the media type\",\"Open and recognize the signature before enforcing the complete-size bound\",\"Specify an explicit precedence table in the backend IR\"],\"default_guess\":\"Validate the reference and containment first, securely open a regular file, enforce the size bound during the bounded read, and only then recognize its media type.\"},{\"subject\":\"A30 CFG-002 validity of BINARY_STORAGE_ROOT\",\"kind\":\"vague invalidity and test oracle\",\"text\":\"`BINARY_STORAGE_ROOT` is a required string row kept as supplied: a missing, empty or whitespace-only value stops the start (CFG-002); the start checks nothing about the path itself.\\n- CFG-002: a required start-up variable that is missing or invalid stops the start before any request is served\\n- CFG-002: `runtime_settings_client_portal`: for each required variable other than `REGISTRY_BASE_URL` a missing value and an invalid value stop start-up\",\"question\":\"For `BINARY_STORAGE_ROOT`, does “invalid value” mean only an empty or whitespace-only string, or does it include any path property; exactly which invalid case must the CFG-002 test demonstrate without contradicting “the start checks nothing about the path itself”?\",\"options\":[\"Only missing, empty, and whitespace-only values are invalid at startup; every other string starts regardless of the filesystem\",\"Path existence, directory type, readability, and containment suitability are startup validity conditions\",\"The invariant and test exclude filesystem validity explicitly and test only row-level string validation\"],\"default_guess\":\"Define startup invalidity for this row as missing, empty, or whitespace-only and state explicitly that nonexistent, non-directory, and unreadable paths are accepted at startup and fail only on reads.\",\"witness\":{\"initial\":\"The environment supplies `BINARY_STORAGE_ROOT=/srv/portal-missing`, and that path does not exist; all other required variables are valid.\",\"events\":[\"The host operator starts the service.\",\"The startup settings check evaluates `BINARY_STORAGE_ROOT`.\"],\"outcomes\":[\"Following “the start checks nothing about the path itself,” startup succeeds and a later binary read raises `BinaryStorageError`.\",\"Treating a nonexistent root as the required variable's “invalid value,” the CFG-002 check stops startup before serving requests.\"],\"observer\":\"The host operator sees a running service versus startup refusal.\"}},{\"subject\":\"Classification principles and A30 binary_storage ownership\",\"kind\":\"contradictory specification location\",\"text\":\"Behaviour that applies the values — a condition that chooses what code does — is prose of the State 7 notes (SPEC_STANDARD §2).\\nHow a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`, not of this decision: the deterministic backend decides it from its IR\",\"question\":\"Is file-resolution and filesystem-refusal behaviour decided by the deterministic backend IR in State 2, or must it be stated as behavioural prose in the State 7 notes; which text is authoritative?\",\"options\":[\"State 2 defines the complete backend IR policy and State 7 merely names the emitted symbol\",\"State 7 notes define the conditions and precedence\",\"The classification principle is narrowed explicitly so emitted deterministic backends may own behavioural conditions in IR\"],\"default_guess\":\"Narrow the classification principle explicitly for deterministic emitted backends, then put the complete resolution, containment, filesystem-condition, and precedence policy in the backend IR before handoff.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,111 @@
+{
+ "open_points": [
+  {
+   "subject": "A30 binary_storage path resolution",
+   "kind": "undecided_resolution",
+   "text": "How a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`, not of this decision: the deterministic backend decides it from its IR, as for the media types (A14), and answers every such failure as `BinaryStorageError`",
+   "question": "What exact normalization and containment rules apply to absolute references, `..`, symbolic links, and other indirections when resolving `file_ref` under `binary_storage_root`?",
+   "options": [
+    "Reject any absolute reference, traversal component, or reference whose canonical target is outside the canonical root.",
+    "Use lexical containment only, allowing an in-root symbolic link to resolve outside the root.",
+    "Treat an absolute `file_ref` as relative to the configured root after removing its leading separator."
+   ],
+   "default_guess": "Resolve root and target canonically and reject unless the target is a regular file strictly contained by the canonical root.",
+   "witness": {
+    "initial": "`binary_storage_root` is `/srv/binaries`; `/srv/binaries/document.pdf` is a symbolic link to the readable `/srv/private/secret.pdf`; an authorized ExpenseDocument stores `file_ref = document.pdf`.",
+    "events": [
+     "An authenticated client requests that document by `document_id`.",
+     "The owning module authorizes it and hands the reference to `binary_storage`.",
+     "`binary_storage` resolves and reads the reference."
+    ],
+    "outcomes": [
+     "Canonical containment detects that the target is outside `/srv/binaries` and raises `BinaryStorageError`.",
+     "Lexical containment accepts the path because its written form is under `/srv/binaries` and returns the bytes of `/srv/private/secret.pdf`."
+    ],
+    "observer": "The requesting client sees refusal versus successful disclosure of the outside file."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 binary_storage filesystem acceptance",
+   "kind": "unspecified_refusal_conditions",
+   "text": "How a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`, not of this decision: the deterministic backend decides it from its IR, as for the media types (A14), and answers every such failure as `BinaryStorageError`",
+   "question": "Which filesystem object types and conditions are refused, including a missing root, non-directory root, missing target, directory target, FIFO, device, symbolic link, permission failure, and file mutation during reading?",
+   "options": [
+    "Accept only an existing readable regular file beneath an existing directory root.",
+    "Attempt to open any filesystem object and fail only when the operating system operation fails.",
+    "Permit symbolic links and special files subject only to containment and the byte bound."
+   ],
+   "default_guess": "Require an existing directory root and an existing readable regular-file target; reject special files, directories, broken links, permission failures, and concurrent changes that prevent a consistent bounded read.",
+   "witness": {
+    "initial": "The configured root exists and contains a FIFO named `photo`; a writer is ready to provide bytes having a valid JPEG signature; an authorized ProgressPhoto stores `file_ref = photo`.",
+    "events": [
+     "An authenticated caller requests the photo by `photo_id`.",
+     "The owning module authorizes the request and calls `binary_storage`.",
+     "The storage implementation examines or opens the FIFO."
+    ],
+    "outcomes": [
+     "An implementation requiring a regular file refuses the FIFO with `BinaryStorageError`.",
+     "An implementation that accepts any readable filesystem object opens the FIFO, reads the supplied bytes, and returns the photo."
+    ],
+    "observer": "The requesting caller sees an unavailable error versus a successful image response."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 and A14 binary read checks",
+   "kind": "unspecified_precedence",
+   "text": "How a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`, not of this decision: the deterministic backend decides it from its IR, as for the media types (A14), and answers every such failure as `BinaryStorageError`",
+   "question": "In what order are containment, object-type, existence, open/read, size-bound, signature, allowed-media-type, and concurrent-change checks performed, and which failure wins when more than one condition applies?",
+   "options": [
+    "Validate containment and regular-file status, then enforce size, then read and classify the signature.",
+    "Open and read a bounded prefix first, classify the signature, and then enforce the complete-size bound.",
+    "Use metadata to enforce the size bound before opening or reading any content."
+   ],
+   "default_guess": "Validate canonical containment and regular-file status first, reject a known oversize file before reading content, then perform a bounded read and signature classification, rechecking the final byte count.",
+   "witness": {
+    "initial": "An authorized photo references a regular file that is larger than `binary_max_read_bytes` and whose leading bytes do not match any allowed photo signature.",
+    "events": [
+     "The caller requests the photo.",
+     "The owning module authorizes it and invokes `binary_storage`.",
+     "The emitted storage applies its size and signature checks."
+    ],
+    "outcomes": [
+     "A size-first implementation rejects the object without reading its content.",
+     "A signature-first implementation opens and reads the leading bytes before rejecting the unrecognized media type."
+    ],
+    "observer": "The host operator or filesystem instrumentation sees no content read versus a content read, with different resource and device-side effects."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Classification principles and A30 binary_storage ownership",
+   "kind": "contradictory_ownership",
+   "text": "Behaviour that applies the values — a condition that chooses what code does — is prose of the State 7 notes (SPEC_STANDARD §2).\nHow a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`, not of this decision: the deterministic backend decides it from its IR, as for the media types (A14), and answers every such failure as `BinaryStorageError`",
+   "question": "Is binary path resolution and filesystem-failure classification decided by the deterministic backend IR or specified as behavioural conditions in the State 7 notes?",
+   "options": [
+    "State 2 decides the policy as backend IR and State 7 notes merely call the emitted symbol.",
+    "State 7 notes decide every resolution and refusal condition; the backend IR supplies only values or structure.",
+    "Split ownership explicitly, listing which decisions belong to IR and which belong to State 7 notes."
+   ],
+   "default_guess": "Specify the complete resolution and refusal policy in the deterministic backend IR, and make State 7 notes name and call the emitted `binary_storage` symbol without redefining it.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30 CFG-002 required test",
+   "kind": "vague_required_test",
+   "text": "for each required variable other than `REGISTRY_BASE_URL` a missing value and an invalid value stop start-up",
+   "question": "For `BINARY_STORAGE_ROOT`, what exact value must the CFG-002 test use as the invalid case, and must it also demonstrate that every non-empty, non-whitespace path string—including a nonexistent path, a non-directory path, and an unreadable path—is accepted at startup because the start checks nothing about the path itself?",
+   "options": [
+    "Use an empty or whitespace-only string as the invalid case and separately prove that unusable non-empty paths do not stop startup.",
+    "Treat nonexistent, non-directory, or unreadable paths as invalid and require startup refusal.",
+    "Test only one unspecified invalid sample selected by the implementer."
+   ],
+   "default_guess": "Use whitespace-only input as the invalid case and add startup-acceptance cases for representative nonexistent, non-directory, and unreadable non-empty paths.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A30 binary_storage path resolution\",\"kind\":\"undecided_resolution\",\"text\":\"How a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`, not of this decision: the deterministic backend decides it from its IR, as for the media types (A14), and answers every such failure as `BinaryStorageError`\",\"question\":\"What exact normalization and containment rules apply to absolute references, `..`, symbolic links, and other indirections when resolving `file_ref` under `binary_storage_root`?\",\"options\":[\"Reject any absolute reference, traversal component, or reference whose canonical target is outside the canonical root.\",\"Use lexical containment only, allowing an in-root symbolic link to resolve outside the root.\",\"Treat an absolute `file_ref` as relative to the configured root after removing its leading separator.\"],\"default_guess\":\"Resolve root and target canonically and reject unless the target is a regular file strictly contained by the canonical root.\",\"witness\":{\"initial\":\"`binary_storage_root` is `/srv/binaries`; `/srv/binaries/document.pdf` is a symbolic link to the readable `/srv/private/secret.pdf`; an authorized ExpenseDocument stores `file_ref = document.pdf`.\",\"events\":[\"An authenticated client requests that document by `document_id`.\",\"The owning module authorizes it and hands the reference to `binary_storage`.\",\"`binary_storage` resolves and reads the reference.\"],\"outcomes\":[\"Canonical containment detects that the target is outside `/srv/binaries` and raises `BinaryStorageError`.\",\"Lexical containment accepts the path because its written form is under `/srv/binaries` and returns the bytes of `/srv/private/secret.pdf`.\"],\"observer\":\"The requesting client sees refusal versus successful disclosure of the outside file.\"}},{\"subject\":\"A30 binary_storage filesystem acceptance\",\"kind\":\"unspecified_refusal_conditions\",\"text\":\"How a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`, not of this decision: the deterministic backend decides it from its IR, as for the media types (A14), and answers every such failure as `BinaryStorageError`\",\"question\":\"Which filesystem object types and conditions are refused, including a missing root, non-directory root, missing target, directory target, FIFO, device, symbolic link, permission failure, and file mutation during reading?\",\"options\":[\"Accept only an existing readable regular file beneath an existing directory root.\",\"Attempt to open any filesystem object and fail only when the operating system operation fails.\",\"Permit symbolic links and special files subject only to containment and the byte bound.\"],\"default_guess\":\"Require an existing directory root and an existing readable regular-file target; reject special files, directories, broken links, permission failures, and concurrent changes that prevent a consistent bounded read.\",\"witness\":{\"initial\":\"The configured root exists and contains a FIFO named `photo`; a writer is ready to provide bytes having a valid JPEG signature; an authorized ProgressPhoto stores `file_ref = photo`.\",\"events\":[\"An authenticated caller requests the photo by `photo_id`.\",\"The owning module authorizes the request and calls `binary_storage`.\",\"The storage implementation examines or opens the FIFO.\"],\"outcomes\":[\"An implementation requiring a regular file refuses the FIFO with `BinaryStorageError`.\",\"An implementation that accepts any readable filesystem object opens the FIFO, reads the supplied bytes, and returns the photo.\"],\"observer\":\"The requesting caller sees an unavailable error versus a successful image response.\"}},{\"subject\":\"A30 and A14 binary read checks\",\"kind\":\"unspecified_precedence\",\"text\":\"How a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`, not of this decision: the deterministic backend decides it from its IR, as for the media types (A14), and answers every such failure as `BinaryStorageError`\",\"question\":\"In what order are containment, object-type, existence, open/read, size-bound, signature, allowed-media-type, and concurrent-change checks performed, and which failure wins when more than one condition applies?\",\"options\":[\"Validate containment and regular-file status, then enforce size, then read and classify the signature.\",\"Open and read a bounded prefix first, classify the signature, and then enforce the complete-size bound.\",\"Use metadata to enforce the size bound before opening or reading any content.\"],\"default_guess\":\"Validate canonical containment and regular-file status first, reject a known oversize file before reading content, then perform a bounded read and signature classification, rechecking the final byte count.\",\"witness\":{\"initial\":\"An authorized photo references a regular file that is larger than `binary_max_read_bytes` and whose leading bytes do not match any allowed photo signature.\",\"events\":[\"The caller requests the photo.\",\"The owning module authorizes it and invokes `binary_storage`.\",\"The emitted storage applies its size and signature checks.\"],\"outcomes\":[\"A size-first implementation rejects the object without reading its content.\",\"A signature-first implementation opens and reads the leading bytes before rejecting the unrecognized media type.\"],\"observer\":\"The host operator or filesystem instrumentation sees no content read versus a content read, with different resource and device-side effects.\"}},{\"subject\":\"Classification principles and A30 binary_storage ownership\",\"kind\":\"contradictory_ownership\",\"text\":\"Behaviour that applies the values — a condition that chooses what code does — is prose of the State 7 notes (SPEC_STANDARD §2).\\nHow a read resolves a `file_ref` under the root and which filesystem conditions fail it is behaviour of the emitted `binary_storage`, not of this decision: the deterministic backend decides it from its IR, as for the media types (A14), and answers every such failure as `BinaryStorageError`\",\"question\":\"Is binary path resolution and filesystem-failure classification decided by the deterministic backend IR or specified as behavioural conditions in the State 7 notes?\",\"options\":[\"State 2 decides the policy as backend IR and State 7 notes merely call the emitted symbol.\",\"State 7 notes decide every resolution and refusal condition; the backend IR supplies only values or structure.\",\"Split ownership explicitly, listing which decisions belong to IR and which belong to State 7 notes.\"],\"default_guess\":\"Specify the complete resolution and refusal policy in the deterministic backend IR, and make State 7 notes name and call the emitted `binary_storage` symbol without redefining it.\"},{\"subject\":\"A30 CFG-002 required test\",\"kind\":\"vague_required_test\",\"text\":\"for each required variable other than `REGISTRY_BASE_URL` a missing value and an invalid value stop start-up\",\"question\":\"For `BINARY_STORAGE_ROOT`, what exact value must the CFG-002 test use as the invalid case, and must it also demonstrate that every non-empty, non-whitespace path string—including a nonexistent path, a non-directory path, and an unreadable path—is accepted at startup because the start checks nothing about the path itself?\",\"options\":[\"Use an empty or whitespace-only string as the invalid case and separately prove that unusable non-empty paths do not stop startup.\",\"Treat nonexistent, non-directory, or unreadable paths as invalid and require startup refusal.\",\"Test only one unspecified invalid sample selected by the implementer.\"],\"default_guess\":\"Use whitespace-only input as the invalid case and add startup-acceptance cases for representative nonexistent, non-directory, and unreadable non-empty paths.\"}]}",
+ "set_aside": []
+}
