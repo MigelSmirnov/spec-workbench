@@ -8,6 +8,69 @@ merged: accepted spec `018b2e2e`). The assembly, admission and diagnosis
 results are in `80_assembly.md`; the semantic diff, for the owner, is
 `SEMANTIC_DIFF.md` (against `018b2e2e` first, then against `459ac96c`).
 
+## Toward READY_TO_EXPORT (2026-11-09) — read this first
+
+Branch `agent/client-portal`, Workbench main merged (#173, #174). Factory
+checkout for prompts and checks: `code_factory_cp_witnesses` detached at
+origin/main `76ff8512` (#200). Not exported; no Route B, no PR merged.
+`global_spec.json` sha256 `d545b52d…`.
+
+Done:
+
+- `3b943d13` owner decision: the Registry URL is read only through
+  `runtime_settings` — `REGISTRY_BASE_URL` a required row targeting
+  `RuntimeSettings.registry_base_url`; `_registry_url` calls
+  `load_runtime_settings` at each Registry call; `REGISTRY_BASE_URL_VARIABLE`
+  removed; `runtime_settings` moved before `registry_gateway` in
+  `module_order`. A missing, empty or whitespace-only URL now stops the start
+  (and the bootstrap command); an unusable non-empty one still fails each
+  call as `transport_error`. Behaviour change: `SEMANTIC_DIFF.md`.
+- `04cd3253`… State 2 round-101 standard violations and test gaps fixed;
+  rounds 102–109 and their fixes (A6 failure order, A16 control set,
+  INV-037/INV-041/CFG-001/CFG-002 tests, prose rules addresses replaced by
+  the path each value reaches code by). The carried rules namespaces
+  (`registry_status_policy`, `project_guard_sequence`, `producer_scope_policy`,
+  `idempotency_identities`, … 13 in all) are read by no module or backend:
+  each Consequence now says so. Retiring them like FA018 did is an owner
+  question.
+- `54ebf13f` State 7 notes of the 16 review modules in the standard's forms,
+  Q10 mechanism, ProgressPhoto nullable (owner). `0a1ee28f` round-23 fixes:
+  plain enumeration members named by the emitter's NAME, dotted-value ones
+  (`AuditAction`, `Capability`) by value (#167) — except `project_tracking`'s
+  two, named `PAYMENT_REGISTER`/`PROGRESS_UPDATE` after rounds 24–25; new
+  builder `build_replayed_expense_operation_outcome` (IR defect); new
+  constant `SERVICE_KEY_VERSION_FIRST`; `ProjectTrackingRepository` named in
+  the notes so its surface reaches the prompt. One `PortalStore.begin` stays
+  in `_authorize_project_operation` (flow closure reads only dotted calls).
+- Stage 8.1 closed: 39/39 PASS (`81_module_review.md`).
+
+Rounds closed: State 0 (r35), 1 (r52), 3 (r49), 4 (r48), 5 (r36). Open:
+
+- **State 2** (r103/r107/r108/r109, unit-less): the two binary storage rows
+  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`) reach generated code
+  outside `RuntimeSettings` — the emitted `binary_storage` reads them itself,
+  as the Factory binary storage backend is built. A standard violation that
+  takes no disposition: it needs a Factory/standard decision (give the
+  backend settings fields, or name the backend an allowed reader in §6.11).
+- **State 7** `financial_policy` r23 T1–T3: the judge reads the Factory
+  prompt's own record-construction line (#200) as an unclassified note
+  with code syntax. A Factory prompt question; the module's notes are
+  unchanged.
+
+Admission `--update-existing` (no export): BLOCKED, 17 PASS, 1 warning
+(codec coverage incomplete: `budget_repository` is model-written), 1 block:
+FA019 for the two items above. FA002 PASS.
+
+Other for the owner/tools: Q10 — `model_validate(instance,
+from_attributes=True)` returns a same-class instance unchanged under the
+emitted model config, so the note re-validates from the dumped values
+(SOURCE.md "Owner decisions of 2026-11-09"); notes propagation reports a
+pre-existing "Factory blockers" count of 88, 89 after the new builder
+(not a gate here); the workbench MCP server runs tools from
+`spec-workbench-worktrees/workbench-mcp` (main 42 commits behind), so its
+answers for this case fail to project — the checks above used the same
+service functions from this branch.
+
 ## Record construction on `record_construction_backend/v1` (2026-11-08/09) — read this first
 
 Owner decision 2026-11-08: every record a model-written module builds from its
