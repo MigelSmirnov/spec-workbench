@@ -915,6 +915,26 @@ is removed (git keeps it at `7316b443`).
   migration form exists (spec-workbench #147); State 1 M35.
 - **Q07** as already applied (2026-11-08).
 
+State 7 round 23 (2026-11-09), technical decisions under the owner's
+delegation, values unchanged against the accepted code:
+
+- IR defect fixed: `build_expense_operation_outcome` fixes `replayed` false,
+  so the replay path of `_classify_expense_replay` had no builder; the new
+  `build_replayed_expense_operation_outcome` (replayed true, consumer
+  `expense_intake`) is the accepted code's
+  `ExpenseOperationOutcome(aggregate=existing, replayed=True)`
+  (`application/expense_intake.py` 109).
+- Data placement: `SERVICE_KEY_VERSION_FIRST` = 1, the key version of a
+  principal's first credential (`_next_key_version`), a data-provider
+  constant instead of prose.
+- Enumeration members: a member of an enumeration whose values contain a
+  dot (`AuditAction`, `Capability`) is named by its value beside the
+  address (#167); a member of any other enumeration by the name the models
+  emitter writes (`the EXPENSE member of = models.AuditEntityKind`),
+  because the Factory prompt lists those names and asks for them exactly,
+  and round 23 read a value-named plain member as a second member (15
+  contradictions).
+
 ## Record construction: emitters first, gaps to the owner (2026-11-08)
 
 Owner correction of the same day: a prose map of which field comes from
