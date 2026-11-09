@@ -451,8 +451,8 @@ before it projects anything and before any write, a publication object that
 lacks a field its model declares — one built bypassing validation — by
 checking that concrete input shape, never by catching a generic attribute
 error (owner 2026-11-08, Q10). The check is a re-validation of the model
-with a typed refusal, without attribute probing (owner 2026-11-09): the
-consumer validates the publication model again from the field values the
+with a typed refusal, without attribute probing (owner 2026-11-09; the
+mechanism below confirmed by the owner the same day): the consumer validates the publication model again from the field values the
 received instance dumps and refuses a failure as `ExpenseValidationError`;
 it never reads fields by attribute lookup or the attribute dictionary.
 Handing the instance itself to the model's validation would accept it
