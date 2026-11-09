@@ -1,0 +1,131 @@
+{
+ "open_points": [
+  {
+   "subject": "Registry settings read lifecycle",
+   "kind": "contradiction",
+   "text": "A30's environment part: load, normalize, default and validate the closed table `config.runtime_environment_variables` into `RuntimeSettings` once at start, including the startup consistency of the binary bounds (A14).",
+   "question": "Is `load_runtime_settings` executed once at process start, or executed again for every Registry call?",
+   "options": [
+    "Load once at startup and give or cache the resulting `RuntimeSettings` for `registry_gateway`.",
+    "Load at startup for validation and call `load_runtime_settings` again for every Registry operation."
+   ],
+   "default_guess": "Load once at startup and inject the resulting `RuntimeSettings`, because the runtime_settings ownership text and earlier A30 explicitly require one startup read.",
+   "witness": {
+    "initial": "The process has a complete valid environment and has not yet started.",
+    "events": [
+     "The startup owner starts the service.",
+     "A client causes two Registry calls through `registry_gateway`."
+    ],
+    "outcomes": [
+     "The environment table is read once at startup; both Registry calls use the startup `RuntimeSettings`.",
+     "The environment table is read once at startup and once for each Registry call; no startup settings object reaches the gateway."
+    ],
+    "observer": "A verification check instrumenting environment reads sees one read or three reads."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "startup configuration validation",
+   "kind": "missing_owner",
+   "text": "the same environment the start validated",
+   "question": "Which module owns the startup call to `load_runtime_settings` and supplies the validated settings to the modules that need them?",
+   "options": [
+    "`runtime` calls `load_runtime_settings` before serving requests and injects the result into runtime consumers.",
+    "`api.create_app` performs the startup load.",
+    "Loading occurs as an import-time side effect of `runtime_settings`."
+   ],
+   "default_guess": "`runtime` owns the startup call and explicit dependency injection.",
+   "witness": {
+    "initial": "`REGISTRY_BASE_URL` is missing when the process is started.",
+    "events": [
+     "The host invokes the service entry point.",
+     "The startup composition is assembled by the module chosen by the implementer."
+    ],
+    "outcomes": [
+     "A `runtime`-owned startup load refuses startup before an application is created.",
+     "An API-owned or import-side-effect load assigns startup refusal and its dependency to a different module."
+    ],
+    "observer": "The startup verification and dependency-graph checks see different owning modules and call paths."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Registry-call configuration failures",
+   "kind": "failure_translation",
+   "text": "the call reads and validates the environment again through `runtime_settings`",
+   "question": "If this repeated full-environment validation fails during a Registry call, what failure crosses the gateway boundary?",
+   "options": [
+    "Translate every settings-loading failure to `RegistryBoundaryError(kind=transport_error)`.",
+    "Let the runtime-settings validation error escape.",
+    "Reload and validate only `REGISTRY_BASE_URL`, so unrelated settings cannot fail a Registry call."
+   ],
+   "default_guess": "Do not reload at Registry-call time; if reloading is retained, translate an unusable or missing Registry URL to `transport_error` and specify treatment of every other validation failure.",
+   "witness": {
+    "initial": "The service started with a valid environment and is ready to serve requests.",
+    "events": [
+     "An in-process host or verification harness makes a required non-Registry environment value unusable after startup.",
+     "A client invokes an operation that makes a Registry call.",
+     "`registry_gateway` calls `load_runtime_settings`, which validates the closed environment table again."
+    ],
+    "outcomes": [
+     "The caller receives the A6 boundary failure `transport_error`.",
+     "A runtime-settings/configuration exception escapes instead of one of the required `RegistryFailureKind` values."
+    ],
+    "observer": "The API caller and the PLAT-REG-005 verification see different error contracts."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "data_provider Registry path exports",
+   "kind": "missing_export",
+   "text": "REGISTRY_CONTEXT_SEGMENT\nREGISTRY_PROJECTS_PATH\nREGISTRY_TIMEOUT_SECONDS\nREGISTRY_VALIDATE_SEGMENT",
+   "question": "Must `data_provider` publicly export `REGISTRY_ACTIVE_SEGMENT`, which A6 and A30 say is joined with `REGISTRY_PROJECTS_PATH` for `projects/active`?",
+   "options": [
+    "Add `REGISTRY_ACTIVE_SEGMENT` to the public capabilities of `data_provider`.",
+    "Do not export it and encode `active` in `registry_gateway` or another path value."
+   ],
+   "default_guess": "Export `REGISTRY_ACTIVE_SEGMENT` from `data_provider`, matching the one-home rule and A30's named constant.",
+   "witness": {
+    "initial": "The active-project Registry operation must request `projects/active`.",
+    "events": [
+     "The generator builds `registry_gateway` from the State 3 module surface.",
+     "The gateway constructs the active-project path."
+    ],
+    "outcomes": [
+     "`REGISTRY_ACTIVE_SEGMENT` is exported and imported, so the gateway joins the two owned constants.",
+     "The candidate surface is treated as complete, so the gateway must hard-code `active`, use a different constant, or fail generation."
+    ],
+    "observer": "The import projector or a Registry stub sees either a declared constant-backed path or a missing/duplicated value."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "api to api_irregular dependency surface",
+   "kind": "incomplete_import_surface",
+   "text": "the imports closure now carries it in `imports.module_internal`",
+   "question": "Which exact exported symbol or symbols does `api` import from `api_irregular` to mount the seven viewer endpoints?",
+   "options": [
+    "Import a viewer router object.",
+    "Import a route-registration function.",
+    "Import an `api_irregular` application/factory and compose it."
+   ],
+   "default_guess": "Expose and import one viewer router object, then include it from `api.create_app`.",
+   "witness": {
+    "initial": "`api` must mount the seven viewer endpoints and the module-level edge `api` → `api_irregular` exists.",
+    "events": [
+     "A later agent writes the `api_irregular` public surface.",
+     "Another agent writes the direct import in `api` and the corresponding `module_internal` symbol list."
+    ],
+    "outcomes": [
+     "The modules use a router-object export and `module_internal` names that object.",
+     "The modules use a registration function or factory and `module_internal` names that different export."
+    ],
+    "observer": "The projector, generated source, and dependency reviewer see different direct runtime import surfaces."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Registry settings read lifecycle\",\"kind\":\"contradiction\",\"text\":\"A30's environment part: load, normalize, default and validate the closed table `config.runtime_environment_variables` into `RuntimeSettings` once at start, including the startup consistency of the binary bounds (A14).\",\"question\":\"Is `load_runtime_settings` executed once at process start, or executed again for every Registry call?\",\"options\":[\"Load once at startup and give or cache the resulting `RuntimeSettings` for `registry_gateway`.\",\"Load at startup for validation and call `load_runtime_settings` again for every Registry operation.\"],\"default_guess\":\"Load once at startup and inject the resulting `RuntimeSettings`, because the runtime_settings ownership text and earlier A30 explicitly require one startup read.\",\"witness\":{\"initial\":\"The process has a complete valid environment and has not yet started.\",\"events\":[\"The startup owner starts the service.\",\"A client causes two Registry calls through `registry_gateway`.\"],\"outcomes\":[\"The environment table is read once at startup; both Registry calls use the startup `RuntimeSettings`.\",\"The environment table is read once at startup and once for each Registry call; no startup settings object reaches the gateway.\"],\"observer\":\"A verification check instrumenting environment reads sees one read or three reads.\"}},{\"subject\":\"startup configuration validation\",\"kind\":\"missing_owner\",\"text\":\"the same environment the start validated\",\"question\":\"Which module owns the startup call to `load_runtime_settings` and supplies the validated settings to the modules that need them?\",\"options\":[\"`runtime` calls `load_runtime_settings` before serving requests and injects the result into runtime consumers.\",\"`api.create_app` performs the startup load.\",\"Loading occurs as an import-time side effect of `runtime_settings`.\"],\"default_guess\":\"`runtime` owns the startup call and explicit dependency injection.\",\"witness\":{\"initial\":\"`REGISTRY_BASE_URL` is missing when the process is started.\",\"events\":[\"The host invokes the service entry point.\",\"The startup composition is assembled by the module chosen by the implementer.\"],\"outcomes\":[\"A `runtime`-owned startup load refuses startup before an application is created.\",\"An API-owned or import-side-effect load assigns startup refusal and its dependency to a different module.\"],\"observer\":\"The startup verification and dependency-graph checks see different owning modules and call paths.\"}},{\"subject\":\"Registry-call configuration failures\",\"kind\":\"failure_translation\",\"text\":\"the call reads and validates the environment again through `runtime_settings`\",\"question\":\"If this repeated full-environment validation fails during a Registry call, what failure crosses the gateway boundary?\",\"options\":[\"Translate every settings-loading failure to `RegistryBoundaryError(kind=transport_error)`.\",\"Let the runtime-settings validation error escape.\",\"Reload and validate only `REGISTRY_BASE_URL`, so unrelated settings cannot fail a Registry call.\"],\"default_guess\":\"Do not reload at Registry-call time; if reloading is retained, translate an unusable or missing Registry URL to `transport_error` and specify treatment of every other validation failure.\",\"witness\":{\"initial\":\"The service started with a valid environment and is ready to serve requests.\",\"events\":[\"An in-process host or verification harness makes a required non-Registry environment value unusable after startup.\",\"A client invokes an operation that makes a Registry call.\",\"`registry_gateway` calls `load_runtime_settings`, which validates the closed environment table again.\"],\"outcomes\":[\"The caller receives the A6 boundary failure `transport_error`.\",\"A runtime-settings/configuration exception escapes instead of one of the required `RegistryFailureKind` values.\"],\"observer\":\"The API caller and the PLAT-REG-005 verification see different error contracts.\"}},{\"subject\":\"data_provider Registry path exports\",\"kind\":\"missing_export\",\"text\":\"REGISTRY_CONTEXT_SEGMENT\\nREGISTRY_PROJECTS_PATH\\nREGISTRY_TIMEOUT_SECONDS\\nREGISTRY_VALIDATE_SEGMENT\",\"question\":\"Must `data_provider` publicly export `REGISTRY_ACTIVE_SEGMENT`, which A6 and A30 say is joined with `REGISTRY_PROJECTS_PATH` for `projects/active`?\",\"options\":[\"Add `REGISTRY_ACTIVE_SEGMENT` to the public capabilities of `data_provider`.\",\"Do not export it and encode `active` in `registry_gateway` or another path value.\"],\"default_guess\":\"Export `REGISTRY_ACTIVE_SEGMENT` from `data_provider`, matching the one-home rule and A30's named constant.\",\"witness\":{\"initial\":\"The active-project Registry operation must request `projects/active`.\",\"events\":[\"The generator builds `registry_gateway` from the State 3 module surface.\",\"The gateway constructs the active-project path.\"],\"outcomes\":[\"`REGISTRY_ACTIVE_SEGMENT` is exported and imported, so the gateway joins the two owned constants.\",\"The candidate surface is treated as complete, so the gateway must hard-code `active`, use a different constant, or fail generation.\"],\"observer\":\"The import projector or a Registry stub sees either a declared constant-backed path or a missing/duplicated value.\"}},{\"subject\":\"api to api_irregular dependency surface\",\"kind\":\"incomplete_import_surface\",\"text\":\"the imports closure now carries it in `imports.module_internal`\",\"question\":\"Which exact exported symbol or symbols does `api` import from `api_irregular` to mount the seven viewer endpoints?\",\"options\":[\"Import a viewer router object.\",\"Import a route-registration function.\",\"Import an `api_irregular` application/factory and compose it.\"],\"default_guess\":\"Expose and import one viewer router object, then include it from `api.create_app`.\",\"witness\":{\"initial\":\"`api` must mount the seven viewer endpoints and the module-level edge `api` → `api_irregular` exists.\",\"events\":[\"A later agent writes the `api_irregular` public surface.\",\"Another agent writes the direct import in `api` and the corresponding `module_internal` symbol list.\"],\"outcomes\":[\"The modules use a router-object export and `module_internal` names that object.\",\"The modules use a registration function or factory and `module_internal` names that different export.\"],\"observer\":\"The projector, generated source, and dependency reviewer see different direct runtime import surfaces.\"}}]}",
+ "set_aside": []
+}

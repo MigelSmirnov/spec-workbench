@@ -1,0 +1,87 @@
+{
+ "open_points": [
+  {
+   "subject": "Registry runtime-settings lifetime",
+   "kind": "contradiction",
+   "text": "`RuntimeSettings` that `load_runtime_settings` returns, which it calls at\neach Registry call: the call reads and validates the environment again\nthrough `runtime_settings`, the same environment the start validated, and\nno settings object is handed to the gateway or cached by it",
+   "question": "Must `RuntimeSettings` be loaded once at startup and handed to `registry_gateway`, as `runtime_settings` and A30 say, or must the gateway call `load_runtime_settings` and reread the environment for every Registry call?",
+   "options": [
+    "Load once at startup and inject the resulting `RuntimeSettings` into `registry_gateway`.",
+    "Call `load_runtime_settings` for every Registry operation and use the current environment.",
+    "Load once at startup but reload only `REGISTRY_BASE_URL` for each Registry operation."
+   ],
+   "default_guess": "Load once at startup and inject the resulting `RuntimeSettings`, preserving the repeatedly stated single-read configuration model.",
+   "witness": {
+    "initial": "The service starts successfully while `REGISTRY_BASE_URL` is `https://registry-a.example`; afterward the host changes it to `https://registry-b.example` without restarting the service.",
+    "events": [
+     "The runtime performs its startup settings load.",
+     "The host operator changes `REGISTRY_BASE_URL`.",
+     "An API caller starts an operation that requires Registry validation.",
+     "`registry_gateway` chooses the base URL for that call."
+    ],
+    "outcomes": [
+     "A startup-owned settings implementation calls `https://registry-a.example`.",
+     "A per-call `load_runtime_settings` implementation calls `https://registry-b.example`."
+    ],
+    "observer": "The API caller and the operators of the two Registry endpoints see which Registry supplied the authorization result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Per-call settings validation failure",
+   "kind": "undefined_failure_mapping",
+   "text": "the call reads and validates the environment again\nthrough `runtime_settings`",
+   "question": "If a per-Registry-call `load_runtime_settings` invocation fails after startup, especially because an unrelated required environment value became missing or invalid, what typed failure must `registry_gateway` return and may it make the HTTP request?",
+   "options": [
+    "Translate every reload failure to `RegistryBoundaryError(kind=transport_error)` and make no Registry request.",
+    "Propagate the runtime-settings validation error outside the Registry failure contract.",
+    "Use the last successfully loaded settings and continue the Registry call.",
+    "Reload and validate only `REGISTRY_BASE_URL`, so unrelated environment rows cannot fail a Registry call."
+   ],
+   "default_guess": "Make no Registry request and translate a failure relevant to the Registry URL to `transport_error`; do not revalidate unrelated settings during a Registry call.",
+   "witness": {
+    "initial": "The service has started with a complete valid environment and a usable Registry URL; afterward an unrelated required setting such as `DATABASE_URL` becomes missing while the Registry URL remains usable.",
+    "events": [
+     "An API caller invokes an operation requiring Registry validation.",
+     "`registry_gateway` calls `load_runtime_settings`.",
+     "The loader encounters the now-missing unrelated setting before an HTTP request is made."
+    ],
+    "outcomes": [
+     "The gateway converts the loader failure into the Registry contract's `transport_error`.",
+     "The loader's configuration exception escapes and produces a different API failure; alternatively an implementation using cached startup settings completes the Registry call."
+    ],
+    "observer": "The API caller sees a Registry boundary response, an internal/configuration response, or a successful operation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "REGISTRY_ACTIVE_SEGMENT export",
+   "kind": "missing_public_capability",
+   "text": "the Registry paths and timeout",
+   "question": "Must `data_provider` publicly export `REGISTRY_ACTIVE_SEGMENT`, which A6 and A30 require generated `registry_gateway` code to import, even though it is absent from this module's Candidate public capabilities?",
+   "options": [
+    "Add `REGISTRY_ACTIVE_SEGMENT` to `data_provider`'s public capabilities.",
+    "Replace the split path representation with a single exported active-project path.",
+    "Require `registry_gateway` to spell or derive the `active` segment locally."
+   ],
+   "default_guess": "Add `REGISTRY_ACTIVE_SEGMENT` to the public capabilities so the required path remains owned by `data_provider` and imported by name.",
+   "witness": {
+    "initial": "The Registry exposes the portal-compatible list at `projects/active`, while plain `projects` returns the incompatible `ProjectSummary` shape described by A6.",
+    "events": [
+     "A generated `registry_gateway` implementation constructs the active-project-list URL.",
+     "The implementer consults the listed public capabilities of `data_provider`.",
+     "The implementation requests the active-project list."
+    ],
+    "outcomes": [
+     "An implementer follows A30, adds/imports `REGISTRY_ACTIVE_SEGMENT`, and requests `projects/active`.",
+     "An implementer follows the listed export surface and either requests plain `projects` or embeds the word `active` locally."
+    ],
+    "observer": "The Registry and the API caller observe either a successfully decoded active-project list or a schema failure; maintainers also observe whether the segment has one owner or is repeated in gateway code."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Registry runtime-settings lifetime\",\"kind\":\"contradiction\",\"text\":\"`RuntimeSettings` that `load_runtime_settings` returns, which it calls at\\neach Registry call: the call reads and validates the environment again\\nthrough `runtime_settings`, the same environment the start validated, and\\nno settings object is handed to the gateway or cached by it\",\"question\":\"Must `RuntimeSettings` be loaded once at startup and handed to `registry_gateway`, as `runtime_settings` and A30 say, or must the gateway call `load_runtime_settings` and reread the environment for every Registry call?\",\"options\":[\"Load once at startup and inject the resulting `RuntimeSettings` into `registry_gateway`.\",\"Call `load_runtime_settings` for every Registry operation and use the current environment.\",\"Load once at startup but reload only `REGISTRY_BASE_URL` for each Registry operation.\"],\"default_guess\":\"Load once at startup and inject the resulting `RuntimeSettings`, preserving the repeatedly stated single-read configuration model.\",\"witness\":{\"initial\":\"The service starts successfully while `REGISTRY_BASE_URL` is `https://registry-a.example`; afterward the host changes it to `https://registry-b.example` without restarting the service.\",\"events\":[\"The runtime performs its startup settings load.\",\"The host operator changes `REGISTRY_BASE_URL`.\",\"An API caller starts an operation that requires Registry validation.\",\"`registry_gateway` chooses the base URL for that call.\"],\"outcomes\":[\"A startup-owned settings implementation calls `https://registry-a.example`.\",\"A per-call `load_runtime_settings` implementation calls `https://registry-b.example`.\"],\"observer\":\"The API caller and the operators of the two Registry endpoints see which Registry supplied the authorization result.\"}},{\"subject\":\"Per-call settings validation failure\",\"kind\":\"undefined_failure_mapping\",\"text\":\"the call reads and validates the environment again\\nthrough `runtime_settings`\",\"question\":\"If a per-Registry-call `load_runtime_settings` invocation fails after startup, especially because an unrelated required environment value became missing or invalid, what typed failure must `registry_gateway` return and may it make the HTTP request?\",\"options\":[\"Translate every reload failure to `RegistryBoundaryError(kind=transport_error)` and make no Registry request.\",\"Propagate the runtime-settings validation error outside the Registry failure contract.\",\"Use the last successfully loaded settings and continue the Registry call.\",\"Reload and validate only `REGISTRY_BASE_URL`, so unrelated environment rows cannot fail a Registry call.\"],\"default_guess\":\"Make no Registry request and translate a failure relevant to the Registry URL to `transport_error`; do not revalidate unrelated settings during a Registry call.\",\"witness\":{\"initial\":\"The service has started with a complete valid environment and a usable Registry URL; afterward an unrelated required setting such as `DATABASE_URL` becomes missing while the Registry URL remains usable.\",\"events\":[\"An API caller invokes an operation requiring Registry validation.\",\"`registry_gateway` calls `load_runtime_settings`.\",\"The loader encounters the now-missing unrelated setting before an HTTP request is made.\"],\"outcomes\":[\"The gateway converts the loader failure into the Registry contract's `transport_error`.\",\"The loader's configuration exception escapes and produces a different API failure; alternatively an implementation using cached startup settings completes the Registry call.\"],\"observer\":\"The API caller sees a Registry boundary response, an internal/configuration response, or a successful operation.\"}},{\"subject\":\"REGISTRY_ACTIVE_SEGMENT export\",\"kind\":\"missing_public_capability\",\"text\":\"the Registry paths and timeout\",\"question\":\"Must `data_provider` publicly export `REGISTRY_ACTIVE_SEGMENT`, which A6 and A30 require generated `registry_gateway` code to import, even though it is absent from this module's Candidate public capabilities?\",\"options\":[\"Add `REGISTRY_ACTIVE_SEGMENT` to `data_provider`'s public capabilities.\",\"Replace the split path representation with a single exported active-project path.\",\"Require `registry_gateway` to spell or derive the `active` segment locally.\"],\"default_guess\":\"Add `REGISTRY_ACTIVE_SEGMENT` to the public capabilities so the required path remains owned by `data_provider` and imported by name.\",\"witness\":{\"initial\":\"The Registry exposes the portal-compatible list at `projects/active`, while plain `projects` returns the incompatible `ProjectSummary` shape described by A6.\",\"events\":[\"A generated `registry_gateway` implementation constructs the active-project-list URL.\",\"The implementer consults the listed public capabilities of `data_provider`.\",\"The implementation requests the active-project list.\"],\"outcomes\":[\"An implementer follows A30, adds/imports `REGISTRY_ACTIVE_SEGMENT`, and requests `projects/active`.\",\"An implementer follows the listed export surface and either requests plain `projects` or embeds the word `active` locally.\"],\"observer\":\"The Registry and the API caller observe either a successfully decoded active-project list or a schema failure; maintainers also observe whether the segment has one owner or is repeated in gateway code.\"}}]}",
+ "set_aside": []
+}

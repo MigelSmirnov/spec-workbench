@@ -1569,8 +1569,9 @@ R0-10's check covers, read into the `registry_base_url` field of
 gateway takes the value from the settings `load_runtime_settings` returns,
 never from the environment. Before this decision the gateway read the
 variable itself at each call, and its absence failed only Registry calls
-(`SEMANTIC_DIFF.md`). The start-up check refuses only a missing or empty
-value; which values the gateway accepts as a base URL and how it joins them
+(`SEMANTIC_DIFF.md`). The start-up check refuses only a missing value or
+one that is empty or whitespace only, tested on the value as supplied (the
+row's normalization is `none`); which values the gateway accepts as a base URL and how it joins them
 with the request paths stay the accepted gateway's (note `_registry_url`,
 the Registry path constants), carried to States 6–7.
 
@@ -1629,8 +1630,9 @@ the Registry path constants), carried to States 6–7.
   from the instant their issue time plus their lifetime is reached; the
   viewer-entry attempt after the limit within the window is refused and
   creates no session; a request body over its bound and a binary over its
-  read bound are refused before the handler or the response; and the start
-  is refused when the read bound exceeds the response bound.
+  read bound are refused before the handler or the response; a binary within
+  the read bound but over `max_binary_response_bytes` is not sent; and the
+  start is refused when the read bound exceeds the response bound.
 - CFG-002: `runtime_settings_client_portal`: for each required variable
   other than `REGISTRY_BASE_URL` a missing value and an invalid value stop
   start-up; a missing or empty `REGISTRY_BASE_URL` stops it, while a

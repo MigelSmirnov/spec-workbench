@@ -1718,8 +1718,10 @@ install_transport_guards
 ### Owns
 
 A30's environment part: load, normalize, default and validate the closed
-table `config.runtime_environment_variables` into `RuntimeSettings` once at
-start, including the startup consistency of the binary bounds (A14). Factory
+table `config.runtime_environment_variables` into `RuntimeSettings` at each
+call of `load_runtime_settings` — once at start by `runtime` and by the
+bootstrap command, and again at each Registry call by `registry_gateway`
+(owner 2026-11-09) — including the startup consistency of the binary bounds (A14). Factory
 `38626cc7be12`.
 
 ### Knows

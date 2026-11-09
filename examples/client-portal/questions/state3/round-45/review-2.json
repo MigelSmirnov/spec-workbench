@@ -1,0 +1,83 @@
+{
+ "open_points": [
+  {
+   "subject": "Registry configuration lifetime",
+   "kind": "contradiction",
+   "text": "`registry_gateway` takes the Registry URL from the `registry_base_url` field of the `RuntimeSettings` that `load_runtime_settings` returns, which it calls at each Registry call: the call reads and validates the environment again through `runtime_settings`, the same environment the start validated, and no settings object is handed to the gateway or cached by it",
+   "question": "Must Registry calls use the RuntimeSettings snapshot loaded once at startup, as `runtime_settings` and A30 say, or reload the process environment for every call as this passage says?",
+   "options": [
+    "Load RuntimeSettings once at startup and inject that snapshot into registry_gateway",
+    "Call load_runtime_settings for every Registry operation and observe the current environment"
+   ],
+   "default_guess": "Load RuntimeSettings once at startup and inject that snapshot into registry_gateway.",
+   "witness": {
+    "initial": "The process starts with a valid environment whose REGISTRY_BASE_URL is URL A.",
+    "events": [
+     "The startup owner calls load_runtime_settings and obtains RuntimeSettings containing URL A.",
+     "A test harness changes the process environment so REGISTRY_BASE_URL is URL B.",
+     "A caller invokes list_active_projects."
+    ],
+    "outcomes": [
+     "Following the once-at-start passages, registry_gateway calls URL A.",
+     "Following the changed State 3 passage, registry_gateway reloads the environment and calls URL B."
+    ],
+    "observer": "The Registry receiving the request and the API caller receiving its answer."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Per-call RuntimeSettings validation failure",
+   "kind": "failure_mapping_gap",
+   "text": "the call reads and validates the environment again through `runtime_settings`",
+   "question": "What must a Registry operation answer when this new per-call full-environment validation fails, especially because an unrelated required setting became missing or invalid after startup?",
+   "options": [
+    "Translate the failure to RegistryBoundaryError with kind transport_error",
+    "Propagate the runtime-settings validation error as an internal failure",
+    "Keep using the startup-loaded settings and therefore perform no per-call configuration validation"
+   ],
+   "default_guess": "Translate a missing or unusable Registry URL to transport_error, but do not revalidate unrelated settings during a Registry call.",
+   "witness": {
+    "initial": "The service starts with every required environment value valid.",
+    "events": [
+     "After startup, a test harness makes DATABASE_URL invalid while leaving REGISTRY_BASE_URL valid.",
+     "A caller invokes validate_project_reference.",
+     "registry_gateway calls load_runtime_settings before making the Registry request."
+    ],
+    "outcomes": [
+     "One implementation converts the loader failure to RegistryBoundaryError(transport_error), preserving A6's closed Registry failure boundary.",
+     "Another lets the configuration exception escape, producing an unclassified internal error and making no Registry request."
+    ],
+    "observer": "The API caller sees a declared Registry failure in one implementation and an internal error in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "REGISTRY_ACTIVE_SEGMENT export",
+   "kind": "public_surface_contradiction",
+   "text": "the Registry paths and timeout",
+   "question": "Does data_provider export REGISTRY_ACTIVE_SEGMENT for registry_gateway to join with REGISTRY_PROJECTS_PATH, as A6 and A30 require, or is the Candidate public capabilities list intentionally complete without it?",
+   "options": [
+    "Add REGISTRY_ACTIVE_SEGMENT to data_provider's exported capabilities and registry_gateway's direct import surface",
+    "Make REGISTRY_PROJECTS_PATH contain the complete projects/active path and remove the separate-segment requirement",
+    "Use the plain projects path because only the listed capabilities are available"
+   ],
+   "default_guess": "Export and import REGISTRY_ACTIVE_SEGMENT separately, preserving the A6/A30 projects/active construction.",
+   "witness": {
+    "initial": "The Registry's plain projects endpoint returns ProjectSummary objects, while projects/active returns the ProjectReference shape required by the portal.",
+    "events": [
+     "registry_gateway builds the URL for list_active_projects.",
+     "It decodes the Registry response as ProjectReference values."
+    ],
+    "outcomes": [
+     "An implementation following A6/A30 imports REGISTRY_ACTIVE_SEGMENT, requests projects/active, and decodes the response.",
+     "An implementation treating the Candidate public capabilities list as the available surface has no active segment, requests projects, and fails with schema_mismatch when the list is non-empty."
+    ],
+    "observer": "The API caller requesting the active project list."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Registry configuration lifetime\",\"kind\":\"contradiction\",\"text\":\"`registry_gateway` takes the Registry URL from the `registry_base_url` field of the `RuntimeSettings` that `load_runtime_settings` returns, which it calls at each Registry call: the call reads and validates the environment again through `runtime_settings`, the same environment the start validated, and no settings object is handed to the gateway or cached by it\",\"question\":\"Must Registry calls use the RuntimeSettings snapshot loaded once at startup, as `runtime_settings` and A30 say, or reload the process environment for every call as this passage says?\",\"options\":[\"Load RuntimeSettings once at startup and inject that snapshot into registry_gateway\",\"Call load_runtime_settings for every Registry operation and observe the current environment\"],\"default_guess\":\"Load RuntimeSettings once at startup and inject that snapshot into registry_gateway.\",\"witness\":{\"initial\":\"The process starts with a valid environment whose REGISTRY_BASE_URL is URL A.\",\"events\":[\"The startup owner calls load_runtime_settings and obtains RuntimeSettings containing URL A.\",\"A test harness changes the process environment so REGISTRY_BASE_URL is URL B.\",\"A caller invokes list_active_projects.\"],\"outcomes\":[\"Following the once-at-start passages, registry_gateway calls URL A.\",\"Following the changed State 3 passage, registry_gateway reloads the environment and calls URL B.\"],\"observer\":\"The Registry receiving the request and the API caller receiving its answer.\"}},{\"subject\":\"Per-call RuntimeSettings validation failure\",\"kind\":\"failure_mapping_gap\",\"text\":\"the call reads and validates the environment again through `runtime_settings`\",\"question\":\"What must a Registry operation answer when this new per-call full-environment validation fails, especially because an unrelated required setting became missing or invalid after startup?\",\"options\":[\"Translate the failure to RegistryBoundaryError with kind transport_error\",\"Propagate the runtime-settings validation error as an internal failure\",\"Keep using the startup-loaded settings and therefore perform no per-call configuration validation\"],\"default_guess\":\"Translate a missing or unusable Registry URL to transport_error, but do not revalidate unrelated settings during a Registry call.\",\"witness\":{\"initial\":\"The service starts with every required environment value valid.\",\"events\":[\"After startup, a test harness makes DATABASE_URL invalid while leaving REGISTRY_BASE_URL valid.\",\"A caller invokes validate_project_reference.\",\"registry_gateway calls load_runtime_settings before making the Registry request.\"],\"outcomes\":[\"One implementation converts the loader failure to RegistryBoundaryError(transport_error), preserving A6's closed Registry failure boundary.\",\"Another lets the configuration exception escape, producing an unclassified internal error and making no Registry request.\"],\"observer\":\"The API caller sees a declared Registry failure in one implementation and an internal error in the other.\"}},{\"subject\":\"REGISTRY_ACTIVE_SEGMENT export\",\"kind\":\"public_surface_contradiction\",\"text\":\"the Registry paths and timeout\",\"question\":\"Does data_provider export REGISTRY_ACTIVE_SEGMENT for registry_gateway to join with REGISTRY_PROJECTS_PATH, as A6 and A30 require, or is the Candidate public capabilities list intentionally complete without it?\",\"options\":[\"Add REGISTRY_ACTIVE_SEGMENT to data_provider's exported capabilities and registry_gateway's direct import surface\",\"Make REGISTRY_PROJECTS_PATH contain the complete projects/active path and remove the separate-segment requirement\",\"Use the plain projects path because only the listed capabilities are available\"],\"default_guess\":\"Export and import REGISTRY_ACTIVE_SEGMENT separately, preserving the A6/A30 projects/active construction.\",\"witness\":{\"initial\":\"The Registry's plain projects endpoint returns ProjectSummary objects, while projects/active returns the ProjectReference shape required by the portal.\",\"events\":[\"registry_gateway builds the URL for list_active_projects.\",\"It decodes the Registry response as ProjectReference values.\"],\"outcomes\":[\"An implementation following A6/A30 imports REGISTRY_ACTIVE_SEGMENT, requests projects/active, and decodes the response.\",\"An implementation treating the Candidate public capabilities list as the available surface has no active segment, requests projects, and fails with schema_mismatch when the list is non-empty.\"],\"observer\":\"The API caller requesting the active project list.\"}}]}",
+ "set_aside": []
+}

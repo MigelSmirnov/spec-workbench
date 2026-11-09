@@ -1,0 +1,108 @@
+{
+ "open_points": [
+  {
+   "subject": "A30: Accepted decision A30 — Configuration — meaning of an empty REGISTRY_BASE_URL",
+   "kind": "refusal_condition",
+   "text": "a missing or empty value stops the start",
+   "question": "Is emptiness tested on the raw environment string or after normalization such as trimming whitespace?",
+   "options": [
+    "Only the zero-length raw value is empty, so whitespace-only values start successfully.",
+    "Normalization runs first, so a whitespace-only value is empty and stops start-up."
+   ],
+   "default_guess": "Treat only the zero-length raw value as empty, because every non-empty form is expressly accepted at start.",
+   "witness": {
+    "initial": "Every required environment variable is valid, and REGISTRY_BASE_URL is three space characters.",
+    "events": [
+     "The deployment operator starts the service."
+    ],
+    "outcomes": [
+     "Start-up succeeds because the raw value is non-empty; a later Registry call fails as transport_error.",
+     "Start-up stops because normalization turns the value into an empty string."
+    ],
+    "observer": "The deployment operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 and A6 — Registry base-URL acceptance and path joining",
+   "kind": "deferred_undefined_behavior",
+   "text": "The start-up check refuses only a missing or empty value; which values the gateway accepts as a base URL and how it joins them with the request paths stay the accepted gateway's (note `_registry_url`, the Registry path constants), carried to States 6–7.",
+   "question": "What exact URL forms does the gateway refuse, and what exact normalization and joining algorithm applies to paths, trailing slashes, queries, fragments, ports and percent-encoding?",
+   "options": [
+    "Specify the complete accepted URL grammar and deterministic joining rules in State 2.",
+    "Declare every non-empty http/https URL without user information acceptable and define a standard URL-resolution operation.",
+    "Define a narrower base-URL grammar, including explicit refusal of query, fragment or other disallowed components."
+   ],
+   "default_guess": "Accept only absolute http/https URLs without user information, query or fragment, normalize one trailing slash, and append each path segment with URL-aware joining.",
+   "witness": {
+    "initial": "REGISTRY_BASE_URL is https://registry.example/root?tenant=a and all other start-up settings are valid.",
+    "events": [
+     "The deployment operator starts the service.",
+     "An API caller triggers a Registry validation call."
+    ],
+    "outcomes": [
+     "The gateway accepts the value as an HTTPS base and joins the validation path to it.",
+     "The gateway treats a query-bearing URL as not being a base URL and returns transport_error before making a request."
+    ],
+    "observer": "The API caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 and 02_rules.md:Classification principles — binary storage environment values",
+   "kind": "contradictory_value_path",
+   "text": "a value that depends on the deployment (URLs, origins, hosts, size bounds, rate limits) — a row of the start-up table `config.runtime_environment_variables`, validated once at start by `runtime_settings` and read into a field of `RuntimeSettings`; the one exception is the two binary storage rows (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and which the emitted `binary_storage` reads at each read, as the Factory's binary storage backend is built (A14, A30).",
+   "question": "Are BINARY_STORAGE_ROOT and BINARY_MAX_READ_BYTES immutable start-up settings loaded once into RuntimeSettings, or environment variables reread by binary_storage for every operation?",
+   "options": [
+    "Load both once into RuntimeSettings fields and pass those values to binary_storage.",
+    "Validate them at start but reread the process environment on every binary read.",
+    "Load an immutable binary-storage configuration object once, distinct from RuntimeSettings."
+   ],
+   "default_guess": "Load both once into typed settings fields and pass the immutable values to binary_storage.",
+   "witness": {
+    "initial": "BINARY_MAX_READ_BYTES is 100 when the service starts, and a stored binary has 75 bytes.",
+    "events": [
+     "The deployment operator starts the service successfully.",
+     "The process environment is changed so BINARY_MAX_READ_BYTES is 50 without restarting the service.",
+     "An authorized client requests the 75-byte binary."
+    ],
+    "outcomes": [
+     "The read succeeds because configuration was read once at start and remains 100.",
+     "The read is refused because binary_storage rereads the environment and observes 50."
+    ],
+    "observer": "The authorized client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "02_rules.md:Classification principles",
+   "kind": "standard_violation",
+   "text": "the one exception is the two binary storage rows\n  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and\n  which the emitted `binary_storage` reads at each read, as the Factory's\n  binary storage backend is built (A14, A30).",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Replace the exception with settings-object fields, or reclassify the values into another path that 15.3.1 permits.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30: Accepted decision A30 — Configuration — binary_read_limit_env_name",
+   "kind": "standard_violation",
+   "text": "`binary_read_limit_env_name`: the binary read limit is the environment\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\n  field; the emitted `binary_storage` reads it at each read through its\n  backend IR (Factory `a6916180314d`). No model-written module reads it.",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Make BINARY_MAX_READ_BYTES a field of the settings object used by generated code, or place it on another permitted 15.3.1 path.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30: Accepted decision A30 — Configuration — Consequence",
+   "kind": "standard_violation",
+   "text": "A deployment value is a row of `config.runtime_environment_variables` read only by `load_runtime_settings`, into a field of `RuntimeSettings` (`database_url`, `environment`, `public_origin`, `trusted_hosts`, `allowed_origins`, `max_request_body_bytes`, `max_binary_response_bytes`, `production_logging`, the two viewer-entry limits and, since 2026-11-09, `registry_base_url`), except the two binary storage rows, which the emitted `binary_storage` reads.",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Remove the exception and state the settings-object fields through which both binary storage deployment values reach binary_storage.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A30: Accepted decision A30 — Configuration — meaning of an empty REGISTRY_BASE_URL\",\"kind\":\"refusal_condition\",\"text\":\"a missing or empty value stops the start\",\"question\":\"Is emptiness tested on the raw environment string or after normalization such as trimming whitespace?\",\"options\":[\"Only the zero-length raw value is empty, so whitespace-only values start successfully.\",\"Normalization runs first, so a whitespace-only value is empty and stops start-up.\"],\"default_guess\":\"Treat only the zero-length raw value as empty, because every non-empty form is expressly accepted at start.\",\"witness\":{\"initial\":\"Every required environment variable is valid, and REGISTRY_BASE_URL is three space characters.\",\"events\":[\"The deployment operator starts the service.\"],\"outcomes\":[\"Start-up succeeds because the raw value is non-empty; a later Registry call fails as transport_error.\",\"Start-up stops because normalization turns the value into an empty string.\"],\"observer\":\"The deployment operator\"}},{\"subject\":\"A30 and A6 — Registry base-URL acceptance and path joining\",\"kind\":\"deferred_undefined_behavior\",\"text\":\"The start-up check refuses only a missing or empty value; which values the gateway accepts as a base URL and how it joins them with the request paths stay the accepted gateway's (note `_registry_url`, the Registry path constants), carried to States 6–7.\",\"question\":\"What exact URL forms does the gateway refuse, and what exact normalization and joining algorithm applies to paths, trailing slashes, queries, fragments, ports and percent-encoding?\",\"options\":[\"Specify the complete accepted URL grammar and deterministic joining rules in State 2.\",\"Declare every non-empty http/https URL without user information acceptable and define a standard URL-resolution operation.\",\"Define a narrower base-URL grammar, including explicit refusal of query, fragment or other disallowed components.\"],\"default_guess\":\"Accept only absolute http/https URLs without user information, query or fragment, normalize one trailing slash, and append each path segment with URL-aware joining.\",\"witness\":{\"initial\":\"REGISTRY_BASE_URL is https://registry.example/root?tenant=a and all other start-up settings are valid.\",\"events\":[\"The deployment operator starts the service.\",\"An API caller triggers a Registry validation call.\"],\"outcomes\":[\"The gateway accepts the value as an HTTPS base and joins the validation path to it.\",\"The gateway treats a query-bearing URL as not being a base URL and returns transport_error before making a request.\"],\"observer\":\"The API caller\"}},{\"subject\":\"A30 and 02_rules.md:Classification principles — binary storage environment values\",\"kind\":\"contradictory_value_path\",\"text\":\"a value that depends on the deployment (URLs, origins, hosts, size bounds, rate limits) — a row of the start-up table `config.runtime_environment_variables`, validated once at start by `runtime_settings` and read into a field of `RuntimeSettings`; the one exception is the two binary storage rows (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and which the emitted `binary_storage` reads at each read, as the Factory's binary storage backend is built (A14, A30).\",\"question\":\"Are BINARY_STORAGE_ROOT and BINARY_MAX_READ_BYTES immutable start-up settings loaded once into RuntimeSettings, or environment variables reread by binary_storage for every operation?\",\"options\":[\"Load both once into RuntimeSettings fields and pass those values to binary_storage.\",\"Validate them at start but reread the process environment on every binary read.\",\"Load an immutable binary-storage configuration object once, distinct from RuntimeSettings.\"],\"default_guess\":\"Load both once into typed settings fields and pass the immutable values to binary_storage.\",\"witness\":{\"initial\":\"BINARY_MAX_READ_BYTES is 100 when the service starts, and a stored binary has 75 bytes.\",\"events\":[\"The deployment operator starts the service successfully.\",\"The process environment is changed so BINARY_MAX_READ_BYTES is 50 without restarting the service.\",\"An authorized client requests the 75-byte binary.\"],\"outcomes\":[\"The read succeeds because configuration was read once at start and remains 100.\",\"The read is refused because binary_storage rereads the environment and observes 50.\"],\"observer\":\"The authorized client\"}},{\"subject\":\"02_rules.md:Classification principles\",\"kind\":\"standard_violation\",\"text\":\"the one exception is the two binary storage rows\\n  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and\\n  which the emitted `binary_storage` reads at each read, as the Factory's\\n  binary storage backend is built (A14, A30).\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Replace the exception with settings-object fields, or reclassify the values into another path that 15.3.1 permits.\"},{\"subject\":\"A30: Accepted decision A30 — Configuration — binary_read_limit_env_name\",\"kind\":\"standard_violation\",\"text\":\"`binary_read_limit_env_name`: the binary read limit is the environment\\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\\n  field; the emitted `binary_storage` reads it at each read through its\\n  backend IR (Factory `a6916180314d`). No model-written module reads it.\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Make BINARY_MAX_READ_BYTES a field of the settings object used by generated code, or place it on another permitted 15.3.1 path.\"},{\"subject\":\"A30: Accepted decision A30 — Configuration — Consequence\",\"kind\":\"standard_violation\",\"text\":\"A deployment value is a row of `config.runtime_environment_variables` read only by `load_runtime_settings`, into a field of `RuntimeSettings` (`database_url`, `environment`, `public_origin`, `trusted_hosts`, `allowed_origins`, `max_request_body_bytes`, `max_binary_response_bytes`, `production_logging`, the two viewer-entry limits and, since 2026-11-09, `registry_base_url`), except the two binary storage rows, which the emitted `binary_storage` reads.\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Remove the exception and state the settings-object fields through which both binary storage deployment values reach binary_storage.\"}]}",
+ "set_aside": []
+}
