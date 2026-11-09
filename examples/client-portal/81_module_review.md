@@ -26,6 +26,13 @@ home, text only) the packets were recomputed once more: 0 blocks, verdicts
 unchanged. `financial_policy`'s round 23 T1–T3 were re-judged
 `generator_text` in State 7 round 28 (spec-workbench #178).
 
+After `2ac4a641`..`587ef729` (Route B on `3fd38bcc` stopped at
+`expense_intake`: a declared import no note obliged; the sweep named 22
+such imports in 12 modules, all live behaviour, now named in the notes and
+the lost amount check of `create_expense_from_recognition` restored) 18
+packets changed: State 7 rounds 29–31 on the 11 modules whose notes changed,
+closed; structural review 0 blocks; verdicts unchanged, 39/39 PASS.
+
 Second pass: `81_module_review_status.json` records each
 verdict and its packet hash (`slice_sha256`, the FA002 rule over
 `build_slice`), recomputed on the spec after the State 7 rounds below.
