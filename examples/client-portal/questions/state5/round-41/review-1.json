@@ -1,0 +1,134 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "error_contract",
+   "text": "A missing, malformed or inconsistent value (a wildcard host or origin, binary\nbounds out of order) is refused with the `ValueError` the emitted\n`runtime_settings` raises, never carrying a value; its shape is the emitted\nmodule's (Factory `generate_runtime_settings_draft.py`).",
+   "question": "What exact public error contract does `load_runtime_settings` expose: exception class or subclasses, fields, arguments, stable codes, and whether the variable name may be carried?",
+   "options": [
+    "A plain `ValueError` with no structured fields and an unspecified redacted message",
+    "A `ValueError` subclass with a stable error code and variable name but no raw value",
+    "Distinct `ValueError` subclasses or codes for missing, malformed and inconsistent settings"
+   ],
+   "default_guess": "Use a plain `ValueError` with a stable redacted message that identifies the setting but never includes its raw value.",
+   "witness": {
+    "initial": "A required environment variable is malformed.",
+    "events": [
+     "`runtime_settings.load_runtime_settings` validates the variable and must refuse it.",
+     "A caller attempts to classify or present the refusal without inspecting raw environment data."
+    ],
+    "outcomes": [
+     "One implementation raises plain `ValueError('invalid configuration')` with no fields.",
+     "Another raises a `ValueError` subclass carrying a setting name and reason code."
+    ],
+    "observer": "The direct caller and any deployment code handling the exception"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "contradiction",
+   "text": "A later call reads the\nsame process environment the start validated, so it is not refused (State 3\nConfiguration); how a caller answers one is that caller's (A14).",
+   "question": "Can the process environment change after startup, and if it can, must a later call refuse newly invalid settings?",
+   "options": [
+    "The environment is an immutable deployment invariant after startup, so later validation cannot fail",
+    "Every call validates the current environment and may fail if it changed",
+    "Later calls use the startup snapshot instead of rereading the environment"
+   ],
+   "default_guess": "Every call validates the current process environment and may fail if it changed.",
+   "witness": {
+    "initial": "The service starts with a complete valid environment.",
+    "events": [
+     "The service starts and `load_runtime_settings` accepts the environment.",
+     "Code in the running process changes or removes `BINARY_STORAGE_ROOT`.",
+     "A binary read calls `load_runtime_settings` again."
+    ],
+    "outcomes": [
+     "The quoted State 5 passage says the later call is not refused because it reads the environment validated at startup.",
+     "State 3 says `binary_storage` refuses the read as `BinaryStorageError` when settings cannot be loaded, which permits the later validation to fail."
+    ],
+    "observer": "The client requesting the binary"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "input_snapshot",
+   "text": "Read, normalize, default and validate the deployment environment at each call",
+   "question": "Does one call read an atomic snapshot of all environment variables, or may it observe values changed between individual variable reads?",
+   "options": [
+    "Copy the complete process environment at call entry and validate that snapshot",
+    "Read each variable directly while validating, allowing a mixed observation",
+    "Serialize environment mutation and settings loading so either strategy has snapshot semantics"
+   ],
+   "default_guess": "Copy the complete process environment at call entry and validate that snapshot.",
+   "witness": {
+    "initial": "The binary read bound and response ceiling are valid before a call, and another actor can update the process environment.",
+    "events": [
+     "A caller invokes `load_runtime_settings`.",
+     "Another thread changes both bounds from one valid pair to another while the call is reading them."
+    ],
+    "outcomes": [
+     "A snapshot implementation validates either complete pair and succeeds.",
+     "A field-by-field implementation can observe one old and one new bound and refuse them as inconsistent."
+    ],
+    "observer": "The caller whose operation either proceeds or is refused"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "caller_error_mapping",
+   "text": "how a caller answers one is that caller's (A14).",
+   "question": "When `registry_gateway` calls `load_runtime_settings` and settings loading fails, must it propagate `ValueError` or translate it to `RegistryBoundaryError`, and if translated, which `RegistryFailureKind` applies?",
+   "options": [
+    "Propagate the settings `ValueError` unchanged",
+    "Translate it to `RegistryBoundaryError(kind=transport_error)`",
+    "Define a separate configuration failure kind"
+   ],
+   "default_guess": "Translate it to `RegistryBoundaryError(kind=transport_error)` so every failed Registry call retains A6's closed error contract.",
+   "witness": {
+    "initial": "The service started successfully, but `REGISTRY_BASE_URL` is later removed or made empty in the process environment.",
+    "events": [
+     "A portal operation asks `registry_gateway` to make a Registry call.",
+     "The gateway calls `load_runtime_settings`, which refuses before an HTTP request is made."
+    ],
+    "outcomes": [
+     "The gateway exposes the `ValueError` from `runtime_settings`.",
+     "The gateway converts the failure to `RegistryBoundaryError` with `kind=transport_error`."
+    ],
+    "observer": "The portal operation and its API caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "exit_code_gap",
+   "text": "At start the\nrefusal stops the start (and the bootstrap command).",
+   "question": "Which externally observable bootstrap exit code represents a runtime-settings refusal, given that A29's closed exit-code contract lists only success, confirmation mismatch, identity input rejection and bootstrap already completed?",
+   "options": [
+    "Treat invalid configuration as identity input rejection and exit 2",
+    "Add a distinct configuration-failure outcome and exit code",
+    "Let `ValueError` escape and use the host runtime's generic nonzero exit status"
+   ],
+   "default_guess": "Add a distinct configuration-failure outcome and exit code to the closed bootstrap contract.",
+   "witness": {
+    "initial": "No staff account exists, but a required runtime environment variable is missing.",
+    "events": [
+     "The host operator runs `run_bootstrap_cli` and supplies matching credentials.",
+     "The CLI calls `load_runtime_settings` before creating a store.",
+     "Settings loading raises `ValueError`."
+    ],
+    "outcomes": [
+     "One implementation maps the failure to exit code 2 as rejected input.",
+     "Another leaves the exception unhandled and the process exits with a generic nonzero status."
+    ],
+    "observer": "The host operator and deployment script branching on the command's exit code"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"error_contract\",\"text\":\"A missing, malformed or inconsistent value (a wildcard host or origin, binary\\nbounds out of order) is refused with the `ValueError` the emitted\\n`runtime_settings` raises, never carrying a value; its shape is the emitted\\nmodule's (Factory `generate_runtime_settings_draft.py`).\",\"question\":\"What exact public error contract does `load_runtime_settings` expose: exception class or subclasses, fields, arguments, stable codes, and whether the variable name may be carried?\",\"options\":[\"A plain `ValueError` with no structured fields and an unspecified redacted message\",\"A `ValueError` subclass with a stable error code and variable name but no raw value\",\"Distinct `ValueError` subclasses or codes for missing, malformed and inconsistent settings\"],\"default_guess\":\"Use a plain `ValueError` with a stable redacted message that identifies the setting but never includes its raw value.\",\"witness\":{\"initial\":\"A required environment variable is malformed.\",\"events\":[\"`runtime_settings.load_runtime_settings` validates the variable and must refuse it.\",\"A caller attempts to classify or present the refusal without inspecting raw environment data.\"],\"outcomes\":[\"One implementation raises plain `ValueError('invalid configuration')` with no fields.\",\"Another raises a `ValueError` subclass carrying a setting name and reason code.\"],\"observer\":\"The direct caller and any deployment code handling the exception\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"contradiction\",\"text\":\"A later call reads the\\nsame process environment the start validated, so it is not refused (State 3\\nConfiguration); how a caller answers one is that caller's (A14).\",\"question\":\"Can the process environment change after startup, and if it can, must a later call refuse newly invalid settings?\",\"options\":[\"The environment is an immutable deployment invariant after startup, so later validation cannot fail\",\"Every call validates the current environment and may fail if it changed\",\"Later calls use the startup snapshot instead of rereading the environment\"],\"default_guess\":\"Every call validates the current process environment and may fail if it changed.\",\"witness\":{\"initial\":\"The service starts with a complete valid environment.\",\"events\":[\"The service starts and `load_runtime_settings` accepts the environment.\",\"Code in the running process changes or removes `BINARY_STORAGE_ROOT`.\",\"A binary read calls `load_runtime_settings` again.\"],\"outcomes\":[\"The quoted State 5 passage says the later call is not refused because it reads the environment validated at startup.\",\"State 3 says `binary_storage` refuses the read as `BinaryStorageError` when settings cannot be loaded, which permits the later validation to fail.\"],\"observer\":\"The client requesting the binary\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"input_snapshot\",\"text\":\"Read, normalize, default and validate the deployment environment at each call\",\"question\":\"Does one call read an atomic snapshot of all environment variables, or may it observe values changed between individual variable reads?\",\"options\":[\"Copy the complete process environment at call entry and validate that snapshot\",\"Read each variable directly while validating, allowing a mixed observation\",\"Serialize environment mutation and settings loading so either strategy has snapshot semantics\"],\"default_guess\":\"Copy the complete process environment at call entry and validate that snapshot.\",\"witness\":{\"initial\":\"The binary read bound and response ceiling are valid before a call, and another actor can update the process environment.\",\"events\":[\"A caller invokes `load_runtime_settings`.\",\"Another thread changes both bounds from one valid pair to another while the call is reading them.\"],\"outcomes\":[\"A snapshot implementation validates either complete pair and succeeds.\",\"A field-by-field implementation can observe one old and one new bound and refuse them as inconsistent.\"],\"observer\":\"The caller whose operation either proceeds or is refused\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"caller_error_mapping\",\"text\":\"how a caller answers one is that caller's (A14).\",\"question\":\"When `registry_gateway` calls `load_runtime_settings` and settings loading fails, must it propagate `ValueError` or translate it to `RegistryBoundaryError`, and if translated, which `RegistryFailureKind` applies?\",\"options\":[\"Propagate the settings `ValueError` unchanged\",\"Translate it to `RegistryBoundaryError(kind=transport_error)`\",\"Define a separate configuration failure kind\"],\"default_guess\":\"Translate it to `RegistryBoundaryError(kind=transport_error)` so every failed Registry call retains A6's closed error contract.\",\"witness\":{\"initial\":\"The service started successfully, but `REGISTRY_BASE_URL` is later removed or made empty in the process environment.\",\"events\":[\"A portal operation asks `registry_gateway` to make a Registry call.\",\"The gateway calls `load_runtime_settings`, which refuses before an HTTP request is made.\"],\"outcomes\":[\"The gateway exposes the `ValueError` from `runtime_settings`.\",\"The gateway converts the failure to `RegistryBoundaryError` with `kind=transport_error`.\"],\"observer\":\"The portal operation and its API caller\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"exit_code_gap\",\"text\":\"At start the\\nrefusal stops the start (and the bootstrap command).\",\"question\":\"Which externally observable bootstrap exit code represents a runtime-settings refusal, given that A29's closed exit-code contract lists only success, confirmation mismatch, identity input rejection and bootstrap already completed?\",\"options\":[\"Treat invalid configuration as identity input rejection and exit 2\",\"Add a distinct configuration-failure outcome and exit code\",\"Let `ValueError` escape and use the host runtime's generic nonzero exit status\"],\"default_guess\":\"Add a distinct configuration-failure outcome and exit code to the closed bootstrap contract.\",\"witness\":{\"initial\":\"No staff account exists, but a required runtime environment variable is missing.\",\"events\":[\"The host operator runs `run_bootstrap_cli` and supplies matching credentials.\",\"The CLI calls `load_runtime_settings` before creating a store.\",\"Settings loading raises `ValueError`.\"],\"outcomes\":[\"One implementation maps the failure to exit code 2 as rejected input.\",\"Another leaves the exception unhandled and the process exits with a generic nonzero status.\"],\"observer\":\"The host operator and deployment script branching on the command's exit code\"}}]}",
+ "set_aside": []
+}
