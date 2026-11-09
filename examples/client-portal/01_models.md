@@ -1682,8 +1682,10 @@ None.
   which confirms the running service; the Expense rule "None until amended"
   is not carried over to photos). The field types keep `None` as the
   accepted model and the persisted columns do (nullable), so a reader
-  accepts a stored `None`; no portal operation writes one. Tightening the
-  types to non-null is a schema change, not taken here (owner question).
+  accepts a stored `None`; no portal operation writes one. The types stay
+  nullable (owner 2026-11-09): tightening them to non-null would need a
+  schema migration, and the specification has no form for one yet
+  (spec-workbench #147).
 
 ### Carried changes
 

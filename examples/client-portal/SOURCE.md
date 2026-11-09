@@ -799,7 +799,7 @@ The owner accepted every recommendation of the questions document of
 | Q07 | answered again 2026-11-08 (the first choice, `PortalSection.display_name`, names a field `PortalSection` does not have): for a `section` target the name is the `display_name` of that section's `SectionPlan` in the project's active `BudgetVersion`, `None` without an active version or without a plan for the section, always `None` for `other_expenses`. `build_expense_view` passes the active version's plans (empty without one) to `_project_expense_summary`, which passes the name or `None` to `build_expense_allocation_view` | State 1 `ExpenseAllocationView` (condition withdrawn), State 2 A21, State 3 `derived_views`, State 5 `build_expense_view`, State 6 `_project_expense_summary` contract, IR `build_expense_allocation_view` (parameter), State 7 note, `spec/SEMANTIC_DIFF.md` (behaviour change) |
 | Q08 | readiness answers `HEALTH_OK_STATUS` (`ok`) only after the storage probe, with no external check | State 2 A25, IR `build_health_status`; the stale gap entry is gone with the gap list |
 | Q09 | A7 "decoding" is the public input decoding boundary `decode_recognition_publication` of `expense_intake`, refusing an unsupported version from `SUPPORTED_OCR_CONTRACT_VERSIONS` with `ExpenseValidationError`; the consumer re-check stays | State 2 A7, State 3 `expense_intake`, State 4 expense flow, State 5 (new internal-only operation), State 6 contract, State 7 notes |
-| Q10 | `create_expense_from_recognition` refuses an incomplete publication object (built bypassing validation) with `ExpenseValidationError` before projection and before any write, by checking that input shape | State 2 A7, State 4, State 5 errors, State 7 note |
+| Q10 | `create_expense_from_recognition` refuses an incomplete publication object (built bypassing validation) with `ExpenseValidationError` before projection and before any write, by checking that input shape; mechanism (owner 2026-11-09): the model validated again from the instance's dumped field values, a failure refused typed, no attribute probing | State 2 A7, State 4, State 5 errors, State 7 note |
 | Q11 | the Registry v1 wire contract is fixed: 16 positions, nested `project`, `project.project_id`, `is_active`, `registry_updated_at`; the three decoders stay LLM-generated, outside §6.13 | State 1 M17 (table), State 2 A6. `platform/manifest` belongs to the Factory and is not on the Workbench route: the manifest entry is a follow-up |
 | Q12 | `list_active_projects` reads the Registry path `projects/active` (`REGISTRY_PROJECTS_PATH` + new constant `REGISTRY_ACTIVE_SEGMENT`), not `projects` | data provider, State 1 M16, State 2 A6, State 7 note, `spec/SEMANTIC_DIFF.md` (behaviour change) |
 
@@ -896,6 +896,24 @@ is removed (git keeps it at `7316b443`).
   which no import line bound: `from typing import Any` is added to
   `imports.stdlib` of `global_spec.json`, which no tool projects (its lines
   are the accepted spec's).
+
+## Owner decisions of 2026-11-09
+
+- **Registry URL through `runtime_settings`** (approved): see "Data
+  placement" above; A6, A30; `SEMANTIC_DIFF.md`.
+- **Q10 mechanism**: the completeness of a received publication object is
+  checked by re-validating its model, with a typed refusal and no
+  `getattr`/`hasattr`/`vars`. The decision named
+  `model_validate(..., from_attributes=True)`; with the emitted model
+  configuration (`extra="forbid", frozen=True`, no `revalidate_instances`)
+  pydantic 2.12 returns an instance of the model's own class unchanged from
+  that call, so an instance built by `model_construct` without `confirmed_at`
+  passes it (checked 2026-11-09). The note therefore asks for the
+  re-validation from the field values the instance dumps, which refuses that
+  instance (`missing`) and accepts a complete one; reported to the owner.
+- **`ProgressPhoto.updated_at`/`updated_by`** stay nullable: no schema
+  migration form exists (spec-workbench #147); State 1 M35.
+- **Q07** as already applied (2026-11-08).
 
 ## Record construction: emitters first, gaps to the owner (2026-11-08)
 
