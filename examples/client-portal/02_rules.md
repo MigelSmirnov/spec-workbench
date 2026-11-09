@@ -1199,7 +1199,7 @@ carried verbatim at assembly (Factory `0baceacc`).
 
 ### Consequence
 
-The guard is behaviour, not data: the notes of every use case state it as prose (SPEC_STANDARD §2), and the transaction itself is the emitted unit of work (`rules.sqlite_unit_of_work_backend`). The accepted spec's `rules.transaction_guard_policy` records the same policy and is carried unchanged; no module reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1), but the Factory's code-invariant gate reads it by its kind `transaction_policy` (Factory `tools/code_invariant_gates.py` `_transaction_guard_exception_scope`), so it stays when the namespaces without a reader are retired (owner 2026-11-09).
+The guard is behaviour, not data: the notes of every use case state it as prose (SPEC_STANDARD §2), and the transaction itself is the emitted unit of work (`rules.sqlite_unit_of_work_backend`). The accepted spec's `rules.transaction_guard_policy` records the same policy and is carried unchanged. No module reads it and no note names it; its home is the fourth of SPEC_STANDARD 15.3.1, a policy a Factory gate reads: its kind `transaction_policy` is declared in the Factory's `tools/gate_rules_reads.py` (`GATE_RULES_READS`), and the gate checks the generated code against it (owner 2026-11-09).
 
 ## Accepted decision A23 — Audit entity id policy (accepted Factory spec, 2026-07-26)
 
@@ -1249,7 +1249,7 @@ Recorded in the accepted spec as `rules.model_immutability_policy` (Factory `bd5
 
 ### Consequence
 
-State 1 models are frozen by the emitted `models`, and new and replaced records are built by the emitted builders below. The accepted spec's `rules.model_immutability_policy` records the same policy and is carried unchanged; no module reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1), but the Factory's code-invariant gate reads it by its kind `model_policy` (Factory `tools/code_invariant_gates.py` `_models_are_frozen`), so it stays when the namespaces without a reader are retired (owner 2026-11-09).
+State 1 models are frozen by the emitted `models`, and new and replaced records are built by the emitted builders below. The accepted spec's `rules.model_immutability_policy` records the same policy and is carried unchanged. No module reads it and no note names it; its home is the fourth of SPEC_STANDARD 15.3.1, a policy a Factory gate reads: its kind `model_policy` is declared in the Factory's `tools/gate_rules_reads.py` (`GATE_RULES_READS`), and the gate checks the generated code against it (owner 2026-11-09).
 
 Owner 2026-11-08: every record a model-written module built from its inputs
 is built by an emitted builder of `record_builders`
@@ -1353,7 +1353,7 @@ Recorded in the accepted spec as `rules.exception_payload_policy` (Factory `a129
 
 ### Consequence
 
-The exception fields are State 6 contracts and the payload rules are prose of the notes that raise each exception (SPEC_STANDARD §2). The accepted spec's `rules.exception_payload_policy` records the same policy and is carried unchanged; no module reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1), but the Factory verification check `verification/exception_payload_check.py` is active only while the spec declares it (its activation key), so it stays when the namespaces without a reader are retired (owner 2026-11-09).
+The exception fields are State 6 contracts and the payload rules are prose of the notes that raise each exception (SPEC_STANDARD §2). The accepted spec's `rules.exception_payload_policy` records the same policy and is carried unchanged. No module reads it and no note names it; its home is the fourth of SPEC_STANDARD 15.3.1, a policy a Factory gate reads: its kind `exception_policy` is declared in the Factory's `tools/gate_rules_reads.py` (`GATE_RULES_READS`), and the gate checks the generated code against it (owner 2026-11-09).
 
 ## Accepted decision A27 — Derived view orderings (accepted Factory spec, 2026-08-09; owner 2026-11-06)
 
