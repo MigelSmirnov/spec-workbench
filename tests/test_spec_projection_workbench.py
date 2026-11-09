@@ -994,3 +994,86 @@ def test_backend_placed_module_needs_no_shared_root() -> None:
         list(_MIXED_PATHS), dict(_MIXED_PATHS), contracts, frozenset({"record_builders"}))
     assert order == list(_MIXED_PATHS)
     assert paths == _MIXED_PATHS
+
+
+# ── the builders' import surface (client-portal hand-wrote both, 2026-11-08) ──
+# imports.internal[<wiring.module>] is what consumers import, and imports.stdlib
+# must bind the stdlib types the builders' contracts name (SPEC_STANDARD 6.13, §7).
+
+def _with_imports(project, **imports):
+    current = json.loads((project / "global_spec.json").read_text(encoding="utf-8"))
+    current["imports"].update(imports)
+    (project / "global_spec.json").write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
+
+
+def test_builders_export_surface_is_every_consumed_builder(tmp_path, monkeypatch) -> None:
+    project = _builders_case(tmp_path, monkeypatch)
+
+    _, projected, findings, _ = service._project(project)
+
+    assert findings == []
+    internal = projected["imports"]["internal"]
+    assert internal["record_builders"] == ["build_row", "build_rows"]
+    # a new export surface is appended, as the data provider's is
+    assert list(internal)[-1] == "record_builders"
+
+
+def test_builders_export_surface_replaces_a_hand_edit(tmp_path, monkeypatch) -> None:
+    project = _builders_case(tmp_path, monkeypatch)
+    _with_imports(project, internal={"models": [], "record_builders": ["build_gone"], "alpha": ["new"]})
+
+    _, projected, findings, _ = service._project(project)
+
+    assert findings == []
+    assert list(projected["imports"]["internal"]) == ["models", "record_builders", "alpha", "data_provider"]
+    assert projected["imports"]["internal"]["record_builders"] == ["build_row", "build_rows"]
+
+
+def test_builders_contract_types_get_a_stdlib_binding(tmp_path, monkeypatch) -> None:
+    project = _builders_case(tmp_path, monkeypatch)
+    # a bare module name binds no type name (§7); the lines already there stay
+    _with_imports(project, stdlib=["from __future__ import annotations", "decimal", "import json"])
+
+    plan = service.build_plan(project)
+    _, projected, _, _ = service._project(project)
+
+    assert projected["imports"]["stdlib"] == [
+        "from __future__ import annotations", "decimal", "import json", "from decimal import Decimal"]
+    assert "imports.stdlib" in {row["address"] for row in plan["changes"]}
+
+
+def test_bound_builder_types_add_no_stdlib_line(tmp_path, monkeypatch) -> None:
+    project = _builders_case(tmp_path, monkeypatch)
+    lines = ["from datetime import date, datetime", "from decimal import Decimal as Decimal"]
+    _with_imports(project, stdlib=list(lines))
+
+    _, projected, findings, _ = service._project(project)
+
+    assert findings == []
+    assert projected["imports"]["stdlib"] == lines
+
+
+def test_builders_stdlib_lines_group_by_source(tmp_path, monkeypatch) -> None:
+    project = _builders_case(tmp_path, monkeypatch)
+    contracts = {
+        "new": {"module": "module:alpha", "signature": "() -> str"},
+        "round_amount": {"module": "module:policy", "signature": "(amount: Decimal) -> Decimal"},
+        "build_row": {"module": "module:record_builders",
+                      "signature": "(amount: Decimal, at: datetime, extra: dict[str, Any]) -> Row"},
+        "build_rows": {"module": "module:record_builders",
+                       "signature": "(amount: Decimal, ids: list[UUID], on: date | None) -> Rows"},
+    }
+    monkeypatch.setattr(service.design_stage6_contracts, "handoff", lambda project: {
+        "ready": True, "summary": {"errors": 0, "plan_closed": True}, "contracts": contracts})
+    _with_imports(project, stdlib=["from datetime import datetime"])
+
+    _, projected, findings, _ = service._project(project)
+
+    assert findings == []
+    assert projected["imports"]["stdlib"] == [
+        "from datetime import datetime",
+        "from datetime import date",
+        "from decimal import Decimal",
+        "from typing import Any",
+        "from uuid import UUID",
+    ]
