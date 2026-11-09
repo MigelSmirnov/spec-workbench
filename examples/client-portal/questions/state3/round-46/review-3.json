@@ -1,0 +1,126 @@
+{
+ "open_points": [
+  {
+   "subject": "context",
+   "kind": "contradictory load frequency",
+   "text": "validated once at start by `runtime_settings` and read into a field of\n  `RuntimeSettings`",
+   "question": "Does `registry_gateway` use the Registry URL captured at start, as the State 2 classification principle requires, or call `load_runtime_settings` and reread it for every Registry call, as the changed State 3 text requires?",
+   "options": [
+    "Load and validate all deployment settings once at process start; pass the resulting `RuntimeSettings` to the gateway.",
+    "Call `load_runtime_settings` for every Registry call and use the current environment.",
+    "Load once at start but reread only `REGISTRY_BASE_URL` for each Registry call."
+   ],
+   "default_guess": "Treat the changed State 3 owner decision as intended: reload on every Registry call, and amend the earlier classification principle.",
+   "witness": {
+    "initial": "The service starts with `REGISTRY_BASE_URL` naming Registry A, then the process environment is changed to Registry B.",
+    "events": [
+     "`runtime` calls `load_runtime_settings` at start.",
+     "An operator changes `REGISTRY_BASE_URL` to Registry B.",
+     "A caller performs an operation requiring a Registry call."
+    ],
+    "outcomes": [
+     "The once-at-start rule sends the request to Registry A.",
+     "The changed State 3 rule reloads the environment and sends the request to Registry B."
+    ],
+    "observer": "The caller and the two Registry services see which Registry receives and answers the request."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "runtime_settings",
+   "kind": "unowned failure translation",
+   "text": "and again at each Registry call by `registry_gateway`",
+   "question": "When the per-call `load_runtime_settings` rejects a missing, invalid, or mutually inconsistent setting, which module translates that failure, and what `RegistryFailureKind` or other public error must the Registry operation return?",
+   "options": [
+    "`registry_gateway` translates every settings-load failure to `RegistryBoundaryError(kind=transport_error)`.",
+    "The settings error escapes as a configuration/startup error even though it occurs during a request.",
+    "Only `registry_base_url` is validated on a Registry call, so unrelated setting failures cannot block it.",
+    "Add a distinct Registry failure kind for runtime-configuration failure."
+   ],
+   "default_guess": "Have `registry_gateway` translate a per-call settings-load failure to `transport_error`, matching the treatment of an unusable Registry URL.",
+   "witness": {
+    "initial": "The service started with a valid environment; afterward `max_request_body_bytes` becomes invalid while `REGISTRY_BASE_URL` remains usable.",
+    "events": [
+     "A caller invokes an operation that needs Registry validation.",
+     "`registry_gateway` calls `load_runtime_settings`.",
+     "`runtime_settings` validates the entire closed environment table and rejects the changed request-body bound before any HTTP request."
+    ],
+    "outcomes": [
+     "The gateway catches the settings failure and answers `RegistryBoundaryError(kind=transport_error)`.",
+     "The settings exception escapes as an unclassified server/configuration error."
+    ],
+    "observer": "The API caller sees a translated Registry failure in one implementation and a different error response in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "runtime_settings",
+   "kind": "bootstrap outcome contradiction",
+   "text": "once at start by `runtime` and by the\nbootstrap command",
+   "question": "What must the bootstrap command do when `load_runtime_settings` rejects the environment, given that A29 declares a closed four-value exit-code contract with no configuration-failure outcome?",
+   "options": [
+    "Add a bootstrap configuration-error outcome and exit code.",
+    "Map the failure to one of the existing exit codes.",
+    "Let the loader failure terminate the command outside the declared exit-code contract.",
+    "Load only the settings actually needed by bootstrap rather than the complete runtime table."
+   ],
+   "default_guess": "Add an explicit bootstrap configuration-error outcome and exit code rather than misclassifying or leaking the exception.",
+   "witness": {
+    "initial": "The staff table is empty and valid first-administrator credentials are supplied, but `REGISTRY_BASE_URL` is missing.",
+    "events": [
+     "The host operator starts the local bootstrap command.",
+     "The command calls `load_runtime_settings` before attempting the bootstrap transaction."
+    ],
+    "outcomes": [
+     "The command fails with an undeclared process status or exception because configuration validation failed.",
+     "The command maps the failure to an existing declared exit code, such as identity input rejected, even though the identity input is valid."
+    ],
+    "observer": "The host operator and deployment script observe different exit statuses and meanings."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "consumer ownership contradiction",
+   "text": "| A30 | `runtime_settings` | `registry_gateway`, `staff_identity`, `viewer_access`, `credential_security`, `binary_storage`, the ten repositories, `staff_bootstrap_store`, `data_provider` |",
+   "question": "Are `runtime` and `staff_bootstrap_cli` A30 consumers and dependency-graph importers now that the changed text requires them to call `load_runtime_settings`, or are they intentionally excluded from A30's authoritative owner/consumer mapping?",
+   "options": [
+    "Add `runtime` and `staff_bootstrap_cli` as A30 consumers and declare their `runtime_settings` import edges.",
+    "Keep the A30 table unchanged and define why calling the A30-owned capability does not make either module a consumer.",
+    "Move the calls into already-listed consumer modules so `runtime` and the CLI do not import `runtime_settings` directly."
+   ],
+   "default_guess": "Add both calling modules as A30 consumers and declare their direct imports of `load_runtime_settings`.",
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "missing response-bound owner",
+   "text": "a binary within\n  the read bound but over `max_binary_response_bytes` is not sent",
+   "question": "Which module compares a returned `BinaryPayload` with `max_binary_response_bytes`, what failure does it return, and which settings instance supplies that ceiling when `BINARY_MAX_READ_BYTES` can change after startup?",
+   "options": [
+    "`binary_storage` receives or loads the response ceiling and rejects before returning the payload.",
+    "`api` and `api_irregular` enforce the response ceiling before sending bytes.",
+    "`transport_guard` enforces the response ceiling after the handler returns but before response emission.",
+    "The condition is declared unreachable by freezing the binary read bound after startup."
+   ],
+   "default_guess": "Make the HTTP modules enforce the startup `RuntimeSettings.max_binary_response_bytes` immediately before emission and define their typed failure.",
+   "witness": {
+    "initial": "Startup succeeds with `BINARY_MAX_READ_BYTES` no greater than `max_binary_response_bytes`; afterward the environment read bound is increased, and stored content is larger than the response ceiling but within the new read bound.",
+    "events": [
+     "A client requests an authorized document or photo.",
+     "`binary_storage` rereads `BINARY_MAX_READ_BYTES`, accepts the content, and returns `BinaryPayload`.",
+     "The HTTP path prepares the response."
+    ],
+    "outcomes": [
+     "The HTTP path enforces `max_binary_response_bytes` and sends no bytes.",
+     "Following the rule that HTTP modules send the payload's exact bytes, the HTTP path emits an oversized response because no named module owns the new comparison."
+    ],
+    "observer": "The requesting client sees either a refusal with no binary body or the oversized binary response."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context\",\"kind\":\"contradictory load frequency\",\"text\":\"validated once at start by `runtime_settings` and read into a field of\\n  `RuntimeSettings`\",\"question\":\"Does `registry_gateway` use the Registry URL captured at start, as the State 2 classification principle requires, or call `load_runtime_settings` and reread it for every Registry call, as the changed State 3 text requires?\",\"options\":[\"Load and validate all deployment settings once at process start; pass the resulting `RuntimeSettings` to the gateway.\",\"Call `load_runtime_settings` for every Registry call and use the current environment.\",\"Load once at start but reread only `REGISTRY_BASE_URL` for each Registry call.\"],\"default_guess\":\"Treat the changed State 3 owner decision as intended: reload on every Registry call, and amend the earlier classification principle.\",\"witness\":{\"initial\":\"The service starts with `REGISTRY_BASE_URL` naming Registry A, then the process environment is changed to Registry B.\",\"events\":[\"`runtime` calls `load_runtime_settings` at start.\",\"An operator changes `REGISTRY_BASE_URL` to Registry B.\",\"A caller performs an operation requiring a Registry call.\"],\"outcomes\":[\"The once-at-start rule sends the request to Registry A.\",\"The changed State 3 rule reloads the environment and sends the request to Registry B.\"],\"observer\":\"The caller and the two Registry services see which Registry receives and answers the request.\"}},{\"subject\":\"runtime_settings\",\"kind\":\"unowned failure translation\",\"text\":\"and again at each Registry call by `registry_gateway`\",\"question\":\"When the per-call `load_runtime_settings` rejects a missing, invalid, or mutually inconsistent setting, which module translates that failure, and what `RegistryFailureKind` or other public error must the Registry operation return?\",\"options\":[\"`registry_gateway` translates every settings-load failure to `RegistryBoundaryError(kind=transport_error)`.\",\"The settings error escapes as a configuration/startup error even though it occurs during a request.\",\"Only `registry_base_url` is validated on a Registry call, so unrelated setting failures cannot block it.\",\"Add a distinct Registry failure kind for runtime-configuration failure.\"],\"default_guess\":\"Have `registry_gateway` translate a per-call settings-load failure to `transport_error`, matching the treatment of an unusable Registry URL.\",\"witness\":{\"initial\":\"The service started with a valid environment; afterward `max_request_body_bytes` becomes invalid while `REGISTRY_BASE_URL` remains usable.\",\"events\":[\"A caller invokes an operation that needs Registry validation.\",\"`registry_gateway` calls `load_runtime_settings`.\",\"`runtime_settings` validates the entire closed environment table and rejects the changed request-body bound before any HTTP request.\"],\"outcomes\":[\"The gateway catches the settings failure and answers `RegistryBoundaryError(kind=transport_error)`.\",\"The settings exception escapes as an unclassified server/configuration error.\"],\"observer\":\"The API caller sees a translated Registry failure in one implementation and a different error response in the other.\"}},{\"subject\":\"runtime_settings\",\"kind\":\"bootstrap outcome contradiction\",\"text\":\"once at start by `runtime` and by the\\nbootstrap command\",\"question\":\"What must the bootstrap command do when `load_runtime_settings` rejects the environment, given that A29 declares a closed four-value exit-code contract with no configuration-failure outcome?\",\"options\":[\"Add a bootstrap configuration-error outcome and exit code.\",\"Map the failure to one of the existing exit codes.\",\"Let the loader failure terminate the command outside the declared exit-code contract.\",\"Load only the settings actually needed by bootstrap rather than the complete runtime table.\"],\"default_guess\":\"Add an explicit bootstrap configuration-error outcome and exit code rather than misclassifying or leaking the exception.\",\"witness\":{\"initial\":\"The staff table is empty and valid first-administrator credentials are supplied, but `REGISTRY_BASE_URL` is missing.\",\"events\":[\"The host operator starts the local bootstrap command.\",\"The command calls `load_runtime_settings` before attempting the bootstrap transaction.\"],\"outcomes\":[\"The command fails with an undeclared process status or exception because configuration validation failed.\",\"The command maps the failure to an existing declared exit code, such as identity input rejected, even though the identity input is valid.\"],\"observer\":\"The host operator and deployment script observe different exit statuses and meanings.\"}},{\"subject\":\"context\",\"kind\":\"consumer ownership contradiction\",\"text\":\"| A30 | `runtime_settings` | `registry_gateway`, `staff_identity`, `viewer_access`, `credential_security`, `binary_storage`, the ten repositories, `staff_bootstrap_store`, `data_provider` |\",\"question\":\"Are `runtime` and `staff_bootstrap_cli` A30 consumers and dependency-graph importers now that the changed text requires them to call `load_runtime_settings`, or are they intentionally excluded from A30's authoritative owner/consumer mapping?\",\"options\":[\"Add `runtime` and `staff_bootstrap_cli` as A30 consumers and declare their `runtime_settings` import edges.\",\"Keep the A30 table unchanged and define why calling the A30-owned capability does not make either module a consumer.\",\"Move the calls into already-listed consumer modules so `runtime` and the CLI do not import `runtime_settings` directly.\"],\"default_guess\":\"Add both calling modules as A30 consumers and declare their direct imports of `load_runtime_settings`.\"},{\"subject\":\"context\",\"kind\":\"missing response-bound owner\",\"text\":\"a binary within\\n  the read bound but over `max_binary_response_bytes` is not sent\",\"question\":\"Which module compares a returned `BinaryPayload` with `max_binary_response_bytes`, what failure does it return, and which settings instance supplies that ceiling when `BINARY_MAX_READ_BYTES` can change after startup?\",\"options\":[\"`binary_storage` receives or loads the response ceiling and rejects before returning the payload.\",\"`api` and `api_irregular` enforce the response ceiling before sending bytes.\",\"`transport_guard` enforces the response ceiling after the handler returns but before response emission.\",\"The condition is declared unreachable by freezing the binary read bound after startup.\"],\"default_guess\":\"Make the HTTP modules enforce the startup `RuntimeSettings.max_binary_response_bytes` immediately before emission and define their typed failure.\",\"witness\":{\"initial\":\"Startup succeeds with `BINARY_MAX_READ_BYTES` no greater than `max_binary_response_bytes`; afterward the environment read bound is increased, and stored content is larger than the response ceiling but within the new read bound.\",\"events\":[\"A client requests an authorized document or photo.\",\"`binary_storage` rereads `BINARY_MAX_READ_BYTES`, accepts the content, and returns `BinaryPayload`.\",\"The HTTP path prepares the response.\"],\"outcomes\":[\"The HTTP path enforces `max_binary_response_bytes` and sends no bytes.\",\"Following the rule that HTTP modules send the payload's exact bytes, the HTTP path emits an oversized response because no named module owns the new comparison.\"],\"observer\":\"The requesting client sees either a refusal with no binary body or the oversized binary response.\"}}]}",
+ "set_aside": []
+}

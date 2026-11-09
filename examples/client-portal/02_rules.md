@@ -69,8 +69,9 @@ has one of three homes, and the decision that owns it names that home:
   deterministic `data_provider`, imported by name;
 - a value that depends on the deployment (URLs, origins, hosts, size bounds,
   rate limits) — a row of the start-up table `config.runtime_environment_variables`,
-  validated once at start by `runtime_settings` and read into a field of
-  `RuntimeSettings`; the one exception is the two binary storage rows
+  validated by `runtime_settings` at each call of `load_runtime_settings` (at
+  start, by the bootstrap command, and by `registry_gateway` at each Registry
+  call) and read into a field of `RuntimeSettings`; the one exception is the two binary storage rows
   (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and
   which the emitted `binary_storage` reads at each read, as the Factory's
   binary storage backend is built (A14, A30).
@@ -1619,7 +1620,7 @@ the Registry path constants), carried to States 6–7.
   (`BINARY_MAX_READ_BYTES`).
 - CFG-002: a required start-up variable that is missing or invalid stops
   the start before any request is served; for the Registry URL the start-up
-  check refuses only a missing or empty value, and an unusable non-empty URL
+  check refuses only a missing, empty or whitespace-only value, and any other unusable URL
   fails each Registry call as `transport_error` (A6).
 
 ### Required tests
@@ -1630,14 +1631,16 @@ the Registry path constants), carried to States 6–7.
   from the instant their issue time plus their lifetime is reached; the
   viewer-entry attempt after the limit within the window is refused and
   creates no session; a request body over its bound and a binary over its
-  read bound are refused before the handler or the response; a binary within
-  the read bound but over `max_binary_response_bytes` is not sent; and the
-  start is refused when the read bound exceeds the response bound.
+  read bound are refused before the handler or the response; and the start
+  is refused when the read bound exceeds the response bound, which is how
+  `max_binary_response_bytes` is applied: no module compares a response with
+  it, and every binary sent is within the read bound and so within it.
 - CFG-002: `runtime_settings_client_portal`: for each required variable
   other than `REGISTRY_BASE_URL` a missing value and an invalid value stop
-  start-up; a missing or empty `REGISTRY_BASE_URL` stops it, while a
-  non-empty one is accepted at start whatever its form (A6 refuses it at
-  each call); and a complete valid environment starts.
+  start-up; a missing, empty or whitespace-only `REGISTRY_BASE_URL` stops
+  it, while any other value is accepted at start whatever its form (A6
+  refuses an unusable one at each call); and a complete valid environment
+  starts.
 - Witnesses, the focused Factory verification checks that assert it: CFG-002 [witness: verification:runtime_settings_client_portal].
 - Witnesses, the focused Factory verification checks that assert it: CFG-001 [witness: verification:binary_storage_content_client_portal].
 

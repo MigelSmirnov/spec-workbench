@@ -1,0 +1,121 @@
+{
+ "open_points": [
+  {
+   "subject": "runtime_settings validation cadence",
+   "kind": "contradiction",
+   "text": "load, normalize, default and validate the closed\ntable `config.runtime_environment_variables` into `RuntimeSettings` at each\ncall of `load_runtime_settings`",
+   "question": "Does `runtime_settings` validate the table only once during process start, as State 2 says, or again on every later Registry call?",
+   "options": [
+    "Validate once at process start and reuse that validated configuration.",
+    "Validate the entire table on every `load_runtime_settings` call, including every Registry call.",
+    "Validate once at start, but reread and validate only `REGISTRY_BASE_URL` for each Registry call."
+   ],
+   "default_guess": "Validate the entire table on every call because the changed State 3 passage is the latest explicit decision.",
+   "witness": {
+    "initial": "The service starts with a valid environment; afterward the process environment used by a test harness changes one required row to an invalid value.",
+    "events": [
+     "A caller invokes a Registry operation.",
+     "`registry_gateway` calls `load_runtime_settings`."
+    ],
+    "outcomes": [
+     "The changed State 3 text validates again and refuses before the Registry request.",
+     "The State 2 classification that the table is \"validated once at start\" permits the Registry operation to continue with the start-time configuration."
+    ],
+    "observer": "The Registry caller and the test harness"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "REGISTRY_BASE_URL whitespace validation",
+   "kind": "contradiction",
+   "text": "a missing or empty `REGISTRY_BASE_URL` stops it, while a\n  non-empty one is accepted at start whatever its form",
+   "question": "Must a whitespace-only `REGISTRY_BASE_URL` stop startup, or is it accepted as a non-empty value?",
+   "options": [
+    "Reject missing, empty, and whitespace-only values.",
+    "Reject only missing or zero-length values; accept whitespace-only values."
+   ],
+   "default_guess": "Reject whitespace-only values, following the changed normative paragraph.",
+   "witness": {
+    "initial": "All required environment rows are valid and `REGISTRY_BASE_URL` is three spaces.",
+    "events": [
+     "`runtime` calls `load_runtime_settings` during startup."
+    ],
+    "outcomes": [
+     "The changed normative paragraph refuses startup because the supplied value is whitespace only.",
+     "The CFG-002 required test accepts startup because the value is non-empty and must be accepted whatever its form."
+    ],
+    "observer": "The deployment operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 consumers and runtime_settings dependency edges",
+   "kind": "missing ownership mapping",
+   "text": "once at start by `runtime` and by the\nbootstrap command, and again at each Registry call by `registry_gateway`",
+   "question": "Must `runtime` and `staff_bootstrap_cli` be A30 consumers that directly import and call `load_runtime_settings`, and if so where are those consumer-to-provider dependencies recorded?",
+   "options": [
+    "Add `runtime` and `staff_bootstrap_cli` as A30 consumers and give each a direct dependency on `runtime_settings`.",
+    "Treat their calls as wiring that does not make them A30 consumers, but still declare their direct imports.",
+    "Have another module call `load_runtime_settings` for one or both entry points and pass the result to them."
+   ],
+   "default_guess": "Make `runtime` and `staff_bootstrap_cli` direct consumers of `runtime_settings` and declare their imports explicitly.",
+   "unit": "?"
+  },
+  {
+   "subject": "failure of per-call settings reload in registry_gateway",
+   "kind": "unowned failure translation",
+   "text": "the call reads and validates the environment again\nthrough `runtime_settings`",
+   "question": "When this per-Registry-call validation fails, especially because an unrelated required environment row is invalid, which module owns the failure and what public error does the Registry operation return?",
+   "options": [
+    "`registry_gateway` translates every reload failure to `RegistryBoundaryError(kind=transport_error)`.",
+    "A typed runtime-configuration error escapes the gateway and is mapped by an HTTP module.",
+    "Only the Registry URL is revalidated per Registry call, so unrelated rows cannot fail the call.",
+    "The failed reload terminates or marks the process unhealthy rather than producing a Registry response."
+   ],
+   "default_guess": "Have `registry_gateway` translate the failure to `RegistryBoundaryError(kind=transport_error)` so every failed Registry call retains A6's closed error contract.",
+   "witness": {
+    "initial": "The service started successfully; before a later Registry call, a required non-Registry environment row becomes invalid while `REGISTRY_BASE_URL` remains usable.",
+    "events": [
+     "A user starts an operation that requires Registry validation.",
+     "`registry_gateway` invokes `load_runtime_settings`, which rejects the environment before making HTTP I/O."
+    ],
+    "outcomes": [
+     "The configuration exception escapes because `runtime_settings` owns validation and no translation is assigned.",
+     "`registry_gateway` treats the reload failure as `transport_error` because A6 requires every failed Registry call to have one `RegistryFailureKind`."
+    ],
+    "observer": "The API caller and error-handling middleware"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "max_binary_response_bytes enforcement",
+   "kind": "missing owner and outcome",
+   "text": "a binary within\n  the read bound but over `max_binary_response_bytes` is not sent",
+   "question": "Which module checks a produced binary against `max_binary_response_bytes`, at what point, and what typed outcome is returned when the response ceiling is exceeded?",
+   "options": [
+    "`binary_storage` receives the response ceiling and refuses before returning `BinaryPayload`.",
+    "The owning HTTP module checks `BinaryPayload` before constructing the response.",
+    "`transport_guard` performs a post-handler response-size check despite otherwise running before handlers.",
+    "The condition is impossible after valid startup and the required test should instead assert only the bound-consistency check."
+   ],
+   "default_guess": "The owning HTTP module should check the completed `BinaryPayload` before response construction and return a specified binary-unavailable response.",
+   "witness": {
+    "initial": "Startup cached `max_binary_response_bytes = 10 MB`; afterward `BINARY_MAX_READ_BYTES`, which `binary_storage` rereads per operation, is 20 MB; the stored authorized binary is 15 MB.",
+    "events": [
+     "The client requests the binary.",
+     "`binary_storage` accepts and returns the 15 MB payload under its current read bound.",
+     "The HTTP layer prepares the response."
+    ],
+    "outcomes": [
+     "An HTTP-layer response-ceiling check refuses the response, satisfying CFG-001.",
+     "The HTTP module sends the exact returned bytes because State 3 assigns no post-read ceiling check to any module."
+    ],
+    "observer": "The requesting client"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"runtime_settings validation cadence\",\"kind\":\"contradiction\",\"text\":\"load, normalize, default and validate the closed\\ntable `config.runtime_environment_variables` into `RuntimeSettings` at each\\ncall of `load_runtime_settings`\",\"question\":\"Does `runtime_settings` validate the table only once during process start, as State 2 says, or again on every later Registry call?\",\"options\":[\"Validate once at process start and reuse that validated configuration.\",\"Validate the entire table on every `load_runtime_settings` call, including every Registry call.\",\"Validate once at start, but reread and validate only `REGISTRY_BASE_URL` for each Registry call.\"],\"default_guess\":\"Validate the entire table on every call because the changed State 3 passage is the latest explicit decision.\",\"witness\":{\"initial\":\"The service starts with a valid environment; afterward the process environment used by a test harness changes one required row to an invalid value.\",\"events\":[\"A caller invokes a Registry operation.\",\"`registry_gateway` calls `load_runtime_settings`.\"],\"outcomes\":[\"The changed State 3 text validates again and refuses before the Registry request.\",\"The State 2 classification that the table is \\\"validated once at start\\\" permits the Registry operation to continue with the start-time configuration.\"],\"observer\":\"The Registry caller and the test harness\"}},{\"subject\":\"REGISTRY_BASE_URL whitespace validation\",\"kind\":\"contradiction\",\"text\":\"a missing or empty `REGISTRY_BASE_URL` stops it, while a\\n  non-empty one is accepted at start whatever its form\",\"question\":\"Must a whitespace-only `REGISTRY_BASE_URL` stop startup, or is it accepted as a non-empty value?\",\"options\":[\"Reject missing, empty, and whitespace-only values.\",\"Reject only missing or zero-length values; accept whitespace-only values.\"],\"default_guess\":\"Reject whitespace-only values, following the changed normative paragraph.\",\"witness\":{\"initial\":\"All required environment rows are valid and `REGISTRY_BASE_URL` is three spaces.\",\"events\":[\"`runtime` calls `load_runtime_settings` during startup.\"],\"outcomes\":[\"The changed normative paragraph refuses startup because the supplied value is whitespace only.\",\"The CFG-002 required test accepts startup because the value is non-empty and must be accepted whatever its form.\"],\"observer\":\"The deployment operator\"}},{\"subject\":\"A30 consumers and runtime_settings dependency edges\",\"kind\":\"missing ownership mapping\",\"text\":\"once at start by `runtime` and by the\\nbootstrap command, and again at each Registry call by `registry_gateway`\",\"question\":\"Must `runtime` and `staff_bootstrap_cli` be A30 consumers that directly import and call `load_runtime_settings`, and if so where are those consumer-to-provider dependencies recorded?\",\"options\":[\"Add `runtime` and `staff_bootstrap_cli` as A30 consumers and give each a direct dependency on `runtime_settings`.\",\"Treat their calls as wiring that does not make them A30 consumers, but still declare their direct imports.\",\"Have another module call `load_runtime_settings` for one or both entry points and pass the result to them.\"],\"default_guess\":\"Make `runtime` and `staff_bootstrap_cli` direct consumers of `runtime_settings` and declare their imports explicitly.\"},{\"subject\":\"failure of per-call settings reload in registry_gateway\",\"kind\":\"unowned failure translation\",\"text\":\"the call reads and validates the environment again\\nthrough `runtime_settings`\",\"question\":\"When this per-Registry-call validation fails, especially because an unrelated required environment row is invalid, which module owns the failure and what public error does the Registry operation return?\",\"options\":[\"`registry_gateway` translates every reload failure to `RegistryBoundaryError(kind=transport_error)`.\",\"A typed runtime-configuration error escapes the gateway and is mapped by an HTTP module.\",\"Only the Registry URL is revalidated per Registry call, so unrelated rows cannot fail the call.\",\"The failed reload terminates or marks the process unhealthy rather than producing a Registry response.\"],\"default_guess\":\"Have `registry_gateway` translate the failure to `RegistryBoundaryError(kind=transport_error)` so every failed Registry call retains A6's closed error contract.\",\"witness\":{\"initial\":\"The service started successfully; before a later Registry call, a required non-Registry environment row becomes invalid while `REGISTRY_BASE_URL` remains usable.\",\"events\":[\"A user starts an operation that requires Registry validation.\",\"`registry_gateway` invokes `load_runtime_settings`, which rejects the environment before making HTTP I/O.\"],\"outcomes\":[\"The configuration exception escapes because `runtime_settings` owns validation and no translation is assigned.\",\"`registry_gateway` treats the reload failure as `transport_error` because A6 requires every failed Registry call to have one `RegistryFailureKind`.\"],\"observer\":\"The API caller and error-handling middleware\"}},{\"subject\":\"max_binary_response_bytes enforcement\",\"kind\":\"missing owner and outcome\",\"text\":\"a binary within\\n  the read bound but over `max_binary_response_bytes` is not sent\",\"question\":\"Which module checks a produced binary against `max_binary_response_bytes`, at what point, and what typed outcome is returned when the response ceiling is exceeded?\",\"options\":[\"`binary_storage` receives the response ceiling and refuses before returning `BinaryPayload`.\",\"The owning HTTP module checks `BinaryPayload` before constructing the response.\",\"`transport_guard` performs a post-handler response-size check despite otherwise running before handlers.\",\"The condition is impossible after valid startup and the required test should instead assert only the bound-consistency check.\"],\"default_guess\":\"The owning HTTP module should check the completed `BinaryPayload` before response construction and return a specified binary-unavailable response.\",\"witness\":{\"initial\":\"Startup cached `max_binary_response_bytes = 10 MB`; afterward `BINARY_MAX_READ_BYTES`, which `binary_storage` rereads per operation, is 20 MB; the stored authorized binary is 15 MB.\",\"events\":[\"The client requests the binary.\",\"`binary_storage` accepts and returns the 15 MB payload under its current read bound.\",\"The HTTP layer prepares the response.\"],\"outcomes\":[\"An HTTP-layer response-ceiling check refuses the response, satisfying CFG-001.\",\"The HTTP module sends the exact returned bytes because State 3 assigns no post-read ceiling check to any module.\"],\"observer\":\"The requesting client\"}}]}",
+ "set_aside": []
+}

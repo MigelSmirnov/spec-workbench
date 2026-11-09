@@ -74,7 +74,7 @@ the one mapping; `30_trace.json` records the same:
 | A27 | `derived_views` | — |
 | A28 | `system_clock` | every module that reads the time (listed in `30_trace.json`) |
 | A29 | `staff_bootstrap` | `staff_bootstrap_store`, `staff_bootstrap_cli`, `staff_identity`, `credential_security`, `data_provider` |
-| A30 | `runtime_settings` | `registry_gateway`, `staff_identity`, `viewer_access`, `credential_security`, `binary_storage`, the ten repositories, `staff_bootstrap_store`, `data_provider` |
+| A30 | `runtime_settings` | `runtime`, `staff_bootstrap_cli`, `registry_gateway`, `staff_identity`, `viewer_access`, `credential_security`, `binary_storage`, the ten repositories, `staff_bootstrap_store`, `data_provider` |
 | A31 | evidence record | — |
 | A32 | deployment process | — |
 

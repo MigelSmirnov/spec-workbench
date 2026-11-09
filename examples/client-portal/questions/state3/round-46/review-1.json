@@ -1,0 +1,133 @@
+{
+ "open_points": [
+  {
+   "subject": "load_runtime_settings validation timing",
+   "kind": "contradiction",
+   "text": "a value that depends on the deployment (URLs, origins, hosts, size bounds,\n  rate limits) — a row of the start-up table `config.runtime_environment_variables`,\n  validated once at start by `runtime_settings` and read into a field of\n  `RuntimeSettings` versus load, normalize, default and validate the closed\ntable `config.runtime_environment_variables` into `RuntimeSettings` at each\ncall of `load_runtime_settings`",
+   "question": "Are deployment settings frozen after start, or must every call to `load_runtime_settings`, including every Registry operation, reread and revalidate the current environment?",
+   "options": [
+    "Validate once and reuse the startup settings",
+    "Reread and validate the complete table on every call",
+    "Freeze all fields except `registry_base_url`, which is reread for Registry calls"
+   ],
+   "default_guess": "Follow the dated change: reread and validate the complete table on every call.",
+   "witness": {
+    "initial": "The service starts with `REGISTRY_BASE_URL` set to Registry A; afterward the process environment changes it to Registry B.",
+    "events": [
+     "A caller invokes a Registry-backed operation after the environment change.",
+     "`registry_gateway` obtains its Registry URL."
+    ],
+    "outcomes": [
+     "The once-at-start rule keeps using Registry A.",
+     "The each-call rule reloads the environment and uses Registry B."
+    ],
+    "observer": "The two Registry services and the portal caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "REGISTRY_BASE_URL whitespace validation",
+   "kind": "contradiction",
+   "text": "The start-up check refuses only a missing value or\none that is empty or whitespace only, tested on the value as supplied versus a missing or empty `REGISTRY_BASE_URL` stops it, while a\n  non-empty one is accepted at start whatever its form",
+   "question": "Must a whitespace-only `REGISTRY_BASE_URL` stop startup, or is it accepted because it is non-empty?",
+   "options": [
+    "Reject missing, empty, and whitespace-only values",
+    "Reject only a zero-length or missing value",
+    "Normalize whitespace before deciding emptiness"
+   ],
+   "default_guess": "Reject whitespace-only values, following the more explicit changed rule with normalization `none`.",
+   "witness": {
+    "initial": "`REGISTRY_BASE_URL` is supplied as three space characters and every other required variable is valid.",
+    "events": [
+     "`runtime` calls `load_runtime_settings` during startup."
+    ],
+    "outcomes": [
+     "Startup is refused because the supplied value is whitespace only.",
+     "Startup succeeds because the supplied value is non-empty and any non-empty form is accepted."
+    ],
+    "observer": "The deployment operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 consumer ownership and trace mapping",
+   "kind": "contradiction",
+   "text": "once at start by `runtime` and by the\nbootstrap command, and again at each Registry call by `registry_gateway` versus | A30 | `runtime_settings` | `registry_gateway`, `staff_identity`, `viewer_access`, `credential_security`, `binary_storage`, the ten repositories, `staff_bootstrap_store`, `data_provider` |",
+   "question": "Must the authoritative A30 consumer mapping also name `runtime` and the module implementing the bootstrap command?",
+   "options": [
+    "Add `runtime` and `staff_bootstrap_cli` as A30 consumers",
+    "Add `runtime` and `staff_bootstrap` as A30 consumers",
+    "Keep the table unchanged and declare that invocation of the loader does not make the caller an A30 consumer"
+   ],
+   "default_guess": "Add `runtime` and `staff_bootstrap_cli` as A30 consumers.",
+   "unit": "?"
+  },
+  {
+   "subject": "bootstrap command dependency on runtime_settings",
+   "kind": "unclear_dependency_target",
+   "text": "once at start by `runtime` and by the\nbootstrap command",
+   "question": "Which logical module calls `load_runtime_settings` for the bootstrap command: `staff_bootstrap_cli`, `staff_bootstrap`, or both?",
+   "options": [
+    "`staff_bootstrap_cli` calls it before invoking the use case",
+    "`staff_bootstrap` calls it so every adapter receives the same validation",
+    "Both modules call it"
+   ],
+   "default_guess": "`staff_bootstrap_cli` calls it once.",
+   "unit": "?"
+  },
+  {
+   "subject": "runtime-settings failure during a Registry operation",
+   "kind": "failure_ownership_gap",
+   "text": "and again at each Registry call by `registry_gateway`",
+   "question": "Who owns translation of a repeated `load_runtime_settings` failure, and what does a public Registry gateway operation raise when the URL or an unrelated required row has become missing or invalid after startup?",
+   "options": [
+    "`registry_gateway` translates every loader failure to `RegistryBoundaryError(kind=transport_error)`",
+    "The runtime-settings error propagates as a configuration failure outside `RegistryFailureKind`",
+    "Only `registry_base_url` is revalidated for Registry calls, so unrelated rows cannot fail them"
+   ],
+   "default_guess": "Have `registry_gateway` translate a loader failure to `RegistryBoundaryError(kind=transport_error)` so its public failure contract remains closed.",
+   "witness": {
+    "initial": "Startup succeeds with a complete environment and a valid Registry URL; later `PUBLIC_ORIGIN` is removed while `REGISTRY_BASE_URL` remains valid.",
+    "events": [
+     "A caller invokes `validate_project_reference`.",
+     "`registry_gateway` calls `load_runtime_settings`, which validates the complete table."
+    ],
+    "outcomes": [
+     "The caller receives `RegistryBoundaryError` with `kind=transport_error`.",
+     "A runtime-settings/configuration exception escapes the gateway or becomes an unspecified internal error."
+    ],
+    "observer": "The API caller and operations logs"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "binary response ceiling enforcement",
+   "kind": "missing_owner",
+   "text": "a binary within\nthe read bound but over `max_binary_response_bytes` is not sent",
+   "question": "Which module compares a returned binary with `max_binary_response_bytes`, at what stage, and which typed outcome is returned when the response ceiling is exceeded?",
+   "options": [
+    "`binary_storage` receives the response ceiling and refuses before returning `BinaryPayload`",
+    "`api` and `api_irregular` compare the payload length before emitting the response",
+    "`transport_guard` enforces the ceiling on the handler response"
+   ],
+   "default_guess": "Make the HTTP module compare `BinaryPayload` length with the startup `RuntimeSettings.max_binary_response_bytes` before emitting headers or bytes, with an explicitly specified typed response.",
+   "witness": {
+    "initial": "The service starts with both binary bounds at 10 MiB; afterward `BINARY_MAX_READ_BYTES` is changed to 20 MiB, and an authorized stored binary is 15 MiB.",
+    "events": [
+     "A client requests the binary.",
+     "`binary_storage` rereads the 20 MiB read bound and returns the payload.",
+     "The response ceiling remains 10 MiB in the startup settings."
+    ],
+    "outcomes": [
+     "The HTTP module refuses the response before sending bytes and returns its chosen transport error.",
+     "A storage or transport layer refuses it under a different error contract because that layer is treated as the owner."
+    ],
+    "observer": "The requesting client and API error handling"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"load_runtime_settings validation timing\",\"kind\":\"contradiction\",\"text\":\"a value that depends on the deployment (URLs, origins, hosts, size bounds,\\n  rate limits) — a row of the start-up table `config.runtime_environment_variables`,\\n  validated once at start by `runtime_settings` and read into a field of\\n  `RuntimeSettings` versus load, normalize, default and validate the closed\\ntable `config.runtime_environment_variables` into `RuntimeSettings` at each\\ncall of `load_runtime_settings`\",\"question\":\"Are deployment settings frozen after start, or must every call to `load_runtime_settings`, including every Registry operation, reread and revalidate the current environment?\",\"options\":[\"Validate once and reuse the startup settings\",\"Reread and validate the complete table on every call\",\"Freeze all fields except `registry_base_url`, which is reread for Registry calls\"],\"default_guess\":\"Follow the dated change: reread and validate the complete table on every call.\",\"witness\":{\"initial\":\"The service starts with `REGISTRY_BASE_URL` set to Registry A; afterward the process environment changes it to Registry B.\",\"events\":[\"A caller invokes a Registry-backed operation after the environment change.\",\"`registry_gateway` obtains its Registry URL.\"],\"outcomes\":[\"The once-at-start rule keeps using Registry A.\",\"The each-call rule reloads the environment and uses Registry B.\"],\"observer\":\"The two Registry services and the portal caller\"}},{\"subject\":\"REGISTRY_BASE_URL whitespace validation\",\"kind\":\"contradiction\",\"text\":\"The start-up check refuses only a missing value or\\none that is empty or whitespace only, tested on the value as supplied versus a missing or empty `REGISTRY_BASE_URL` stops it, while a\\n  non-empty one is accepted at start whatever its form\",\"question\":\"Must a whitespace-only `REGISTRY_BASE_URL` stop startup, or is it accepted because it is non-empty?\",\"options\":[\"Reject missing, empty, and whitespace-only values\",\"Reject only a zero-length or missing value\",\"Normalize whitespace before deciding emptiness\"],\"default_guess\":\"Reject whitespace-only values, following the more explicit changed rule with normalization `none`.\",\"witness\":{\"initial\":\"`REGISTRY_BASE_URL` is supplied as three space characters and every other required variable is valid.\",\"events\":[\"`runtime` calls `load_runtime_settings` during startup.\"],\"outcomes\":[\"Startup is refused because the supplied value is whitespace only.\",\"Startup succeeds because the supplied value is non-empty and any non-empty form is accepted.\"],\"observer\":\"The deployment operator\"}},{\"subject\":\"A30 consumer ownership and trace mapping\",\"kind\":\"contradiction\",\"text\":\"once at start by `runtime` and by the\\nbootstrap command, and again at each Registry call by `registry_gateway` versus | A30 | `runtime_settings` | `registry_gateway`, `staff_identity`, `viewer_access`, `credential_security`, `binary_storage`, the ten repositories, `staff_bootstrap_store`, `data_provider` |\",\"question\":\"Must the authoritative A30 consumer mapping also name `runtime` and the module implementing the bootstrap command?\",\"options\":[\"Add `runtime` and `staff_bootstrap_cli` as A30 consumers\",\"Add `runtime` and `staff_bootstrap` as A30 consumers\",\"Keep the table unchanged and declare that invocation of the loader does not make the caller an A30 consumer\"],\"default_guess\":\"Add `runtime` and `staff_bootstrap_cli` as A30 consumers.\"},{\"subject\":\"bootstrap command dependency on runtime_settings\",\"kind\":\"unclear_dependency_target\",\"text\":\"once at start by `runtime` and by the\\nbootstrap command\",\"question\":\"Which logical module calls `load_runtime_settings` for the bootstrap command: `staff_bootstrap_cli`, `staff_bootstrap`, or both?\",\"options\":[\"`staff_bootstrap_cli` calls it before invoking the use case\",\"`staff_bootstrap` calls it so every adapter receives the same validation\",\"Both modules call it\"],\"default_guess\":\"`staff_bootstrap_cli` calls it once.\"},{\"subject\":\"runtime-settings failure during a Registry operation\",\"kind\":\"failure_ownership_gap\",\"text\":\"and again at each Registry call by `registry_gateway`\",\"question\":\"Who owns translation of a repeated `load_runtime_settings` failure, and what does a public Registry gateway operation raise when the URL or an unrelated required row has become missing or invalid after startup?\",\"options\":[\"`registry_gateway` translates every loader failure to `RegistryBoundaryError(kind=transport_error)`\",\"The runtime-settings error propagates as a configuration failure outside `RegistryFailureKind`\",\"Only `registry_base_url` is revalidated for Registry calls, so unrelated rows cannot fail them\"],\"default_guess\":\"Have `registry_gateway` translate a loader failure to `RegistryBoundaryError(kind=transport_error)` so its public failure contract remains closed.\",\"witness\":{\"initial\":\"Startup succeeds with a complete environment and a valid Registry URL; later `PUBLIC_ORIGIN` is removed while `REGISTRY_BASE_URL` remains valid.\",\"events\":[\"A caller invokes `validate_project_reference`.\",\"`registry_gateway` calls `load_runtime_settings`, which validates the complete table.\"],\"outcomes\":[\"The caller receives `RegistryBoundaryError` with `kind=transport_error`.\",\"A runtime-settings/configuration exception escapes the gateway or becomes an unspecified internal error.\"],\"observer\":\"The API caller and operations logs\"}},{\"subject\":\"binary response ceiling enforcement\",\"kind\":\"missing_owner\",\"text\":\"a binary within\\nthe read bound but over `max_binary_response_bytes` is not sent\",\"question\":\"Which module compares a returned binary with `max_binary_response_bytes`, at what stage, and which typed outcome is returned when the response ceiling is exceeded?\",\"options\":[\"`binary_storage` receives the response ceiling and refuses before returning `BinaryPayload`\",\"`api` and `api_irregular` compare the payload length before emitting the response\",\"`transport_guard` enforces the ceiling on the handler response\"],\"default_guess\":\"Make the HTTP module compare `BinaryPayload` length with the startup `RuntimeSettings.max_binary_response_bytes` before emitting headers or bytes, with an explicitly specified typed response.\",\"witness\":{\"initial\":\"The service starts with both binary bounds at 10 MiB; afterward `BINARY_MAX_READ_BYTES` is changed to 20 MiB, and an authorized stored binary is 15 MiB.\",\"events\":[\"A client requests the binary.\",\"`binary_storage` rereads the 20 MiB read bound and returns the payload.\",\"The response ceiling remains 10 MiB in the startup settings.\"],\"outcomes\":[\"The HTTP module refuses the response before sending bytes and returns its chosen transport error.\",\"A storage or transport layer refuses it under a different error contract because that layer is treated as the owner.\"],\"observer\":\"The requesting client and API error handling\"}}]}",
+ "set_aside": []
+}
