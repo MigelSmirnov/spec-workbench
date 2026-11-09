@@ -1596,6 +1596,16 @@ the Registry path constants), carried to States 6–7.
   reads no environment itself (owner 2026-11-09, SPEC_STANDARD 6.11;
   Factory code-factory #201). Until then it read both variables itself
   (Factory `a6916180314d`). No model-written module reads them.
+  `BINARY_STORAGE_ROOT` is a required string row kept as supplied: a
+  missing, empty or whitespace-only value stops the start (CFG-002); the
+  start checks nothing about the path itself. Each read resolves the stored
+  `file_ref` under that root as given (a relative root against the
+  process's working directory) and refuses a reference outside it; a root
+  that does not exist, is not a directory or cannot be read fails each
+  binary read as `BinaryStorageError`, never the start (Factory
+  `generate_binary_storage_draft.py`, `generate_runtime_settings_draft.py`;
+  owner 2026-11-06: current service behaviour accepted; technical decisions
+  delegated).
 - Registry paths (accepted `config.registry_request_paths`, since 2026-11-08
   the data-provider constants of the Consequence): the paths are fixed as
   `projects/active` for the active list (owner 2026-11-08, Q12, A6: the
