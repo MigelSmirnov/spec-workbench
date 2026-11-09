@@ -1,0 +1,303 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 request-supplied authorization claims",
+   "kind": "refusal_precedence",
+   "text": "a request that carries its own role, capability or principal-kind claim (a header, a body field, a query value) changes no decision: an operator presenting an administrator claim is refused access management, and a viewer presenting a manage capability is refused the mutation",
+   "question": "Must an untrusted authorization claim be ignored before normal authorization, or must the request be rejected at decoding because it contains the claim, and which refusal is returned?",
+   "options": [
+    "Ignore the claim and return the authorization refusal that the claim-free request would receive.",
+    "Reject the request at decoding because the claim field or header is forbidden."
+   ],
+   "default_guess": "Ignore the claim and perform authorization solely from the authenticated context.",
+   "witness": {
+    "initial": "An authenticated operator lacks portal.access.manage.",
+    "events": [
+     "The operator calls an access-management route and supplies an administrator-role claim in the request body."
+    ],
+    "outcomes": [
+     "The body claim is ignored and the route returns the ordinary access-management authorization refusal.",
+     "Request decoding rejects the forbidden role field before authorization, producing a decoding refusal."
+    ],
+    "observer": "The operator sees a different refusal and status."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 Registry failure translation",
+   "kind": "check_precedence",
+   "text": "which transport condition counts as which kind, and the order the gateway tests them in, are the accepted gateway's (notes of `validate_project_reference`, `get_project_context`, `list_active_projects`; the `RegistryFailureKind` member naming each failure), carried to States 6–7.",
+   "question": "What is the exact precedence when one Registry response satisfies more than one failure condition?",
+   "options": [
+    "Classify the HTTP status before attempting to decode the body.",
+    "Decode and validate the body before classifying a non-success HTTP status.",
+    "Define an operation-specific precedence table."
+   ],
+   "default_guess": "Classify timeout and transport failures first, then non-success HTTP status, then decode and validate successful bodies.",
+   "witness": {
+    "initial": "The Registry is reachable and the portal requests an existing Registry endpoint.",
+    "events": [
+     "Registry answers HTTP 404 with a body that is not decodable as the expected response model."
+    ],
+    "outcomes": [
+     "Status-first classification raises RegistryBoundaryError(kind=not_found).",
+     "Body-first classification raises RegistryBoundaryError(kind=schema_mismatch)."
+    ],
+    "observer": "The gateway caller sees a different RegistryFailureKind."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 and A30 Registry URL validation",
+   "kind": "contradiction",
+   "text": "A Registry call made while the URL is unusable (not an http or https base URL, or carrying user information) fails as `transport_error`, as before (Factory code `adapters/registry_gateway.py` `_registry_url`).\n\nThe start-up check refuses only a missing or empty value; which values the gateway accepts as a base URL and how it joins them with the request paths stay the accepted gateway's (note `_registry_url`, the Registry path constants), carried to States 6–7.\n\nCFG-002: a required start-up variable that is missing or invalid, the Registry URL among them, stops the start before any request is served.",
+   "question": "Does a nonempty but unusable Registry URL stop start-up, or does start-up accept it and let the first Registry call fail with transport_error?",
+   "options": [
+    "Validate the complete Registry base-URL syntax at start-up and stop on any unusable value.",
+    "At start-up validate only presence/nonemptiness; classify an unusable value as transport_error when a call is attempted."
+   ],
+   "default_guess": "Validate the complete URL at start-up, because CFG-002 explicitly includes an invalid Registry URL.",
+   "witness": {
+    "initial": "REGISTRY_BASE_URL is set to ftp://registry.example and every other required variable is valid.",
+    "events": [
+     "The host starts the service.",
+     "After a successful start, a caller attempts an operation requiring Registry validation."
+    ],
+    "outcomes": [
+     "CFG-002 stops start-up before any request is served.",
+     "The presence-only start-up check succeeds; the later Registry call raises RegistryBoundaryError(kind=transport_error)."
+    ],
+    "observer": "The host operator sees either a failed start or a running service, and the caller may see a runtime Registry failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "State 0 R0-10 and A30 Registry configuration",
+   "kind": "contradiction",
+   "text": "The service is configured only by environment variables, which it validates when it starts (except the Registry address, which the Registry gateway reads at each call and whose absence fails only Registry calls, State 2 A30)\n\nThe Registry URL is read only through `runtime_settings` (owner decision 2026-11-09, SPEC_STANDARD 6.11: a second reader of the environment is a defect). `REGISTRY_BASE_URL` is a required variable of the start-up table that R0-10's check covers, read into the `registry_base_url` field of `RuntimeSettings`: a missing or empty value stops the start, and the Registry gateway takes the value from the settings `load_runtime_settings` returns, never from the environment.",
+   "question": "Which Registry-address lifecycle is authoritative, and must the State 0 passage be replaced to agree with A30?",
+   "options": [
+    "The URL is required and snapshotted by runtime_settings at start-up.",
+    "The gateway reads the environment at every Registry call and absence affects only those calls."
+   ],
+   "default_guess": "Use A30's newer owner decision: require and snapshot the URL at start-up, and update State 0.",
+   "witness": {
+    "initial": "REGISTRY_BASE_URL is absent when the process starts.",
+    "events": [
+     "The host attempts to start the service."
+    ],
+    "outcomes": [
+     "State 0 R0-10 permits the service to start; a later Registry call fails.",
+     "A30 refuses start-up before the service accepts requests."
+    ],
+    "observer": "The host operator sees a different start-up outcome."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 Registry URL composition",
+   "kind": "url_join_semantics",
+   "text": "which values the gateway accepts as a base URL and how it joins them with the request paths stay the accepted gateway's (note `_registry_url`, the Registry path constants), carried to States 6–7.",
+   "question": "Which nonempty HTTP(S) URL forms are accepted, and exactly how are an existing path, trailing slash, query, fragment, percent-encoding and the Registry path constants combined?",
+   "options": [
+    "Accept only an origin-style base URL and reject paths, queries and fragments.",
+    "Preserve a base path and append Registry paths beneath it.",
+    "Use URL-reference replacement semantics, which may discard an existing base path."
+   ],
+   "default_guess": "Accept HTTP(S) URLs without user information, query or fragment, preserve a normalized optional base path, and append path segments with URL-aware joining.",
+   "witness": {
+    "initial": "RuntimeSettings.registry_base_url is https://registry.example/platform and the active-list path is projects/active.",
+    "events": [
+     "The gateway calls list_active_projects."
+    ],
+    "outcomes": [
+     "The gateway requests https://registry.example/platform/projects/active.",
+     "The gateway requests https://registry.example/projects/active because joining replaces the base path."
+    ],
+    "observer": "The Registry and portal caller see a successful answer in one deployment and a not-found or other HTTP failure in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 password control characters",
+   "kind": "undefined_set",
+   "text": "The exact control set is that of the accepted `_validate_new_password`, carried to States 6–7.\n\n a password containing a NUL or another control character is refused and changes nothing",
+   "question": "What exact Unicode code points count as control characters, so that later notes and the required test can implement the same refusal set without consulting unwritten code?",
+   "options": [
+    "Reject Unicode general category Cc only.",
+    "Reject all Unicode categories beginning with C.",
+    "Reject an explicitly enumerated set matching the accepted implementation."
+   ],
+   "default_guess": "Reject every Unicode Cc code point and state that set explicitly.",
+   "witness": {
+    "initial": "A new password is within the length bounds and contains U+0085 but no NUL.",
+    "events": [
+     "A staff-account creation operation validates the password."
+    ],
+    "outcomes": [
+     "An implementation treating Unicode Cc characters as controls refuses it.",
+     "An implementation checking only NUL and common ASCII controls accepts and hashes it exactly as supplied."
+    ],
+    "observer": "The administrator and eventual account holder see whether the password is accepted."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 viewer-entry rate limiter",
+   "kind": "algorithm_unspecified",
+   "text": "the limiter's algorithm, its bound and its answer are those of the accepted transport guard, stated by the notes of `transport_guard` (recorded in the accepted spec as `rules.http_transport_policy.limits.viewer_entry`), with the values of A30, carried to States 6–7.",
+   "question": "What rate-limit algorithm, window-boundary rule, key eviction rule and concealed refusal response must the State 7 note state?",
+   "options": [
+    "Fixed windows keyed by client address and route.",
+    "A sliding-window log or counter keyed by client address and route.",
+    "A token bucket keyed by client address and route."
+   ],
+   "default_guess": "Use the accepted implementation's algorithm, but reproduce its complete semantics in State 2 before generating later notes.",
+   "witness": {
+    "initial": "The configured limit is one viewer-entry attempt per ten seconds for one client address and route.",
+    "events": [
+     "The client attempts entry at elapsed time 9.9 seconds.",
+     "The same client attempts entry again at elapsed time 10.1 seconds across a fixed-window boundary."
+    ],
+    "outcomes": [
+     "A fixed-window limiter accepts both attempts because they fall in different windows.",
+     "A sliding-window limiter refuses the second attempt because the first remains within the preceding ten seconds."
+    ],
+    "observer": "The viewer sees whether the second entry attempt is accepted or concealed as rate-limited."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A28 source-supplied timestamps",
+   "kind": "time_representation",
+   "text": "their accepted forms and checks, and where in an operation its one clock read happens, are the accepted spec's, carried to States 6–7.",
+   "question": "For every source-supplied datetime, are naive inputs rejected or interpreted as UTC, and are offset-aware inputs converted to UTC before their offset is removed?",
+   "options": [
+    "Require offset-aware input, convert the instant to UTC, then store it offset-naive.",
+    "Accept naive input as already UTC and normalize aware input to UTC.",
+    "Accept both and merely remove tzinfo without converting the wall value."
+   ],
+   "default_guess": "Require an offset-aware input, convert it to UTC, then store the same instant as an offset-naive datetime.",
+   "witness": {
+    "initial": "A recognition publication supplies confirmed_at as the naive datetime 2026-11-09 12:00:00.",
+    "events": [
+     "The expense-intake operation accepts and projects the publication."
+    ],
+    "outcomes": [
+     "The boundary rejects the timestamp because it carries no offset.",
+     "The boundary treats it as UTC and stores 2026-11-09 12:00:00 as an offset-naive UTC value."
+    ],
+    "observer": "The authenticated staff caller sees acceptance or typed rejection, and readers may see a persisted expense only in one implementation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Classification principles and A30 binary settings",
+   "kind": "configuration_path_contradiction",
+   "text": "a value that depends on the deployment (URLs, origins, hosts, size bounds, rate limits) — a row of the start-up table `config.runtime_environment_variables`, read once by `runtime_settings` into a field of `RuntimeSettings`.\n\n`binary_read_limit_env_name`: the binary read limit is the environment variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that `load_runtime_settings` validates at start without a `RuntimeSettings` field; the emitted `binary_storage` reads it at each read through its backend IR (Factory `a6916180314d`). No model-written module reads it.",
+   "question": "Is BINARY_MAX_READ_BYTES snapshotted once into RuntimeSettings like every deployment size bound, or reread by binary_storage for every read without a settings field?",
+   "options": [
+    "Add a RuntimeSettings field and pass its start-up value to binary_storage.",
+    "Let binary_storage reread the environment for every operation.",
+    "Have the emitted backend capture a validated start-up value through a separately specified settings contract."
+   ],
+   "default_guess": "Add a RuntimeSettings field and use the one validated start-up value.",
+   "witness": {
+    "initial": "The service starts with BINARY_MAX_READ_BYTES=1024 and validates that value.",
+    "events": [
+     "After start, the process environment is changed to BINARY_MAX_READ_BYTES=2048.",
+     "A caller requests a 1500-byte authorized binary."
+    ],
+    "outcomes": [
+     "Read-once RuntimeSettings behavior refuses the binary against the 1024-byte bound.",
+     "Per-read environment behavior returns the binary under the new 2048-byte bound."
+    ],
+    "observer": "The binary client sees refusal versus a successful response."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 CFG-001 binary response bound",
+   "kind": "invariant_test_gap",
+   "text": "CFG-001: one check per bound, each with the bound at its value: a Registry request that outlasts the timeout fails as the `timeout` member of `RegistryFailureKind`; a staff session and a viewer session are refused from the instant their issue time plus their lifetime is reached; the viewer-entry attempt after the limit within the window is refused and creates no session; a request body over its bound and a binary over its read bound are refused before the handler or the response; and the start is refused when the read bound exceeds the response bound.",
+   "question": "What must the required test show for application of max_binary_response_bytes itself, rather than only BINARY_MAX_READ_BYTES and the start-up ordering between the two bounds?",
+   "options": [
+    "Exercise a response whose content exceeds max_binary_response_bytes and prove no response is emitted.",
+    "Declare that enforcing read_bound <= response_bound plus enforcing the read bound is the complete proof that the response bound is applied.",
+    "Remove max_binary_response_bytes from CFG-001 as an independently applied bound."
+   ],
+   "default_guess": "State explicitly that the response ceiling is guaranteed by the validated inequality and read-bound enforcement, and test both facts as the proof for that bound.",
+   "witness": {
+    "initial": "The configured binary read bound is 5 MiB and the binary response bound is 10 MiB.",
+    "events": [
+     "The CFG-001 checks run without constructing any response over 10 MiB."
+    ],
+    "outcomes": [
+     "The invariant is considered proved indirectly because every readable binary is at most 5 MiB.",
+     "The invariant is considered unproved because no check demonstrates refusal by max_binary_response_bytes itself."
+    ],
+    "observer": "The State 2 invariant gate or a later test author reaches a different pass/fail decision."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "01_models.md administrative-area question",
+   "kind": "model_question",
+   "text": "Administrative-area boundaries — with the sole-trader constraint one administrative area covers everything; the field stays out of the models until a real second area exists (recorded to avoid a future placeholder).",
+   "question": "Does State 2 intentionally retain the single global administrative area as the complete current authorization policy, and which later state owns the decision if a second area is introduced?",
+   "options": [
+    "Keep one implicit global area for this specification and identify multi-area support as a future product redesign.",
+    "Introduce an explicit administrative-area model and scope policy now."
+   ],
+   "default_guess": "Keep one implicit global area and exclude multi-area behavior from the current specification.",
+   "unit": "?"
+  },
+  {
+   "subject": "01_models.md external binary retention question",
+   "kind": "model_question",
+   "text": "External binary deletion/retention after source intake (operational policy; no model impact and no implicit delete from portal record changes).",
+   "question": "Which later owner decides binary retention and deletion, and must binary_storage expose no deletion operation in the current design?",
+   "options": [
+    "Current portal storage is permanently read-only; retention is outside this specification.",
+    "A later operational state defines retention while the current API still exposes no business-triggered deletion.",
+    "State 2 defines an explicit retention duration and deletion authority."
+   ],
+   "default_guess": "Keep binary_storage read-only and carry retention to a named operational owner outside current business behavior.",
+   "unit": "?"
+  },
+  {
+   "subject": "01_models.md SnapshotImportRecord retention question",
+   "kind": "model_question",
+   "text": "Whether `SnapshotImportRecord` retention needs pruning (operational question; no model impact now).",
+   "question": "Are SnapshotImportRecord values retained indefinitely in the current specification, or may an unspecified later process prune them?",
+   "options": [
+    "Retain every record indefinitely unless a future product decision changes the model.",
+    "Define a retention period and pruning operation now.",
+    "Explicitly delegate pruning to a named later operational state while guaranteeing no pruning in generated product code."
+   ],
+   "default_guess": "Retain all SnapshotImportRecord values indefinitely in the current specification.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30 binary read limit configuration",
+   "kind": "standard_violation",
+   "text": "`binary_read_limit_env_name`: the binary read limit is the environment\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\n  field; the emitted `binary_storage` reads it at each read through its\n  backend IR (Factory `a6916180314d`). No model-written module reads it.",
+   "rule": "Таблица выше —\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Make BINARY_MAX_READ_BYTES a field of the settings object read through the settings module, or reclassify it into another permitted home and use that home's required form.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30 configuration consequence",
+   "kind": "standard_violation",
+   "text": "A deployment value is a row of `config.runtime_environment_variables` read once by `load_runtime_settings` into a field of `RuntimeSettings` (`database_url`, `environment`, `public_origin`, `trusted_hosts`, `allowed_origins`, `max_request_body_bytes`, `max_binary_response_bytes`, `production_logging`, the two viewer-entry limits and, since 2026-11-09, `registry_base_url`), except the two binary storage rows, which the emitted `binary_storage` reads.",
+   "rule": "Таблица выше —\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Remove the exception and give each environment-dependent binary-storage value a settings-model field, or move it to another one of the three permitted value paths with the required form.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 request-supplied authorization claims\",\"kind\":\"refusal_precedence\",\"text\":\"a request that carries its own role, capability or principal-kind claim (a header, a body field, a query value) changes no decision: an operator presenting an administrator claim is refused access management, and a viewer presenting a manage capability is refused the mutation\",\"question\":\"Must an untrusted authorization claim be ignored before normal authorization, or must the request be rejected at decoding because it contains the claim, and which refusal is returned?\",\"options\":[\"Ignore the claim and return the authorization refusal that the claim-free request would receive.\",\"Reject the request at decoding because the claim field or header is forbidden.\"],\"default_guess\":\"Ignore the claim and perform authorization solely from the authenticated context.\",\"witness\":{\"initial\":\"An authenticated operator lacks portal.access.manage.\",\"events\":[\"The operator calls an access-management route and supplies an administrator-role claim in the request body.\"],\"outcomes\":[\"The body claim is ignored and the route returns the ordinary access-management authorization refusal.\",\"Request decoding rejects the forbidden role field before authorization, producing a decoding refusal.\"],\"observer\":\"The operator sees a different refusal and status.\"}},{\"subject\":\"A6 Registry failure translation\",\"kind\":\"check_precedence\",\"text\":\"which transport condition counts as which kind, and the order the gateway tests them in, are the accepted gateway's (notes of `validate_project_reference`, `get_project_context`, `list_active_projects`; the `RegistryFailureKind` member naming each failure), carried to States 6–7.\",\"question\":\"What is the exact precedence when one Registry response satisfies more than one failure condition?\",\"options\":[\"Classify the HTTP status before attempting to decode the body.\",\"Decode and validate the body before classifying a non-success HTTP status.\",\"Define an operation-specific precedence table.\"],\"default_guess\":\"Classify timeout and transport failures first, then non-success HTTP status, then decode and validate successful bodies.\",\"witness\":{\"initial\":\"The Registry is reachable and the portal requests an existing Registry endpoint.\",\"events\":[\"Registry answers HTTP 404 with a body that is not decodable as the expected response model.\"],\"outcomes\":[\"Status-first classification raises RegistryBoundaryError(kind=not_found).\",\"Body-first classification raises RegistryBoundaryError(kind=schema_mismatch).\"],\"observer\":\"The gateway caller sees a different RegistryFailureKind.\"}},{\"subject\":\"A6 and A30 Registry URL validation\",\"kind\":\"contradiction\",\"text\":\"A Registry call made while the URL is unusable (not an http or https base URL, or carrying user information) fails as `transport_error`, as before (Factory code `adapters/registry_gateway.py` `_registry_url`).\\n\\nThe start-up check refuses only a missing or empty value; which values the gateway accepts as a base URL and how it joins them with the request paths stay the accepted gateway's (note `_registry_url`, the Registry path constants), carried to States 6–7.\\n\\nCFG-002: a required start-up variable that is missing or invalid, the Registry URL among them, stops the start before any request is served.\",\"question\":\"Does a nonempty but unusable Registry URL stop start-up, or does start-up accept it and let the first Registry call fail with transport_error?\",\"options\":[\"Validate the complete Registry base-URL syntax at start-up and stop on any unusable value.\",\"At start-up validate only presence/nonemptiness; classify an unusable value as transport_error when a call is attempted.\"],\"default_guess\":\"Validate the complete URL at start-up, because CFG-002 explicitly includes an invalid Registry URL.\",\"witness\":{\"initial\":\"REGISTRY_BASE_URL is set to ftp://registry.example and every other required variable is valid.\",\"events\":[\"The host starts the service.\",\"After a successful start, a caller attempts an operation requiring Registry validation.\"],\"outcomes\":[\"CFG-002 stops start-up before any request is served.\",\"The presence-only start-up check succeeds; the later Registry call raises RegistryBoundaryError(kind=transport_error).\"],\"observer\":\"The host operator sees either a failed start or a running service, and the caller may see a runtime Registry failure.\"}},{\"subject\":\"State 0 R0-10 and A30 Registry configuration\",\"kind\":\"contradiction\",\"text\":\"The service is configured only by environment variables, which it validates when it starts (except the Registry address, which the Registry gateway reads at each call and whose absence fails only Registry calls, State 2 A30)\\n\\nThe Registry URL is read only through `runtime_settings` (owner decision 2026-11-09, SPEC_STANDARD 6.11: a second reader of the environment is a defect). `REGISTRY_BASE_URL` is a required variable of the start-up table that R0-10's check covers, read into the `registry_base_url` field of `RuntimeSettings`: a missing or empty value stops the start, and the Registry gateway takes the value from the settings `load_runtime_settings` returns, never from the environment.\",\"question\":\"Which Registry-address lifecycle is authoritative, and must the State 0 passage be replaced to agree with A30?\",\"options\":[\"The URL is required and snapshotted by runtime_settings at start-up.\",\"The gateway reads the environment at every Registry call and absence affects only those calls.\"],\"default_guess\":\"Use A30's newer owner decision: require and snapshot the URL at start-up, and update State 0.\",\"witness\":{\"initial\":\"REGISTRY_BASE_URL is absent when the process starts.\",\"events\":[\"The host attempts to start the service.\"],\"outcomes\":[\"State 0 R0-10 permits the service to start; a later Registry call fails.\",\"A30 refuses start-up before the service accepts requests.\"],\"observer\":\"The host operator sees a different start-up outcome.\"}},{\"subject\":\"A30 Registry URL composition\",\"kind\":\"url_join_semantics\",\"text\":\"which values the gateway accepts as a base URL and how it joins them with the request paths stay the accepted gateway's (note `_registry_url`, the Registry path constants), carried to States 6–7.\",\"question\":\"Which nonempty HTTP(S) URL forms are accepted, and exactly how are an existing path, trailing slash, query, fragment, percent-encoding and the Registry path constants combined?\",\"options\":[\"Accept only an origin-style base URL and reject paths, queries and fragments.\",\"Preserve a base path and append Registry paths beneath it.\",\"Use URL-reference replacement semantics, which may discard an existing base path.\"],\"default_guess\":\"Accept HTTP(S) URLs without user information, query or fragment, preserve a normalized optional base path, and append path segments with URL-aware joining.\",\"witness\":{\"initial\":\"RuntimeSettings.registry_base_url is https://registry.example/platform and the active-list path is projects/active.\",\"events\":[\"The gateway calls list_active_projects.\"],\"outcomes\":[\"The gateway requests https://registry.example/platform/projects/active.\",\"The gateway requests https://registry.example/projects/active because joining replaces the base path.\"],\"observer\":\"The Registry and portal caller see a successful answer in one deployment and a not-found or other HTTP failure in the other.\"}},{\"subject\":\"A16 password control characters\",\"kind\":\"undefined_set\",\"text\":\"The exact control set is that of the accepted `_validate_new_password`, carried to States 6–7.\\n\\n a password containing a NUL or another control character is refused and changes nothing\",\"question\":\"What exact Unicode code points count as control characters, so that later notes and the required test can implement the same refusal set without consulting unwritten code?\",\"options\":[\"Reject Unicode general category Cc only.\",\"Reject all Unicode categories beginning with C.\",\"Reject an explicitly enumerated set matching the accepted implementation.\"],\"default_guess\":\"Reject every Unicode Cc code point and state that set explicitly.\",\"witness\":{\"initial\":\"A new password is within the length bounds and contains U+0085 but no NUL.\",\"events\":[\"A staff-account creation operation validates the password.\"],\"outcomes\":[\"An implementation treating Unicode Cc characters as controls refuses it.\",\"An implementation checking only NUL and common ASCII controls accepts and hashes it exactly as supplied.\"],\"observer\":\"The administrator and eventual account holder see whether the password is accepted.\"}},{\"subject\":\"A25 viewer-entry rate limiter\",\"kind\":\"algorithm_unspecified\",\"text\":\"the limiter's algorithm, its bound and its answer are those of the accepted transport guard, stated by the notes of `transport_guard` (recorded in the accepted spec as `rules.http_transport_policy.limits.viewer_entry`), with the values of A30, carried to States 6–7.\",\"question\":\"What rate-limit algorithm, window-boundary rule, key eviction rule and concealed refusal response must the State 7 note state?\",\"options\":[\"Fixed windows keyed by client address and route.\",\"A sliding-window log or counter keyed by client address and route.\",\"A token bucket keyed by client address and route.\"],\"default_guess\":\"Use the accepted implementation's algorithm, but reproduce its complete semantics in State 2 before generating later notes.\",\"witness\":{\"initial\":\"The configured limit is one viewer-entry attempt per ten seconds for one client address and route.\",\"events\":[\"The client attempts entry at elapsed time 9.9 seconds.\",\"The same client attempts entry again at elapsed time 10.1 seconds across a fixed-window boundary.\"],\"outcomes\":[\"A fixed-window limiter accepts both attempts because they fall in different windows.\",\"A sliding-window limiter refuses the second attempt because the first remains within the preceding ten seconds.\"],\"observer\":\"The viewer sees whether the second entry attempt is accepted or concealed as rate-limited.\"}},{\"subject\":\"A28 source-supplied timestamps\",\"kind\":\"time_representation\",\"text\":\"their accepted forms and checks, and where in an operation its one clock read happens, are the accepted spec's, carried to States 6–7.\",\"question\":\"For every source-supplied datetime, are naive inputs rejected or interpreted as UTC, and are offset-aware inputs converted to UTC before their offset is removed?\",\"options\":[\"Require offset-aware input, convert the instant to UTC, then store it offset-naive.\",\"Accept naive input as already UTC and normalize aware input to UTC.\",\"Accept both and merely remove tzinfo without converting the wall value.\"],\"default_guess\":\"Require an offset-aware input, convert it to UTC, then store the same instant as an offset-naive datetime.\",\"witness\":{\"initial\":\"A recognition publication supplies confirmed_at as the naive datetime 2026-11-09 12:00:00.\",\"events\":[\"The expense-intake operation accepts and projects the publication.\"],\"outcomes\":[\"The boundary rejects the timestamp because it carries no offset.\",\"The boundary treats it as UTC and stores 2026-11-09 12:00:00 as an offset-naive UTC value.\"],\"observer\":\"The authenticated staff caller sees acceptance or typed rejection, and readers may see a persisted expense only in one implementation.\"}},{\"subject\":\"Classification principles and A30 binary settings\",\"kind\":\"configuration_path_contradiction\",\"text\":\"a value that depends on the deployment (URLs, origins, hosts, size bounds, rate limits) — a row of the start-up table `config.runtime_environment_variables`, read once by `runtime_settings` into a field of `RuntimeSettings`.\\n\\n`binary_read_limit_env_name`: the binary read limit is the environment variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that `load_runtime_settings` validates at start without a `RuntimeSettings` field; the emitted `binary_storage` reads it at each read through its backend IR (Factory `a6916180314d`). No model-written module reads it.\",\"question\":\"Is BINARY_MAX_READ_BYTES snapshotted once into RuntimeSettings like every deployment size bound, or reread by binary_storage for every read without a settings field?\",\"options\":[\"Add a RuntimeSettings field and pass its start-up value to binary_storage.\",\"Let binary_storage reread the environment for every operation.\",\"Have the emitted backend capture a validated start-up value through a separately specified settings contract.\"],\"default_guess\":\"Add a RuntimeSettings field and use the one validated start-up value.\",\"witness\":{\"initial\":\"The service starts with BINARY_MAX_READ_BYTES=1024 and validates that value.\",\"events\":[\"After start, the process environment is changed to BINARY_MAX_READ_BYTES=2048.\",\"A caller requests a 1500-byte authorized binary.\"],\"outcomes\":[\"Read-once RuntimeSettings behavior refuses the binary against the 1024-byte bound.\",\"Per-read environment behavior returns the binary under the new 2048-byte bound.\"],\"observer\":\"The binary client sees refusal versus a successful response.\"}},{\"subject\":\"A30 CFG-001 binary response bound\",\"kind\":\"invariant_test_gap\",\"text\":\"CFG-001: one check per bound, each with the bound at its value: a Registry request that outlasts the timeout fails as the `timeout` member of `RegistryFailureKind`; a staff session and a viewer session are refused from the instant their issue time plus their lifetime is reached; the viewer-entry attempt after the limit within the window is refused and creates no session; a request body over its bound and a binary over its read bound are refused before the handler or the response; and the start is refused when the read bound exceeds the response bound.\",\"question\":\"What must the required test show for application of max_binary_response_bytes itself, rather than only BINARY_MAX_READ_BYTES and the start-up ordering between the two bounds?\",\"options\":[\"Exercise a response whose content exceeds max_binary_response_bytes and prove no response is emitted.\",\"Declare that enforcing read_bound <= response_bound plus enforcing the read bound is the complete proof that the response bound is applied.\",\"Remove max_binary_response_bytes from CFG-001 as an independently applied bound.\"],\"default_guess\":\"State explicitly that the response ceiling is guaranteed by the validated inequality and read-bound enforcement, and test both facts as the proof for that bound.\",\"witness\":{\"initial\":\"The configured binary read bound is 5 MiB and the binary response bound is 10 MiB.\",\"events\":[\"The CFG-001 checks run without constructing any response over 10 MiB.\"],\"outcomes\":[\"The invariant is considered proved indirectly because every readable binary is at most 5 MiB.\",\"The invariant is considered unproved because no check demonstrates refusal by max_binary_response_bytes itself.\"],\"observer\":\"The State 2 invariant gate or a later test author reaches a different pass/fail decision.\"}},{\"subject\":\"01_models.md administrative-area question\",\"kind\":\"model_question\",\"text\":\"Administrative-area boundaries — with the sole-trader constraint one administrative area covers everything; the field stays out of the models until a real second area exists (recorded to avoid a future placeholder).\",\"question\":\"Does State 2 intentionally retain the single global administrative area as the complete current authorization policy, and which later state owns the decision if a second area is introduced?\",\"options\":[\"Keep one implicit global area for this specification and identify multi-area support as a future product redesign.\",\"Introduce an explicit administrative-area model and scope policy now.\"],\"default_guess\":\"Keep one implicit global area and exclude multi-area behavior from the current specification.\"},{\"subject\":\"01_models.md external binary retention question\",\"kind\":\"model_question\",\"text\":\"External binary deletion/retention after source intake (operational policy; no model impact and no implicit delete from portal record changes).\",\"question\":\"Which later owner decides binary retention and deletion, and must binary_storage expose no deletion operation in the current design?\",\"options\":[\"Current portal storage is permanently read-only; retention is outside this specification.\",\"A later operational state defines retention while the current API still exposes no business-triggered deletion.\",\"State 2 defines an explicit retention duration and deletion authority.\"],\"default_guess\":\"Keep binary_storage read-only and carry retention to a named operational owner outside current business behavior.\"},{\"subject\":\"01_models.md SnapshotImportRecord retention question\",\"kind\":\"model_question\",\"text\":\"Whether `SnapshotImportRecord` retention needs pruning (operational question; no model impact now).\",\"question\":\"Are SnapshotImportRecord values retained indefinitely in the current specification, or may an unspecified later process prune them?\",\"options\":[\"Retain every record indefinitely unless a future product decision changes the model.\",\"Define a retention period and pruning operation now.\",\"Explicitly delegate pruning to a named later operational state while guaranteeing no pruning in generated product code.\"],\"default_guess\":\"Retain all SnapshotImportRecord values indefinitely in the current specification.\"},{\"subject\":\"A30 binary read limit configuration\",\"kind\":\"standard_violation\",\"text\":\"`binary_read_limit_env_name`: the binary read limit is the environment\\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\\n  field; the emitted `binary_storage` reads it at each read through its\\n  backend IR (Factory `a6916180314d`). No model-written module reads it.\",\"rule\":\"Таблица выше —\\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Make BINARY_MAX_READ_BYTES a field of the settings object read through the settings module, or reclassify it into another permitted home and use that home's required form.\"},{\"subject\":\"A30 configuration consequence\",\"kind\":\"standard_violation\",\"text\":\"A deployment value is a row of `config.runtime_environment_variables` read once by `load_runtime_settings` into a field of `RuntimeSettings` (`database_url`, `environment`, `public_origin`, `trusted_hosts`, `allowed_origins`, `max_request_body_bytes`, `max_binary_response_bytes`, `production_logging`, the two viewer-entry limits and, since 2026-11-09, `registry_base_url`), except the two binary storage rows, which the emitted `binary_storage` reads.\",\"rule\":\"Таблица выше —\\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Remove the exception and give each environment-dependent binary-storage value a settings-model field, or move it to another one of the three permitted value paths with the required form.\"}]}",
+ "set_aside": []
+}

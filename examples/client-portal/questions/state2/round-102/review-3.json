@@ -1,0 +1,250 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 Required tests — principal-kind and role coverage",
+   "kind": "ambiguous_quantification",
+   "text": "for every principal kind and role, the capability set decided is exactly the one `CAPABILITY_SET_MEMBERS` gives for its `CapabilitySet`",
+   "question": "Does this require only valid principal/role combinations, or the Cartesian product of every principal kind and every staff role, and which `CapabilitySet` corresponds to each valid combination?",
+   "options": [
+    "Test only valid combinations: viewer→viewer, operator→operator, administrator→operator plus administrator additions, estimate producer→estimate_producer.",
+    "Test every principal-kind/role pair, including combinations the models cannot represent."
+   ],
+   "default_guess": "Test only model-valid combinations and state their mapping explicitly.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 request-carried authorization claims",
+   "kind": "refusal_boundary",
+   "text": "a request that carries its own role, capability or principal-kind claim (a header, a body field, a query value) changes no decision",
+   "question": "Must an otherwise authorized request containing such a claim be rejected at decoding, or must the claim be ignored so the request receives the same authorization result as if it were absent?",
+   "options": [
+    "Reject any request containing an authorization claim.",
+    "Ignore the claim and decide solely from authenticated server-side context.",
+    "Reject body/query claims as unknown input but ignore untrusted headers."
+   ],
+   "default_guess": "Reject declared claim fields at the public decoding boundary and ignore unrelated headers, while never using either as authorization input.",
+   "witness": {
+    "initial": "An active administrator session is authorized to perform an access-management mutation.",
+    "events": [
+     "The administrator submits a valid mutation request whose body also contains `role: viewer`.",
+     "The request reaches public decoding and authorization."
+    ],
+    "outcomes": [
+     "Strict decoding refuses the request because it contains a caller-supplied role claim.",
+     "The extra claim is ignored and the authorized mutation succeeds."
+    ],
+    "observer": "The administrator and any audit/store observer see refusal with no write versus a successful mutation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 Registry failure translation",
+   "kind": "precedence_unspecified",
+   "text": "which transport condition counts as which kind, and the order the gateway tests them in, are the accepted gateway's (notes of\n`validate_project_reference`, `get_project_context`,\n`list_active_projects`; the `RegistryFailureKind` member naming each failure), carried to\nStates 6–7.",
+   "question": "What is the exact precedence when one failure satisfies more than one category, such as a timeout exception that is also a transport exception or an HTTP error response with an invalid body?",
+   "options": [
+    "Classify timeout before the general transport condition and classify HTTP status before decoding its body.",
+    "Classify every transport exception as `transport_error`, including timeout subclasses.",
+    "Attempt body decoding before classifying a non-success HTTP status."
+   ],
+   "default_guess": "Classify URL validity first, timeout before general transport errors, HTTP status before body decoding, then identity after successful decoding.",
+   "witness": {
+    "initial": "The Registry gateway is called with a usable URL and its HTTP client raises an exception that is both a timeout and a general transport exception.",
+    "events": [
+     "The gateway catches and translates the exception.",
+     "The caller observes the `kind` field of `RegistryBoundaryError`."
+    ],
+    "outcomes": [
+     "The timeout check wins and the kind is `timeout`.",
+     "The general transport check wins and the kind is `transport_error`."
+    ],
+    "observer": "The Registry caller and the HTTP error mapper see different typed failures."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 password control-character policy",
+   "kind": "undefined_character_set",
+   "text": "The exact control\n  set is that of the accepted `_validate_new_password`, carried to\n  States 6–7.",
+   "question": "Which Unicode code points are control characters for password rejection, including whether DEL, C1 controls, format characters, line separators and other Unicode categories are included?",
+   "options": [
+    "Reject only NUL and ASCII C0 controls.",
+    "Reject Unicode general category `Cc`, including C0, DEL and C1 controls.",
+    "Reject all Unicode control/format/separator categories selected by an explicitly listed predicate."
+   ],
+   "default_guess": "Reject every Unicode `Cc` code point and state the predicate directly.",
+   "witness": {
+    "initial": "An administrator creates an otherwise valid 12-code-point password containing U+007F DELETE.",
+    "events": [
+     "The password is passed to `_validate_new_password`.",
+     "If accepted, credential security hashes the exact supplied string."
+    ],
+    "outcomes": [
+     "An ASCII-C0-only implementation accepts and stores the password.",
+     "A Unicode-`Cc` implementation refuses it and changes nothing."
+    ],
+    "observer": "The administrator sees account creation succeed or fail, and the holder can or cannot authenticate with the supplied password."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A28 source-supplied datetimes",
+   "kind": "datetime_input_representation",
+   "text": "Times a\nsource supplies — `approved_at`, `published_at` of a snapshot, `confirmed_at`\nof a recognition, `photo_date`, a service credential's `expires_at` — are\nkept as supplied: the same instant, stored offset-naive UTC like every\npersisted timestamp, never replaced by the clock",
+   "question": "Are offset-naive source datetimes rejected, interpreted as UTC, or interpreted using some other declared offset before being stored as offset-naive UTC?",
+   "options": [
+    "Reject every source-supplied datetime without an offset.",
+    "Interpret an offset-naive source datetime as UTC.",
+    "Accept only the exact forms later contracts choose, without State 2 fixing their meaning."
+   ],
+   "default_guess": "Require an offset-aware source value, convert the represented instant to UTC, then remove the offset for storage.",
+   "witness": {
+    "initial": "A producer is authorized to publish a snapshot whose `approved_at` is the naive datetime `2026-11-09 10:00:00`.",
+    "events": [
+     "The publication is decoded and imported.",
+     "The stored snapshot is later read and ordered against other timestamps."
+    ],
+    "outcomes": [
+     "The publication is refused because the supplied datetime identifies no instant.",
+     "The value is accepted as 10:00 UTC and stored as naive `2026-11-09 10:00:00`."
+    ],
+    "observer": "The producer sees rejection versus acceptance, and readers may see a different stored or ordered instant."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A28 CLK-001 Required tests",
+   "kind": "incomplete_required_test",
+   "text": "CLK-001: a test per operation that reads the current time — writing a\n  timestamp or comparing it with a stored one, expiry checks included —\n  with the clock source fixed at a known instant, showing that the\n  operation reads it once and uses that instant for every comparison, that\n  its portal-owned event timestamps equal that instant, that a derived\n  expiry equals that instant plus the TTL, and that supplied times and\n  dates are stored as supplied; and that no module other than the clock\n  source reads the host wall or monotonic clock directly.",
+   "question": "What must the test show for the invariant's explicit audit-writer exception: the number of `utc_now` readings per appended audit record, the use of that reading for `occurred_at`, and its offset-naive UTC representation?",
+   "options": [
+    "Add an audit-writer test proving one reading per appended record and exact reuse as `occurred_at`.",
+    "Treat audit-writer timing as outside CLK-001 despite its presence in the invariant."
+   ],
+   "default_guess": "Add a focused audit-writer check proving one wall reading per appended record and exact offset-naive UTC storage.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30 Registry URL validation",
+   "kind": "contradiction",
+   "text": "The start-up check refuses only a missing or empty\nvalue; which values the gateway accepts as a base URL and how it joins them\nwith the request paths stay the accepted gateway's (note `_registry_url`,\nthe Registry path constants), carried to States 6–7.\n\nCFG-002: `runtime_settings_client_portal`: for each required variable,\n  `REGISTRY_BASE_URL` included, a missing value and an invalid value stop\n  start-up, and a complete valid environment starts.\n\nA Registry\ncall made while the URL is unusable (not an http or https base URL, or\ncarrying user information) fails as `transport_error`, as before",
+   "question": "Must a non-empty but unusable Registry URL stop start-up, or may start-up succeed and the first Registry call fail with `transport_error`?",
+   "options": [
+    "Validate scheme and user information at start-up and stop on an unusable URL.",
+    "At start-up check only presence/non-emptiness; classify an unusable URL as `transport_error` when called."
+   ],
+   "default_guess": "Validate the complete base-URL rules at start-up and remove the runtime unusable-URL branch.",
+   "witness": {
+    "initial": "The environment contains `REGISTRY_BASE_URL=ftp://user@example.test/registry`; every other required variable is valid.",
+    "events": [
+     "The service starts.",
+     "A client later invokes an operation that calls Registry."
+    ],
+    "outcomes": [
+     "CFG-002 treats the URL as invalid and start-up stops before serving requests.",
+     "The presence-only start-up check succeeds; the service serves requests until the Registry operation fails with `RegistryBoundaryError(kind=transport_error)`."
+    ],
+    "observer": "The deployment operator sees failed versus successful start-up, and the client may see a later Registry failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "State 0 R0-10 and State 2 A30 Registry configuration",
+   "kind": "contradiction",
+   "text": "The service is\nconfigured only by environment variables, which it validates when it starts\n(except the Registry address, which the Registry gateway reads at each call\nand whose absence fails only Registry calls, State 2 A30)\n\n`REGISTRY_BASE_URL` is a required variable of the start-up table that\nR0-10's check covers, read into the `registry_base_url` field of\n`RuntimeSettings`: a missing or empty value stops the start, and the Registry\ngateway takes the value from the settings `load_runtime_settings` returns,\nnever from the environment.",
+   "question": "Which text governs the Registry address: per-call environment reading with absence tolerated at start-up, or one start-up read into `RuntimeSettings` with absence fatal?",
+   "options": [
+    "State 2 supersedes R0-10; update State 0 to the required start-up setting.",
+    "Keep State 0 behavior and withdraw the State 2 change."
+   ],
+   "default_guess": "Apply the newer State 2 decision and correct State 0 R0-10.",
+   "witness": {
+    "initial": "`REGISTRY_BASE_URL` is absent and all other start-up settings are valid.",
+    "events": [
+     "The deployment launches the service.",
+     "No Registry operation has yet been requested."
+    ],
+    "outcomes": [
+     "Under State 0 R0-10 the service starts, and only a later Registry call fails.",
+     "Under State 2 A30 start-up stops before any request is served."
+    ],
+    "observer": "The deployment operator sees a running service versus a start-up failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Classification principles and A30 binary storage settings",
+   "kind": "contradiction",
+   "text": "a value that depends on the deployment (URLs, origins, hosts, size bounds,\n  rate limits) — a row of the start-up table `config.runtime_environment_variables`,\n  read once by `runtime_settings` into a field of `RuntimeSettings`.\n\n`binary_read_limit_env_name`: the binary read limit is the environment\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\n  field; the emitted `binary_storage` reads it at each read through its\n  backend IR (Factory `a6916180314d`). No model-written module reads it.",
+   "question": "Is `BINARY_MAX_READ_BYTES` a start-up setting read once into `RuntimeSettings`, or a value reread from the environment for every binary read, and which value applies if the environment changes after start-up?",
+   "options": [
+    "Add a `RuntimeSettings` field and pass the one start-up value to binary storage.",
+    "Validate at start-up but reread the environment on every binary access.",
+    "Treat the emitted backend's private settings object as the single settings-module path and name it explicitly."
+   ],
+   "default_guess": "Read and validate it once into a typed settings field and inject that value into binary storage.",
+   "witness": {
+    "initial": "The service starts with `BINARY_MAX_READ_BYTES=1048576` and the storage contains a 2 MiB object.",
+    "events": [
+     "After start-up, the host changes the environment value to `3145728` without restarting the process.",
+     "An authorized client requests the object."
+    ],
+    "outcomes": [
+     "A read-once settings implementation retains the 1 MiB limit and refuses the object.",
+     "A per-read environment implementation sees the new 3 MiB limit and returns the object."
+    ],
+    "observer": "The client sees refusal versus binary delivery; the operator sees configuration mutate without a restart."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25/A30 size-bound refusal conditions",
+   "kind": "boundary_inclusivity",
+   "text": "Request bodies and binary responses are bounded by runtime\nsettings before expensive work\n\nCFG-001: one check per bound, each with the bound at its value:\n\n  a request body over its bound and a binary over its\n  read bound are refused before the handler or the response",
+   "question": "Are bodies and binaries whose size is exactly equal to the configured bound accepted, and must Required tests demonstrate both the exact-bound and one-over-bound cases?",
+   "options": [
+    "The bound is an inclusive maximum: accept exactly the bound and reject larger values.",
+    "The bound is an exclusive ceiling: reject values equal to or greater than it."
+   ],
+   "default_guess": "Treat each size bound as an inclusive maximum and test both exactly-at-bound acceptance and one-byte-over refusal.",
+   "witness": {
+    "initial": "A syntactically valid request body has exactly `max_request_body_bytes` bytes.",
+    "events": [
+     "The request passes through `transport_guard`.",
+     "The handler would succeed if invoked."
+    ],
+    "outcomes": [
+     "An inclusive comparison permits the request and invokes the handler.",
+     "An exclusive comparison refuses the request before the handler."
+    ],
+    "observer": "The API caller sees success versus a transport refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 CFG-002 configuration coverage",
+   "kind": "undefined_test_domain",
+   "text": "CFG-002: `runtime_settings_client_portal`: for each required variable,\n  `REGISTRY_BASE_URL` included, a missing value and an invalid value stop\n  start-up, and a complete valid environment starts.",
+   "question": "Which exact rows are required, what value is invalid for each row, and what complete environment must the test construct?",
+   "options": [
+    "List every required row and its invalid-value predicate in A30.",
+    "Make the Required test explicitly iterate the separately supplied closed start-up table and identify that table as its complete source.",
+    "Let each later test author choose representative required variables and invalid values."
+   ],
+   "default_guess": "Bind the test explicitly to every row marked required in the closed start-up table and state the invalidity predicate for each type.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30 binary read limit delivery",
+   "kind": "standard_violation",
+   "text": "- `binary_read_limit_env_name`: the binary read limit is the environment\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\n  field; the emitted `binary_storage` reads it at each read through its\n  backend IR (Factory `a6916180314d`). No model-written module reads it.",
+   "rule": "| настройка запуска, зависящая от окружения | `config`, через модуль настроек (§6.11) | поле объекта настроек | поле модели настроек и его тип |",
+   "section": "15.3.1",
+   "question": "Make `BINARY_MAX_READ_BYTES` a typed field of the settings model supplied through the settings module, rather than validating it without a field and rereading the environment in generated code.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 Required tests — principal-kind and role coverage\",\"kind\":\"ambiguous_quantification\",\"text\":\"for every principal kind and role, the capability set decided is exactly the one `CAPABILITY_SET_MEMBERS` gives for its `CapabilitySet`\",\"question\":\"Does this require only valid principal/role combinations, or the Cartesian product of every principal kind and every staff role, and which `CapabilitySet` corresponds to each valid combination?\",\"options\":[\"Test only valid combinations: viewer→viewer, operator→operator, administrator→operator plus administrator additions, estimate producer→estimate_producer.\",\"Test every principal-kind/role pair, including combinations the models cannot represent.\"],\"default_guess\":\"Test only model-valid combinations and state their mapping explicitly.\"},{\"subject\":\"A1 request-carried authorization claims\",\"kind\":\"refusal_boundary\",\"text\":\"a request that carries its own role, capability or principal-kind claim (a header, a body field, a query value) changes no decision\",\"question\":\"Must an otherwise authorized request containing such a claim be rejected at decoding, or must the claim be ignored so the request receives the same authorization result as if it were absent?\",\"options\":[\"Reject any request containing an authorization claim.\",\"Ignore the claim and decide solely from authenticated server-side context.\",\"Reject body/query claims as unknown input but ignore untrusted headers.\"],\"default_guess\":\"Reject declared claim fields at the public decoding boundary and ignore unrelated headers, while never using either as authorization input.\",\"witness\":{\"initial\":\"An active administrator session is authorized to perform an access-management mutation.\",\"events\":[\"The administrator submits a valid mutation request whose body also contains `role: viewer`.\",\"The request reaches public decoding and authorization.\"],\"outcomes\":[\"Strict decoding refuses the request because it contains a caller-supplied role claim.\",\"The extra claim is ignored and the authorized mutation succeeds.\"],\"observer\":\"The administrator and any audit/store observer see refusal with no write versus a successful mutation.\"}},{\"subject\":\"A6 Registry failure translation\",\"kind\":\"precedence_unspecified\",\"text\":\"which transport condition counts as which kind, and the order the gateway tests them in, are the accepted gateway's (notes of\\n`validate_project_reference`, `get_project_context`,\\n`list_active_projects`; the `RegistryFailureKind` member naming each failure), carried to\\nStates 6–7.\",\"question\":\"What is the exact precedence when one failure satisfies more than one category, such as a timeout exception that is also a transport exception or an HTTP error response with an invalid body?\",\"options\":[\"Classify timeout before the general transport condition and classify HTTP status before decoding its body.\",\"Classify every transport exception as `transport_error`, including timeout subclasses.\",\"Attempt body decoding before classifying a non-success HTTP status.\"],\"default_guess\":\"Classify URL validity first, timeout before general transport errors, HTTP status before body decoding, then identity after successful decoding.\",\"witness\":{\"initial\":\"The Registry gateway is called with a usable URL and its HTTP client raises an exception that is both a timeout and a general transport exception.\",\"events\":[\"The gateway catches and translates the exception.\",\"The caller observes the `kind` field of `RegistryBoundaryError`.\"],\"outcomes\":[\"The timeout check wins and the kind is `timeout`.\",\"The general transport check wins and the kind is `transport_error`.\"],\"observer\":\"The Registry caller and the HTTP error mapper see different typed failures.\"}},{\"subject\":\"A16 password control-character policy\",\"kind\":\"undefined_character_set\",\"text\":\"The exact control\\n  set is that of the accepted `_validate_new_password`, carried to\\n  States 6–7.\",\"question\":\"Which Unicode code points are control characters for password rejection, including whether DEL, C1 controls, format characters, line separators and other Unicode categories are included?\",\"options\":[\"Reject only NUL and ASCII C0 controls.\",\"Reject Unicode general category `Cc`, including C0, DEL and C1 controls.\",\"Reject all Unicode control/format/separator categories selected by an explicitly listed predicate.\"],\"default_guess\":\"Reject every Unicode `Cc` code point and state the predicate directly.\",\"witness\":{\"initial\":\"An administrator creates an otherwise valid 12-code-point password containing U+007F DELETE.\",\"events\":[\"The password is passed to `_validate_new_password`.\",\"If accepted, credential security hashes the exact supplied string.\"],\"outcomes\":[\"An ASCII-C0-only implementation accepts and stores the password.\",\"A Unicode-`Cc` implementation refuses it and changes nothing.\"],\"observer\":\"The administrator sees account creation succeed or fail, and the holder can or cannot authenticate with the supplied password.\"}},{\"subject\":\"A28 source-supplied datetimes\",\"kind\":\"datetime_input_representation\",\"text\":\"Times a\\nsource supplies — `approved_at`, `published_at` of a snapshot, `confirmed_at`\\nof a recognition, `photo_date`, a service credential's `expires_at` — are\\nkept as supplied: the same instant, stored offset-naive UTC like every\\npersisted timestamp, never replaced by the clock\",\"question\":\"Are offset-naive source datetimes rejected, interpreted as UTC, or interpreted using some other declared offset before being stored as offset-naive UTC?\",\"options\":[\"Reject every source-supplied datetime without an offset.\",\"Interpret an offset-naive source datetime as UTC.\",\"Accept only the exact forms later contracts choose, without State 2 fixing their meaning.\"],\"default_guess\":\"Require an offset-aware source value, convert the represented instant to UTC, then remove the offset for storage.\",\"witness\":{\"initial\":\"A producer is authorized to publish a snapshot whose `approved_at` is the naive datetime `2026-11-09 10:00:00`.\",\"events\":[\"The publication is decoded and imported.\",\"The stored snapshot is later read and ordered against other timestamps.\"],\"outcomes\":[\"The publication is refused because the supplied datetime identifies no instant.\",\"The value is accepted as 10:00 UTC and stored as naive `2026-11-09 10:00:00`.\"],\"observer\":\"The producer sees rejection versus acceptance, and readers may see a different stored or ordered instant.\"}},{\"subject\":\"A28 CLK-001 Required tests\",\"kind\":\"incomplete_required_test\",\"text\":\"CLK-001: a test per operation that reads the current time — writing a\\n  timestamp or comparing it with a stored one, expiry checks included —\\n  with the clock source fixed at a known instant, showing that the\\n  operation reads it once and uses that instant for every comparison, that\\n  its portal-owned event timestamps equal that instant, that a derived\\n  expiry equals that instant plus the TTL, and that supplied times and\\n  dates are stored as supplied; and that no module other than the clock\\n  source reads the host wall or monotonic clock directly.\",\"question\":\"What must the test show for the invariant's explicit audit-writer exception: the number of `utc_now` readings per appended audit record, the use of that reading for `occurred_at`, and its offset-naive UTC representation?\",\"options\":[\"Add an audit-writer test proving one reading per appended record and exact reuse as `occurred_at`.\",\"Treat audit-writer timing as outside CLK-001 despite its presence in the invariant.\"],\"default_guess\":\"Add a focused audit-writer check proving one wall reading per appended record and exact offset-naive UTC storage.\"},{\"subject\":\"A30 Registry URL validation\",\"kind\":\"contradiction\",\"text\":\"The start-up check refuses only a missing or empty\\nvalue; which values the gateway accepts as a base URL and how it joins them\\nwith the request paths stay the accepted gateway's (note `_registry_url`,\\nthe Registry path constants), carried to States 6–7.\\n\\nCFG-002: `runtime_settings_client_portal`: for each required variable,\\n  `REGISTRY_BASE_URL` included, a missing value and an invalid value stop\\n  start-up, and a complete valid environment starts.\\n\\nA Registry\\ncall made while the URL is unusable (not an http or https base URL, or\\ncarrying user information) fails as `transport_error`, as before\",\"question\":\"Must a non-empty but unusable Registry URL stop start-up, or may start-up succeed and the first Registry call fail with `transport_error`?\",\"options\":[\"Validate scheme and user information at start-up and stop on an unusable URL.\",\"At start-up check only presence/non-emptiness; classify an unusable URL as `transport_error` when called.\"],\"default_guess\":\"Validate the complete base-URL rules at start-up and remove the runtime unusable-URL branch.\",\"witness\":{\"initial\":\"The environment contains `REGISTRY_BASE_URL=ftp://user@example.test/registry`; every other required variable is valid.\",\"events\":[\"The service starts.\",\"A client later invokes an operation that calls Registry.\"],\"outcomes\":[\"CFG-002 treats the URL as invalid and start-up stops before serving requests.\",\"The presence-only start-up check succeeds; the service serves requests until the Registry operation fails with `RegistryBoundaryError(kind=transport_error)`.\"],\"observer\":\"The deployment operator sees failed versus successful start-up, and the client may see a later Registry failure.\"}},{\"subject\":\"State 0 R0-10 and State 2 A30 Registry configuration\",\"kind\":\"contradiction\",\"text\":\"The service is\\nconfigured only by environment variables, which it validates when it starts\\n(except the Registry address, which the Registry gateway reads at each call\\nand whose absence fails only Registry calls, State 2 A30)\\n\\n`REGISTRY_BASE_URL` is a required variable of the start-up table that\\nR0-10's check covers, read into the `registry_base_url` field of\\n`RuntimeSettings`: a missing or empty value stops the start, and the Registry\\ngateway takes the value from the settings `load_runtime_settings` returns,\\nnever from the environment.\",\"question\":\"Which text governs the Registry address: per-call environment reading with absence tolerated at start-up, or one start-up read into `RuntimeSettings` with absence fatal?\",\"options\":[\"State 2 supersedes R0-10; update State 0 to the required start-up setting.\",\"Keep State 0 behavior and withdraw the State 2 change.\"],\"default_guess\":\"Apply the newer State 2 decision and correct State 0 R0-10.\",\"witness\":{\"initial\":\"`REGISTRY_BASE_URL` is absent and all other start-up settings are valid.\",\"events\":[\"The deployment launches the service.\",\"No Registry operation has yet been requested.\"],\"outcomes\":[\"Under State 0 R0-10 the service starts, and only a later Registry call fails.\",\"Under State 2 A30 start-up stops before any request is served.\"],\"observer\":\"The deployment operator sees a running service versus a start-up failure.\"}},{\"subject\":\"Classification principles and A30 binary storage settings\",\"kind\":\"contradiction\",\"text\":\"a value that depends on the deployment (URLs, origins, hosts, size bounds,\\n  rate limits) — a row of the start-up table `config.runtime_environment_variables`,\\n  read once by `runtime_settings` into a field of `RuntimeSettings`.\\n\\n`binary_read_limit_env_name`: the binary read limit is the environment\\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\\n  field; the emitted `binary_storage` reads it at each read through its\\n  backend IR (Factory `a6916180314d`). No model-written module reads it.\",\"question\":\"Is `BINARY_MAX_READ_BYTES` a start-up setting read once into `RuntimeSettings`, or a value reread from the environment for every binary read, and which value applies if the environment changes after start-up?\",\"options\":[\"Add a `RuntimeSettings` field and pass the one start-up value to binary storage.\",\"Validate at start-up but reread the environment on every binary access.\",\"Treat the emitted backend's private settings object as the single settings-module path and name it explicitly.\"],\"default_guess\":\"Read and validate it once into a typed settings field and inject that value into binary storage.\",\"witness\":{\"initial\":\"The service starts with `BINARY_MAX_READ_BYTES=1048576` and the storage contains a 2 MiB object.\",\"events\":[\"After start-up, the host changes the environment value to `3145728` without restarting the process.\",\"An authorized client requests the object.\"],\"outcomes\":[\"A read-once settings implementation retains the 1 MiB limit and refuses the object.\",\"A per-read environment implementation sees the new 3 MiB limit and returns the object.\"],\"observer\":\"The client sees refusal versus binary delivery; the operator sees configuration mutate without a restart.\"}},{\"subject\":\"A25/A30 size-bound refusal conditions\",\"kind\":\"boundary_inclusivity\",\"text\":\"Request bodies and binary responses are bounded by runtime\\nsettings before expensive work\\n\\nCFG-001: one check per bound, each with the bound at its value:\\n\\n  a request body over its bound and a binary over its\\n  read bound are refused before the handler or the response\",\"question\":\"Are bodies and binaries whose size is exactly equal to the configured bound accepted, and must Required tests demonstrate both the exact-bound and one-over-bound cases?\",\"options\":[\"The bound is an inclusive maximum: accept exactly the bound and reject larger values.\",\"The bound is an exclusive ceiling: reject values equal to or greater than it.\"],\"default_guess\":\"Treat each size bound as an inclusive maximum and test both exactly-at-bound acceptance and one-byte-over refusal.\",\"witness\":{\"initial\":\"A syntactically valid request body has exactly `max_request_body_bytes` bytes.\",\"events\":[\"The request passes through `transport_guard`.\",\"The handler would succeed if invoked.\"],\"outcomes\":[\"An inclusive comparison permits the request and invokes the handler.\",\"An exclusive comparison refuses the request before the handler.\"],\"observer\":\"The API caller sees success versus a transport refusal.\"}},{\"subject\":\"A30 CFG-002 configuration coverage\",\"kind\":\"undefined_test_domain\",\"text\":\"CFG-002: `runtime_settings_client_portal`: for each required variable,\\n  `REGISTRY_BASE_URL` included, a missing value and an invalid value stop\\n  start-up, and a complete valid environment starts.\",\"question\":\"Which exact rows are required, what value is invalid for each row, and what complete environment must the test construct?\",\"options\":[\"List every required row and its invalid-value predicate in A30.\",\"Make the Required test explicitly iterate the separately supplied closed start-up table and identify that table as its complete source.\",\"Let each later test author choose representative required variables and invalid values.\"],\"default_guess\":\"Bind the test explicitly to every row marked required in the closed start-up table and state the invalidity predicate for each type.\"},{\"subject\":\"A30 binary read limit delivery\",\"kind\":\"standard_violation\",\"text\":\"- `binary_read_limit_env_name`: the binary read limit is the environment\\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\\n  field; the emitted `binary_storage` reads it at each read through its\\n  backend IR (Factory `a6916180314d`). No model-written module reads it.\",\"rule\":\"| настройка запуска, зависящая от окружения | `config`, через модуль настроек (§6.11) | поле объекта настроек | поле модели настроек и его тип |\",\"section\":\"15.3.1\",\"question\":\"Make `BINARY_MAX_READ_BYTES` a typed field of the settings model supplied through the settings module, rather than validating it without a field and rereading the environment in generated code.\"}]}",
+ "set_aside": []
+}

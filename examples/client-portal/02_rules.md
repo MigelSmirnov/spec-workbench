@@ -69,7 +69,11 @@ has one of three homes, and the decision that owns it names that home:
   deterministic `data_provider`, imported by name;
 - a value that depends on the deployment (URLs, origins, hosts, size bounds,
   rate limits) — a row of the start-up table `config.runtime_environment_variables`,
-  read once by `runtime_settings` into a field of `RuntimeSettings`.
+  validated once at start by `runtime_settings` and read into a field of
+  `RuntimeSettings`; the one exception is the two binary storage rows
+  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and
+  which the emitted `binary_storage` reads at each read, as the Factory's
+  binary storage backend is built (A14, A30).
 
 The IR a deterministic backend is emitted from (`rules.*_backend` and the
 policies such a backend reads) is read only by that backend. Behaviour that
@@ -365,11 +369,15 @@ refuses it (HTTP 422) before any Registry call or endpoint check, and the
 gateway takes only typed UUIDs, so the running service never produces
 `invalid_uuid` (Factory code: no caller raises it). Every failed Registry
 call is answered with exactly one kind of the table and never with a
-fallback; which transport condition counts as which kind, and the order the
-gateway tests them in, are the accepted gateway's (notes of
-`validate_project_reference`, `get_project_context`,
-`list_active_projects`; the `RegistryFailureKind` member naming each failure), carried to
-States 6–7. A decoded validation answer is returned as it is and read by
+fallback, decided in the order a call proceeds (the accepted gateway,
+`adapters/registry_gateway.py`): an unusable Registry URL is
+`transport_error` before any request; while the request is made, an answer
+with HTTP 404 is `not_found` and any other non-success status `http_error`,
+a timeout is `timeout`, and any other failure to obtain an answer is
+`transport_error`; only a success answer's body is decoded, and a body that
+does not decode is `schema_mismatch`; only a decoded answer is compared with
+the requested project, and a mismatch is `identity_mismatch`. A later stage
+is never reached after an earlier one failed, so no failure has two kinds. A decoded validation answer is returned as it is and read by
 its caller as A5 says; the two readings of A5 agree, because the Registry
 sets `is_active = true` exactly when `status` is `active` (Registry v1
 `validate_project_reference`). The portal does not check the fields of an
@@ -615,7 +623,7 @@ running service still returns 0 until the next Route B regenerates
 
 ### Required tests
 
-- INV-037: a check at `validate_eur_amount` and at each operation that accepts an amount, with the values of the data-provider constants `MONEY_CURRENCY`, `MONEY_FRACTION_DIGITS` and `MONEY_ROUNDING`: an amount in a currency other than `MONEY_CURRENCY` is refused, never converted, and changes nothing; an accepted amount is returned as a `Decimal` with exactly `MONEY_FRACTION_DIGITS` fraction digits, a half-way value (for example 0.005 and 0.015) rounded half-up away from zero; and every derived money value (completed work value, balances) carries the same scale and rounding.
+- INV-037: a check at `validate_eur_amount` and at each operation that accepts an amount — `create_expense_from_recognition` (total and allocation amounts), `correct_expense` (total), `replace_expense_allocations` (allocation amounts), `upsert_manual_section_plan` (its two planned amounts), `register_work_payment` (amount) and `import_snapshot` (the snapshot's currency and amounts) — with the values of the data-provider constants `MONEY_CURRENCY`, `MONEY_FRACTION_DIGITS` and `MONEY_ROUNDING`: an amount in a currency other than `MONEY_CURRENCY` is refused, never converted, and changes nothing; an accepted amount is returned as a `Decimal` with exactly `MONEY_FRACTION_DIGITS` fraction digits, a half-way value (for example 0.005 and 0.015) rounded half-up away from zero; and every derived money value (completed work value, balances) carries the same scale and rounding.
 - INV-041: a check against the rules table at `calculate_overall_progress` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-044: the ledger's property at `calculate_material_balance` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-037 [witness: verification:project_tracking_audit_writer_sqlite_uow_client_portal].
@@ -923,9 +931,10 @@ The ordering is behaviour, not data: it is stated as prose by the notes of the f
   accepted `_normalize_staff_email`, carried to States 6–7.
 - A new password is 12–128 Unicode code points, contains no NUL/control
   characters, and is hashed exactly as supplied. The portal never trims,
-  casefolds, or Unicode-normalizes password plaintext. The exact control
-  set is that of the accepted `_validate_new_password`, carried to
-  States 6–7.
+  casefolds, or Unicode-normalizes password plaintext. The refused control
+  characters are exactly the code points U+0000 to U+001F and U+007F (the
+  accepted `_validate_new_password`); every other code point, other Unicode
+  control and format characters included, is accepted.
 - No character-class composition ritual is required. A future breached-
   password service is a separate explicit boundary, not an implicit network
   call during hashing.
@@ -949,7 +958,7 @@ behaviour accepted; technical decisions delegated.
 ### Required tests
 
 - INV-018: a check against the rules table at `_normalize_staff_email` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-019: a check at `_validate_new_password` and the operations that accept a new password, with the bounds of the data-provider constants `PASSWORD_MIN_CODEPOINTS` and `PASSWORD_MAX_CODEPOINTS`: passwords of one code point below the minimum and one above the maximum are refused and change nothing, the minimum and the maximum are accepted; a password containing a NUL or another control character is refused and changes nothing; a password with surrounding whitespace, a case variant and a password in a non-normalized Unicode form are each accepted and stored as the hash of exactly the supplied string, so that the supplied string verifies and its trimmed, casefolded or normalized variant does not.
+- INV-019: a check at `_validate_new_password` and the operations that accept a new password, with the bounds of the data-provider constants `PASSWORD_MIN_CODEPOINTS` and `PASSWORD_MAX_CODEPOINTS`: passwords of one code point below the minimum and one above the maximum are refused and change nothing, the minimum and the maximum are accepted; a password containing any code point from U+0000 to U+001F or U+007F is refused and changes nothing, while one containing U+0080 or U+200B is accepted; a password with surrounding whitespace, a case variant and a password in a non-normalized Unicode form are each accepted and stored as the hash of exactly the supplied string, so that the supplied string verifies and its trimmed, casefolded or normalized variant does not.
 - Witnesses, the focused Factory verification checks that assert it: INV-018 [witness: verification:staff_identity_uow_client_portal].
 - Witnesses, the focused Factory verification checks that assert it: INV-019 [witness: verification:credential_security_policy_client_portal].
 
@@ -1607,8 +1616,10 @@ the Registry path constants), carried to States 6–7.
   (`max_request_body_bytes`), the binary response bound
   (`max_binary_response_bytes`) and the binary read bound
   (`BINARY_MAX_READ_BYTES`).
-- CFG-002: a required start-up variable that is missing or invalid, the
-  Registry URL among them, stops the start before any request is served.
+- CFG-002: a required start-up variable that is missing or invalid stops
+  the start before any request is served; for the Registry URL the start-up
+  check refuses only a missing or empty value, and an unusable non-empty URL
+  fails each Registry call as `transport_error` (A6).
 
 ### Required tests
 
@@ -1620,9 +1631,9 @@ the Registry path constants), carried to States 6–7.
   creates no session; a request body over its bound and a binary over its
   read bound are refused before the handler or the response; and the start
   is refused when the read bound exceeds the response bound.
-- CFG-002: `runtime_settings_client_portal`: for each required variable,
-  `REGISTRY_BASE_URL` included, a missing value and an invalid value stop
-  start-up, and a complete valid environment starts.
+- CFG-002: `runtime_settings_client_portal`: for each required variable a
+  missing value and an invalid value stop start-up, a missing or empty
+  `REGISTRY_BASE_URL` stops it too, and a complete valid environment starts.
 - Witnesses, the focused Factory verification checks that assert it: CFG-002 [witness: verification:runtime_settings_client_portal].
 - Witnesses, the focused Factory verification checks that assert it: CFG-001 [witness: verification:binary_storage_content_client_portal].
 

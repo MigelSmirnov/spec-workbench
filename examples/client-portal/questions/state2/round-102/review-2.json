@@ -1,0 +1,247 @@
+{
+ "open_points": [
+  {
+   "subject": "A6 Registry failure translation",
+   "kind": "check_precedence",
+   "text": "Every failed Registry call is answered with exactly one kind of the table and never with a fallback; which transport condition counts as which kind, and the order the gateway tests them in, are the accepted gateway's (notes of `validate_project_reference`, `get_project_context`, `list_active_projects`; the `RegistryFailureKind` member naming each failure), carried to States 6–7.",
+   "question": "When one response satisfies multiple failure conditions, in what exact order must URL, transport, HTTP-status, body-decoding and identity checks run?",
+   "options": [
+    "Classify the HTTP status before decoding the body",
+    "Decode and validate the body before classifying the HTTP status"
+   ],
+   "default_guess": "Validate the URL, perform transport, classify non-success HTTP status, decode and validate the body, then check identity.",
+   "witness": {
+    "initial": "The Registry gateway receives an HTTP 404 response whose body is not decodable as the expected model.",
+    "events": [
+     "The Registry answers a portal context request with status 404 and an invalid body.",
+     "The gateway classifies the failed call."
+    ],
+    "outcomes": [
+     "The gateway raises RegistryBoundaryError(kind=not_found) because HTTP status is checked first.",
+     "The gateway raises RegistryBoundaryError(kind=schema_mismatch) because the body is decoded first."
+    ],
+    "observer": "The portal caller classifying the Registry failure"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 and A30 Registry URL validation",
+   "kind": "contradiction",
+   "text": "A Registry call made while the URL is unusable (not an http or https base URL, or carrying user information) fails as `transport_error`, as before (Factory code `adapters/registry_gateway.py` `_registry_url`).\n\nCFG-002: a required start-up variable that is missing or invalid, the Registry URL among them, stops the start before any request is served.",
+   "question": "Must a non-HTTP(S) Registry URL or one containing user information stop start-up, or may the service start and translate it to `transport_error` on a Registry call?",
+   "options": [
+    "Reject every unusable Registry URL at start-up",
+    "At start-up reject only missing or empty values; reject unusable URLs at call time"
+   ],
+   "default_guess": "Validate the complete base-URL policy at start-up and refuse to start.",
+   "witness": {
+    "initial": "REGISTRY_BASE_URL is `ftp://user:pass@registry.example/projects`; all other required settings are valid.",
+    "events": [
+     "The operator starts the service.",
+     "If it starts, a client invokes an operation requiring Registry validation."
+    ],
+    "outcomes": [
+     "CFG-002 stops start-up because the Registry URL is invalid.",
+     "The start-up check accepts the non-empty value; the later Registry call raises RegistryBoundaryError(kind=transport_error)."
+    ],
+    "observer": "The deployment operator, and if start-up succeeds, the requesting client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 and A30 Registry request URL construction",
+   "kind": "url_joining",
+   "text": "which values the gateway accepts as a base URL and how it joins them with the request paths stay the accepted gateway's (note `_registry_url`, the Registry path constants), carried to States 6–7.",
+   "question": "What exact base-URL normalization and path-joining rule must generated code use, including trailing slashes and an existing base path?",
+   "options": [
+    "Append the Registry path beneath the complete base path",
+    "Resolve the Registry path as a URL-relative reference, which may replace the final base-path segment",
+    "Require a base URL with no path and reject every other form"
+   ],
+   "default_guess": "Require an HTTP(S) base URL without user information, preserve any explicit base path, normalize one separating slash, and append the path constants.",
+   "witness": {
+    "initial": "RuntimeSettings.registry_base_url is `https://registry.example/api/v1` and the requested Registry path is `projects/active`.",
+    "events": [
+     "An administrator requests the active-project list.",
+     "The gateway constructs and calls the Registry URL."
+    ],
+    "outcomes": [
+     "String-style path appending calls `https://registry.example/api/v1/projects/active` and receives the configured endpoint.",
+     "URL-reference resolution treats `v1` as the last path segment and calls `https://registry.example/api/projects/active`, which may return 404."
+    ],
+    "observer": "The Registry and the administrator requesting the project list"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 viewer-entry rate limiter",
+   "kind": "algorithm_unspecified",
+   "text": "the limiter's algorithm, its bound and its answer are those of the accepted transport guard, stated by the notes of `transport_guard` (recorded in the accepted spec as `rules.http_transport_policy.limits.viewer_entry`), with the values of A30, carried to States 6–7.",
+   "question": "What exact rate-limiting algorithm, window boundary, counted attempts, eviction rule and concealed refusal response must `transport_guard` implement?",
+   "options": [
+    "Fixed windows",
+    "Sliding windows",
+    "Token bucket"
+   ],
+   "default_guess": "Use a bounded per-address-and-route sliding window, count every entry attempt, and refuse attempt N+1 while N earlier attempts remain inside the window.",
+   "witness": {
+    "initial": "The configured limit is two viewer-entry attempts per 60 seconds and the address has no prior entries.",
+    "events": [
+     "The address makes attempts at elapsed times 59.8 and 59.9 seconds.",
+     "The same address makes another attempt at 60.1 seconds."
+    ],
+    "outcomes": [
+     "A fixed epoch-aligned window admits the third attempt because it is in a new window.",
+     "A sliding window refuses the third attempt because both earlier attempts are less than 60 seconds old."
+    ],
+    "observer": "The viewer making the entry request"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 password validation",
+   "kind": "character_set_unspecified",
+   "text": "a password containing a NUL or another control character is refused and changes nothing",
+   "question": "Which exact Unicode code points count as control characters, and which representatives must the Required test cover?",
+   "options": [
+    "Only NUL and ASCII C0 controls",
+    "Unicode general category Cc",
+    "All Unicode categories beginning with C, including format, surrogate, private-use and unassigned characters"
+   ],
+   "default_guess": "Reject every Unicode general-category Cc character and test NUL, an ASCII non-NUL control and a C1 control.",
+   "witness": {
+    "initial": "An administrator submits a new password of valid length containing U+0085 NEXT LINE and otherwise ordinary characters.",
+    "events": [
+     "The password reaches `_validate_new_password`.",
+     "The operation either refuses it or stores its hash."
+    ],
+    "outcomes": [
+     "An ASCII-control-only implementation accepts and hashes the password.",
+     "A Unicode-Cc implementation refuses it and changes nothing."
+    ],
+    "observer": "The administrator creating or changing the password"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 request-supplied authorization claims",
+   "kind": "refusal_semantics",
+   "text": "a request that carries its own role, capability or principal-kind claim (a header, a body field, a query value) changes no decision",
+   "question": "Must such an untrusted claim be ignored while authorization proceeds from the authenticated context, or must the request be refused at decoding merely for containing it?",
+   "options": [
+    "Ignore the claim and make the same decision as if it were absent",
+    "Reject the request at decoding",
+    "Ignore unknown headers but reject body or query claims"
+   ],
+   "default_guess": "Public request schemas should not expose these fields; incidental unknown claims should be ignored or rejected consistently without ever replacing the authenticated context, with the exact transport behavior stated per boundary.",
+   "witness": {
+    "initial": "An authenticated operator is allowed to perform a normal expense mutation.",
+    "events": [
+     "The operator submits the otherwise valid mutation with an extra body field claiming role `administrator`.",
+     "The request is decoded and authorized."
+    ],
+    "outcomes": [
+     "A decoder that ignores the claim performs the authorized operator mutation, exactly as without the claim.",
+     "A decoder that forbids the field refuses the request before authorization and performs no mutation."
+    ],
+    "observer": "The operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9 INV-037 Required tests",
+   "kind": "test_scope_unspecified",
+   "text": "a check at `validate_eur_amount` and at each operation that accepts an amount",
+   "question": "Which exact operations and amount-bearing fields must the INV-037 test cover, including correction, allocation, snapshot, plan, payment and derived-value paths?",
+   "options": [
+    "Enumerate and test every public amount-bearing operation and each derived-money function",
+    "Test only `validate_eur_amount` and representative callers",
+    "Treat internal operations as covered transitively by their public route"
+   ],
+   "default_guess": "Enumerate every public operation accepting money and separately test every derived-money function named by R9.",
+   "witness": {
+    "initial": "Expense creation applies `validate_eur_amount`, but expense correction has a separate amount path.",
+    "events": [
+     "An expense is created with a two-digit amount.",
+     "A staff member corrects it to the halfway value 1.005.",
+     "The expense and derived totals are read."
+    ],
+    "outcomes": [
+     "An implementation that validates every amount path stores 1.01 and derived values retain two digits.",
+     "An implementation that treats the generic validator test as sufficient stores or propagates 1.005 on the correction path."
+    ],
+    "observer": "Staff and viewers reading the corrected expense and totals"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Classification principles and A30 binary read setting",
+   "kind": "contradiction",
+   "text": "a value that depends on the deployment (URLs, origins, hosts, size bounds, rate limits) — a row of the start-up table `config.runtime_environment_variables`, read once by `runtime_settings` into a field of `RuntimeSettings`.\n\n`binary_read_limit_env_name`: the binary read limit is the environment variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that `load_runtime_settings` validates at start without a `RuntimeSettings` field; the emitted `binary_storage` reads it at each read through its backend IR (Factory `a6916180314d`).",
+   "question": "Must BINARY_MAX_READ_BYTES be read once into RuntimeSettings, or validated once and then reread from the environment for every binary read?",
+   "options": [
+    "Add a RuntimeSettings field and use the start-up value",
+    "Let binary_storage reread the environment on every read"
+   ],
+   "default_guess": "Add a RuntimeSettings field and pass the start-up value to binary_storage.",
+   "witness": {
+    "initial": "The service starts with BINARY_MAX_READ_BYTES=100 and completes start-up validation.",
+    "events": [
+     "After start-up, the process environment is changed to BINARY_MAX_READ_BYTES=200.",
+     "An authorized client requests a 150-byte binary."
+    ],
+    "outcomes": [
+     "A read-once implementation enforces 100 and refuses the binary.",
+     "A rereading implementation enforces 200 and returns the binary."
+    ],
+    "observer": "The authorized binary client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "State 0 R0-10 agreement with A6 and A30",
+   "kind": "contradiction",
+   "text": "The service is configured only by environment variables, which it validates when it starts (except the Registry address, which the Registry gateway reads at each call and whose absence fails only Registry calls, State 2 A30)",
+   "question": "Must State 0 be changed so that the Registry address is a required start-up setting read through RuntimeSettings, rather than an exception read by the gateway at each call?",
+   "options": [
+    "Update State 0 to the new required-start-up behavior",
+    "Restore the earlier per-call environment lookup behavior"
+   ],
+   "default_guess": "Update State 0 to require REGISTRY_BASE_URL at start-up and pass RuntimeSettings.registry_base_url to the gateway.",
+   "witness": {
+    "initial": "REGISTRY_BASE_URL is absent and every other required environment variable is valid.",
+    "events": [
+     "The operator starts the service.",
+     "If it starts, a client invokes a Registry-dependent operation."
+    ],
+    "outcomes": [
+     "State 0 R0-10 permits start-up and only the later Registry call fails.",
+     "A30 stops start-up before any request is served."
+    ],
+    "observer": "The deployment operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30 binary read limit delivery",
+   "kind": "standard_violation",
+   "text": "`binary_read_limit_env_name`: the binary read limit is the environment\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\n  field; the emitted `binary_storage` reads it at each read through its\n  backend IR (Factory `a6916180314d`). No model-written module reads it.",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Make BINARY_MAX_READ_BYTES a field of the settings object read by the settings module and pass that field to binary_storage, instead of delivering an environment-dependent value through backend IR.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30 deployment-value exception",
+   "kind": "standard_violation",
+   "text": "A deployment value is a row of `config.runtime_environment_variables` read once by `load_runtime_settings` into a field of `RuntimeSettings` (`database_url`, `environment`, `public_origin`, `trusted_hosts`, `allowed_origins`, `max_request_body_bytes`, `max_binary_response_bytes`, `production_logging`, the two viewer-entry limits and, since 2026-11-09, `registry_base_url`), except the two binary storage rows, which the emitted `binary_storage` reads.",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Remove the binary-storage exception and give each environment-dependent binary-storage value the settings-object-field path required for configuration values.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A6 Registry failure translation\",\"kind\":\"check_precedence\",\"text\":\"Every failed Registry call is answered with exactly one kind of the table and never with a fallback; which transport condition counts as which kind, and the order the gateway tests them in, are the accepted gateway's (notes of `validate_project_reference`, `get_project_context`, `list_active_projects`; the `RegistryFailureKind` member naming each failure), carried to States 6–7.\",\"question\":\"When one response satisfies multiple failure conditions, in what exact order must URL, transport, HTTP-status, body-decoding and identity checks run?\",\"options\":[\"Classify the HTTP status before decoding the body\",\"Decode and validate the body before classifying the HTTP status\"],\"default_guess\":\"Validate the URL, perform transport, classify non-success HTTP status, decode and validate the body, then check identity.\",\"witness\":{\"initial\":\"The Registry gateway receives an HTTP 404 response whose body is not decodable as the expected model.\",\"events\":[\"The Registry answers a portal context request with status 404 and an invalid body.\",\"The gateway classifies the failed call.\"],\"outcomes\":[\"The gateway raises RegistryBoundaryError(kind=not_found) because HTTP status is checked first.\",\"The gateway raises RegistryBoundaryError(kind=schema_mismatch) because the body is decoded first.\"],\"observer\":\"The portal caller classifying the Registry failure\"}},{\"subject\":\"A6 and A30 Registry URL validation\",\"kind\":\"contradiction\",\"text\":\"A Registry call made while the URL is unusable (not an http or https base URL, or carrying user information) fails as `transport_error`, as before (Factory code `adapters/registry_gateway.py` `_registry_url`).\\n\\nCFG-002: a required start-up variable that is missing or invalid, the Registry URL among them, stops the start before any request is served.\",\"question\":\"Must a non-HTTP(S) Registry URL or one containing user information stop start-up, or may the service start and translate it to `transport_error` on a Registry call?\",\"options\":[\"Reject every unusable Registry URL at start-up\",\"At start-up reject only missing or empty values; reject unusable URLs at call time\"],\"default_guess\":\"Validate the complete base-URL policy at start-up and refuse to start.\",\"witness\":{\"initial\":\"REGISTRY_BASE_URL is `ftp://user:pass@registry.example/projects`; all other required settings are valid.\",\"events\":[\"The operator starts the service.\",\"If it starts, a client invokes an operation requiring Registry validation.\"],\"outcomes\":[\"CFG-002 stops start-up because the Registry URL is invalid.\",\"The start-up check accepts the non-empty value; the later Registry call raises RegistryBoundaryError(kind=transport_error).\"],\"observer\":\"The deployment operator, and if start-up succeeds, the requesting client\"}},{\"subject\":\"A6 and A30 Registry request URL construction\",\"kind\":\"url_joining\",\"text\":\"which values the gateway accepts as a base URL and how it joins them with the request paths stay the accepted gateway's (note `_registry_url`, the Registry path constants), carried to States 6–7.\",\"question\":\"What exact base-URL normalization and path-joining rule must generated code use, including trailing slashes and an existing base path?\",\"options\":[\"Append the Registry path beneath the complete base path\",\"Resolve the Registry path as a URL-relative reference, which may replace the final base-path segment\",\"Require a base URL with no path and reject every other form\"],\"default_guess\":\"Require an HTTP(S) base URL without user information, preserve any explicit base path, normalize one separating slash, and append the path constants.\",\"witness\":{\"initial\":\"RuntimeSettings.registry_base_url is `https://registry.example/api/v1` and the requested Registry path is `projects/active`.\",\"events\":[\"An administrator requests the active-project list.\",\"The gateway constructs and calls the Registry URL.\"],\"outcomes\":[\"String-style path appending calls `https://registry.example/api/v1/projects/active` and receives the configured endpoint.\",\"URL-reference resolution treats `v1` as the last path segment and calls `https://registry.example/api/projects/active`, which may return 404.\"],\"observer\":\"The Registry and the administrator requesting the project list\"}},{\"subject\":\"A25 viewer-entry rate limiter\",\"kind\":\"algorithm_unspecified\",\"text\":\"the limiter's algorithm, its bound and its answer are those of the accepted transport guard, stated by the notes of `transport_guard` (recorded in the accepted spec as `rules.http_transport_policy.limits.viewer_entry`), with the values of A30, carried to States 6–7.\",\"question\":\"What exact rate-limiting algorithm, window boundary, counted attempts, eviction rule and concealed refusal response must `transport_guard` implement?\",\"options\":[\"Fixed windows\",\"Sliding windows\",\"Token bucket\"],\"default_guess\":\"Use a bounded per-address-and-route sliding window, count every entry attempt, and refuse attempt N+1 while N earlier attempts remain inside the window.\",\"witness\":{\"initial\":\"The configured limit is two viewer-entry attempts per 60 seconds and the address has no prior entries.\",\"events\":[\"The address makes attempts at elapsed times 59.8 and 59.9 seconds.\",\"The same address makes another attempt at 60.1 seconds.\"],\"outcomes\":[\"A fixed epoch-aligned window admits the third attempt because it is in a new window.\",\"A sliding window refuses the third attempt because both earlier attempts are less than 60 seconds old.\"],\"observer\":\"The viewer making the entry request\"}},{\"subject\":\"A16 password validation\",\"kind\":\"character_set_unspecified\",\"text\":\"a password containing a NUL or another control character is refused and changes nothing\",\"question\":\"Which exact Unicode code points count as control characters, and which representatives must the Required test cover?\",\"options\":[\"Only NUL and ASCII C0 controls\",\"Unicode general category Cc\",\"All Unicode categories beginning with C, including format, surrogate, private-use and unassigned characters\"],\"default_guess\":\"Reject every Unicode general-category Cc character and test NUL, an ASCII non-NUL control and a C1 control.\",\"witness\":{\"initial\":\"An administrator submits a new password of valid length containing U+0085 NEXT LINE and otherwise ordinary characters.\",\"events\":[\"The password reaches `_validate_new_password`.\",\"The operation either refuses it or stores its hash.\"],\"outcomes\":[\"An ASCII-control-only implementation accepts and hashes the password.\",\"A Unicode-Cc implementation refuses it and changes nothing.\"],\"observer\":\"The administrator creating or changing the password\"}},{\"subject\":\"A1 request-supplied authorization claims\",\"kind\":\"refusal_semantics\",\"text\":\"a request that carries its own role, capability or principal-kind claim (a header, a body field, a query value) changes no decision\",\"question\":\"Must such an untrusted claim be ignored while authorization proceeds from the authenticated context, or must the request be refused at decoding merely for containing it?\",\"options\":[\"Ignore the claim and make the same decision as if it were absent\",\"Reject the request at decoding\",\"Ignore unknown headers but reject body or query claims\"],\"default_guess\":\"Public request schemas should not expose these fields; incidental unknown claims should be ignored or rejected consistently without ever replacing the authenticated context, with the exact transport behavior stated per boundary.\",\"witness\":{\"initial\":\"An authenticated operator is allowed to perform a normal expense mutation.\",\"events\":[\"The operator submits the otherwise valid mutation with an extra body field claiming role `administrator`.\",\"The request is decoded and authorized.\"],\"outcomes\":[\"A decoder that ignores the claim performs the authorized operator mutation, exactly as without the claim.\",\"A decoder that forbids the field refuses the request before authorization and performs no mutation.\"],\"observer\":\"The operator\"}},{\"subject\":\"A9 INV-037 Required tests\",\"kind\":\"test_scope_unspecified\",\"text\":\"a check at `validate_eur_amount` and at each operation that accepts an amount\",\"question\":\"Which exact operations and amount-bearing fields must the INV-037 test cover, including correction, allocation, snapshot, plan, payment and derived-value paths?\",\"options\":[\"Enumerate and test every public amount-bearing operation and each derived-money function\",\"Test only `validate_eur_amount` and representative callers\",\"Treat internal operations as covered transitively by their public route\"],\"default_guess\":\"Enumerate every public operation accepting money and separately test every derived-money function named by R9.\",\"witness\":{\"initial\":\"Expense creation applies `validate_eur_amount`, but expense correction has a separate amount path.\",\"events\":[\"An expense is created with a two-digit amount.\",\"A staff member corrects it to the halfway value 1.005.\",\"The expense and derived totals are read.\"],\"outcomes\":[\"An implementation that validates every amount path stores 1.01 and derived values retain two digits.\",\"An implementation that treats the generic validator test as sufficient stores or propagates 1.005 on the correction path.\"],\"observer\":\"Staff and viewers reading the corrected expense and totals\"}},{\"subject\":\"Classification principles and A30 binary read setting\",\"kind\":\"contradiction\",\"text\":\"a value that depends on the deployment (URLs, origins, hosts, size bounds, rate limits) — a row of the start-up table `config.runtime_environment_variables`, read once by `runtime_settings` into a field of `RuntimeSettings`.\\n\\n`binary_read_limit_env_name`: the binary read limit is the environment variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that `load_runtime_settings` validates at start without a `RuntimeSettings` field; the emitted `binary_storage` reads it at each read through its backend IR (Factory `a6916180314d`).\",\"question\":\"Must BINARY_MAX_READ_BYTES be read once into RuntimeSettings, or validated once and then reread from the environment for every binary read?\",\"options\":[\"Add a RuntimeSettings field and use the start-up value\",\"Let binary_storage reread the environment on every read\"],\"default_guess\":\"Add a RuntimeSettings field and pass the start-up value to binary_storage.\",\"witness\":{\"initial\":\"The service starts with BINARY_MAX_READ_BYTES=100 and completes start-up validation.\",\"events\":[\"After start-up, the process environment is changed to BINARY_MAX_READ_BYTES=200.\",\"An authorized client requests a 150-byte binary.\"],\"outcomes\":[\"A read-once implementation enforces 100 and refuses the binary.\",\"A rereading implementation enforces 200 and returns the binary.\"],\"observer\":\"The authorized binary client\"}},{\"subject\":\"State 0 R0-10 agreement with A6 and A30\",\"kind\":\"contradiction\",\"text\":\"The service is configured only by environment variables, which it validates when it starts (except the Registry address, which the Registry gateway reads at each call and whose absence fails only Registry calls, State 2 A30)\",\"question\":\"Must State 0 be changed so that the Registry address is a required start-up setting read through RuntimeSettings, rather than an exception read by the gateway at each call?\",\"options\":[\"Update State 0 to the new required-start-up behavior\",\"Restore the earlier per-call environment lookup behavior\"],\"default_guess\":\"Update State 0 to require REGISTRY_BASE_URL at start-up and pass RuntimeSettings.registry_base_url to the gateway.\",\"witness\":{\"initial\":\"REGISTRY_BASE_URL is absent and every other required environment variable is valid.\",\"events\":[\"The operator starts the service.\",\"If it starts, a client invokes a Registry-dependent operation.\"],\"outcomes\":[\"State 0 R0-10 permits start-up and only the later Registry call fails.\",\"A30 stops start-up before any request is served.\"],\"observer\":\"The deployment operator\"}},{\"subject\":\"A30 binary read limit delivery\",\"kind\":\"standard_violation\",\"text\":\"`binary_read_limit_env_name`: the binary read limit is the environment\\n  variable `BINARY_MAX_READ_BYTES`, a required row of the start-up table that\\n  `load_runtime_settings` validates at start without a `RuntimeSettings`\\n  field; the emitted `binary_storage` reads it at each read through its\\n  backend IR (Factory `a6916180314d`). No model-written module reads it.\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Make BINARY_MAX_READ_BYTES a field of the settings object read by the settings module and pass that field to binary_storage, instead of delivering an environment-dependent value through backend IR.\"},{\"subject\":\"A30 deployment-value exception\",\"kind\":\"standard_violation\",\"text\":\"A deployment value is a row of `config.runtime_environment_variables` read once by `load_runtime_settings` into a field of `RuntimeSettings` (`database_url`, `environment`, `public_origin`, `trusted_hosts`, `allowed_origins`, `max_request_body_bytes`, `max_binary_response_bytes`, `production_logging`, the two viewer-entry limits and, since 2026-11-09, `registry_base_url`), except the two binary storage rows, which the emitted `binary_storage` reads.\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Remove the binary-storage exception and give each environment-dependent binary-storage value the settings-object-field path required for configuration values.\"}]}",
+ "set_aside": []
+}
