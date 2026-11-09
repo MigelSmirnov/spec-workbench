@@ -1,0 +1,170 @@
+{
+ "open_points": [
+  {
+   "subject": "A30",
+   "kind": "contradiction",
+   "text": "the emitted `binary_storage` reads it at each read through its backend IR (Factory `a6916180314d`). No model-written module reads it.",
+   "question": "If `BINARY_MAX_READ_BYTES` changes after start to exceed the already-loaded `max_binary_response_bytes`, does a read use the new value, preserve the start-up value, or re-run the consistency check before reading?",
+   "options": [
+    "Use the new read bound and potentially send a response larger than `max_binary_response_bytes`.",
+    "Keep the start-up read bound for the process lifetime.",
+    "Reload both bounds and refuse the read or stop serving when the consistency relation no longer holds."
+   ],
+   "default_guess": "Keep the start-up validated read bound for the process lifetime.",
+   "witness": {
+    "initial": "The service starts with `BINARY_MAX_READ_BYTES=5` and `max_binary_response_bytes=10`.",
+    "events": [
+     "The deployment operator changes `BINARY_MAX_READ_BYTES` to 20 without restarting the service.",
+     "A client requests an authorized 15-byte binary."
+    ],
+    "outcomes": [
+     "The per-read value 20 is used, so the 15-byte response is sent even though it exceeds `max_binary_response_bytes`.",
+     "The start-up value 5 is retained or consistency is revalidated, so the binary is refused."
+    ],
+    "observer": "The requesting client sees bytes in one implementation and a refusal in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30",
+   "kind": "missing_refusal",
+   "text": "the emitted `binary_storage` reads it at each read through its backend IR",
+   "question": "What exact failure is produced when `BINARY_MAX_READ_BYTES` is missing, empty, non-integer, non-positive, or otherwise invalid at a read after the service has started?",
+   "options": [
+    "Return the same concealed binary-not-found response used for refused document reads.",
+    "Return an explicit storage-unavailable error.",
+    "Treat it as a fatal configuration error and stop serving.",
+    "Continue with the last successfully validated value."
+   ],
+   "default_guess": "Treat it as a storage-unavailable configuration failure and send no content.",
+   "witness": {
+    "initial": "The service starts with a valid binary read bound.",
+    "events": [
+     "The deployment operator removes or corrupts `BINARY_MAX_READ_BYTES` without restarting.",
+     "A client requests an authorized binary."
+    ],
+    "outcomes": [
+     "The request is refused as a concealed unavailable/not-found binary.",
+     "The request fails as an explicit storage or configuration error."
+    ],
+    "observer": "The requesting client sees different error behavior."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Classification principles",
+   "kind": "missing_translation",
+   "text": "validated by `runtime_settings` at each call of `load_runtime_settings` (at start, by the bootstrap command, and by `registry_gateway` at each Registry call)",
+   "question": "When the Registry gateway's per-call settings load fails because the Registry URL or any other required runtime variable became invalid after start, which `RegistryFailureKind` is returned, and does this failure occur inside A6's precedence chain?",
+   "options": [
+    "Translate every per-call settings-load failure to `transport_error`.",
+    "Translate only an unusable Registry URL to `transport_error`; propagate other settings errors separately.",
+    "Keep using the last valid `RuntimeSettings` object and make the Registry request."
+   ],
+   "default_guess": "Translate an invalid Registry URL to `transport_error`, but do not reload unrelated runtime settings in the gateway.",
+   "witness": {
+    "initial": "The service starts with a complete valid environment.",
+    "events": [
+     "The deployment operator makes a required runtime variable missing or invalid.",
+     "A caller invokes one of the three Registry gateway operations."
+    ],
+    "outcomes": [
+     "The gateway raises `RegistryBoundaryError` with kind `transport_error`, satisfying A6's closed translation rule.",
+     "`load_runtime_settings` fails before A6 classifies the call, so a configuration exception or another response escapes."
+    ],
+    "observer": "The API caller sees a Registry transport failure in one implementation and a different failure in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Classification principles",
+   "kind": "missing_refusal",
+   "text": "validated by `runtime_settings` at each call of `load_runtime_settings` (at start, by the bootstrap command, and by `registry_gateway` at each Registry call)",
+   "question": "Does the first-administrator bootstrap command require the complete service runtime environment, including `REGISTRY_BASE_URL`, and what command outcome or exit code represents a settings-validation failure?",
+   "options": [
+    "Require the complete runtime environment and add or identify a configuration-error outcome.",
+    "Require the complete runtime environment but map failure to one of the four existing bootstrap outcomes.",
+    "Load only settings the bootstrap actually uses, so Registry and transport settings cannot refuse it."
+   ],
+   "default_guess": "The bootstrap should load only the configuration it uses and should not require `REGISTRY_BASE_URL`.",
+   "witness": {
+    "initial": "No staff account exists and `REGISTRY_BASE_URL` is missing, while valid administrator email and password inputs are available.",
+    "events": [
+     "The host operator runs the first-administrator bootstrap command."
+    ],
+    "outcomes": [
+     "The command refuses before creating the account because `load_runtime_settings` validates the missing Registry URL.",
+     "The command creates the administrator because bootstrap does not use Registry configuration."
+    ],
+    "observer": "The host operator sees either a configuration refusal or successful account creation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A30",
+   "kind": "vague_refusal_condition",
+   "text": "which values the gateway accepts as a base URL and how it joins them with the request paths stay the accepted gateway's (note `_registry_url`, the Registry path constants), carried to States 6–7.",
+   "question": "What exact non-empty URL forms are unusable and therefore become `transport_error`, including relative URLs, missing hosts, invalid ports, query strings, fragments, whitespace around a URL, and path-bearing base URLs?",
+   "options": [
+    "Accept exactly absolute `http` or `https` URLs with a host and no user information, query, or fragment.",
+    "Reject only non-http(s) schemes and user information; accept all other parseable forms.",
+    "Copy the current gateway implementation's complete validation and joining behavior as an explicit State 2 rule."
+   ],
+   "default_guess": "Accept only an absolute `http` or `https` URL with a host and without user information, query, or fragment, then join normalized path segments.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30",
+   "kind": "contradiction",
+   "text": "and every binary sent is within the read bound and so within it.",
+   "question": "How is the claim that every binary within the per-read bound is also within `max_binary_response_bytes` maintained after start, given that the read bound is reread for every binary while the response bound is a `RuntimeSettings` field handed to the runtime?",
+   "options": [
+    "Freeze both bounds from the same start-up settings snapshot.",
+    "Reload and compare both bounds before every binary read.",
+    "Permit live read-bound changes only when they do not exceed the fixed response bound.",
+    "Remove the claim that every sent binary is within the response bound."
+   ],
+   "default_guess": "Freeze both bounds from the validated start-up snapshot.",
+   "unit": "?"
+  },
+  {
+   "subject": "Classification principles",
+   "kind": "standard_violation",
+   "text": "the one exception is the two binary storage rows\n  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and\n  which the emitted `binary_storage` reads at each read, as the Factory's\n  binary storage backend is built (A14, A30).",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Give both environment-dependent binary-storage values the configuration path required by the standard: fields of the settings model supplied through the settings module, or reclassify them into another one of the three permitted value paths.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30",
+   "kind": "standard_violation",
+   "text": "`load_runtime_settings` validates at start without a `RuntimeSettings`\n  field; the emitted `binary_storage` reads it at each read through its\n  backend IR (Factory `a6916180314d`).",
+   "rule": "Таблица выше —\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Make `BINARY_MAX_READ_BYTES` a field of the settings object read through the settings module, or place it on another permitted path instead of reading the environment through backend IR.",
+   "unit": "?"
+  },
+  {
+   "subject": "A30",
+   "kind": "standard_violation",
+   "text": "except the two binary storage rows, which the emitted `binary_storage` reads.",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Replace the exception with one of the three permitted paths and name the corresponding settings fields or imported constants.",
+   "unit": "?"
+  },
+  {
+   "subject": "A14",
+   "kind": "standard_violation",
+   "text": "The two storage variables are rows of the start-up table (A30).",
+   "rule": "Таблица выше —\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "State the valid delivery path for both storage values, including the fields of the settings object through which generated code receives environment-dependent settings.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A30\",\"kind\":\"contradiction\",\"text\":\"the emitted `binary_storage` reads it at each read through its backend IR (Factory `a6916180314d`). No model-written module reads it.\",\"question\":\"If `BINARY_MAX_READ_BYTES` changes after start to exceed the already-loaded `max_binary_response_bytes`, does a read use the new value, preserve the start-up value, or re-run the consistency check before reading?\",\"options\":[\"Use the new read bound and potentially send a response larger than `max_binary_response_bytes`.\",\"Keep the start-up read bound for the process lifetime.\",\"Reload both bounds and refuse the read or stop serving when the consistency relation no longer holds.\"],\"default_guess\":\"Keep the start-up validated read bound for the process lifetime.\",\"witness\":{\"initial\":\"The service starts with `BINARY_MAX_READ_BYTES=5` and `max_binary_response_bytes=10`.\",\"events\":[\"The deployment operator changes `BINARY_MAX_READ_BYTES` to 20 without restarting the service.\",\"A client requests an authorized 15-byte binary.\"],\"outcomes\":[\"The per-read value 20 is used, so the 15-byte response is sent even though it exceeds `max_binary_response_bytes`.\",\"The start-up value 5 is retained or consistency is revalidated, so the binary is refused.\"],\"observer\":\"The requesting client sees bytes in one implementation and a refusal in the other.\"}},{\"subject\":\"A30\",\"kind\":\"missing_refusal\",\"text\":\"the emitted `binary_storage` reads it at each read through its backend IR\",\"question\":\"What exact failure is produced when `BINARY_MAX_READ_BYTES` is missing, empty, non-integer, non-positive, or otherwise invalid at a read after the service has started?\",\"options\":[\"Return the same concealed binary-not-found response used for refused document reads.\",\"Return an explicit storage-unavailable error.\",\"Treat it as a fatal configuration error and stop serving.\",\"Continue with the last successfully validated value.\"],\"default_guess\":\"Treat it as a storage-unavailable configuration failure and send no content.\",\"witness\":{\"initial\":\"The service starts with a valid binary read bound.\",\"events\":[\"The deployment operator removes or corrupts `BINARY_MAX_READ_BYTES` without restarting.\",\"A client requests an authorized binary.\"],\"outcomes\":[\"The request is refused as a concealed unavailable/not-found binary.\",\"The request fails as an explicit storage or configuration error.\"],\"observer\":\"The requesting client sees different error behavior.\"}},{\"subject\":\"Classification principles\",\"kind\":\"missing_translation\",\"text\":\"validated by `runtime_settings` at each call of `load_runtime_settings` (at start, by the bootstrap command, and by `registry_gateway` at each Registry call)\",\"question\":\"When the Registry gateway's per-call settings load fails because the Registry URL or any other required runtime variable became invalid after start, which `RegistryFailureKind` is returned, and does this failure occur inside A6's precedence chain?\",\"options\":[\"Translate every per-call settings-load failure to `transport_error`.\",\"Translate only an unusable Registry URL to `transport_error`; propagate other settings errors separately.\",\"Keep using the last valid `RuntimeSettings` object and make the Registry request.\"],\"default_guess\":\"Translate an invalid Registry URL to `transport_error`, but do not reload unrelated runtime settings in the gateway.\",\"witness\":{\"initial\":\"The service starts with a complete valid environment.\",\"events\":[\"The deployment operator makes a required runtime variable missing or invalid.\",\"A caller invokes one of the three Registry gateway operations.\"],\"outcomes\":[\"The gateway raises `RegistryBoundaryError` with kind `transport_error`, satisfying A6's closed translation rule.\",\"`load_runtime_settings` fails before A6 classifies the call, so a configuration exception or another response escapes.\"],\"observer\":\"The API caller sees a Registry transport failure in one implementation and a different failure in the other.\"}},{\"subject\":\"Classification principles\",\"kind\":\"missing_refusal\",\"text\":\"validated by `runtime_settings` at each call of `load_runtime_settings` (at start, by the bootstrap command, and by `registry_gateway` at each Registry call)\",\"question\":\"Does the first-administrator bootstrap command require the complete service runtime environment, including `REGISTRY_BASE_URL`, and what command outcome or exit code represents a settings-validation failure?\",\"options\":[\"Require the complete runtime environment and add or identify a configuration-error outcome.\",\"Require the complete runtime environment but map failure to one of the four existing bootstrap outcomes.\",\"Load only settings the bootstrap actually uses, so Registry and transport settings cannot refuse it.\"],\"default_guess\":\"The bootstrap should load only the configuration it uses and should not require `REGISTRY_BASE_URL`.\",\"witness\":{\"initial\":\"No staff account exists and `REGISTRY_BASE_URL` is missing, while valid administrator email and password inputs are available.\",\"events\":[\"The host operator runs the first-administrator bootstrap command.\"],\"outcomes\":[\"The command refuses before creating the account because `load_runtime_settings` validates the missing Registry URL.\",\"The command creates the administrator because bootstrap does not use Registry configuration.\"],\"observer\":\"The host operator sees either a configuration refusal or successful account creation.\"}},{\"subject\":\"A30\",\"kind\":\"vague_refusal_condition\",\"text\":\"which values the gateway accepts as a base URL and how it joins them with the request paths stay the accepted gateway's (note `_registry_url`, the Registry path constants), carried to States 6–7.\",\"question\":\"What exact non-empty URL forms are unusable and therefore become `transport_error`, including relative URLs, missing hosts, invalid ports, query strings, fragments, whitespace around a URL, and path-bearing base URLs?\",\"options\":[\"Accept exactly absolute `http` or `https` URLs with a host and no user information, query, or fragment.\",\"Reject only non-http(s) schemes and user information; accept all other parseable forms.\",\"Copy the current gateway implementation's complete validation and joining behavior as an explicit State 2 rule.\"],\"default_guess\":\"Accept only an absolute `http` or `https` URL with a host and without user information, query, or fragment, then join normalized path segments.\"},{\"subject\":\"A30\",\"kind\":\"contradiction\",\"text\":\"and every binary sent is within the read bound and so within it.\",\"question\":\"How is the claim that every binary within the per-read bound is also within `max_binary_response_bytes` maintained after start, given that the read bound is reread for every binary while the response bound is a `RuntimeSettings` field handed to the runtime?\",\"options\":[\"Freeze both bounds from the same start-up settings snapshot.\",\"Reload and compare both bounds before every binary read.\",\"Permit live read-bound changes only when they do not exceed the fixed response bound.\",\"Remove the claim that every sent binary is within the response bound.\"],\"default_guess\":\"Freeze both bounds from the validated start-up snapshot.\"},{\"subject\":\"Classification principles\",\"kind\":\"standard_violation\",\"text\":\"the one exception is the two binary storage rows\\n  (`BINARY_STORAGE_ROOT`, `BINARY_MAX_READ_BYTES`), which have no field and\\n  which the emitted `binary_storage` reads at each read, as the Factory's\\n  binary storage backend is built (A14, A30).\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь\\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Give both environment-dependent binary-storage values the configuration path required by the standard: fields of the settings model supplied through the settings module, or reclassify them into another one of the three permitted value paths.\"},{\"subject\":\"A30\",\"kind\":\"standard_violation\",\"text\":\"`load_runtime_settings` validates at start without a `RuntimeSettings`\\n  field; the emitted `binary_storage` reads it at each read through its\\n  backend IR (Factory `a6916180314d`).\",\"rule\":\"Таблица выше —\\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Make `BINARY_MAX_READ_BYTES` a field of the settings object read through the settings module, or place it on another permitted path instead of reading the environment through backend IR.\"},{\"subject\":\"A30\",\"kind\":\"standard_violation\",\"text\":\"except the two binary storage rows, which the emitted `binary_storage` reads.\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь\\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Replace the exception with one of the three permitted paths and name the corresponding settings fields or imported constants.\"},{\"subject\":\"A14\",\"kind\":\"standard_violation\",\"text\":\"The two storage variables are rows of the start-up table (A30).\",\"rule\":\"Таблица выше —\\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"State the valid delivery path for both storage values, including the fields of the settings object through which generated code receives environment-dependent settings.\"}]}",
+ "set_aside": []
+}

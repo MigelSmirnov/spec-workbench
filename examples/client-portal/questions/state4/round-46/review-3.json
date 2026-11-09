@@ -1,0 +1,159 @@
+{
+ "open_points": [
+  {
+   "subject": "40_flows.md:flow:start_service_and_answer_health",
+   "kind": "contradictory validation",
+   "text": "“a missing, malformed or inconsistent one … stops the start before any request is served. The Registry URL is one of them” versus “any other value is accepted at start whatever its form”",
+   "question": "Does an unusable but nonblank Registry URL stop service start-up, or is it accepted until a Registry call fails?",
+   "options": [
+    "Reject every unusable Registry URL during start-up.",
+    "Reject only a missing, empty or whitespace-only URL during start-up; report other unusable URLs as transport_error on Registry calls."
+   ],
+   "default_guess": "Apply A30's explicit exception: accept every nonblank URL at start-up and reject an unusable one per Registry call.",
+   "witness": {
+    "initial": "REGISTRY_BASE_URL is ftp://registry, and every other required variable is valid.",
+    "events": [
+     "The deployment process starts the service.",
+     "A monitor requests liveness.",
+     "A caller later performs an operation requiring the Registry."
+    ],
+    "outcomes": [
+     "Start-up is refused as invalid configuration, so liveness is unavailable.",
+     "The service starts and liveness answers ok; the later Registry operation fails with transport_error."
+    ],
+    "observer": "The deployment operator and the Registry-dependent API caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:flow:start_service_and_answer_health",
+   "kind": "contradictory read frequency",
+   "text": "“module:runtime_settings owns reading the environment, once” versus “load_runtime_settings … again at each Registry call by registry_gateway”",
+   "question": "Is the environment captured once for the running service, or re-read for every Registry call?",
+   "options": [
+    "Use the RuntimeSettings loaded at service start for every later Registry call.",
+    "Call load_runtime_settings for every Registry call and use the current environment."
+   ],
+   "default_guess": "Re-read through load_runtime_settings for every Registry call, because the later ownership and dependency passages state that explicitly.",
+   "witness": {
+    "initial": "The service starts with REGISTRY_BASE_URL=https://registry-a.example.",
+    "events": [
+     "The deployment process starts the service successfully.",
+     "The host operator changes REGISTRY_BASE_URL to https://registry-b.example without restarting.",
+     "A staff request requires Registry validation."
+    ],
+    "outcomes": [
+     "The request is sent to registry-a because start-up settings were captured once.",
+     "The request is sent to registry-b because the gateway reloads the environment."
+    ],
+    "observer": "The staff caller and the operators of the two Registry endpoints"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:flow:bootstrap_first_administrator",
+   "kind": "contradictory validation",
+   "text": "“a missing or invalid required variable — the Registry URL among them since 2026-11-09 (A30) — ends it before any store exists” versus “any other value is accepted at start whatever its form”",
+   "question": "Does the bootstrap command reject an unusable but nonblank Registry URL, even though it makes no Registry call?",
+   "options": [
+    "Reject an unusable Registry URL before constructing the bootstrap store.",
+    "Accept any nonblank Registry URL and continue bootstrap; URL usability is checked only by Registry calls."
+   ],
+   "default_guess": "Accept any nonblank Registry URL, matching A30's precise start-up validation rule.",
+   "witness": {
+    "initial": "The staff table is empty, all settings are valid except REGISTRY_BASE_URL=ftp://registry, and valid bootstrap credentials are entered.",
+    "events": [
+     "The host operator runs the bootstrap command.",
+     "The command loads the start-up table.",
+     "The command would create the first administrator if configuration is accepted."
+    ],
+    "outcomes": [
+     "The command ends before a store exists and creates nothing.",
+     "The command creates the administrator and audit because the nonblank URL passes runtime_settings and bootstrap never calls the Registry."
+    ],
+    "observer": "The host operator and anyone inspecting the staff database"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:flow:bootstrap_first_administrator",
+   "kind": "missing failure outcome",
+   "text": "“a missing or invalid required variable — the Registry URL among them since 2026-11-09 (A30) — ends it before any store exists”",
+   "question": "Which closed BootstrapCommandOutcome and exit code represent a runtime-settings failure?",
+   "options": [
+    "Map configuration failure to an existing exit code, such as identity input rejected/code 2.",
+    "Add a distinct configuration-failure outcome and exit code.",
+    "Let the configuration exception escape, producing an unspecified process exit status."
+   ],
+   "default_guess": "Add a distinct configuration-failure outcome and exit code; none of the four existing outcomes truthfully describes it.",
+   "witness": {
+    "initial": "The staff table is empty and REGISTRY_BASE_URL is missing.",
+    "events": [
+     "The host operator runs the bootstrap command and supplies matching valid credentials.",
+     "staff_bootstrap_cli calls load_runtime_settings, which refuses the missing variable."
+    ],
+    "outcomes": [
+     "The CLI maps the refusal to one of its documented exit codes, for example code 2.",
+     "The exception escapes or receives a newly invented exit code not present in the closed table."
+    ],
+    "observer": "The deployment script branching on the command's exit code"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:flow:expense_intake_and_management",
+   "kind": "unnamed caller",
+   "text": "“Apart from the route, a recognition payload that arrives undecoded at boundary:ocr_service is decoded by that boundary, its caller, at expense_intake's public boundary”",
+   "question": "Who calls decode_recognition_publication outside the HTTP route, and how does that caller obtain the authenticated staff context, project and allocations required to continue into create_expense_from_recognition?",
+   "options": [
+    "The HTTP API is the only executable intake flow and calls the decoder before the creation operation.",
+    "A named in-process adapter or intake module calls the decoder and then invokes creation with staff-authorized context and allocations.",
+    "The external OCR service calls the decoder directly, requiring a new authenticated boundary operation that no listed module currently offers."
+   ],
+   "default_guess": "Make api the named caller and keep authenticated staff submission as the only executable intake flow until a future intake module and principal are designed.",
+   "witness": {
+    "initial": "An undecoded recognition JSON payload exists outside an HTTP route; the OCR service has no portal principal.",
+    "events": [
+     "The OCR side makes the payload available.",
+     "An implementer attempts to follow the stated non-route path to decode it.",
+     "The decoded publication must be combined with project, allocation and authenticated actor data before expense creation."
+    ],
+    "outcomes": [
+     "The implementer exposes or invents a direct OCR-to-portal invocation path and must invent its authority and continuation.",
+     "The implementer treats decode_recognition_publication as route-owned and requires an authenticated staff HTTP request before creation."
+    ],
+    "observer": "The intake integrator and the staff user expecting an expense to be created"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "missing failure translation",
+   "text": "“registry_gateway takes the Registry URL from the registry_base_url field of the RuntimeSettings that load_runtime_settings returns, which it calls at each Registry call”",
+   "question": "What failure does a Registry-dependent operation produce when the per-call load_runtime_settings fails because any required setting other than the Registry URL became missing or invalid after service start?",
+   "options": [
+    "Translate every per-call settings failure into RegistryBoundaryError with transport_error, producing the Registry 502 response.",
+    "Propagate an invalid-configuration or persistence-style failure, producing 500.",
+    "Validate only the Registry URL on the gateway's per-call reload so unrelated settings cannot fail a Registry operation."
+   ],
+   "default_guess": "Translate the failure at the gateway boundary into RegistryBoundaryError with transport_error, while preserving no partial result or write.",
+   "witness": {
+    "initial": "The service started with a valid environment; afterward BINARY_MAX_READ_BYTES is removed while REGISTRY_BASE_URL remains valid.",
+    "events": [
+     "A staff caller requests an operation that requires Registry validation.",
+     "registry_gateway calls load_runtime_settings before making the Registry request.",
+     "load_runtime_settings validates the whole start-up table and detects the missing binary setting."
+    ],
+    "outcomes": [
+     "The operation fails as a Registry transport failure and the route answers 502.",
+     "The configuration exception escapes the Registry failure contract and the route answers 500 or has no declared mapping."
+    ],
+    "observer": "The staff API caller and service operator"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"40_flows.md:flow:start_service_and_answer_health\",\"kind\":\"contradictory validation\",\"text\":\"“a missing, malformed or inconsistent one … stops the start before any request is served. The Registry URL is one of them” versus “any other value is accepted at start whatever its form”\",\"question\":\"Does an unusable but nonblank Registry URL stop service start-up, or is it accepted until a Registry call fails?\",\"options\":[\"Reject every unusable Registry URL during start-up.\",\"Reject only a missing, empty or whitespace-only URL during start-up; report other unusable URLs as transport_error on Registry calls.\"],\"default_guess\":\"Apply A30's explicit exception: accept every nonblank URL at start-up and reject an unusable one per Registry call.\",\"witness\":{\"initial\":\"REGISTRY_BASE_URL is ftp://registry, and every other required variable is valid.\",\"events\":[\"The deployment process starts the service.\",\"A monitor requests liveness.\",\"A caller later performs an operation requiring the Registry.\"],\"outcomes\":[\"Start-up is refused as invalid configuration, so liveness is unavailable.\",\"The service starts and liveness answers ok; the later Registry operation fails with transport_error.\"],\"observer\":\"The deployment operator and the Registry-dependent API caller\"}},{\"subject\":\"40_flows.md:flow:start_service_and_answer_health\",\"kind\":\"contradictory read frequency\",\"text\":\"“module:runtime_settings owns reading the environment, once” versus “load_runtime_settings … again at each Registry call by registry_gateway”\",\"question\":\"Is the environment captured once for the running service, or re-read for every Registry call?\",\"options\":[\"Use the RuntimeSettings loaded at service start for every later Registry call.\",\"Call load_runtime_settings for every Registry call and use the current environment.\"],\"default_guess\":\"Re-read through load_runtime_settings for every Registry call, because the later ownership and dependency passages state that explicitly.\",\"witness\":{\"initial\":\"The service starts with REGISTRY_BASE_URL=https://registry-a.example.\",\"events\":[\"The deployment process starts the service successfully.\",\"The host operator changes REGISTRY_BASE_URL to https://registry-b.example without restarting.\",\"A staff request requires Registry validation.\"],\"outcomes\":[\"The request is sent to registry-a because start-up settings were captured once.\",\"The request is sent to registry-b because the gateway reloads the environment.\"],\"observer\":\"The staff caller and the operators of the two Registry endpoints\"}},{\"subject\":\"40_flows.md:flow:bootstrap_first_administrator\",\"kind\":\"contradictory validation\",\"text\":\"“a missing or invalid required variable — the Registry URL among them since 2026-11-09 (A30) — ends it before any store exists” versus “any other value is accepted at start whatever its form”\",\"question\":\"Does the bootstrap command reject an unusable but nonblank Registry URL, even though it makes no Registry call?\",\"options\":[\"Reject an unusable Registry URL before constructing the bootstrap store.\",\"Accept any nonblank Registry URL and continue bootstrap; URL usability is checked only by Registry calls.\"],\"default_guess\":\"Accept any nonblank Registry URL, matching A30's precise start-up validation rule.\",\"witness\":{\"initial\":\"The staff table is empty, all settings are valid except REGISTRY_BASE_URL=ftp://registry, and valid bootstrap credentials are entered.\",\"events\":[\"The host operator runs the bootstrap command.\",\"The command loads the start-up table.\",\"The command would create the first administrator if configuration is accepted.\"],\"outcomes\":[\"The command ends before a store exists and creates nothing.\",\"The command creates the administrator and audit because the nonblank URL passes runtime_settings and bootstrap never calls the Registry.\"],\"observer\":\"The host operator and anyone inspecting the staff database\"}},{\"subject\":\"40_flows.md:flow:bootstrap_first_administrator\",\"kind\":\"missing failure outcome\",\"text\":\"“a missing or invalid required variable — the Registry URL among them since 2026-11-09 (A30) — ends it before any store exists”\",\"question\":\"Which closed BootstrapCommandOutcome and exit code represent a runtime-settings failure?\",\"options\":[\"Map configuration failure to an existing exit code, such as identity input rejected/code 2.\",\"Add a distinct configuration-failure outcome and exit code.\",\"Let the configuration exception escape, producing an unspecified process exit status.\"],\"default_guess\":\"Add a distinct configuration-failure outcome and exit code; none of the four existing outcomes truthfully describes it.\",\"witness\":{\"initial\":\"The staff table is empty and REGISTRY_BASE_URL is missing.\",\"events\":[\"The host operator runs the bootstrap command and supplies matching valid credentials.\",\"staff_bootstrap_cli calls load_runtime_settings, which refuses the missing variable.\"],\"outcomes\":[\"The CLI maps the refusal to one of its documented exit codes, for example code 2.\",\"The exception escapes or receives a newly invented exit code not present in the closed table.\"],\"observer\":\"The deployment script branching on the command's exit code\"}},{\"subject\":\"40_flows.md:flow:expense_intake_and_management\",\"kind\":\"unnamed caller\",\"text\":\"“Apart from the route, a recognition payload that arrives undecoded at boundary:ocr_service is decoded by that boundary, its caller, at expense_intake's public boundary”\",\"question\":\"Who calls decode_recognition_publication outside the HTTP route, and how does that caller obtain the authenticated staff context, project and allocations required to continue into create_expense_from_recognition?\",\"options\":[\"The HTTP API is the only executable intake flow and calls the decoder before the creation operation.\",\"A named in-process adapter or intake module calls the decoder and then invokes creation with staff-authorized context and allocations.\",\"The external OCR service calls the decoder directly, requiring a new authenticated boundary operation that no listed module currently offers.\"],\"default_guess\":\"Make api the named caller and keep authenticated staff submission as the only executable intake flow until a future intake module and principal are designed.\",\"witness\":{\"initial\":\"An undecoded recognition JSON payload exists outside an HTTP route; the OCR service has no portal principal.\",\"events\":[\"The OCR side makes the payload available.\",\"An implementer attempts to follow the stated non-route path to decode it.\",\"The decoded publication must be combined with project, allocation and authenticated actor data before expense creation.\"],\"outcomes\":[\"The implementer exposes or invents a direct OCR-to-portal invocation path and must invent its authority and continuation.\",\"The implementer treats decode_recognition_publication as route-owned and requires an authenticated staff HTTP request before creation.\"],\"observer\":\"The intake integrator and the staff user expecting an expense to be created\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"missing failure translation\",\"text\":\"“registry_gateway takes the Registry URL from the registry_base_url field of the RuntimeSettings that load_runtime_settings returns, which it calls at each Registry call”\",\"question\":\"What failure does a Registry-dependent operation produce when the per-call load_runtime_settings fails because any required setting other than the Registry URL became missing or invalid after service start?\",\"options\":[\"Translate every per-call settings failure into RegistryBoundaryError with transport_error, producing the Registry 502 response.\",\"Propagate an invalid-configuration or persistence-style failure, producing 500.\",\"Validate only the Registry URL on the gateway's per-call reload so unrelated settings cannot fail a Registry operation.\"],\"default_guess\":\"Translate the failure at the gateway boundary into RegistryBoundaryError with transport_error, while preserving no partial result or write.\",\"witness\":{\"initial\":\"The service started with a valid environment; afterward BINARY_MAX_READ_BYTES is removed while REGISTRY_BASE_URL remains valid.\",\"events\":[\"A staff caller requests an operation that requires Registry validation.\",\"registry_gateway calls load_runtime_settings before making the Registry request.\",\"load_runtime_settings validates the whole start-up table and detects the missing binary setting.\"],\"outcomes\":[\"The operation fails as a Registry transport failure and the route answers 502.\",\"The configuration exception escapes the Registry failure contract and the route answers 500 or has no declared mapping.\"],\"observer\":\"The staff API caller and service operator\"}}]}",
+ "set_aside": []
+}

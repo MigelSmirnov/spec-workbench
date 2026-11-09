@@ -3915,7 +3915,7 @@ The in-memory viewer-entry attempt buckets only.
 
 ### Owner
 
-`module:runtime_settings`. Read, normalize, default and validate the deployment environment once.
+`module:runtime_settings`. Read, normalize, default and validate the deployment environment at each call: at start, by the bootstrap command, and by the Registry gateway at each Registry call.
 
 ### Callers
 

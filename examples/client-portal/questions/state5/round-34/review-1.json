@@ -1,0 +1,122 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings callers and import surface",
+   "kind": "caller_import_contradiction",
+   "text": "`module:runtime`, `module:staff_bootstrap_cli`, and `module:registry_gateway`\nfor the Registry URL (owner 2026-11-09, A30).",
+   "question": "Must `module:registry_gateway` directly import and call `runtime_settings.load_runtime_settings`, or must this caller be removed and the Registry URL reach the gateway another way?",
+   "options": [
+    "Declare the `registry_gateway` → `runtime_settings.load_runtime_settings` import and retain the caller",
+    "Remove `module:registry_gateway` as a caller and pass or cache settings elsewhere"
+   ],
+   "default_guess": "Declare the direct import and retain the per-Registry-call settings load.",
+   "witness": {
+    "initial": "Strict internal-import projection is enabled and the Registry gateway handles a request.",
+    "events": [
+     "The gateway follows its State 5 text and calls `runtime_settings.load_runtime_settings`.",
+     "The imports closure is generated from the State 5 plan."
+    ],
+    "outcomes": [
+     "The plan is amended with the dependency, so the gateway imports and calls the operation.",
+     "The plan remains unchanged, so strict projection rejects the undeclared call or generates a gateway without the required import."
+    ],
+    "observer": "The build and the deployment operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of runtime-settings read frequency",
+   "kind": "contradictory_lifetime",
+   "text": "`module:runtime_settings`. Read, normalize, default and validate the deployment environment once.",
+   "question": "Does “once” mean once per invocation, including a new invocation for every Registry call, or once for the lifetime of the process?",
+   "options": [
+    "Read the environment once on every call to `load_runtime_settings`",
+    "Read it once at process startup and reuse the resulting settings"
+   ],
+   "default_guess": "Read once per invocation, including every Registry call.",
+   "witness": {
+    "initial": "The service starts with Registry URL A, then the environment is changed to Registry URL B.",
+    "events": [
+     "The deployment starts the service.",
+     "An administrator later performs an operation requiring a Registry call."
+    ],
+    "outcomes": [
+     "The gateway reloads settings and sends the request to B.",
+     "The process reuses startup settings and sends the request to A."
+    ],
+    "observer": "The Registry operators and the administrator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings Registry URL validation",
+   "kind": "contradictory_validation",
+   "text": "A missing, malformed or inconsistent value (a wildcard host or origin, binary\nbounds out of order) stops the start.",
+   "question": "Must a nonempty but unusable `REGISTRY_BASE_URL` stop startup as a malformed value, or must startup accept it and let each Registry call fail with `transport_error`?",
+   "options": [
+    "Accept every nonempty, non-whitespace Registry URL at startup and reject an unusable URL at the Registry call",
+    "Validate URL syntax at startup and refuse an unusable URL before serving requests"
+   ],
+   "default_guess": "Apply A30's Registry-specific exception: accept it at startup and produce `transport_error` on use.",
+   "witness": {
+    "initial": "`REGISTRY_BASE_URL` is `ftp://registry.example`, while every other required setting is valid.",
+    "events": [
+     "The deployment calls `load_runtime_settings`.",
+     "If startup succeeds, an administrator lists active projects."
+    ],
+    "outcomes": [
+     "Startup succeeds; the later Registry operation raises `RegistryBoundaryError` with `transport_error`.",
+     "Startup is refused as invalid configuration and no request can be served."
+    ],
+    "observer": "The deployment operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings errors during Registry calls",
+   "kind": "missing_runtime_error_mapping",
+   "text": "A missing, malformed or inconsistent value (a wildcard host or origin, binary\nbounds out of order) stops the start.",
+   "question": "When `registry_gateway` invokes this operation after startup and revalidation fails, what exception must the Registry operation expose?",
+   "options": [
+    "Translate the settings failure to `RegistryBoundaryError` with `transport_error`",
+    "Propagate it as an unclassified configuration failure, producing 500",
+    "Retain and use the last successfully loaded settings"
+   ],
+   "default_guess": "Translate a Registry-URL loading failure to `RegistryBoundaryError` with `transport_error`, but propagate an unrelated settings failure as an unclassified configuration error.",
+   "witness": {
+    "initial": "The service starts with a valid environment; afterward a required non-Registry setting becomes malformed.",
+    "events": [
+     "An administrator requests the active-project list.",
+     "The gateway calls `load_runtime_settings`, which validates the entire environment again."
+    ],
+    "outcomes": [
+     "The gateway reports the declared Registry boundary failure, 502.",
+     "The configuration exception escapes as an unclassified 500."
+    ],
+    "observer": "The administrator and API client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings Callers",
+   "kind": "standard_violation",
+   "text": "`module:runtime`, `module:staff_bootstrap_cli`, and `module:registry_gateway`\nfor the Registry URL (owner 2026-11-09, A30).",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "The passage must list only callers supported by `imports.module_internal`, or that authoritative map must be changed to declare `registry_gateway` importing `load_runtime_settings`.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:registry_gateway.list_active_projects settings dependency",
+   "kind": "standard_violation",
+   "text": "A6, A15, R0-08; A30 for the endpoint, the `registry_base_url` field of the\n`RuntimeSettings` that `runtime_settings.load_runtime_settings` returns\n(owner 2026-11-09).",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "The passage must be backed by a `registry_gateway` → `runtime_settings` import of `load_runtime_settings`, or it must stop requiring that direct call.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:runtime_settings.load_runtime_settings callers and import surface\",\"kind\":\"caller_import_contradiction\",\"text\":\"`module:runtime`, `module:staff_bootstrap_cli`, and `module:registry_gateway`\\nfor the Registry URL (owner 2026-11-09, A30).\",\"question\":\"Must `module:registry_gateway` directly import and call `runtime_settings.load_runtime_settings`, or must this caller be removed and the Registry URL reach the gateway another way?\",\"options\":[\"Declare the `registry_gateway` → `runtime_settings.load_runtime_settings` import and retain the caller\",\"Remove `module:registry_gateway` as a caller and pass or cache settings elsewhere\"],\"default_guess\":\"Declare the direct import and retain the per-Registry-call settings load.\",\"witness\":{\"initial\":\"Strict internal-import projection is enabled and the Registry gateway handles a request.\",\"events\":[\"The gateway follows its State 5 text and calls `runtime_settings.load_runtime_settings`.\",\"The imports closure is generated from the State 5 plan.\"],\"outcomes\":[\"The plan is amended with the dependency, so the gateway imports and calls the operation.\",\"The plan remains unchanged, so strict projection rejects the undeclared call or generates a gateway without the required import.\"],\"observer\":\"The build and the deployment operator\"}},{\"subject\":\"context: agreement of runtime-settings read frequency\",\"kind\":\"contradictory_lifetime\",\"text\":\"`module:runtime_settings`. Read, normalize, default and validate the deployment environment once.\",\"question\":\"Does “once” mean once per invocation, including a new invocation for every Registry call, or once for the lifetime of the process?\",\"options\":[\"Read the environment once on every call to `load_runtime_settings`\",\"Read it once at process startup and reuse the resulting settings\"],\"default_guess\":\"Read once per invocation, including every Registry call.\",\"witness\":{\"initial\":\"The service starts with Registry URL A, then the environment is changed to Registry URL B.\",\"events\":[\"The deployment starts the service.\",\"An administrator later performs an operation requiring a Registry call.\"],\"outcomes\":[\"The gateway reloads settings and sends the request to B.\",\"The process reuses startup settings and sends the request to A.\"],\"observer\":\"The Registry operators and the administrator\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings Registry URL validation\",\"kind\":\"contradictory_validation\",\"text\":\"A missing, malformed or inconsistent value (a wildcard host or origin, binary\\nbounds out of order) stops the start.\",\"question\":\"Must a nonempty but unusable `REGISTRY_BASE_URL` stop startup as a malformed value, or must startup accept it and let each Registry call fail with `transport_error`?\",\"options\":[\"Accept every nonempty, non-whitespace Registry URL at startup and reject an unusable URL at the Registry call\",\"Validate URL syntax at startup and refuse an unusable URL before serving requests\"],\"default_guess\":\"Apply A30's Registry-specific exception: accept it at startup and produce `transport_error` on use.\",\"witness\":{\"initial\":\"`REGISTRY_BASE_URL` is `ftp://registry.example`, while every other required setting is valid.\",\"events\":[\"The deployment calls `load_runtime_settings`.\",\"If startup succeeds, an administrator lists active projects.\"],\"outcomes\":[\"Startup succeeds; the later Registry operation raises `RegistryBoundaryError` with `transport_error`.\",\"Startup is refused as invalid configuration and no request can be served.\"],\"observer\":\"The deployment operator\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings errors during Registry calls\",\"kind\":\"missing_runtime_error_mapping\",\"text\":\"A missing, malformed or inconsistent value (a wildcard host or origin, binary\\nbounds out of order) stops the start.\",\"question\":\"When `registry_gateway` invokes this operation after startup and revalidation fails, what exception must the Registry operation expose?\",\"options\":[\"Translate the settings failure to `RegistryBoundaryError` with `transport_error`\",\"Propagate it as an unclassified configuration failure, producing 500\",\"Retain and use the last successfully loaded settings\"],\"default_guess\":\"Translate a Registry-URL loading failure to `RegistryBoundaryError` with `transport_error`, but propagate an unrelated settings failure as an unclassified configuration error.\",\"witness\":{\"initial\":\"The service starts with a valid environment; afterward a required non-Registry setting becomes malformed.\",\"events\":[\"An administrator requests the active-project list.\",\"The gateway calls `load_runtime_settings`, which validates the entire environment again.\"],\"outcomes\":[\"The gateway reports the declared Registry boundary failure, 502.\",\"The configuration exception escapes as an unclassified 500.\"],\"observer\":\"The administrator and API client\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings Callers\",\"kind\":\"standard_violation\",\"text\":\"`module:runtime`, `module:staff_bootstrap_cli`, and `module:registry_gateway`\\nfor the Registry URL (owner 2026-11-09, A30).\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"The passage must list only callers supported by `imports.module_internal`, or that authoritative map must be changed to declare `registry_gateway` importing `load_runtime_settings`.\"},{\"subject\":\"public_op:registry_gateway.list_active_projects settings dependency\",\"kind\":\"standard_violation\",\"text\":\"A6, A15, R0-08; A30 for the endpoint, the `registry_base_url` field of the\\n`RuntimeSettings` that `runtime_settings.load_runtime_settings` returns\\n(owner 2026-11-09).\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"The passage must be backed by a `registry_gateway` → `runtime_settings` import of `load_runtime_settings`, or it must stop requiring that direct call.\"}]}",
+ "set_aside": []
+}

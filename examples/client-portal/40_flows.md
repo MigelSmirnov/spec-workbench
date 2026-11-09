@@ -77,7 +77,7 @@ for liveness or readiness (R0-10, R0-11).
 
 ### Boundary
 
-`module:runtime_settings` owns reading the environment, once: the closed table
+`module:runtime_settings` owns reading the environment, at start and again whenever a module calls it (`module:registry_gateway` at each Registry call, A30): the closed table
 `config.runtime_environment_variables`, defaults, normalization and the
 startup checks (A30), into `RuntimeSettings`. `module:runtime` owns the
 running application: one `PortalStore`, the inner application of `module:api`
@@ -92,8 +92,9 @@ creates every repository schema when a transaction begins. Crossing models:
    environment variables of A30; a missing, malformed or inconsistent one (a
    wildcard host or origin, binary bounds out of order) stops the start
    before any request is served. The Registry URL is one of them since the
-   owner's decision of 2026-11-09 (A6, A30): the service does not start
-   without it.
+   owner's decision of 2026-11-09 (A6, A30): a missing, empty or
+   whitespace-only URL stops the start; any other value is accepted here and
+   an unusable one fails each Registry call (A6).
 2. `capability:runtime.create_runtime_app` builds one `PortalStore` from the
    settings, builds the inner application with
    `capability:api.create_app`, installs
@@ -159,8 +160,9 @@ No HTTP route reaches this flow.
 2. It resolves the database through
    `capability:runtime_settings.load_runtime_settings` and builds the
    bootstrap store. The command loads the same start-up table as the
-   service, so a missing or invalid required variable — the Registry URL
-   among them since 2026-11-09 (A30) — ends it before any store exists.
+   service, so a missing or invalid required variable — and, since
+   2026-11-09, a missing, empty or whitespace-only Registry URL (A30) — ends
+   it before any store exists.
 3. `capability:staff_bootstrap.bootstrap_first_administrator` normalizes and
    validates the email and password, hashes the password with
    `capability:credential_security.hash_password`, and builds one active

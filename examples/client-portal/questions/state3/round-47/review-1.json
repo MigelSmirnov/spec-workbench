@@ -1,0 +1,73 @@
+{
+ "open_points": [
+  {
+   "subject": "context",
+   "kind": "ownership_contradiction",
+   "text": "A default for a value nobody chose, or any check that uses a setting.",
+   "question": "Does “any check that uses a setting” exclude validation and the binary-bound consistency check that `runtime_settings` explicitly owns, or must another named module own that comparison?",
+   "options": [
+    "`runtime_settings` owns normalization, validation, and the cross-setting binary-bound consistency check",
+    "Another module owns the binary-bound consistency check",
+    "`runtime_settings` may validate individual settings but may not compare settings"
+   ],
+   "default_guess": "Treat validation, including binary-bound consistency, as part of `runtime_settings`; interpret the prohibition as applying only to operational checks that consume already-loaded settings.",
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "mutable_bound_gap",
+   "text": "and the start\n  is refused when the read bound exceeds the response bound, which is how\n  `max_binary_response_bytes` is applied: no module compares a response with\n  it, and every binary sent is within the read bound and so within it.",
+   "question": "What preserves `BINARY_MAX_READ_BYTES <= max_binary_response_bytes` after startup when `binary_storage` rereads the former at every binary read but no module compares a response with the latter?",
+   "options": [
+    "Environment values are immutable after successful startup",
+    "Each binary read revalidates the current read bound against the startup response bound",
+    "A changed binary bound requires restart and is ignored by the running process",
+    "The response ceiling may be exceeded after an environment change"
+   ],
+   "default_guess": "Require each binary read to reject a current read bound exceeding the startup response bound.",
+   "witness": {
+    "initial": "The service starts with `BINARY_MAX_READ_BYTES = 10 MiB` and `max_binary_response_bytes = 10 MiB`.",
+    "events": [
+     "A host operator changes `BINARY_MAX_READ_BYTES` to 20 MiB without restarting the process.",
+     "A client requests a stored 15 MiB binary.",
+     "`binary_storage` rereads the changed bound at that read."
+    ],
+    "outcomes": [
+     "The binary is sent because it is within the current 20 MiB read bound, exceeding the 10 MiB response ceiling.",
+     "The read is refused because the current read bound is rechecked against the 10 MiB response ceiling."
+    ],
+    "observer": "The requesting client sees binary content in one implementation and a refusal in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "failure_translation_gap",
+   "text": "validated by `runtime_settings` at each call of `load_runtime_settings` (at\n  start, by the bootstrap command, and by `registry_gateway` at each Registry\n  call)",
+   "question": "When per-call `load_runtime_settings` fails inside `registry_gateway`, which module translates that failure, and must the caller receive `RegistryBoundaryError(kind=transport_error)` or a runtime-settings/configuration failure?",
+   "options": [
+    "`registry_gateway` translates every per-call settings failure to `transport_error`",
+    "Only an accepted nonblank but unusable Registry URL becomes `transport_error`; loader validation failures propagate separately",
+    "A loader failure terminates or disables the running service before an API answer"
+   ],
+   "default_guess": "Translate a Registry-URL failure encountered during a Registry call to `RegistryBoundaryError(kind=transport_error)` and define separate behavior for failures of unrelated settings.",
+   "witness": {
+    "initial": "The service starts with a valid, nonblank `REGISTRY_BASE_URL`.",
+    "events": [
+     "After startup, a host operator changes `REGISTRY_BASE_URL` to whitespace.",
+     "An API operation invokes `registry_gateway`.",
+     "The gateway calls `load_runtime_settings`, which validates the environment again."
+    ],
+    "outcomes": [
+     "`load_runtime_settings` rejects the value and its configuration error escapes the gateway.",
+     "`registry_gateway` converts the failed per-call load into `RegistryBoundaryError` with kind `transport_error`."
+    ],
+    "observer": "The API caller sees different error classification and HTTP behavior."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context\",\"kind\":\"ownership_contradiction\",\"text\":\"A default for a value nobody chose, or any check that uses a setting.\",\"question\":\"Does “any check that uses a setting” exclude validation and the binary-bound consistency check that `runtime_settings` explicitly owns, or must another named module own that comparison?\",\"options\":[\"`runtime_settings` owns normalization, validation, and the cross-setting binary-bound consistency check\",\"Another module owns the binary-bound consistency check\",\"`runtime_settings` may validate individual settings but may not compare settings\"],\"default_guess\":\"Treat validation, including binary-bound consistency, as part of `runtime_settings`; interpret the prohibition as applying only to operational checks that consume already-loaded settings.\"},{\"subject\":\"context\",\"kind\":\"mutable_bound_gap\",\"text\":\"and the start\\n  is refused when the read bound exceeds the response bound, which is how\\n  `max_binary_response_bytes` is applied: no module compares a response with\\n  it, and every binary sent is within the read bound and so within it.\",\"question\":\"What preserves `BINARY_MAX_READ_BYTES <= max_binary_response_bytes` after startup when `binary_storage` rereads the former at every binary read but no module compares a response with the latter?\",\"options\":[\"Environment values are immutable after successful startup\",\"Each binary read revalidates the current read bound against the startup response bound\",\"A changed binary bound requires restart and is ignored by the running process\",\"The response ceiling may be exceeded after an environment change\"],\"default_guess\":\"Require each binary read to reject a current read bound exceeding the startup response bound.\",\"witness\":{\"initial\":\"The service starts with `BINARY_MAX_READ_BYTES = 10 MiB` and `max_binary_response_bytes = 10 MiB`.\",\"events\":[\"A host operator changes `BINARY_MAX_READ_BYTES` to 20 MiB without restarting the process.\",\"A client requests a stored 15 MiB binary.\",\"`binary_storage` rereads the changed bound at that read.\"],\"outcomes\":[\"The binary is sent because it is within the current 20 MiB read bound, exceeding the 10 MiB response ceiling.\",\"The read is refused because the current read bound is rechecked against the 10 MiB response ceiling.\"],\"observer\":\"The requesting client sees binary content in one implementation and a refusal in the other.\"}},{\"subject\":\"context\",\"kind\":\"failure_translation_gap\",\"text\":\"validated by `runtime_settings` at each call of `load_runtime_settings` (at\\n  start, by the bootstrap command, and by `registry_gateway` at each Registry\\n  call)\",\"question\":\"When per-call `load_runtime_settings` fails inside `registry_gateway`, which module translates that failure, and must the caller receive `RegistryBoundaryError(kind=transport_error)` or a runtime-settings/configuration failure?\",\"options\":[\"`registry_gateway` translates every per-call settings failure to `transport_error`\",\"Only an accepted nonblank but unusable Registry URL becomes `transport_error`; loader validation failures propagate separately\",\"A loader failure terminates or disables the running service before an API answer\"],\"default_guess\":\"Translate a Registry-URL failure encountered during a Registry call to `RegistryBoundaryError(kind=transport_error)` and define separate behavior for failures of unrelated settings.\",\"witness\":{\"initial\":\"The service starts with a valid, nonblank `REGISTRY_BASE_URL`.\",\"events\":[\"After startup, a host operator changes `REGISTRY_BASE_URL` to whitespace.\",\"An API operation invokes `registry_gateway`.\",\"The gateway calls `load_runtime_settings`, which validates the environment again.\"],\"outcomes\":[\"`load_runtime_settings` rejects the value and its configuration error escapes the gateway.\",\"`registry_gateway` converts the failed per-call load into `RegistryBoundaryError` with kind `transport_error`.\"],\"observer\":\"The API caller sees different error classification and HTTP behavior.\"}}]}",
+ "set_aside": []
+}
