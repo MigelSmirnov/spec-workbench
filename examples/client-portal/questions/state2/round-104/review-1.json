@@ -1,0 +1,204 @@
+{
+ "open_points": [
+  {
+   "subject": "A9: Accepted decision A9 — R9. Money policy",
+   "kind": "incomplete_invariant_test",
+   "text": "And, at each operation that accepts an amount, that the stored record carries the amount in that form",
+   "question": "Must every listed operation also be tested to reject a foreign-currency or otherwise invalid amount atomically, or is testing rejection only at `validate_eur_amount` sufficient?",
+   "options": [
+    "Test rejection and no state change through every listed operation",
+    "Test rejection only at `validate_eur_amount`; operation tests cover accepted values only",
+    "Test operation-level rejection only where currency is an explicit operation input"
+   ],
+   "default_guess": "Test rejection and no state change through every operation whose boundary can carry the invalid value.",
+   "witness": {
+    "initial": "An active project exists and no expense has been created for a recognized document.",
+    "events": [
+     "An OCR producer submits `create_expense_from_recognition` with a foreign currency.",
+     "The invariant tests run against the implementation."
+    ],
+    "outcomes": [
+     "The operation invokes the money policy, returns `currency_mismatch`, and commits nothing; the operation-level test detects regressions.",
+     "Only `validate_eur_amount` is tested for rejection, so an operation that omits that validation can create records without failing the required tests."
+    ],
+    "observer": "The caller and the invariant-test reviewer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9: Accepted decision A9 — R9. Money policy",
+   "kind": "missing_test_scope",
+   "text": "all monetary values are EUR with decimal 2-digit semantics and ROUND_HALF_UP",
+   "question": "Which derived and returned monetary values must the INV-037 tests inspect, now that the Required tests item no longer says that every derived money value carries the same scale and rounding?",
+   "options": [
+    "Every monetary field in stored records, operation answers, and derived views",
+    "Only values returned by `validate_eur_amount` and values persisted by the listed mutations",
+    "Only derivations that perform multiplication or division"
+   ],
+   "default_guess": "Inspect every monetary field observable in stored records, operation answers, and derived views, including totals, completed work, material balances, and work balances.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9: Accepted decision A9 — R9. Money policy",
+   "kind": "vague_boundary",
+   "text": "`Decimal`, 2 fraction digits, `ROUND_HALF_UP` at derivation boundaries",
+   "question": "Exactly which calculations are derivation boundaries, and at what step must each intermediate or aggregate result be quantized?",
+   "options": [
+    "Quantize each independently displayed or stored derived value before aggregation",
+    "Carry full precision through a calculation and quantize only its final answer",
+    "Define a separate rounding point for every formula"
+   ],
+   "default_guess": "Define each persisted or independently displayed monetary result as a boundary; in particular, quantize each section's completed-work value before summing it.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9: Accepted decision A9 — R9. Money policy",
+   "kind": "ambiguous_evidence",
+   "text": "read back through the operation's own answer or the record it stored",
+   "question": "May an operation answer alone prove that the stored record has the normalized amount, or must the test read persistence independently?",
+   "options": [
+    "The test must read the committed record; the answer may be checked additionally",
+    "Either the answer or an independent persistence read is sufficient",
+    "Use the answer only when it is itself reconstructed from committed state"
+   ],
+   "default_guess": "Require an independent read of committed state, plus an answer assertion when the answer exposes the amount.",
+   "witness": {
+    "initial": "A mutation can construct its response from the normalized input independently of its persistence mapping.",
+    "events": [
+     "The caller submits an amount of 1.005.",
+     "The operation answers 1.01 but mistakenly stores 1.005.",
+     "A test follows the phrase's operation-answer alternative."
+    ],
+    "outcomes": [
+     "A response-only test passes although the stored invariant is broken.",
+     "A persistence read observes 1.005 and fails the test."
+    ],
+    "observer": "The invariant-test reviewer and any later reader of the record"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9: Accepted decision A9 — R9. Money policy",
+   "kind": "undefined_validation",
+   "text": "the line amounts of `NormalizedRecognitionItem` are validated for decimal shape only and are not stored",
+   "question": "What exact decimal shape is accepted for `quantity`, `unit_price`, and `line_total`, and are monetary line values exempt from the two-fraction-digit rule?",
+   "options": [
+    "Accept any finite Decimal satisfying the model's sign bounds, without quantizing it",
+    "Require at most two fraction digits and reject finer values",
+    "Round monetary line fields to two digits before accepting the boundary item"
+   ],
+   "default_guess": "Accept finite Decimal values satisfying the model's sign bounds without quantization, and explicitly exclude these discarded boundary values from the two-digit invariant.",
+   "witness": {
+    "initial": "A confirmed recognition contains a line with `unit_price` 0.005 and otherwise valid fields.",
+    "events": [
+     "The OCR adapter validates the `NormalizedRecognitionItem`.",
+     "The item would be discarded after validation."
+    ],
+    "outcomes": [
+     "The item is accepted because arbitrary finite decimal scale is valid at this discarded boundary.",
+     "The publication is rejected or the value is rounded because every monetary value must have two-digit semantics."
+    ],
+    "observer": "The OCR producer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9: Accepted decision A9 — R9. Money policy",
+   "kind": "undefined_field_set",
+   "text": "`import_snapshot` (the snapshot's currency, refused when not `MONEY_CURRENCY`, and its amounts)",
+   "question": "Which exact snapshot fields and nested fields are included in “its amounts,” and must each be normalized, rejected, or checked only after derivation?",
+   "options": [
+    "Enumerate every monetary field and nested monetary field in the snapshot contract",
+    "Apply the rule only to stored section-plan amounts",
+    "Apply it to every Decimal in the payload, including non-monetary decimals"
+   ],
+   "default_guess": "Enumerate and validate every monetary field in the snapshot contract, including nested section amounts, while excluding non-monetary decimal quantities.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9: Accepted decision A9 — R9. Money policy",
+   "kind": "non_discriminating_test",
+   "text": "a value that rounds at the half (work_planned 0.10 at 5 % gives 0.005) is 0.01",
+   "question": "What test must prove that section values are rounded separately and only then summed, rather than the unrounded values being summed and rounded once?",
+   "options": [
+    "Add at least two half-way sections and assert both section values and their aggregate",
+    "The single half-way section is sufficient",
+    "Assert only the aggregate and leave section rounding internal"
+   ],
+   "default_guess": "Use two sections of 0.10 at 5%, assert 0.01 for each and 0.02 for their completed-work total.",
+   "witness": {
+    "initial": "Two sections each have `work_planned` 0.10 and recorded progress 5%.",
+    "events": [
+     "The completed-work values and total are calculated."
+    ],
+    "outcomes": [
+     "Rounding per section produces 0.01 and 0.01, then a total of 0.02.",
+     "Summing unrounded values first produces 0.010 and a rounded total of 0.01."
+    ],
+    "observer": "A client reading the budget or progress view"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9: Accepted decision A9 — R9. Money policy",
+   "kind": "undefined_precision",
+   "text": "overall progress is (100.00 × 33 + 200.00 × 50) / 300.00 = 44.33… as the formula gives it",
+   "question": "What exact Decimal value, scale, precision, and rounding rule must `calculate_overall_progress` return for a non-terminating quotient?",
+   "options": [
+    "Quantize the percentage to two fraction digits with `ROUND_HALF_UP`, returning 44.33",
+    "Return a Decimal using a specified fixed precision greater than two digits",
+    "Return the current Decimal-context result without an additional quantization rule"
+   ],
+   "default_guess": "Return a percentage quantized to two fraction digits with `ROUND_HALF_UP`, but state this separately from monetary rounding.",
+   "witness": {
+    "initial": "The fixed sections in the Required tests item produce the repeating quotient 44.333….",
+    "events": [
+     "`calculate_overall_progress` calculates the quotient.",
+     "The value is returned in `ProgressView.overall_progress_percent`."
+    ],
+    "outcomes": [
+     "The implementation returns `Decimal('44.33')`.",
+     "The implementation returns a longer context-dependent Decimal such as `Decimal('44.33333333333333333333333333')`."
+    ],
+    "observer": "The API client and the exact-value test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9: Accepted decision A9 — R9. Money policy",
+   "kind": "missing_expected_result",
+   "text": "when no section has work_planned above 0 with a recorded progress, overall progress is `None` (shown unavailable), never 0",
+   "question": "In the same case, what exact value and scale must the completed-work total have when every section's completed-work value is `None`?",
+   "options": [
+    "`Decimal('0.00')` as the empty sum",
+    "`None` because no completed-work value exists",
+    "Omit or mark the whole progress view unavailable"
+   ],
+   "default_guess": "Return `Decimal('0.00')` for the completed-work total while returning `None` for overall progress.",
+   "witness": {
+    "initial": "An active budget has planned sections but no `SectionProgress` records.",
+    "events": [
+     "The progress and budget views calculate their completed-work totals."
+    ],
+    "outcomes": [
+     "The empty sum is exposed as `Decimal('0.00')`.",
+     "The total is exposed as `None` or the view is treated as unavailable."
+    ],
+    "observer": "A client reading `ProgressView` or `BudgetView`"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9: Accepted decision A9 — R9. Money policy",
+   "kind": "standard_violation",
+   "text": "INV-037: a check at `validate_eur_amount`, with the values of the data-provider constants `MONEY_CURRENCY`, `MONEY_FRACTION_DIGITS` and `MONEY_ROUNDING`:",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must name each code-read policy value in the prescribed imported-symbol form, for example `the imported MONEY_CURRENCY constant`, `the imported MONEY_FRACTION_DIGITS constant`, and `the imported MONEY_ROUNDING constant`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A9: Accepted decision A9 — R9. Money policy\",\"kind\":\"incomplete_invariant_test\",\"text\":\"And, at each operation that accepts an amount, that the stored record carries the amount in that form\",\"question\":\"Must every listed operation also be tested to reject a foreign-currency or otherwise invalid amount atomically, or is testing rejection only at `validate_eur_amount` sufficient?\",\"options\":[\"Test rejection and no state change through every listed operation\",\"Test rejection only at `validate_eur_amount`; operation tests cover accepted values only\",\"Test operation-level rejection only where currency is an explicit operation input\"],\"default_guess\":\"Test rejection and no state change through every operation whose boundary can carry the invalid value.\",\"witness\":{\"initial\":\"An active project exists and no expense has been created for a recognized document.\",\"events\":[\"An OCR producer submits `create_expense_from_recognition` with a foreign currency.\",\"The invariant tests run against the implementation.\"],\"outcomes\":[\"The operation invokes the money policy, returns `currency_mismatch`, and commits nothing; the operation-level test detects regressions.\",\"Only `validate_eur_amount` is tested for rejection, so an operation that omits that validation can create records without failing the required tests.\"],\"observer\":\"The caller and the invariant-test reviewer\"}},{\"subject\":\"A9: Accepted decision A9 — R9. Money policy\",\"kind\":\"missing_test_scope\",\"text\":\"all monetary values are EUR with decimal 2-digit semantics and ROUND_HALF_UP\",\"question\":\"Which derived and returned monetary values must the INV-037 tests inspect, now that the Required tests item no longer says that every derived money value carries the same scale and rounding?\",\"options\":[\"Every monetary field in stored records, operation answers, and derived views\",\"Only values returned by `validate_eur_amount` and values persisted by the listed mutations\",\"Only derivations that perform multiplication or division\"],\"default_guess\":\"Inspect every monetary field observable in stored records, operation answers, and derived views, including totals, completed work, material balances, and work balances.\"},{\"subject\":\"A9: Accepted decision A9 — R9. Money policy\",\"kind\":\"vague_boundary\",\"text\":\"`Decimal`, 2 fraction digits, `ROUND_HALF_UP` at derivation boundaries\",\"question\":\"Exactly which calculations are derivation boundaries, and at what step must each intermediate or aggregate result be quantized?\",\"options\":[\"Quantize each independently displayed or stored derived value before aggregation\",\"Carry full precision through a calculation and quantize only its final answer\",\"Define a separate rounding point for every formula\"],\"default_guess\":\"Define each persisted or independently displayed monetary result as a boundary; in particular, quantize each section's completed-work value before summing it.\"},{\"subject\":\"A9: Accepted decision A9 — R9. Money policy\",\"kind\":\"ambiguous_evidence\",\"text\":\"read back through the operation's own answer or the record it stored\",\"question\":\"May an operation answer alone prove that the stored record has the normalized amount, or must the test read persistence independently?\",\"options\":[\"The test must read the committed record; the answer may be checked additionally\",\"Either the answer or an independent persistence read is sufficient\",\"Use the answer only when it is itself reconstructed from committed state\"],\"default_guess\":\"Require an independent read of committed state, plus an answer assertion when the answer exposes the amount.\",\"witness\":{\"initial\":\"A mutation can construct its response from the normalized input independently of its persistence mapping.\",\"events\":[\"The caller submits an amount of 1.005.\",\"The operation answers 1.01 but mistakenly stores 1.005.\",\"A test follows the phrase's operation-answer alternative.\"],\"outcomes\":[\"A response-only test passes although the stored invariant is broken.\",\"A persistence read observes 1.005 and fails the test.\"],\"observer\":\"The invariant-test reviewer and any later reader of the record\"}},{\"subject\":\"A9: Accepted decision A9 — R9. Money policy\",\"kind\":\"undefined_validation\",\"text\":\"the line amounts of `NormalizedRecognitionItem` are validated for decimal shape only and are not stored\",\"question\":\"What exact decimal shape is accepted for `quantity`, `unit_price`, and `line_total`, and are monetary line values exempt from the two-fraction-digit rule?\",\"options\":[\"Accept any finite Decimal satisfying the model's sign bounds, without quantizing it\",\"Require at most two fraction digits and reject finer values\",\"Round monetary line fields to two digits before accepting the boundary item\"],\"default_guess\":\"Accept finite Decimal values satisfying the model's sign bounds without quantization, and explicitly exclude these discarded boundary values from the two-digit invariant.\",\"witness\":{\"initial\":\"A confirmed recognition contains a line with `unit_price` 0.005 and otherwise valid fields.\",\"events\":[\"The OCR adapter validates the `NormalizedRecognitionItem`.\",\"The item would be discarded after validation.\"],\"outcomes\":[\"The item is accepted because arbitrary finite decimal scale is valid at this discarded boundary.\",\"The publication is rejected or the value is rounded because every monetary value must have two-digit semantics.\"],\"observer\":\"The OCR producer\"}},{\"subject\":\"A9: Accepted decision A9 — R9. Money policy\",\"kind\":\"undefined_field_set\",\"text\":\"`import_snapshot` (the snapshot's currency, refused when not `MONEY_CURRENCY`, and its amounts)\",\"question\":\"Which exact snapshot fields and nested fields are included in “its amounts,” and must each be normalized, rejected, or checked only after derivation?\",\"options\":[\"Enumerate every monetary field and nested monetary field in the snapshot contract\",\"Apply the rule only to stored section-plan amounts\",\"Apply it to every Decimal in the payload, including non-monetary decimals\"],\"default_guess\":\"Enumerate and validate every monetary field in the snapshot contract, including nested section amounts, while excluding non-monetary decimal quantities.\"},{\"subject\":\"A9: Accepted decision A9 — R9. Money policy\",\"kind\":\"non_discriminating_test\",\"text\":\"a value that rounds at the half (work_planned 0.10 at 5 % gives 0.005) is 0.01\",\"question\":\"What test must prove that section values are rounded separately and only then summed, rather than the unrounded values being summed and rounded once?\",\"options\":[\"Add at least two half-way sections and assert both section values and their aggregate\",\"The single half-way section is sufficient\",\"Assert only the aggregate and leave section rounding internal\"],\"default_guess\":\"Use two sections of 0.10 at 5%, assert 0.01 for each and 0.02 for their completed-work total.\",\"witness\":{\"initial\":\"Two sections each have `work_planned` 0.10 and recorded progress 5%.\",\"events\":[\"The completed-work values and total are calculated.\"],\"outcomes\":[\"Rounding per section produces 0.01 and 0.01, then a total of 0.02.\",\"Summing unrounded values first produces 0.010 and a rounded total of 0.01.\"],\"observer\":\"A client reading the budget or progress view\"}},{\"subject\":\"A9: Accepted decision A9 — R9. Money policy\",\"kind\":\"undefined_precision\",\"text\":\"overall progress is (100.00 × 33 + 200.00 × 50) / 300.00 = 44.33… as the formula gives it\",\"question\":\"What exact Decimal value, scale, precision, and rounding rule must `calculate_overall_progress` return for a non-terminating quotient?\",\"options\":[\"Quantize the percentage to two fraction digits with `ROUND_HALF_UP`, returning 44.33\",\"Return a Decimal using a specified fixed precision greater than two digits\",\"Return the current Decimal-context result without an additional quantization rule\"],\"default_guess\":\"Return a percentage quantized to two fraction digits with `ROUND_HALF_UP`, but state this separately from monetary rounding.\",\"witness\":{\"initial\":\"The fixed sections in the Required tests item produce the repeating quotient 44.333….\",\"events\":[\"`calculate_overall_progress` calculates the quotient.\",\"The value is returned in `ProgressView.overall_progress_percent`.\"],\"outcomes\":[\"The implementation returns `Decimal('44.33')`.\",\"The implementation returns a longer context-dependent Decimal such as `Decimal('44.33333333333333333333333333')`.\"],\"observer\":\"The API client and the exact-value test\"}},{\"subject\":\"A9: Accepted decision A9 — R9. Money policy\",\"kind\":\"missing_expected_result\",\"text\":\"when no section has work_planned above 0 with a recorded progress, overall progress is `None` (shown unavailable), never 0\",\"question\":\"In the same case, what exact value and scale must the completed-work total have when every section's completed-work value is `None`?\",\"options\":[\"`Decimal('0.00')` as the empty sum\",\"`None` because no completed-work value exists\",\"Omit or mark the whole progress view unavailable\"],\"default_guess\":\"Return `Decimal('0.00')` for the completed-work total while returning `None` for overall progress.\",\"witness\":{\"initial\":\"An active budget has planned sections but no `SectionProgress` records.\",\"events\":[\"The progress and budget views calculate their completed-work totals.\"],\"outcomes\":[\"The empty sum is exposed as `Decimal('0.00')`.\",\"The total is exposed as `None` or the view is treated as unavailable.\"],\"observer\":\"A client reading `ProgressView` or `BudgetView`\"}},{\"subject\":\"A9: Accepted decision A9 — R9. Money policy\",\"kind\":\"standard_violation\",\"text\":\"INV-037: a check at `validate_eur_amount`, with the values of the data-provider constants `MONEY_CURRENCY`, `MONEY_FRACTION_DIGITS` and `MONEY_ROUNDING`:\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must name each code-read policy value in the prescribed imported-symbol form, for example `the imported MONEY_CURRENCY constant`, `the imported MONEY_FRACTION_DIGITS constant`, and `the imported MONEY_ROUNDING constant`.\"}]}",
+ "set_aside": []
+}

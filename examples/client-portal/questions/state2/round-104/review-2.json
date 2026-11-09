@@ -1,0 +1,197 @@
+{
+ "open_points": [
+  {
+   "subject": "A9 money derivation policy",
+   "kind": "undefined_scope",
+   "text": "`Decimal`, 2 fraction digits, `ROUND_HALF_UP` at derivation boundaries; stored amounts are already 2-digit exact.",
+   "question": "Which calculations are derivation boundaries, and exactly which intermediate or returned values must be quantized there?",
+   "options": [
+    "Quantize every derived monetary value before it is returned or used by another calculation",
+    "Quantize only completed work per section",
+    "Quantize only when a value is persisted"
+   ],
+   "default_guess": "Quantize every externally visible or persisted derived monetary value to two fraction digits, while retaining full precision only inside a single calculation.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-037 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "And, at each operation that accepts an amount, that the stored record carries the amount in that form, read back through the operation's own answer or the record it stored: `create_expense_from_recognition` (the expense total and each allocation amount; the line amounts of `NormalizedRecognitionItem` are validated for decimal shape only and are not stored), `correct_expense` (the total and each allocation amount), `replace_expense_allocations` (each allocation amount), `upsert_manual_section_plan` (its two planned amounts), `register_work_payment` (the amount) and `import_snapshot` (the snapshot's currency, refused when not `MONEY_CURRENCY`, and its amounts).",
+   "question": "What must the Required tests show for INV-037's claim about all derived monetary values, including totals, balances, material values and other money projections that are not stored by the listed operations?",
+   "options": [
+    "Assert two-digit scale and ROUND_HALF_UP for every derived monetary output",
+    "Treat the INV-041 completed-work examples as sufficient for all derivations",
+    "Narrow INV-037 so it covers only validation and stored amounts"
+   ],
+   "default_guess": "Add assertions for every derived monetary output and every calculation capable of producing more than two fraction digits.",
+   "unit": "?"
+  },
+  {
+   "subject": "NormalizedRecognitionItem amounts",
+   "kind": "contradiction",
+   "text": "the line amounts of `NormalizedRecognitionItem` are validated for decimal shape only and are not stored",
+   "question": "Must `NormalizedRecognitionItem.unit_price` and `line_total` obey INV-037's two-digit monetary semantics, or may they have arbitrary valid Decimal scale because they are discarded?",
+   "options": [
+    "Require exactly two fraction digits or normalize with ROUND_HALF_UP",
+    "Accept any finite Decimal shape without applying the money scale",
+    "Exclude these fields explicitly from INV-037"
+   ],
+   "default_guess": "Validate them as monetary inputs and normalize them to two fraction digits before further validation.",
+   "witness": {
+    "initial": "An otherwise valid confirmed OCR intake contains a line with unit_price 0.005 and line_total 0.005, while the expense total and allocations are valid EUR amounts.",
+    "events": [
+     "The OCR producer submits the intake.",
+     "The portal validates the normalized line items before discarding them."
+    ],
+    "outcomes": [
+     "The intake is accepted because 0.005 has a valid Decimal shape and the line values are not stored.",
+     "The intake is rejected or the line values are normalized because INV-037 says all monetary values have two-digit semantics."
+    ],
+    "observer": "The OCR producer and the staff member submitting the expense"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "calculate_overall_progress result",
+   "kind": "unspecified_representation",
+   "text": "overall progress is (100.00 × 33 + 200.00 × 50) / 300.00 = 44.33… as the formula gives it",
+   "question": "What exact Decimal value, scale and rounding rule must `calculate_overall_progress` return for a non-terminating quotient?",
+   "options": [
+    "Return 44.33 rounded to two fraction digits with ROUND_HALF_UP",
+    "Return a Decimal rounded to a separately specified progress precision",
+    "Use the active Decimal context, allowing context-dependent precision"
+   ],
+   "default_guess": "Return Decimal('44.33') using an explicitly stated two-fraction-digit ROUND_HALF_UP rule.",
+   "witness": {
+    "initial": "The active version has work_planned 100.00 at 33% and 200.00 at 50%, both with recorded progress.",
+    "events": [
+     "A reader requests the progress view.",
+     "The service calculates 13300 / 300."
+    ],
+    "outcomes": [
+     "The service returns 44.33 after explicit two-digit rounding.",
+     "The service returns a context-dependent value such as 44.33333333333333333333333333."
+    ],
+    "observer": "The caller reading `overall_progress_percent`"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-041 unavailable condition",
+   "kind": "inconsistent_condition",
+   "text": "INV-041: completed work value and overall progress follow the R9 formulas; overall progress is unavailable, never guessed, when no planned work cost exists",
+   "question": "Does unavailability mean that the project has no positive planned work at all, or that no section simultaneously has positive planned work and a recorded progress value?",
+   "options": [
+    "Unavailable when the eligible denominator is zero after excluding sections without recorded progress",
+    "Unavailable only when all planned work values are zero or absent"
+   ],
+   "default_guess": "Use the eligible denominator: return unavailable when no section has both `work_planned > 0` and recorded progress.",
+   "witness": {
+    "initial": "A section has work_planned 100.00 but no SectionProgress record.",
+    "events": [
+     "A caller requests the progress view.",
+     "The service evaluates INV-041."
+    ],
+    "outcomes": [
+     "Overall progress is unavailable because the section is excluded and the eligible denominator is zero.",
+     "The phrase 'when no planned work cost exists' does not apply because 100.00 of planned work exists, so an implementer attempts to produce a progress value."
+    ],
+    "observer": "The progress-view caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-044 Required tests",
+   "kind": "contradiction",
+   "text": "INV-044: the ledger's property at `calculate_material_balance` showing the invariant holds; a violating input is refused and changes nothing.",
+   "question": "Is an overspent section a permitted state that produces a negative remaining balance, or a violating input that must be refused without change?",
+   "options": [
+    "Permit overspend and return the negative remaining value",
+    "Refuse any input or mutation that would create overspend",
+    "Define a narrower class of violating inputs and state its exact refusal condition"
+   ],
+   "default_guess": "Permit overspend and display the negative balance; replace the generic refusal sentence with exact tests for negative results and explicit missing-data results.",
+   "witness": {
+    "initial": "A section has material_planned 100.00 and included material allocations totaling 120.00.",
+    "events": [
+     "Staff records or retains the allocations.",
+     "A caller requests the budget derivation."
+    ],
+    "outcomes": [
+     "`calculate_material_balance` returns -20.00 and the budget view displays it.",
+     "The overspending input is treated as violating INV-044 and is refused without changing state."
+    ],
+    "observer": "The staff actor and every budget-view reader"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "validate_eur_amount refusal precedence",
+   "kind": "unspecified_precedence",
+   "text": "Currency literal: `EUR` only; any other currency at any boundary → explicit typed rejection (`currency_mismatch`).",
+   "question": "When an amount has both a foreign currency and an invalid or unparseable Decimal representation, which check runs first and which typed refusal is returned?",
+   "options": [
+    "Check currency first and always return `currency_mismatch` for a non-EUR currency",
+    "Parse and validate the amount first, returning the amount-format refusal when malformed",
+    "Define a combined validation error"
+   ],
+   "default_guess": "Check the currency discriminator first and return `currency_mismatch`, because the rule says any foreign currency at a boundary has that explicit rejection.",
+   "witness": {
+    "initial": "An input boundary receives currency USD and an amount value that cannot be decoded as Decimal.",
+    "events": [
+     "The caller submits the input.",
+     "The boundary validates currency and amount."
+    ],
+    "outcomes": [
+     "The caller receives `currency_mismatch`.",
+     "The caller receives the Decimal-shape or decoding refusal."
+    ],
+    "observer": "The boundary caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-044 missing-data scope",
+   "kind": "undefined_scope",
+   "text": "missing data is presented explicitly, never replaced by zero unless zero is confirmed",
+   "question": "Which missing inputs and derived fields are covered by this rule, and what explicit unavailable representation must each one use?",
+   "options": [
+    "Apply it only to absent section progress and an absent budget, as exercised by the listed test",
+    "Apply it to every missing dependency or owning datum used by material, budget and progress derivations",
+    "Enumerate the covered fields and their required `None`, `not_configured` or `temporarily_unavailable` result"
+   ],
+   "default_guess": "Enumerate each covered field and use the existing typed absence representation for it rather than treating the phrase as an unrestricted rule.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-037 Required tests",
+   "kind": "standard_violation",
+   "text": "with the values of the data-provider constants `MONEY_CURRENCY`, `MONEY_FRACTION_DIGITS` and `MONEY_ROUNDING`",
+   "rule": "перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must name each generated-code dependency in the prescribed form, for example `the imported MONEY_CURRENCY constant`, `the imported MONEY_FRACTION_DIGITS constant` and `the imported MONEY_ROUNDING constant`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9 Consequence",
+   "kind": "standard_violation",
+   "text": "The currency, the fraction digits and the rounding mode, which generated code reads, are the data-provider constants `MONEY_CURRENCY`, `MONEY_FRACTION_DIGITS` and `MONEY_ROUNDING`; the sign that selects each `WorkBalanceLabel` is `WORK_BALANCE_LABEL_SIGNS` (SPEC_STANDARD 6.10 version 2, keyed by the label, total).",
+   "rule": "перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must name all four generated-code dependencies as imported constants using the required `the imported X constant` form.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9 Consequence",
+   "kind": "standard_violation",
+   "text": "The formulas stay behaviour of their notes; the remaining `rules.money_policy` leaves are the decision's record.",
+   "rule": "Namespace `rules` или `config`, который не достижим ни одним из этих путей, — мёртвые данные: факт остаётся решением дизайна и в спецификацию не кладётся, либо получает один из трёх путей.",
+   "section": "15.3.1",
+   "question": "The passage must either keep those facts outside the specification as design facts or give every generated-code value one of the three permitted delivery paths, rather than retaining unreachable `rules.money_policy` leaves.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A9 money derivation policy\",\"kind\":\"undefined_scope\",\"text\":\"`Decimal`, 2 fraction digits, `ROUND_HALF_UP` at derivation boundaries; stored amounts are already 2-digit exact.\",\"question\":\"Which calculations are derivation boundaries, and exactly which intermediate or returned values must be quantized there?\",\"options\":[\"Quantize every derived monetary value before it is returned or used by another calculation\",\"Quantize only completed work per section\",\"Quantize only when a value is persisted\"],\"default_guess\":\"Quantize every externally visible or persisted derived monetary value to two fraction digits, while retaining full precision only inside a single calculation.\"},{\"subject\":\"INV-037 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"And, at each operation that accepts an amount, that the stored record carries the amount in that form, read back through the operation's own answer or the record it stored: `create_expense_from_recognition` (the expense total and each allocation amount; the line amounts of `NormalizedRecognitionItem` are validated for decimal shape only and are not stored), `correct_expense` (the total and each allocation amount), `replace_expense_allocations` (each allocation amount), `upsert_manual_section_plan` (its two planned amounts), `register_work_payment` (the amount) and `import_snapshot` (the snapshot's currency, refused when not `MONEY_CURRENCY`, and its amounts).\",\"question\":\"What must the Required tests show for INV-037's claim about all derived monetary values, including totals, balances, material values and other money projections that are not stored by the listed operations?\",\"options\":[\"Assert two-digit scale and ROUND_HALF_UP for every derived monetary output\",\"Treat the INV-041 completed-work examples as sufficient for all derivations\",\"Narrow INV-037 so it covers only validation and stored amounts\"],\"default_guess\":\"Add assertions for every derived monetary output and every calculation capable of producing more than two fraction digits.\"},{\"subject\":\"NormalizedRecognitionItem amounts\",\"kind\":\"contradiction\",\"text\":\"the line amounts of `NormalizedRecognitionItem` are validated for decimal shape only and are not stored\",\"question\":\"Must `NormalizedRecognitionItem.unit_price` and `line_total` obey INV-037's two-digit monetary semantics, or may they have arbitrary valid Decimal scale because they are discarded?\",\"options\":[\"Require exactly two fraction digits or normalize with ROUND_HALF_UP\",\"Accept any finite Decimal shape without applying the money scale\",\"Exclude these fields explicitly from INV-037\"],\"default_guess\":\"Validate them as monetary inputs and normalize them to two fraction digits before further validation.\",\"witness\":{\"initial\":\"An otherwise valid confirmed OCR intake contains a line with unit_price 0.005 and line_total 0.005, while the expense total and allocations are valid EUR amounts.\",\"events\":[\"The OCR producer submits the intake.\",\"The portal validates the normalized line items before discarding them.\"],\"outcomes\":[\"The intake is accepted because 0.005 has a valid Decimal shape and the line values are not stored.\",\"The intake is rejected or the line values are normalized because INV-037 says all monetary values have two-digit semantics.\"],\"observer\":\"The OCR producer and the staff member submitting the expense\"}},{\"subject\":\"calculate_overall_progress result\",\"kind\":\"unspecified_representation\",\"text\":\"overall progress is (100.00 × 33 + 200.00 × 50) / 300.00 = 44.33… as the formula gives it\",\"question\":\"What exact Decimal value, scale and rounding rule must `calculate_overall_progress` return for a non-terminating quotient?\",\"options\":[\"Return 44.33 rounded to two fraction digits with ROUND_HALF_UP\",\"Return a Decimal rounded to a separately specified progress precision\",\"Use the active Decimal context, allowing context-dependent precision\"],\"default_guess\":\"Return Decimal('44.33') using an explicitly stated two-fraction-digit ROUND_HALF_UP rule.\",\"witness\":{\"initial\":\"The active version has work_planned 100.00 at 33% and 200.00 at 50%, both with recorded progress.\",\"events\":[\"A reader requests the progress view.\",\"The service calculates 13300 / 300.\"],\"outcomes\":[\"The service returns 44.33 after explicit two-digit rounding.\",\"The service returns a context-dependent value such as 44.33333333333333333333333333.\"],\"observer\":\"The caller reading `overall_progress_percent`\"}},{\"subject\":\"INV-041 unavailable condition\",\"kind\":\"inconsistent_condition\",\"text\":\"INV-041: completed work value and overall progress follow the R9 formulas; overall progress is unavailable, never guessed, when no planned work cost exists\",\"question\":\"Does unavailability mean that the project has no positive planned work at all, or that no section simultaneously has positive planned work and a recorded progress value?\",\"options\":[\"Unavailable when the eligible denominator is zero after excluding sections without recorded progress\",\"Unavailable only when all planned work values are zero or absent\"],\"default_guess\":\"Use the eligible denominator: return unavailable when no section has both `work_planned > 0` and recorded progress.\",\"witness\":{\"initial\":\"A section has work_planned 100.00 but no SectionProgress record.\",\"events\":[\"A caller requests the progress view.\",\"The service evaluates INV-041.\"],\"outcomes\":[\"Overall progress is unavailable because the section is excluded and the eligible denominator is zero.\",\"The phrase 'when no planned work cost exists' does not apply because 100.00 of planned work exists, so an implementer attempts to produce a progress value.\"],\"observer\":\"The progress-view caller\"}},{\"subject\":\"INV-044 Required tests\",\"kind\":\"contradiction\",\"text\":\"INV-044: the ledger's property at `calculate_material_balance` showing the invariant holds; a violating input is refused and changes nothing.\",\"question\":\"Is an overspent section a permitted state that produces a negative remaining balance, or a violating input that must be refused without change?\",\"options\":[\"Permit overspend and return the negative remaining value\",\"Refuse any input or mutation that would create overspend\",\"Define a narrower class of violating inputs and state its exact refusal condition\"],\"default_guess\":\"Permit overspend and display the negative balance; replace the generic refusal sentence with exact tests for negative results and explicit missing-data results.\",\"witness\":{\"initial\":\"A section has material_planned 100.00 and included material allocations totaling 120.00.\",\"events\":[\"Staff records or retains the allocations.\",\"A caller requests the budget derivation.\"],\"outcomes\":[\"`calculate_material_balance` returns -20.00 and the budget view displays it.\",\"The overspending input is treated as violating INV-044 and is refused without changing state.\"],\"observer\":\"The staff actor and every budget-view reader\"}},{\"subject\":\"validate_eur_amount refusal precedence\",\"kind\":\"unspecified_precedence\",\"text\":\"Currency literal: `EUR` only; any other currency at any boundary → explicit typed rejection (`currency_mismatch`).\",\"question\":\"When an amount has both a foreign currency and an invalid or unparseable Decimal representation, which check runs first and which typed refusal is returned?\",\"options\":[\"Check currency first and always return `currency_mismatch` for a non-EUR currency\",\"Parse and validate the amount first, returning the amount-format refusal when malformed\",\"Define a combined validation error\"],\"default_guess\":\"Check the currency discriminator first and return `currency_mismatch`, because the rule says any foreign currency at a boundary has that explicit rejection.\",\"witness\":{\"initial\":\"An input boundary receives currency USD and an amount value that cannot be decoded as Decimal.\",\"events\":[\"The caller submits the input.\",\"The boundary validates currency and amount.\"],\"outcomes\":[\"The caller receives `currency_mismatch`.\",\"The caller receives the Decimal-shape or decoding refusal.\"],\"observer\":\"The boundary caller\"}},{\"subject\":\"INV-044 missing-data scope\",\"kind\":\"undefined_scope\",\"text\":\"missing data is presented explicitly, never replaced by zero unless zero is confirmed\",\"question\":\"Which missing inputs and derived fields are covered by this rule, and what explicit unavailable representation must each one use?\",\"options\":[\"Apply it only to absent section progress and an absent budget, as exercised by the listed test\",\"Apply it to every missing dependency or owning datum used by material, budget and progress derivations\",\"Enumerate the covered fields and their required `None`, `not_configured` or `temporarily_unavailable` result\"],\"default_guess\":\"Enumerate each covered field and use the existing typed absence representation for it rather than treating the phrase as an unrestricted rule.\"},{\"subject\":\"INV-037 Required tests\",\"kind\":\"standard_violation\",\"text\":\"with the values of the data-provider constants `MONEY_CURRENCY`, `MONEY_FRACTION_DIGITS` and `MONEY_ROUNDING`\",\"rule\":\"перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must name each generated-code dependency in the prescribed form, for example `the imported MONEY_CURRENCY constant`, `the imported MONEY_FRACTION_DIGITS constant` and `the imported MONEY_ROUNDING constant`.\"},{\"subject\":\"A9 Consequence\",\"kind\":\"standard_violation\",\"text\":\"The currency, the fraction digits and the rounding mode, which generated code reads, are the data-provider constants `MONEY_CURRENCY`, `MONEY_FRACTION_DIGITS` and `MONEY_ROUNDING`; the sign that selects each `WorkBalanceLabel` is `WORK_BALANCE_LABEL_SIGNS` (SPEC_STANDARD 6.10 version 2, keyed by the label, total).\",\"rule\":\"перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must name all four generated-code dependencies as imported constants using the required `the imported X constant` form.\"},{\"subject\":\"A9 Consequence\",\"kind\":\"standard_violation\",\"text\":\"The formulas stay behaviour of their notes; the remaining `rules.money_policy` leaves are the decision's record.\",\"rule\":\"Namespace `rules` или `config`, который не достижим ни одним из этих путей, — мёртвые данные: факт остаётся решением дизайна и в спецификацию не кладётся, либо получает один из трёх путей.\",\"section\":\"15.3.1\",\"question\":\"The passage must either keep those facts outside the specification as design facts or give every generated-code value one of the three permitted delivery paths, rather than retaining unreachable `rules.money_policy` leaves.\"}]}",
+ "set_aside": []
+}
