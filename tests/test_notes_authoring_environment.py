@@ -212,7 +212,7 @@ def test_the_module_slice_carries_the_module_not_the_values(case):
     payload = brief.build(case, "store", SPEC, slice_payload)
     assert payload["callables"] == {"load_rows": "(limit: int) -> list[Row]", "save_row": "(row: Row) -> Status"}
     assert payload["other_symbols"] == []
-    assert payload["models_named"] == {"Row": {"fields": ["row_id"]}, "Status": {"enum_members": ["open", "closed"]}}
+    assert payload["models_named"] == {"Row": {"fields": ["row_id"]}, "Status": {"enum_members": {"OPEN": "open", "CLOSED": "closed"}}}
     assert payload["design"]["responsibility"] == "keeps rows"
     assert payload["open_structure_requests"] == []
     assert "200" not in json.dumps(payload)
