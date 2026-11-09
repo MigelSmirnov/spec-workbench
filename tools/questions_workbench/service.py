@@ -250,7 +250,8 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
            later: dict[str, str] | None = None,
            precedents: list[dict[str, Any]] | None = None,
            witness: bool = False, case: Path | None = None, layer: str | None = None,
-           scope: list[str] | None = None, sections: list[dict[str, str]] | None = None) -> dict[str, Any]:
+           scope: list[str] | None = None, sections: list[dict[str, str]] | None = None,
+           violation_texts: str | None = None) -> dict[str, Any]:
     """Judge the repeated topics. `later` maps the later states' documents to
     their texts; `precedents` are the state's prior non-blocking judgements,
     which the judge may follow for the same question on unchanged passages.
@@ -270,7 +271,8 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
     Either way judge.check finds every quote in the full texts, which it gets
     here from `texts`, never from what the judge was shown. `sections` are the
     state's SPEC_STANDARD sections the reviewers were given: the judge gets
-    them too, and a violation's rule is found in them."""
+    them too, and a violation's rule is found in them. `violation_texts` are
+    the passages a violation may hold (State 7: the module's notes; judge.py)."""
     standard = prompts.standard_text(sections) if sections else None
     for index, topic in enumerate(repeated, 1):
         topic["id"] = f"T{index}"
@@ -325,7 +327,8 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
                                          "\n\n".join(later.values()) if later else None,
                                          {p["id"]: p for p in precedents or []},
                                          "\n\n".join(b for s, _, b in texts if s == state),
-                                         witness_required=witness, earlier_texts=earlier, standard=standard)
+                                         witness_required=witness, earlier_texts=earlier, standard=standard,
+                                         violation_texts=violation_texts)
     if case is not None and state > 0:
         provenance = QuoteProvenance(case, [(s, n, b) for s, n, b in texts if s < state])
         for topic in repeated:
@@ -691,6 +694,17 @@ def _previous_hypotheses(case: Path, state: int) -> list[tuple[str, str]]:
             if (t.get("judgement") or {}).get("kind") == judge.HYPOTHESIS]
 
 
+def _spec_notes(case: Path) -> list[str] | None:
+    """The notes of the case's assembled specification, or None when it has none
+    to read: the prompt's notes are found among them (prompts.notes_in_prompt)."""
+    path = case / documents.SPEC_FILE
+    try:
+        notes = json.loads(path.read_text(encoding="utf-8")).get("notes")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return [n for n in notes if isinstance(n, str)] if isinstance(notes, list) else None
+
+
 def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, scope: list[str],
                   changed: dict[str, tuple[str, list[str]]], old: dict[str, str] | None,
                   case: Path, referencing: dict[str, list[str]] | None = None,
@@ -707,6 +721,10 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
     # received obligations, limited to each module (transition.module_obligations);
     # the Factory prompt itself stays as the Factory builds it
     obligations = {module: transition.module_obligations(case, layer or {}, module) for module in scope}
+    # the module's notes: the only design text of its prompt (judge.GENERATOR_TEXT)
+    spec_notes = _spec_notes(case)
+    notes = ({module: prompts.notes_in_prompt(spec_notes, read.units[module]["text"]) for module in scope}
+             if spec_notes is not None else {})
 
     def one(job: tuple[str, int]) -> dict[str, Any]:
         module = job[0]
@@ -743,8 +761,11 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
             module_old = None if old is None else {module: old.get(module, "")}
             judged["modules"][module] = _judge(provider, state, text, [(state, module, read.units[module]["text"])],
                                                again, module_old, None, precedents,
-                                               layer=prompts.module_layer_judge(obligations[module]),
-                                               sections=sections)
+                                               layer=prompts.module_layer_judge(obligations[module],
+                                                                                notes.get(module)),
+                                               sections=sections,
+                                               violation_texts=("\n".join(notes[module])
+                                                                if module in notes else None))
             for topic in again:
                 topic["id"] = f"{module}:{topic['id']}"
         topics += mine
