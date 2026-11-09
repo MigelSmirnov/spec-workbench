@@ -1730,7 +1730,7 @@ bootstrap command, and again at each Registry call by `registry_gateway`
 
 ### Must not own
 
-A default for a value nobody chose, or any check that uses a setting other than the start-up consistency of the two binary bounds (A14), which is a check of the table itself.
+A default for a value nobody chose, or any check that uses a setting to decide what the portal does. The checks of the table itself are its own: each row's type, requiredness, normalization and accepted values, the wildcard refusals of hosts and origins, and the consistency of the two binary bounds (A14).
 
 ### Hides
 
