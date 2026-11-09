@@ -3948,12 +3948,11 @@ neither bound is changed silently.
 
 A missing, malformed or inconsistent value (a wildcard host or origin, binary
 bounds out of order) is refused with the `ValueError` the emitted
-`runtime_settings` raises, never carrying a value (Factory
-`generate_runtime_settings_draft.py`); at start the refusal stops the start
-(and the bootstrap command). A later call reads the same process
-environment the start validated, so it is not refused (State 3
-Configuration); the emitted `binary_storage` would still answer such a
-refusal as `BinaryStorageError` (A14).
+`runtime_settings` raises, never carrying a value; its shape is the emitted
+module's (Factory `generate_runtime_settings_draft.py`). At start the
+refusal stops the start (and the bootstrap command). A later call reads the
+same process environment the start validated, so it is not refused (State 3
+Configuration); how a caller answers one is that caller's (A14).
 
 ### State impact
 
