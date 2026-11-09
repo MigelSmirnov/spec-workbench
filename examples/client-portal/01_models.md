@@ -2125,8 +2125,8 @@ Each is a value; none adds a fact to a model above.
 - `HealthStatus` — the liveness and readiness answer (R0-11; Factory
   `21658368`).
 - Orderings — the tie-break orders of expenses, allocations, payments and
-  photos written above (former text) are replaced by `rules.derived_view_ordering`
-  (State 2 A27; Factory `d2c4511e`; owner 2026-11-06: current service
+  photos written above (former text) are replaced by the orderings of State 2 A27
+  (accepted `rules.derived_view_ordering`, retired 2026-11-09; Factory `d2c4511e`; owner 2026-11-06: current service
   behaviour accepted; technical decisions delegated).
 - Timestamps — "timezone-aware UTC" of the modeling conventions is narrowed
   by State 2 A28: instants are UTC, stored offset-naive (Factory `c92b6878`;

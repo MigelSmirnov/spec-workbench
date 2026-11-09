@@ -191,7 +191,7 @@ None.
 
 ### Enforces
 
-A17: the envelope of `rules.verification_envelope_policy` and
+A17: the envelope of that decision and
 `rules.credential_security_backend`; the plaintext exists only in the
 returned value.
 
@@ -704,7 +704,7 @@ None beyond the table.
 
 ### Enforces
 
-A8 (`rules.idempotency_identities.progress_photo`: `intake_id` is the one
+A8 (the progress photo row: `intake_id` is the one
 replay identity), A30. Idempotent.
 
 ### Errors
@@ -851,7 +851,7 @@ None.
 ### Outputs
 
 The typed active `ProjectReference` list, by `project_id` ascending
-(`rules.project_list_ordering`), whatever the upstream order.
+(A15), whatever the upstream order.
 
 ### Observable effect
 
@@ -1017,8 +1017,8 @@ None outside the caller's transaction.
 
 ### Enforces
 
-A13 (closed catalogue `AuditAction`, reason policy
-`rules.audit_result_reason_policy`), A23 (`entity_id`), A21 (append-only),
+A13 (closed catalogue `AuditAction`, its result and
+reason policy), A23 (`entity_id`), A21 (append-only),
 A28 (`occurred_at` from its own clock read at append, not the caller's
 instant): exactly one insert; a service actor keeps its `key_version`; no secret or
 `file_ref` enters the details.
@@ -3093,7 +3093,7 @@ None: no invoice or accounting posting is created.
 ### Enforces
 
 A9 (positive EUR, the validated amount stored and compared), A8
-(`rules.idempotency_identities`: an equal replay returns the existing payment
+(an equal replay returns the existing payment
 with no audit), A13 (`payment.register`).
 
 ### Errors
@@ -3207,7 +3207,7 @@ None: the binary already exists under the root (R0-13).
 
 ### Enforces
 
-A8 (`rules.idempotency_identities.progress_photo`: `intake_id` is the one
+A8 (the progress photo row: `intake_id` is the one
 replay identity; a fresh `photo_id`), A20 (no progress or financial value is
 set), the optional section is this project's, A13 (`photo.publish`).
 
@@ -3354,7 +3354,7 @@ The `PortalStore` and the `ViewerActorContext`.
 ### Outputs
 
 `ProjectListItem` list (project, display name, address, Registry status,
-grant) in the A15 order (`rules.project_list_ordering.viewer`: display name
+grant) in the A15 order (display name
 case-folded, then `project_id`); empty when none.
 
 ### Observable effect
@@ -3490,7 +3490,7 @@ None.
 
 ### Enforces
 
-A19, A21, A27 (`rules.derived_view_ordering` for expenses and allocations).
+A19, A21, A27 (the orderings of expenses and allocations).
 
 ### Errors
 

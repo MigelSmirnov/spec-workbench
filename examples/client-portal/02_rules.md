@@ -201,7 +201,7 @@ to every account stays the one the accepted spec gave.
 
 ### Consequence
 
-The staff and principal tables, which generated code reads, are the data-provider constants `STAFF_STATUS_TRANSITIONS` and `PRINCIPAL_STATUS_TRANSITIONS` (SPEC_STANDARD 6.10 version 2: keyed by the pair of statuses, total, `allowed`). The viewer, grant and budget-version tables stay `rules.status_transitions`; no note reads them as data. Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): values unchanged.
+The staff and principal tables, which generated code reads, are the data-provider constants `STAFF_STATUS_TRANSITIONS` and `PRINCIPAL_STATUS_TRANSITIONS` (SPEC_STANDARD 6.10 version 2: keyed by the pair of statuses, total, `allowed`). The viewer, grant and budget-version tables are behaviour the notes of the operations that change those statuses state (SPEC_STANDARD §2), recorded by the Normative rules above; the accepted spec's `rules.status_transitions`, which no module and no deterministic backend read, is retired (owner 2026-11-09; `60_data_closure.json` `retired`, SOURCE.md). Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): values unchanged.
 
 ## Accepted decision A4 — R4. Authorization guard sequence (policy)
 
@@ -265,7 +265,7 @@ the challenges (owner 2026-11-07, A3 "Carried changes").
 
 ### Consequence
 
-The sequence is behaviour, not data: an order of steps that chooses what the guard does is prose of the State 7 notes (SPEC_STANDARD §2), stated by the notes of `_authorize_project_operation` and of the operations each flow names. The accepted spec's `rules.project_guard_sequence` records the same order and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
+The sequence is behaviour, not data: an order of steps that chooses what the guard does is prose of the State 7 notes (SPEC_STANDARD §2), stated by the notes of `_authorize_project_operation` and of the operations each flow names. The accepted spec's `rules.project_guard_sequence` recorded the same order; no module and no deterministic backend read it, so it delivered nothing to generated code (SPEC_STANDARD 15.3.1), and it is retired (owner 2026-11-09; `60_data_closure.json` `retired`, SOURCE.md): the Normative rules above are its one record.
 
 ## Accepted decision A5 — R5. Registry status policy
 
@@ -345,7 +345,7 @@ accepted; technical decisions delegated.
 
 ### Consequence
 
-The policy is behaviour, not data: which Registry state admits a read or a mutation chooses what the guard does, and is stated as prose by the notes of `_authorize_project_operation`, `_context_from_validation` and the operations that read `registry_status` (SPEC_STANDARD §2); the states are the enumeration `= models.RegistryProjectStatus`. The accepted spec's `rules.registry_status_policy` records the same table and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
+The policy is behaviour, not data: which Registry state admits a read or a mutation chooses what the guard does, and is stated as prose by the notes of `_authorize_project_operation`, `_context_from_validation` and the operations that read `registry_status` (SPEC_STANDARD §2); the states are the enumeration `= models.RegistryProjectStatus`. The accepted spec's `rules.registry_status_policy` recorded the same table; no module and no deterministic backend read it, so it delivered nothing to generated code (SPEC_STANDARD 15.3.1), and it is retired (owner 2026-11-09; `60_data_closure.json` `retired`, SOURCE.md): the Normative rules above are its one record.
 
 ## Accepted decision A6 — R6. Registry failure translation (gateway-owned)
 
@@ -573,7 +573,7 @@ current service behaviour accepted; technical decisions delegated).
 
 ### Consequence
 
-The identities are behaviour, not data: which fields make a repeated request the same request is stated as prose by the notes of the operations this decision's tests name (SPEC_STANDARD §2). The accepted spec's `rules.idempotency_identities` records the same table and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
+The identities are behaviour, not data: which fields make a repeated request the same request is stated as prose by the notes of the operations this decision's tests name (SPEC_STANDARD §2). The accepted spec's `rules.idempotency_identities` recorded the same table; no module and no deterministic backend read it, so it delivered nothing to generated code (SPEC_STANDARD 15.3.1), and it is retired (owner 2026-11-09; `60_data_closure.json` `retired`, SOURCE.md): the Normative rules above are its one record.
 
 ## Accepted decision A9 — R9. Money policy
 
@@ -639,7 +639,7 @@ running service still returns 0 until the next Route B regenerates
 
 ### Consequence
 
-The currency, the fraction digits and the rounding mode, which generated code reads, are the imported MONEY_CURRENCY constant, the imported MONEY_FRACTION_DIGITS constant and the imported MONEY_ROUNDING constant of `data_provider`; the sign that selects each `WorkBalanceLabel` is the imported WORK_BALANCE_LABEL_SIGNS constant (SPEC_STANDARD 6.10 version 2, keyed by the label, total). The formulas stay behaviour of their notes; the remaining `rules.money_policy` leaves are the decision's record. Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): values unchanged.
+The currency, the fraction digits and the rounding mode, which generated code reads, are the imported MONEY_CURRENCY constant, the imported MONEY_FRACTION_DIGITS constant and the imported MONEY_ROUNDING constant of `data_provider`; the sign that selects each `WorkBalanceLabel` is the imported WORK_BALANCE_LABEL_SIGNS constant (SPEC_STANDARD 6.10 version 2, keyed by the label, total). The formulas stay behaviour of their notes, recorded by the Normative rules above; the accepted spec's `rules.money_policy`, whose remaining leaves no module and no deterministic backend read, is retired (owner 2026-11-09; `60_data_closure.json` `retired`, SOURCE.md). Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): values unchanged.
 
 ## Accepted decision A10 — R10. No email challenges (owner 2026-11-07)
 
@@ -761,7 +761,7 @@ is reached only if access changed in between (Q20). Owner 2026-11-06: current se
 
 ### Consequence
 
-The rule is behaviour, not data: which scope admits which project is stated as prose by the notes of `authorize_producer_scope` and `authorize_snapshot_import` (SPEC_STANDARD §2); the scopes are the enumeration `= models.ProducerScopeMode`. The accepted spec's `rules.producer_scope_policy` records the same rule and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
+The rule is behaviour, not data: which scope admits which project is stated as prose by the notes of `authorize_producer_scope` and `authorize_snapshot_import` (SPEC_STANDARD §2); the scopes are the enumeration `= models.ProducerScopeMode`. The accepted spec's `rules.producer_scope_policy` recorded the same rule; no module and no deterministic backend read it, so it delivered nothing to generated code (SPEC_STANDARD 15.3.1), and it is retired (owner 2026-11-09; `60_data_closure.json` `retired`, SOURCE.md): the Normative rules above are its one record.
 
 ## Accepted decision A13 — R13. Audit action catalog (closed)
 
@@ -835,7 +835,7 @@ The six challenge actions `staff.email_verification_issue`,
 operation of the accepted service wrote, leave the catalog and the significant
 set with the challenges (owner 2026-11-07, A10, `00_product.md` R0-23).
 
-The accepted Factory spec adds two policies beside the catalog (Factory `5677993e`, 2026-07-22): `rules.audit_significant_mutation_actions`, the closed subset of the catalog called significant mutations (listed above; removed from the case 2026-11-07, see Consequence), and `rules.audit_result_reason_policy`: a success carries no `reason_code`, a rejected significant mutation carries a non-blank one, a rejected non-significant action may carry one.
+The accepted Factory spec adds two policies beside the catalog (Factory `5677993e`, 2026-07-22): `rules.audit_significant_mutation_actions`, the closed subset of the catalog called significant mutations (listed above; removed from the case 2026-11-07, see Consequence), and `rules.audit_result_reason_policy` (retired 2026-11-09, see Consequence): a success carries no `reason_code`, a rejected significant mutation carries a non-blank one, a rejected non-significant action may carry one.
 
 ### Formal invariants
 
@@ -851,7 +851,7 @@ The accepted Factory spec adds two policies beside the catalog (Factory `5677993
 
 ### Consequence
 
-The normative catalog and significant subset are the two lists above, the rules tables of this decision; INV-051 and INV-053 are checked against them. In the specification the catalog is the `AuditAction` enumeration (`= models.AuditAction`). Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): the significant subset, which `_validate_audit_intent` reads, is the data-provider constant `AUDIT_ACTION_SIGNIFICANCE` (SPEC_STANDARD 6.10 version 2: keyed by the action, total, `significant_mutation`), so an action added without its classification stops the build; the note no longer lists the members. Neither has a `rules` namespace. The accepted spec's `rules.audit_action_catalog` and `rules.audit_significant_mutation_actions` are removed (2026-11-07, SOURCE.md).
+The normative catalog and significant subset are the two lists above, the rules tables of this decision; INV-051 and INV-053 are checked against them. In the specification the catalog is the `AuditAction` enumeration (`= models.AuditAction`). Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): the significant subset, which `_validate_audit_intent` reads, is the data-provider constant `AUDIT_ACTION_SIGNIFICANCE` (SPEC_STANDARD 6.10 version 2: keyed by the action, total, `significant_mutation`), so an action added without its classification stops the build; the note no longer lists the members. Neither has a `rules` namespace. The accepted spec's `rules.audit_action_catalog` and `rules.audit_significant_mutation_actions` are removed (2026-11-07, SOURCE.md). The result and reason combinations are the sentence on the reason policy above, stated as prose by the notes of `_validate_audit_intent`; the accepted spec's `rules.audit_result_reason_policy`, which no module and no deterministic backend read, is retired (owner 2026-11-09; `60_data_closure.json` `retired`, SOURCE.md).
 
 ## Accepted decision A14 — R14. Binary delivery policy
 
@@ -918,7 +918,7 @@ The accepted Factory spec extends `rules.binary_delivery_policy` (Factory `babd5
 
 ### Consequence
 
-The ordering is behaviour, not data: it is stated as prose by the notes of the functions this decision's tests name (SPEC_STANDARD §2). The accepted spec's `rules.project_list_ordering` records the same ordering and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
+The ordering is behaviour, not data: it is stated as prose by the notes of the functions this decision's tests name (SPEC_STANDARD §2). The accepted spec's `rules.project_list_ordering` recorded the same ordering; no module and no deterministic backend read it, so it delivered nothing to generated code (SPEC_STANDARD 15.3.1), and it is retired (owner 2026-11-09; `60_data_closure.json` `retired`, SOURCE.md): the Normative rules above are its one record.
 
 ## Accepted decision A16 — R16. Staff email and password policy
 
@@ -948,7 +948,7 @@ The ordering is behaviour, not data: it is stated as prose by the notes of the f
 
 The former "stripped of surrounding whitespace" is narrowed to the running
 service, which refuses it (Factory code `application/staff_identity.py`
-`_normalize_staff_email`; `rules.staff_identity_input_policy`). Owner 2026-11-06: current service
+`_normalize_staff_email`; the accepted `rules.staff_identity_input_policy`, retired 2026-11-09, see Consequence). Owner 2026-11-06: current service
 behaviour accepted; technical decisions delegated.
 
 ### Formal invariants
@@ -965,7 +965,7 @@ behaviour accepted; technical decisions delegated.
 
 ### Consequence
 
-The password bounds, which generated code reads, are the data-provider constants `PASSWORD_MIN_CODEPOINTS` and `PASSWORD_MAX_CODEPOINTS`; the rest of `rules.staff_identity_input_policy` is behaviour its notes state. Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): values unchanged.
+The password bounds, which generated code reads, are the data-provider constants `PASSWORD_MIN_CODEPOINTS` and `PASSWORD_MAX_CODEPOINTS`; the rest of the policy is behaviour its notes state, recorded by the Normative rules above; the accepted spec's `rules.staff_identity_input_policy`, whose remaining leaves no module and no deterministic backend read, is retired (owner 2026-11-09; `60_data_closure.json` `retired`, SOURCE.md). Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): values unchanged.
 
 ## Accepted decision A17 — R17. Verification-secret envelope
 
@@ -994,7 +994,7 @@ The password bounds, which generated code reads, are the data-provider constants
 
 ### Consequence
 
-The envelope is behaviour of the emitted `credential_security` (its backend IR `rules.credential_security_backend`) and of the notes of the operations this decision's tests name (SPEC_STANDARD §2). The accepted spec's `rules.verification_envelope_policy` records the same policy and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
+The envelope is behaviour of the emitted `credential_security` (its backend IR `rules.credential_security_backend`) and of the notes of the operations this decision's tests name (SPEC_STANDARD §2). The accepted spec's `rules.verification_envelope_policy` recorded the same policy; no module and no deterministic backend read it, so it delivered nothing to generated code (SPEC_STANDARD 15.3.1), and it is retired (owner 2026-11-09; `60_data_closure.json` `retired`, SOURCE.md): the Normative rules above are its one record.
 
 ## Accepted decision A18 — Budget and snapshot invariants
 
@@ -1199,7 +1199,7 @@ carried verbatim at assembly (Factory `0baceacc`).
 
 ### Consequence
 
-The guard is behaviour, not data: the notes of every use case state it as prose (SPEC_STANDARD §2), and the transaction itself is the emitted unit of work (`rules.sqlite_unit_of_work_backend`). The accepted spec's `rules.transaction_guard_policy` records the same policy and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
+The guard is behaviour, not data: the notes of every use case state it as prose (SPEC_STANDARD §2), and the transaction itself is the emitted unit of work (`rules.sqlite_unit_of_work_backend`). The accepted spec's `rules.transaction_guard_policy` records the same policy and is carried unchanged; no module reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1), but the Factory's code-invariant gate reads it by its kind `transaction_policy` (Factory `tools/code_invariant_gates.py` `_transaction_guard_exception_scope`), so it stays when the namespaces without a reader are retired (owner 2026-11-09).
 
 ## Accepted decision A23 — Audit entity id policy (accepted Factory spec, 2026-07-26)
 
@@ -1210,7 +1210,7 @@ identifier, produced by converting the UUID to a string; it is absent only
 when the audited entity has no identifier of its own. A UUID object, a
 hyphen-stripped, truncated or upper-cased form, or another entity's
 identifier is forbidden. Recorded in the accepted spec as `rules.audit_entity_id_policy`
-(Factory `0f9ae3ae`).
+(Factory `0f9ae3ae`; retired 2026-11-09, see Consequence).
 
 ### Formal invariants
 
@@ -1226,7 +1226,7 @@ identifier is forbidden. Recorded in the accepted spec as `rules.audit_entity_id
 
 ### Consequence
 
-Which entity an audit names is behaviour of the audit-appending notes, which pass the `AuditEntityKind` member and the entity id to the emitted audit builders of `record_builders` (SPEC_STANDARD §2, §6.13). The accepted spec's `rules.audit_entity_id_policy` records the same policy and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
+Which entity an audit names is behaviour of the audit-appending notes, which pass the `AuditEntityKind` member and the entity id to the emitted audit builders of `record_builders` (SPEC_STANDARD §2, §6.13). The accepted spec's `rules.audit_entity_id_policy` recorded the same policy; no module and no deterministic backend read it, so it delivered nothing to generated code (SPEC_STANDARD 15.3.1), and it is retired (owner 2026-11-09; `60_data_closure.json` `retired`, SOURCE.md): the Normative rules above are its one record.
 
 ## Accepted decision A24 — Records are immutable values (accepted Factory spec, 2026-07-26)
 
@@ -1249,7 +1249,7 @@ Recorded in the accepted spec as `rules.model_immutability_policy` (Factory `bd5
 
 ### Consequence
 
-State 1 models are frozen by the emitted `models`, and new and replaced records are built by the emitted builders below. The accepted spec's `rules.model_immutability_policy` records the same policy and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
+State 1 models are frozen by the emitted `models`, and new and replaced records are built by the emitted builders below. The accepted spec's `rules.model_immutability_policy` records the same policy and is carried unchanged; no module reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1), but the Factory's code-invariant gate reads it by its kind `model_policy` (Factory `tools/code_invariant_gates.py` `_models_are_frozen`), so it stays when the namespaces without a reader are retired (owner 2026-11-09).
 
 Owner 2026-11-08: every record a model-written module built from its inputs
 is built by an emitted builder of `record_builders`
@@ -1353,7 +1353,7 @@ Recorded in the accepted spec as `rules.exception_payload_policy` (Factory `a129
 
 ### Consequence
 
-The exception fields are State 6 contracts and the payload rules are prose of the notes that raise each exception (SPEC_STANDARD §2). The accepted spec's `rules.exception_payload_policy` records the same policy and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
+The exception fields are State 6 contracts and the payload rules are prose of the notes that raise each exception (SPEC_STANDARD §2). The accepted spec's `rules.exception_payload_policy` records the same policy and is carried unchanged; no module reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1), but the Factory verification check `verification/exception_payload_check.py` is active only while the spec declares it (its activation key), so it stays when the namespaces without a reader are retired (owner 2026-11-09).
 
 ## Accepted decision A27 — Derived view orderings (accepted Factory spec, 2026-08-09; owner 2026-11-06)
 
@@ -1364,7 +1364,8 @@ descending, then id descending; an expense's allocations by creation time
 ascending, then id ascending; payments by payment date descending, then
 recording time descending, then id descending; photos by photo date
 ascending, then publication time ascending, then id ascending. Normative
-value: `rules.derived_view_ordering` (Factory `d2c4511e`).
+value: `rules.derived_view_ordering` of the accepted spec (Factory `d2c4511e`;
+retired 2026-11-09, see Consequence).
 
 The former State 1 text of 2026-07-19 ordered the same lists by
 `(document_date, expense_id)` descending, `allocation_id`,
@@ -1384,7 +1385,7 @@ delegated; answers OQ-18 and `open_questions.md` Q18).
 
 ### Consequence
 
-The orderings are behaviour, stated as prose by the notes of the functions that build each view (SPEC_STANDARD §2); `01_models.md` "Projections and answers" records the replacement. The accepted spec's `rules.derived_view_ordering` records the same orderings and is carried unchanged; no module and no deterministic backend reads it, so it delivers nothing to generated code (SPEC_STANDARD 15.3.1).
+The orderings are behaviour, stated as prose by the notes of the functions that build each view (SPEC_STANDARD §2); `01_models.md` "Projections and answers" records the replacement. The accepted spec's `rules.derived_view_ordering` recorded the same orderings; no module and no deterministic backend read it, so it delivered nothing to generated code (SPEC_STANDARD 15.3.1), and it is retired (owner 2026-11-09; `60_data_closure.json` `retired`, SOURCE.md): the Normative rules above are its one record.
 
 ## Accepted decision A28 — Clock policy (accepted Factory spec, 2026-08-09; one clock source, coordinator 2026-11-07)
 
@@ -1485,7 +1486,7 @@ reading equals `datetime.utcnow()` and the elapsed reading equals
 
 ### Consequence
 
-Consumers import the emitted `utc_now` and `monotonic_seconds` of `system_clock` and name them in their notes; nothing else delivers time to generated code. `rules.system_clock_backend` and `rules.time_source_policy` are the IR `system_clock` is emitted from and the Factory's time-source gate reads; no model-written module reads them. `rules.clock_policy` is the accepted spec's record of the rules above (Factory `c92b6878`), carried unchanged; no module reads it, and the representation it records is the one `utc_now` returns.
+Consumers import the emitted `utc_now` and `monotonic_seconds` of `system_clock` and name them in their notes; nothing else delivers time to generated code. `rules.system_clock_backend` and `rules.time_source_policy` are the IR `system_clock` is emitted from and the Factory's time-source gate reads; no model-written module reads them. `rules.clock_policy` was the accepted spec's record of the rules above (Factory `c92b6878`); no module and no deterministic backend read it (the Factory's time-source gate reads `rules.time_source_policy`), and it is retired (owner 2026-11-09; `60_data_closure.json` `retired`, SOURCE.md). The representation it recorded is the one `utc_now` returns.
 
 ## Accepted decision A29 — First-administrator bootstrap policy (accepted Factory spec, 2026-08-17)
 
