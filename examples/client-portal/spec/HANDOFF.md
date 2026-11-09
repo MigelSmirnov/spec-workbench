@@ -8,7 +8,30 @@ merged: accepted spec `018b2e2e`). The assembly, admission and diagnosis
 results are in `80_assembly.md`; the semantic diff, for the owner, is
 `SEMANTIC_DIFF.md` (against `018b2e2e` first, then against `459ac96c`).
 
-## Toward READY_TO_EXPORT (2026-11-09, evening) — read this first
+## READY_TO_EXPORT (2026-11-09, late) — read this first
+
+Admission `--update-existing` (no export): **READY_TO_EXPORT**, 18 PASS, 0
+blocks, 0 warnings, against Factory `code_factory_cp_witnesses` at origin/main
+`2a9db30e` (#202). Workbench main `a2b20fc5` merged (#178, #179).
+`global_spec.json` sha256 `3fd38bcc…`. Not exported; no Route B.
+
+Since the evening section below:
+
+- Owner chose (b): a `rules` policy no module reads is legitimate when its
+  `kind` is declared in the Factory's `tools/gate_rules_reads.py` (§15.3.1
+  fourth home). `bbe9bb0f`: the Consequences of `transaction_guard_policy`,
+  `model_immutability_policy`, `exception_payload_policy` cite it;
+  `design_factory_slices` names the three under `rules_read_by_gate`;
+  FA018 "every rules namespace has a reader". State 2 r114 clear; context
+  rounds State 3 r53, State 4 r50, State 5 r42 clear.
+- State 7 r28: `design_questions.py rejudge … --unit financial_policy`
+  re-judged round 23 T1–T3 `generator_text` (#178); State 7 closed.
+- Stage 8.1 hashes recomputed (`fbe8fe3d`), 39/39 PASS.
+
+Both owner/tool items of the evening section are resolved. Next is the
+owner's export decision.
+
+## Toward READY_TO_EXPORT (2026-11-09, evening)
 
 Branch `agent/client-portal`, Workbench main `bcd03125` merged (#175, #176,
 #177). Factory checkout for prompts and checks: `code_factory_cp_witnesses`
