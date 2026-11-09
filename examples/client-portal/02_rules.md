@@ -638,7 +638,7 @@ running service still returns 0 until the next Route B regenerates
 
 ### Consequence
 
-The currency, the fraction digits and the rounding mode, which generated code reads, are the imported MONEY_CURRENCY constant, the imported MONEY_FRACTION_DIGITS constant and the imported MONEY_ROUNDING constant of `data_provider`; the sign that selects each `WorkBalanceLabel` is `WORK_BALANCE_LABEL_SIGNS` (SPEC_STANDARD 6.10 version 2, keyed by the label, total). The formulas stay behaviour of their notes; the remaining `rules.money_policy` leaves are the decision's record. Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): values unchanged.
+The currency, the fraction digits and the rounding mode, which generated code reads, are the imported MONEY_CURRENCY constant, the imported MONEY_FRACTION_DIGITS constant and the imported MONEY_ROUNDING constant of `data_provider`; the sign that selects each `WorkBalanceLabel` is the imported WORK_BALANCE_LABEL_SIGNS constant (SPEC_STANDARD 6.10 version 2, keyed by the label, total). The formulas stay behaviour of their notes; the remaining `rules.money_policy` leaves are the decision's record. Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): values unchanged.
 
 ## Accepted decision A10 — R10. No email challenges (owner 2026-11-07)
 

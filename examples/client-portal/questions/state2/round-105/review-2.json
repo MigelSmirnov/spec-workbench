@@ -1,0 +1,137 @@
+{
+ "open_points": [
+  {
+   "subject": "INV-037 Required tests",
+   "kind": "test_does_not_fix_constant_value",
+   "text": "with the values of the imported MONEY_CURRENCY, MONEY_FRACTION_DIGITS and MONEY_ROUNDING constants: an amount in another currency is refused with the typed `currency_mismatch` rejection",
+   "question": "Must the test assert that MONEY_CURRENCY is exactly `EUR`, rather than merely treating whatever value the imported constant contains as the accepted currency?",
+   "options": [
+    "Assert MONEY_CURRENCY == `EUR` before testing acceptance and rejection",
+    "Use the imported constant as the oracle without independently asserting its value"
+   ],
+   "default_guess": "Assert that MONEY_CURRENCY is exactly `EUR`, then test that every other literal is rejected.",
+   "witness": {
+    "initial": "A generated data provider contains MONEY_CURRENCY = `USD`.",
+    "events": [
+     "The verification check submits `EUR` as the currency different from MONEY_CURRENCY.",
+     "The check observes `currency_mismatch`, no conversion and no state change."
+    ],
+    "outcomes": [
+     "The check passes because it uses the imported constant as its oracle, although the normative `EUR`-only rule is broken.",
+     "The check fails immediately because it separately asserts MONEY_CURRENCY == `EUR`."
+    ],
+    "observer": "The verifier, and later a caller whose valid EUR input is refused"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-037 currency-bearing operation boundaries",
+   "kind": "required_test_coverage",
+   "text": "an amount in another currency is refused with the typed `currency_mismatch` rejection, never converted, and changes nothing; an accepted amount is returned as a `Decimal` with exactly `MONEY_FRACTION_DIGITS` fraction digits",
+   "question": "Is foreign-currency rejection and no-change required to be demonstrated only at `validate_eur_amount`, or also through every operation boundary that accepts a currency, including `create_expense_from_recognition` and `import_snapshot`?",
+   "options": [
+    "Test the validator only and rely on operation wiring",
+    "Test rejection and unchanged state through every currency-bearing operation boundary"
+   ],
+   "default_guess": "Test every currency-bearing operation boundary as well as the validator.",
+   "witness": {
+    "initial": "`validate_eur_amount` rejects USD correctly, but `create_expense_from_recognition` does not call it.",
+    "events": [
+     "Staff submits an otherwise valid USD expense.",
+     "The operation reaches its persistence path."
+    ],
+    "outcomes": [
+     "Validator-only verification passes and the USD expense is stored.",
+     "Boundary verification fails because the expense operation must return `currency_mismatch` and store nothing."
+    ],
+    "observer": "Staff and verification checks"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "currency_mismatch validation precedence",
+   "kind": "check_precedence",
+   "text": "Currency literal: `EUR` only; any other currency at any boundary → explicit typed rejection (`currency_mismatch`).",
+   "question": "When an input simultaneously has a foreign currency and another defect, which check wins and which typed rejection must be returned?",
+   "options": [
+    "Currency validation runs first and returns `currency_mismatch`",
+    "Structural or domain validation runs first and returns its own rejection",
+    "A fixed operation-specific precedence table decides"
+   ],
+   "default_guess": "Validate currency before monetary and domain checks, returning `currency_mismatch`.",
+   "witness": {
+    "initial": "No expense exists for the submitted recognition.",
+    "events": [
+     "Staff submits a recognition with currency USD and an empty allocation list."
+    ],
+    "outcomes": [
+     "The operation returns `currency_mismatch` and changes nothing.",
+     "The operation returns the allocation-list rejection and changes nothing."
+    ],
+    "observer": "The calling staff client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "NormalizedRecognitionItem monetary fields",
+   "kind": "vague_validation",
+   "text": "the line amounts of `NormalizedRecognitionItem` are validated for decimal shape only and are not stored",
+   "question": "What exactly is “decimal shape” for `quantity`, `unit_price` and `line_total`: must values already have at most two fraction digits, are they quantized with MONEY_ROUNDING, or may any finite Decimal scale satisfying the model's sign bounds pass?",
+   "options": [
+    "Require at most MONEY_FRACTION_DIGITS fraction digits",
+    "Quantize line monetary values using MONEY_FRACTION_DIGITS and MONEY_ROUNDING",
+    "Accept any finite Decimal with the model's sign constraints because the items are discarded"
+   ],
+   "default_guess": "Accept any finite Decimal satisfying the model's sign constraints and do not quantize discarded line items.",
+   "witness": {
+    "initial": "A confirmed recognition has EUR total 0.01 and one item whose `line_total` is Decimal `0.005`.",
+    "events": [
+     "The producer submits the recognition to `create_expense_from_recognition`."
+    ],
+    "outcomes": [
+     "The recognition is accepted because `0.005` is a valid Decimal shape and item values are discarded.",
+     "The recognition is refused because a monetary line value has more than two fraction digits."
+    ],
+    "observer": "The producer or staff submitting the recognition"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-041 overall progress result",
+   "kind": "result_precision",
+   "text": "overall progress is (100.00 × 33 + 200.00 × 50) / 300.00 = 44.33… as the formula gives it",
+   "question": "What exact Decimal representation must `calculate_overall_progress` return for a non-terminating quotient: a two-digit rounded percentage, a Decimal computed under a specified precision, or another fixed scale?",
+   "options": [
+    "Return Decimal `44.33` using ROUND_HALF_UP to two fraction digits",
+    "Return an unquantized Decimal under a specified Decimal context",
+    "Return a percentage at a separately specified fixed scale"
+   ],
+   "default_guess": "Return Decimal `44.33`, quantized to two fraction digits with ROUND_HALF_UP.",
+   "witness": {
+    "initial": "The active version has work_planned 100.00 at 33% and 200.00 at 50%.",
+    "events": [
+     "A caller requests the progress view.",
+     "The service computes the weighted overall percentage."
+    ],
+    "outcomes": [
+     "The answer contains Decimal `44.33`.",
+     "The answer contains a longer context-dependent Decimal such as `44.33333333333333333333333333`."
+    ],
+    "observer": "The progress-view caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9 Consequence",
+   "kind": "standard_violation",
+   "text": "`WORK_BALANCE_LABEL_SIGNS`",
+   "rule": "Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается вовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение сочинить. Обе формы невалидны для значения, которое читает генерируемый код.",
+   "section": "15.3.1",
+   "question": "The passage must name this generated-code policy value as `the imported WORK_BALANCE_LABEL_SIGNS constant`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"INV-037 Required tests\",\"kind\":\"test_does_not_fix_constant_value\",\"text\":\"with the values of the imported MONEY_CURRENCY, MONEY_FRACTION_DIGITS and MONEY_ROUNDING constants: an amount in another currency is refused with the typed `currency_mismatch` rejection\",\"question\":\"Must the test assert that MONEY_CURRENCY is exactly `EUR`, rather than merely treating whatever value the imported constant contains as the accepted currency?\",\"options\":[\"Assert MONEY_CURRENCY == `EUR` before testing acceptance and rejection\",\"Use the imported constant as the oracle without independently asserting its value\"],\"default_guess\":\"Assert that MONEY_CURRENCY is exactly `EUR`, then test that every other literal is rejected.\",\"witness\":{\"initial\":\"A generated data provider contains MONEY_CURRENCY = `USD`.\",\"events\":[\"The verification check submits `EUR` as the currency different from MONEY_CURRENCY.\",\"The check observes `currency_mismatch`, no conversion and no state change.\"],\"outcomes\":[\"The check passes because it uses the imported constant as its oracle, although the normative `EUR`-only rule is broken.\",\"The check fails immediately because it separately asserts MONEY_CURRENCY == `EUR`.\"],\"observer\":\"The verifier, and later a caller whose valid EUR input is refused\"}},{\"subject\":\"INV-037 currency-bearing operation boundaries\",\"kind\":\"required_test_coverage\",\"text\":\"an amount in another currency is refused with the typed `currency_mismatch` rejection, never converted, and changes nothing; an accepted amount is returned as a `Decimal` with exactly `MONEY_FRACTION_DIGITS` fraction digits\",\"question\":\"Is foreign-currency rejection and no-change required to be demonstrated only at `validate_eur_amount`, or also through every operation boundary that accepts a currency, including `create_expense_from_recognition` and `import_snapshot`?\",\"options\":[\"Test the validator only and rely on operation wiring\",\"Test rejection and unchanged state through every currency-bearing operation boundary\"],\"default_guess\":\"Test every currency-bearing operation boundary as well as the validator.\",\"witness\":{\"initial\":\"`validate_eur_amount` rejects USD correctly, but `create_expense_from_recognition` does not call it.\",\"events\":[\"Staff submits an otherwise valid USD expense.\",\"The operation reaches its persistence path.\"],\"outcomes\":[\"Validator-only verification passes and the USD expense is stored.\",\"Boundary verification fails because the expense operation must return `currency_mismatch` and store nothing.\"],\"observer\":\"Staff and verification checks\"}},{\"subject\":\"currency_mismatch validation precedence\",\"kind\":\"check_precedence\",\"text\":\"Currency literal: `EUR` only; any other currency at any boundary → explicit typed rejection (`currency_mismatch`).\",\"question\":\"When an input simultaneously has a foreign currency and another defect, which check wins and which typed rejection must be returned?\",\"options\":[\"Currency validation runs first and returns `currency_mismatch`\",\"Structural or domain validation runs first and returns its own rejection\",\"A fixed operation-specific precedence table decides\"],\"default_guess\":\"Validate currency before monetary and domain checks, returning `currency_mismatch`.\",\"witness\":{\"initial\":\"No expense exists for the submitted recognition.\",\"events\":[\"Staff submits a recognition with currency USD and an empty allocation list.\"],\"outcomes\":[\"The operation returns `currency_mismatch` and changes nothing.\",\"The operation returns the allocation-list rejection and changes nothing.\"],\"observer\":\"The calling staff client\"}},{\"subject\":\"NormalizedRecognitionItem monetary fields\",\"kind\":\"vague_validation\",\"text\":\"the line amounts of `NormalizedRecognitionItem` are validated for decimal shape only and are not stored\",\"question\":\"What exactly is “decimal shape” for `quantity`, `unit_price` and `line_total`: must values already have at most two fraction digits, are they quantized with MONEY_ROUNDING, or may any finite Decimal scale satisfying the model's sign bounds pass?\",\"options\":[\"Require at most MONEY_FRACTION_DIGITS fraction digits\",\"Quantize line monetary values using MONEY_FRACTION_DIGITS and MONEY_ROUNDING\",\"Accept any finite Decimal with the model's sign constraints because the items are discarded\"],\"default_guess\":\"Accept any finite Decimal satisfying the model's sign constraints and do not quantize discarded line items.\",\"witness\":{\"initial\":\"A confirmed recognition has EUR total 0.01 and one item whose `line_total` is Decimal `0.005`.\",\"events\":[\"The producer submits the recognition to `create_expense_from_recognition`.\"],\"outcomes\":[\"The recognition is accepted because `0.005` is a valid Decimal shape and item values are discarded.\",\"The recognition is refused because a monetary line value has more than two fraction digits.\"],\"observer\":\"The producer or staff submitting the recognition\"}},{\"subject\":\"INV-041 overall progress result\",\"kind\":\"result_precision\",\"text\":\"overall progress is (100.00 × 33 + 200.00 × 50) / 300.00 = 44.33… as the formula gives it\",\"question\":\"What exact Decimal representation must `calculate_overall_progress` return for a non-terminating quotient: a two-digit rounded percentage, a Decimal computed under a specified precision, or another fixed scale?\",\"options\":[\"Return Decimal `44.33` using ROUND_HALF_UP to two fraction digits\",\"Return an unquantized Decimal under a specified Decimal context\",\"Return a percentage at a separately specified fixed scale\"],\"default_guess\":\"Return Decimal `44.33`, quantized to two fraction digits with ROUND_HALF_UP.\",\"witness\":{\"initial\":\"The active version has work_planned 100.00 at 33% and 200.00 at 50%.\",\"events\":[\"A caller requests the progress view.\",\"The service computes the weighted overall percentage.\"],\"outcomes\":[\"The answer contains Decimal `44.33`.\",\"The answer contains a longer context-dependent Decimal such as `44.33333333333333333333333333`.\"],\"observer\":\"The progress-view caller\"}},{\"subject\":\"A9 Consequence\",\"kind\":\"standard_violation\",\"text\":\"`WORK_BALANCE_LABEL_SIGNS`\",\"rule\":\"Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается вовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение сочинить. Обе формы невалидны для значения, которое читает генерируемый код.\",\"section\":\"15.3.1\",\"question\":\"The passage must name this generated-code policy value as `the imported WORK_BALANCE_LABEL_SIGNS constant`.\"}]}",
+ "set_aside": []
+}
