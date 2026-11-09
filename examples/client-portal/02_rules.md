@@ -884,7 +884,7 @@ The accepted Factory spec extends `rules.binary_delivery_policy` (Factory `babd5
 
 ### Consequence
 
-`rules.binary_delivery_policy` (media types and signatures per object kind, download name, disposition, the read bound's start-up consistency) is IR read only by the deterministic `binary_storage` backend, which `binary_storage` is emitted from (`rules.binary_storage_backend`); no model-written module reads it. A model-written owner (`read_expense_document`, `read_progress_photo`) hands `read_binary` an authorized reference and returns the payload it answers, whose media type, download name and disposition the emitted module decided. The two storage variables are rows of the start-up table (A30).
+`rules.binary_delivery_policy` (media types and signatures per object kind, download name, disposition) is IR read only by the deterministic `binary_storage` backend, which `binary_storage` is emitted from (`rules.binary_storage_backend`); no model-written module reads it. A model-written owner (`read_expense_document`, `read_progress_photo`) hands `read_binary` an authorized reference and returns the payload it answers, whose media type, download name and disposition the emitted module decided. The two storage variables are rows of the start-up table (A30). The start-up check that the read bound is no larger than the response ceiling is a constraint of that table (`BINARY_MAX_READ_BYTES` less than or equal to `MAX_BINARY_RESPONSE_BYTES`), checked by `runtime_settings` at each `load_runtime_settings`, so a violating deployment does not start; `binary_storage` applies only the read bound, at each read.
 
 ## Accepted decision A15 — R15. Deterministic project-list ordering
 
