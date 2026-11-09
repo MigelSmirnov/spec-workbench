@@ -50,6 +50,9 @@
 - `config` — runtime/product knobs: лимиты, TTL, paths, feature knobs, небольшие списки пользовательских ключей.
 - `models` — DTO/schema плюс domain catalogs/mapping tables/upstream-downstream contracts.
 - `rules` — read-only policy tables плюс зарезервированные versioned backend IR.
+  Политика `rules`, которую не читает ни один модуль, законна, только если её
+  `kind` перечислен в декларации гейтов фабрики `tools/gate_rules_reads.py`
+  (политика, которую читает гейт, §15.3.1); иначе это мёртвые данные.
 
 Не merge-ить таблицы по похожей форме. Решение только по change-axis: меняются ли они вместе и по одной причине.
 

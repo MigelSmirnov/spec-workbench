@@ -559,6 +559,33 @@ round 23 held `financial_policy` on three §2 "violations" (T1–T3) of the
 Factory's `model_copy` instruction (code-factory#200) — no prefix, no
 modality, a method call — while the module's six notes were unchanged.
 
+A verdict says which rules it was checked under. Every round keeps
+`judge_rules`: the version of `judge.check` (`judge.RULES_VERSION`, raised with
+every change of the check that can change a kept verdict; 2 since #175) and
+the digest of the standard sections a violation's rule was looked up in. A
+unit's verdicts were revisited only when its text changed, so a change of the
+rules reached no unit whose text stayed: `financial_policy`'s round 23 T1–T3
+kept blocking after #175 because its prompt never changed. `status` now names
+the State 7 modules held open, on the text they were reviewed on, by verdicts
+kept under other judge rules (`needs_rejudge`), and
+
+    python tools/design_questions.py rejudge examples/<case> --state 7 --unit <module>
+
+checks them again: it takes the judge's answer the module's latest round kept
+(`judge.modules.<module>.raw`), applies the current `judge.check` to it on the
+module's current prompt — the very text the round judged, by its digest — with
+the current sections and the module's notes, and keeps the result as a new
+round that asked no model (`rejudge: {of, unit, judge_rules}`, provider
+`rejudge: …`, scope the one module). Each topic keeps the verdict it replaces
+(`rejudged`); the earlier round stays as it was written, and its dispositions
+of those topics are carried into the new round (`rejudged_from`; `carried`
+lists them once). It refuses a changed prompt or changed evidence (ask a
+round), a round asked `--since`, a round already checked under the current
+rules, and the document states, whose verdicts also rest on other states'
+texts as they were at the round. A re-judgement is no round of the layer: the
+topics that name no unit, the precedents and the hypotheses are read from the
+rounds that asked reviewers.
+
 Each phase gets only the sections it lists, never the whole
 standard: State 7 about 20 000 characters (§2 8 232, §15.3.1 3 168, §7 6 557,
 §15.9 1 974) on top of a module prompt of 8 000–40 000; State 1 6 611; State 2

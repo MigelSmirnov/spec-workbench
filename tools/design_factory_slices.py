@@ -38,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
             f"{summary['imports_examined']} induced imports examined; "
             f"{summary['seam_checked']} slices asked at the data/code seam; "
             f"{summary['changed_addresses_asked']} changed data addresses asked for a consumer; "
+            f"{summary.get('rules_namespaces_asked', 0)} rules namespaces asked for a reader; "
             f"findings={len(report['findings'])}; ready={str(report['ready']).lower()}"
         )
         for item in report["findings"]:

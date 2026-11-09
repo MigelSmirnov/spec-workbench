@@ -20,7 +20,9 @@ earlier:
 The probe runs the Factory's own normalizer, slicer and seam over every module
 in a temporary directory, asks the Factory's own reachability resolver about
 exactly the addresses Route B will ask about, and reports everything at once,
-before export. Authority stays with the Factory tools; nothing here
+before export. It also asks the resolver about every ``rules`` namespace: one
+that reaches no module is dead data (SPEC_STANDARD 15.3.1) unless the Factory's
+declaration ``tools/gate_rules_reads.py`` lists its ``kind`` as read by a gate. Authority stays with the Factory tools; nothing here
 re-implements their rules.
 """
 from __future__ import annotations
@@ -39,6 +41,8 @@ NORMALIZER = "tools/normalize_spec.py"
 SLICER = "tools/build_local_spec.py"
 SEAM = "tools/data_code_seam.py"
 REACHABILITY = "tools/spec_data_reachability.py"
+# The Factory's declaration of the rules kinds its gates read (SPEC_STANDARD 15.3.1).
+GATE_RULES_READS = "tools/gate_rules_reads.py"
 # The Factory names the deterministic model module literally (tools/data_code_seam.py).
 MODELS_MODULE = "models"
 
@@ -129,6 +133,76 @@ def _import_findings(
                     symbol=name,
                 ))
     return findings, examined
+
+
+def rules_reader_findings(
+    source: Path, factory_root: Path
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Every ``rules`` namespace of the specification has a reader (SPEC_STANDARD 15.3.1).
+
+    A namespace no module reads is dead data, unless a Factory gate reads it by
+    its ``kind`` and the Factory declares that read in its catalogue
+    ``tools/gate_rules_reads.py`` (the fourth home of 15.3.1): the proof is the
+    declaration, never a sentence of the case. The Factory's own resolver says
+    which namespaces reach a module, the Factory's own declaration which kinds
+    its gates read; a Factory without the declaration reads none, and every
+    namespace without a module reader is reported. Returns the findings and
+    ``{"asked", "read_by_gate"}``.
+    """
+    spec = json.loads(source.read_text(encoding="utf-8"))
+    rules = spec.get("rules") if isinstance(spec.get("rules"), dict) else {}
+    names = sorted(str(name) for name, value in rules.items() if isinstance(value, dict))
+    record: dict[str, Any] = {"asked": len(names), "read_by_gate": {}}
+    if not names or not (factory_root / REACHABILITY).is_file():
+        return [], {**record, "asked": 0}
+    with tempfile.TemporaryDirectory(prefix="spec-workbench-rules-") as temp:
+        asked = Path(temp) / "addresses.json"
+        asked.write_text(json.dumps([f"rules.{name}" for name in names]), encoding="utf-8")
+        result = _run(factory_root, ["-c", _REACHABILITY_SCRIPT, str(source), str(asked)])
+    try:
+        unresolved = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return [_finding(
+            "factory_reachability_failed", "", "The Factory reachability resolver could not be asked.",
+            detail=_tail(result),
+        )], record
+    unread = sorted(
+        str(item["address"]).removeprefix("rules.") for item in unresolved
+        if isinstance(item, dict) and item.get("reason") == "no_module_consumer"
+    )
+    declared: dict[str, list[dict[str, Any]]] = {}
+    kinds: list[str] = []
+    if unread and (factory_root / GATE_RULES_READS).is_file():
+        result = _run(factory_root, [GATE_RULES_READS, "--json", "--spec", str(source)])
+        try:
+            catalog = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return [_finding(
+                "factory_gate_reads_failed", "", "The Factory's declaration of the rules its gates read "
+                f"({GATE_RULES_READS}) could not be asked.", detail=_tail(result),
+            )], record
+        declared = {str(name): list(reads) for name, reads in (catalog.get("namespaces") or {}).items()}
+        kinds = sorted({str(row.get("kind")) for row in catalog.get("reads") or [] if isinstance(row, dict)})
+    findings = []
+    for name in unread:
+        if name in declared:
+            record["read_by_gate"][name] = sorted({f"{r.get('gate')} ({r.get('kind')})" for r in declared[name]})
+            continue
+        kind = rules[name].get("kind")
+        findings.append(_finding(
+            "rules_namespace_without_reader",
+            "",
+            f"rules.{name} reaches no module and no Factory gate declares that it reads "
+            + (f"its kind {kind!r}" if kind else "it (it declares no kind)")
+            + f" ({GATE_RULES_READS}: "
+            + (", ".join(kinds) if kinds else "this Factory declares none")
+            + "). SPEC_STANDARD 15.3.1: a rules namespace no path reaches is dead data. Give the value its "
+            "path, or retire the namespace and keep the fact as a design decision.",
+            namespace=name,
+            kind=kind,
+            gate_read_kinds=kinds,
+        ))
+    return findings, record
 
 
 def reachability_findings(
@@ -358,6 +432,7 @@ def probe(
             "imports_examined": 0,
             "seam_checked": 0,
             "changed_addresses_asked": 0,
+            "rules_namespaces_asked": 0,
         },
         "findings": [],
     }
@@ -365,6 +440,11 @@ def probe(
     unreachable, asked = reachability_findings(source, factory_root, project)
     findings.extend(unreachable)
     report["summary"]["changed_addresses_asked"] = asked
+    unread, readers = rules_reader_findings(source, factory_root)
+    findings.extend(unread)
+    report["summary"]["rules_namespaces_asked"] = readers["asked"]
+    if readers["read_by_gate"]:
+        report["rules_read_by_gate"] = readers["read_by_gate"]
     if not declared:
         report["ready"] = not findings
         return report

@@ -53,6 +53,7 @@ between a note and that text still blocks: the note is what can change.
 """
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 BLOCKING = {"contradiction", "consequential_gap"}
@@ -66,6 +67,24 @@ GENERATOR_TEXT = "generator_text"
 KINDS = BLOCKING | {STANDARD_VIOLATION, "answered", "answered_later", "later_state", "indifferent", "preexisting", "judged_before",
                     HYPOTHESIS}
 WITNESS_FIELDS = ("initial", "events", "outcomes", "observer", "basis")
+
+# The version of the rules `check` applies to a judge's answer. A round keeps it
+# with the digest of the SPEC_STANDARD sections a violation's rule was looked
+# up in (`rules_record`), so a verdict says which rules it was checked under,
+# and a verdict on an unchanged unit kept under other rules can be checked again
+# under the current ones (`service.rejudge`) instead of standing until the text
+# changes. Raise the version with every change of `check` that can change a
+# kept verdict, and say here what changed:
+#   1  before versioning (rounds that keep no `judge_rules`)
+#   2  #175: a State 7 violation quoting no note of the module is generator_text
+RULES_VERSION = 2
+
+
+def rules_record(standard: str | None) -> dict[str, Any]:
+    """The judge rules a verdict is checked under: the version of `check` and
+    the digest of the standard sections it looked a violation's rule up in."""
+    return {"version": RULES_VERSION,
+            "standard": hashlib.sha256(standard.encode("utf-8")).hexdigest() if standard else None}
 
 
 def _norm(text: str) -> str:
