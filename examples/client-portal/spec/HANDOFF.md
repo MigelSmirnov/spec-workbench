@@ -8,7 +8,43 @@ merged: accepted spec `018b2e2e`). The assembly, admission and diagnosis
 results are in `80_assembly.md`; the semantic diff, for the owner, is
 `SEMANTIC_DIFF.md` (against `018b2e2e` first, then against `459ac96c`).
 
-## Re-export after the Route B stop at expense_intake (2026-11-09, night) — read this first
+## Cleanup after the Route B verify of b3bfb504 (2026-11-10) — read this first
+
+Route B on `b3bfb504` generated, linked and deployed; verify failed on spec
+causes (after the harness fix code-factory #208). Owner-approved cleanup,
+Workbench main `cc7120cf` (#182 notes gate) merged, Factory checkout
+`code_factory_cp_witnesses` at origin/main `784d834d` (#209). Not exported
+here; see the export PR. `global_spec.json` sha256 `071062af…`.
+
+- Repository methods: 46 DEPENDENCY_BOUNDARY notes name, per function and
+  per repository, every repository method the accepted code calls ("MUST
+  make its own reads/writes, wherever its other notes call for them, of the
+  records the <Interface> holds through M of the <accessor> repository of
+  that transaction ..."); naming the interface makes the Factory slicer
+  import it and carry the named contracts (staff_identity 0 -> 12,
+  derived_views gains the budget/expense/photo/section methods).
+- Legacy surface: the 74 `PortalTransaction.get_*/list_*/insert_*/update_*/
+  upsert_*` contracts and their 195 notes retired; notes that still pointed
+  at them now name the repository.
+- Lost behaviours: viewer-entry client identity (A25 rule rewritten,
+  data-provider constants `VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS`,
+  `VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN`, transport_guard notes, test carried
+  to Factory checks: `verification/client_portal_transport_guard_check.py`
+  asserts it but no command runs it); `ExpenseConflictError` for a missing
+  or other-project expense in four expense_management operations.
+- Rounds: State 2 r115–r117, State 3 r54–r56, State 4 r51–r52, State 5
+  r43–r44, State 7 r32–r35; all closed. Stage 8.1 39/39 PASS. Admission
+  READY_TO_EXPORT 18/0/0.
+
+Tool conflict (reported, not patched): a repository method that shares its
+name with another module's function cannot be named in a note without the
+Factory slicer inducing an import of that function (§7). derived_views
+names `list_project_progress`/`list_project_payments` (the #182 gate
+requires a ProjectTrackingRepository method; the same-named project_tracking
+functions are induced, as before b3bfb504) and describes the read of one
+budget version by id without naming `get_budget_version`.
+
+## Re-export after the Route B stop at expense_intake (2026-11-09, night)
 
 `3fd38bcc` was exported (code-factory #203, with #204 config and #205 v1
 catalog proof, all merged). Route B generated 28 modules and stopped at
