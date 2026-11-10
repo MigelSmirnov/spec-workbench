@@ -272,8 +272,10 @@ values and work-balance signs (A9), the Registry paths and timeout
 significance (A13), the capability sets (A2), the staff and principal
 transitions (A3), the password bounds (A16), the supported contract versions
 (A7), the import audit table (A18), the completion bound (A20), the transport
-values (A25) and the bootstrap exit codes (A29). Emitted deterministically
-(`python_constant_data_v1`); 2026-11-08.
+values (A25, among them the viewer-entry client identity bound and its
+`unknown` stand-in since 2026-11-10) and the bootstrap exit codes (A29). The
+list names groups; every constant of that closure is exported. Emitted
+deterministically (`python_constant_data_v1`); 2026-11-08.
 
 ### Knows
 
