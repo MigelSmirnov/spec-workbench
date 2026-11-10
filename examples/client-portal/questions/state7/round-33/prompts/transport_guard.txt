@@ -1,0 +1,161 @@
+Module: transport_guard
+Target path: runtime/transport_guard.py
+Target file: transport_guard.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from __future__ import annotations
+
+from fastapi import FastAPI, Request
+from fastapi.responses import Response
+
+from core.data_provider import API_PREFIX, NO_STORE_CACHE_CONTROL, NO_STORE_PATHS, SECURITY_HEADERS, TRANSPORT_GUARD_STATUSES, TRANSPORT_LOG_LABELS, VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS, VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN, VIEWER_ENTRY_PATH, VIEWER_LOGOUT_PATH
+from core.models import RuntimeEnvironment, RuntimeSettings, TransportGuardRefusal, TransportGuardStatus
+from core.system_clock import monotonic_seconds
+
+CONTRACTS (function signatures — follow exactly):
+def _apply_security_headers(response: Response, request_id: str, no_store: bool) -> Response
+def _body_within_limit(content_length: str | None, limit: int) -> bool
+def _canonical_path(path: str) -> str
+def _client_bucket_key(client_host: str | None, canonical_path: str) -> str
+def _host_allowed(host: str, trusted_hosts: list[str]) -> bool
+def _normalized_origin(value: str) -> str | None
+def _record_viewer_entry_attempt(buckets: dict[str, list[float]], key: str, now: float, attempts: int, window_seconds: int) -> bool
+def _requires_no_store(canonical_path: str) -> bool
+def _transport_log_record(request_id: str, method: str, canonical_path: str, status: int) -> str
+def install_transport_guards(app: FastAPI, settings: RuntimeSettings) -> None
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def monotonic_seconds() -> float
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+API_PREFIX: str
+NO_STORE_CACHE_CONTROL: str
+NO_STORE_PATHS: tuple[str, ...]
+SECURITY_HEADERS: Mapping[str, str]
+TRANSPORT_GUARD_STATUSES: tuple[TransportGuardStatus, ...]
+TRANSPORT_LOG_LABELS: tuple[str, ...]
+VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS: int
+VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN: str
+VIEWER_ENTRY_PATH: str
+VIEWER_LOGOUT_PATH: str
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _apply_security_headers: (response: Response, request_id: str, no_store: bool) -> Response
+- _body_within_limit: (content_length: str | None, limit: int) -> bool
+- _canonical_path: (path: str) -> str
+- _client_bucket_key: (client_host: str | None, canonical_path: str) -> str
+- _host_allowed: (host: str, trusted_hosts: list[str]) -> bool
+- _normalized_origin: (value: str) -> str | None
+- _record_viewer_entry_attempt: (buckets: dict[str, list[float]], key: str, now: float, attempts: int, window_seconds: int) -> bool
+- _requires_no_store: (canonical_path: str) -> bool
+- _transport_log_record: (request_id: str, method: str, canonical_path: str, status: int) -> str
+- install_transport_guards: (app: FastAPI, settings: RuntimeSettings) -> None
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+POLICIES ENFORCED BY FACTORY GATES ON THIS MODULE (spec rules, not code; a module that violates one is rejected):
+rules.model_immutability_policy (kind model_policy; tools/code_invariant_gates.py refuses a generated assignment to a field of a model instance when instances are frozen):
+  assignment_to_argument_field: forbidden
+  derive_instead: compute the value where it is needed, or return it, rather than writing it back onto an input
+  forbidden:
+    - assigning to any field of an argument
+    - assigning to any field of a value read from a repository
+    - carrying a computed result to the caller through a mutated input
+  instances_are_frozen: true
+  replacement_shape: construct a new instance when a changed value must be carried
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _apply_security_headers: [SECURITY_BOUNDARY] MUST return the same response with X-Request-Id set to the request id and every header of the imported SECURITY_HEADERS constant set to its value, plus Cache-Control set to the imported NO_STORE_CACHE_CONTROL constant when the no-store decision is true, on rejections and successes alike, while preserving route-owned binary response headers.
+- _body_within_limit: [VALIDATION_ERROR] MUST accept an absent Content-Length, accept a declared length less than or equal to the limit, and reject a length above it or a value that is not a non-negative integer. It MUST decide before any expensive work and MUST NOT read the request body to measure it.
+- _canonical_path: [BEHAVIOR] MUST map a deployment path to the inner route path by removing exactly one leading segment equal to the imported API_PREFIX constant, returning / for the bare prefix and the unchanged path when the prefix is absent. It MUST NOT strip the segment more than once, strip a longer prefix, alter query or fragment, or treat a path that merely begins with the letters of the prefix as prefixed.
+- _client_bucket_key: [BEHAVIOR] MUST build the rate-limit key from the canonical path and the client network identity the next note derives from client_host, and from nothing else.
+- _client_bucket_key: [BEHAVIOR] MUST take the supplied client_host as the client network identity, MUST use the imported VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN constant when client_host is absent or empty, and MUST keep only the leading characters of a longer identity, as many as the imported VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS constant allows.
+- _host_allowed: [VALIDATION_ERROR] MUST accept the request host only when its lowercased form equals an entry of the supplied trusted host list, MUST reject when the list is empty, and MUST NOT accept a wildcard entry, a suffix match, or a host derived from the public origin or from an allowed CORS origin.
+- _normalized_origin: [VALIDATION_ERROR] MUST return the canonical origin: the lowercased scheme, the lowercased host, and the effective port, taking the explicit port when the value carries one and otherwise 443 for https and 80 for http. It MUST return None for a value whose scheme is neither http nor https, and for a value carrying userinfo, a query, a fragment, a non-empty path other than a single trailing slash, or a missing scheme or host. The returned canonical origin MUST discriminate: two values differing in scheme or in host after that lowercasing, differing by any additional host prefix, differing by any additional host suffix, or differing in effective port MUST each receive a different canonical origin. A None result MUST NOT be treated as equal to any value, including another None result.
+- _record_viewer_entry_attempt: [BEHAVIOR] MUST drop attempts older than the window from the bucket for the supplied key, return false without recording when the remaining count is at or above the allowed attempts, and otherwise record the attempt and return true. The supplied now and every timestamp it stores are readings of one monotonic clock that cannot move backwards, so the window is a duration measured on that scale and never a wall-clock interval. Each bucket holds at most the allowed attempts, because a refused attempt is not recorded, and it MUST keep total memory bounded by pruning buckets that hold no attempt inside the window, and MUST NOT distinguish its refusal by account state, by whether a capability exists, or by any other fact about the presented credential.
+- _requires_no_store: [BEHAVIOR] MUST return true for exactly the canonical paths of the imported NO_STORE_PATHS constant, compared as whole paths and never as an abbreviation or a prefix of them. It MUST return false for every other path. The decision depends only on the path: not on the response status, not on whether the response carries Set-Cookie, and not on whether the request succeeded.
+- _transport_log_record: [SECURITY_BOUNDARY] MUST return the four values under the labels of the imported TRANSPORT_LOG_LABELS constant, in its order: the request id, the method, the canonical_path argument and the status, each written as its label, an equals sign and the value, and joined by single spaces. It MUST format each value as given, with no truncation, escaping, encoding or redaction: whatever the canonical_path argument holds, which the caller took from _canonical_path over the request path without its query string, is written as it is. Headers, cookies, query values, bodies, the authenticated principal's identity, raw exception text and configuration values MUST NOT be added to the record; no portal route carries a credential in its path.
+- install_transport_guards: [ORCHESTRATION] MUST register exactly one FastAPI http middleware on the supplied application. For every request the middleware MUST evaluate the checks below in the order they are written, and the order is a pipeline rather than a choice between alternatives: each check either produces the response named for it and ends the request there, or leaves the request untouched for the next check to evaluate. A check that does not produce a response MUST NOT call the next handler, MUST NOT return, and MUST NOT cause any later check to be skipped; the next handler is called exactly once, after every check in the list has left the request unrefused. The status of each response a check produces is the status_code of the row of the imported TRANSPORT_GUARD_STATUSES constant selected by the = models.TransportGuardRefusal member named in parentheses. The checks are: derive a request id carrying no identity or credential material; reject the request (UNTRUSTED_HOST) when _host_allowed refuses the request host against the trusted_hosts field of the settings; answer an OPTIONS request carrying an Origin listed in the allowed_origins field of the settings with a preflight (ALLOWED_PREFLIGHT) echoing the requested method and headers plus Vary Origin, together with the allow-origin and allow-credentials headers every allowed-origin response carries, and reject an unlisted origin (UNLISTED_PREFLIGHT_ORIGIN); reject POST on the canonical viewer logout path, the imported VIEWER_LOGOUT_PATH constant, (LOGOUT_ORIGIN_MISMATCH) unless _normalized_origin of the request Origin equals _normalized_origin of the public_origin field of the settings; reject (OVERSIZED_BODY) when _body_within_limit refuses the declared Content-Length against the max_request_body_bytes field of the settings; reject (RATE_LIMITED) when _record_viewer_entry_attempt refuses a POST on the canonical viewer entry path, the imported VIEWER_ENTRY_PATH constant, keyed by _client_bucket_key, before any credential parsing or verification. A POST to the viewer logout path whose Origin is accepted therefore still passes through the body-size check, and so does every other request that is not refused before it. It MUST supply _record_viewer_entry_attempt with one reading of monotonic_seconds per entry attempt, a clock that cannot move backwards, never with wall-clock time and never with a host clock read directly, so that adjusting the system clock cannot widen the window or discard recorded attempts. Every response it produces or forwards, including each rejection above, MUST pass through _apply_security_headers with the request id and the _requires_no_store decision for the canonical path, and MUST carry the CORS allow-origin, allow-credentials and Vary headers only when the request Origin is listed in the allowed_origins field of the settings. When the production_logging field of the settings is true it MUST emit exactly one INFO record per completed request, built only by _transport_log_record. It MUST classify every path through _canonical_path so a deployment-prefixed path is treated exactly like its stripped inner path, keep its rate-limit state bounded inside the installed guard, and MUST NOT authenticate a principal, read persistence, import a domain or application module, or import starlette directly.
+- install_transport_guards: [SECURITY_BOUNDARY] MUST hand the viewer-entry limiter, as the client_host of _client_bucket_key, only the host of the connection's client, never a forwarded header, a client-supplied identity header, a cookie or the capability secret.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- TransportGuardRefusal: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not core.models imports.
+Only import runtime model symbols from core.models when they are explicitly listed in IMPORTS.
+- models.TransportGuardRefusal: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from core.models. Use the listed enum member names and model fields exactly.
+- RuntimeEnvironment enum members: DEVELOPMENT='development', PRODUCTION='production', TEST='test'
+- RuntimeSettings fields (exact, no others exist): allowed_origins: list[str], binary_max_read_bytes: int, binary_storage_root: str, database_url: str, environment: RuntimeEnvironment, max_binary_response_bytes: int, max_request_body_bytes: int, production_logging: bool, public_origin: str, registry_base_url: str, trusted_hosts: list[str], viewer_entry_rate_limit_attempts: int, viewer_entry_rate_limit_window_seconds: int
+- TransportGuardRefusal enum members: ALLOWED_PREFLIGHT='allowed_preflight', LOGOUT_ORIGIN_MISMATCH='logout_origin_mismatch', OVERSIZED_BODY='oversized_body', RATE_LIMITED='rate_limited', UNLISTED_PREFLIGHT_ORIGIN='unlisted_preflight_origin', UNTRUSTED_HOST='untrusted_host'
+- TransportGuardStatus fields (exact, no others exist): refusal: TransportGuardRefusal, status_code: int
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+_apply_security_headers, _body_within_limit, _canonical_path, _client_bucket_key, _host_allowed, _normalized_origin, _record_viewer_entry_attempt, _requires_no_store, _transport_log_record, install_transport_guards
+
+MODELS CONTEXT:
+Runtime models live in core.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete transport_guard.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in core.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and core.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.

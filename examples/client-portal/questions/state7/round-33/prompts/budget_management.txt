@@ -1,0 +1,344 @@
+Module: budget_management
+Target path: domain/budget_management.py
+Target file: budget_management.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from __future__ import annotations
+from datetime import date, datetime
+from decimal import Decimal
+from uuid import UUID
+from uuid import uuid4
+
+from adapters.portal_store import PortalStore, PortalTransaction
+from application.audit_writer import append_audit
+from application.authorization_guard import ScopedNotFoundError
+from core.data_provider import MONEY_CURRENCY
+from core.models import ActorKind, AllocationTargetKind, AuditAction, AuditEntityKind, AuditIntent, AuditRecord, AuditRepository, AuditResult, AuthorizedProjectContext, BudgetActivationResult, BudgetRepository, BudgetSource, BudgetVersion, BudgetVersionDetail, BudgetVersionStatus, Capability, Expense, ExpenseAggregate, ExpenseAllocation, ExpenseRepository, PortalSection, ProjectContext, ProjectReference, ProjectSectionRepository, RegistryProjectStatus, SectionPlan, SnapshotSectionData, ExpenseDocument
+from core.record_builders import build_budget_activation_result, build_budget_version_detail, build_imported_section_plan, build_manual_budget_version, build_manual_portal_section, build_manual_section_plan, build_project_audit_intent, build_snapshot_sections, revise_budget_version
+from core.system_clock import utc_now
+from domain.financial_policy import validate_eur_amount
+
+CONTRACTS (function signatures — follow exactly):
+def _build_imported_plans(version: BudgetVersion, sections: list[PortalSection], snapshot_sections: list[SnapshotSectionData], created_at: datetime) -> list[SectionPlan]
+def _find_unresolved_allocation_count(active_section_ids: list[UUID], allocations: list[ExpenseAllocation]) -> int
+def _link_snapshot_sections(existing_sections: list[PortalSection], snapshot_sections: list[SnapshotSectionData], actor_id: UUID, created_at: datetime) -> list[PortalSection]
+def _ordered_plans(plans: list[SectionPlan]) -> list[SectionPlan]
+def activate_budget_version(store: PortalStore, context: AuthorizedProjectContext, version_id: UUID) -> BudgetActivationResult
+def ensure_manual_budget(store: PortalStore, context: AuthorizedProjectContext) -> BudgetVersionDetail
+def get_budget_version(store: PortalStore, context: AuthorizedProjectContext, version_id: UUID) -> BudgetVersionDetail
+def upsert_manual_section_plan(store: PortalStore, context: AuthorizedProjectContext, section_id: UUID | None, display_name: str, sort_order: int, material_planned: Decimal, work_planned: Decimal) -> BudgetVersionDetail
+def validate_project_section(store: PortalStore, project_id: UUID, section_id: UUID) -> PortalSection
+# PortalStore
+def __init__(self, database_url: str) -> None
+# PortalStore
+def begin(self) -> PortalTransaction
+# PortalTransaction
+def __init__(self, connection: object) -> None
+# PortalTransaction
+def assert_open(self) -> None
+# PortalTransaction
+def audit(self) -> AuditRepository
+# PortalTransaction
+def budgets(self) -> BudgetRepository
+# PortalTransaction
+def commit(self) -> None
+# PortalTransaction
+def expenses(self) -> ExpenseRepository
+# PortalTransaction
+def project_sections(self) -> ProjectSectionRepository
+# PortalTransaction
+def rollback(self) -> None
+# ProjectSectionRepository
+def get_project_section(self, project_id: UUID, section_id: UUID) -> PortalSection | None
+# ProjectSectionRepository
+def insert_project_sections(self, sections: list[PortalSection]) -> None
+# ProjectSectionRepository
+def list_project_sections(self, project_id: UUID) -> list[PortalSection]
+# BudgetRepository
+def get_active_budget_version(self, project_id: UUID) -> BudgetVersion | None
+# BudgetRepository
+def get_budget_version(self, version_id: UUID) -> BudgetVersion | None
+# BudgetRepository
+def get_manual_budget_version(self, project_id: UUID) -> BudgetVersion | None
+# BudgetRepository
+def insert_budget_version(self, version: BudgetVersion) -> None
+# BudgetRepository
+def insert_section_plans(self, plans: list[SectionPlan]) -> None
+# BudgetRepository
+def list_budget_plans(self, version_id: UUID) -> list[SectionPlan]
+# BudgetRepository
+def update_budget_versions(self, versions: list[BudgetVersion]) -> None
+# BudgetRepository
+def upsert_section_plan(self, plan: SectionPlan) -> None
+# ExpenseRepository
+def get_expense_aggregate(self, expense_id: UUID) -> ExpenseAggregate | None
+# ExpenseRepository
+def get_expense_by_recognition_id(self, recognized_document_id: str) -> ExpenseAggregate | None
+# ExpenseRepository
+def get_expense_document(self, document_id: UUID) -> ExpenseDocument | None
+# ExpenseRepository
+def insert_expense_aggregate(self, aggregate: ExpenseAggregate) -> None
+# ExpenseRepository
+def list_project_expenses(self, project_id: UUID) -> list[ExpenseAggregate]
+# ExpenseRepository
+def update_expense(self, expense: Expense) -> None
+# ExpenseRepository
+def update_expense_aggregate(self, aggregate: ExpenseAggregate) -> None
+# ExpenseRepository
+def update_expense_document(self, document: ExpenseDocument) -> None
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def append_audit(repository: AuditRepository, intent: AuditIntent) -> AuditRecord
+def validate_eur_amount(currency: str, amount: Decimal, strictly_positive: bool = False) -> Decimal
+def build_budget_activation_result(budget_version: BudgetVersion, plans: list[SectionPlan], unresolved_allocation_count: int) -> BudgetActivationResult
+def build_budget_version_detail(budget_version: BudgetVersion, plans: list[SectionPlan], unresolved_allocation_count: int) -> BudgetVersionDetail
+def build_imported_section_plan(created_at: datetime, section: PortalSection, snapshot_section: SnapshotSectionData, version: BudgetVersion) -> SectionPlan
+def build_manual_budget_version(context: AuthorizedProjectContext, now: datetime) -> BudgetVersion
+def build_manual_portal_section(context: AuthorizedProjectContext, now: datetime) -> PortalSection
+def build_manual_section_plan(context: AuthorizedProjectContext, budget_version: BudgetVersion, display_name: str, material_planned: Decimal, now: datetime, plan_id: UUID, portal_section: PortalSection, sort_order: int, work_planned: Decimal) -> SectionPlan
+def build_project_audit_intent(context: AuthorizedProjectContext, action: AuditAction, entity_kind: AuditEntityKind, entity_id: UUID) -> AuditIntent
+def build_snapshot_sections(actor_id: UUID, created_at: datetime, project_id: UUID, snapshot_sections: list[SnapshotSectionData]) -> list[PortalSection]
+def revise_budget_version(activated_at: datetime | None, activated_by: UUID | None, budget_version: BudgetVersion, deactivated_at: datetime | None, status: BudgetVersionStatus) -> BudgetVersion
+def utc_now() -> datetime
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+MONEY_CURRENCY: str
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _build_imported_plans: (version: BudgetVersion, sections: list[PortalSection], snapshot_sections: list[SnapshotSectionData], created_at: datetime) -> list[SectionPlan]
+- _find_unresolved_allocation_count: (active_section_ids: list[UUID], allocations: list[ExpenseAllocation]) -> int
+- _link_snapshot_sections: (existing_sections: list[PortalSection], snapshot_sections: list[SnapshotSectionData], actor_id: UUID, created_at: datetime) -> list[PortalSection]
+- _ordered_plans: (plans: list[SectionPlan]) -> list[SectionPlan]
+- activate_budget_version: (store: PortalStore, context: AuthorizedProjectContext, version_id: UUID) -> BudgetActivationResult
+- ensure_manual_budget: (store: PortalStore, context: AuthorizedProjectContext) -> BudgetVersionDetail
+- get_budget_version: (store: PortalStore, context: AuthorizedProjectContext, version_id: UUID) -> BudgetVersionDetail
+- upsert_manual_section_plan: (store: PortalStore, context: AuthorizedProjectContext, section_id: UUID | None, display_name: str, sort_order: int, material_planned: Decimal, work_planned: Decimal) -> BudgetVersionDetail
+- validate_project_section: (store: PortalStore, project_id: UUID, section_id: UUID) -> PortalSection
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+POLICIES ENFORCED BY FACTORY GATES ON THIS MODULE (spec rules, not code; a module that violates one is rejected):
+rules.model_immutability_policy (kind model_policy; tools/code_invariant_gates.py refuses a generated assignment to a field of a model instance when instances are frozen):
+  assignment_to_argument_field: forbidden
+  derive_instead: compute the value where it is needed, or return it, rather than writing it back onto an input
+  forbidden:
+    - assigning to any field of an argument
+    - assigning to any field of a value read from a repository
+    - carrying a computed result to the caller through a mutated input
+  instances_are_frozen: true
+  replacement_shape: construct a new instance when a changed value must be carried
+rules.transaction_guard_policy (kind transaction_policy; tools/code_invariant_gates.py refuses a transaction guard that catches less than the declared exception scope):
+  close_exactly_once: true
+  forbidden:
+    - a second rollback on an already closed transaction
+    - rollback after a successful commit
+    - catching only Exception instead of BaseException
+    - probing open state through assert_open, _assert_open, or a caught PersistenceError
+  guard_action: rollback only while the local flag still marks the transaction open, then re-raise the original exception unchanged
+  guard_exception_scope: BaseException
+  open_state_tracking: required_local_boolean_flag
+  read_path: rollback once immediately after the last read, set the local flag to closed, then evaluate results and raise any domain error
+  write_path: commit once on success and set the local flag to closed
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes with contracted methods required; module-local exception exports are listed separately.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _build_imported_plans: [PROVENANCE] MUST pair each snapshot section with its linked = models.PortalSection and build one = models.SectionPlan per pair with the imported build_imported_section_plan, passing the version, that section, that snapshot section and created_at; it MUST NOT derive values from expenses. An imported plan names no editor (M23 gives updated_by to manual plans only), and its author stays on the created_by_id of the BudgetVersion.
+- _build_imported_plans: [VALIDATION_ERROR] MUST raise BudgetValidationError when any snapshot source_section_id has no exact linked PortalSection source_key; KeyError and partial plan output are forbidden.
+- _find_unresolved_allocation_count: [BEHAVIOR] MUST count allocations whose section target is absent from active_section_ids and MUST NOT count other_expenses targets.
+- _link_snapshot_sections: [BEHAVIOR] MUST reuse sections only by exact source_key, create stable new identities otherwise, preserve existing identities across rename, and MUST NOT match display_name.
+- _link_snapshot_sections: [RETURN_SHAPE] MUST return exactly one PortalSection per snapshot section in input order, reuse the exact existing object whose source_key matches source_section_id, and build the sections of the unmatched snapshot sections with the imported build_snapshot_sections, passing actor_id, created_at, the project_id of the existing sections and those unmatched snapshot sections; with no existing section it MUST raise BudgetValidationError; it MUST NOT omit already linked sections.
+- _ordered_plans: [DETERMINISM_OR_ORDERING] MUST return every input plan exactly once ordered by sort_order then section_id.
+- activate_budget_version: [ORCHESTRATION] MUST validate version ownership and unresolved-allocation policy, atomically deactivate the prior active version, activate exactly the requested version, and append an audit with the SNAPSHOT_ACTIVATE member of = models.AuditAction without granting producers this operation.
+- activate_budget_version: [DEPENDENCY_BOUNDARY] MUST use one transaction and one budgets repository of the transaction for the requested version, active version, ordered plans, and one update_budget_versions call; the project's expenses, with their allocations flattened, are read only through list_project_expenses of the expenses repository of that transaction, an ExpenseRepository, called with the project_id of the context, and the success audit MUST be appended with the imported append_audit into the audit repository of that transaction.
+- activate_budget_version: [FIELD_ASSIGNMENT] MUST replace both versions with the imported revise_budget_version at the single utc_now instant of the operation: for the prior different active version it passes the INACTIVE member of = models.BudgetVersionStatus as status, that instant as deactivated_at and its own activated_at and activated_by unchanged; for the requested version its ACTIVE member as status, that instant as activated_at, the actor_id of the context as activated_by and None as deactivated_at; it MUST then pass non-active updates before the active update.
+- activate_budget_version: [ORCHESTRATION] MUST append exactly one audit whose intent the imported build_project_audit_intent builds from the context, the SNAPSHOT_ACTIVATE member of = models.AuditAction, the BUDGET_VERSION member of = models.AuditEntityKind and the requested version_id as entity_id, commit the version changes and audit atomically, and return the result the imported build_budget_activation_result builds from the activated BudgetVersion object, its ordered plans and the pre-update unresolved allocation count.
+- activate_budget_version: [SECURITY_BOUNDARY] MUST require the capability of the context to be the PORTAL_ESTIMATE_SNAPSHOT_ACTIVATE member of = models.Capability and raise BudgetValidationError before opening a transaction otherwise; no other capability or producer context may activate a version.
+- activate_budget_version: [VALIDATION_ERROR] After flattening allocations and before constructing updates or audit, MUST raise BudgetConflictError when unresolved_allocation_count is greater than zero; that failure MUST rollback and leave both prior and requested budget statuses and audit storage unchanged.
+- activate_budget_version: [DEPENDENCY_BOUNDARY] MUST use only BudgetRepository, the budgets repository of that transaction, for budget persistence and ProjectSectionRepository, the project_sections repository of that transaction, for project-section persistence; the project's expenses are read only through list_project_expenses of the expenses repository of that transaction, an ExpenseRepository, called with project_id, and allocations MUST be flattened from those ExpenseAggregate values.
+- activate_budget_version: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only when the transaction is still open, so a domain error raised after the read was already rolled back MUST NOT trigger a second rollback; nested transactions and rollback after successful commit are forbidden.
+- activate_budget_version: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.
+- activate_budget_version: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- activate_budget_version: [DEPENDENCY_BOUNDARY] MUST make each read and write its other notes call for through get_active_budget_version of the budgets repository of that transaction, a BudgetRepository, and through its get_budget_version and its list_budget_plans.
+- ensure_manual_budget: [ORCHESTRATION] MUST return the existing single manual version or atomically create one with empty plans plus an audit with the BUDGET_MANUAL_VERSION_CREATE member of = models.AuditAction; it MUST NOT activate it implicitly.
+- ensure_manual_budget: [DEPENDENCY_BOUNDARY] MUST open one transaction by beginning a transaction with begin of the store, which returns a PortalTransaction, obtain one stable BudgetRepository as the budgets repository of that transaction, read the manual version through get_manual_budget_version, read its plans through list_budget_plans, and read the project's expenses, with their allocations flattened, only through list_project_expenses of the expenses repository of that transaction, an ExpenseRepository, when computing unresolved allocations.
+- ensure_manual_budget: [FIELD_ASSIGNMENT] When no manual version exists, MUST build the new = models.BudgetVersion with the imported build_manual_budget_version, passing the context and the single utc_now instant as now, insert that exact object, build exactly one audit intent with the imported build_project_audit_intent from the context, the BUDGET_MANUAL_VERSION_CREATE member of = models.AuditAction, the BUDGET_VERSION member of = models.AuditEntityKind and the new version_id as entity_id and append it with the imported append_audit into the audit repository of that transaction, commit once, and return the detail the imported build_budget_version_detail builds from the same BudgetVersion object, empty plans and zero unresolved allocations.
+- ensure_manual_budget: [RETURN_SHAPE] When a manual version already exists, MUST return the detail the imported build_budget_version_detail builds from that exact repository object, all and only its persisted plans ordered by sort_order then section_id and the unresolved allocation count, close the read transaction by exactly one rollback of that transaction, and append no audit.
+- ensure_manual_budget: [DEPENDENCY_BOUNDARY] MUST use only BudgetRepository, the budgets repository of that transaction, for budget persistence and ProjectSectionRepository, the project_sections repository of that transaction, for project-section persistence; the project's expenses are read only through list_project_expenses of the expenses repository of that transaction, an ExpenseRepository, called with project_id, and allocations MUST be flattened from those ExpenseAggregate values.
+- ensure_manual_budget: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only when the transaction is still open, so a domain error raised after the read was already rolled back MUST NOT trigger a second rollback; nested transactions and rollback after successful commit are forbidden.
+- ensure_manual_budget: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.
+- ensure_manual_budget: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- ensure_manual_budget: [DEPENDENCY_BOUNDARY] MUST make each read and write its other notes call for through insert_budget_version of the budgets repository of that transaction, a BudgetRepository.
+- get_budget_version: [SECURITY_BOUNDARY] MUST return the exact project-scoped version with deterministically ordered plans or raise ScopedNotFoundError without revealing another project.
+- get_budget_version: [RETURN_SHAPE] MUST return BudgetVersionDetail with the version_id of its version equal to version_id and every persisted plan ordered by sort_order then section_id.
+- get_budget_version: [DEPENDENCY_BOUNDARY] MUST open one transaction, read the exact version and its plans only through one budgets repository of the transaction, read the project's expenses, with their allocations flattened, only through list_project_expenses of the expenses repository of that transaction, an ExpenseRepository, called with the project_id of the context, and close that read transaction by exactly one rollback of that transaction.
+- get_budget_version: [DEPENDENCY_BOUNDARY] MUST use only BudgetRepository, the budgets repository of that transaction, for budget persistence and ProjectSectionRepository, the project_sections repository of that transaction, for project-section persistence; the project's expenses are read only through list_project_expenses of the expenses repository of that transaction, an ExpenseRepository, called with project_id, and allocations MUST be flattened from those ExpenseAggregate values.
+- get_budget_version: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only when the transaction is still open, so a domain error raised after the read was already rolled back MUST NOT trigger a second rollback; nested transactions and rollback after successful commit are forbidden.
+- get_budget_version: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.
+- get_budget_version: [DEPENDENCY_BOUNDARY] MUST make each read and write its other notes call for through list_budget_plans of the budgets repository of that transaction, a BudgetRepository.
+- upsert_manual_section_plan: [ORCHESTRATION] MUST require an active project and the single manual version, create the stable PortalSection when needed (the name is the display_name of SectionPlan, so a rename changes the plan, never the section), validate R9 amounts, upsert its plan, and append an audit with the BUDGET_SECTION_PLAN_EDIT member of = models.AuditAction atomically without changing imported plans.
+- upsert_manual_section_plan: [DEPENDENCY_BOUNDARY] MUST perform optional manual-version creation, optional PortalSection insertion, SectionPlan upsert, required audits, and final reads through one shared transaction using the repositories of that transaction for budgets, for project sections and for audits, and read the project's expenses, with their allocations flattened, only through list_project_expenses of the expenses repository of that transaction, an ExpenseRepository; it MUST NOT call ensure_manual_budget or validate_project_section from inside that transaction.
+- upsert_manual_section_plan: [FIELD_ASSIGNMENT] MUST reuse the repository's existing manual BudgetVersion object when present or otherwise build it with the imported build_manual_budget_version; for a supplied section_id it MUST obtain the exact project-scoped PortalSection or raise BudgetValidationError, while a missing section_id MUST build one = models.PortalSection with the imported build_manual_portal_section and insert it; both builders receive the context and the single utc_now instant of the operation as now.
+- upsert_manual_section_plan: [PROVENANCE] MUST pass as plan_id the plan_id of the plan the manual version already has for the stable section_id, and otherwise a fresh uuid4; it MUST upsert the = models.SectionPlan the imported build_manual_section_plan builds from the context, the manual version, the PortalSection, the supplied display_name and sort_order, the validated R9 amounts as material_planned and work_planned, that plan_id and the single utc_now instant as now, without altering any imported-version plan.
+- upsert_manual_section_plan: [ORCHESTRATION] MUST append an audit with the BUDGET_MANUAL_VERSION_CREATE member of = models.AuditAction only when this transaction creates the manual version and append exactly one success audit with its BUDGET_SECTION_PLAN_EDIT member for the upserted plan; it MUST build both intents with the imported build_project_audit_intent from the context, the first with the BUDGET_VERSION member of = models.AuditEntityKind and the version_id, the second with its SECTION_PLAN member and the plan_id, and after commit it MUST return the detail the imported build_budget_version_detail builds from the same manual BudgetVersion object, all persisted plans ordered by sort_order then section_id, and the unresolved allocation count.
+- upsert_manual_section_plan: [VALIDATION_ERROR] MUST validate both R9 amounts, each with the imported validate_eur_amount, in the currency the imported MONEY_CURRENCY constant names and not as a strictly positive amount, before opening a transaction and raise BudgetValidationError when the registry_status of the context is not the ACTIVE member of = models.RegistryProjectStatus; invalid input MUST write nothing at all, neither a record of this module nor an audit.
+- upsert_manual_section_plan: [DEPENDENCY_BOUNDARY] MUST use only BudgetRepository, the budgets repository of that transaction, for budget persistence and ProjectSectionRepository, the project_sections repository of that transaction, for project-section persistence; the project's expenses are read only through list_project_expenses of the expenses repository of that transaction, an ExpenseRepository, called with project_id, and allocations MUST be flattened from those ExpenseAggregate values.
+- upsert_manual_section_plan: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only when the transaction is still open, so a domain error raised after the read was already rolled back MUST NOT trigger a second rollback; nested transactions and rollback after successful commit are forbidden.
+- upsert_manual_section_plan: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.
+- upsert_manual_section_plan: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- upsert_manual_section_plan: [DEPENDENCY_BOUNDARY] MUST make each read and write its other notes call for through get_manual_budget_version of the budgets repository of that transaction, a BudgetRepository, and through its insert_budget_version, its list_budget_plans and its upsert_section_plan, and through get_project_section and insert_project_sections of the project_sections repository of that transaction, a ProjectSectionRepository.
+- validate_project_section: [SECURITY_BOUNDARY] MUST return only a section whose project_id equals project_id and raise BudgetValidationError for missing or cross-project identity without revealing another project.
+- validate_project_section: [DEPENDENCY_BOUNDARY] MUST open one transaction, read only by calling get_project_section of the project_sections repository of that transaction with project_id and section_id, then close that read transaction by exactly one rollback of that transaction immediately after the read, marking it closed before it evaluates identity or raises BudgetValidationError, and use no PortalStore lookup or legacy PortalTransaction project-section method.
+- validate_project_section: [DEPENDENCY_BOUNDARY] MUST use only BudgetRepository, the budgets repository of that transaction, for budget persistence and ProjectSectionRepository, the project_sections repository of that transaction, for project-section persistence; the project's expenses are read only through list_project_expenses of the expenses repository of that transaction, an ExpenseRepository, called with project_id, and allocations MUST be flattened from those ExpenseAggregate values.
+- validate_project_section: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only when the transaction is still open, so a domain error raised after the read was already rolled back MUST NOT trigger a second rollback; nested transactions and rollback after successful commit are forbidden.
+- validate_project_section: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- AuditAction: omitted because it is an imported runtime model schema
+- AuditEntityKind: omitted because it is an imported runtime model schema
+- BudgetVersion: omitted because it is an imported runtime model schema
+- BudgetVersionStatus: omitted because it is an imported runtime model schema
+- Capability: omitted because it is an imported runtime model schema
+- PortalSection: omitted because it is an imported runtime model schema
+- RegistryProjectStatus: omitted because it is an imported runtime model schema
+- SectionPlan: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not core.models imports.
+Only import runtime model symbols from core.models when they are explicitly listed in IMPORTS.
+- models.AuditAction: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.AuditEntityKind: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.BudgetVersion: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.BudgetVersionStatus: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.Capability: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.PortalSection: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.RegistryProjectStatus: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.SectionPlan: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from core.models. Use the listed enum member names and model fields exactly.
+- ActorKind enum members: SERVICE='service', STAFF='staff', SYSTEM='system', VIEWER='viewer'
+- AllocationTargetKind enum members: OTHER_EXPENSES='other_expenses', SECTION='section'
+- AuditAction enum members: BUDGET_MANUAL_VERSION_CREATE='budget.manual_version_create', BUDGET_SECTION_PLAN_EDIT='budget.section_plan_edit', DOCUMENT_UPDATE='document.update', EXPENSE_ALLOCATE='expense.allocate', EXPENSE_CORRECT='expense.correct', EXPENSE_CREATE='expense.create', EXPENSE_EXCLUDE='expense.exclude', EXPENSE_INCLUDE='expense.include', GRANT_CREATE='grant.create', GRANT_REVOKE='grant.revoke', PAYMENT_REGISTER='payment.register', PHOTO_PUBLISH='photo.publish', PHOTO_UPDATE='photo.update', PRINCIPAL_CREATE='principal.create', PRINCIPAL_CREDENTIAL_ISSUE='principal.credential_issue', PRINCIPAL_CREDENTIAL_REVOKE='principal.credential_revoke', PRINCIPAL_DISABLE='principal.disable', PRINCIPAL_ENABLE='principal.enable', PRODUCER_GRANT_CREATE='producer_grant.create', PRODUCER_GRANT_REVOKE='producer_grant.revoke', PROGRESS_UPDATE='progress.update', SNAPSHOT_ACTIVATE='snapshot.activate', SNAPSHOT_IMPORT='snapshot.import', STAFF_ASSIGNMENT_CREATE='staff_assignment.create', STAFF_ASSIGNMENT_REVOKE='staff_assignment.revoke', STAFF_CREATE='staff.create', STAFF_DISABLE='staff.disable', STAFF_LOGIN='staff.login', STAFF_LOGIN_FAILED='staff.login_failed', STAFF_LOGOUT='staff.logout', STAFF_RECOVERY_OVERRIDE='staff.recovery_override', STAFF_REINSTATE='staff.reinstate', STAFF_SESSIONS_REVOKE='staff.sessions_revoke', STAFF_SUSPEND='staff.suspend', VIEWER_CREATE='viewer.create', VIEWER_CREDENTIAL_ISSUE='viewer.credential_issue', VIEWER_CREDENTIAL_REVOKE='viewer.credential_revoke', VIEWER_REVOKE='viewer.revoke'
+- AuditEntityKind enum members: BUDGET_VERSION='budget_version', EXPENSE='expense', EXPENSE_ALLOCATION='expense_allocation', EXPENSE_DOCUMENT='expense_document', PRODUCER_GRANT='producer_grant', PROGRESS_PHOTO='progress_photo', SECTION_PLAN='section_plan', SECTION_PROGRESS='section_progress', SERVICE_CREDENTIAL='service_credential', SERVICE_PRINCIPAL='service_principal', SNAPSHOT_IMPORT='snapshot_import', STAFF_ACCOUNT='staff_account', STAFF_ASSIGNMENT='staff_assignment', STAFF_SESSION='staff_session', VIEWER='viewer', VIEWER_CREDENTIAL='viewer_credential', VIEWER_GRANT='viewer_grant', WORK_PAYMENT='work_payment'
+- AuditIntent fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditRecord fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, audit_id: UUID, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, occurred_at: datetime, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditRepository operations (exact, no others exist):
+    insert_audit(self, record: AuditRecord) -> None
+- AuditResult enum members: REJECTED='rejected', SUCCESS='success'
+- AuthorizedProjectContext fields (exact, no others exist): actor_id: UUID, actor_kind: ActorKind, capability: Capability, key_version: int | None, project_id: UUID, registry_status: RegistryProjectStatus
+- BudgetActivationResult fields (exact, no others exist): plans: list[SectionPlan], unresolved_allocation_count: int, version: BudgetVersion
+- BudgetRepository operations (exact, no others exist):
+    get_active_budget_version(self, project_id: UUID) -> BudgetVersion | None
+    get_budget_version(self, version_id: UUID) -> BudgetVersion | None
+    get_manual_budget_version(self, project_id: UUID) -> BudgetVersion | None
+    insert_budget_version(self, version: BudgetVersion) -> None
+    insert_section_plans(self, plans: list[SectionPlan]) -> None
+    list_budget_plans(self, version_id: UUID) -> list[SectionPlan]
+    update_budget_versions(self, versions: list[BudgetVersion]) -> None
+    upsert_section_plan(self, plan: SectionPlan) -> None
+- BudgetSource enum members: APPROVED_ESTIMATE_SNAPSHOT='approved_estimate_snapshot', MANUAL='manual'
+- BudgetVersion fields (exact, no others exist): activated_at: datetime | None, activated_by: UUID | None, created_at: datetime, created_by_id: UUID, created_by_kind: ActorKind, deactivated_at: datetime | None, project_id: UUID, snapshot_id: UUID | None, source: BudgetSource, status: BudgetVersionStatus, version_id: UUID
+- BudgetVersionDetail fields (exact, no others exist): plans: list[SectionPlan], unresolved_allocation_count: int, version: BudgetVersion
+- BudgetVersionStatus enum members: ACTIVE='active', INACTIVE='inactive'
+- Capability enum members: PORTAL_ACCESS_MANAGE='portal.access.manage', PORTAL_BUDGET_MANAGE='portal.budget.manage', PORTAL_BUDGET_READ='portal.budget.read', PORTAL_ESTIMATE_SNAPSHOT_ACTIVATE='portal.estimate_snapshot.activate', PORTAL_ESTIMATE_SNAPSHOT_IMPORT='portal.estimate_snapshot.import', PORTAL_ESTIMATE_SNAPSHOT_READ_IMPORT_RESULT='portal.estimate_snapshot.read_import_result', PORTAL_EXPENSE_MANAGE='portal.expense.manage', PORTAL_EXPENSE_READ='portal.expense.read', PORTAL_PAYMENT_MANAGE='portal.payment.manage', PORTAL_PAYMENT_READ='portal.payment.read', PORTAL_PHOTO_MANAGE='portal.photo.manage', PORTAL_PHOTO_READ='portal.photo.read', PORTAL_PROGRESS_MANAGE='portal.progress.manage', PORTAL_PROGRESS_READ='portal.progress.read', PORTAL_PROJECT_READ='portal.project.read'
+- Expense fields (exact, no others exist): confirmed_at: datetime, confirmed_by: UUID, created_at: datetime, document_date: date, expense_id: UUID, included: bool, intake_fingerprint: str, project_id: UUID, provenance_ref: str, recognized_document_id: str, supplier: str, total_amount: Decimal, updated_at: datetime | None, updated_by: UUID | None
+- ExpenseAggregate fields (exact, no others exist): allocations: list[ExpenseAllocation], document: ExpenseDocument, expense: Expense
+- ExpenseAllocation fields (exact, no others exist): allocation_id: UUID, amount: Decimal, created_at: datetime, created_by: UUID, expense_id: UUID, section_id: UUID | None, target: AllocationTargetKind, updated_at: datetime | None, updated_by: UUID | None
+- ExpenseDocument fields (exact, no others exist): client_visible: bool, created_at: datetime, description: str | None, document_id: UUID, document_reference: str, expense_id: UUID, file_ref: str, updated_at: datetime | None, updated_by: UUID | None
+- ExpenseRepository operations (exact, no others exist):
+    get_expense_aggregate(self, expense_id: UUID) -> ExpenseAggregate | None
+    get_expense_by_recognition_id(self, recognized_document_id: str) -> ExpenseAggregate | None
+    get_expense_document(self, document_id: UUID) -> ExpenseDocument | None
+    insert_expense_aggregate(self, aggregate: ExpenseAggregate) -> None
+    list_project_expenses(self, project_id: UUID) -> list[ExpenseAggregate]
+    update_expense(self, expense: Expense) -> None
+    update_expense_aggregate(self, aggregate: ExpenseAggregate) -> None
+    update_expense_document(self, document: ExpenseDocument) -> None
+- PortalSection fields (exact, no others exist): created_at: datetime, created_by_id: UUID, created_by_kind: ActorKind, project_id: UUID, section_id: UUID, source_key: str | None
+- ProjectContext fields (exact, no others exist): address: str, created_at: datetime, customer_ref: str | None, project: ProjectReference, registry_updated_at: datetime
+- ProjectReference fields (exact, no others exist): display_name: str, project_id: UUID, status: str
+- ProjectSectionRepository operations (exact, no others exist):
+    get_project_section(self, project_id: UUID, section_id: UUID) -> PortalSection | None
+    insert_project_sections(self, sections: list[PortalSection]) -> None
+    list_project_sections(self, project_id: UUID) -> list[PortalSection]
+- RegistryProjectStatus enum members: ACTIVE='active', ARCHIVED='archived'
+- SectionPlan fields (exact, no others exist): display_name: str, material_planned: Decimal, plan_id: UUID, section_id: UUID, sort_order: int, source_section_code: str | None, updated_at: datetime, updated_by: UUID | None, version_id: UUID, work_planned: Decimal
+- SnapshotSectionData fields (exact, no others exist): display_name: str, material_planned: Decimal, sort_order: int, source_section_code: str, source_section_id: str, work_planned: Decimal
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+- class BudgetConflictError(Exception): pass
+- class BudgetValidationError(Exception): pass
+
+RECORDS BUILT FOR THIS MODULE (record_construction_backend):
+Each record below is built by the imported builder named after it; call the builder.
+Constructing such a record here — its constructor, model_construct, model_validate,
+or model_copy of a parameter of that type — is rejected (record_construction_bypassed).
+- AuditIntent: build_project_audit_intent
+- BudgetActivationResult: build_budget_activation_result
+- BudgetVersion: build_manual_budget_version, revise_budget_version
+- BudgetVersionDetail: build_budget_version_detail
+- PortalSection: build_manual_portal_section, build_snapshot_sections
+- SectionPlan: build_imported_section_plan, build_manual_section_plan
+
+FUNCTION ORDER (define in this order):
+_build_imported_plans, _find_unresolved_allocation_count, _link_snapshot_sections, _ordered_plans, activate_budget_version, ensure_manual_budget, get_budget_version, upsert_manual_section_plan, validate_project_section
+
+MODELS CONTEXT:
+Runtime models live in core.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete budget_management.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in core.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and core.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen). A record listed in RECORDS BUILT FOR THIS MODULE, new or changed, comes only from its builder: call the builder, never model_copy or a constructor of it. Any other model value: derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
