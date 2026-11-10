@@ -8,7 +8,20 @@ merged: accepted spec `018b2e2e`). The assembly, admission and diagnosis
 results are in `80_assembly.md`; the semantic diff, for the owner, is
 `SEMANTIC_DIFF.md` (against `018b2e2e` first, then against `459ac96c`).
 
-## Cleanup after the Route B verify of b3bfb504 (2026-11-10) — read this first
+## Lost behaviours from the Route B verify of 071062af (2026-11-10, later) — read this first
+
+#210 merged (spec `071062af`); Route B passed generation, linker and deploy;
+verify triage (code-factory #214) found three spec gaps, restored in
+`27fc1ab2`: expense view order (A27, `_project_expense_summary`),
+`ScopedNotFoundError` from `build_progress_view`/`build_payment_view`
+without an active version (INV-044, overview NOT_CONFIGURED), and
+`issue_viewer_access` refusing a missing or revoked viewer before any write
+(INV-008). With code-factory #211 `get_budget_version` is named in
+`build_budget_view` (no induced import). State 7 r36 clear; Stage 8.1 39/39;
+admission READY_TO_EXPORT 18/0/0 against Factory `97675d94`.
+`global_spec.json` sha256 `43e2c70c…`.
+
+## Cleanup after the Route B verify of b3bfb504 (2026-11-10)
 
 Route B on `b3bfb504` generated, linked and deployed; verify failed on spec
 causes (after the harness fix code-factory #208). Owner-approved cleanup,
