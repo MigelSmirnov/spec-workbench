@@ -41,6 +41,11 @@ changed; `portal_store` lost its delegating surface. State 7 rounds 32–35
 on every changed module, closed; structural review 0 blocks; verdicts
 unchanged, 39/39 PASS.
 
+After `27fc1ab2` (expense view order, INV-044 refusal of the progress and
+payment views, INV-008 refusal of a revoked viewer, `get_budget_version`
+named): State 7 round 36 on `derived_views` and `viewer_access`, clear;
+structural review 0 blocks; 39/39 PASS.
+
 Second pass: `81_module_review_status.json` records each
 verdict and its packet hash (`slice_sha256`, the FA002 rule over
 `build_slice`), recomputed on the spec after the State 7 rounds below.
