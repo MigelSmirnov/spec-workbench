@@ -1,0 +1,275 @@
+Module: expense_intake
+Target path: application/expense_intake.py
+Target file: expense_intake.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from __future__ import annotations
+from datetime import date, datetime
+from decimal import Decimal
+from uuid import UUID
+from typing import Any
+
+from adapters.portal_store import PortalStore, PortalTransaction
+from application.audit_writer import append_audit
+from core.data_provider import SUPPORTED_OCR_CONTRACT_VERSIONS
+from core.models import ActorKind, AllocationInstruction, AllocationTargetKind, AuditAction, AuditEntityKind, AuditIntent, AuditRecord, AuditRepository, AuditResult, AuthorizedProjectContext, Capability, ConfirmedRecognitionPublication, Expense, ExpenseAggregate, ExpenseAllocation, ExpenseDocument, ExpenseIntake, ExpenseOperationOutcome, ExpenseRepository, NormalizedRecognitionItem, ProjectContext, ProjectReference, ProjectSectionRepository, RecognitionStatus, RegistryProjectStatus, PortalSection, SupportedContractVersion
+from core.record_builders import build_expense_aggregate, build_expense_intake, build_expense_operation_outcome, build_project_audit_intent, build_replayed_expense_operation_outcome
+from core.system_clock import utc_now
+from domain.expense_management import ExpenseConflictError, ExpenseValidationError
+from domain.financial_policy import FinancialValidationError, validate_eur_amount
+
+CONTRACTS (function signatures — follow exactly):
+def _canonical_intake_fingerprint(intake: ExpenseIntake) -> str
+def _classify_expense_replay(existing: ExpenseAggregate, fingerprint: str) -> ExpenseOperationOutcome
+def _validate_initial_allocations(store: PortalStore, intake: ExpenseIntake) -> None
+def create_expense_from_recognition(store: PortalStore, context: AuthorizedProjectContext, publication: ConfirmedRecognitionPublication, allocations: list[AllocationInstruction]) -> ExpenseOperationOutcome
+def decode_recognition_publication(payload: dict[str, Any]) -> ConfirmedRecognitionPublication
+# PortalStore
+def __init__(self, database_url: str) -> None
+# PortalStore
+def begin(self) -> PortalTransaction
+# PortalTransaction
+def __init__(self, connection: object) -> None
+# PortalTransaction
+def audit(self) -> AuditRepository
+# PortalTransaction
+def commit(self) -> None
+# PortalTransaction
+def expenses(self) -> ExpenseRepository
+# PortalTransaction
+def project_sections(self) -> ProjectSectionRepository
+# PortalTransaction
+def rollback(self) -> None
+# ProjectSectionRepository
+def get_project_section(self, project_id: UUID, section_id: UUID) -> PortalSection | None
+# ProjectSectionRepository
+def insert_project_sections(self, sections: list[PortalSection]) -> None
+# ProjectSectionRepository
+def list_project_sections(self, project_id: UUID) -> list[PortalSection]
+# ExpenseRepository
+def get_expense_aggregate(self, expense_id: UUID) -> ExpenseAggregate | None
+# ExpenseRepository
+def get_expense_by_recognition_id(self, recognized_document_id: str) -> ExpenseAggregate | None
+# ExpenseRepository
+def get_expense_document(self, document_id: UUID) -> ExpenseDocument | None
+# ExpenseRepository
+def insert_expense_aggregate(self, aggregate: ExpenseAggregate) -> None
+# ExpenseRepository
+def list_project_expenses(self, project_id: UUID) -> list[ExpenseAggregate]
+# ExpenseRepository
+def update_expense(self, expense: Expense) -> None
+# ExpenseRepository
+def update_expense_aggregate(self, aggregate: ExpenseAggregate) -> None
+# ExpenseRepository
+def update_expense_document(self, document: ExpenseDocument) -> None
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def append_audit(repository: AuditRepository, intent: AuditIntent) -> AuditRecord
+def validate_eur_amount(currency: str, amount: Decimal, strictly_positive: bool = False) -> Decimal
+def build_expense_aggregate(created_at: datetime, expense_intake: ExpenseIntake, fingerprint: str) -> ExpenseAggregate
+def build_expense_intake(allocations: list[AllocationInstruction], context: AuthorizedProjectContext, confirmed_recognition_publication: ConfirmedRecognitionPublication) -> ExpenseIntake
+def build_expense_operation_outcome(aggregate: ExpenseAggregate) -> ExpenseOperationOutcome
+def build_project_audit_intent(context: AuthorizedProjectContext, action: AuditAction, entity_kind: AuditEntityKind, entity_id: UUID) -> AuditIntent
+def build_replayed_expense_operation_outcome(aggregate: ExpenseAggregate) -> ExpenseOperationOutcome
+def utc_now() -> datetime
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+SUPPORTED_OCR_CONTRACT_VERSIONS: tuple[SupportedContractVersion, ...]
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _canonical_intake_fingerprint: (intake: ExpenseIntake) -> str
+- _classify_expense_replay: (existing: ExpenseAggregate, fingerprint: str) -> ExpenseOperationOutcome
+- _validate_initial_allocations: (store: PortalStore, intake: ExpenseIntake) -> None
+- create_expense_from_recognition: (store: PortalStore, context: AuthorizedProjectContext, publication: ConfirmedRecognitionPublication, allocations: list[AllocationInstruction]) -> ExpenseOperationOutcome
+- decode_recognition_publication: (payload: dict[str, Any]) -> ConfirmedRecognitionPublication
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+POLICIES ENFORCED BY FACTORY GATES ON THIS MODULE (spec rules, not code; a module that violates one is rejected):
+rules.model_immutability_policy (kind model_policy; tools/code_invariant_gates.py refuses a generated assignment to a field of a model instance when instances are frozen):
+  assignment_to_argument_field: forbidden
+  derive_instead: compute the value where it is needed, or return it, rather than writing it back onto an input
+  forbidden:
+    - assigning to any field of an argument
+    - assigning to any field of a value read from a repository
+    - carrying a computed result to the caller through a mutated input
+  instances_are_frozen: true
+  replacement_shape: construct a new instance when a changed value must be carried
+rules.transaction_guard_policy (kind transaction_policy; tools/code_invariant_gates.py refuses a transaction guard that catches less than the declared exception scope):
+  close_exactly_once: true
+  forbidden:
+    - a second rollback on an already closed transaction
+    - rollback after a successful commit
+    - catching only Exception instead of BaseException
+    - probing open state through assert_open, _assert_open, or a caught PersistenceError
+  guard_action: rollback only while the local flag still marks the transaction open, then re-raise the original exception unchanged
+  guard_exception_scope: BaseException
+  open_state_tracking: required_local_boolean_flag
+  read_path: rollback once immediately after the last read, set the local flag to closed, then evaluate results and raise any domain error
+  write_path: commit once on success and set the local flag to closed
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _canonical_intake_fingerprint: [DETERMINISM_OR_ORDERING] MUST hash the complete canonical intake independent of input/hash order and exclude clock, actor session, and storage path. The encoding is part of the identity and MUST NOT drift between builds: sorted-key JSON with no insignificant whitespace, enum members as their value, decimals as their plain non-exponential string form, UUIDs and dates as their canonical strings, and allocations sorted by a stable total order over their encoded fields.
+- _classify_expense_replay: [BEHAVIOR] MUST return the = models.ExpenseOperationOutcome the imported build_replayed_expense_operation_outcome builds from the existing aggregate only for equal intake_fingerprint and otherwise raise ExpenseConflictError without mutation, the replay identity being recognized_document_id with intake_fingerprint as the content check.
+- _validate_initial_allocations: [VALIDATION_ERROR] MUST require every section target to belong to the project_id of the intake and enforce exact allocation sum with no proportional or residual allocation.
+- _validate_initial_allocations: [DEPENDENCY_BOUNDARY] MUST raise FinancialValidationError for an instruction whose target is the SECTION member of = models.AllocationTargetKind without section_id, one whose target is its OTHER_EXPENSES member carrying a section_id, any other target, and an allocation total that differs from the total_amount of the intake, all before opening any transaction; it MUST then open exactly one transaction, resolve every section target only by calling get_project_section of the project_sections repository of that transaction with the project_id of the intake and the section_id, and close that read transaction by exactly one rollback of that transaction, marking it closed before it raises ExpenseValidationError for a missing or cross-project section, so that rejection keeps the input-rejection answer the former budget validation error produced; it MUST NOT call validate_project_section, a PortalStore lookup, or a legacy PortalTransaction project-section method.
+- _validate_initial_allocations: [DEPENDENCY_BOUNDARY] MUST use only ExpenseRepository as the expenses repository of that transaction, ProjectSectionRepository as the project_sections repository of that transaction, and AuditRepository as the audit repository of that transaction for persistence; direct legacy PortalTransaction expense and project-section method calls are forbidden, and this module MUST NOT import or call the budget_management module of the domain package.
+- _validate_initial_allocations: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, a second rollback on an already closed transaction, probing open state through an assert-open call or a caught persistence error, and substituting a translated persistence error for the original failure are forbidden.
+- _validate_initial_allocations: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only while the transaction is still open; opening a transaction while another one this module owns is still open is forbidden, and so is rollback after a successful commit.
+- create_expense_from_recognition: [ORCHESTRATION] MUST accept only confirmed complete normalized input whose contract_version equals the version of a row of the imported SUPPORTED_OCR_CONTRACT_VERSIONS constant, validate explicit allocations, apply R8 replay before mutation, and atomically insert one Expense plus one ExpenseDocument plus allocations and the EXPENSE_CREATE member of = models.AuditAction audit.
+- create_expense_from_recognition: [DEPENDENCY_BOUNDARY] MUST open exactly one transaction by beginning a transaction with begin of the store, which returns a PortalTransaction, after allocation validation completes, read the replay candidate only by calling get_expense_by_recognition_id of the expenses repository of that transaction with the recognized_document_id of the intake, insert the new aggregate only through insert_expense_aggregate of the expenses repository of that transaction, append the audit only with the imported append_audit into the audit repository of that transaction, and call no legacy PortalTransaction expense method.
+- create_expense_from_recognition: [ORCHESTRATION] MUST build exactly one audit intent with the imported build_project_audit_intent from the context, the EXPENSE_CREATE member of = models.AuditAction as action, the EXPENSE member of = models.AuditEntityKind as entity_kind and the expense_id of the expense of the inserted aggregate as entity_id, and append it with the imported append_audit into the audit repository of that transaction, then commit exactly once and return the outcome the imported build_expense_operation_outcome builds from the inserted aggregate.
+- create_expense_from_recognition: [RETURN_SHAPE] When the expenses repository of that transaction returns an existing aggregate for the recognized_document_id, MUST close that read transaction by exactly one rollback of that transaction, marking it closed before _classify_expense_replay evaluates the fingerprint, then return its ExpenseOperationOutcome with replayed true for an equal fingerprint or raise ExpenseConflictError unchanged; neither replay path may append an audit or mutate storage.
+- create_expense_from_recognition: [DEPENDENCY_BOUNDARY] MUST use only ExpenseRepository as the expenses repository of that transaction, ProjectSectionRepository as the project_sections repository of that transaction, and AuditRepository as the audit repository of that transaction for persistence; direct legacy PortalTransaction expense and project-section method calls are forbidden, and this module MUST NOT import or call the budget_management module of the domain package.
+- create_expense_from_recognition: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, a second rollback on an already closed transaction, probing open state through an assert-open call or a caught persistence error, and substituting a translated persistence error for the original failure are forbidden.
+- create_expense_from_recognition: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only while the transaction is still open; opening a transaction while another one this module owns is still open is forbidden, and so is rollback after a successful commit.
+- create_expense_from_recognition: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it creates and every current-time comparison it makes; the publication's `confirmed_at` is copied as confirmed, never replaced by it; it MUST NOT read a host clock itself. A supplied `confirmed_at` that carries a UTC offset MUST be converted to UTC, keeping its instant, before it is stored offset-naive; a supplied offset-naive value is taken as UTC.
+- create_expense_from_recognition: [FIELD_ASSIGNMENT] MUST project the publication into = models.ExpenseIntake with the imported build_expense_intake, passing the context and the supplied allocation instructions, and build the new = models.ExpenseAggregate with the imported build_expense_aggregate, passing that intake, the fingerprint _canonical_intake_fingerprint computes from it and the single utc_now instant of the operation as created_at.
+- create_expense_from_recognition: [VALIDATION_ERROR] MUST, before it projects the publication and before any transaction or write, validate the received publication again as = models.ConfirmedRecognitionPublication from the field values that instance itself dumps, so that an instance built bypassing validation and lacking a declared field such as confirmed_at fails that validation, and MUST raise ExpenseValidationError for that failure. It MUST NOT hand the instance object itself to that validation, because the validation of the model accepts an instance of its own class unchanged without checking it; it MUST NOT inspect fields by attribute lookup, attribute-existence tests or the attribute dictionary of the instance, and MUST NOT rely on catching a generic attribute error.
+- create_expense_from_recognition: [VALIDATION_ERROR] MUST, after it has checked the recognition status, the contract version, the capability and the registry_status of the context and before it projects the publication, check the currency and the total_amount of the publication with the imported validate_eur_amount, the total required to be strictly positive, and let the FinancialValidationError it raises propagate unchanged, so a currency other than the portal's or a total that is not a strictly positive R9 amount creates nothing.
+- decode_recognition_publication: [VALIDATION_ERROR] MUST raise ExpenseValidationError for a payload that does not decode into a complete = models.ConfirmedRecognitionPublication and for a contract_version that is not the version of a row of the imported SUPPORTED_OCR_CONTRACT_VERSIONS constant; the error MUST carry no content of the payload.
+- decode_recognition_publication: [RETURN_SHAPE] MUST return the = models.ConfirmedRecognitionPublication the payload describes and MUST read and write nothing: it opens no transaction, calls no repository and reads no clock.
+- decode_recognition_publication: [VALIDATION_ERROR] MUST refuse with ExpenseValidationError a normalized item whose quantity, unit_price or line_total is not a finite decimal or breaks the bound = models.NormalizedRecognitionItem declares for that field, and MUST keep each accepted item amount exactly as supplied, without quantizing it, because item amounts are validated for shape only and are not stored.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- AllocationTargetKind: omitted because it is an imported runtime model schema
+- AuditAction: omitted because it is an imported runtime model schema
+- AuditEntityKind: omitted because it is an imported runtime model schema
+- ConfirmedRecognitionPublication: omitted because it is an imported runtime model schema
+- ExpenseAggregate: omitted because it is an imported runtime model schema
+- ExpenseIntake: omitted because it is an imported runtime model schema
+- ExpenseOperationOutcome: omitted because it is an imported runtime model schema
+- NormalizedRecognitionItem: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not core.models imports.
+Only import runtime model symbols from core.models when they are explicitly listed in IMPORTS.
+- models.AllocationTargetKind: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.AuditAction: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.AuditEntityKind: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.ConfirmedRecognitionPublication: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.ExpenseAggregate: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.ExpenseIntake: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.ExpenseOperationOutcome: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.NormalizedRecognitionItem: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from core.models. Use the listed enum member names and model fields exactly.
+- ActorKind enum members: SERVICE='service', STAFF='staff', SYSTEM='system', VIEWER='viewer'
+- AllocationInstruction fields (exact, no others exist): amount: Decimal, section_id: UUID | None, target: AllocationTargetKind
+- AllocationTargetKind enum members: OTHER_EXPENSES='other_expenses', SECTION='section'
+- AuditAction enum members: BUDGET_MANUAL_VERSION_CREATE='budget.manual_version_create', BUDGET_SECTION_PLAN_EDIT='budget.section_plan_edit', DOCUMENT_UPDATE='document.update', EXPENSE_ALLOCATE='expense.allocate', EXPENSE_CORRECT='expense.correct', EXPENSE_CREATE='expense.create', EXPENSE_EXCLUDE='expense.exclude', EXPENSE_INCLUDE='expense.include', GRANT_CREATE='grant.create', GRANT_REVOKE='grant.revoke', PAYMENT_REGISTER='payment.register', PHOTO_PUBLISH='photo.publish', PHOTO_UPDATE='photo.update', PRINCIPAL_CREATE='principal.create', PRINCIPAL_CREDENTIAL_ISSUE='principal.credential_issue', PRINCIPAL_CREDENTIAL_REVOKE='principal.credential_revoke', PRINCIPAL_DISABLE='principal.disable', PRINCIPAL_ENABLE='principal.enable', PRODUCER_GRANT_CREATE='producer_grant.create', PRODUCER_GRANT_REVOKE='producer_grant.revoke', PROGRESS_UPDATE='progress.update', SNAPSHOT_ACTIVATE='snapshot.activate', SNAPSHOT_IMPORT='snapshot.import', STAFF_ASSIGNMENT_CREATE='staff_assignment.create', STAFF_ASSIGNMENT_REVOKE='staff_assignment.revoke', STAFF_CREATE='staff.create', STAFF_DISABLE='staff.disable', STAFF_LOGIN='staff.login', STAFF_LOGIN_FAILED='staff.login_failed', STAFF_LOGOUT='staff.logout', STAFF_RECOVERY_OVERRIDE='staff.recovery_override', STAFF_REINSTATE='staff.reinstate', STAFF_SESSIONS_REVOKE='staff.sessions_revoke', STAFF_SUSPEND='staff.suspend', VIEWER_CREATE='viewer.create', VIEWER_CREDENTIAL_ISSUE='viewer.credential_issue', VIEWER_CREDENTIAL_REVOKE='viewer.credential_revoke', VIEWER_REVOKE='viewer.revoke'
+- AuditEntityKind enum members: BUDGET_VERSION='budget_version', EXPENSE='expense', EXPENSE_ALLOCATION='expense_allocation', EXPENSE_DOCUMENT='expense_document', PRODUCER_GRANT='producer_grant', PROGRESS_PHOTO='progress_photo', SECTION_PLAN='section_plan', SECTION_PROGRESS='section_progress', SERVICE_CREDENTIAL='service_credential', SERVICE_PRINCIPAL='service_principal', SNAPSHOT_IMPORT='snapshot_import', STAFF_ACCOUNT='staff_account', STAFF_ASSIGNMENT='staff_assignment', STAFF_SESSION='staff_session', VIEWER='viewer', VIEWER_CREDENTIAL='viewer_credential', VIEWER_GRANT='viewer_grant', WORK_PAYMENT='work_payment'
+- AuditIntent fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditRecord fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, audit_id: UUID, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, occurred_at: datetime, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditRepository operations (exact, no others exist):
+    insert_audit(self, record: AuditRecord) -> None
+- AuditResult enum members: REJECTED='rejected', SUCCESS='success'
+- AuthorizedProjectContext fields (exact, no others exist): actor_id: UUID, actor_kind: ActorKind, capability: Capability, key_version: int | None, project_id: UUID, registry_status: RegistryProjectStatus
+- Capability enum members: PORTAL_ACCESS_MANAGE='portal.access.manage', PORTAL_BUDGET_MANAGE='portal.budget.manage', PORTAL_BUDGET_READ='portal.budget.read', PORTAL_ESTIMATE_SNAPSHOT_ACTIVATE='portal.estimate_snapshot.activate', PORTAL_ESTIMATE_SNAPSHOT_IMPORT='portal.estimate_snapshot.import', PORTAL_ESTIMATE_SNAPSHOT_READ_IMPORT_RESULT='portal.estimate_snapshot.read_import_result', PORTAL_EXPENSE_MANAGE='portal.expense.manage', PORTAL_EXPENSE_READ='portal.expense.read', PORTAL_PAYMENT_MANAGE='portal.payment.manage', PORTAL_PAYMENT_READ='portal.payment.read', PORTAL_PHOTO_MANAGE='portal.photo.manage', PORTAL_PHOTO_READ='portal.photo.read', PORTAL_PROGRESS_MANAGE='portal.progress.manage', PORTAL_PROGRESS_READ='portal.progress.read', PORTAL_PROJECT_READ='portal.project.read'
+- ConfirmedRecognitionPublication fields (exact, no others exist): confirmed_at: datetime, contract_version: int, currency: str, document_date: date, document_reference: str, document_type: str, file_ref: str, normalized_items: list[NormalizedRecognitionItem], provenance_ref: str, recognition_status: RecognitionStatus, recognized_document_id: str, supplier: str, total_amount: Decimal
+- Expense fields (exact, no others exist): confirmed_at: datetime, confirmed_by: UUID, created_at: datetime, document_date: date, expense_id: UUID, included: bool, intake_fingerprint: str, project_id: UUID, provenance_ref: str, recognized_document_id: str, supplier: str, total_amount: Decimal, updated_at: datetime | None, updated_by: UUID | None
+- ExpenseAggregate fields (exact, no others exist): allocations: list[ExpenseAllocation], document: ExpenseDocument, expense: Expense
+- ExpenseAllocation fields (exact, no others exist): allocation_id: UUID, amount: Decimal, created_at: datetime, created_by: UUID, expense_id: UUID, section_id: UUID | None, target: AllocationTargetKind, updated_at: datetime | None, updated_by: UUID | None
+- ExpenseDocument fields (exact, no others exist): client_visible: bool, created_at: datetime, description: str | None, document_id: UUID, document_reference: str, expense_id: UUID, file_ref: str, updated_at: datetime | None, updated_by: UUID | None
+- ExpenseIntake fields (exact, no others exist): allocations: list[AllocationInstruction], confirmed_at: datetime, confirmed_by: UUID, contract_version: int, currency: str, document_date: date, document_reference: str, document_type: str, file_ref: str, project_id: UUID, provenance_ref: str, recognized_document_id: str, supplier: str, total_amount: Decimal
+- ExpenseOperationOutcome fields (exact, no others exist): aggregate: ExpenseAggregate, replayed: bool
+- ExpenseRepository operations (exact, no others exist):
+    get_expense_aggregate(self, expense_id: UUID) -> ExpenseAggregate | None
+    get_expense_by_recognition_id(self, recognized_document_id: str) -> ExpenseAggregate | None
+    get_expense_document(self, document_id: UUID) -> ExpenseDocument | None
+    insert_expense_aggregate(self, aggregate: ExpenseAggregate) -> None
+    list_project_expenses(self, project_id: UUID) -> list[ExpenseAggregate]
+    update_expense(self, expense: Expense) -> None
+    update_expense_aggregate(self, aggregate: ExpenseAggregate) -> None
+    update_expense_document(self, document: ExpenseDocument) -> None
+- NormalizedRecognitionItem fields (exact, no others exist): description: str, line_id: str, line_total: Decimal, quantity: Decimal, unit_price: Decimal
+- PortalSection fields (exact, no others exist): created_at: datetime, created_by_id: UUID, created_by_kind: ActorKind, project_id: UUID, section_id: UUID, source_key: str | None
+- ProjectContext fields (exact, no others exist): address: str, created_at: datetime, customer_ref: str | None, project: ProjectReference, registry_updated_at: datetime
+- ProjectReference fields (exact, no others exist): display_name: str, project_id: UUID, status: str
+- ProjectSectionRepository operations (exact, no others exist):
+    get_project_section(self, project_id: UUID, section_id: UUID) -> PortalSection | None
+    insert_project_sections(self, sections: list[PortalSection]) -> None
+    list_project_sections(self, project_id: UUID) -> list[PortalSection]
+- RecognitionStatus enum members: CONFIRMED='confirmed'
+- RegistryProjectStatus enum members: ACTIVE='active', ARCHIVED='archived'
+- SupportedContractVersion fields (exact, no others exist): version: int
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+RECORDS BUILT FOR THIS MODULE (record_construction_backend):
+Each record below is built by the imported builder named after it; call the builder.
+Constructing such a record here — its constructor, model_construct, model_validate,
+or model_copy of a parameter of that type — is rejected (record_construction_bypassed).
+- AuditIntent: build_project_audit_intent
+- Expense: build_expense_aggregate
+- ExpenseAggregate: build_expense_aggregate
+- ExpenseAllocation: build_expense_aggregate
+- ExpenseDocument: build_expense_aggregate
+- ExpenseIntake: build_expense_intake
+- ExpenseOperationOutcome: build_expense_operation_outcome, build_replayed_expense_operation_outcome
+
+FUNCTION ORDER (define in this order):
+_canonical_intake_fingerprint, _classify_expense_replay, _validate_initial_allocations, create_expense_from_recognition, decode_recognition_publication
+
+MODELS CONTEXT:
+Runtime models live in core.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete expense_intake.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in core.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and core.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen). A record listed in RECORDS BUILT FOR THIS MODULE, new or changed, comes only from its builder: call the builder, never model_copy or a constructor of it. Any other model value: derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.

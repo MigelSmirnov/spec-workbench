@@ -1304,10 +1304,6 @@ headers only. Recorded in the accepted spec as `rules.http_transport_policy` (Fa
 - TRN-002: no viewer sign-out succeeds from a foreign origin, and no viewer
   project read succeeds without the cookie.
 - TRN-003: no credential, cookie or secret appears in a log line.
-- TRN-004: the viewer-entry limiter keys an attempt by the route and the
-  connection's client address cut to its first 128 characters, or `unknown`
-  when the connection names no client; no request-controlled value enters
-  the key.
 
 ### Required tests
 
@@ -1320,10 +1316,11 @@ headers only. Recorded in the accepted spec as `rules.http_transport_policy` (Fa
   [witness: verification:transport_guard_client_portal].
 - TRN-002: the API transport check
   [witness: verification:api_transport_financial_policy_registry_gateway_client_portal].
-- TRN-004: a check of the limiter key: a 129-character client address and its
-  first 128 characters share one bucket; two connections without a client
-  share the `unknown` bucket; a forwarded header or cookie never changes the
-  bucket.
+- The limiter key (Normative rules above) has no witness yet: the Factory
+  check `verification/client_portal_transport_guard_check.py` asserts it but
+  no verification command runs it; carried to Factory checks (State 2
+  rounds 115–116), together with the route and request-controlled-input
+  cases.
 
 ### Consequence
 
