@@ -1,0 +1,362 @@
+Module: staff_identity
+Target path: application/staff_identity.py
+Target file: staff_identity.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from __future__ import annotations
+from datetime import datetime
+from uuid import UUID
+from uuid import uuid4
+
+from adapters.portal_store import PortalStore, PortalTransaction
+from adapters.registry_gateway import validate_project_reference
+from application.audit_writer import append_audit
+from application.authorization_guard import ArchivedProjectRejected, AuthenticationRejected, AuthorizationRejected, ScopedNotFoundError, authorize_access_management, conceal_authentication_failure
+from core.data_provider import CREDENTIAL_SECRET_BYTES, PASSWORD_MAX_CODEPOINTS, PASSWORD_MIN_CODEPOINTS, STAFF_SESSION_TTL_HOURS, STAFF_STATUS_TRANSITIONS
+from core.models import ActorKind, AuditAction, AuditEntityKind, AuditIntent, AuditRecord, AuditRepository, AuditResult, GrantStatus, IssuedSecret, PresentedSecret, ProjectValidationResult, SessionRevocationResult, StaffAccessRepository, StaffAccount, StaffAccountView, StaffActorContext, StaffProjectAssignment, StaffRole, StaffSession, StaffSessionGrant, StaffStatus, StaffStatusTransition
+from core.record_builders import build_session_revocation_result, build_staff_account, build_staff_account_view, build_staff_actor_context, build_staff_audit_intent, build_staff_login_audit_intent, build_staff_logout_audit_intent, build_staff_project_assignment, build_staff_session, build_staff_session_grant, revise_staff_email, revise_staff_password, revise_staff_project_assignment, revise_staff_session, revise_staff_status
+from core.system_clock import utc_now
+from security.credential_security import hash_password, issue_verification_secret, parse_verification_secret, verify_password, verify_secret
+
+CONTRACTS (function signatures — follow exactly):
+def _normalize_staff_email(email: str) -> str
+def _validate_new_password(password: str) -> None
+def assign_staff_project(store: PortalStore, administrator: StaffActorContext, operator_id: UUID, project_id: UUID) -> StaffProjectAssignment
+def authenticate_staff(store: PortalStore, email: str, password: str) -> StaffSessionGrant
+def change_staff_password(store: PortalStore, actor: StaffActorContext, current_password: str, new_password: str) -> StaffAccountView
+def change_staff_status(store: PortalStore, administrator: StaffActorContext, staff_id: UUID, new_status: StaffStatus) -> StaffAccountView
+def create_staff_account(store: PortalStore, administrator: StaffActorContext, email: str, initial_password: str, role: StaffRole) -> StaffAccountView
+def perform_recovery_override(store: PortalStore, administrator: StaffActorContext, staff_id: UUID, replacement_email: str) -> StaffAccountView
+def resolve_staff_session(store: PortalStore, token: str) -> StaffActorContext
+def revoke_staff_project_assignment(store: PortalStore, administrator: StaffActorContext, assignment_id: UUID) -> StaffProjectAssignment
+def revoke_staff_sessions(store: PortalStore, administrator: StaffActorContext, staff_id: UUID) -> SessionRevocationResult
+def sign_out_staff(store: PortalStore, actor: StaffActorContext) -> StaffSession
+# StaffAccessRepository
+def get_staff(self, staff_id: UUID) -> StaffAccount | None
+# StaffAccessRepository
+def get_staff_assignment(self, staff_id: UUID, project_id: UUID) -> StaffProjectAssignment | None
+# StaffAccessRepository
+def get_staff_assignment_by_id(self, assignment_id: UUID) -> StaffProjectAssignment | None
+# StaffAccessRepository
+def get_staff_by_email(self, normalized_email: str) -> StaffAccount | None
+# StaffAccessRepository
+def get_staff_session(self, session_id: UUID) -> StaffSession | None
+# StaffAccessRepository
+def insert_staff_account(self, account: StaffAccount) -> None
+# StaffAccessRepository
+def insert_staff_assignment(self, assignment: StaffProjectAssignment) -> None
+# StaffAccessRepository
+def insert_staff_session(self, session: StaffSession) -> None
+# StaffAccessRepository
+def list_staff_sessions(self, staff_id: UUID) -> list[StaffSession]
+# StaffAccessRepository
+def update_staff_account(self, account: StaffAccount) -> None
+# StaffAccessRepository
+def update_staff_assignment(self, assignment: StaffProjectAssignment) -> None
+# StaffAccessRepository
+def update_staff_sessions(self, sessions: list[StaffSession]) -> None
+# PortalStore
+def __init__(self, database_url: str) -> None
+# PortalStore
+def begin(self) -> PortalTransaction
+# PortalTransaction
+def __init__(self, connection: object) -> None
+# PortalTransaction
+def audit(self) -> AuditRepository
+# PortalTransaction
+def commit(self) -> None
+# PortalTransaction
+def rollback(self) -> None
+# PortalTransaction
+def staff_access(self) -> StaffAccessRepository
+# AuthenticationRejected
+def __init__(self) -> None
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def append_audit(repository: AuditRepository, intent: AuditIntent) -> AuditRecord
+def authorize_access_management(store: PortalStore, actor: StaffActorContext) -> StaffActorContext
+def conceal_authentication_failure() -> AuthenticationRejected
+def hash_password(password: str) -> str
+def issue_verification_secret(record_id: UUID, entropy_bytes: int) -> IssuedSecret
+def parse_verification_secret(token: str) -> PresentedSecret
+def verify_password(password: str, password_hash: str) -> bool
+def verify_secret(secret: str, verification_hash: str) -> bool
+def build_session_revocation_result(revoked_at: datetime, revoked_session_count: int, staff_id: UUID) -> SessionRevocationResult
+def build_staff_account(email: str, now: datetime, password_hash: str, role: StaffRole, administrator: StaffActorContext) -> StaffAccount
+def build_staff_account_view(staff_account: StaffAccount) -> StaffAccountView
+def build_staff_actor_context(staff_account: StaffAccount, staff_session: StaffSession) -> StaffActorContext
+def build_staff_audit_intent(administrator: StaffActorContext, action: AuditAction, entity_kind: AuditEntityKind, entity_id: UUID, project_id: UUID | None) -> AuditIntent
+def build_staff_login_audit_intent(action: AuditAction, actor_id: UUID | None, entity_id: str | None, result: AuditResult) -> AuditIntent
+def build_staff_logout_audit_intent(staff_account: StaffAccount) -> AuditIntent
+def build_staff_project_assignment(now: datetime, operator_id: UUID, project_id: UUID, administrator: StaffActorContext) -> StaffProjectAssignment
+def build_staff_session(created_at: datetime, expires_at: datetime, issued_secret: IssuedSecret, session_id: UUID, staff_account: StaffAccount) -> StaffSession
+def build_staff_session_grant(expires_at: datetime, issued_secret: IssuedSecret, session_id: UUID, staff_account: StaffAccount) -> StaffSessionGrant
+def revise_staff_email(email: str, now: datetime, staff_account: StaffAccount) -> StaffAccount
+def revise_staff_password(now: datetime, password_hash: str, staff_account: StaffAccount) -> StaffAccount
+def revise_staff_project_assignment(revoked_at: datetime, administrator: StaffActorContext, staff_project_assignment: StaffProjectAssignment) -> StaffProjectAssignment
+def revise_staff_session(revoked_at: datetime, staff_session: StaffSession) -> StaffSession
+def revise_staff_status(email_verified_at: datetime | None, new_status: StaffStatus, now: datetime, staff_account: StaffAccount) -> StaffAccount
+def validate_project_reference(project_id: UUID) -> ProjectValidationResult
+def utc_now() -> datetime
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+CREDENTIAL_SECRET_BYTES: int
+PASSWORD_MAX_CODEPOINTS: int
+PASSWORD_MIN_CODEPOINTS: int
+STAFF_SESSION_TTL_HOURS: int
+STAFF_STATUS_TRANSITIONS: tuple[StaffStatusTransition, ...]
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _normalize_staff_email: (email: str) -> str
+- _validate_new_password: (password: str) -> None
+- assign_staff_project: (store: PortalStore, administrator: StaffActorContext, operator_id: UUID, project_id: UUID) -> StaffProjectAssignment
+- authenticate_staff: (store: PortalStore, email: str, password: str) -> StaffSessionGrant
+- change_staff_password: (store: PortalStore, actor: StaffActorContext, current_password: str, new_password: str) -> StaffAccountView
+- change_staff_status: (store: PortalStore, administrator: StaffActorContext, staff_id: UUID, new_status: StaffStatus) -> StaffAccountView
+- create_staff_account: (store: PortalStore, administrator: StaffActorContext, email: str, initial_password: str, role: StaffRole) -> StaffAccountView
+- perform_recovery_override: (store: PortalStore, administrator: StaffActorContext, staff_id: UUID, replacement_email: str) -> StaffAccountView
+- resolve_staff_session: (store: PortalStore, token: str) -> StaffActorContext
+- revoke_staff_project_assignment: (store: PortalStore, administrator: StaffActorContext, assignment_id: UUID) -> StaffProjectAssignment
+- revoke_staff_sessions: (store: PortalStore, administrator: StaffActorContext, staff_id: UUID) -> SessionRevocationResult
+- sign_out_staff: (store: PortalStore, actor: StaffActorContext) -> StaffSession
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+POLICIES ENFORCED BY FACTORY GATES ON THIS MODULE (spec rules, not code; a module that violates one is rejected):
+rules.model_immutability_policy (kind model_policy; tools/code_invariant_gates.py refuses a generated assignment to a field of a model instance when instances are frozen):
+  assignment_to_argument_field: forbidden
+  derive_instead: compute the value where it is needed, or return it, rather than writing it back onto an input
+  forbidden:
+    - assigning to any field of an argument
+    - assigning to any field of a value read from a repository
+    - carrying a computed result to the caller through a mutated input
+  instances_are_frozen: true
+  replacement_shape: construct a new instance when a changed value must be carried
+rules.transaction_guard_policy (kind transaction_policy; tools/code_invariant_gates.py refuses a transaction guard that catches less than the declared exception scope):
+  close_exactly_once: true
+  forbidden:
+    - a second rollback on an already closed transaction
+    - rollback after a successful commit
+    - catching only Exception instead of BaseException
+    - probing open state through assert_open, _assert_open, or a caught PersistenceError
+  guard_action: rollback only while the local flag still marks the transaction open, then re-raise the original exception unchanged
+  guard_exception_scope: BaseException
+  open_state_tracking: required_local_boolean_flag
+  read_path: rollback once immediately after the last read, set the local flag to closed, then evaluate results and raise any domain error
+  write_path: commit once on success and set the local flag to closed
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes with contracted methods required; module-local exception exports are listed separately.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _normalize_staff_email: [VALIDATION_ERROR] MUST reject an address containing any whitespace, then syntax-validate and Unicode-casefold it in that order while preserving dots and plus tags and performing no provider-specific rewrite.
+- _normalize_staff_email: [VALIDATION_ERROR] MUST require exactly one at-sign, non-empty local and domain components, and at least one dot inside the domain with no empty domain label; therefore a single-label domain such as operator@localhost MUST raise IdentityInputRejected. It MUST also reject whitespace while preserving dots and plus tags.
+- _validate_new_password: [VALIDATION_ERROR] MUST reject a password whose code point count is below the imported PASSWORD_MIN_CODEPOINTS constant or above the imported PASSWORD_MAX_CODEPOINTS constant, both bounds inclusive, or that contains a control character, and MUST NOT trim, casefold, Unicode-normalize, log, or perform an undeclared network check.
+- assign_staff_project: [ORCHESTRATION] MUST authorize access management with the imported authorize_access_management, validate the Registry UUID server-side with validate_project_reference before opening the mutation transaction, reject duplicate active assignment, and append the STAFF_ASSIGNMENT_CREATE member of = models.AuditAction atomically.
+- assign_staff_project: [DEPENDENCY_BOUNDARY] MUST complete both its authorization check and its Registry validation before it opens a transaction, never while one is open, because the authorization check opens a transaction of its own and a second one nested inside this transaction is forbidden, and because a transaction must never stay open across a call to an external service. It MUST then open its transaction with an explicit assignment, never as a context manager, reach account and assignment persistence only through the staff_access repository of that transaction, append its audit only with the imported append_audit into the audit repository of that transaction, use no legacy transaction-level staff method, and close the transaction exactly once.
+- assign_staff_project: [VALIDATION_ERROR] MUST inspect the validation result it receives for the project rather than discarding it: a project the Registry does not know is ScopedNotFoundError and a project it knows but reports as not active is ArchivedProjectRejected, both raised before the transaction opens, because an archived or unknown project accepts no mutation. An unknown operator_id is ScopedNotFoundError, and an operator that already holds an active assignment for that project is AuthorizationRejected.
+- assign_staff_project: [FIELD_ASSIGNMENT] MUST build the new = models.StaffProjectAssignment with the imported build_staff_project_assignment, passing the one utc_now instant as now, the operator_id, the validated project_id and the authorized administrator context. It MUST build exactly one audit intent with the imported build_staff_audit_intent, passing as action the STAFF_ASSIGNMENT_CREATE member of = models.AuditAction, as entity_kind the STAFF_ASSIGNMENT member of = models.AuditEntityKind, as entity_id the assignment_id of the built assignment and as project_id the assigned project.
+- assign_staff_project: [FIELD_ASSIGNMENT] MUST capture its operation timestamp as offset-naive UTC, compatible with the existing persisted datetime model; it MUST NOT introduce a timezone-aware datetime that cannot be compared with existing offset-naive records.
+- assign_staff_project: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- assign_staff_project: [DEPENDENCY_BOUNDARY] MUST make its own reads and writes, wherever its other notes call for them, of the records the StaffAccessRepository holds through get_staff of the staff_access repository of that transaction, and through its get_staff_assignment and its insert_staff_assignment.
+- authenticate_staff: [SECURITY_BOUNDARY] MUST normalize email, accept only an account whose status is the ACTIVE member of = models.StaffStatus with a password verify_password matches, deciding nothing on email_verified_at, issue a hashed fixed-expiry session, audit success or concealed failure, and never reveal which check failed: every rejection raises what conceal_authentication_failure returns.
+- authenticate_staff: [DEPENDENCY_BOUNDARY] MUST open its transaction by beginning a transaction with begin of the store, which returns a PortalTransaction, with an explicit assignment, never as a context manager, reach account and session persistence only through the staff_access repository of that transaction, append its audit only with the imported append_audit into the audit repository of that transaction, use no legacy transaction-level staff method, and close the transaction exactly once: the outcome commits once, and a failure rolls back with the rollback of that transaction only while the local open flag still marks the transaction open and re-raises the original failure unchanged.
+- authenticate_staff: [FIELD_ASSIGNMENT] MUST allocate a fresh session_id, issue the session secret for that same session_id, and build both the persisted = models.StaffSession with the imported build_staff_session and the returned = models.StaffSessionGrant with the imported build_staff_session_grant from that session_id, that issued secret and the matched account, so the identity carried by the returned token is the identity the session is stored under; binding the secret to any other identifier stores the session where no later resolution can find it. It MUST pass the one utc_now instant as created_at and, to both builders, as expires_at the timedelta addition of the staff session lifetime, the imported STAFF_SESSION_TTL_HOURS constant in hours, onto that same instant rather than a round trip through a local-time conversion.
+- authenticate_staff: [SECURITY_BOUNDARY] MUST append, with the imported append_audit into the audit repository of that transaction, exactly one audit on every outcome and commit it before it returns or raises, its intent built with the imported build_staff_login_audit_intent: passing the STAFF_LOGIN member of = models.AuditAction with the SUCCESS member of = models.AuditResult when a session was issued, and its STAFF_LOGIN_FAILED member with the REJECTED member of = models.AuditResult on every rejection, including an unknown email, a non-active account and a wrong password. As actor_id it MUST pass the staff_id of the persisted account and as entity_id the canonical string of that identifier, and None for both when no account matched the normalized email. The concealed rejection is raised only after that commit, so the record survives the failure.
+- authenticate_staff: [FIELD_ASSIGNMENT] MUST capture created_at as offset-naive UTC and derive expires_at by adding the staff session lifetime, the imported STAFF_SESSION_TTL_HOURS constant in hours, to that same offset-naive value; both persisted and returned datetimes MUST remain comparable with existing offset-naive records.
+- authenticate_staff: [FIELD_ASSIGNMENT] MUST allocate session_id with uuid4 before calling issue_verification_secret with that session_id as record_id and the imported CREDENTIAL_SECRET_BYTES constant as entropy_bytes; IssuedSecret exposes only plaintext and verification_hash and MUST NOT be used as an identifier source.
+- authenticate_staff: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- authenticate_staff: [DEPENDENCY_BOUNDARY] MUST make its own reads and writes, wherever its other notes call for them, of the records the StaffAccessRepository holds through get_staff_by_email and insert_staff_session of the staff_access repository of that transaction.
+- change_staff_password: [SECURITY_BOUNDARY] MUST verify current_password with verify_password, enforce R16 on new_password, replace password_hash with the hash_password of it, revoke other active sessions, and never persist or audit either plaintext. It MUST return the hash-free = models.StaffAccountView the imported build_staff_account_view builds from the replaced account, so password_hash never leaves this module.
+- change_staff_password: [DEPENDENCY_BOUNDARY] MUST open its transaction with an explicit assignment, never as a context manager, reach account and session persistence only through the staff_access repository of that transaction, use no legacy transaction-level staff method, and close the transaction exactly once. AuditAction has no member for a password change, so this function appends no audit, by declaration rather than by omission.
+- change_staff_password: [FIELD_ASSIGNMENT] MUST read the account the actor context names, reject a wrong current_password through the concealed authentication boundary, and carry the new hash on a replacement account built with the imported revise_staff_password, passing the hash_password of new_password as password_hash and the one utc_now instant as now. It MUST revoke every session of that account that is neither revoked nor expired except the actor's own, each replaced with the imported revise_staff_session at that same instant as revoked_at, so the caller keeps the session it is acting through while every other one dies with the old password.
+- change_staff_password: [FIELD_ASSIGNMENT] MUST capture updated_at and revoked_at as one offset-naive UTC datetime so comparisons with existing offset-naive session expiry values remain valid; it MUST NOT introduce a timezone-aware datetime.
+- change_staff_password: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- change_staff_password: [DEPENDENCY_BOUNDARY] MUST make its own reads and writes, wherever its other notes call for them, of the records the StaffAccessRepository holds through get_staff of the staff_access repository of that transaction, and through its list_staff_sessions, its update_staff_account and its update_staff_sessions.
+- change_staff_status: [BEHAVIOR] MUST accept a transition only when its row in the imported STAFF_STATUS_TRANSITIONS constant selected by from_status, which is the persisted current status, and to_status, which is the requested one, has allowed true; and MUST apply the revocation cascade; suspension or disabling revokes the account's sessions and commits the status change plus one catalog audit atomically. It MUST return the hash-free = models.StaffAccountView the imported build_staff_account_view builds from the replaced account, so password_hash never leaves this module.
+- change_staff_status: [DEPENDENCY_BOUNDARY] MUST complete its authorization check before it opens a transaction, never while one is open, because that check opens a transaction of its own and a second one nested inside this transaction is forbidden. It MUST then open its transaction with an explicit assignment, never as a context manager, reach account and session persistence only through the staff_access repository of that transaction, append its audit only with the imported append_audit into the audit repository of that transaction, use no legacy transaction-level staff method, and close the transaction exactly once.
+- change_staff_status: [VALIDATION_ERROR] MUST reject a transition whose row of the imported STAFF_STATUS_TRANSITIONS constant selected by from_status, the persisted current status, and to_status, the requested one, has allowed false, and MUST do so with IdentityInputRejected before any write, because the api answers that rejection as an input rejection while an unmapped error type would reach the caller as an internal failure. An unknown staff_id is ScopedNotFoundError. It MUST re-raise both unchanged rather than substituting a translated persistence error.
+- change_staff_status: [FIELD_ASSIGNMENT] MUST carry the change on a replacement account built with the imported revise_staff_status, passing the requested status as new_status and the one utc_now instant as now, because persisted records are frozen and assigning to a record that was read is forbidden. As email_verified_at it MUST pass that same instant for a transition into active from pending_verification, because the administrator performing the activation is what vouches for the address, and the persisted email_verified_at unchanged for every other transition, including one into active from suspended; the recorded value is a record only, and sign-in decides nothing on it.
+- change_staff_status: [BEHAVIOR] MUST append exactly one audit, its intent built with the imported build_staff_audit_intent, passing as action the member chosen by the target status — the STAFF_SUSPEND member of = models.AuditAction, its STAFF_DISABLE member, or its STAFF_REINSTATE member for either transition into active — as entity_kind the STAFF_ACCOUNT member of = models.AuditEntityKind, as entity_id that staff_id and as project_id None. Suspension and disabling MUST additionally revoke every session of that account that is neither revoked nor expired, each replaced with the imported revise_staff_session at the same instant as revoked_at, because suspending or disabling an account ends its sessions; the account has nothing else to revoke.
+- change_staff_status: [FIELD_ASSIGNMENT] MUST capture updated_at, any activation email_verified_at, and any session revoked_at as one offset-naive UTC datetime so comparisons with existing offset-naive session expiry values remain valid; it MUST NOT introduce a timezone-aware datetime.
+- change_staff_status: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- change_staff_status: [DEPENDENCY_BOUNDARY] MUST make its own reads and writes, wherever its other notes call for them, of the records the StaffAccessRepository holds through get_staff of the staff_access repository of that transaction, and through its list_staff_sessions, its update_staff_account and its update_staff_sessions.
+- create_staff_account: [ORCHESTRATION] MUST authorize access management with the imported authorize_access_management, enforce R16 normalized-email uniqueness, hash initial_password exactly as supplied with hash_password, insert the pending-verification account, and append the STAFF_CREATE member of = models.AuditAction in the same transaction. It MUST return the hash-free = models.StaffAccountView the imported build_staff_account_view builds from the inserted account, so password_hash never leaves this module.
+- create_staff_account: [FIELD_ASSIGNMENT] MUST append exactly one audit, its intent built with the imported build_staff_audit_intent passing as action the STAFF_CREATE member of = models.AuditAction, as entity_kind the STAFF_ACCOUNT member of = models.AuditEntityKind, as entity_id the staff_id of the new account and as project_id None, in the same transaction that inserts the account, before that transaction commits. Committing the account without that audit is forbidden.
+- create_staff_account: [DEPENDENCY_BOUNDARY] MUST complete its authorization check before it opens a transaction, never while one is open, because that check opens a transaction of its own and a second one nested inside this transaction is forbidden. It MUST then open its transaction with an explicit assignment, never as a context manager, reach staff account, session and assignment persistence only through the staff_access repository of that transaction, append its audit only with the imported append_audit into the audit repository of that transaction, use no legacy transaction-level staff method, and close the transaction exactly once: a successful write commits once, a failure rolls back with the rollback of that transaction only while the local open flag still marks the transaction open and re-raises the original failure unchanged.
+- create_staff_account: [VALIDATION_ERROR] MUST re-raise the original failure unchanged and MUST NOT substitute a translated persistence error for it. Translating every failure turns an authorization or input rejection into a persistence failure, changes the answer the api gives for it and hides the defect from every caller and every gate; only a genuine storage failure is a persistence error.
+- create_staff_account: [FIELD_ASSIGNMENT] MUST build the new = models.StaffAccount with the imported build_staff_account, passing the normalized email, the hash_password of initial_password as password_hash, the requested role, the one utc_now instant as now and the authorized administrator context. When an account already exists for that normalized email it MUST raise IdentityInputRejected before any insert, because the api maps that rejection to an input rejection while an uncaught uniqueness collision would surface as a server failure.
+- create_staff_account: [FIELD_ASSIGNMENT] MUST capture created_at and updated_at as one offset-naive UTC datetime compatible with the existing persisted datetime model; it MUST NOT introduce a timezone-aware datetime.
+- create_staff_account: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- create_staff_account: [DEPENDENCY_BOUNDARY] MUST make its own reads and writes, wherever its other notes call for them, of the records the StaffAccessRepository holds through get_staff_by_email and insert_staff_account of the staff_access repository of that transaction.
+- perform_recovery_override: [SECURITY_BOUNDARY] MUST be administrator-only, enforce R16 on replacement_email, append the enhanced audit of the STAFF_RECOVERY_OVERRIDE member of = models.AuditAction atomically with the replacement; it is the one operation that changes a login email. It MUST return the hash-free = models.StaffAccountView the imported build_staff_account_view builds from the replaced account, so password_hash never leaves this module.
+- perform_recovery_override: [FIELD_ASSIGNMENT] MUST capture email_verified_at and updated_at as one offset-naive UTC datetime compatible with the existing persisted datetime model; it MUST NOT introduce a timezone-aware datetime.
+- perform_recovery_override: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- perform_recovery_override: [FIELD_ASSIGNMENT] MUST carry the replacement on a replacement account built with the imported revise_staff_email, passing the normalized replacement_email as email and the one utc_now instant as now, and build its one audit intent with the imported build_staff_audit_intent, passing as action the STAFF_RECOVERY_OVERRIDE member of = models.AuditAction, as entity_kind the STAFF_ACCOUNT member of = models.AuditEntityKind, as entity_id that staff_id and as project_id None.
+- perform_recovery_override: [DEPENDENCY_BOUNDARY] MUST make its own reads and writes, wherever its other notes call for them, of the records the StaffAccessRepository holds through get_staff and update_staff_account of the staff_access repository of that transaction.
+- resolve_staff_session: [SECURITY_BOUNDARY] MUST parse the R17 selector with parse_verification_secret, verify its secret hash with verify_secret, fixed expiry, revocation and that the account status is the ACTIVE member of = models.StaffStatus before returning StaffActorContext, deciding nothing on email_verified_at; any failure raises AuthenticationRejected.
+- resolve_staff_session: [RETURN_SHAPE] MUST return exactly one = models.StaffActorContext, built with the imported build_staff_actor_context from the selected persisted session and its account, or raise AuthenticationRejected; it MUST never return None.
+- resolve_staff_session: [DEPENDENCY_BOUNDARY] MUST open its transaction with an explicit assignment, never as a context manager, and read only through the staff_access repository of that transaction: first the persisted session addressed by the identifier parsed out of the token, then, only when that session exists, the staff account that session names. It MUST roll the transaction back with its rollback exactly once immediately after those reads and mark the local open flag closed before it evaluates revocation, expiry or account status, so that a decidable rejection is never answered as a storage failure. It MUST use no legacy transaction-level staff method and append no audit.
+- resolve_staff_session: [SECURITY_BOUNDARY] MUST verify the parsed secret component against the stored session hash and never the presented token as a whole, because the token is a selector-and-secret envelope and the stored hash covers only the secret, so verifying the envelope rejects every correct token. A token that cannot be parsed is an ordinary bad credential and MUST be answered with the same AuthenticationRejected as a wrong or expired one, never as a parse or validation failure, because the value arrives from an unauthenticated caller and a distinguishable answer tells an attacker which guess was even well formed.
+- resolve_staff_session: [SECURITY_BOUNDARY] MUST evaluate expiry against a captured offset-naive UTC datetime because persisted session expiry values use the existing offset-naive datetime model; it MUST NOT compare them with a timezone-aware datetime.
+- resolve_staff_session: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- resolve_staff_session: [DEPENDENCY_BOUNDARY] MUST make its own reads, wherever its other notes call for them, of the records the StaffAccessRepository holds through get_staff and get_staff_session of the staff_access repository of that transaction.
+- revoke_staff_project_assignment: [ORCHESTRATION] MUST authorize access management with the imported authorize_access_management, revoke the addressed active assignment, and append the STAFF_ASSIGNMENT_REVOKE member of = models.AuditAction atomically so the next guard observes revocation.
+- revoke_staff_project_assignment: [DEPENDENCY_BOUNDARY] MUST complete its authorization check before it opens a transaction, never while one is open, because that check opens a transaction of its own and a second one nested inside this transaction is forbidden. It MUST then open its transaction with an explicit assignment, never as a context manager, reach assignment persistence only through the staff_access repository of that transaction, append its audit only with the imported append_audit into the audit repository of that transaction, use no legacy transaction-level staff method, and close the transaction exactly once.
+- revoke_staff_project_assignment: [FIELD_ASSIGNMENT] MUST address the assignment by its own identifier and answer both an unknown identifier and an already revoked assignment with ScopedNotFoundError, because an already revoked target is no longer revocable and telling the two apart would let a caller enumerate identifiers through the revocation surface. The revocation MUST be carried on a replacement built with the imported revise_staff_project_assignment, passing the one utc_now instant as revoked_at and the authorized administrator context. It MUST build exactly one audit intent with the imported build_staff_audit_intent, passing as action the STAFF_ASSIGNMENT_REVOKE member of = models.AuditAction, as entity_kind the STAFF_ASSIGNMENT member of = models.AuditEntityKind, as entity_id that assignment_id and as project_id the project of the assignment.
+- revoke_staff_project_assignment: [FIELD_ASSIGNMENT] MUST capture revoked_at as offset-naive UTC compatible with the existing persisted datetime model; it MUST NOT introduce a timezone-aware datetime.
+- revoke_staff_project_assignment: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- revoke_staff_project_assignment: [DEPENDENCY_BOUNDARY] MUST make its own reads and writes, wherever its other notes call for them, of the records the StaffAccessRepository holds through get_staff_assignment_by_id and update_staff_assignment of the staff_access repository of that transaction.
+- revoke_staff_sessions: [ORCHESTRATION] MUST authorize access management with the imported authorize_access_management, revoke every active session for staff_id at one revoked_at, append the STAFF_SESSIONS_REVOKE member of = models.AuditAction in the same transaction, and return the SessionRevocationResult built from that same timestamp and the revoked count; when no session was active it MUST use the timestamp it captured for the operation rather than let the caller supply one.
+- revoke_staff_sessions: [DEPENDENCY_BOUNDARY] MUST complete its authorization check before it opens a transaction, never while one is open, because that check opens a transaction of its own and a second one nested inside this transaction is forbidden. It MUST then open its transaction with an explicit assignment, never as a context manager, reach session persistence only through the staff_access repository of that transaction, append its audit only with the imported append_audit into the audit repository of that transaction, use no legacy transaction-level staff method, and close the transaction exactly once.
+- revoke_staff_sessions: [FIELD_ASSIGNMENT] MUST select from the persisted sessions of that staff_id exactly those that are neither revoked nor expired and replace each with the imported revise_staff_session, passing the one utc_now instant as revoked_at, because persisted records are frozen and assigning to a record that was read is forbidden. It MUST build exactly one audit intent with the imported build_staff_audit_intent, passing as action the STAFF_SESSIONS_REVOKE member of = models.AuditAction, as entity_kind the STAFF_ACCOUNT member of = models.AuditEntityKind, as entity_id that staff_id and as project_id None, and its result with the imported build_session_revocation_result from that same instant, the count of replaced sessions and that staff_id.
+- revoke_staff_sessions: [FIELD_ASSIGNMENT] MUST capture revoked_at as offset-naive UTC so comparisons with existing offset-naive session expiry values remain valid and return that same value in SessionRevocationResult; it MUST NOT introduce a timezone-aware datetime.
+- revoke_staff_sessions: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- revoke_staff_sessions: [DEPENDENCY_BOUNDARY] MUST make its own reads and writes, wherever its other notes call for them, of the records the StaffAccessRepository holds through list_staff_sessions and update_staff_sessions of the staff_access repository of that transaction.
+- sign_out_staff: [ORCHESTRATION] MUST revoke the actor's selected active session and append the STAFF_LOGOUT member of = models.AuditAction atomically; an already unusable session is rejected through the concealed auth boundary.
+- sign_out_staff: [DEPENDENCY_BOUNDARY] MUST open its transaction with an explicit assignment, never as a context manager, reach session persistence only through the staff_access repository of that transaction, append its audit only with the imported append_audit into the audit repository of that transaction, use no legacy transaction-level staff method, and close the transaction exactly once: the revocation commits once, and a failure rolls back with the rollback of that transaction only while the local open flag still marks the transaction open and re-raises the original failure unchanged.
+- sign_out_staff: [FIELD_ASSIGNMENT] MUST address exactly the session the actor context names, and reject a missing, already revoked or expired session through the concealed authentication boundary rather than reporting a successful sign-out. Persisted records are frozen, so the revocation MUST replace that session with the imported revise_staff_session, passing the one utc_now instant as revoked_at, and MUST NOT assign to the record it read. It MUST append exactly one audit whose intent the imported build_staff_logout_audit_intent builds from the account of that session, then return the revoked session.
+- sign_out_staff: [FIELD_ASSIGNMENT] MUST capture revoked_at as offset-naive UTC so comparisons with the existing offset-naive session expiry value remain valid; it MUST NOT introduce a timezone-aware datetime.
+- sign_out_staff: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- sign_out_staff: [DEPENDENCY_BOUNDARY] MUST make its own reads and writes, wherever its other notes call for them, of the records the StaffAccessRepository holds through get_staff of the staff_access repository of that transaction, and through its get_staff_session and its update_staff_sessions.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- AuditAction: omitted because it is an imported runtime model schema
+- AuditEntityKind: omitted because it is an imported runtime model schema
+- AuditResult: omitted because it is an imported runtime model schema
+- StaffAccount: omitted because it is an imported runtime model schema
+- StaffAccountView: omitted because it is an imported runtime model schema
+- StaffActorContext: omitted because it is an imported runtime model schema
+- StaffProjectAssignment: omitted because it is an imported runtime model schema
+- StaffSession: omitted because it is an imported runtime model schema
+- StaffSessionGrant: omitted because it is an imported runtime model schema
+- StaffStatus: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not core.models imports.
+Only import runtime model symbols from core.models when they are explicitly listed in IMPORTS.
+- models.AuditAction: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.AuditEntityKind: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.AuditResult: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.StaffAccount: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.StaffAccountView: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.StaffActorContext: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.StaffProjectAssignment: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.StaffSession: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.StaffSessionGrant: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.StaffStatus: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from core.models. Use the listed enum member names and model fields exactly.
+- ActorKind enum members: SERVICE='service', STAFF='staff', SYSTEM='system', VIEWER='viewer'
+- AuditAction enum members: BUDGET_MANUAL_VERSION_CREATE='budget.manual_version_create', BUDGET_SECTION_PLAN_EDIT='budget.section_plan_edit', DOCUMENT_UPDATE='document.update', EXPENSE_ALLOCATE='expense.allocate', EXPENSE_CORRECT='expense.correct', EXPENSE_CREATE='expense.create', EXPENSE_EXCLUDE='expense.exclude', EXPENSE_INCLUDE='expense.include', GRANT_CREATE='grant.create', GRANT_REVOKE='grant.revoke', PAYMENT_REGISTER='payment.register', PHOTO_PUBLISH='photo.publish', PHOTO_UPDATE='photo.update', PRINCIPAL_CREATE='principal.create', PRINCIPAL_CREDENTIAL_ISSUE='principal.credential_issue', PRINCIPAL_CREDENTIAL_REVOKE='principal.credential_revoke', PRINCIPAL_DISABLE='principal.disable', PRINCIPAL_ENABLE='principal.enable', PRODUCER_GRANT_CREATE='producer_grant.create', PRODUCER_GRANT_REVOKE='producer_grant.revoke', PROGRESS_UPDATE='progress.update', SNAPSHOT_ACTIVATE='snapshot.activate', SNAPSHOT_IMPORT='snapshot.import', STAFF_ASSIGNMENT_CREATE='staff_assignment.create', STAFF_ASSIGNMENT_REVOKE='staff_assignment.revoke', STAFF_CREATE='staff.create', STAFF_DISABLE='staff.disable', STAFF_LOGIN='staff.login', STAFF_LOGIN_FAILED='staff.login_failed', STAFF_LOGOUT='staff.logout', STAFF_RECOVERY_OVERRIDE='staff.recovery_override', STAFF_REINSTATE='staff.reinstate', STAFF_SESSIONS_REVOKE='staff.sessions_revoke', STAFF_SUSPEND='staff.suspend', VIEWER_CREATE='viewer.create', VIEWER_CREDENTIAL_ISSUE='viewer.credential_issue', VIEWER_CREDENTIAL_REVOKE='viewer.credential_revoke', VIEWER_REVOKE='viewer.revoke'
+- AuditEntityKind enum members: BUDGET_VERSION='budget_version', EXPENSE='expense', EXPENSE_ALLOCATION='expense_allocation', EXPENSE_DOCUMENT='expense_document', PRODUCER_GRANT='producer_grant', PROGRESS_PHOTO='progress_photo', SECTION_PLAN='section_plan', SECTION_PROGRESS='section_progress', SERVICE_CREDENTIAL='service_credential', SERVICE_PRINCIPAL='service_principal', SNAPSHOT_IMPORT='snapshot_import', STAFF_ACCOUNT='staff_account', STAFF_ASSIGNMENT='staff_assignment', STAFF_SESSION='staff_session', VIEWER='viewer', VIEWER_CREDENTIAL='viewer_credential', VIEWER_GRANT='viewer_grant', WORK_PAYMENT='work_payment'
+- AuditIntent fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditRecord fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, audit_id: UUID, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, occurred_at: datetime, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditRepository operations (exact, no others exist):
+    insert_audit(self, record: AuditRecord) -> None
+- AuditResult enum members: REJECTED='rejected', SUCCESS='success'
+- GrantStatus enum members: ACTIVE='active', REVOKED='revoked'
+- IssuedSecret fields (exact, no others exist): plaintext: str, verification_hash: str
+- PresentedSecret fields (exact, no others exist): record_id: UUID, secret: str
+- ProjectValidationResult fields (exact, no others exist): exists: bool, failure: str | None, is_active: bool, project_id: UUID, status: str | None
+- SessionRevocationResult fields (exact, no others exist): revoked_at: datetime, revoked_session_count: int, staff_id: UUID
+- StaffAccessRepository operations (exact, no others exist):
+    get_staff(self, staff_id: UUID) -> StaffAccount | None
+    get_staff_assignment(self, staff_id: UUID, project_id: UUID) -> StaffProjectAssignment | None
+    get_staff_assignment_by_id(self, assignment_id: UUID) -> StaffProjectAssignment | None
+    get_staff_by_email(self, normalized_email: str) -> StaffAccount | None
+    get_staff_session(self, session_id: UUID) -> StaffSession | None
+    insert_staff_account(self, account: StaffAccount) -> None
+    insert_staff_assignment(self, assignment: StaffProjectAssignment) -> None
+    insert_staff_session(self, session: StaffSession) -> None
+    list_staff_sessions(self, staff_id: UUID) -> list[StaffSession]
+    update_staff_account(self, account: StaffAccount) -> None
+    update_staff_assignment(self, assignment: StaffProjectAssignment) -> None
+    update_staff_sessions(self, sessions: list[StaffSession]) -> None
+- StaffAccount fields (exact, no others exist): created_at: datetime, created_by: UUID | None, email: str, email_verified_at: datetime | None, password_hash: str, role: StaffRole, staff_id: UUID, status: StaffStatus, updated_at: datetime
+- StaffAccountView fields (exact, no others exist): created_at: datetime, email: str, email_verified: bool, role: StaffRole, staff_id: UUID, status: StaffStatus, updated_at: datetime
+- StaffActorContext fields (exact, no others exist): role: StaffRole, session_id: UUID, staff_id: UUID
+- StaffProjectAssignment fields (exact, no others exist): assignment_id: UUID, created_at: datetime, created_by: UUID, project_id: UUID, revoked_at: datetime | None, revoked_by: UUID | None, staff_id: UUID, status: GrantStatus
+- StaffRole enum members: ADMINISTRATOR='administrator', OPERATOR='operator'
+- StaffSession fields (exact, no others exist): created_at: datetime, expires_at: datetime, revoked_at: datetime | None, session_id: UUID, staff_id: UUID, token_hash: str
+- StaffSessionGrant fields (exact, no others exist): expires_at: datetime, role: StaffRole, session_id: UUID, staff_id: UUID, token: str
+- StaffStatus enum members: ACTIVE='active', DISABLED='disabled', PENDING_VERIFICATION='pending_verification', SUSPENDED='suspended'
+- StaffStatusTransition fields (exact, no others exist): allowed: bool, from_status: StaffStatus, to_status: StaffStatus
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+- class IdentityInputRejected(Exception): pass
+
+RECORDS BUILT FOR THIS MODULE (record_construction_backend):
+Each record below is built by the imported builder named after it; call the builder.
+Constructing such a record here — its constructor, model_construct, model_validate,
+or model_copy of a parameter of that type — is rejected (record_construction_bypassed).
+- AuditIntent: build_staff_audit_intent, build_staff_login_audit_intent, build_staff_logout_audit_intent
+- SessionRevocationResult: build_session_revocation_result
+- StaffAccount: build_staff_account, revise_staff_email, revise_staff_password, revise_staff_status
+- StaffAccountView: build_staff_account_view
+- StaffActorContext: build_staff_actor_context
+- StaffProjectAssignment: build_staff_project_assignment, revise_staff_project_assignment
+- StaffSession: build_staff_session, revise_staff_session
+- StaffSessionGrant: build_staff_session_grant
+
+FUNCTION ORDER (define in this order):
+_normalize_staff_email, _validate_new_password, assign_staff_project, authenticate_staff, change_staff_password, change_staff_status, create_staff_account, perform_recovery_override, resolve_staff_session, revoke_staff_project_assignment, revoke_staff_sessions, sign_out_staff
+
+MODELS CONTEXT:
+Runtime models live in core.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete staff_identity.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in core.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and core.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen). A record listed in RECORDS BUILT FOR THIS MODULE, new or changed, comes only from its builder: call the builder, never model_copy or a constructor of it. Any other model value: derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.

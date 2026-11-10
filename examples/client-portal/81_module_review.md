@@ -33,6 +33,14 @@ the lost amount check of `create_expense_from_recognition` restored) 18
 packets changed: State 7 rounds 29–31 on the 11 modules whose notes changed,
 closed; structural review 0 blocks; verdicts unchanged, 39/39 PASS.
 
+After the cleanup that followed the Route B verify of `b3bfb504`
+(`20da9ee4`..: the 74 transaction-level `PortalTransaction` contracts
+retired, the repository methods each function uses named in its notes, the
+limiter identity and the four expense conflict answers restored) 36 packets
+changed; `portal_store` lost its delegating surface. State 7 rounds 32–35
+on every changed module, closed; structural review 0 blocks; verdicts
+unchanged, 39/39 PASS.
+
 Second pass: `81_module_review_status.json` records each
 verdict and its packet hash (`slice_sha256`, the FA002 rule over
 `build_slice`), recomputed on the spec after the State 7 rounds below.
