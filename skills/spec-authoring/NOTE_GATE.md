@@ -39,6 +39,15 @@ The gate checks all non-heading, non-empty lines in `80_notes.md` and blocks whe
    exposes a transport-to-interface adaptation boundary, but its State 7 notes do not
    both identify concrete implementation/adapter ownership and explicitly
    prohibit instantiating the interface itself.
+10. a scope's note routes an operation through a port it does not take as a
+    parameter — `through|via [only] the <accessor> repository|port`, the
+    accessor being a contract that returns one interface, or `through|via
+    <Interface>` — and no note of that scope names a method of the port. See
+    "Port access must be named" below (`port_methods_unnamed`);
+11. a class declares, under the same names, methods of the interface one of
+    its accessors returns, and no accepted State 2 decision names the copy as
+    `Class.method`. See "One operation, one owner" below
+    (`duplicate_contract_surface`).
 
 Malformed or unknown notes are never silently skipped.
 
@@ -62,6 +71,43 @@ the fill: the declared field list and the predicate template.
 
 Scalar, tuple, and mapping constants are exempt: their access is the import
 itself, and their values may legitimately double as structural vocabulary.
+
+## Port access must be named
+
+The Factory slicer hands a module only the contracts its notes name. A note
+that reaches persistence "only through the staff_access repository of that
+transaction" names the accessor `PortalTransaction.staff_access ->
+StaffAccessRepository` and nothing the generator can call on what it returns:
+the prompt lists the accessor and none of the port's operations, and the
+generator invents them. client_portal spec b3bfb504: `staff_identity` called
+eight `StaffAccessRepository` methods that do not exist and `derived_views` two
+`BudgetRepository` methods; `viewer_access`, whose notes said "calling
+get_viewer_session of the viewer_access repository", came out right.
+
+A scope that routes through a port therefore names, in one of its notes, each
+port method it calls, as an address the flow closure resolves:
+`<method> of the <accessor> repository`, `<method> of the <Interface>`,
+`Interface.method`, or `param.method` through its own contract. It is also
+closed when the note names the interface by name together with a method of it
+(a named interface is imported and the prompt lists its operations exactly), or
+names a callable that takes the port as a parameter (`with the imported
+append_audit into the audit repository of that transaction`). A port the
+scope's own contract takes as a parameter is exempt: it is imported, and the
+prompt lists an imported interface's operations. The gate proves that at least
+one method is named; naming every method the operation calls is the author's
+obligation. The Factory's draft gate stops the other side
+(`undeclared_port_method`, code-factory `tools/draft_static_gates.py`).
+
+## One operation, one owner
+
+A class whose accessor returns an interface (`PortalTransaction.expenses ->
+ExpenseRepository`) and which also declares that interface's methods under the
+same names (`PortalTransaction.get_expense_aggregate`) shows the generator one
+operation under two owners. It picks either, and reads the accessor as if it
+were the repository (`transaction.expenses.get_expense_aggregate`). The copy
+blocks unless an accepted State 2 decision names it as `Class.method`: keeping
+a transitional copy is then a decision with an owner, not an accident of an
+earlier shape.
 
 ## Callable completeness
 

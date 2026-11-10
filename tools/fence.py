@@ -61,6 +61,8 @@ HINTS: dict[str, str] = {
     "invariant_without_identifier": "give each formal invariant of the decision a stable identifier, and name it in the Required tests item whose tag binds it",
     "witness_material_not_checked": "make the bound check's content readable (SPEC_WORKBENCH_FACTORY_ROOT, a command that names its files, at most the size a round is given whole) so the round can judge it, or remove the binding and carry it",
     "flow_reachability_not_checked": "assemble the router (design_spec_projection.py --apply) or close the router closure so the routes the flows start from can be read",
+    "port_methods_unnamed": "a note routing through a port names the port methods it calls, as '<method> of the <accessor> repository', or names the callable that takes the port (NOTE_GATE.md 'Port access must be named')",
+    "duplicate_contract_surface": "one operation has one owner: remove the class's copies of its accessor's port methods, or record in State 2 the decision that keeps each copy, naming it as Class.method (NOTE_GATE.md 'One operation, one owner')",
     "table_access_unnamed": "a note naming a record table names its access: spell the match in the row model's field vocabulary, or name the contract that owns it (NOTE_GATE.md 'Table access must be named')",
 }
 
