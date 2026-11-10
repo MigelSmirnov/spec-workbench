@@ -1,0 +1,124 @@
+{
+ "open_points": [
+  {
+   "subject": "A25",
+   "kind": "identity_representation",
+   "text": "The identity is the client address of the connection, never a forwarded header, cookie or secret, kept to its first 128 characters",
+   "question": "Which connection value is the client address before truncation: the raw host field, a serialized socket address including the port, or a normalized address, and are the 128 characters Unicode code points, code units, or bytes?",
+   "options": [
+    "Use the raw connection host string and take its first 128 Unicode code points",
+    "Serialize the complete peer address, including its port, before truncation",
+    "Canonicalize the address, such as normalizing IPv6, before truncation",
+    "Truncate the encoded bytes rather than the runtime string"
+   ],
+   "default_guess": "Use the raw connection host field exactly as supplied by the server interface and take its first 128 runtime string characters.",
+   "witness": {
+    "initial": "A connection reports the IPv6 peer as `2001:0db8:0:0:0:0:0:1` with a changing source port.",
+    "events": [
+     "The client makes two viewer-entry attempts from that peer using different source ports.",
+     "The limiter derives the bucket key for each attempt."
+    ],
+    "outcomes": [
+     "Using the raw host field puts both attempts in one client bucket.",
+     "Serializing the socket address including its port puts the attempts in different client buckets; canonicalizing the host may also merge it with differently spelled forms."
+    ],
+    "observer": "The client and the viewer-entry limiter operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25",
+   "kind": "missing_identity_condition",
+   "text": "a connection that names no client is identified as `unknown`",
+   "question": "Exactly which connection states count as naming no client: absent client metadata only, or also a null host, empty host, malformed host, or failure while reading it?",
+   "options": [
+    "Only absent or null client metadata maps to `unknown`",
+    "Absent, null, or empty client host maps to `unknown`",
+    "Any unusable or malformed client value maps to `unknown`",
+    "An unusable client value refuses the request instead of using a bucket"
+   ],
+   "default_guess": "Treat absent metadata, a null host, and an empty host as `unknown`; propagate no request-supplied fallback.",
+   "witness": {
+    "initial": "The server supplies a client metadata object whose address field is an empty string.",
+    "events": [
+     "The connection makes a viewer-entry attempt.",
+     "The transport guard selects its limiter bucket."
+    ],
+    "outcomes": [
+     "The attempt uses the shared `unknown` bucket.",
+     "The attempt uses an empty-string bucket distinct from `unknown`."
+    ],
+    "observer": "Other clients without usable client metadata and the operator monitoring rate-limit refusals"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25",
+   "kind": "route_identity",
+   "text": "viewer entry attempts are rate limited per client network identity and route",
+   "question": "What exact route representation is part of the key: the configured route identifier, the matched route template, the mounted path after proxy stripping, or the raw request path?",
+   "options": [
+    "Use the configured viewer-entry route identifier",
+    "Use the framework's matched route template",
+    "Use the proxy-stripped request path",
+    "Use the raw path received from the server interface"
+   ],
+   "default_guess": "Use the configured viewer-entry route identifier so equivalent requests to that route share a bucket.",
+   "witness": {
+    "initial": "The viewer-entry handler is reachable through two path representations that resolve to the same handler, such as a mounted prefix and its proxy-stripped form.",
+    "events": [
+     "One client makes an attempt through each representation.",
+     "The limiter derives the route component of both keys."
+    ],
+    "outcomes": [
+     "A handler or route-template key combines both attempts in one bucket.",
+     "A raw-path key places the attempts in separate buckets."
+    ],
+    "observer": "The client and the operator observing rate-limit consumption"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25",
+   "kind": "vague_exclusion",
+   "text": "no request-controlled value enters the key",
+   "question": "What is classified as request-controlled for TRN-004, beyond the specifically named forwarded header and cookie, and must query values, bodies, authorization or other headers, raw paths, and TLS-supplied names all be proven irrelevant?",
+   "options": [
+    "Exclude every HTTP request field; only the connection client address and a fixed route identifier may enter",
+    "Exclude headers, cookies, query values, and bodies but permit the raw request path",
+    "Exclude only forwarded headers, cookies, and secrets named by the normative rule",
+    "Define an explicit allow-list of the two key inputs instead of classifying request-controlled values"
+   ],
+   "default_guess": "Define the key as an ordered pair of a fixed route identifier and the server-provided connection host, with every HTTP request field excluded.",
+   "unit": "?"
+  },
+  {
+   "subject": "A25",
+   "kind": "incomplete_required_test",
+   "text": "- TRN-004: a check of the limiter key: a 129-character client address and its\n  first 128 characters share one bucket; two connections without a client\n  share the `unknown` bucket; a forwarded header or cookie never changes the\n  bucket.",
+   "question": "What must the Required tests item show for the invariant's route component and its broader requirement that no request-controlled value enters the key?",
+   "options": [
+    "Extend the test to prove distinct routes use distinct key components and every permitted class of request-controlled input is irrelevant",
+    "Narrow TRN-004 to only the address, missing-client, forwarded-header, and cookie cases this test describes",
+    "State that the route is a fixed constant for viewer entry and replace the broad request-controlled claim with an explicit input allow-list"
+   ],
+   "default_guess": "Extend the test to assert the fixed route component and vary every HTTP-controlled input class while holding the connection identity constant.",
+   "witness": {
+    "initial": "An implementation passes the listed truncation, missing-client, forwarded-header, and cookie examples but derives its route component from the raw request path or also includes an authorization header.",
+    "events": [
+     "The required TRN-004 check is run.",
+     "A later request changes the untested path representation or authorization header while keeping the connection address fixed."
+    ],
+    "outcomes": [
+     "The implementation is accepted even though the changed request value selects a different bucket.",
+     "A complete test rejects the implementation because only the specified route and connection identity may affect the bucket."
+    ],
+    "observer": "The verification gate, later implementation agents, and affected viewer clients"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A25\",\"kind\":\"identity_representation\",\"text\":\"The identity is the client address of the connection, never a forwarded header, cookie or secret, kept to its first 128 characters\",\"question\":\"Which connection value is the client address before truncation: the raw host field, a serialized socket address including the port, or a normalized address, and are the 128 characters Unicode code points, code units, or bytes?\",\"options\":[\"Use the raw connection host string and take its first 128 Unicode code points\",\"Serialize the complete peer address, including its port, before truncation\",\"Canonicalize the address, such as normalizing IPv6, before truncation\",\"Truncate the encoded bytes rather than the runtime string\"],\"default_guess\":\"Use the raw connection host field exactly as supplied by the server interface and take its first 128 runtime string characters.\",\"witness\":{\"initial\":\"A connection reports the IPv6 peer as `2001:0db8:0:0:0:0:0:1` with a changing source port.\",\"events\":[\"The client makes two viewer-entry attempts from that peer using different source ports.\",\"The limiter derives the bucket key for each attempt.\"],\"outcomes\":[\"Using the raw host field puts both attempts in one client bucket.\",\"Serializing the socket address including its port puts the attempts in different client buckets; canonicalizing the host may also merge it with differently spelled forms.\"],\"observer\":\"The client and the viewer-entry limiter operator\"}},{\"subject\":\"A25\",\"kind\":\"missing_identity_condition\",\"text\":\"a connection that names no client is identified as `unknown`\",\"question\":\"Exactly which connection states count as naming no client: absent client metadata only, or also a null host, empty host, malformed host, or failure while reading it?\",\"options\":[\"Only absent or null client metadata maps to `unknown`\",\"Absent, null, or empty client host maps to `unknown`\",\"Any unusable or malformed client value maps to `unknown`\",\"An unusable client value refuses the request instead of using a bucket\"],\"default_guess\":\"Treat absent metadata, a null host, and an empty host as `unknown`; propagate no request-supplied fallback.\",\"witness\":{\"initial\":\"The server supplies a client metadata object whose address field is an empty string.\",\"events\":[\"The connection makes a viewer-entry attempt.\",\"The transport guard selects its limiter bucket.\"],\"outcomes\":[\"The attempt uses the shared `unknown` bucket.\",\"The attempt uses an empty-string bucket distinct from `unknown`.\"],\"observer\":\"Other clients without usable client metadata and the operator monitoring rate-limit refusals\"}},{\"subject\":\"A25\",\"kind\":\"route_identity\",\"text\":\"viewer entry attempts are rate limited per client network identity and route\",\"question\":\"What exact route representation is part of the key: the configured route identifier, the matched route template, the mounted path after proxy stripping, or the raw request path?\",\"options\":[\"Use the configured viewer-entry route identifier\",\"Use the framework's matched route template\",\"Use the proxy-stripped request path\",\"Use the raw path received from the server interface\"],\"default_guess\":\"Use the configured viewer-entry route identifier so equivalent requests to that route share a bucket.\",\"witness\":{\"initial\":\"The viewer-entry handler is reachable through two path representations that resolve to the same handler, such as a mounted prefix and its proxy-stripped form.\",\"events\":[\"One client makes an attempt through each representation.\",\"The limiter derives the route component of both keys.\"],\"outcomes\":[\"A handler or route-template key combines both attempts in one bucket.\",\"A raw-path key places the attempts in separate buckets.\"],\"observer\":\"The client and the operator observing rate-limit consumption\"}},{\"subject\":\"A25\",\"kind\":\"vague_exclusion\",\"text\":\"no request-controlled value enters the key\",\"question\":\"What is classified as request-controlled for TRN-004, beyond the specifically named forwarded header and cookie, and must query values, bodies, authorization or other headers, raw paths, and TLS-supplied names all be proven irrelevant?\",\"options\":[\"Exclude every HTTP request field; only the connection client address and a fixed route identifier may enter\",\"Exclude headers, cookies, query values, and bodies but permit the raw request path\",\"Exclude only forwarded headers, cookies, and secrets named by the normative rule\",\"Define an explicit allow-list of the two key inputs instead of classifying request-controlled values\"],\"default_guess\":\"Define the key as an ordered pair of a fixed route identifier and the server-provided connection host, with every HTTP request field excluded.\"},{\"subject\":\"A25\",\"kind\":\"incomplete_required_test\",\"text\":\"- TRN-004: a check of the limiter key: a 129-character client address and its\\n  first 128 characters share one bucket; two connections without a client\\n  share the `unknown` bucket; a forwarded header or cookie never changes the\\n  bucket.\",\"question\":\"What must the Required tests item show for the invariant's route component and its broader requirement that no request-controlled value enters the key?\",\"options\":[\"Extend the test to prove distinct routes use distinct key components and every permitted class of request-controlled input is irrelevant\",\"Narrow TRN-004 to only the address, missing-client, forwarded-header, and cookie cases this test describes\",\"State that the route is a fixed constant for viewer entry and replace the broad request-controlled claim with an explicit input allow-list\"],\"default_guess\":\"Extend the test to assert the fixed route component and vary every HTTP-controlled input class while holding the connection identity constant.\",\"witness\":{\"initial\":\"An implementation passes the listed truncation, missing-client, forwarded-header, and cookie examples but derives its route component from the raw request path or also includes an authorization header.\",\"events\":[\"The required TRN-004 check is run.\",\"A later request changes the untested path representation or authorization header while keeping the connection address fixed.\"],\"outcomes\":[\"The implementation is accepted even though the changed request value selects a different bucket.\",\"A complete test rejects the implementation because only the specified route and connection identity may affect the bucket.\"],\"observer\":\"The verification gate, later implementation agents, and affected viewer clients\"}}]}",
+ "set_aside": []
+}

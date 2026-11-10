@@ -1,0 +1,186 @@
+{
+ "open_points": [
+  {
+   "subject": "A25 client network identity",
+   "kind": "representation_unspecified",
+   "text": "The identity is the client address of the connection, never a forwarded header, cookie or secret, kept to its first 128 characters",
+   "question": "What exact value is the connection's client address before truncation: the host/address component alone, a serialized socket endpoint including the port, or another connection field?",
+   "options": [
+    "Use only the connection peer host/address string",
+    "Serialize the connection peer address and port",
+    "Use the transport framework's client value as supplied"
+   ],
+   "default_guess": "Use only the connection peer host/address string, excluding the port.",
+   "witness": {
+    "initial": "One client makes viewer-entry requests from the same IP through two connections with different source ports.",
+    "events": [
+     "The client makes an entry attempt on the first connection.",
+     "The client makes another entry attempt on the second connection."
+    ],
+    "outcomes": [
+     "Both attempts use one limiter bucket because only the peer host is used.",
+     "The attempts use different buckets because the serialized client endpoint includes the source port."
+    ],
+    "observer": "The client and an operator observing whether the second attempt is rate-limited."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 client address canonicalization",
+   "kind": "normalization_unspecified",
+   "text": "Addresses that share their first 128 characters, and all connections that name no client, therefore share one bucket",
+   "question": "Is the connection address used exactly as supplied, or canonicalized before its first 128 characters are selected, including normalization of equivalent IPv6 spellings, case, or surrounding syntax?",
+   "options": [
+    "Use the supplied address string verbatim",
+    "Parse and canonicalize an IP address before truncation",
+    "Apply only textual normalization such as case folding"
+   ],
+   "default_guess": "Use the connection address string verbatim, because the accepted rule describes leading characters rather than a parsed network address.",
+   "witness": {
+    "initial": "The same IPv6 address can be presented once in compressed form and once in expanded form.",
+    "events": [
+     "A viewer-entry attempt arrives with the compressed textual address.",
+     "Another attempt arrives with the equivalent expanded textual address."
+    ],
+    "outcomes": [
+     "The attempts use different buckets because the raw strings differ.",
+     "The attempts use one bucket because both strings are canonicalized before keying."
+    ],
+    "observer": "The requester when the rate limit is reached in one implementation but not the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 identity truncation",
+   "kind": "unit_unspecified",
+   "text": "kept to its first 128 characters",
+   "question": "What counts as a character for the 128-character limit, and is an invalid or non-ASCII client-address value rejected, decoded, or truncated by bytes?",
+   "options": [
+    "Count Unicode code points in the decoded string",
+    "Count encoded bytes",
+    "Require an ASCII address and define handling of invalid values"
+   ],
+   "default_guess": "Treat the framework-provided value as a string and retain its first 128 Unicode code points.",
+   "witness": {
+    "initial": "A connection supplies a client-address string whose first 128 Unicode characters occupy more than 128 encoded bytes.",
+    "events": [
+     "The connection makes a viewer-entry attempt.",
+     "A second connection uses the prefix produced by code-point truncation."
+    ],
+    "outcomes": [
+     "The attempts share a bucket because truncation counts string characters.",
+     "The attempts do not share a bucket, or the first attempt is rejected, because truncation counts bytes or requires ASCII."
+    ],
+    "observer": "The requester and any limiter test using non-ASCII address data."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 missing-client classification",
+   "kind": "condition_unspecified",
+   "text": "a connection that names no client is identified as `unknown`",
+   "question": "Which connection values mean that no client is named: only an absent/null client field, or also an empty address, an incomplete endpoint, or an unparsable value?",
+   "options": [
+    "Only an absent or null client value maps to `unknown`",
+    "Absent, null, or empty address maps to `unknown`",
+    "Any incomplete or invalid client value maps to `unknown`"
+   ],
+   "default_guess": "Map an absent/null client value and an empty host string to `unknown`; do not silently classify other malformed values.",
+   "witness": {
+    "initial": "The transport exposes a client object whose address string is empty.",
+    "events": [
+     "That connection makes a viewer-entry attempt.",
+     "A connection with no client object makes another attempt."
+    ],
+    "outcomes": [
+     "Both attempts use the `unknown` bucket.",
+     "The empty address uses a distinct empty-string bucket while the absent client uses `unknown`."
+    ],
+    "observer": "The requester when the shared limit is reached."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 viewer-entry limiter route key",
+   "kind": "key_definition_unspecified",
+   "text": "the viewer-entry limiter keys an attempt by the route and the connection's client address cut to its first 128 characters, or `unknown` when the connection names no client",
+   "question": "What exact route identity enters the key: the raw request path, the matched route template, the endpoint identity, or the fixed viewer-entry path constant, and how are aliases or trailing-slash variants treated?",
+   "options": [
+    "Use the fixed imported viewer-entry path constant",
+    "Use the matched route template or endpoint identity",
+    "Use the raw request path"
+   ],
+   "default_guess": "Use the fixed imported viewer-entry path constant for the viewer-entry endpoint.",
+   "witness": {
+    "initial": "Two accepted request paths or path spellings dispatch to the same viewer-entry operation for the same client address.",
+    "events": [
+     "The client exhausts the limit through the first path.",
+     "The client attempts entry through the second path."
+    ],
+    "outcomes": [
+     "The second attempt is refused because both paths share the endpoint's route key.",
+     "The second attempt is admitted because the raw paths form different route keys."
+    ],
+    "observer": "The viewer making the second entry attempt."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 TRN-004 Required tests",
+   "kind": "invariant_test_incomplete",
+   "text": "TRN-004: a check of the limiter key: a 129-character client address and its first 128 characters share one bucket; two connections without a client share the `unknown` bucket; a forwarded header or cookie never changes the bucket.",
+   "question": "What must the test show to prove that the key actually includes both the route and the connection address, rather than merely satisfying the listed same-bucket cases with a constant or incomplete key?",
+   "options": [
+    "Also show that different retained address prefixes produce different buckets and that different route identities produce different buckets",
+    "Inspect the exact structured key returned by the key builder",
+    "Accept only the listed same-bucket examples"
+   ],
+   "default_guess": "Test both same-bucket and different-bucket cases for each key component.",
+   "witness": {
+    "initial": "An implementation uses one constant bucket for every viewer-entry attempt.",
+    "events": [
+     "The required test compares a 129-character address with its first 128 characters.",
+     "It compares two missing-client connections.",
+     "It changes a forwarded header and a cookie."
+    ],
+    "outcomes": [
+     "Every listed assertion passes even though neither route nor connection address enters the key.",
+     "A strengthened test fails because distinct retained addresses or routes do not produce distinct buckets."
+    ],
+    "observer": "The State 2 reviewer and users who unexpectedly share one global limiter bucket."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 TRN-004 request-controlled inputs",
+   "kind": "invariant_test_incomplete",
+   "text": "a forwarded header or cookie never changes the bucket",
+   "question": "Which checks must demonstrate the invariant's broader requirement that no request-controlled value enters the key, including the separately named secret and request components other than forwarded headers and cookies?",
+   "options": [
+    "Enumerate and vary every request-controlled input available to the key builder",
+    "Constrain the key builder's interface to route identity and connection metadata, then test that interface",
+    "Treat forwarded headers and cookies as the complete required examples"
+   ],
+   "default_guess": "Constrain the key builder to trusted route identity and connection metadata and additionally vary representative headers, cookies, credentials, query data, and body data.",
+   "witness": {
+    "initial": "An implementation keys by connection address, route, and a query parameter, but ignores forwarded headers and cookies.",
+    "events": [
+     "The listed TRN-004 test changes a forwarded header and a cookie and observes no bucket change.",
+     "A requester changes the query parameter between entry attempts."
+    ],
+    "outcomes": [
+     "The listed Required tests pass, while the requester obtains a different bucket through another request-controlled value.",
+     "A complete test of the invariant fails the implementation when the query parameter changes the bucket."
+    ],
+    "observer": "The requester bypassing the limit and the security reviewer."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A25 client network identity\",\"kind\":\"representation_unspecified\",\"text\":\"The identity is the client address of the connection, never a forwarded header, cookie or secret, kept to its first 128 characters\",\"question\":\"What exact value is the connection's client address before truncation: the host/address component alone, a serialized socket endpoint including the port, or another connection field?\",\"options\":[\"Use only the connection peer host/address string\",\"Serialize the connection peer address and port\",\"Use the transport framework's client value as supplied\"],\"default_guess\":\"Use only the connection peer host/address string, excluding the port.\",\"witness\":{\"initial\":\"One client makes viewer-entry requests from the same IP through two connections with different source ports.\",\"events\":[\"The client makes an entry attempt on the first connection.\",\"The client makes another entry attempt on the second connection.\"],\"outcomes\":[\"Both attempts use one limiter bucket because only the peer host is used.\",\"The attempts use different buckets because the serialized client endpoint includes the source port.\"],\"observer\":\"The client and an operator observing whether the second attempt is rate-limited.\"}},{\"subject\":\"A25 client address canonicalization\",\"kind\":\"normalization_unspecified\",\"text\":\"Addresses that share their first 128 characters, and all connections that name no client, therefore share one bucket\",\"question\":\"Is the connection address used exactly as supplied, or canonicalized before its first 128 characters are selected, including normalization of equivalent IPv6 spellings, case, or surrounding syntax?\",\"options\":[\"Use the supplied address string verbatim\",\"Parse and canonicalize an IP address before truncation\",\"Apply only textual normalization such as case folding\"],\"default_guess\":\"Use the connection address string verbatim, because the accepted rule describes leading characters rather than a parsed network address.\",\"witness\":{\"initial\":\"The same IPv6 address can be presented once in compressed form and once in expanded form.\",\"events\":[\"A viewer-entry attempt arrives with the compressed textual address.\",\"Another attempt arrives with the equivalent expanded textual address.\"],\"outcomes\":[\"The attempts use different buckets because the raw strings differ.\",\"The attempts use one bucket because both strings are canonicalized before keying.\"],\"observer\":\"The requester when the rate limit is reached in one implementation but not the other.\"}},{\"subject\":\"A25 identity truncation\",\"kind\":\"unit_unspecified\",\"text\":\"kept to its first 128 characters\",\"question\":\"What counts as a character for the 128-character limit, and is an invalid or non-ASCII client-address value rejected, decoded, or truncated by bytes?\",\"options\":[\"Count Unicode code points in the decoded string\",\"Count encoded bytes\",\"Require an ASCII address and define handling of invalid values\"],\"default_guess\":\"Treat the framework-provided value as a string and retain its first 128 Unicode code points.\",\"witness\":{\"initial\":\"A connection supplies a client-address string whose first 128 Unicode characters occupy more than 128 encoded bytes.\",\"events\":[\"The connection makes a viewer-entry attempt.\",\"A second connection uses the prefix produced by code-point truncation.\"],\"outcomes\":[\"The attempts share a bucket because truncation counts string characters.\",\"The attempts do not share a bucket, or the first attempt is rejected, because truncation counts bytes or requires ASCII.\"],\"observer\":\"The requester and any limiter test using non-ASCII address data.\"}},{\"subject\":\"A25 missing-client classification\",\"kind\":\"condition_unspecified\",\"text\":\"a connection that names no client is identified as `unknown`\",\"question\":\"Which connection values mean that no client is named: only an absent/null client field, or also an empty address, an incomplete endpoint, or an unparsable value?\",\"options\":[\"Only an absent or null client value maps to `unknown`\",\"Absent, null, or empty address maps to `unknown`\",\"Any incomplete or invalid client value maps to `unknown`\"],\"default_guess\":\"Map an absent/null client value and an empty host string to `unknown`; do not silently classify other malformed values.\",\"witness\":{\"initial\":\"The transport exposes a client object whose address string is empty.\",\"events\":[\"That connection makes a viewer-entry attempt.\",\"A connection with no client object makes another attempt.\"],\"outcomes\":[\"Both attempts use the `unknown` bucket.\",\"The empty address uses a distinct empty-string bucket while the absent client uses `unknown`.\"],\"observer\":\"The requester when the shared limit is reached.\"}},{\"subject\":\"A25 viewer-entry limiter route key\",\"kind\":\"key_definition_unspecified\",\"text\":\"the viewer-entry limiter keys an attempt by the route and the connection's client address cut to its first 128 characters, or `unknown` when the connection names no client\",\"question\":\"What exact route identity enters the key: the raw request path, the matched route template, the endpoint identity, or the fixed viewer-entry path constant, and how are aliases or trailing-slash variants treated?\",\"options\":[\"Use the fixed imported viewer-entry path constant\",\"Use the matched route template or endpoint identity\",\"Use the raw request path\"],\"default_guess\":\"Use the fixed imported viewer-entry path constant for the viewer-entry endpoint.\",\"witness\":{\"initial\":\"Two accepted request paths or path spellings dispatch to the same viewer-entry operation for the same client address.\",\"events\":[\"The client exhausts the limit through the first path.\",\"The client attempts entry through the second path.\"],\"outcomes\":[\"The second attempt is refused because both paths share the endpoint's route key.\",\"The second attempt is admitted because the raw paths form different route keys.\"],\"observer\":\"The viewer making the second entry attempt.\"}},{\"subject\":\"A25 TRN-004 Required tests\",\"kind\":\"invariant_test_incomplete\",\"text\":\"TRN-004: a check of the limiter key: a 129-character client address and its first 128 characters share one bucket; two connections without a client share the `unknown` bucket; a forwarded header or cookie never changes the bucket.\",\"question\":\"What must the test show to prove that the key actually includes both the route and the connection address, rather than merely satisfying the listed same-bucket cases with a constant or incomplete key?\",\"options\":[\"Also show that different retained address prefixes produce different buckets and that different route identities produce different buckets\",\"Inspect the exact structured key returned by the key builder\",\"Accept only the listed same-bucket examples\"],\"default_guess\":\"Test both same-bucket and different-bucket cases for each key component.\",\"witness\":{\"initial\":\"An implementation uses one constant bucket for every viewer-entry attempt.\",\"events\":[\"The required test compares a 129-character address with its first 128 characters.\",\"It compares two missing-client connections.\",\"It changes a forwarded header and a cookie.\"],\"outcomes\":[\"Every listed assertion passes even though neither route nor connection address enters the key.\",\"A strengthened test fails because distinct retained addresses or routes do not produce distinct buckets.\"],\"observer\":\"The State 2 reviewer and users who unexpectedly share one global limiter bucket.\"}},{\"subject\":\"A25 TRN-004 request-controlled inputs\",\"kind\":\"invariant_test_incomplete\",\"text\":\"a forwarded header or cookie never changes the bucket\",\"question\":\"Which checks must demonstrate the invariant's broader requirement that no request-controlled value enters the key, including the separately named secret and request components other than forwarded headers and cookies?\",\"options\":[\"Enumerate and vary every request-controlled input available to the key builder\",\"Constrain the key builder's interface to route identity and connection metadata, then test that interface\",\"Treat forwarded headers and cookies as the complete required examples\"],\"default_guess\":\"Constrain the key builder to trusted route identity and connection metadata and additionally vary representative headers, cookies, credentials, query data, and body data.\",\"witness\":{\"initial\":\"An implementation keys by connection address, route, and a query parameter, but ignores forwarded headers and cookies.\",\"events\":[\"The listed TRN-004 test changes a forwarded header and a cookie and observes no bucket change.\",\"A requester changes the query parameter between entry attempts.\"],\"outcomes\":[\"The listed Required tests pass, while the requester obtains a different bucket through another request-controlled value.\",\"A complete test of the invariant fails the implementation when the query parameter changes the bucket.\"],\"observer\":\"The requester bypassing the limit and the security reviewer.\"}}]}",
+ "retried": [
+  "{\"open_points\":[{\"subject\":\"A25\",\"kind\":\"contradictory_key_definition\",\"text\":\"TRN-004: the viewer-entry limiter keys an attempt by the route and the connection's client address cut to its first 128 characters, or `unknown` when the connection names no client; no request-controlled value enters the key.\",\"question\":\"How can the route be part of the key while no request-controlled value enters the key, given that the request selects its route?\",\"options\":[\"The matched route is an allowed exception to “no request-controlled value”\",\"Remove the route from the key\",\"Replace the final clause with a prohibition limited to request headers, cookies, query data and bodies\"],\"default_guess\":\"Treat the matched route identifier as an allowed key component and interpret the prohibition as applying to all other request-controlled values.\",\"witness\":{\"initial\":\"The limiter has separate capacity available for viewer entry routes R1 and R2.\",\"events\":[\"A client sends an entry request to R1.\",\"The same client sends an entry request to R2.\"],\"outcomes\":[\"The requests use separate buckets because the route is part of the key.\",\"The route is excluded because it is request-controlled, so both requests use one client-identity bucket.\"],\"observer\":\"The client sees whether activity on one route exhausts the limit on the other.\"}},{\"subject\":\"A25\",\"kind\":\"client_address_representation\",\"text\":\"The identity is the client address of the connection, never a forwarded header, cookie or secret, kept to its first 128 characters\",\"question\":\"Which connection value is the client address, and what exact string is truncated: the host alone, a host-and-port pair, or some other connection representation?\",\"options\":[\"Use only the connection peer host string\",\"Use a serialized host-and-port pair\",\"Use the runtime framework's complete client-address representation\"],\"default_guess\":\"Use the connection peer host string exactly as supplied by the runtime, excluding the client port.\",\"witness\":{\"initial\":\"Two connections come from host `203.0.113.7` using different source ports.\",\"events\":[\"The first connection attempts viewer entry from port 41000.\",\"The second connection attempts viewer entry from port 41001.\"],\"outcomes\":[\"Both attempts share a bucket because identity is the host string.\",\"The attempts use different buckets because identity includes the source port.\"],\"observer\":\"The client sees whether reconnecting with another source port bypasses the limit.\"}},{\"subject\":\"A25\",\"kind\":\"missing_client_condition\",\"text\":\"a connection that names no client is identified as `unknown`\",\"question\":\"Exactly which runtime client values mean that the connection names no client—for example only a missing/null client object, or also an empty host, malformed tuple or empty string?\",\"options\":[\"Only a missing or null client object means no client\",\"Any missing or empty client host means no client\",\"Invalid or incomplete client metadata is refused instead of assigned `unknown`\"],\"default_guess\":\"Treat a missing client object or a missing/empty host as `unknown`.\",\"witness\":{\"initial\":\"The runtime supplies a client object whose host string is empty.\",\"events\":[\"That connection attempts viewer entry.\",\"A connection with no client object attempts viewer entry.\"],\"outcomes\":[\"Both attempts share the `unknown` bucket.\",\"The empty host is a distinct bucket while only the absent client uses `unknown`.\"],\"observer\":\"The service operator and client see whether the two attempts consume the same limit.\"}},{\"subject\":\"A25\",\"kind\":\"placeholder_collision\",\"text\":\"The identity is the client address of the connection, never a forwarded header, cookie or secret, kept to its first 128 characters; a connection that names no client is identified as `unknown`.\",\"question\":\"Must an actual connection address whose string is `unknown` share the missing-client bucket, or must missing-client identity be namespaced so it cannot collide with an address?\",\"options\":[\"The literal address `unknown` shares the missing-client bucket\",\"Missing-client identity uses a distinct tagged key\",\"The runtime must reject `unknown` as an impossible client address\"],\"default_guess\":\"Use the literal `unknown` string, so it shares the bucket if the runtime supplies that exact address.\",\"witness\":{\"initial\":\"One connection has client address string `unknown`; another connection has no client.\",\"events\":[\"The connection whose address is `unknown` attempts viewer entry.\",\"The client-less connection attempts viewer entry.\"],\"outcomes\":[\"Both attempts consume one bucket because the placeholder is an ordinary string.\",\"The attempts use separate buckets because absent-client identity is tagged separately.\"],\"observer\":\"Either client sees whether the other connection consumes its rate limit.\"}},{\"subject\":\"A25\",\"kind\":\"invariant_test_omission\",\"text\":\"TRN-004: a check of the limiter key: a 129-character client address and its first 128 characters share one bucket; two connections without a client share the `unknown` bucket; a forwarded header or cookie never changes the bucket.\",\"question\":\"What required test must show that two non-colliding client addresses use different buckets, rather than allowing every address to map to one bucket while still passing all listed checks?\",\"options\":[\"Add a test that two distinct addresses within 128 characters use separate buckets\",\"Declare that distinct client addresses need not have distinct buckets\",\"Use a structural check of the key construction that proves the truncated address is included\"],\"default_guess\":\"Add a test showing that two distinct, non-truncation-colliding client addresses use separate buckets.\",\"witness\":{\"initial\":\"The limiter is empty and two clients have addresses `198.51.100.1` and `198.51.100.2`.\",\"events\":[\"The first client exhausts the viewer-entry limit.\",\"The second client attempts viewer entry.\"],\"outcomes\":[\"The second client is allowed because distinct addresses have distinct buckets.\",\"The second client is refused because an implementation using one global bucket satisfies every behavior currently named by the TRN-004 test item.\"],\"observer\":\"The second client sees the difference.\"}},{\"subject\":\"A25\",\"kind\":\"invariant_test_omission\",\"text\":\"TRN-004: a check of the limiter key: a 129-character client address and its first 128 characters share one bucket; two connections without a client share the `unknown` bucket; a forwarded header or cookie never changes the bucket.\",\"question\":\"What required test must show the invariant's route component, so an implementation cannot use only the client identity and still satisfy the listed checks?\",\"options\":[\"Add a test that the same client identity on two routes uses separate buckets\",\"Declare that the route is not part of the key\",\"Use a structural check proving the matched route identifier is included\"],\"default_guess\":\"Add a test showing that the same client identity on two limiter-covered routes uses separate buckets.\",\"witness\":{\"initial\":\"One client has exhausted its bucket on viewer-entry route R1 but has made no attempt on route R2.\",\"events\":[\"The client attempts viewer entry on R2.\"],\"outcomes\":[\"The attempt is allowed because route and identity form the key.\",\"The attempt is refused because an identity-only key passes every behavior currently named by the TRN-004 test item.\"],\"observer\":\"The client sees the refusal or success.\"}},{\"subject\":\"A25\",\"kind\":\"invariant_test_omission\",\"text\":\"TRN-004: a check of the limiter key: a 129-character client address and its first 128 characters share one bucket; two connections without a client share the `unknown` bucket; a forwarded header or cookie never changes the bucket.\",\"question\":\"How must the required test demonstrate that no request-controlled value enters the key, rather than checking only forwarded headers and cookies while leaving query parameters, bodies and other headers untested?\",\"options\":[\"Require a structural check that the key receives only the matched route and connection client identity\",\"Enumerate every request-controlled input class whose changes must not alter the bucket\",\"Narrow the invariant to forwarded headers and cookies only\"],\"default_guess\":\"Require a structural check proving that the key is built only from the resolved route identifier and connection-derived client identity.\"}}]}"
+ ],
+ "set_aside": []
+}

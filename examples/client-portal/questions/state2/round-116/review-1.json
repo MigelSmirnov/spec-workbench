@@ -1,0 +1,189 @@
+{
+ "open_points": [
+  {
+   "subject": "A25 TRN-004 viewer-entry limiter key",
+   "kind": "contradictory_key_inputs",
+   "text": "the viewer-entry limiter keys an attempt by the route and the connection's client address cut to its first 128 characters, or `unknown` when the connection names no client; no request-controlled value enters the key.",
+   "question": "How can the route be part of the key while no request-controlled value enters it, given that the requester chooses the requested route?",
+   "options": [
+    "The selected server route is an allowed exception to “no request-controlled value”; other request values are forbidden.",
+    "The key must not contain the route.",
+    "“Route” means a fixed server-side route identifier that is not derived from the request target."
+   ],
+   "default_guess": "Treat the matched server-side route identifier as the intended exception and forbid headers, cookies, query values and body values.",
+   "witness": {
+    "initial": "The limiter has an unused bucket for the viewer-entry route and one client address.",
+    "events": [
+     "A client makes an entry attempt on the viewer-entry route.",
+     "The limiter constructs its key under TRN-004."
+    ],
+    "outcomes": [
+     "The implementation includes the route because TRN-004 expressly requires it.",
+     "The implementation excludes the route because it is requester-selected and TRN-004 says no request-controlled value enters the key."
+    ],
+    "observer": "A client or operator observing whether attempts on different routes share a limit"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 client network identity",
+   "kind": "address_representation",
+   "text": "The identity is the client address of the connection",
+   "question": "What exact connection value is the client address: the host component only, the complete host-and-port endpoint, or another transport-provided representation, and is it normalized before use?",
+   "options": [
+    "Use only the transport-reported host string exactly as supplied.",
+    "Serialize the complete connection endpoint, including its port.",
+    "Canonicalize the host first, including equivalent IPv6 spellings."
+   ],
+   "default_guess": "Use the transport-reported host component as an unmodified string and exclude the client port.",
+   "witness": {
+    "initial": "One client host opens two connections using different source ports.",
+    "events": [
+     "The client makes one viewer-entry attempt through each connection.",
+     "The limiter derives the client network identity for each attempt."
+    ],
+    "outcomes": [
+     "Both attempts use one bucket because only the host component is used.",
+     "The attempts use different buckets because the complete host-and-port endpoint is used."
+    ],
+    "observer": "The client sees whether changing connections bypasses or consumes the same rate limit"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 client network identity truncation",
+   "kind": "representation_order",
+   "text": "kept to its first 128 characters",
+   "question": "In which representation are the first 128 characters selected, and does truncation occur before or after any address normalization or serialization?",
+   "options": [
+    "Slice the raw transport-provided host string by language string characters.",
+    "Canonicalize the address and then slice the canonical string.",
+    "Serialize the complete endpoint and then slice it.",
+    "Limit UTF-8 bytes rather than string characters."
+   ],
+   "default_guess": "Slice the raw host string to 128 language-level characters without normalization.",
+   "witness": {
+    "initial": "Two connections report textually different but equivalent long address representations whose raw first 128 characters differ.",
+    "events": [
+     "Each connection makes a viewer-entry attempt.",
+     "The limiter normalizes and truncates, or truncates without normalization."
+    ],
+    "outcomes": [
+     "The attempts share a bucket because normalization occurs before truncation.",
+     "The attempts use different buckets because the raw strings are truncated without normalization."
+    ],
+    "observer": "The client sees whether equivalent address spellings share the rate limit"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 missing-client classification",
+   "kind": "undefined_condition",
+   "text": "a connection that names no client is identified as `unknown`",
+   "question": "Exactly which transport values mean that the connection names no client: only an absent/null client object, or also an empty address, an incomplete endpoint, an unsupported endpoint type, or a failed conversion?",
+   "options": [
+    "Only an absent/null client object maps to `unknown`.",
+    "Any missing or empty host value maps to `unknown`.",
+    "Any value that cannot be converted to the required client-address representation maps to `unknown`."
+   ],
+   "default_guess": "Map an absent client object or absent/empty host to `unknown`; reject or handle unsupported structures explicitly rather than silently assigning a new bucket.",
+   "witness": {
+    "initial": "A transport supplies a client object whose address string is empty.",
+    "events": [
+     "The connection makes a viewer-entry attempt.",
+     "The limiter derives the bucket key."
+    ],
+    "outcomes": [
+     "The attempt uses the shared `unknown` bucket because an empty address means no named client.",
+     "The attempt uses a distinct empty-string bucket because a client object exists."
+    ],
+    "observer": "Clients on connections without usable address text see whether they share the anonymous rate limit"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 unknown client bucket",
+   "kind": "sentinel_collision",
+   "text": "stands in as `VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN` when the connection names no client",
+   "question": "Must the `unknown` sentinel be type-tagged or escaped so that it cannot collide with a connection whose actual client-address text equals the sentinel?",
+   "options": [
+    "Use the literal sentinel as the identity, allowing an actual address with the same text to share the bucket.",
+    "Use a tagged composite value that distinguishes missing-client identity from actual address text.",
+    "Reject or escape an actual address equal to the sentinel."
+   ],
+   "default_guess": "Use a tagged composite key so a missing client cannot collide with an actual client-address string.",
+   "witness": {
+    "initial": "One connection names no client and another reports the literal client-address text `unknown`.",
+    "events": [
+     "Each connection makes a viewer-entry attempt on the same route.",
+     "The limiter constructs both keys."
+    ],
+    "outcomes": [
+     "Both attempts share a bucket because the sentinel is an ordinary string.",
+     "The attempts use separate buckets because the missing-client case is tagged."
+    ],
+    "observer": "The two clients see whether their attempts consume the same limit"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 limiter key construction",
+   "kind": "composite_key_encoding",
+   "text": "rate limited per client network identity and route",
+   "question": "How are route and identity combined so that distinct pairs cannot collide?",
+   "options": [
+    "Use a structured pair such as a tuple.",
+    "Concatenate with an escaping or length-prefix scheme.",
+    "Concatenate with an unescaped delimiter."
+   ],
+   "default_guess": "Use a structured pair `(route, client_identity)` rather than a concatenated string.",
+   "witness": {
+    "initial": "Two distinct route-and-identity pairs can produce the same unescaped concatenated text.",
+    "events": [
+     "The first client attempts entry using the first pair.",
+     "The second client attempts entry using the second pair."
+    ],
+    "outcomes": [
+     "The pairs share a bucket under ambiguous string concatenation.",
+     "The pairs have separate buckets under a structured or unambiguous encoding."
+    ],
+    "observer": "The clients see unexpected shared throttling only in the colliding implementation"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 TRN-004 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "TRN-004: a check of the limiter key: a 129-character client address and its first 128 characters share one bucket; two connections without a client share the `unknown` bucket; a forwarded header or cookie never changes the bucket.",
+   "question": "What must the Required tests item show for the rest of TRN-004: that the route participates in the key and that every prohibited request-controlled source—not only a forwarded header or cookie—cannot affect it?",
+   "options": [
+    "Add checks that different route identifiers produce different buckets and that query, body, arbitrary headers and secrets do not affect the key.",
+    "Narrow TRN-004's prohibition to forwarded headers and cookies, matching the described test.",
+    "State that a separate named check proves the untested portions of TRN-004."
+   ],
+   "default_guess": "Expand the Required tests item to exercise the route component and representative values from every prohibited request-controlled input class.",
+   "unit": "?"
+  },
+  {
+   "subject": "A25 transport_guard note value delivery",
+   "kind": "standard_violation",
+   "text": "the limiter's algorithm, its bound and its answer are those of the accepted transport guard, stated by the notes of `transport_guard` (recorded in the accepted spec as `rules.http_transport_policy.limits.viewer_entry`)",
+   "rule": "Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается вовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение сочинить. Обе формы невалидны для значения, которое читает генерируемый код.",
+   "section": "15.3.1",
+   "question": "Replace reliance on the bare `rules.http_transport_policy.limits.viewer_entry` address with the exact permitted delivery path for each code-read value—named imported constants or RuntimeSettings fields—and state algorithmic requirements directly as module behavior.",
+   "unit": "?"
+  },
+  {
+   "subject": "A25 transport_guard constant naming",
+   "kind": "standard_violation",
+   "text": "the notes of `transport_guard` state the bound and the source",
+   "rule": "константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип",
+   "section": "15.3.1",
+   "question": "Make the notes name `the imported VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS constant` and `the imported VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN constant` instead of stating their values or referring generically to the bound and source.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A25 TRN-004 viewer-entry limiter key\",\"kind\":\"contradictory_key_inputs\",\"text\":\"the viewer-entry limiter keys an attempt by the route and the connection's client address cut to its first 128 characters, or `unknown` when the connection names no client; no request-controlled value enters the key.\",\"question\":\"How can the route be part of the key while no request-controlled value enters it, given that the requester chooses the requested route?\",\"options\":[\"The selected server route is an allowed exception to “no request-controlled value”; other request values are forbidden.\",\"The key must not contain the route.\",\"“Route” means a fixed server-side route identifier that is not derived from the request target.\"],\"default_guess\":\"Treat the matched server-side route identifier as the intended exception and forbid headers, cookies, query values and body values.\",\"witness\":{\"initial\":\"The limiter has an unused bucket for the viewer-entry route and one client address.\",\"events\":[\"A client makes an entry attempt on the viewer-entry route.\",\"The limiter constructs its key under TRN-004.\"],\"outcomes\":[\"The implementation includes the route because TRN-004 expressly requires it.\",\"The implementation excludes the route because it is requester-selected and TRN-004 says no request-controlled value enters the key.\"],\"observer\":\"A client or operator observing whether attempts on different routes share a limit\"}},{\"subject\":\"A25 client network identity\",\"kind\":\"address_representation\",\"text\":\"The identity is the client address of the connection\",\"question\":\"What exact connection value is the client address: the host component only, the complete host-and-port endpoint, or another transport-provided representation, and is it normalized before use?\",\"options\":[\"Use only the transport-reported host string exactly as supplied.\",\"Serialize the complete connection endpoint, including its port.\",\"Canonicalize the host first, including equivalent IPv6 spellings.\"],\"default_guess\":\"Use the transport-reported host component as an unmodified string and exclude the client port.\",\"witness\":{\"initial\":\"One client host opens two connections using different source ports.\",\"events\":[\"The client makes one viewer-entry attempt through each connection.\",\"The limiter derives the client network identity for each attempt.\"],\"outcomes\":[\"Both attempts use one bucket because only the host component is used.\",\"The attempts use different buckets because the complete host-and-port endpoint is used.\"],\"observer\":\"The client sees whether changing connections bypasses or consumes the same rate limit\"}},{\"subject\":\"A25 client network identity truncation\",\"kind\":\"representation_order\",\"text\":\"kept to its first 128 characters\",\"question\":\"In which representation are the first 128 characters selected, and does truncation occur before or after any address normalization or serialization?\",\"options\":[\"Slice the raw transport-provided host string by language string characters.\",\"Canonicalize the address and then slice the canonical string.\",\"Serialize the complete endpoint and then slice it.\",\"Limit UTF-8 bytes rather than string characters.\"],\"default_guess\":\"Slice the raw host string to 128 language-level characters without normalization.\",\"witness\":{\"initial\":\"Two connections report textually different but equivalent long address representations whose raw first 128 characters differ.\",\"events\":[\"Each connection makes a viewer-entry attempt.\",\"The limiter normalizes and truncates, or truncates without normalization.\"],\"outcomes\":[\"The attempts share a bucket because normalization occurs before truncation.\",\"The attempts use different buckets because the raw strings are truncated without normalization.\"],\"observer\":\"The client sees whether equivalent address spellings share the rate limit\"}},{\"subject\":\"A25 missing-client classification\",\"kind\":\"undefined_condition\",\"text\":\"a connection that names no client is identified as `unknown`\",\"question\":\"Exactly which transport values mean that the connection names no client: only an absent/null client object, or also an empty address, an incomplete endpoint, an unsupported endpoint type, or a failed conversion?\",\"options\":[\"Only an absent/null client object maps to `unknown`.\",\"Any missing or empty host value maps to `unknown`.\",\"Any value that cannot be converted to the required client-address representation maps to `unknown`.\"],\"default_guess\":\"Map an absent client object or absent/empty host to `unknown`; reject or handle unsupported structures explicitly rather than silently assigning a new bucket.\",\"witness\":{\"initial\":\"A transport supplies a client object whose address string is empty.\",\"events\":[\"The connection makes a viewer-entry attempt.\",\"The limiter derives the bucket key.\"],\"outcomes\":[\"The attempt uses the shared `unknown` bucket because an empty address means no named client.\",\"The attempt uses a distinct empty-string bucket because a client object exists.\"],\"observer\":\"Clients on connections without usable address text see whether they share the anonymous rate limit\"}},{\"subject\":\"A25 unknown client bucket\",\"kind\":\"sentinel_collision\",\"text\":\"stands in as `VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN` when the connection names no client\",\"question\":\"Must the `unknown` sentinel be type-tagged or escaped so that it cannot collide with a connection whose actual client-address text equals the sentinel?\",\"options\":[\"Use the literal sentinel as the identity, allowing an actual address with the same text to share the bucket.\",\"Use a tagged composite value that distinguishes missing-client identity from actual address text.\",\"Reject or escape an actual address equal to the sentinel.\"],\"default_guess\":\"Use a tagged composite key so a missing client cannot collide with an actual client-address string.\",\"witness\":{\"initial\":\"One connection names no client and another reports the literal client-address text `unknown`.\",\"events\":[\"Each connection makes a viewer-entry attempt on the same route.\",\"The limiter constructs both keys.\"],\"outcomes\":[\"Both attempts share a bucket because the sentinel is an ordinary string.\",\"The attempts use separate buckets because the missing-client case is tagged.\"],\"observer\":\"The two clients see whether their attempts consume the same limit\"}},{\"subject\":\"A25 limiter key construction\",\"kind\":\"composite_key_encoding\",\"text\":\"rate limited per client network identity and route\",\"question\":\"How are route and identity combined so that distinct pairs cannot collide?\",\"options\":[\"Use a structured pair such as a tuple.\",\"Concatenate with an escaping or length-prefix scheme.\",\"Concatenate with an unescaped delimiter.\"],\"default_guess\":\"Use a structured pair `(route, client_identity)` rather than a concatenated string.\",\"witness\":{\"initial\":\"Two distinct route-and-identity pairs can produce the same unescaped concatenated text.\",\"events\":[\"The first client attempts entry using the first pair.\",\"The second client attempts entry using the second pair.\"],\"outcomes\":[\"The pairs share a bucket under ambiguous string concatenation.\",\"The pairs have separate buckets under a structured or unambiguous encoding.\"],\"observer\":\"The clients see unexpected shared throttling only in the colliding implementation\"}},{\"subject\":\"A25 TRN-004 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"TRN-004: a check of the limiter key: a 129-character client address and its first 128 characters share one bucket; two connections without a client share the `unknown` bucket; a forwarded header or cookie never changes the bucket.\",\"question\":\"What must the Required tests item show for the rest of TRN-004: that the route participates in the key and that every prohibited request-controlled source—not only a forwarded header or cookie—cannot affect it?\",\"options\":[\"Add checks that different route identifiers produce different buckets and that query, body, arbitrary headers and secrets do not affect the key.\",\"Narrow TRN-004's prohibition to forwarded headers and cookies, matching the described test.\",\"State that a separate named check proves the untested portions of TRN-004.\"],\"default_guess\":\"Expand the Required tests item to exercise the route component and representative values from every prohibited request-controlled input class.\"},{\"subject\":\"A25 transport_guard note value delivery\",\"kind\":\"standard_violation\",\"text\":\"the limiter's algorithm, its bound and its answer are those of the accepted transport guard, stated by the notes of `transport_guard` (recorded in the accepted spec as `rules.http_transport_policy.limits.viewer_entry`)\",\"rule\":\"Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается вовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение сочинить. Обе формы невалидны для значения, которое читает генерируемый код.\",\"section\":\"15.3.1\",\"question\":\"Replace reliance on the bare `rules.http_transport_policy.limits.viewer_entry` address with the exact permitted delivery path for each code-read value—named imported constants or RuntimeSettings fields—and state algorithmic requirements directly as module behavior.\"},{\"subject\":\"A25 transport_guard constant naming\",\"kind\":\"standard_violation\",\"text\":\"the notes of `transport_guard` state the bound and the source\",\"rule\":\"константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип\",\"section\":\"15.3.1\",\"question\":\"Make the notes name `the imported VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS constant` and `the imported VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN constant` instead of stating their values or referring generically to the bound and source.\"}]}",
+ "set_aside": []
+}
