@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from interface_workbench import construction_boundary_findings
-from notes_workbench import factory_addresses, language
+from notes_workbench import factory_addresses, language, port_closure
 from notes_workbench.note_standard import (
     NOTE_CLASSES,
     REFERENCE_CLASS_PREFIX,
@@ -408,6 +408,18 @@ def coverage(project: Path) -> dict[str, Any]:
     findings.extend(
         _table_access_findings(notes, _load_provider_tables(project), contract_scopes)
     )
+    # a note routing through a port names the port methods it calls, and one
+    # operation has one owner (client_portal b3bfb504: invented repository methods)
+    signatures = _load_contract_signatures(project)
+    interface_spec = _load_interface_spec(project)
+    interfaces = {
+        str(name) for name, entry in (interface_spec.get("models") or {}).items()
+        if isinstance(entry, dict) and entry.get("kind") == "interface"
+    }
+    findings.extend(port_closure.port_methods_unnamed(notes, signatures, interfaces))
+    if interfaces:
+        findings.extend(port_closure.duplicate_contract_surfaces(
+            signatures, interfaces, port_closure.decision_texts(project)))
     # a note that reads value.attribute names an attribute the declared type has
     findings.extend(note_attributes.findings(notes, ModelIndex.load(project)))
 
@@ -443,7 +455,6 @@ def coverage(project: Path) -> dict[str, Any]:
     # 80_notes*.md files and semantic repairs made at assembly; before assembly
     # the authored notes are all there is. The evidence is both.
     required_classes, _drift = language.semantic_classes()
-    signatures = _load_contract_signatures(project)
     evidence: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for note in language.authored_notes(project):
         evidence[note["scope"]].append(note)
