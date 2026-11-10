@@ -1270,9 +1270,14 @@ service answers only on its trusted hosts (at least one, no wildcard at any
 position); CORS is off when its allowlist is empty, and an allowed origin is
 never a wildcard. Request bodies and binary responses are bounded by runtime
 settings before expensive work; viewer entry attempts are rate limited per
-client network address and route, with bounded memory and a concealed answer,
-the address read only from the connection, never from a forwarded header,
-cookie or secret. An entry attempt over the limit is refused before any
+client network identity and route, with bounded memory and a concealed answer.
+The identity is the client address of the connection, never a forwarded
+header, cookie or secret, kept to its first 128 characters; a connection that
+names no client is identified as `unknown`. Addresses that share their first
+128 characters, and all connections that name no client, therefore share one
+bucket, as in the running service (Factory code `runtime/transport_guard.py`
+`_client_bucket_key`; owner 2026-11-06: current service behaviour accepted;
+technical decisions delegated). An entry attempt over the limit is refused before any
 code verification and creates no session; the limiter's algorithm, its
 bound and its answer are those of the accepted transport guard, stated by
 the notes of `transport_guard` (recorded in the accepted spec as
@@ -1299,6 +1304,10 @@ headers only. Recorded in the accepted spec as `rules.http_transport_policy` (Fa
 - TRN-002: no viewer sign-out succeeds from a foreign origin, and no viewer
   project read succeeds without the cookie.
 - TRN-003: no credential, cookie or secret appears in a log line.
+- TRN-004: the viewer-entry limiter keys an attempt by the route and the
+  connection's client address cut to its first 128 characters, or `unknown`
+  when the connection names no client; no request-controlled value enters
+  the key.
 
 ### Required tests
 
@@ -1311,6 +1320,10 @@ headers only. Recorded in the accepted spec as `rules.http_transport_policy` (Fa
   [witness: verification:transport_guard_client_portal].
 - TRN-002: the API transport check
   [witness: verification:api_transport_financial_policy_registry_gateway_client_portal].
+- TRN-004: a check of the limiter key: a 129-character client address and its
+  first 128 characters share one bucket; two connections without a client
+  share the `unknown` bucket; a forwarded header or cookie never changes the
+  bucket.
 
 ### Consequence
 

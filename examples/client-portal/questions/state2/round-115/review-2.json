@@ -1,0 +1,95 @@
+{
+ "open_points": [
+  {
+   "subject": "A25 viewer-entry client network identity",
+   "kind": "representation ambiguity",
+   "text": "The client network identity of the viewer-entry limiter is bounded by `VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS` (its leading characters kept) and stands in as `VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN` when the connection names no client; the notes of `transport_guard` state the bound and the source (owner-approved cleanup 2026-11-10: lost from the notes since `018b2e2e`; the leaves `maximum_characters` and `unknown_placeholder` of `limits.viewer_entry.client_network_identity` leave the policy).",
+   "question": "What exact character representation is taken from the connection before its leading characters are kept, including whether the peer port, IPv6 canonicalization, and a zone identifier are included?",
+   "options": [
+    "Use the canonical peer IP or host string, excluding the port and normalizing equivalent IP spellings before truncation.",
+    "Use the connection API's host string verbatim, excluding the port, and truncate that string without normalization.",
+    "Serialize the complete connection endpoint, including its port, and truncate that representation."
+   ],
+   "default_guess": "Use a canonical peer IP or host string excluding the port, then keep its first `VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS` characters.",
+   "witness": {
+    "initial": "The viewer-entry limiter is empty, and two requests originate from the same peer address through connections with different ephemeral source ports.",
+    "events": [
+     "The viewer sends enough entry requests on the first connection to reach the limit.",
+     "The same viewer sends another entry request from a new connection with a different source port."
+    ],
+    "outcomes": [
+     "An implementation using only the peer host obtains the same limiter identity and refuses the final request.",
+     "An implementation serializing host and port obtains a different limiter identity and admits the final request."
+    ],
+    "observer": "The viewer and the transport operator observing the limiter"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 viewer-entry limiting key",
+   "kind": "contradictory identity semantics",
+   "text": "The client network identity of the viewer-entry limiter is bounded by `VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS` (its leading characters kept) and stands in as `VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN` when the connection names no client; the notes of `transport_guard` state the bound and the source (owner-approved cleanup 2026-11-10: lost from the notes since `018b2e2e`; the leaves `maximum_characters` and `unknown_placeholder` of `limits.viewer_entry.client_network_identity` leave the policy).",
+   "question": "Must the maximum preserve a distinct limiter key for every valid client network address, as required by the normative rule that limiting is per client network address, or are distinct addresses with the same retained prefix intentionally placed in one limiter bucket?",
+   "options": [
+    "Require the maximum and canonical representation to preserve every valid network address without truncation collisions.",
+    "Accept prefix collisions and rate-limit all addresses sharing a retained prefix as one identity.",
+    "Use the full address for the limiter key and apply the bound only to a stored or logged representation."
+   ],
+   "default_guess": "Require a canonical address representation whose maximum length fits within the constant, so distinct valid addresses do not collide.",
+   "witness": {
+    "initial": "Two distinct client addresses have character representations longer than the configured maximum and share all retained leading characters; the route's limiter bucket is empty.",
+    "events": [
+     "Client A submits enough viewer-entry attempts to exhaust a bucket.",
+     "Client B then submits one viewer-entry attempt on the same route."
+    ],
+    "outcomes": [
+     "If the bounded prefix is the limiter key and collisions are accepted, Client B is refused because Client A exhausted their shared bucket.",
+     "If limiting must remain per complete client network address, Client B has a separate bucket and is admitted."
+    ],
+    "observer": "Client B and the transport operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 missing-client identity handling",
+   "kind": "order ambiguity",
+   "text": "The client network identity of the viewer-entry limiter is bounded by `VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS` (its leading characters kept) and stands in as `VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN` when the connection names no client; the notes of `transport_guard` state the bound and the source (owner-approved cleanup 2026-11-10: lost from the notes since `018b2e2e`; the leaves `maximum_characters` and `unknown_placeholder` of `limits.viewer_entry.client_network_identity` leave the policy).",
+   "question": "Is `VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN` itself subjected to the character bound, or does substitution happen after bounding and preserve the whole placeholder?",
+   "options": [
+    "Substitute the unknown placeholder first and then retain its leading characters like every other identity.",
+    "Bound only identities obtained from a named client and use the complete unknown placeholder.",
+    "Require the unknown placeholder to fit within the maximum, making the two orders equivalent."
+   ],
+   "default_guess": "Require the placeholder to fit within the maximum and use it unchanged.",
+   "witness": {
+    "initial": "`VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN` is longer than `VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS`, and the connection names no client.",
+    "events": [
+     "A viewer-entry request arrives without a named connection client.",
+     "The transport guard constructs the limiter key."
+    ],
+    "outcomes": [
+     "Substitution before truncation uses only the placeholder's retained prefix.",
+     "Substitution after truncation uses the complete placeholder."
+    ],
+    "observer": "The transport operator inspecting limiter buckets and any other identity whose prefix collides with the truncated placeholder"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A25 Formal invariants and Required tests",
+   "kind": "missing verification obligation",
+   "text": "- Factory focused checks `client_portal_transport_guard`,\n  `client_portal_api_transport_check` and `runtime_settings_client_portal`\n  (`babd5e52`, `3080ef0d`, `dc351917`).",
+   "question": "Which formal invariant and Required tests assertion must show that the limiter reads identity only from the connection, retains exactly the prescribed leading characters, substitutes the unknown constant when no client is named, and applies the resulting identity to the viewer-entry limiter?",
+   "options": [
+    "Add a new formal invariant and a Required tests item spelling out all four assertions.",
+    "Extend TRN-001 and its named witness checks to spell out these assertions.",
+    "Declare these assertions explicitly under the focused transport-guard check without adding an invariant."
+   ],
+   "default_guess": "Add a dedicated transport invariant and bind it to a transport-guard witness that demonstrates the source, bound, substitution, and limiter-key behavior.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A25 viewer-entry client network identity\",\"kind\":\"representation ambiguity\",\"text\":\"The client network identity of the viewer-entry limiter is bounded by `VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS` (its leading characters kept) and stands in as `VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN` when the connection names no client; the notes of `transport_guard` state the bound and the source (owner-approved cleanup 2026-11-10: lost from the notes since `018b2e2e`; the leaves `maximum_characters` and `unknown_placeholder` of `limits.viewer_entry.client_network_identity` leave the policy).\",\"question\":\"What exact character representation is taken from the connection before its leading characters are kept, including whether the peer port, IPv6 canonicalization, and a zone identifier are included?\",\"options\":[\"Use the canonical peer IP or host string, excluding the port and normalizing equivalent IP spellings before truncation.\",\"Use the connection API's host string verbatim, excluding the port, and truncate that string without normalization.\",\"Serialize the complete connection endpoint, including its port, and truncate that representation.\"],\"default_guess\":\"Use a canonical peer IP or host string excluding the port, then keep its first `VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS` characters.\",\"witness\":{\"initial\":\"The viewer-entry limiter is empty, and two requests originate from the same peer address through connections with different ephemeral source ports.\",\"events\":[\"The viewer sends enough entry requests on the first connection to reach the limit.\",\"The same viewer sends another entry request from a new connection with a different source port.\"],\"outcomes\":[\"An implementation using only the peer host obtains the same limiter identity and refuses the final request.\",\"An implementation serializing host and port obtains a different limiter identity and admits the final request.\"],\"observer\":\"The viewer and the transport operator observing the limiter\"}},{\"subject\":\"A25 viewer-entry limiting key\",\"kind\":\"contradictory identity semantics\",\"text\":\"The client network identity of the viewer-entry limiter is bounded by `VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS` (its leading characters kept) and stands in as `VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN` when the connection names no client; the notes of `transport_guard` state the bound and the source (owner-approved cleanup 2026-11-10: lost from the notes since `018b2e2e`; the leaves `maximum_characters` and `unknown_placeholder` of `limits.viewer_entry.client_network_identity` leave the policy).\",\"question\":\"Must the maximum preserve a distinct limiter key for every valid client network address, as required by the normative rule that limiting is per client network address, or are distinct addresses with the same retained prefix intentionally placed in one limiter bucket?\",\"options\":[\"Require the maximum and canonical representation to preserve every valid network address without truncation collisions.\",\"Accept prefix collisions and rate-limit all addresses sharing a retained prefix as one identity.\",\"Use the full address for the limiter key and apply the bound only to a stored or logged representation.\"],\"default_guess\":\"Require a canonical address representation whose maximum length fits within the constant, so distinct valid addresses do not collide.\",\"witness\":{\"initial\":\"Two distinct client addresses have character representations longer than the configured maximum and share all retained leading characters; the route's limiter bucket is empty.\",\"events\":[\"Client A submits enough viewer-entry attempts to exhaust a bucket.\",\"Client B then submits one viewer-entry attempt on the same route.\"],\"outcomes\":[\"If the bounded prefix is the limiter key and collisions are accepted, Client B is refused because Client A exhausted their shared bucket.\",\"If limiting must remain per complete client network address, Client B has a separate bucket and is admitted.\"],\"observer\":\"Client B and the transport operator\"}},{\"subject\":\"A25 missing-client identity handling\",\"kind\":\"order ambiguity\",\"text\":\"The client network identity of the viewer-entry limiter is bounded by `VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS` (its leading characters kept) and stands in as `VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN` when the connection names no client; the notes of `transport_guard` state the bound and the source (owner-approved cleanup 2026-11-10: lost from the notes since `018b2e2e`; the leaves `maximum_characters` and `unknown_placeholder` of `limits.viewer_entry.client_network_identity` leave the policy).\",\"question\":\"Is `VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN` itself subjected to the character bound, or does substitution happen after bounding and preserve the whole placeholder?\",\"options\":[\"Substitute the unknown placeholder first and then retain its leading characters like every other identity.\",\"Bound only identities obtained from a named client and use the complete unknown placeholder.\",\"Require the unknown placeholder to fit within the maximum, making the two orders equivalent.\"],\"default_guess\":\"Require the placeholder to fit within the maximum and use it unchanged.\",\"witness\":{\"initial\":\"`VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN` is longer than `VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS`, and the connection names no client.\",\"events\":[\"A viewer-entry request arrives without a named connection client.\",\"The transport guard constructs the limiter key.\"],\"outcomes\":[\"Substitution before truncation uses only the placeholder's retained prefix.\",\"Substitution after truncation uses the complete placeholder.\"],\"observer\":\"The transport operator inspecting limiter buckets and any other identity whose prefix collides with the truncated placeholder\"}},{\"subject\":\"A25 Formal invariants and Required tests\",\"kind\":\"missing verification obligation\",\"text\":\"- Factory focused checks `client_portal_transport_guard`,\\n  `client_portal_api_transport_check` and `runtime_settings_client_portal`\\n  (`babd5e52`, `3080ef0d`, `dc351917`).\",\"question\":\"Which formal invariant and Required tests assertion must show that the limiter reads identity only from the connection, retains exactly the prescribed leading characters, substitutes the unknown constant when no client is named, and applies the resulting identity to the viewer-entry limiter?\",\"options\":[\"Add a new formal invariant and a Required tests item spelling out all four assertions.\",\"Extend TRN-001 and its named witness checks to spell out these assertions.\",\"Declare these assertions explicitly under the focused transport-guard check without adding an invariant.\"],\"default_guess\":\"Add a dedicated transport invariant and bind it to a transport-guard witness that demonstrates the source, bound, substitution, and limiter-key behavior.\"}]}",
+ "set_aside": []
+}
