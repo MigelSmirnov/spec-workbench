@@ -588,6 +588,15 @@ ever needed." It closes `open_questions.md` Q19 and replaces R0-23 of
 |---|---|---|
 | `rules.audit_action_catalog`, `rules.audit_significant_mutation_actions`, `rules.revocation_cascades`, `rules.staff_bootstrap_policy` changed against 459ac96c (the six challenge actions and the challenge cascade left with the challenges) and reach no module: admission FA018 `changed_data_without_consumer`, Route B preflight `affected_data_graph_incomplete` | SPEC_STANDARD §15.3.1 (edition 2): a non-backend `= rules.*` address in a note is refused, so since the State 7 notes of 2026-11-06 no note names them; no running module imports them as data (Factory code: `application/audit_writer.py` 25-75 holds the catalog and the significant set as `AuditAction` literals, the cascades and the bootstrap policy are code in `application/viewer_access.py`, `staff_identity.py`, `service_identity.py`, `staff_bootstrap.py`, `cli/staff_bootstrap.py` and the unit-of-work backend's bootstrap store); the values reach the generator through the State 7 notes of the consuming callables (`AuditAction` members by symbol, behaviour in words) | removed from `60_data_closure.json` (sections and 48 placements) and `global_spec.json` `rules`; the decisions keep the facts (`02_rules.md` A11, A13, A29 Consequence rewritten), and the prose of States 0, 1, 4, 5 and the `_validate_audit_intent` plan purpose name the decision instead of the address. No module's slice changes, so the next Route B regenerates nothing for this; observed behaviour unchanged. Rows 6 and 16 of the data-provider table below keep the 459ac96c leaf as provenance of the deferred upgrade |
 
+#### Cleanup after the Route B verify of b3bfb504 (owner, 2026-11-10)
+
+| topic | evidence | decision |
+|---|---|---|
+| 74 transaction-level contracts `PortalTransaction.get_*/list_*/insert_*/update_*/upsert_*` with the names of the repository methods | Route B on `b3bfb504`: prompts showed each method under both `# PortalTransaction` and its repository, and generated code called them through an accessor not called (`transaction.expenses.get_expense_aggregate`; service_identity 8, expense_intake 3, expense_management 16 sites). Their notes said "transitional compatibility"; every consumer note forbids them; `design_provenance` names no decision that keeps them (A22, A24 only as module trace consumers); the unit-of-work emitter delegates such contracts only when declared (`generate_sqlite_unit_of_work_draft.py`) | retired from `60_contract_plan.json`, `60_contracts.json` and their 195 notes; projected out of `contracts`, `notes`, `function_order`. The accessors, `commit`, `rollback`, `assert_open`, `translate_error` and the helpers stay. No behaviour change: the emitted `portal_store` no longer carries the delegating methods nobody may call |
+| repository methods unnamed in notes | Route B: staff_identity and derived_views invented repository methods because the notes said only "through the X repository of that transaction", so the slicer brought no method contract into the prompt | 46 notes name, per function, the repository methods the accepted code calls (`DEPENDENCY_BOUNDARY`, "by calling M of the X repository of that transaction"); the method list is taken from the accepted code (Factory `projects/client_portal_sandbox`) against the declared interfaces |
+| `_client_bucket_key` bound and placeholder | A25 requires the notes to state the limiter's identity bound; lost since `018b2e2e` | data-provider constants D31; one `transport_guard` note |
+| missing or other-project expense in `correct_expense`, `replace_expense_allocations`, `set_expense_inclusion`, `update_expense_document` | State 5 (`50_public_apis.md`) and the accepted code answer `ExpenseConflictError` (409); the State 7 notes lost it | one `VALIDATION_ERROR` note each |
+
 #### Deviation from 459ac96c: thirteen rules namespaces without a reader are retired (owner, 2026-11-09)
 
 | topic | evidence | decision |
@@ -756,6 +765,7 @@ tools); the projection reproduces `global_spec.json` unchanged.
 | D28 health | `HEALTH_LIVE_PATH`, `HEALTH_READY_PATH`, `HEALTH_OK_STATUS` |
 | D29 bootstrap exit codes | `BOOTSTRAP_EXIT_CODES`, keyed by `BootstrapCommandOutcome`, total |
 | D30 log record | `TRANSPORT_LOG_LABELS` (labels and order); `label=value`, single spaces stay format prose |
+| D31 viewer-entry client identity | `VIEWER_ENTRY_CLIENT_IDENTITY_MAX_CHARACTERS` (128), `VIEWER_ENTRY_CLIENT_IDENTITY_UNKNOWN` (`unknown`), 2026-11-10; the source and forbidden sources stay prose of the `transport_guard` notes |
 | #959 | `build_project_overview` no longer names `= rules` |
 
 Form decisions (one line each; change-axis of SPEC_STANDARD 15.2 and the
