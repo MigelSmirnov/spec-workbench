@@ -327,10 +327,11 @@ secret cannot be shared between holders.
    backup made more than 30 × 24 hours before the instant this step starts,
    one cutoff for the whole step — a backup made exactly 30 × 24 hours before
    it is kept. The step reads the clock once, before it looks at any file,
-   and its cutoff is that UTC instant less exactly 720 hours. The cutoff and
-   each record's UTC instant (L16) are compared as instants at the full
-   precision each holds, neither rounded nor truncated; a backup whose
-   instant is earlier than the cutoff is deleted. The 30 × 24 hours are one value of the release, the data
+   and its cutoff is that UTC instant less exactly 720 hours. The clock is
+   read to the microsecond, and a backup's record holds its instant in UTC
+   to the microsecond (L16), so the cutoff and every record's instant have
+   one precision and are compared as they are, neither rounded nor
+   truncated; a backup whose instant is earlier than the cutoff is deleted. The 30 × 24 hours are one value of the release, the data
    provider's constant `BACKUP_RETENTION_HOURS` = 720, which the code that
    deletes imports (SPEC_STANDARD §15.3.1); no other place holds it. It also
    deletes every file under the kept
@@ -396,7 +397,9 @@ every kept backup is encrypted, consistent, checked, and records
 2. After a run in which the backup failed, backups older than 30 × 24 hours
    are still deleted.
 7. With the step's cutoff fixed at its start, a kept backup made exactly
-   30 × 24 hours before it is kept and one made a second earlier is deleted.
+   30 × 24 hours before it is kept and one made a microsecond earlier is
+   deleted; a record instant with a non-zero fraction of a second is
+   compared with that fraction, not at the whole second.
 8. The readable record of a kept backup holds the instant, release and last
    sequence number of the snapshot it was made from and the digest of its
    key; a backup whose decrypted sequence differs from its record is
