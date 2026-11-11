@@ -1,0 +1,308 @@
+{
+ "open_points": [
+  {
+   "subject": "runtime_settings.load_runtime_settings",
+   "kind": "environment_name_gap",
+   "text": "Read the `REGISTRY_` items A17 rule 1 lists from the process environment into the settings",
+   "question": "What is the exact environment-variable name for each settings field?",
+   "options": [
+    "Define one fixed `REGISTRY_...` name for each of the eight items.",
+    "Derive names mechanically from settings-field names."
+   ],
+   "default_guess": "Use explicit names such as `REGISTRY_STORE_LOCATION`, documented in a closed table.",
+   "witness": {
+    "initial": "The environment contains `REGISTRY_STORE_PATH` but not `REGISTRY_STORE_LOCATION`.",
+    "events": [
+     "The host starts Registry.",
+     "runtime_settings loads the store-location item."
+    ],
+    "outcomes": [
+     "An implementation whose closed table names `REGISTRY_STORE_PATH` loads the value and continues.",
+     "An implementation that derives or chooses `REGISTRY_STORE_LOCATION` treats the item as absent and stops the start."
+    ],
+    "observer": "The host operator sees either a running instance or a missing-item diagnostic."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "configuration.load_configuration",
+   "kind": "call_boundary_ambiguity",
+   "text": "None; it takes the settings from `runtime_settings.load_runtime_settings`.",
+   "question": "Does `load_configuration` call `load_runtime_settings` itself, or must the settings be an explicit input supplied by `instance_lifecycle`?",
+   "options": [
+    "No input; `configuration` calls `runtime_settings.load_runtime_settings`.",
+    "Take the settings object as an explicit input; `instance_lifecycle` calls both operations."
+   ],
+   "default_guess": "Make the settings an explicit input so the public signature and startup sequence expose the dependency.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration.load_configuration",
+   "kind": "validation_gap",
+   "text": "every other item present; each well formed",
+   "question": "What exact form is required for each location, token, credential and backup key, and which diagnostic is returned for each malformed form?",
+   "options": [
+    "Specify a form predicate separately for every settings item.",
+    "Treat all non-path secrets as arbitrary text meeting the byte-length rule and define only the two path forms."
+   ],
+   "default_guess": "Define explicit per-item predicates, with secrets otherwise unrestricted UTF-8 text of sufficient length.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration.load_configuration",
+   "kind": "secret_routing_contradiction",
+   "text": "The loaded configuration — the store's location, the backup location, the backup key, the owner credential, and either the four service tokens or none, which marks an owner-only start — or one diagnostic naming the first failed item and never its value.",
+   "question": "How can this operation return every secret to `instance_lifecycle` while also satisfying “Each secret is handed later only to the module that uses it”; does it return a whole configuration, consumer-specific views, or opaque handles?",
+   "options": [
+    "Return one complete configuration to `instance_lifecycle`, which distributes its fields.",
+    "Return consumer-specific configuration views or handles so `instance_lifecycle` never receives secret values.",
+    "Have `configuration` inject each secret directly into its sole consumer and return only non-secret startup data."
+   ],
+   "default_guess": "Return consumer-specific opaque views and non-secret startup metadata.",
+   "unit": "?"
+  },
+  {
+   "subject": "store.open_store",
+   "kind": "record_contradiction",
+   "text": "Writes no record.",
+   "question": "Must creation of a new store write its required M12 AuditSequence record at 0, or is that state represented as non-record store metadata?",
+   "options": [
+    "Write exactly one M12 AuditSequence record at 0.",
+    "Represent the audit sequence as store metadata and revise M12 and A17 so it is not a record."
+   ],
+   "default_guess": "Write exactly one M12 AuditSequence record at 0 and change this State impact.",
+   "witness": {
+    "initial": "The configured store file does not exist and its directory exists.",
+    "events": [
+     "The host starts Registry.",
+     "store.open_store successfully creates the new store.",
+     "The first audit append or backup snapshot reads the audit sequence."
+    ],
+    "outcomes": [
+     "Following this passage literally, the new store has no sequence record, so the reader must invent a missing-value rule or fail.",
+     "Following A17 and M12, the new store contains one AuditSequence with value 0 and the next entry receives sequence 1."
+    ],
+    "observer": "The audit append, backup checker and owner see either a usable new store or a failure/different initial sequence."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "migration_import.read_import_mapping",
+   "kind": "missing_output",
+   "text": "For an accepted file, the file's digest, the SHA-256 of its bytes, which Registry computes and never takes from a caller.",
+   "question": "How do the accepted file bytes reach `owner_sessions.keep_uploaded_file` after this operation alone consumes the unread stream?",
+   "options": [
+    "Return the accepted bytes together with the digest and project summary.",
+    "Return a rewindable buffered upload object containing bytes and digest.",
+    "Let `read_import_mapping` call `owner_sessions.keep_uploaded_file`, contradicting its stated lack of observable effect."
+   ],
+   "default_guess": "Return an immutable buffered-upload object containing the bytes and computed digest.",
+   "witness": {
+    "initial": "The owner session already has no upload, and a valid upload arrives as a non-rewindable stream.",
+    "events": [
+     "owner_interface hands the unread stream to migration_import.read_import_mapping.",
+     "The operation consumes and accepts the stream.",
+     "operations calls owner_sessions.keep_uploaded_file."
+    ],
+    "outcomes": [
+     "An implementation returns only the documented digest and cannot supply the consumed bytes to keep_uploaded_file.",
+     "Another implementation silently adds the bytes to the output and successfully keeps the upload."
+    ],
+    "observer": "The owner sees either a usable mapping/confirmation flow or an upload that cannot be retained."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "migration_import.read_import_mapping",
+   "kind": "read_timing_contradiction",
+   "text": "a file over the size limit is refused before it is read",
+   "question": "Is every oversized file refused without reading bytes, or only one whose declared length exceeds the limit, with other oversized streams read through the first excess byte?",
+   "options": [
+    "Refuse before reading only when the declared length is over the limit; otherwise read through limit plus one byte.",
+    "Require a trustworthy declared length and refuse every oversized file before reading.",
+    "Always stream through limit plus one byte and ignore the declared length for early refusal."
+   ],
+   "default_guess": "Use the A19 rule: reject an over-limit declared length before reading; otherwise read at most limit plus one byte.",
+   "witness": {
+    "initial": "A request declares 1 byte but its stream contains `IMPORT_FILE_MAX_BYTES + 1` bytes.",
+    "events": [
+     "The owner uploads the request.",
+     "read_import_mapping applies the size check."
+    ],
+    "outcomes": [
+     "The Outputs passage is read literally and the implementation must somehow refuse before consuming the stream.",
+     "A19 is followed and the implementation consumes `IMPORT_FILE_MAX_BYTES + 1` bytes before refusing."
+    ],
+    "observer": "The stream producer and request instrumentation observe different byte consumption."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "backups.run_daily_backup_if_due",
+   "kind": "constant_contradiction",
+   "text": "the backups older than 30 × 24 hours and the unreadable kept files deleted.",
+   "question": "Must retention be read from `data_provider.BACKUP_RETENTION_HOURS`, or is 30 × 24 hours fixed independently in this operation?",
+   "options": [
+    "Import and use `BACKUP_RETENTION_HOURS`.",
+    "Keep the literal 30 × 24 hours in backup code."
+   ],
+   "default_guess": "Import and use `BACKUP_RETENTION_HOURS`, with the prose describing its current value only.",
+   "witness": {
+    "initial": "A later verified release changes `BACKUP_RETENTION_HOURS` from 720 to 48.",
+    "events": [
+     "A backup run rotates a kept backup 72 hours old."
+    ],
+    "outcomes": [
+     "An implementation following the imported release constant deletes the backup.",
+     "An implementation following this literal keeps the backup until it is over 720 hours old."
+    ],
+    "observer": "The owner sees a different retained-backup set."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle.start_instance",
+   "kind": "timer_constant_contradiction",
+   "text": "every 60 seconds `owner_sessions.end_expired_sessions`; at least once a minute, except in an owner-only start, `backups.run_daily_backup_if_due`.",
+   "question": "Are the two schedules independently fixed by `SESSION_PASS_SECONDS` and `BACKUP_LOOK_SECONDS`, and is the backup look exactly periodic or merely required at least once per minute?",
+   "options": [
+    "Use two independent imported constants and schedule each exactly at its configured interval.",
+    "Hard-code 60 seconds for the session pass and any cadence no slower than one minute for backup looks.",
+    "Use one shared 60-second timer for both passes."
+   ],
+   "default_guess": "Use independent imported constants, even while both currently equal 60 seconds.",
+   "witness": {
+    "initial": "A later release sets `SESSION_PASS_SECONDS` to 30 and `BACKUP_LOOK_SECONDS` to 45.",
+    "events": [
+     "The instance starts and runs for 90 seconds."
+    ],
+    "outcomes": [
+     "An implementation using the two constants runs the session pass three times and the backup look twice.",
+     "An implementation following the State 5 literals runs both approximately once per minute."
+    ],
+    "observer": "Expired-session timing and whether a 03:00 backup look occurs differ."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "configuration.load_configuration",
+   "kind": "standard_violation",
+   "text": "the imported `SERVICE_RIGHTS` constant lists",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Declare `configuration -> data_provider -> SERVICE_RIGHTS` in `module_internal`.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration.load_configuration",
+   "kind": "standard_violation",
+   "text": "the imported `SECRET_MIN_BYTES` constant",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Declare `configuration -> data_provider -> SECRET_MIN_BYTES` in `module_internal`.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration.load_configuration",
+   "kind": "standard_violation",
+   "text": "`runtime_settings.load_runtime_settings`",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "If configuration calls this operation, declare `configuration -> runtime_settings -> load_runtime_settings`; otherwise make settings an explicit input and declare the actual caller's edge.",
+   "unit": "?"
+  },
+  {
+   "subject": "store.open_store",
+   "kind": "standard_violation",
+   "text": "the imported `STORE_VERSION` constant",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Declare `store -> data_provider -> STORE_VERSION` in `module_internal`.",
+   "unit": "?"
+  },
+  {
+   "subject": "audit_log.append_audit_entry",
+   "kind": "standard_violation",
+   "text": "the imported `RELEASE_VERSION` and `CONTRACT_VERSION` constants",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Declare both `RELEASE_VERSION` and `CONTRACT_VERSION` on the `audit_log -> data_provider` edge in `module_internal`.",
+   "unit": "?"
+  },
+  {
+   "subject": "service_access.service_may_call",
+   "kind": "standard_violation",
+   "text": "the imported `SERVICE_RIGHTS` constant's alone",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Declare `service_access -> data_provider -> SERVICE_RIGHTS` in `module_internal`.",
+   "unit": "?"
+  },
+  {
+   "subject": "artifact_pointers.publish_pointer",
+   "kind": "standard_violation",
+   "text": "the imported `ARTIFACT_TYPE_OWNERS` constant",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Declare `artifact_pointers -> data_provider -> ARTIFACT_TYPE_OWNERS` in `module_internal`.",
+   "unit": "?"
+  },
+  {
+   "subject": "artifact_pointers.latest_pointer_of_type",
+   "kind": "standard_violation",
+   "text": "the imported `ARTIFACT_TYPE_OWNERS` constant does not declare",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Make this use rely on the declared `artifact_pointers -> data_provider -> ARTIFACT_TYPE_OWNERS` edge.",
+   "unit": "?"
+  },
+  {
+   "subject": "migration_import.read_import_mapping",
+   "kind": "standard_violation",
+   "text": "the imported `IMPORT_FILE_MAX_BYTES` constant",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Declare `migration_import -> data_provider -> IMPORT_FILE_MAX_BYTES` in `module_internal`.",
+   "unit": "?"
+  },
+  {
+   "subject": "migration_import.read_import_mapping",
+   "kind": "standard_violation",
+   "text": "the imported `ARTIFACT_TYPE_OWNERS` constant does not",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Declare `ARTIFACT_TYPE_OWNERS` on the `migration_import -> data_provider` edge in `module_internal`.",
+   "unit": "?"
+  },
+  {
+   "subject": "backups.probe_backup_location",
+   "kind": "standard_violation",
+   "text": "the imported\n`BACKUP_TEMPORARY_PREFIX` constant",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Declare `backups -> data_provider -> BACKUP_TEMPORARY_PREFIX` in `module_internal`.",
+   "unit": "?"
+  },
+  {
+   "subject": "backups.run_daily_backup_if_due",
+   "kind": "standard_violation",
+   "text": "the imported `RELEASE_VERSION` constant",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Declare `backups -> data_provider -> RELEASE_VERSION` in `module_internal`.",
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle.start_instance",
+   "kind": "standard_violation",
+   "text": "the imported `OWNER_INTERFACE_LISTEN_ADDRESS` and\n`SERVICE_API_LISTEN_ADDRESS` constants",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Declare both listener-address constants on the `instance_lifecycle -> data_provider` edge in `module_internal`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"runtime_settings.load_runtime_settings\",\"kind\":\"environment_name_gap\",\"text\":\"Read the `REGISTRY_` items A17 rule 1 lists from the process environment into the settings\",\"question\":\"What is the exact environment-variable name for each settings field?\",\"options\":[\"Define one fixed `REGISTRY_...` name for each of the eight items.\",\"Derive names mechanically from settings-field names.\"],\"default_guess\":\"Use explicit names such as `REGISTRY_STORE_LOCATION`, documented in a closed table.\",\"witness\":{\"initial\":\"The environment contains `REGISTRY_STORE_PATH` but not `REGISTRY_STORE_LOCATION`.\",\"events\":[\"The host starts Registry.\",\"runtime_settings loads the store-location item.\"],\"outcomes\":[\"An implementation whose closed table names `REGISTRY_STORE_PATH` loads the value and continues.\",\"An implementation that derives or chooses `REGISTRY_STORE_LOCATION` treats the item as absent and stops the start.\"],\"observer\":\"The host operator sees either a running instance or a missing-item diagnostic.\"}},{\"subject\":\"configuration.load_configuration\",\"kind\":\"call_boundary_ambiguity\",\"text\":\"None; it takes the settings from `runtime_settings.load_runtime_settings`.\",\"question\":\"Does `load_configuration` call `load_runtime_settings` itself, or must the settings be an explicit input supplied by `instance_lifecycle`?\",\"options\":[\"No input; `configuration` calls `runtime_settings.load_runtime_settings`.\",\"Take the settings object as an explicit input; `instance_lifecycle` calls both operations.\"],\"default_guess\":\"Make the settings an explicit input so the public signature and startup sequence expose the dependency.\"},{\"subject\":\"configuration.load_configuration\",\"kind\":\"validation_gap\",\"text\":\"every other item present; each well formed\",\"question\":\"What exact form is required for each location, token, credential and backup key, and which diagnostic is returned for each malformed form?\",\"options\":[\"Specify a form predicate separately for every settings item.\",\"Treat all non-path secrets as arbitrary text meeting the byte-length rule and define only the two path forms.\"],\"default_guess\":\"Define explicit per-item predicates, with secrets otherwise unrestricted UTF-8 text of sufficient length.\"},{\"subject\":\"configuration.load_configuration\",\"kind\":\"secret_routing_contradiction\",\"text\":\"The loaded configuration — the store's location, the backup location, the backup key, the owner credential, and either the four service tokens or none, which marks an owner-only start — or one diagnostic naming the first failed item and never its value.\",\"question\":\"How can this operation return every secret to `instance_lifecycle` while also satisfying “Each secret is handed later only to the module that uses it”; does it return a whole configuration, consumer-specific views, or opaque handles?\",\"options\":[\"Return one complete configuration to `instance_lifecycle`, which distributes its fields.\",\"Return consumer-specific configuration views or handles so `instance_lifecycle` never receives secret values.\",\"Have `configuration` inject each secret directly into its sole consumer and return only non-secret startup data.\"],\"default_guess\":\"Return consumer-specific opaque views and non-secret startup metadata.\"},{\"subject\":\"store.open_store\",\"kind\":\"record_contradiction\",\"text\":\"Writes no record.\",\"question\":\"Must creation of a new store write its required M12 AuditSequence record at 0, or is that state represented as non-record store metadata?\",\"options\":[\"Write exactly one M12 AuditSequence record at 0.\",\"Represent the audit sequence as store metadata and revise M12 and A17 so it is not a record.\"],\"default_guess\":\"Write exactly one M12 AuditSequence record at 0 and change this State impact.\",\"witness\":{\"initial\":\"The configured store file does not exist and its directory exists.\",\"events\":[\"The host starts Registry.\",\"store.open_store successfully creates the new store.\",\"The first audit append or backup snapshot reads the audit sequence.\"],\"outcomes\":[\"Following this passage literally, the new store has no sequence record, so the reader must invent a missing-value rule or fail.\",\"Following A17 and M12, the new store contains one AuditSequence with value 0 and the next entry receives sequence 1.\"],\"observer\":\"The audit append, backup checker and owner see either a usable new store or a failure/different initial sequence.\"}},{\"subject\":\"migration_import.read_import_mapping\",\"kind\":\"missing_output\",\"text\":\"For an accepted file, the file's digest, the SHA-256 of its bytes, which Registry computes and never takes from a caller.\",\"question\":\"How do the accepted file bytes reach `owner_sessions.keep_uploaded_file` after this operation alone consumes the unread stream?\",\"options\":[\"Return the accepted bytes together with the digest and project summary.\",\"Return a rewindable buffered upload object containing bytes and digest.\",\"Let `read_import_mapping` call `owner_sessions.keep_uploaded_file`, contradicting its stated lack of observable effect.\"],\"default_guess\":\"Return an immutable buffered-upload object containing the bytes and computed digest.\",\"witness\":{\"initial\":\"The owner session already has no upload, and a valid upload arrives as a non-rewindable stream.\",\"events\":[\"owner_interface hands the unread stream to migration_import.read_import_mapping.\",\"The operation consumes and accepts the stream.\",\"operations calls owner_sessions.keep_uploaded_file.\"],\"outcomes\":[\"An implementation returns only the documented digest and cannot supply the consumed bytes to keep_uploaded_file.\",\"Another implementation silently adds the bytes to the output and successfully keeps the upload.\"],\"observer\":\"The owner sees either a usable mapping/confirmation flow or an upload that cannot be retained.\"}},{\"subject\":\"migration_import.read_import_mapping\",\"kind\":\"read_timing_contradiction\",\"text\":\"a file over the size limit is refused before it is read\",\"question\":\"Is every oversized file refused without reading bytes, or only one whose declared length exceeds the limit, with other oversized streams read through the first excess byte?\",\"options\":[\"Refuse before reading only when the declared length is over the limit; otherwise read through limit plus one byte.\",\"Require a trustworthy declared length and refuse every oversized file before reading.\",\"Always stream through limit plus one byte and ignore the declared length for early refusal.\"],\"default_guess\":\"Use the A19 rule: reject an over-limit declared length before reading; otherwise read at most limit plus one byte.\",\"witness\":{\"initial\":\"A request declares 1 byte but its stream contains `IMPORT_FILE_MAX_BYTES + 1` bytes.\",\"events\":[\"The owner uploads the request.\",\"read_import_mapping applies the size check.\"],\"outcomes\":[\"The Outputs passage is read literally and the implementation must somehow refuse before consuming the stream.\",\"A19 is followed and the implementation consumes `IMPORT_FILE_MAX_BYTES + 1` bytes before refusing.\"],\"observer\":\"The stream producer and request instrumentation observe different byte consumption.\"}},{\"subject\":\"backups.run_daily_backup_if_due\",\"kind\":\"constant_contradiction\",\"text\":\"the backups older than 30 × 24 hours and the unreadable kept files deleted.\",\"question\":\"Must retention be read from `data_provider.BACKUP_RETENTION_HOURS`, or is 30 × 24 hours fixed independently in this operation?\",\"options\":[\"Import and use `BACKUP_RETENTION_HOURS`.\",\"Keep the literal 30 × 24 hours in backup code.\"],\"default_guess\":\"Import and use `BACKUP_RETENTION_HOURS`, with the prose describing its current value only.\",\"witness\":{\"initial\":\"A later verified release changes `BACKUP_RETENTION_HOURS` from 720 to 48.\",\"events\":[\"A backup run rotates a kept backup 72 hours old.\"],\"outcomes\":[\"An implementation following the imported release constant deletes the backup.\",\"An implementation following this literal keeps the backup until it is over 720 hours old.\"],\"observer\":\"The owner sees a different retained-backup set.\"}},{\"subject\":\"instance_lifecycle.start_instance\",\"kind\":\"timer_constant_contradiction\",\"text\":\"every 60 seconds `owner_sessions.end_expired_sessions`; at least once a minute, except in an owner-only start, `backups.run_daily_backup_if_due`.\",\"question\":\"Are the two schedules independently fixed by `SESSION_PASS_SECONDS` and `BACKUP_LOOK_SECONDS`, and is the backup look exactly periodic or merely required at least once per minute?\",\"options\":[\"Use two independent imported constants and schedule each exactly at its configured interval.\",\"Hard-code 60 seconds for the session pass and any cadence no slower than one minute for backup looks.\",\"Use one shared 60-second timer for both passes.\"],\"default_guess\":\"Use independent imported constants, even while both currently equal 60 seconds.\",\"witness\":{\"initial\":\"A later release sets `SESSION_PASS_SECONDS` to 30 and `BACKUP_LOOK_SECONDS` to 45.\",\"events\":[\"The instance starts and runs for 90 seconds.\"],\"outcomes\":[\"An implementation using the two constants runs the session pass three times and the backup look twice.\",\"An implementation following the State 5 literals runs both approximately once per minute.\"],\"observer\":\"Expired-session timing and whether a 03:00 backup look occurs differ.\"}},{\"subject\":\"configuration.load_configuration\",\"kind\":\"standard_violation\",\"text\":\"the imported `SERVICE_RIGHTS` constant lists\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Declare `configuration -> data_provider -> SERVICE_RIGHTS` in `module_internal`.\"},{\"subject\":\"configuration.load_configuration\",\"kind\":\"standard_violation\",\"text\":\"the imported `SECRET_MIN_BYTES` constant\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Declare `configuration -> data_provider -> SECRET_MIN_BYTES` in `module_internal`.\"},{\"subject\":\"configuration.load_configuration\",\"kind\":\"standard_violation\",\"text\":\"`runtime_settings.load_runtime_settings`\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"If configuration calls this operation, declare `configuration -> runtime_settings -> load_runtime_settings`; otherwise make settings an explicit input and declare the actual caller's edge.\"},{\"subject\":\"store.open_store\",\"kind\":\"standard_violation\",\"text\":\"the imported `STORE_VERSION` constant\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Declare `store -> data_provider -> STORE_VERSION` in `module_internal`.\"},{\"subject\":\"audit_log.append_audit_entry\",\"kind\":\"standard_violation\",\"text\":\"the imported `RELEASE_VERSION` and `CONTRACT_VERSION` constants\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Declare both `RELEASE_VERSION` and `CONTRACT_VERSION` on the `audit_log -> data_provider` edge in `module_internal`.\"},{\"subject\":\"service_access.service_may_call\",\"kind\":\"standard_violation\",\"text\":\"the imported `SERVICE_RIGHTS` constant's alone\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Declare `service_access -> data_provider -> SERVICE_RIGHTS` in `module_internal`.\"},{\"subject\":\"artifact_pointers.publish_pointer\",\"kind\":\"standard_violation\",\"text\":\"the imported `ARTIFACT_TYPE_OWNERS` constant\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Declare `artifact_pointers -> data_provider -> ARTIFACT_TYPE_OWNERS` in `module_internal`.\"},{\"subject\":\"artifact_pointers.latest_pointer_of_type\",\"kind\":\"standard_violation\",\"text\":\"the imported `ARTIFACT_TYPE_OWNERS` constant does not declare\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Make this use rely on the declared `artifact_pointers -> data_provider -> ARTIFACT_TYPE_OWNERS` edge.\"},{\"subject\":\"migration_import.read_import_mapping\",\"kind\":\"standard_violation\",\"text\":\"the imported `IMPORT_FILE_MAX_BYTES` constant\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Declare `migration_import -> data_provider -> IMPORT_FILE_MAX_BYTES` in `module_internal`.\"},{\"subject\":\"migration_import.read_import_mapping\",\"kind\":\"standard_violation\",\"text\":\"the imported `ARTIFACT_TYPE_OWNERS` constant does not\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Declare `ARTIFACT_TYPE_OWNERS` on the `migration_import -> data_provider` edge in `module_internal`.\"},{\"subject\":\"backups.probe_backup_location\",\"kind\":\"standard_violation\",\"text\":\"the imported\\n`BACKUP_TEMPORARY_PREFIX` constant\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Declare `backups -> data_provider -> BACKUP_TEMPORARY_PREFIX` in `module_internal`.\"},{\"subject\":\"backups.run_daily_backup_if_due\",\"kind\":\"standard_violation\",\"text\":\"the imported `RELEASE_VERSION` constant\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Declare `backups -> data_provider -> RELEASE_VERSION` in `module_internal`.\"},{\"subject\":\"instance_lifecycle.start_instance\",\"kind\":\"standard_violation\",\"text\":\"the imported `OWNER_INTERFACE_LISTEN_ADDRESS` and\\n`SERVICE_API_LISTEN_ADDRESS` constants\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Declare both listener-address constants on the `instance_lifecycle -> data_provider` edge in `module_internal`.\"}]}",
+ "set_aside": []
+}

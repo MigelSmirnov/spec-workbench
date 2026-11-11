@@ -1,0 +1,260 @@
+{
+ "open_points": [
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:runtime_settings.load_runtime_settings`: environment-variable table",
+   "kind": "missing_mapping",
+   "text": "Read the `REGISTRY_` items A17 rule 1 lists from\nthe process environment into the settings, each as set or absent; no other\nvariable is read",
+   "question": "What is the exact mapping from each configuration item to its environment-variable name and settings field? A17 lists semantic items but does not name all eight variables or fields.",
+   "options": [
+    "Declare the exact variable and field name for every item in State 5",
+    "Derive names mechanically from item names",
+    "Let the implementation choose names"
+   ],
+   "default_guess": "Use explicit names such as `REGISTRY_STORE_LOCATION`, `REGISTRY_BACKUP_LOCATION`, `REGISTRY_BACKUP_KEY`, `REGISTRY_OWNER_CREDENTIAL`, and one explicitly declared name for each service token.",
+   "witness": {
+    "initial": "The host sets a complete configuration using one plausible spelling for Cabinet Kernel's token.",
+    "events": [
+     "The host starts Registry.",
+     "`runtime_settings.load_runtime_settings` looks up the environment-variable table chosen by its implementer."
+    ],
+    "outcomes": [
+     "One implementation reads the spelling and starts normally.",
+     "Another implementation chose a different spelling, treats the token as absent, and stops the start or starts owner-only."
+    ],
+    "observer": "The host operator and every service client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:store.open_store`: new-store contents",
+   "kind": "contradiction",
+   "text": "a store made\nnew is empty and of the imported `STORE_VERSION` constant",
+   "question": "Does a newly made store contain the required M12 AuditSequence record at 0, or is it literally empty? The changed earlier-state text requires exactly that one record, while this operation says it is empty and later says it writes no record.",
+   "options": [
+    "Create exactly one AuditSequence record at 0",
+    "Create no records and treat a missing counter as 0",
+    "Store the counter outside the record model"
+   ],
+   "default_guess": "Create exactly one durable AuditSequence record at 0 and change the operation's State impact accordingly.",
+   "witness": {
+    "initial": "The configured store file does not exist.",
+    "events": [
+     "The host starts Registry.",
+     "`store.open_store` creates and opens the new store.",
+     "A backup is taken before any audited change."
+    ],
+    "outcomes": [
+     "The store contains M12 at 0 and the backup records sequence 0.",
+     "The store contains no M12 record, so the snapshot either invents 0 or fails when reading the required counter."
+    ],
+    "observer": "The backup run and a later integrity check"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:store.open_store`: SQLite concurrency setting",
+   "kind": "deferred_decision",
+   "text": "The engine setting that\nlets a backup's reader and the writer go on together is set here, as State 6\nfixes it (A18 rule 1).",
+   "question": "Which exact SQLite journal, locking, timeout and related connection settings must `open_store` apply so a backup snapshot and writes proceed with A18's required behavior? This text explicitly leaves the behavioral choice to State 6 although no such carry is declared.",
+   "options": [
+    "WAL mode with explicitly fixed busy-timeout and synchronous settings",
+    "Rollback-journal mode with explicitly fixed locking behavior",
+    "Another fully specified SQLite configuration proven to meet A18"
+   ],
+   "default_guess": "Use WAL mode and explicitly specify all relevant PRAGMAs and timeout values.",
+   "witness": {
+    "initial": "Registry is open and a daily backup begins while a service write is ready.",
+    "events": [
+     "The backup starts its read transaction and fixes its snapshot.",
+     "The service attempts its write transaction before the copy finishes."
+    ],
+    "outcomes": [
+     "Under one engine configuration, both proceed and the backup contains the before-write snapshot.",
+     "Under another, the writer or copy blocks until a timeout or fails, contrary to the required observable behavior."
+    ],
+    "observer": "The service caller and the backup diagnostic monitor"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`: oversized-stream consumption",
+   "kind": "contradiction",
+   "text": "No refusal carries a\ndigest: a file over the size limit is refused before it is read",
+   "question": "For an upload whose declared length is absent or within the limit but whose actual stream exceeds it, is it refused before reading or only after reading `IMPORT_FILE_MAX_BYTES + 1` bytes?",
+   "options": [
+    "Read through the first byte over the limit, then refuse",
+    "Refuse before reading only when the declared length itself exceeds the limit; otherwise stream to the limit plus one",
+    "Trust the declared length and never detect extra bytes"
+   ],
+   "default_guess": "Refuse without reading only for a declared length over the limit; otherwise read at most the limit plus one and refuse upon receiving the extra byte.",
+   "witness": {
+    "initial": "A session already keeps an accepted upload; a new request declares 1 byte but streams 52,428,801 bytes.",
+    "events": [
+     "The owner submits the new upload.",
+     "`read_import_mapping` applies its size rule."
+    ],
+    "outcomes": [
+     "One implementation refuses before consuming the stream because the actual file is over the limit.",
+     "Another consumes 52,428,801 bytes and then refuses, as A19 requires; both preserve the earlier kept upload."
+    ],
+    "observer": "The HTTP transport, resource monitor and owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`: accepted upload bytes",
+   "kind": "missing_output",
+   "text": "For an accepted file, the file's digest, the SHA-256 of its bytes, which\nRegistry computes and never takes from a caller.",
+   "question": "After this operation alone consumes the unread stream, how do the accepted bytes reach `owner_sessions.keep_uploaded_file`? The declared outputs return the digest and project summaries but not the bytes, while the operation writes nothing.",
+   "options": [
+    "Return the accepted bytes with the digest as an internal-only result",
+    "Have `read_import_mapping` call `keep_uploaded_file` itself",
+    "Pass a caller-owned buffering stream whose complete bytes remain available after consumption"
+   ],
+   "default_guess": "Return an internal accepted-upload object containing the bytes, digest and public upload summary, then let `operations` pass the bytes and digest to `keep_uploaded_file`.",
+   "witness": {
+    "initial": "No migration closure exists and the owner uploads a valid file.",
+    "events": [
+     "`read_import_mapping` consumes the unread stream and accepts it.",
+     "`operations` calls `owner_sessions.keep_uploaded_file`.",
+     "The owner next requests the mapping."
+    ],
+    "outcomes": [
+     "One implementation retained and passes the consumed bytes, so the mapping is shown.",
+     "Another retained only the declared outputs, so no file can be kept and the next request reports `file_not_kept`."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`: mapping cleanliness",
+   "kind": "contradiction",
+   "text": "whether the mapping is clean — no malformed record, no conflict,\nno missing value and at least one pick — which alone lets the confirmation\nstep be shown.",
+   "question": "How are owner-supplied values that are present but outside A02's form represented, and do they make the mapping non-clean? A16 requires an overlong alias or another invalid supplied name/kind to prevent the confirmation step, but this clean definition excludes such failures.",
+   "options": [
+    "Add all owner-supplied value-form failures to the mapping and to the definition of non-clean",
+    "Refuse the mapping request immediately with `invalid_request`",
+    "Treat such values as malformed records"
+   ],
+   "default_guess": "Show each invalid owner-supplied field as a mapping defect and define clean as having no malformed record, conflict, missing value, value-form defect, or `no_picks`.",
+   "witness": {
+    "initial": "A valid kept file contains one project and no conflicting ids.",
+    "events": [
+     "The owner picks that project and supplies a 41-code-point alias.",
+     "`read_import_mapping` constructs the mapping.",
+     "The interface decides whether to show confirmation."
+    ],
+    "outcomes": [
+     "Using the stated clean predicate, the mapping is clean and the confirmation step is shown.",
+     "Applying A02 and A16, the alias defect is shown and the confirmation step is withheld."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`: migration file format",
+   "kind": "deferred_decision",
+   "text": "not readable as the format States\n5 and 6 declare",
+   "question": "What exact byte format does the import accept—container, encoding, schema, field names, record layout, version marker and parsing rules? No such declaration appears in State 5, yet this operation must distinguish `file_unreadable`, `file_malformed` and valid records.",
+   "options": [
+    "Declare a complete versioned JSON format in State 5 and formalize its types in State 6",
+    "Declare a complete archive/container format and its inner records",
+    "Carry the entire format explicitly to State 6"
+   ],
+   "default_guess": "Declare a versioned UTF-8 JSON format with an exact top-level schema and deterministic record arrays before contracts are written.",
+   "witness": {
+    "initial": "The owner uploads bytes that form a valid UTF-8 JSON object containing a project.",
+    "events": [
+     "`read_import_mapping` attempts to read the file according to the format chosen by its implementer."
+    ],
+    "outcomes": [
+     "An implementation expecting JSON parses and accepts the file.",
+     "An implementation expecting a ZIP archive or a different JSON layout returns `file_unreadable` or `file_malformed`."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:`public_op:operations.perform_owner_operation`: upload handoff",
+   "kind": "input_mismatch",
+   "text": "for an upload the\nfile.",
+   "question": "Does `perform_owner_operation` receive raw bytes, an unread stream plus declared length, or a transport upload object? Its downstream operation now requires the declared length and unread byte stream, and the exact ownership and lifetime of that stream are not fixed.",
+   "options": [
+    "Receive declared length and unread stream as explicit inputs",
+    "Receive a typed upload object containing both",
+    "Receive bytes and reconstruct a stream internally"
+   ],
+   "default_guess": "Receive a typed upload object containing the optional declared length and a single-owner unread byte stream, and pass both unchanged to `read_import_mapping`.",
+   "witness": {
+    "initial": "An upload has no declared length and arrives incrementally.",
+    "events": [
+     "`owner_interface` hands the request to `perform_owner_operation`.",
+     "The operation invokes `read_import_mapping`."
+    ],
+    "outcomes": [
+     "One implementation streams and enforces the limit while receiving bytes.",
+     "Another buffers the whole upload as “the file” before calling the size-checking operation."
+    ],
+    "observer": "The process resource monitor and owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:store.open_store`: store version value",
+   "kind": "missing_constant_value",
+   "text": "the imported `STORE_VERSION` constant",
+   "question": "What is the exact type and value of `STORE_VERSION`, and how is it represented in the SQLite store for comparison?",
+   "options": [
+    "An integer schema version such as `1`",
+    "A semantic-version string",
+    "A release identifier identical to `RELEASE_VERSION`"
+   ],
+   "default_guess": "Use an explicitly declared integer schema version starting at 1, stored in a single specified metadata location.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:audit_log.append_audit_entry`: release and contract versions",
+   "kind": "missing_constant_values",
+   "text": "the\nimported `RELEASE_VERSION` and `CONTRACT_VERSION` constants",
+   "question": "What are the exact types, formats and values of the release and contract versions written to every audit entry and backup record, and when do they change independently?",
+   "options": [
+    "Two explicit immutable semantic-version strings supplied by the release",
+    "Two integer versions declared in `data_provider`",
+    "One shared release identifier used for both"
+   ],
+   "default_guess": "Declare two independent immutable semantic-version strings as release-build constants.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:`public_op:instance_lifecycle.start_instance`: listener addresses",
+   "kind": "missing_constant_values",
+   "text": "the imported `OWNER_INTERFACE_LISTEN_ADDRESS` and\n`SERVICE_API_LISTEN_ADDRESS` constants",
+   "question": "What exact address representation and values must the two listeners use, including host/interface, port and IPv4/IPv6 behavior?",
+   "options": [
+    "Two explicit host-and-port values",
+    "Unix-domain socket paths",
+    "Structured address values supporting multiple address families"
+   ],
+   "default_guess": "Declare two explicit structured TCP host-and-port constants, binding the owner interface and service API to distinct ports on their intended interfaces.",
+   "witness": {
+    "initial": "The configuration passes and both listener ports are free.",
+    "events": [
+     "`start_instance` opens the owner listener.",
+     "It then opens the service API listener."
+    ],
+    "outcomes": [
+     "One implementation binds both to loopback on chosen ports.",
+     "Another binds the service API to all interfaces or chooses different ports, changing reachability and client connectivity."
+    ],
+    "observer": "The owner browser, service clients and host administrator"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"50_public_apis_1_foundation.md:`public_op:runtime_settings.load_runtime_settings`: environment-variable table\",\"kind\":\"missing_mapping\",\"text\":\"Read the `REGISTRY_` items A17 rule 1 lists from\\nthe process environment into the settings, each as set or absent; no other\\nvariable is read\",\"question\":\"What is the exact mapping from each configuration item to its environment-variable name and settings field? A17 lists semantic items but does not name all eight variables or fields.\",\"options\":[\"Declare the exact variable and field name for every item in State 5\",\"Derive names mechanically from item names\",\"Let the implementation choose names\"],\"default_guess\":\"Use explicit names such as `REGISTRY_STORE_LOCATION`, `REGISTRY_BACKUP_LOCATION`, `REGISTRY_BACKUP_KEY`, `REGISTRY_OWNER_CREDENTIAL`, and one explicitly declared name for each service token.\",\"witness\":{\"initial\":\"The host sets a complete configuration using one plausible spelling for Cabinet Kernel's token.\",\"events\":[\"The host starts Registry.\",\"`runtime_settings.load_runtime_settings` looks up the environment-variable table chosen by its implementer.\"],\"outcomes\":[\"One implementation reads the spelling and starts normally.\",\"Another implementation chose a different spelling, treats the token as absent, and stops the start or starts owner-only.\"],\"observer\":\"The host operator and every service client\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:store.open_store`: new-store contents\",\"kind\":\"contradiction\",\"text\":\"a store made\\nnew is empty and of the imported `STORE_VERSION` constant\",\"question\":\"Does a newly made store contain the required M12 AuditSequence record at 0, or is it literally empty? The changed earlier-state text requires exactly that one record, while this operation says it is empty and later says it writes no record.\",\"options\":[\"Create exactly one AuditSequence record at 0\",\"Create no records and treat a missing counter as 0\",\"Store the counter outside the record model\"],\"default_guess\":\"Create exactly one durable AuditSequence record at 0 and change the operation's State impact accordingly.\",\"witness\":{\"initial\":\"The configured store file does not exist.\",\"events\":[\"The host starts Registry.\",\"`store.open_store` creates and opens the new store.\",\"A backup is taken before any audited change.\"],\"outcomes\":[\"The store contains M12 at 0 and the backup records sequence 0.\",\"The store contains no M12 record, so the snapshot either invents 0 or fails when reading the required counter.\"],\"observer\":\"The backup run and a later integrity check\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:store.open_store`: SQLite concurrency setting\",\"kind\":\"deferred_decision\",\"text\":\"The engine setting that\\nlets a backup's reader and the writer go on together is set here, as State 6\\nfixes it (A18 rule 1).\",\"question\":\"Which exact SQLite journal, locking, timeout and related connection settings must `open_store` apply so a backup snapshot and writes proceed with A18's required behavior? This text explicitly leaves the behavioral choice to State 6 although no such carry is declared.\",\"options\":[\"WAL mode with explicitly fixed busy-timeout and synchronous settings\",\"Rollback-journal mode with explicitly fixed locking behavior\",\"Another fully specified SQLite configuration proven to meet A18\"],\"default_guess\":\"Use WAL mode and explicitly specify all relevant PRAGMAs and timeout values.\",\"witness\":{\"initial\":\"Registry is open and a daily backup begins while a service write is ready.\",\"events\":[\"The backup starts its read transaction and fixes its snapshot.\",\"The service attempts its write transaction before the copy finishes.\"],\"outcomes\":[\"Under one engine configuration, both proceed and the backup contains the before-write snapshot.\",\"Under another, the writer or copy blocks until a timeout or fails, contrary to the required observable behavior.\"],\"observer\":\"The service caller and the backup diagnostic monitor\"}},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`: oversized-stream consumption\",\"kind\":\"contradiction\",\"text\":\"No refusal carries a\\ndigest: a file over the size limit is refused before it is read\",\"question\":\"For an upload whose declared length is absent or within the limit but whose actual stream exceeds it, is it refused before reading or only after reading `IMPORT_FILE_MAX_BYTES + 1` bytes?\",\"options\":[\"Read through the first byte over the limit, then refuse\",\"Refuse before reading only when the declared length itself exceeds the limit; otherwise stream to the limit plus one\",\"Trust the declared length and never detect extra bytes\"],\"default_guess\":\"Refuse without reading only for a declared length over the limit; otherwise read at most the limit plus one and refuse upon receiving the extra byte.\",\"witness\":{\"initial\":\"A session already keeps an accepted upload; a new request declares 1 byte but streams 52,428,801 bytes.\",\"events\":[\"The owner submits the new upload.\",\"`read_import_mapping` applies its size rule.\"],\"outcomes\":[\"One implementation refuses before consuming the stream because the actual file is over the limit.\",\"Another consumes 52,428,801 bytes and then refuses, as A19 requires; both preserve the earlier kept upload.\"],\"observer\":\"The HTTP transport, resource monitor and owner\"}},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`: accepted upload bytes\",\"kind\":\"missing_output\",\"text\":\"For an accepted file, the file's digest, the SHA-256 of its bytes, which\\nRegistry computes and never takes from a caller.\",\"question\":\"After this operation alone consumes the unread stream, how do the accepted bytes reach `owner_sessions.keep_uploaded_file`? The declared outputs return the digest and project summaries but not the bytes, while the operation writes nothing.\",\"options\":[\"Return the accepted bytes with the digest as an internal-only result\",\"Have `read_import_mapping` call `keep_uploaded_file` itself\",\"Pass a caller-owned buffering stream whose complete bytes remain available after consumption\"],\"default_guess\":\"Return an internal accepted-upload object containing the bytes, digest and public upload summary, then let `operations` pass the bytes and digest to `keep_uploaded_file`.\",\"witness\":{\"initial\":\"No migration closure exists and the owner uploads a valid file.\",\"events\":[\"`read_import_mapping` consumes the unread stream and accepts it.\",\"`operations` calls `owner_sessions.keep_uploaded_file`.\",\"The owner next requests the mapping.\"],\"outcomes\":[\"One implementation retained and passes the consumed bytes, so the mapping is shown.\",\"Another retained only the declared outputs, so no file can be kept and the next request reports `file_not_kept`.\"],\"observer\":\"The owner\"}},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`: mapping cleanliness\",\"kind\":\"contradiction\",\"text\":\"whether the mapping is clean — no malformed record, no conflict,\\nno missing value and at least one pick — which alone lets the confirmation\\nstep be shown.\",\"question\":\"How are owner-supplied values that are present but outside A02's form represented, and do they make the mapping non-clean? A16 requires an overlong alias or another invalid supplied name/kind to prevent the confirmation step, but this clean definition excludes such failures.\",\"options\":[\"Add all owner-supplied value-form failures to the mapping and to the definition of non-clean\",\"Refuse the mapping request immediately with `invalid_request`\",\"Treat such values as malformed records\"],\"default_guess\":\"Show each invalid owner-supplied field as a mapping defect and define clean as having no malformed record, conflict, missing value, value-form defect, or `no_picks`.\",\"witness\":{\"initial\":\"A valid kept file contains one project and no conflicting ids.\",\"events\":[\"The owner picks that project and supplies a 41-code-point alias.\",\"`read_import_mapping` constructs the mapping.\",\"The interface decides whether to show confirmation.\"],\"outcomes\":[\"Using the stated clean predicate, the mapping is clean and the confirmation step is shown.\",\"Applying A02 and A16, the alias defect is shown and the confirmation step is withheld.\"],\"observer\":\"The owner\"}},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`: migration file format\",\"kind\":\"deferred_decision\",\"text\":\"not readable as the format States\\n5 and 6 declare\",\"question\":\"What exact byte format does the import accept—container, encoding, schema, field names, record layout, version marker and parsing rules? No such declaration appears in State 5, yet this operation must distinguish `file_unreadable`, `file_malformed` and valid records.\",\"options\":[\"Declare a complete versioned JSON format in State 5 and formalize its types in State 6\",\"Declare a complete archive/container format and its inner records\",\"Carry the entire format explicitly to State 6\"],\"default_guess\":\"Declare a versioned UTF-8 JSON format with an exact top-level schema and deterministic record arrays before contracts are written.\",\"witness\":{\"initial\":\"The owner uploads bytes that form a valid UTF-8 JSON object containing a project.\",\"events\":[\"`read_import_mapping` attempts to read the file according to the format chosen by its implementer.\"],\"outcomes\":[\"An implementation expecting JSON parses and accepts the file.\",\"An implementation expecting a ZIP archive or a different JSON layout returns `file_unreadable` or `file_malformed`.\"],\"observer\":\"The owner\"}},{\"subject\":\"50_public_apis_5_surfaces.md:`public_op:operations.perform_owner_operation`: upload handoff\",\"kind\":\"input_mismatch\",\"text\":\"for an upload the\\nfile.\",\"question\":\"Does `perform_owner_operation` receive raw bytes, an unread stream plus declared length, or a transport upload object? Its downstream operation now requires the declared length and unread byte stream, and the exact ownership and lifetime of that stream are not fixed.\",\"options\":[\"Receive declared length and unread stream as explicit inputs\",\"Receive a typed upload object containing both\",\"Receive bytes and reconstruct a stream internally\"],\"default_guess\":\"Receive a typed upload object containing the optional declared length and a single-owner unread byte stream, and pass both unchanged to `read_import_mapping`.\",\"witness\":{\"initial\":\"An upload has no declared length and arrives incrementally.\",\"events\":[\"`owner_interface` hands the request to `perform_owner_operation`.\",\"The operation invokes `read_import_mapping`.\"],\"outcomes\":[\"One implementation streams and enforces the limit while receiving bytes.\",\"Another buffers the whole upload as “the file” before calling the size-checking operation.\"],\"observer\":\"The process resource monitor and owner\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:store.open_store`: store version value\",\"kind\":\"missing_constant_value\",\"text\":\"the imported `STORE_VERSION` constant\",\"question\":\"What is the exact type and value of `STORE_VERSION`, and how is it represented in the SQLite store for comparison?\",\"options\":[\"An integer schema version such as `1`\",\"A semantic-version string\",\"A release identifier identical to `RELEASE_VERSION`\"],\"default_guess\":\"Use an explicitly declared integer schema version starting at 1, stored in a single specified metadata location.\"},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:audit_log.append_audit_entry`: release and contract versions\",\"kind\":\"missing_constant_values\",\"text\":\"the\\nimported `RELEASE_VERSION` and `CONTRACT_VERSION` constants\",\"question\":\"What are the exact types, formats and values of the release and contract versions written to every audit entry and backup record, and when do they change independently?\",\"options\":[\"Two explicit immutable semantic-version strings supplied by the release\",\"Two integer versions declared in `data_provider`\",\"One shared release identifier used for both\"],\"default_guess\":\"Declare two independent immutable semantic-version strings as release-build constants.\"},{\"subject\":\"50_public_apis_5_surfaces.md:`public_op:instance_lifecycle.start_instance`: listener addresses\",\"kind\":\"missing_constant_values\",\"text\":\"the imported `OWNER_INTERFACE_LISTEN_ADDRESS` and\\n`SERVICE_API_LISTEN_ADDRESS` constants\",\"question\":\"What exact address representation and values must the two listeners use, including host/interface, port and IPv4/IPv6 behavior?\",\"options\":[\"Two explicit host-and-port values\",\"Unix-domain socket paths\",\"Structured address values supporting multiple address families\"],\"default_guess\":\"Declare two explicit structured TCP host-and-port constants, binding the owner interface and service API to distinct ports on their intended interfaces.\",\"witness\":{\"initial\":\"The configuration passes and both listener ports are free.\",\"events\":[\"`start_instance` opens the owner listener.\",\"It then opens the service API listener.\"],\"outcomes\":[\"One implementation binds both to loopback on chosen ports.\",\"Another binds the service API to all interfaces or chooses different ports, changing reachability and client connectivity.\"],\"observer\":\"The owner browser, service clients and host administrator\"}}]}",
+ "set_aside": []
+}
