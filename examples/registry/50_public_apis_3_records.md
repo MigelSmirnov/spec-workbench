@@ -859,12 +859,12 @@ published pointer becomes `superseded` with its instant; one transaction
 ### Enforces
 
 (3) the project exists; (4) the type in
-`release_declarations.declared_artifact_types`, `uri` or `payload_ref` not
+the imported `ARTIFACT_TYPE_OWNERS` constant, `uri` or `payload_ref` not
 blank, the request id's form; the archive check, a repeat's too; the request
 id among this project's pointers, project and publisher among the facts — a
 repeat answers the pointer whatever its status now (A01 rules 3, 4, 6); (6)
 an archived project, a conflict. The owner service is
-`release_declarations.owner_service_of_type`'s; the digest is stored, never
+the one its row of the imported `ARTIFACT_TYPE_OWNERS` constant names; the digest is stored, never
 checked (A07 rule 6).
 
 ### Errors
@@ -1018,7 +1018,7 @@ None.
 
 ### Enforces
 
-(4) a type `release_declarations.declared_artifact_types` does not declare
+(4) a type the imported `ARTIFACT_TYPE_OWNERS` constant does not declare
 is unknown (A22 rule 5).
 
 ### Errors

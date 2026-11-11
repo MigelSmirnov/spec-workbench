@@ -250,7 +250,8 @@ failed item and never its value.
 In order: `configuration.load_configuration`;
 `backups.probe_backup_location`; `store.open_store`; the owner interface's
 listener and then, unless the start is owner-only, the service API's, at
-`release_declarations.listener_addresses`; then the surfaces answer; every
+the imported `OWNER_INTERFACE_LISTEN_ADDRESS` and
+`SERVICE_API_LISTEN_ADDRESS` constants; then the surfaces answer; every
 60 seconds `owner_sessions.end_expired_sessions`; at least once a minute,
 except in an owner-only start, `backups.run_daily_backup_if_due`.
 

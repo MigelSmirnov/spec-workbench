@@ -64,13 +64,13 @@ before any other check (A16 rule 8; Conventions, "Stages"). Then stage (4):
 a pick that is not a project of the file is outside its closed list, a
 project given twice refused (`duplicate_pick`), whatever values each
 time carries; the file over the
-`release_declarations.import_size_limit`, not readable as the format States
+imported `IMPORT_FILE_MAX_BYTES` constant, not readable as the format States
 5 and 6 declare, holding two projects with one id, or a project without a
 readable id or status, refused whole at upload (A16 rule 3, A19 rule 4).
 Only what the
 picks bring in is checked (rule 3); a record is malformed as rule 4 says, a
-pointer of a type `release_declarations.declared_artifact_types` does not
-declare or whose owner service is not `release_declarations.owner_service_of_type`'s
+pointer of a type the imported `ARTIFACT_TYPE_OWNERS` constant does not
+declare or whose owner service is not the one its row names
 among them (A22 rule 7); ids compared per kind (rule 5); names read with
 `given_values` (A02): a display name, a Customer's name or kind absent or
 blank is no refusal here but a missing value the mapping shows — named by
@@ -202,8 +202,8 @@ failure.
 
 ### Observable effect
 
-A probe file under the temporary prefix of
-`release_declarations.backup_name_prefixes` is created and removed; one it
+A probe file under the temporary prefix, the imported
+`BACKUP_TEMPORARY_PREFIX` constant, is created and removed; one it
 cannot remove stays, for the next run's first step (A18 rule 4).
 
 ### Enforces
@@ -243,7 +243,7 @@ or delete, is a diagnostic (Conventions, "Diagnostics").
 
 When due: the temporary files removed; a backup — the copy of
 `store.copy_store_snapshot` encrypted with the key, its record holding the
-instant, the release from `release_declarations.release_versions`, the last
+instant, the release from the imported `RELEASE_VERSION` constant, the last
 sequence number and the key's digest — checked by decrypting it and asking
 `store.check_store_file`, and kept under a name made from its instant; the
 backups older than 30 × 24 hours and the unreadable kept files deleted.

@@ -2,9 +2,12 @@
 
 ## Status
 
-Draft of 2026-11-01. The operations of `clock`, `random_values`,
-`release_declarations`, `given_values`, `configuration`, `store`, `audit_log`
-and `service_access`. Every one follows `50_public_apis_0_conventions.md`.
+Draft of 2026-11-01, reopened on 2026-11-11: `release_declarations` is
+gone — its values are constants of `data_provider`, which a reader imports
+and which have no operation (SPEC_STANDARD §6.10, §15.3.1) — and
+`runtime_settings` reads the environment. The operations of `clock`,
+`random_values`, `given_values`, `runtime_settings`, `configuration`,
+`store`, `audit_log` and `service_access`. Every one follows `50_public_apis_0_conventions.md`.
 
 ## `public_op:clock.recorded_now`
 
@@ -228,302 +231,6 @@ None; values of different lengths answer unequal.
 
 Pure; touches no record.
 
-## `public_op:release_declarations.import_size_limit`
-
-### Owner
-
-`module:release_declarations`. The import file's size limit the release
-declares (A19 rule 4).
-
-### Callers
-
-`module:migration_import`.
-
-### Inputs
-
-None.
-
-### Outputs
-
-The limit in bytes; its value is State 6's.
-
-### Observable effect
-
-None.
-
-### Enforces
-
-A file over it is refused at upload, before it is read (A19 rule 4).
-
-### Errors
-
-None.
-
-### State impact
-
-Reads the release; touches no record.
-
-## `public_op:release_declarations.backup_name_prefixes`
-
-### Owner
-
-`module:release_declarations`. The kept and the temporary backup prefixes
-the release declares (A18 rule 5).
-
-### Callers
-
-`module:backups`.
-
-### Inputs
-
-None.
-
-### Outputs
-
-The two prefixes, neither beginning with the other; their values are State
-6's.
-
-### Observable effect
-
-None.
-
-### Enforces
-
-The prefixes are the release's, never the configuration's (A18 rule 5), and
-a release keeps the prefixes of the one before it, so a kept backup of an
-earlier release is still counted and rotated.
-
-### Errors
-
-None.
-
-### State impact
-
-Reads the release; touches no record.
-
-## `public_op:release_declarations.declared_artifact_types`
-
-### Owner
-
-`module:release_declarations`. The artifact types the running release
-declares (A22 rules 1, 2).
-
-### Callers
-
-`module:artifact_pointers`, `module:migration_import`.
-
-### Inputs
-
-None.
-
-### Outputs
-
-The set of declared type names; the first release's is `estimate` alone.
-
-### Observable effect
-
-None.
-
-### Enforces
-
-A type is declared exactly when it is in this set; nothing reads types from
-the configuration or the store (A22 rule 2).
-
-### Errors
-
-None.
-
-### State impact
-
-Reads the release; touches no record.
-
-## `public_op:release_declarations.listener_addresses`
-
-### Owner
-
-`module:release_declarations`. The address each surface listens on, which
-the configuration does not name (A17 rules 1, 2).
-
-### Callers
-
-`module:instance_lifecycle`.
-
-### Inputs
-
-None.
-
-### Outputs
-
-The owner interface's address and the service API's address.
-
-### Observable effect
-
-None.
-
-### Enforces
-
-The listeners open at these addresses and at no configured one; which
-networks reach them is the host's (R0-28, R0-29).
-
-### Errors
-
-None.
-
-### State impact
-
-Reads the release; touches no record.
-
-## `public_op:release_declarations.owner_service_of_type`
-
-### Owner
-
-`module:release_declarations`. The owner service a declared type fixes
-(A08 rule 3, A22 rule 6).
-
-### Callers
-
-`module:artifact_pointers`, `module:migration_import`.
-
-### Inputs
-
-A declared type name.
-
-### Outputs
-
-Its owner service.
-
-### Observable effect
-
-None.
-
-### Enforces
-
-A pointer's owner service is this value and never the caller's choice (A08
-rule 3); an imported pointer whose owner service differs is malformed (A16
-rule 4).
-
-### Errors
-
-`invalid_request` (`unknown_artifact_type`) for a name the release does not
-declare.
-
-### State impact
-
-Reads the release; touches no record.
-
-## `public_op:release_declarations.release_versions`
-
-### Owner
-
-`module:release_declarations`. The running release's version and its
-contract version (M09, A18 rule 1).
-
-### Callers
-
-`module:audit_log`, `module:backups`.
-
-### Inputs
-
-None.
-
-### Outputs
-
-The release version and the contract version.
-
-### Observable effect
-
-None.
-
-### Enforces
-
-Every audit entry names both (M09); every backup's record names the release
-(A18 rule 1).
-
-### Errors
-
-None.
-
-### State impact
-
-Reads the release; touches no record.
-
-## `public_op:release_declarations.rights_of_service`
-
-### Owner
-
-`module:release_declarations`. A09 rule 2's table: the services, their
-operations and their highest classes.
-
-### Callers
-
-`module:configuration`, `module:service_access`.
-
-### Inputs
-
-None.
-
-### Outputs
-
-For each of the four services — PresuPro, Client Portal, Cabinet, Cabinet
-Kernel — its operations and its highest class, and whether it carries agent
-authority (Kernel alone, R0-74).
-
-### Observable effect
-
-None.
-
-### Enforces
-
-The configuration requires one token for each service listed here (A17
-rule 1); rights are read from here alone, never from the configuration (A09
-rule 1).
-
-### Errors
-
-None.
-
-### State impact
-
-Reads the release; touches no record.
-
-## `public_op:release_declarations.store_version_of_release`
-
-### Owner
-
-`module:release_declarations`. The store version the running release
-carries, with the suffix of the store's temporary name (A17 rule 5).
-
-### Callers
-
-`module:store`.
-
-### Inputs
-
-None.
-
-### Outputs
-
-One store version, and the temporary-name suffix.
-
-### Observable effect
-
-None.
-
-### Enforces
-
-A store opened at the start and a backup's checked copy carry this version;
-a new store is made under the store's name with this suffix, and only a file
-of that name is removed as a leftover (A17 rule 5, A18 rule 4). Its value is
-State 6's.
-
-### Errors
-
-None.
-
-### State impact
-
-Reads the release; touches no record.
-
 ## `public_op:given_values.check_request_id_form`
 
 ### Owner
@@ -677,11 +384,53 @@ the file brings in is a malformed record (A16 rule 4), not a missing value.
 
 Pure; touches no record.
 
+## `public_op:runtime_settings.load_runtime_settings`
+
+### Owner
+
+`module:runtime_settings`. Read the `REGISTRY_` items A17 rule 1 lists from
+the process environment into the settings, each with its type, whether it
+is required and its normalization; no other variable is read (owner,
+2026-11-11).
+
+### Callers
+
+`module:configuration`.
+
+### Inputs
+
+None; it reads the process environment.
+
+### Outputs
+
+The settings: the store's location, the backup location, the backup key,
+the owner credential, each required; each of the four service tokens, or
+its absence.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A17 rules 1 and 5 for each item alone: a required item missing or
+malformed refused, naming the item and never its value; no default applied.
+The checks across items are `configuration.load_configuration`'s.
+
+### Errors
+
+A diagnostic naming the first failed item, never its value; the start stops
+on it. Its shape is the emitted module's (SPEC_STANDARD §6.11).
+
+### State impact
+
+Reads the environment; touches no file and no record.
+
 ## `public_op:configuration.load_configuration`
 
 ### Owner
 
-`module:configuration`. Read the `REGISTRY_` variables and check them in A17
+`module:configuration`. Check the settings `runtime_settings` loads in A17
 rule 2's order up to the store and backup location apart.
 
 ### Callers
@@ -690,7 +439,7 @@ rule 2's order up to the store and backup location apart.
 
 ### Inputs
 
-None; it reads the process environment.
+None; it takes the settings from `runtime_settings.load_runtime_settings`.
 
 ### Outputs
 
@@ -705,10 +454,9 @@ None.
 
 ### Enforces
 
-A17 rules 1–5: no variable outside `REGISTRY_` read; no unknown item, by
-name in code point order; the tokens all four of
-`release_declarations.rights_of_service` or none; every other item present;
-each well formed; each secret at least 32 bytes; no two secrets equal; the
+A17 rules 1–5: the tokens all four of the services the imported
+`SERVICE_RIGHTS` constant lists, or none; every other item present; each
+well formed; each secret at least the imported `SECRET_MIN_BYTES` constant; no two secrets equal; the
 store and the backup location apart, every link resolved; no default
 applied. Each secret is handed later only to the module that uses it.
 
@@ -718,7 +466,7 @@ The diagnostic is the answer for a failed check; the start stops on it.
 
 ### State impact
 
-Reads the environment and resolves paths; touches no file and no record.
+Resolves paths; touches no file and no record.
 
 ## `public_op:store.open_store`
 
@@ -748,7 +496,7 @@ made under that name and renamed to the store's name once complete.
 ### Enforces
 
 A17 rule 5: only the temporary name is removed, no other file; a store made
-new is empty and of `release_declarations.store_version_of_release`;
+new is empty and of the imported `STORE_VERSION` constant;
 otherwise the store opens for reading and writing, passes `PRAGMA
 integrity_check` answering `ok` and `PRAGMA foreign_key_check` finding
 nothing, and carries the release's store version. The engine setting that
@@ -985,8 +733,9 @@ The entry with its sequence number.
 
 ### Observable effect
 
-One entry, outcome `accepted`, naming the release and contract versions of
-`release_declarations.release_versions`, written with the change or not at
+One entry, outcome `accepted`, naming the release and contract versions, the
+imported `RELEASE_VERSION` and `CONTRACT_VERSION` constants, written with
+the change or not at
 all.
 
 ### Enforces
@@ -1140,7 +889,7 @@ None.
 
 An operation outside the service's row is refused whatever the request holds
 (A09 rule 3); no token but Kernel's may publish or withdraw (A08 rule 2);
-the rights are `release_declarations.rights_of_service`'s alone.
+the rights are the imported `SERVICE_RIGHTS` constant's alone.
 
 ### Errors
 
