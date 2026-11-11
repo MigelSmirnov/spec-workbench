@@ -41,13 +41,15 @@ types and Python signatures are State 6's.
   confirmation id is not checked ("Minted identities").
 - **Stages.** An operation that checks stages (3) to (6) of A04 rule 6 checks
   them in that order and answers the first failing stage with every failure
-  of that stage (A04 rule 6): its kinds in the order the operation's Errors
-  list them, one entry for each failing input or record, each naming the
-  field or the identity it concerns; within one kind, entries are ordered
-  first by the record or input they concern — inputs in the order the
-  operation's Inputs list them, then records list by list in that same
-  order, each list in its own order (A06) — and then, within one record or
-  input, by its fields in the order its Inputs or model lists them. Two failures are answered
+  of that stage (A04 rule 6): one entry for each failing field of the
+  request, or each failing record or identity it names, with its kind and
+  the path that names it — a field by its name and the names and list
+  positions of the inputs that hold it, such as the alias of the second
+  pick, a record by its kind and its id or position. Entries are ordered by
+  kind, in the order the operation's Errors list the kinds, and within one
+  kind by path, compared element by element from the start: a name by
+  Unicode code point, a list position as a number, a shorter path first.
+  Two failures are answered
   alone, every other check being moot: the import's closure, `import_closed`
   (State 4, `flow:import_from_vps`), and then a confirmation's bound upload
   no longer kept, `file_not_kept`, which leaves no bytes to check again. Stages (1) and (2) are `operations`'. A refusal
@@ -98,9 +100,11 @@ types and Python signatures are State 6's.
   began, the first one interval after; a call due while the previous call of
   the same pass is still running is not made, and the pass waits for the
   next due one; deadlines that pass during a suspension of the host or a
-  long call are not made up — the next call is the first deadline at or
-  after the reading when the pass can run again; a deadline equal to that
-  reading is made. The passes run apart, neither waiting for the
+  long call are not made up. Each time a call returns, the pass takes one
+  reading and waits for the first deadline at or after it; when its wait
+  ends — on time, or late after a suspension — it makes one call, whatever
+  deadlines its wait passed, and takes its next reading when that call
+  returns. The passes run apart, neither waiting for the
   other. A look of the backup pass answers at once: a run it starts goes on
   apart from the pass, so the looks go on every interval while a run goes
   on, and a look during a run starts none (A18 rule 1).
