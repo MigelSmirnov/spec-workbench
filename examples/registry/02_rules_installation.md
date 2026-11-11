@@ -145,9 +145,14 @@ closure is the one proof of success.
 
 ### Normative rules
 
-1. The configuration is the set of environment variables whose names begin
-   with `REGISTRY_`, set as R0-23 says; no other variable is read or
-   checked. It holds exactly these items and no other: the store's
+1. The configuration is a set of environment variables whose names begin
+   with `REGISTRY_`, set as R0-23 says. Registry reads exactly the items
+   below and no other variable: a variable whose name names none of them —
+   one beginning with `REGISTRY_` included — is neither read nor checked and
+   does not stop the start (owner, 2026-11-11: only the one module that reads
+   the environment sees it, and it reads the items it declares; a misspelt
+   name still stops the start, as the item it was meant to set is then
+   missing). The items are exactly these: the store's
    location; the backup location and the backup key (A18); the owner
    credential; one service token for each service of A09 — PresuPro, Client
    Portal, Cabinet, Cabinet Kernel (R0-20, R0-23) — or, for an owner-only
@@ -158,8 +163,7 @@ closure is the one proof of success.
 2. Registry checks the configuration when it starts and serves nothing until
    every check passes; a failed check stops the start with a diagnostic that
    names the failed item and never its value (R0-37). The checks run in one
-   order and the first that fails stops the start: no unknown item, taken in
-   the order of their names by Unicode code point; the service tokens all four
+   order and the first that fails stops the start: the service tokens all four
    or none — none makes an owner-only start, and some but not all fail on the
    first missing one in rule 1's order; every other item of rule 1 present; each well formed; each secret's length (rule 3);
    their distinctness (rule 4); the store and backup location apart (rule
@@ -183,7 +187,7 @@ closure is the one proof of success.
    made it (R0-23).
 4. No two secrets are equal: two services with one token, or a token equal to
    the owner credential, fail the start.
-5. A missing, malformed or unknown item fails the start; Registry applies no
+5. A missing or malformed item fails the start; Registry applies no
    default to any item. The backup location must exist and let Registry create
    and remove a file in it; otherwise the start fails. It holds Registry's
    files only; the owner puts nothing else there. The store and the
@@ -240,6 +244,9 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= 32 bytes
    fails, leaves it as an empty store of the release's version; one whose
    listener cannot be opened over an existing store leaves that store's
    records as they were. An owner-only start opens no service API listener.
+7. A complete configuration with an extra `REGISTRY_EXTRA` variable starts;
+   one where the backup key is set as `REGISTRY_BACKUP_KEYY` instead of its
+   own name stops the start, naming the backup key as missing.
 6. A store made new holds exactly one audit sequence (M12), at 0, and no
    other record; a start interrupted before the store's rename leaves no
    store under the store's name, and the next start makes a new one with
