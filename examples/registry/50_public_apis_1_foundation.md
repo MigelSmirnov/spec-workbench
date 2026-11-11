@@ -503,7 +503,8 @@ None.
 A17 rules 1–5: the tokens all four of the services the imported
 `SERVICE_RIGHTS` constant lists with the service API's address, or none;
 every other item present; each — an address as `host:port`, the host an IP
-address, the port 1 to 65535 —
+address, the port from the imported `LISTEN_PORT_MIN` to `LISTEN_PORT_MAX`
+constant, the two ports different —
 well formed; each secret at least the imported `SECRET_MIN_BYTES` constant; no two secrets equal; the
 store and the backup location apart, every link resolved; no default
 applied. Each secret is handed later only to the module that uses it.

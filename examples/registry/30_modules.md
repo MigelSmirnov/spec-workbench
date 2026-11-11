@@ -310,7 +310,7 @@ retention of 30 × 24 hours (A18 rules 1, 4, 5); the import file's size limit
 every audit entry names (M09) and a backup's record names (A18 rule 1); the
 owner session's limits — 8 hours, 30 minutes, the 15
 minutes and five refusals of the sign-in, the 10 minutes of a confirmation,
-the 60 seconds of the pass (A13); the request id's 128 characters (A01 rule
+the 60 seconds of the pass (A13); a listen port's bounds (A17 rule 1); the request id's 128 characters (A01 rule
 1), the alias's 40 and the characteristics' bounds (A02 rule 4), the 32 bytes of a secret value and of a
 configured secret (A13 rule 7, A17 rule 3). The list names groups; the data
 closure names each constant, and every one is exported.
@@ -365,6 +365,8 @@ ALIAS_MAX_CHARACTERS
 OBJECT_FLOOR_AREA_MIN_EXCLUSIVE
 OBJECT_ROOMS_MIN
 SECRET_MIN_BYTES
+LISTEN_PORT_MIN
+LISTEN_PORT_MAX
 ```
 
 ### Depth assessment
@@ -473,7 +475,7 @@ A17: the start checks of rule 2 that need no file, in its one order, over
 the settings `runtime_settings` loads as set — the service tokens of the services
 `data_provider`'s rights table lists with the service API's address, all or
 none, the other items present,
-each well formed, each secret at least the 32 bytes `data_provider` holds, no
+each well formed, the addresses' ports different, each secret at least the 32 bytes `data_provider` holds, no
 two secrets equal — with the diagnostic naming the failed item and never its
 value; that no default is applied (rule 5); an owner-only start when no token
 is given (rule 1); and last the path checks of rule 5 that need no file — the

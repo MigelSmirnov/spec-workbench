@@ -174,7 +174,12 @@ closure is the one proof of success.
    Registry and is refused by its connection failing, with no answer (owner,
    2026-11-01; A18 rule 9). An address is a host and a port, `host:port`:
    the host an IP address — an IPv6 one in brackets — and the port a whole
-   number from 1 to 65535. The addresses are the deployment's, as R0-19 says
+   number from 1 to 65535, the data provider's constants `LISTEN_PORT_MIN`
+   and `LISTEN_PORT_MAX`, which the checking code imports (SPEC_STANDARD
+   §15.3.1). The two addresses have different ports, so that the two
+   surfaces never share an endpoint, and Registry opens each listener for
+   itself alone, never with an option that lets another socket bind the
+   same endpoint. The addresses are the deployment's, as R0-19 says
    — the host's loopback where Registry runs on the host, its internal
    network where it runs in a container — so the configuration names them
    (owner, 2026-11-11, replacing the release-fixed addresses of 2026-11-01:
@@ -184,7 +189,8 @@ closure is the one proof of success.
    names the failed item and never its value (R0-37). The checks run in one
    order and the first that fails stops the start: the service tokens and the
    service API's address all five or none — none makes an owner-only start,
-   and some but not all fail on the first missing one in rule 1's order; every other item of rule 1 present; each well formed; each secret's length (rule 3);
+   and some but not all fail on the first missing one in rule 1's order; every other item of rule 1 present; each well formed; the two addresses'
+   ports different; each secret's length (rule 3);
    their distinctness (rule 4); the store and backup location apart (rule
    5); the backup location writable, by a probe file under the temporary
    prefix (A18 rule 5); the store opening, or made new (rule 5); last, the
@@ -253,8 +259,8 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= 32 bytes
 ### Required tests
 
 1. A configuration with some service tokens but without Client Portal's
-   stops the start and names the missing item; one with none of the four is
-   an owner-only start.
+   stops the start and names the missing item; one with none of the four
+   and no service API address is an owner-only start.
 2. Two services with one token stop the start.
 3. A 16-byte token stops the start.
 4. The start diagnostic never contains a secret's value.
@@ -274,7 +280,8 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= 32 bytes
    the address; the address without the tokens stops it naming the first
    token. An address `127.0.0.1:8781` is accepted, `[::1]:8781` too;
    `localhost:8781`, `127.0.0.1` and `127.0.0.1:0` stop the start, naming the
-   item.
+   item. Two addresses with one port, `127.0.0.1:8781` and
+   `0.0.0.0:8781`, stop the start naming the service API's address.
 6. A store made new holds exactly one audit sequence (M12), at 0, and no
    other record; a start interrupted before the store's rename leaves no
    store under the store's name, and the next start makes a new one with
