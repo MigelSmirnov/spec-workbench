@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import copy
 import difflib
 import json
@@ -9,6 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import design_record_construction
 import design_router_ir
 import design_stage6_contracts
 import design_stage6_data
@@ -123,6 +125,7 @@ def _sync_module_topology(
     current_order: Any,
     current_paths: Any,
     handoff_contracts: dict[str, Any],
+    backend_placed: frozenset[str] = frozenset(),
 ) -> tuple[list[str] | None, dict[str, str] | None]:
     order_present = current_order is not None
     paths_present = current_paths is not None
@@ -147,7 +150,6 @@ def _sync_module_topology(
             "global_spec.module_paths keys must match global_spec.module_order exactly"
         )
 
-    parents: set[str] = set()
     result_paths: dict[str, str] = {}
     for module in current_order:
         path = current_paths.get(module)
@@ -155,24 +157,37 @@ def _sync_module_topology(
             raise SpecProjectionError(
                 f"global_spec.module_paths[{module!r}] must be a non-empty string"
             )
+        result_paths[module] = path
+
+    # Existing paths are taken as given (SPEC_STANDARD §10 allows several
+    # roots, root-level modules and a leaf that differs from the module name).
+    # A deterministic root is needed only to place a module the handoff adds.
+    # A module a standard backend's wiring names (``backend_placed``) is placed
+    # by that backend from its IR, after the contracts are synced.
+    new_modules = [
+        m for m in _handoff_modules(handoff_contracts)
+        if m not in result_paths and m not in backend_placed
+    ]
+    result_order = list(current_order)
+    if not new_modules:
+        return result_order, result_paths
+    parents: set[str] = set()
+    for module, path in result_paths.items():
         parent, separator, leaf = path.rpartition("/")
         if not separator or not parent or leaf != module:
             raise SpecProjectionError(
-                f"global_spec.module_paths[{module!r}] must end with '/{module}'"
+                f"global_spec.module_paths[{module!r}] must end with '/{module}' "
+                f"before new modules ({', '.join(new_modules)}) can be projected"
             )
         parents.add(parent)
-        result_paths[module] = path
     if len(parents) != 1:
         raise SpecProjectionError(
             "global_spec.module_paths must share one deterministic module root before new modules can be projected"
         )
     module_root = next(iter(parents))
-
-    result_order = list(current_order)
-    for module in _handoff_modules(handoff_contracts):
-        if module not in result_paths:
-            result_order.append(module)
-            result_paths[module] = f"{module_root}/{module}"
+    for module in new_modules:
+        result_order.append(module)
+        result_paths[module] = f"{module_root}/{module}"
     return result_order, result_paths
 
 
@@ -403,7 +418,370 @@ def _source_check(
     }
 
 
-def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+DATA_PROVIDER_BACKEND_ID = "data_provider"
+
+
+def _insert_in_order(mapping: dict[str, Any], key: str, value: Any, order: list[str]) -> dict[str, Any]:
+    """``mapping`` with ``key`` set to ``value``: in place when present, else
+    right after the nearest module before ``key`` in ``order`` that the mapping
+    holds (first when none does; last when ``key`` is not in the order). The
+    other keys keep their order."""
+    if key in mapping or key not in order:
+        result = dict(mapping)
+        result[key] = value
+        return result
+    preceding = order[: order.index(key)]
+    anchor = next((module for module in reversed(preceding) if module in mapping), None)
+    result: dict[str, Any] = {}
+    if anchor is None:
+        result[key] = value
+    for existing, item in mapping.items():
+        result[existing] = item
+        if existing == anchor:
+            result[key] = value
+    return result
+
+
+def _place_data_provider_module(
+    projected: dict[str, Any],
+    backend: dict[str, Any],
+    findings: list[dict[str, Any]],
+    source: str,
+) -> None:
+    """Place the data provider's module, which has no State 6 contracts.
+
+    The module owns exactly the closure's constants (SPEC_STANDARD 6.10): they
+    are its module_functions and its imports.internal. It imports only the row
+    models and enumerations of ``wiring.models_module``, which equals the path
+    of the models module (6.10, version 2), so a module new to the order is
+    placed right after that module and beside it under the same root. A module
+    already in the order keeps its place and path (SPEC_STANDARD §10).
+    """
+    wiring = backend.get("wiring")
+    module = wiring.get("module") if isinstance(wiring, dict) else None
+    constants = backend.get("constants")
+    if not isinstance(module, str) or not module or not isinstance(constants, dict):
+        findings.append(_finding(
+            "block", "data_provider_module_unplaceable",
+            f"{source} backend_ir names no wiring.module or carries no constants object",
+            source=source,
+        ))
+        return
+    symbols = sorted(str(name) for name in constants)
+
+    order = projected.get("module_order")
+    paths = projected.get("module_paths")
+    if isinstance(order, list) and isinstance(paths, dict) and module not in order:
+        models_module = wiring.get("models_module")
+        anchor = next(
+            (name for name in order
+             if isinstance(paths.get(name), str) and paths[name].replace("/", ".") == models_module),
+            None,
+        )
+        if anchor is None:
+            findings.append(_finding(
+                "block", "data_provider_module_unplaceable",
+                f"{source} wiring.models_module {models_module!r} is the path of no module in "
+                "global_spec.module_paths, so the data-provider module has no place in the order",
+                source=source,
+            ))
+            return
+        parent, separator, _ = paths[anchor].rpartition("/")
+        order = list(order)
+        order.insert(order.index(anchor) + 1, module)
+        paths = {**paths, module: f"{parent}/{module}" if separator else module}
+        _set(projected, "module_order", order)
+        _set(projected, "module_paths", {name: paths[name] for name in order})
+    order = projected.get("module_order") if isinstance(projected.get("module_order"), list) else []
+
+    module_functions = projected.get("module_functions")
+    if isinstance(module_functions, dict):
+        projected["module_functions"] = _insert_in_order(module_functions, module, symbols, order)
+    imports = projected.get("imports")
+    internal = imports.get("internal") if isinstance(imports, dict) else None
+    if isinstance(internal, dict):
+        # a new export surface is appended, as every other owner's is
+        internal[module] = list(symbols)
+
+
+RECORD_CONSTRUCTION_BACKEND_ID = "record_construction"
+# standard backends whose wiring.module the projector places from the IR
+BACKEND_PLACED_MODULES = (DATA_PROVIDER_BACKEND_ID, RECORD_CONSTRUCTION_BACKEND_ID)
+
+
+def _backend_placed_modules(project: Path, exclude_ids: set[str]) -> frozenset[str]:
+    """The modules closed standard-backend closures place (their wiring.module)."""
+    modules: set[str] = set()
+    for standard in standard_backends(exclude_ids=exclude_ids):
+        if standard.id not in BACKEND_PLACED_MODULES:
+            continue
+        authored = standard.authored_backend(project)
+        wiring = authored.get("wiring") if isinstance(authored, dict) else None
+        module = wiring.get("module") if isinstance(wiring, dict) else None
+        if isinstance(module, str) and module:
+            modules.add(module)
+    return frozenset(modules)
+
+
+def _construction_refs(row: dict[str, Any]):
+    """Every ref of a construction row: over, fields, and the parts' over and fields."""
+    for owner in [row, *(row.get("parts") or {}).values()]:
+        if not isinstance(owner, dict):
+            continue
+        if isinstance(owner.get("over"), dict):
+            yield owner["over"]
+        fields = owner.get("fields")
+        if isinstance(fields, dict):
+            yield from (ref for ref in fields.values() if isinstance(ref, dict))
+
+
+def _record_builder_edges(backend: dict[str, Any], projected: dict[str, Any]) -> dict[str, list[str]]:
+    """imports.module_internal of the builders module, from the IR alone.
+
+    SPEC_STANDARD 6.13 names the builders module's edges exactly: to the data
+    provider with each ``constant`` symbol, and to the owner of each ``call``ed
+    function that is not a builder of the same IR, with its name. Types named
+    by the builders' contracts are imported structurally (§7), and the emitter
+    imports models from ``wiring.models_module`` itself, so no models edge is
+    derived. A call whose owner is not exactly one other module derives no edge:
+    RC012/RC014 report it. Providers follow module_order, symbols are sorted.
+    """
+    module = backend["wiring"]["module"]
+    constructions = backend.get("constructions") if isinstance(backend.get("constructions"), dict) else {}
+    rules = projected.get("rules") if isinstance(projected.get("rules"), dict) else {}
+    provider_backend = rules.get("data_provider_backend")
+    provider_wiring = provider_backend.get("wiring") if isinstance(provider_backend, dict) else None
+    provider = provider_wiring.get("module") if isinstance(provider_wiring, dict) else None
+    functions = projected.get("module_functions") if isinstance(projected.get("module_functions"), dict) else {}
+    owners: dict[str, list[str]] = {}
+    for owner, names in functions.items():
+        for name in names if isinstance(names, list) else []:
+            owners.setdefault(str(name), []).append(str(owner))
+
+    edges: dict[str, set[str]] = {}
+    for row in constructions.values():
+        if not isinstance(row, dict):
+            continue
+        for ref in _construction_refs(row):
+            if ref.get("ref") == "constant" and isinstance(provider, str) and isinstance(ref.get("symbol"), str):
+                edges.setdefault(provider, set()).add(ref["symbol"])
+            elif ref.get("ref") == "call" and isinstance(ref.get("function"), str) \
+                    and ref["function"] not in constructions:
+                found = [name for name in owners.get(ref["function"], []) if name != module]
+                if len(found) == 1:
+                    edges.setdefault(found[0], set()).add(ref["function"])
+    order = [str(name) for name in projected.get("module_order") or []]
+    ranked = sorted(edges, key=lambda name: (order.index(name) if name in order else len(order), name))
+    return {name: sorted(edges[name]) for name in ranked}
+
+
+def _place_record_builders_module(
+    projected: dict[str, Any],
+    backend: dict[str, Any],
+    findings: list[dict[str, Any]],
+    source: str,
+) -> dict[str, dict[str, list[str]]]:
+    """Place the builders module and return its import edges (SPEC_STANDARD 6.13).
+
+    The module imports only the models module (``wiring.models_module``, the
+    path of ``module_paths.models``) and the providers its IR names
+    (``_record_builder_edges``); every builder's consumer imports it. A module
+    new to the order is therefore placed right after the last of its providers,
+    beside the models module under the same root, and it is unplaceable when a
+    consumer does not come after that point. A module already in the order keeps
+    its place and path (SPEC_STANDARD §10).
+    """
+    wiring = backend.get("wiring")
+    module = wiring.get("module") if isinstance(wiring, dict) else None
+    constructions = backend.get("constructions")
+    if not isinstance(module, str) or not module or not isinstance(constructions, dict):
+        findings.append(_finding(
+            "block", "record_builders_module_unplaceable",
+            f"{source} backend_ir names no wiring.module or carries no constructions object",
+            source=source,
+        ))
+        return {}
+    edges = _record_builder_edges(backend, projected)
+
+    order = projected.get("module_order")
+    paths = projected.get("module_paths")
+    if isinstance(order, list) and isinstance(paths, dict) and module not in order:
+        models_module = wiring.get("models_module")
+        models = next(
+            (name for name in order
+             if isinstance(paths.get(name), str) and paths[name].replace("/", ".") == models_module),
+            None,
+        )
+        if models is None:
+            findings.append(_finding(
+                "block", "record_builders_module_unplaceable",
+                f"{source} wiring.models_module {models_module!r} is the path of no module in "
+                "global_spec.module_paths, so the builders module has no place in the order",
+                source=source,
+            ))
+            return edges
+        missing = [name for name in edges if name not in order]
+        if missing:
+            findings.append(_finding(
+                "block", "record_builders_module_unplaceable",
+                f"{source}: the builders module imports {missing}, which global_spec.module_order "
+                "does not hold",
+                source=source,
+            ))
+            return edges
+        anchor = max([models, *edges], key=order.index)
+        consumers = sorted({
+            str(name) for row in constructions.values() if isinstance(row, dict)
+            for name in row.get("consumers") or [] if name in order
+        })
+        early = [name for name in consumers if order.index(name) <= order.index(anchor)]
+        if early:
+            findings.append(_finding(
+                "block", "record_builders_module_unplaceable",
+                f"{source}: consumers {early} come before {anchor!r}, the builders module's last "
+                "provider in global_spec.module_order",
+                source=source,
+            ))
+            return edges
+        parent, separator, _ = paths[models].rpartition("/")
+        order = list(order)
+        order.insert(order.index(anchor) + 1, module)
+        paths = {**paths, module: f"{parent}/{module}" if separator else module}
+        _set(projected, "module_order", order)
+        _set(projected, "module_paths", {name: paths[name] for name in order})
+    _project_builders_imports(projected, module, constructions)
+    return {module: edges}
+
+
+def _stdlib_bound_names(lines: Any) -> set[str]:
+    """The names ``from <module> import ...`` lines bind. A bare module name or an
+    ``import <module>`` line binds no type name (SPEC_STANDARD §7)."""
+    bound: set[str] = set()
+    for line in lines if isinstance(lines, list) else []:
+        try:
+            tree = ast.parse(str(line))
+        except SyntaxError:
+            continue
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom) and node.module != "__future__":
+                bound.update(alias.asname or alias.name for alias in node.names)
+    return bound
+
+
+def _project_builders_imports(projected: dict[str, Any], module: str, constructions: dict[str, Any]) -> None:
+    """The builders module's import surface for the rest of the spec (SPEC_STANDARD 6.13, §7).
+
+    ``imports.internal[<wiring.module>]`` is the export surface its consumers
+    import: every builder a module consumes, sorted. A new surface is appended,
+    as every other owner's is. ``imports.stdlib`` gets a
+    ``from <source> import <names>`` line for each stdlib type a builder's
+    contract names that no line binds yet (a bare module name binds none, §7);
+    the lines already there are the accepted spec's and stay as they are.
+    """
+    imports = projected.get("imports")
+    if not isinstance(imports, dict):
+        return
+    internal = imports.get("internal")
+    if isinstance(internal, dict):
+        internal[module] = sorted(
+            str(name) for name, row in constructions.items()
+            if isinstance(row, dict) and row.get("consumers")
+        )
+
+    contracts = projected.get("contracts") if isinstance(projected.get("contracts"), dict) else {}
+    needed: dict[str, set[str]] = {}
+    for name in sorted(constructions):
+        signature = contracts.get(name)
+        if isinstance(signature, dict):
+            signature = signature.get("signature")
+        parsed = design_record_construction.parse_contract(signature)
+        if parsed is None:
+            continue
+        parameters, returns = parsed
+        for annotation in [*(kind for _, kind in parameters), returns]:
+            for type_name in design_record_construction.type_names(annotation):
+                source = design_record_construction.STDLIB_TYPE_SOURCES.get(type_name)
+                if source is not None:
+                    needed.setdefault(source, set()).add(type_name)
+    stdlib = imports.get("stdlib")
+    if not isinstance(stdlib, list):
+        return
+    bound = _stdlib_bound_names(stdlib) | _stdlib_bound_names(imports.get("third_party"))
+    added = [
+        f"from {source} import {', '.join(sorted(names - bound))}"
+        for source, names in sorted(needed.items()) if names - bound
+    ]
+    if added:
+        imports["stdlib"] = [*stdlib, *added]
+
+
+IMPORTS_TABLE = "65_imports.json"
+
+
+def _project_module_internal(
+    project: Path,
+    current: dict[str, Any],
+    projected: dict[str, Any],
+    findings: list[dict[str, Any]],
+    source_checks: list[dict[str, Any]],
+    emitted_edges: dict[str, dict[str, list[str]]] | None = None,
+) -> None:
+    """imports.module_internal is derived from the imports closure table, never hand-edited.
+
+    The table's scopes name the modules the closure judges; their edges are
+    exactly the table's uses (IMPORTS_WORKBENCH.md §4). A module the closure does
+    not judge whose edges a backend IR states (``emitted_edges``: the builders
+    module, SPEC_STANDARD 6.13) gets exactly those; any other such module
+    (``models``, other modules an emitter writes) keeps its edges. Whether
+    every candidate is decided is the imports_closure gate's question, not the
+    projector's: the gate reads the case through this projection, so asking it
+    here would be circular.
+    """
+    from imports_workbench.service import derive
+
+    path = project / IMPORTS_TABLE
+    if not path.is_file():
+        source_checks.append(_source_check(IMPORTS_TABLE, enabled=True, ready=False, status="missing", errors=1))
+        findings.append(_finding(
+            "block", "imports_table_missing",
+            f"imports.module_internal is projected from {IMPORTS_TABLE}: run "
+            "tools/design_imports.py <case> --draft and close the imports_closure phase",
+            source=IMPORTS_TABLE,
+        ))
+        return
+    table = _read_json(path, IMPORTS_TABLE)
+    scopes = table.get("scopes")
+    if not isinstance(scopes, dict):
+        source_checks.append(_source_check(IMPORTS_TABLE, enabled=True, ready=False, status="invalid", errors=1))
+        findings.append(_finding("block", "imports_table_invalid", f"{IMPORTS_TABLE} has no scopes object",
+                                 source=IMPORTS_TABLE))
+        return
+    judged = {str(scope).split(".", 1)[0] for scope in scopes}
+    derived = derive(table)
+    current_edges = _get(current, "imports.module_internal")
+    current_edges = current_edges if isinstance(current_edges, dict) else {}
+    stated = {m: v for m, v in (emitted_edges or {}).items() if m not in judged}
+    order = [str(m) for m in projected.get("module_order") or []]
+    known = set(judged) | set(current_edges) | set(stated)
+    modules = [m for m in order if m in known]
+    modules += sorted(known - set(modules))
+    edges: dict[str, Any] = {}
+    for module in modules:
+        if module in judged:
+            value = derived.get(module)
+        elif module in stated:
+            value = stated[module]
+        else:
+            value = current_edges.get(module)
+        if value:
+            edges[module] = copy.deepcopy(value)
+    source_checks.append(_source_check(IMPORTS_TABLE, enabled=True, ready=True, status="present"))
+    _set(projected, "imports.module_internal", edges)
+
+
+def _project(
+    project: Path, *, imports: bool = True
+) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
     project = project.resolve()
     if not project.is_dir():
         raise SpecProjectionError(f"project directory not found: {project}")
@@ -547,6 +925,16 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
             if not isinstance(namespace, str) or not namespace:
                 raise SpecProjectionError("structured rules namespace must be a non-empty string")
             _set(projected, f"rules.{namespace}", value)
+        # A namespace the closure retired (its values moved to a data-provider
+        # constant or were a second home of a models enumeration) leaves the
+        # assembled rules. Retirement is authored, because a namespace the
+        # closure never declared (a hand-carried backend binding) looks the same
+        # in the assembled spec as one it dropped; the lint holds a retired
+        # namespace out of sections.rules.
+        projected_rules = projected.get("rules")
+        if isinstance(projected_rules, dict):
+            for namespace in design_stage6_data.retired_rule_namespaces(data_payload):
+                projected_rules.pop(namespace, None)
 
     state6 = design_stage6_contracts.handoff(project)
     state6_ready = state6.get("ready") is True
@@ -589,6 +977,7 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
             current.get("module_order"),
             current.get("module_paths"),
             handoff_contracts,
+            _backend_placed_modules(project, {entry["id"] for entry in declared_backends(project)}),
         )
         if module_order is not None and module_paths is not None:
             _set(projected, "module_order", module_order)
@@ -745,6 +1134,7 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
     # the projection carries that IR into rules verbatim so no hand edit of the
     # assembled spec is ever the way a backend arrives.
     legacy_ids = {entry["id"] for entry in declared_backends(project)}
+    emitted_edges: dict[str, dict[str, list[str]]] = {}
     for standard in standard_backends(exclude_ids=legacy_ids):
         if not (project / standard.closure_file).is_file():
             continue
@@ -771,6 +1161,14 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
             )
             continue
         _set(projected, f"rules.{standard.rule_key}", authored)
+        if standard.id == DATA_PROVIDER_BACKEND_ID:
+            _place_data_provider_module(projected, authored, findings, standard.closure_file)
+        elif standard.id == RECORD_CONSTRUCTION_BACKEND_ID:
+            emitted_edges.update(
+                _place_record_builders_module(projected, authored, findings, standard.closure_file))
+
+    if imports:
+        _project_module_internal(project, current, projected, findings, source_checks, emitted_edges)
 
     return current, projected, findings, source_checks
 
@@ -783,6 +1181,8 @@ def build_plan(project: Path) -> dict[str, Any]:
         "contracts",
         "function_order",
         "imports.internal",
+        "imports.module_internal",
+        "imports.stdlib",
         "module_functions",
         "module_order",
         "module_paths",
@@ -824,14 +1224,18 @@ def _canonical_text(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
 
 
-def projected_spec(project: Path) -> dict[str, Any]:
+def projected_spec(project: Path, *, imports: bool = True) -> dict[str, Any]:
     """The specification the authored sources project to, in memory; the
     project's ``global_spec.json`` is not written.
+
+    ``imports=False`` leaves imports.module_internal as it is: the imports
+    closure reads the case through this projection to build the very table the
+    field is projected from.
 
     A source that is not ready leaves its section as the last assembly wrote
     it, so a projection with a blocking finding does not stand for the
     authored texts: it raises SpecProjectionError naming the findings."""
-    _, projected, findings, _ = _project(project.resolve())
+    _, projected, findings, _ = _project(project.resolve(), imports=imports)
     blocks = sorted({str(row.get("code")) for row in findings if row.get("severity") == "block"})
     if blocks:
         raise SpecProjectionError(f"the authored sources do not project: {', '.join(blocks)}")

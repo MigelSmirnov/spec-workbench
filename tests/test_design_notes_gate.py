@@ -500,3 +500,35 @@ def test_open_keyed_file_spool_closure_exempts_nothing(tmp_path):
     missing = {item["scope"] for item in report["findings"] if item["code"] == "missing_callable_note"}
     assert missing == owned
     assert report["deterministic_callables"] == []
+
+
+def _uow_project(tmp_path, *, status: str = "closed"):
+    from test_standard_backends import UOW_CONTRACTS, UOW_OWNED, uow_ir
+
+    project = _project(tmp_path, "parse: [BEHAVIOR] MUST return normalized content.\n")
+    contracts = json.loads((tmp_path / "60_contracts.json").read_text(encoding="utf-8"))
+    for name in UOW_OWNED:
+        contracts["contracts"][name] = UOW_CONTRACTS[name]
+    (tmp_path / "60_contracts.json").write_text(json.dumps(contracts), encoding="utf-8")
+    (project / "70_sqlite_unit_of_work_closure.json").write_text(json.dumps({
+        "schema_version": "spec_workbench_sqlite_unit_of_work_backend_closure.v1",
+        "status": status,
+        "backend_ir": uow_ir(),
+    }), encoding="utf-8")
+    return project, UOW_OWNED
+
+
+def test_sqlite_unit_of_work_classes_are_deterministic_callables(tmp_path):
+    project, owned = _uow_project(tmp_path)
+    report = gate.coverage(project)
+    assert "missing_callable_note" not in _codes(report)
+    assert set(report["deterministic_callables"]) == owned
+    assert report["summary"]["handoff_ready"] is True
+
+
+def test_open_sqlite_unit_of_work_closure_exempts_nothing(tmp_path):
+    project, owned = _uow_project(tmp_path, status="open")
+    report = gate.coverage(project)
+    missing = {item["scope"] for item in report["findings"] if item["code"] == "missing_callable_note"}
+    assert missing == owned
+    assert report["deterministic_callables"] == []

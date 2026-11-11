@@ -1,8 +1,9 @@
 """What one module is, for the agent that writes its notes
 (tools/DATA_CLOSURE_WORKBENCH.md §3): its callables with their signatures
 (and its other symbols, such as exceptions),
-the models those signatures name (fields and members are names a note may
-write as words), what the design says the module does, and its open
+the models those signatures name (fields and member NAMES are names a note
+may write as words; a member's value only beside its NAME, SPEC_STANDARD
+§15.3.1), what the design says the module does, and its open
 structure requests. Data is not here: the agent reaches a value only through
 its home (find_value_homes, resolve_data_address, find_absence)."""
 
@@ -24,7 +25,7 @@ def _models_named(signatures: dict[str, str], index: SpecIndex) -> dict[str, Any
     named = sorted({n for s in signatures.values() for n in _TYPE_NAME_RE.findall(s)}
                    & (set(index.fields) | set(index.enums)))
     return {
-        name: ({"enum_members": list(index.enums[name])} if name in index.enums
+        name: ({"enum_members": {member: value for value, member in index.member_names[name].items()}} if name in index.enums
                else {"fields": sorted(index.fields[name])})
         for name in named
     }

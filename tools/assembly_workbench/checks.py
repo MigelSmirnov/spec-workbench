@@ -77,6 +77,10 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
         errors = int(summary.get("errors", 0))
         warnings = _severity_count(findings, {"warning", "review"})
         ready = bool(summary.get("handoff_ready"))
+    elif name == "imports":
+        errors = int(summary.get("errors", len(findings)))
+        warnings = 0
+        ready = bool(summary.get("handoff_ready")) and errors == 0
     elif name in {"witness", "flows", "factory"}:
         errors = int(summary.get("errors", len(findings)))
         warnings = 0
@@ -142,10 +146,14 @@ def _factory_storage_resolver(factory_root: Path | None = None):
     import os
     import sys as _sys
     root = Path(__file__).resolve().parents[2]
-    candidates = [factory_root] if factory_root is not None else []
-    if os.environ.get("SPEC_WORKBENCH_FACTORY_ROOT"):
-        candidates.append(Path(os.environ["SPEC_WORKBENCH_FACTORY_ROOT"]))
-    candidates += [root.parent / "code_factory", root.parent.parent / "code_factory"]
+    # an explicitly chosen root is the only one read: no other checkout stands in for it
+    if factory_root is not None:
+        candidates = [factory_root]
+    else:
+        candidates = []
+        if os.environ.get("SPEC_WORKBENCH_FACTORY_ROOT"):
+            candidates.append(Path(os.environ["SPEC_WORKBENCH_FACTORY_ROOT"]))
+        candidates += [root.parent / "code_factory", root.parent.parent / "code_factory"]
     for candidate in candidates:
         emitter = candidate / "tools" / "generate_postgres_repository_draft.py"
         if emitter.is_file():
@@ -172,6 +180,7 @@ CHECKS: dict[str, ReportFunction] = {
     "router": _router_coverage,
     "persistence": lambda project: persistence_coverage(project, storage_resolver=_factory_storage_resolver()),
     "witness": design_decision_witness.coverage,
+    "imports": lambda project: imports_coverage(project, factory_root=None),
     "flows": flow_closure.coverage,
     "factory": lambda project: factory_validation(project, factory_root=_factory_root()),
 }
@@ -252,6 +261,19 @@ def factory_validation(project: Path, *, factory_root: Path | None) -> dict[str,
     })
     return {"summary": summary, "findings": findings}
 
+def imports_coverage(project: Path, *, factory_root: Path | None) -> dict[str, Any]:
+    """The imports closure, and global_spec.json carrying its projection (IMPORTS_WORKBENCH.md §9.3)."""
+    from imports_workbench import service as imports_closure
+    from imports_workbench.model import ImportsError
+
+    try:
+        return imports_closure.assembly_report(project, factory_root)
+    except ImportsError as error:
+        return {"summary": {"errors": 1, "handoff_ready": False}, "findings": [{
+            "severity": "error", "code": "imports_case_unreadable", "message": str(error),
+        }]}
+
+
 def run(project: Path, name: str, *, factory_root: Path | None = None) -> CheckResult:
     function = CHECKS.get(name)
     if function is None:
@@ -262,6 +284,11 @@ def run(project: Path, name: str, *, factory_root: Path | None = None) -> CheckR
                 project,
                 storage_resolver=_factory_storage_resolver(factory_root),
             )
+        elif name == "imports":
+            report = imports_coverage(project, factory_root=factory_root)
+        elif name == "witness" and factory_root is not None:
+            # the verification checks a witness names are read from the chosen Factory
+            report = design_decision_witness.coverage(project, factory_root)
         else:
             report = function(project)
     except (OSError, ValueError, KeyError, TypeError) as error:

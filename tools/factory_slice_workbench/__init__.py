@@ -4,6 +4,8 @@ from factory_slice_workbench.service import (
     module_prompts,
     probe,
     reachability_findings,
+    rules_reader_findings,
 )
 
-__all__ = ["REPORT_SCHEMA", "FactoryPromptError", "module_prompts", "probe", "reachability_findings"]
+__all__ = ["REPORT_SCHEMA", "FactoryPromptError", "module_prompts", "probe", "reachability_findings",
+           "rules_reader_findings"]

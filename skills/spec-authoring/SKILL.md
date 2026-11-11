@@ -17,11 +17,14 @@ normative. The method reaches you one phase at a time, from the pipeline — do 
    this phase.
 4. Answer every `Ask:` question in the state document. They are the judgement no gate can make.
 5. Run the gate. A finding names the rule it enforces and the fix. There are no warnings and no waivers
-   (`tools/fence.py`): a finding that is not an error is an undecided fact.
-6. Ask the generator's own model what the state still leaves open: the `questions:` command of the phase
-   (`python tools/design_questions.py ask examples/<case> --state <N>`), States 0–7. A state is closed
-   when every unit of it — a section, a decision, for State 7 a generated module's prompt — is clear in
-   its two latest reviews on its current text — [QUESTIONS.md](QUESTIONS.md). Gates see form; only this
+   (`tools/fence.py`): a finding that is not an error is an undecided fact. Then close the transition
+   ([TRANSITION_PROTOCOL.md](TRANSITION_PROTOCOL.md)): what the phase owns, the obligations earlier states
+   carried to it (`layer` in `next`), and what it carries on, to whom, confirmed by what. `not_checked` is
+   never a pass.
+6. Ask a model what the state still leaves open, as the generator would: the `questions:` command of the phase
+   (`python tools/design_questions.py ask examples/<case> --state <N>`), States 0–7, one round per change: a
+   unit (a section, a decision, a State 7 module prompt) closes when its latest round raised no contradiction
+   and every other judged topic has a disposition (`dispose`) — [QUESTIONS.md](QUESTIONS.md). Gates see form; only this
    sees a decision nobody made. After State 5, `next` and Stage 9 admission (`FA019`) stop at any state
    a later edit reopened.
 7. Before export, `python tools/design_factory_slices.py examples/<case> --factory-root <factory> --project <name>`

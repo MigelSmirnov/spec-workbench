@@ -724,6 +724,35 @@ def test_external_obligation_does_not_make_a_lowered_repository_reachable() -> N
     assert _runtime_carrier_check(spec).status == "BLOCK"
 
 
+@pytest.mark.parametrize("where", ["accessor", "bootstrap_write"])
+def test_repository_constructed_by_the_unit_of_work_is_reachable(where: str) -> None:
+    spec = _carrier_spec()
+    spec["contracts"]["begin_unit_of_work"] = "(purpose: str) -> None"
+    backend = {"kind": "sqlite_unit_of_work_backend", "accessors": []}
+    row = {"repository": "SqliteStoreRepository"}
+    if where == "accessor":
+        backend["accessors"].append({"accessor": "store", **row})
+    else:
+        backend["bootstrap_store"] = {"writes": [{"parameter": "slot", "method": "insert_slot", **row}]}
+    spec["rules"]["sqlite_unit_of_work_backend"] = backend
+
+    result = _runtime_carrier_check(spec)
+
+    assert result.status == "PASS"
+    assert result.evidence["unit_of_work_repositories"] == ["SqliteStoreRepository"]
+
+
+def test_unit_of_work_of_another_kind_does_not_make_a_repository_reachable() -> None:
+    spec = _carrier_spec()
+    spec["contracts"]["begin_unit_of_work"] = "(purpose: str) -> None"
+    spec["rules"]["sqlite_unit_of_work_backend"] = {
+        "kind": "persistence_backend",
+        "accessors": [{"accessor": "store", "repository": "SqliteStoreRepository"}],
+    }
+
+    assert _runtime_carrier_check(spec).status == "BLOCK"
+
+
 def test_runtime_carrier_check_blocks_malformed_spec() -> None:
     assert _runtime_carrier_check({"contracts": [], "models": {}}).status == "BLOCK"
 
@@ -993,3 +1022,101 @@ def test_fa021_blocks_a_factory_without_the_same_emitter_tables(tmp_path: Path, 
 
 def test_fa021_runs_in_every_admission_report(tmp_path: Path) -> None:
     assert _fa(_run(tmp_path), "FA021")["status"] == "NOT_APPLICABLE"
+
+
+# -- FA022: the imports closure (IMPORTS_WORKBENCH.md §9.4) ----------------------
+
+def _imports_report(ready: bool, codes=(), strict=False):
+    return {"summary": {"handoff_ready": ready, "strict_ready": strict},
+            "findings": [{"code": code} for code in codes], "code_evidence": {"status": "available"}}
+
+
+def test_imports_closure_check_not_applicable_without_case(tmp_path) -> None:
+    from factory_admission_workbench.service import _imports_closure_check
+
+    result = _imports_closure_check(None, tmp_path)
+    assert (result.check_id, result.status) == ("FA022", "NOT_APPLICABLE")
+
+
+def test_imports_closure_check_blocks_an_open_closure_and_names_its_findings(tmp_path, monkeypatch) -> None:
+    from factory_admission_workbench import service
+    from imports_workbench import service as imports_closure
+
+    monkeypatch.setattr(imports_closure, "assembly_report", lambda case, root: _imports_report(
+        False, ["imports_candidate_undecided", "imports_candidate_undecided", "imports_projection_drift"]))
+    result = service._imports_closure_check(tmp_path, tmp_path)
+
+    assert (result.check_id, result.status) == ("FA022", "BLOCK")
+    assert result.evidence["codes"] == {"imports_candidate_undecided": 2, "imports_projection_drift": 1}
+
+    monkeypatch.setattr(imports_closure, "assembly_report", lambda case, root: _imports_report(True, strict=True))
+    passed = service._imports_closure_check(tmp_path, tmp_path)
+    assert passed.status == "PASS" and "strict imports" in passed.summary
+
+
+def test_imports_closure_check_blocks_an_unreadable_case(tmp_path, monkeypatch) -> None:
+    from factory_admission_workbench import service
+    from imports_workbench import service as imports_closure
+    from imports_workbench.model import ImportsError
+
+    def refuse(case, root):
+        raise ImportsError("the projector cannot build the specification")
+
+    monkeypatch.setattr(imports_closure, "assembly_report", refuse)
+    assert service._imports_closure_check(tmp_path, tmp_path).status == "BLOCK"
+
+
+# ── FA023: the record builders module owns exactly the constructions (§6.13) ──
+
+RECORD_EMITTER = '''
+RULE_KEY = "record_construction_backend"
+EMITTER = "python_record_builders_v1"
+'''
+
+
+def _rc_spec(owned: list[str], extra: dict | None = None) -> dict:
+    return {
+        "module_functions": {"record_builders": owned, **(extra or {})},
+        "rules": {"record_construction_backend": {
+            "kind": "record_construction_backend",
+            "schema_version": 1,
+            "backend": {"emitter": "python_record_builders_v1"},
+            "wiring": {"module": "record_builders", "models_module": "core.models"},
+            "constructions": {"build_a": {}, "build_b": {}},
+        }},
+    }
+
+
+def _fa023(tmp_path: Path, spec: dict, emitter: str | None) -> dict:
+    from factory_admission_workbench.service import _record_builders_check
+
+    factory = tmp_path / "cf"
+    if emitter is not None:
+        _write(factory / "tools/generate_record_construction_draft.py", emitter)
+    return _record_builders_check(factory, spec).to_dict()
+
+
+def test_fa023_is_not_applicable_without_record_construction(tmp_path: Path) -> None:
+    result = _fa023(tmp_path, {"rules": {}}, None)
+    assert (result["id"], result["status"]) == ("FA023", "NOT_APPLICABLE")
+
+
+def test_fa023_passes_when_the_builders_module_owns_exactly_the_constructions(tmp_path: Path) -> None:
+    result = _fa023(tmp_path, _rc_spec(["build_b", "build_a"]), RECORD_EMITTER)
+    assert result["status"] == "PASS"
+    assert result["evidence"]["constructions"] == ["build_a", "build_b"]
+
+
+@pytest.mark.parametrize("spec, emitter", [
+    (_rc_spec(["build_a"]), RECORD_EMITTER),
+    (_rc_spec(["build_a", "build_b", "helper"]), RECORD_EMITTER),
+    (_rc_spec(["build_a", "build_b"], {"other": ["build_a"]}), RECORD_EMITTER),
+    (_rc_spec(["build_a", "build_b"]), None),
+    (_rc_spec(["build_a", "build_b"]), RECORD_EMITTER.replace("python_record_builders_v1", "python_record_builders_v2")),
+])
+def test_fa023_blocks_other_ownership_or_a_factory_without_the_emitter(tmp_path: Path, spec, emitter) -> None:
+    assert _fa023(tmp_path, spec, emitter)["status"] == "BLOCK"
+
+
+def test_fa023_runs_in_every_admission_report(tmp_path: Path) -> None:
+    assert _fa(_run(tmp_path), "FA023")["status"] == "NOT_APPLICABLE"

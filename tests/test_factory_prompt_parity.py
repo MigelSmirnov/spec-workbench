@@ -152,7 +152,6 @@ def test_rounds_closed_on_a_prompt_without_the_models_context_reopen_on_its_diff
     case = _case(tmp_path, monkeypatch)
     before = _factory(tmp_path / "before", models_code="")
     service.ask_round(case, 7, Provider(), factory_root=before)
-    service.ask_round(case, 7, Provider(), factory_root=before)
     assert service.status(case, 7, before)["closed"] is True
 
     after = _factory(tmp_path / "after")
@@ -164,8 +163,7 @@ def test_rounds_closed_on_a_prompt_without_the_models_context_reopen_on_its_diff
     assert summary["scope"] == ["store", "surface"] and summary["changed_units"] == ["store", "surface"]
     asked = [i for i in provider.instructions if i.startswith("You are the model")]
     assert asked and all("has changed since" in i and "+class Status(StrEnum):" in i for i in asked)
-    service.ask_round(case, 7, Provider(), factory_root=after)
-    assert service.status(case, 7, after)["closed"] is True
+    assert service.status(case, 7, after)["closed"] is True  # one round on the change closes it
 
 
 # 3. The real Factory: the review prompt is the production prompt

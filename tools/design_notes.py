@@ -80,6 +80,14 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--replace-all",
+        action="store_true",
+        help=(
+            "With --propagate, make the assembled notes exactly the notes of 80_notes.md "
+            "(requires a handoff-ready State 7 gate); for a case whose notes were rewritten as a whole"
+        ),
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="With --propagate or --author-accept, report without writing.",
@@ -111,6 +119,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.base_ref != "HEAD" and not args.propagate:
         print("design_notes: error: --base-ref is valid only with --propagate", file=sys.stderr)
         return 2
+    if args.replace_all and not args.propagate:
+        print("design_notes: error: --replace-all is valid only with --propagate", file=sys.stderr)
+        return 2
+    if args.replace_all and (args.prune_stale or args.base_ref != "HEAD"):
+        print("design_notes: error: --replace-all takes no --base-ref or --prune-stale", file=sys.stderr)
+        return 2
     if args.prune_stale and not args.propagate:
         print("design_notes: error: --prune-stale is valid only with --propagate", file=sys.stderr)
         return 2
@@ -127,6 +141,7 @@ def main(argv: list[str] | None = None) -> int:
                 base_ref=args.base_ref,
                 write=not args.check,
                 prune_stale=args.prune_stale,
+                replace_all=args.replace_all,
             )
         else:
             payload = service.module_slice(args.project, args.module) if args.slice else service.module_review(args.project, args.module)

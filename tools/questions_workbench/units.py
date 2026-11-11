@@ -26,19 +26,42 @@ generator. That is what the generator reads — not the notes of every module,
 but its own cut of notes, imports, contracts and models — and where a late
 note contradicting an IMPORTS list (Cabinet Kernel decision 25) shows up.
 
-A round reviews the units that are not closed; the reviewers read every text,
-but each point names its unit, and a point about a closed unit is set aside.
-A unit is closed when the two latest rounds that reviewed it were clear for it
-on the same text, and the text has not changed since. The state is closed
-when every unit is.
+A round reviews the units that need one: never reviewed, or changed since
+their latest review. The reviewers read the layer's prompt, each point names
+its unit, and a point about another unit is set aside.
 
-A unit that was closed and then edited is reviewed for the edit only: the
-reviewers get its diff since the text it closed on (found in the case's git
-history) and are asked about the change and what it affects; a point quoting
-an unchanged passage of that unit, away from the change, is set aside. On
-2026-10-07 a one-sentence edit reopened Cabinet Kernel A18, and three
-reviewers given the whole decision raised new storage-hardening topics every
-round, none about the edit.
+A unit is closed by ONE round (owner decision 2026-11-08, #147, comment
+6721261089): the latest round that reviewed it, on its current text, raised
+no open contradiction against it, and every other topic of that round that
+concerns it — a consequential gap, a hypothesis, a judgement whose evidence
+failed — has an author disposition (``dispositions.json`` beside the round's
+summary): ``fixed`` with a reference to the change, ``carried`` to a named
+later layer with what it must decide, or ``accepted`` with the author's reason.
+A contradiction takes no disposition: it blocks until a round on the changed
+text no longer raises it. "Two clear rounds on the same text" is gone; it is
+what made ping-pong (client-portal State 2, rounds 82-90 on A28 and A32).
+
+A topic that names no unit under review (its points name none, ``?``) is
+closed as itself, under the key ``NO_UNIT``, and keeps no unit open: every
+round reviews the layer as a whole, so the state's latest round is its
+latest review. It needs its own disposition (fixed, carried, accepted), and
+a contradiction among such topics blocks the state until a round on a
+changed text no longer raises it. Until 2026-11-09 such a topic held every
+unit of its round open: on client-portal State 1 the unit-less
+contradictions of round 49 kept ten unchanged decisions open after round 50
+reviewed the three that changed, and no round could ever reach them.
+
+Rounds kept before this rule (no ``closure`` in their summary) keep the
+closure they gave: a unit closed by its two latest clear reviews on its
+current text stays closed and is never reopened by the new rule.
+
+A unit that was reviewed and then edited is reviewed for the edit only: the
+reviewers get its diff since the text of its latest review (found in the
+case's git history) and are asked about the change and what it affects; a
+point quoting an unchanged passage of that unit, away from the change, is set
+aside. On 2026-10-07 a one-sentence edit reopened Cabinet Kernel A18, and
+three reviewers given the whole decision raised new storage-hardening topics
+every round, none about the edit.
 """
 from __future__ import annotations
 
@@ -52,6 +75,43 @@ DECISION_KEY = re.compile(r"A\d+")
 SECTION_HEADING = re.compile(r"^##\s+(.*\S)\s*$")
 CONTEXT = "context"
 UNKNOWN = "?"
+# the closure key of the topics of a round that name no unit under review
+NO_UNIT = "(no unit)"
+
+# Summaries kept from 2026-11-08 close by one round with dispositions; a
+# summary without it was kept under the two-clear-rounds rule.
+CLOSURE_RULE = "single_round"
+# The judged kinds that leave nothing to the author: the texts answer the
+# topic, a later state owns it, a precedent on unchanged passages settled it,
+# no one acts on it, or the change did not touch it.
+SETTLED_KINDS = frozenset({"answered", "answered_later", "judged_before", "later_state", "indifferent",
+                           "preexisting", "generator_text"})
+CONTRADICTION = "contradiction"
+# A verified violation of the state's SPEC_STANDARD sections asks what a
+# contradiction asks: a change of the text and one round on it (judge.py).
+CHANGE_KINDS = frozenset({CONTRADICTION, "standard_violation"})
+DISPOSITION = "disposition"
+# why a unit needs a round
+NEVER_REVIEWED = "never reviewed"
+CHANGED = "changed since its latest review"
+EVIDENCE_CHANGED = "the evidence its bindings rest on changed"
+UNVERIFIED = "a contradiction whose quotes were not verified"
+# A round that asked no reviewer: it checks the judgements of one unchanged
+# unit's latest round again under the current judge rules (service.rejudge).
+# It is that unit's latest review; it reviews nothing else, so the topics that
+# name no unit and the precedents are read from the rounds that asked.
+REJUDGE = "rejudge"
+
+
+def asked(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The rounds that asked reviewers, without the re-judgements."""
+    return [s for s in summaries if not s.get(REJUDGE)]
+
+
+def latest_review(summaries: list[dict[str, Any]], key: str) -> dict[str, Any] | None:
+    """The latest round that reviewed the unit `key` (or re-judged it)."""
+    reviewed = [s for s in summaries if key in (s.get("scope") or []) and key in (s.get("units") or {})]
+    return reviewed[-1] if reviewed else None
 
 
 def _digest(text: str) -> str:
@@ -106,14 +166,12 @@ def module_units(prompts: dict[str, str]) -> dict[str, dict[str, str]]:
 
 
 def closed_digest(summaries: list[dict[str, Any]], key: str) -> str | None:
-    """The digest the unit was last closed on: the latest two consecutive
-    reviews of it that were clear for it on the same text."""
+    """The digest of the text the unit was last reviewed on, or None: the base
+    of the diff a changed unit is reviewed for. One round per change: a unit
+    edited after its latest review is reviewed for that edit, whether or not
+    that review closed it."""
     reviewed = [s for s in summaries if key in (s.get("scope") or []) and key in (s.get("units") or {})]
-    for first, second in reversed(list(zip(reviewed, reviewed[1:]))):
-        if (_clear_for(first, key) and _clear_for(second, key)
-                and first["units"][key] == second["units"][key]):
-            return second["units"][key]
-    return None
+    return reviewed[-1]["units"][key] if reviewed else None
 
 
 def change_regions(old: str, new: str, context: int = 3) -> tuple[str, list[str]]:
@@ -153,24 +211,182 @@ def _clear_for(summary: dict[str, Any], key: str) -> bool:
     return key not in set(summary.get("blocked_units") or [])
 
 
-def closed(summaries: list[dict[str, Any]], current: dict[str, dict[str, str]]) -> dict[str, bool]:
-    """Per unit: closed by the two latest rounds that reviewed it, on its current text."""
-    result = {}
-    for key, unit in current.items():
-        reviewed = [s for s in summaries if key in (s.get("scope") or []) and key in (s.get("units") or {})]
-        last = reviewed[-2:]
-        result[key] = (len(last) == 2 and all(_clear_for(s, key) for s in last)
-                       and all(s["units"][key] == unit["digest"] for s in last))
-    return result
+def topic_units(topic: dict[str, Any], scope: list[str]) -> list[str]:
+    """The units under review a topic names; [] when it names none: such a
+    topic closes as itself (``NO_UNIT``), not through the units."""
+    return [u for u in topic.get("units") or [] if u in scope]
+
+
+def _topic_concerns(topic: dict[str, Any], summary: dict[str, Any], key: str) -> bool:
+    """Whether a topic of `summary` keeps the unit `key` open. In a round kept
+    before the single-round rule a topic naming no unit concerned every unit
+    under review, and those rounds keep the closure they gave."""
+    scope = list(summary.get("scope") or [])
+    named = topic_units(topic, scope)
+    if not named and summary.get("closure") != CLOSURE_RULE:
+        return key in scope
+    return key in named
+
+
+def topic_need(topic: dict[str, Any], summary: dict[str, Any]) -> str | None:
+    """What a topic of a round asks of the author: CONTRADICTION (a change of
+    the text and a round on it; a contradiction or a standard violation), DISPOSITION (fixed, carried or accepted), or
+    None. A topic no judge saw — raised by one review without a witness — asks
+    nothing; in a round kept before the judge, a topic two reviews raised
+    needs a disposition."""
+    if "judge" not in summary:
+        return DISPOSITION if len(topic.get("runs") or []) >= 2 else None
+    judgement = topic.get("judgement")
+    if not isinstance(judgement, dict):
+        return None
+    kind = judgement.get("kind")
+    if kind in CHANGE_KINDS:
+        # verified or not: an unverified contradiction or standard violation is not downgraded
+        return CONTRADICTION
+    if not judgement.get("verified"):
+        return DISPOSITION if judgement.get("blocking", True) else None
+    if kind in SETTLED_KINDS:
+        return None
+    return DISPOSITION  # consequential_gap (quoted, deferred or recorded), hypothesis
+
+
+def disposed(summary: dict[str, Any], topic_id: str, unit: str) -> dict[str, Any] | None:
+    """The author's disposition of a topic for a unit: one naming that unit,
+    or one naming no unit (it covers every unit of the topic, and is the
+    disposition of a topic that names none)."""
+    found = None
+    for entry in summary.get("dispositions") or []:
+        if entry.get("topic") != topic_id:
+            continue
+        if entry.get("unit") == unit:
+            return entry
+        if not entry.get("unit"):
+            found = entry
+    return found
+
+
+def _legacy_closed(reviewed: list[dict[str, Any]], key: str, digest: str,
+                   evidence: dict[str, str] | None) -> bool:
+    """The two-clear-rounds closure of rounds kept before the single-round rule."""
+    last = reviewed[-2:]
+    return (len(last) == 2 and all(s.get("closure") != CLOSURE_RULE for s in last)
+            and all(_clear_for(s, key) for s in last)
+            and all(s["units"][key] == digest for s in last)
+            and (evidence is None or not any(evidence_changed(s, key, evidence) for s in last)))
+
+
+def unit_state(summaries: list[dict[str, Any]], key: str, digest: str,
+               evidence: dict[str, str] | None = None) -> dict[str, Any]:
+    """Whether one unit is closed on its text `digest`, and what keeps it open.
+
+    - ``needs_round``: why a round must review it (never reviewed, changed
+      since its latest review, its evidence changed, or an unverified
+      contradiction), or None;
+    - ``contradictions``: topic ids of its latest round that raise one against
+      it — closed only by a changed text and a round on it;
+    - ``awaiting``: topic ids of that round that need an author disposition;
+    - ``carried``: what that round's dispositions carry to later layers.
+    """
+    reviewed = [s for s in summaries if key in (s.get("scope") or []) and key in (s.get("units") or {})]
+    state: dict[str, Any] = {"closed": False, "rule": None, "round": None, "needs_round": None,
+                             "contradictions": [], "unverified": [], "awaiting": [], "carried": []}
+    if not reviewed:
+        state["needs_round"] = NEVER_REVIEWED
+        return state
+    last = reviewed[-1]
+    state["round"] = last.get("round")
+    if _legacy_closed(reviewed, key, digest, evidence):
+        state.update(closed=True, rule="two_clear_rounds")
+        return state
+    if last["units"][key] != digest:
+        state["needs_round"] = CHANGED
+        return state
+    if evidence is not None and evidence_changed(last, key, evidence):
+        state["needs_round"] = EVIDENCE_CHANGED
+        return state
+    _close_on_topics(state, last, key, lambda topic: _topic_concerns(topic, last, key))
+    return state
+
+
+def _close_on_topics(state: dict[str, Any], summary: dict[str, Any], key: str, concerns) -> None:
+    """Fill `state` from the topics of `summary` that `concerns` selects: the
+    contradictions it holds, the topics awaiting a disposition for `key`, and
+    what the dispositions carried; closed when nothing of it is left."""
+    for index, topic in enumerate(summary.get("topics") or [], 1):
+        need = topic_need(topic, summary)
+        if need is None or not concerns(topic):
+            continue
+        topic_id = str(topic.get("id") or f"#{index}")
+        if need == CONTRADICTION:
+            verified = (topic.get("judgement") or {}).get("verified", True)
+            state["contradictions" if verified else "unverified"].append(topic_id)
+            continue
+        entry = disposed(summary, topic_id, key)
+        if entry is None:
+            state["awaiting"].append(topic_id)
+        elif entry.get("disposition") == "carried":
+            state["carried"].append({"topic": topic_id, "to": entry.get("to"), "what": entry.get("what")})
+    if state["unverified"]:
+        state["needs_round"] = UNVERIFIED
+    state["closed"] = not (state["contradictions"] or state["unverified"] or state["awaiting"])
+    state["rule"] = CLOSURE_RULE if state["closed"] else None
+
+
+def no_unit_state(summaries: list[dict[str, Any]]) -> dict[str, Any]:
+    """The closure of the topics that name no unit under review (``NO_UNIT``),
+    in the shape of ``unit_state``. Every round reviews the layer as a whole,
+    so they are judged on the state's latest round that asked reviewers (a
+    re-judgement reviews one unit, ``REJUDGE``) only, if it was kept under
+    the single-round rule: a contradiction among them blocks until a round on
+    a changed text no longer raises it, any other needs its own disposition.
+    They keep no unit open."""
+    state: dict[str, Any] = {"closed": True, "rule": None, "round": None, "needs_round": None,
+                             "contradictions": [], "unverified": [], "awaiting": [], "carried": []}
+    rounds = asked(summaries)
+    last = rounds[-1] if rounds else None
+    if last is None or last.get("closure") != CLOSURE_RULE:
+        return state
+    state["round"] = last.get("round")
+    scope = list(last.get("scope") or [])
+    _close_on_topics(state, last, NO_UNIT, lambda topic: not topic_units(topic, scope))
+    return state
+
+
+def states(summaries: list[dict[str, Any]], current: dict[str, dict[str, str]],
+           evidence: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
+    """``unit_state`` of every unit, and ``NO_UNIT`` when the topics naming no
+    unit leave something open or carried."""
+    found = {key: unit_state(summaries, key, unit["digest"], evidence) for key, unit in current.items()}
+    layer = no_unit_state(summaries)
+    if not layer["closed"] or layer["carried"]:
+        found[NO_UNIT] = layer
+    return found
+
+
+def closed(summaries: list[dict[str, Any]], current: dict[str, dict[str, str]],
+           evidence: dict[str, str] | None = None) -> dict[str, bool]:
+    """Per unit: closed on its current text (``unit_state``).
+
+    `evidence` maps a unit to the digest of what its bindings rest on (the
+    checks its decision's witness tags name). A review that recorded another
+    evidence digest for the unit (`unit_evidence`) judged other evidence, so it
+    does not close the unit: a changed check reopens exactly the decisions bound
+    to it. A review that recorded none (kept before evidence was recorded) is
+    taken as it stands. Without `evidence` the closure is on the text alone."""
+    return {key: value["closed"] for key, value in states(summaries, current, evidence).items()}
+
+
+def evidence_changed(summary: dict[str, Any], key: str, evidence: dict[str, str]) -> bool:
+    recorded = (summary.get("unit_evidence") or {}).get(key)
+    return recorded is not None and recorded != evidence.get(key)
 
 
 def blocked(topics: list[dict[str, Any]], scope: list[str]) -> list[str]:
-    """Units a round's blocking topics keep open. A blocking topic that names no
-    unit under review keeps every unit under review open."""
+    """Units a round's blocking topics keep open, and ``NO_UNIT`` when a
+    blocking topic names no unit under review: it blocks as itself."""
     hit: set[str] = set()
     for topic in topics:
         if not (topic.get("judgement") or {}).get("blocking"):
             continue
-        named = [u for u in topic.get("units") or [] if u in scope]
-        hit.update(named or scope)
+        hit.update(topic_units(topic, scope) or [NO_UNIT])
     return sorted(hit)

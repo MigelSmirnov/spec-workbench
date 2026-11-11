@@ -327,6 +327,28 @@ def _runtime_persistence_check(source_spec: object, case_root: Path | None) -> A
     )
 
 
+def _unit_of_work_repositories(rules: object) -> set[str]:
+    """Repositories the declared unit of work constructs: its accessors and bootstrap writes.
+
+    The emitted transaction builds every accessor repository over its own
+    connection and hands it out through the accessor; the bootstrap store
+    builds every repository it writes through. Only the repository names are
+    read here; the closed form is judged by the Factory generator (FA005).
+    """
+    backend = rules.get("sqlite_unit_of_work_backend") if isinstance(rules, dict) else None
+    if not isinstance(backend, dict) or backend.get("kind") != "sqlite_unit_of_work_backend":
+        return set()
+    rows = list(backend.get("accessors") or []) if isinstance(backend.get("accessors"), list) else []
+    bootstrap = backend.get("bootstrap_store")
+    if isinstance(bootstrap, dict) and isinstance(bootstrap.get("writes"), list):
+        rows += bootstrap["writes"]
+    return {
+        row["repository"]
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("repository"), str)
+    }
+
+
 def _runtime_carrier_check(source_spec: object) -> AdmissionCheck:
     """Refuse a runtime mechanism that no contract can carry.
 
@@ -339,8 +361,10 @@ def _runtime_carrier_check(source_spec: object) -> AdmissionCheck:
       signature: the generator receives a value with no operations and invents
       them (module-level dicts, method names probed in turn);
     - a repository class lowered from ``rules.persistence_backend`` that no
-      interface names as its local implementation and no other contract
-      mentions: the emitted storage exists and nothing can reach it.
+      interface names as its local implementation, no other contract mentions
+      and no ``rules.sqlite_unit_of_work_backend`` accessor or bootstrap write
+      constructs (SPEC_STANDARD §6.12): the emitted storage exists and nothing
+      can reach it.
     """
     spec = source_spec if isinstance(source_spec, dict) else {}
     contracts = spec.get("contracts", {})
@@ -395,8 +419,9 @@ def _runtime_carrier_check(source_spec: object) -> AdmissionCheck:
         for implementation in disposition.get("implementations") or []
         if isinstance(implementation, str)
     }
+    unit_of_work = _unit_of_work_repositories(rules)
     for repository in repositories:
-        if repository in local_implementations:
+        if repository in local_implementations or repository in unit_of_work:
             continue
         mentioned_by = sorted(
             owner
@@ -415,6 +440,7 @@ def _runtime_carrier_check(source_spec: object) -> AdmissionCheck:
         "opaque_models": opaque,
         "repositories_examined": repositories,
         "local_implementations": sorted(local_implementations),
+        "unit_of_work_repositories": sorted(unit_of_work),
     }
     if findings:
         return AdmissionCheck(
@@ -596,6 +622,46 @@ def _projection_drift_check(case_root: Path | None) -> AdmissionCheck:
         "FA016",
         CHECK_PASS,
         "global_spec.json equals its deterministic projection.",
+        {"summary": summary},
+    )
+
+
+def _imports_closure_check(case_root: Path | None, factory_root: Path) -> AdmissionCheck:
+    """FA022: every internal import of the exported specification is an author's decision.
+
+    imports.module_internal is projected from 65_imports.json (FA016 catches a
+    hand edit). This check recomputes the closure at admission: every candidate
+    decided, no scope stale against the contracts and notes being exported, and
+    the accepted code agreeing with the decisions. Recomputing is stronger than
+    a hash recorded when the phase closed: an edit after closing reopens the
+    scope it touched (basis_sha256), and there is no recorded value to forge.
+    """
+    if case_root is None:
+        return AdmissionCheck("FA022", CHECK_NOT_APPLICABLE,
+                              "Explicit --spec admission has no Workbench imports closure.", {})
+    from imports_workbench import service as imports_closure
+    from imports_workbench.model import ImportsError
+
+    try:
+        report = imports_closure.assembly_report(case_root, factory_root)
+    except ImportsError as error:
+        return AdmissionCheck("FA022", CHECK_BLOCK, f"The imports closure cannot read the case: {error}",
+                              {"error": str(error)})
+    summary = report["summary"]
+    if not summary.get("handoff_ready"):
+        codes: dict[str, int] = {}
+        for item in report["findings"]:
+            codes[item["code"]] = codes.get(item["code"], 0) + 1
+        return AdmissionCheck(
+            "FA022", CHECK_BLOCK,
+            "The imports closure is not closed: imports.module_internal is not the author's decision "
+            f"({', '.join(f'{code} {count}' for code, count in sorted(codes.items()))}).",
+            {"summary": summary, "codes": codes, "code_evidence": report.get("code_evidence")},
+        )
+    return AdmissionCheck(
+        "FA022", CHECK_PASS,
+        "Every internal import is decided and imports.module_internal is its projection"
+        + ("; the accepted code agrees (strict imports may be enabled)." if summary.get("strict_ready") else "."),
         {"summary": summary},
     )
 
@@ -850,8 +916,8 @@ def _factory_slices_check(
     return AdmissionCheck(
         "FA018",
         CHECK_PASS if ready else CHECK_BLOCK,
-        "The Factory cuts every module; no induced import collides with a name, no slice carries a value, and "
-        "every changed data address reaches a module."
+        "The Factory cuts every module; no induced import collides with a name, no slice carries a value, "
+        "every changed data address reaches a module, and every rules namespace has a reader."
         if ready
         else "The Factory's own local specifications would stop generation.",
         {"summary": report["summary"], "findings": report["findings"]},
@@ -865,8 +931,10 @@ def _question_rounds_check(case_root: Path | None, factory_root: Path) -> Admiss
     the module it was cut into, and decision 26 rewrote States 3–5; no round
     was asked about either, the assembly and every other check passed, and
     Route B stopped twice. A state is closed only unit by unit on the texts
-    it has now (skills/spec-authoring/QUESTIONS.md); State 7 on the prompts
-    this Factory builds. A state with a document and no round blocks too.
+    it has now (skills/spec-authoring/QUESTIONS.md): by one round per change
+    with no open contradiction and the author's disposition of every other
+    judged topic; State 7 on the prompts this Factory builds. A state with a
+    document and no round blocks too.
     """
     if case_root is None:
         return AdmissionCheck(
@@ -886,6 +954,10 @@ def _question_rounds_check(case_root: Path | None, factory_root: Path) -> Admiss
             "reason": status["reason"],
             "units": status.get("units"),
             "open_units": status.get("open_units", []),
+            # one round per change (owner decision 2026-11-08): what keeps each open unit open
+            "needs_round": status.get("needs_round", []),
+            "contradictions": status.get("contradictions", {}),
+            "awaiting_disposition": status.get("awaiting_disposition", {}),
             "closed_at": status.get("closed_at"),
         }
     still_open = {name: row for name, row in states.items() if not row["closed"]}
@@ -1251,6 +1323,75 @@ def _standard_backend_contracts_check(factory_root: Path, source_spec: object) -
     )
 
 
+RECORD_CONSTRUCTION_RULE = "record_construction_backend"
+RECORD_CONSTRUCTION_TOOL = "tools/generate_record_construction_draft.py"
+
+
+def _record_builders_check(factory_root: Path, source_spec: object) -> AdmissionCheck:
+    """FA023: the record builders module owns exactly the declared constructions,
+    and the target Factory emits them (SPEC_STANDARD §6.13).
+
+    The notes gate exempts every ``constructions`` key from State 7 notes as an
+    emitted scope; a builders module owning one function more would leave it
+    with neither a note nor an emitter, one fewer would leave a builder
+    nobody emits. The Factory side is read as literals (``RULE_KEY``,
+    ``EMITTER``) of its emitter tool, without running Factory code; the closed
+    form itself is judged by the Factory validator at FA005.
+    """
+    rules = source_spec.get("rules") if isinstance(source_spec, dict) else None
+    backend = rules.get(RECORD_CONSTRUCTION_RULE) if isinstance(rules, dict) else None
+    if backend is None:
+        return AdmissionCheck(
+            "FA023", CHECK_NOT_APPLICABLE, "Source declares no rules.record_construction_backend.", {},
+        )
+    problems: list[str] = []
+    wiring = backend.get("wiring") if isinstance(backend, dict) else None
+    module = wiring.get("module") if isinstance(wiring, dict) else None
+    constructions = backend.get("constructions") if isinstance(backend, dict) else None
+    emitter = (backend.get("backend") or {}).get("emitter") if isinstance(backend, dict) else None
+    functions = source_spec.get("module_functions") if isinstance(source_spec, dict) else None
+    functions = functions if isinstance(functions, dict) else {}
+    owned = functions.get(module) if isinstance(module, str) else None
+    builders = sorted(constructions) if isinstance(constructions, dict) else []
+    evidence: dict[str, Any] = {
+        "module": module,
+        "constructions": builders,
+        "module_functions": sorted(owned) if isinstance(owned, list) else owned,
+        "factory_tool": str(factory_root / RECORD_CONSTRUCTION_TOOL),
+    }
+    if not isinstance(module, str) or not builders:
+        problems.append("rules.record_construction_backend names no builders module or no constructions")
+    elif not isinstance(owned, list) or sorted(owned) != builders:
+        problems.append(f"module_functions.{module} is not exactly the constructions keys")
+    else:
+        elsewhere = sorted(
+            name for other, names in functions.items() if other != module and isinstance(names, list)
+            for name in names if name in builders
+        )
+        if elsewhere:
+            problems.append(f"builders also owned by another module: {', '.join(elsewhere)}")
+    try:
+        tree = ast.parse((factory_root / RECORD_CONSTRUCTION_TOOL).read_text(encoding="utf-8"))
+        factory_rule = _factory_literal(tree, "RULE_KEY")
+        factory_emitter = _factory_literal(tree, "EMITTER")
+    except FileNotFoundError:
+        problems.append(f"target Factory has no {RECORD_CONSTRUCTION_TOOL}")
+    except (OSError, SyntaxError, ValueError, MemoryError, RecursionError) as exc:
+        evidence["error"] = str(exc)
+        problems.append(f"{RECORD_CONSTRUCTION_TOOL} declares RULE_KEY/EMITTER in a form admission cannot read")
+    else:
+        evidence["factory_emitter"] = factory_emitter
+        if factory_rule != RECORD_CONSTRUCTION_RULE or factory_emitter != emitter:
+            problems.append(f"the target Factory emitter does not emit {emitter!r} for rules.{RECORD_CONSTRUCTION_RULE}")
+    if problems:
+        return AdmissionCheck("FA023", CHECK_BLOCK, "; ".join(problems) + ".", evidence)
+    return AdmissionCheck(
+        "FA023", CHECK_PASS,
+        "The record builders module owns exactly the declared constructions, and the target Factory emits them.",
+        evidence,
+    )
+
+
 def _factory_toolchain_check(factory_root: Path) -> AdmissionCheck:
     metadata = git_metadata(factory_root)
     required = [
@@ -1306,12 +1447,14 @@ def check(
         _language_check(source),
         _factory_standard_version_check(factory_root, source_standard_version),
         _standard_backend_contracts_check(factory_root, source_spec),
+        _record_builders_check(factory_root, source_spec),
         _implementation_obligations_check(source),
         _runtime_persistence_check(source_spec, case_root),
         _runtime_carrier_check(source_spec),
         _external_contract_check(case_root),
         _closure_gaps_check(case_root),
         _projection_drift_check(case_root),
+        _imports_closure_check(case_root, factory_root),
     ]
     validation_check, validation_report = _factory_validation_check(factory_root, source)
     inspector_check, inspector_report = _factory_inspector_check(

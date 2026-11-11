@@ -34,6 +34,19 @@ findings to stops with a hint, refuses closure-gap waivers, and adds the
 `witness` and `flows` assembly checks. A phase that reports a stop is not
 "ready with remarks"; it is not ready.
 
+## Every transition closes its own rules
+
+A phase may declare a `layer` block: the decisions it `owns`, the `checks` run
+at its own handoff, and the obligations it `carries`, each to a receiving phase
+with the check that confirms it there. After a phase's gate passes, the
+sequencer runs its checks and every obligation carried to it
+(`tools/transition.py --phase <id>`) and stops at that phase unless each is
+`closed` or `carried`; `not_checked` — an input the check needs is missing — is
+never a pass, and a `workbench_gap` (KNOWN_GAPS.md) stops too. The method is
+`TRANSITION_PROTOCOL.md`. A check is added only for a rule of the standard; the
+protocol moves existing rule checks to the layer that owns them rather than
+adding one per way of going wrong.
+
 ## Canonical order
 
 The generic sequence promoted to `main` is:
@@ -47,6 +60,7 @@ State 0  Product frame
   -> State 5  Public module operations
   -> pre-contract structured data closure
   -> State 6  Exact contracts and internal functions
+  -> deterministic record_construction_backend/v1 closure (when used)
   -> deterministic persistence_backend/v2 closure (when used)
   -> deterministic HTTP per-route closure (when used)
   -> deterministic HTTP global context closure
@@ -63,7 +77,7 @@ and schemas named `60_data_closure.json` / `spec_workbench_state6_data_*` are
 retained for compatibility only; their numeric name does not redefine the
 semantic state numbering of this sequence.
 
-Likewise, `70_persistence_closure.json`, `70_router_closure.json`, and
+Likewise, `70_record_construction_closure.json`, `70_persistence_closure.json`, `70_router_closure.json`, and
 `70_router_context.json` are workbench artifact names, not statements that any
 of these closures are semantic State 7. State 7 remains Notes.
 
@@ -156,6 +170,54 @@ models.
 5. One persistence module owns one repository class plus its schema function; partial class emission and companion delegation are forbidden.
 6. An irregular repository remains wholly on the ordinary generation path; an enabled invalid backend never silently falls back.
 7. Final persistence IR is the exact deterministic handoff from the closed authoring artifact; final assembly does not invent repository semantics.
+
+## Required dependency chain for deterministic record construction
+
+For projects using `rules.record_construction_backend`
+([SPEC_STANDARD §6.13](SPEC_STANDARD.md#613-record_construction_backendv1))
+the dependency chain is:
+
+```text
+State 1 models (targets and inputs)
+  -> State 6 builder contracts, owned by the one builders module, determinism
+  -> 70_record_construction_closure.json (backend_ir)
+  -> tools/design_record_construction.py --coverage (RC001–RC015)
+  -> State 7 notes name each builder as an imported symbol, no field prose
+  -> Factory emitter python_record_builders_v1
+```
+
+The closure is checked at the State 6 handoff because everything it reads
+belongs to State 1 and State 6; notes are not read. A construction defect — a
+field the model does not declare, a field without a source, an input field
+neither read nor dropped — stops the layer that made it, not Route B
+(`model_constructor_unknown_field`, #147). `imports.module_internal` is
+authored later by the imports closure: until `65_imports.json` exists the
+import-edge findings (RC014) are carried, not blocking; from then on they
+block, and admission (`FA023`, Factory validation at `FA005`) judges the
+assembled specification.
+
+Absence of the closure file means the case declares no builder. Once it
+exists, an open or invalid closure blocks progress.
+
+### Record construction invariants
+
+1. A builder's signature comes only from `contracts`; the IR does not repeat it.
+2. The builders module owns exactly the `constructions` keys; one module per project.
+3. Every target field has one source from the closed ref set; every field of a
+   model-typed input is read by a ref or dropped with a reason code.
+4. There is no clock source: an instant is a builder parameter; the one wall
+   reading of an operation stays with the calling operation (§6.8, §6.9).
+5. A value behaviour computes (a sum, a branch, a lookup) is a parameter; its
+   computation stays behaviour of the caller, in the caller's notes.
+6. `determinism` of a builder is `false` exactly when it, or a builder it
+   calls, has a `fresh_id`.
+
+Notes for migrating an existing case (client-portal first): the prose policy
+`rules.audit_entity_id_policy` ("canonical string form of the audited entity
+identifier") is replaced by the `uuid_canonical_string` conversion on each
+field it governed — one home; and a pure deterministic private helper used as
+a source (`_normalize_staff_email`) becomes a public function of the policy
+module that owns it, referenced by `call`.
 
 ## Required dependency chain for deterministic HTTP assembly
 

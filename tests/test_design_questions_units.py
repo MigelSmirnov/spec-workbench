@@ -105,27 +105,29 @@ def test_the_first_round_reviews_every_unit_and_asks_each_point_to_name_one(tmp_
     case = _case(tmp_path)
     summary, provider = _ask(case)
     assert summary["scope"] == ["02_rules.md:preamble", "A01", "A02", "02_rules.md:Carried to later states", "context"]
-    assert "Units under review" in provider.instructions[0] and "- A01: Accepted decision A01" in provider.instructions[0]
+    assert "these units are under review" in provider.instructions[0]
+    assert "- A01: Accepted decision A01" in provider.instructions[0]
 
 
-def test_a_blocking_topic_keeps_only_its_unit_open_and_the_next_round_asks_only_about_it(tmp_path):
+def test_a_gap_keeps_only_its_unit_open_and_is_not_asked_again_on_the_same_text(tmp_path):
     case = _case(tmp_path)
-    for _ in range(2):
-        summary, _ = _ask(case, [_point("first", "A01")], blocking={"first"})
-        assert summary["blocked_units"] == ["A01"] and summary["clear"] is False
-    assert summary["open_units"] == ["A01"]
+    summary, _ = _ask(case, [_point("first", "A01")], blocking={"first"})
+    assert summary["blocked_units"] == ["A01"] and summary["clear"] is False
+    assert summary["open_units"] == ["A01"] and summary["awaiting_disposition"] == ["T1"]
+    # one round per change: the same text is not asked again, the topic waits for its disposition
+    with pytest.raises(service.QuestionRoundError, match="disposition"):
+        _ask(case)
+    (case / "02_rules.md").write_text(RULES.replace("Rule one.", "Rule one, decided."), encoding="utf-8")
     summary, provider = _ask(case)
-    assert summary["scope"] == ["A01"]
+    assert summary["scope"] == ["A01"] and summary["closed"] is True
     assert "- A02" not in provider.instructions[0]
 
 
-def test_a_unit_closes_after_two_rounds_clear_for_it_and_the_state_with_its_last_unit(tmp_path):
+def test_one_clear_round_closes_a_unit_and_the_state_with_its_last_unit(tmp_path):
     case = _case(tmp_path)
-    _ask(case, [_point("first", "A01")], blocking={"first"})
-    _ask(case)
+    summary, _ = _ask(case, [_point("first", "A01")], blocking={"first"})
     assert service.status(case, 2)["open_units"] == ["A01"]
-    summary, _ = _ask(case)
-    assert summary["closed"] is True
+    service.dispose(case, 2, "T1", "accepted", reason="the owner keeps rule one as it stands")
     result = service.status(case, 2)
     assert result["closed"] is True and result["open_units"] == []
     with pytest.raises(service.QuestionRoundError, match="nothing to ask"):
@@ -133,7 +135,6 @@ def test_a_unit_closes_after_two_rounds_clear_for_it_and_the_state_with_its_last
 
 
 def _close_all(case):
-    _ask(case)
     _ask(case)
     assert service.status(case, 2)["closed"] is True
 
@@ -162,19 +163,20 @@ def _review_with_set_aside(case, summary):
 
 def test_a_point_about_a_closed_unit_is_set_aside(tmp_path):
     case = _case(tmp_path)
-    _ask(case, [_point("first", "A01")], blocking={"first"})
-    _ask(case, [_point("first", "A01")], blocking={"first"})
+    _close_all(case)
+    (case / "02_rules.md").write_text(RULES.replace("Rule one.", "Rule one, sharper."), encoding="utf-8")
     summary, _ = _ask(case, [_point("second", "A02")], blocking={"second"})
     assert sorted(summary["set_aside"]) == [0, 1, 1] and summary["topics"] == []
     review = _review_with_set_aside(case, summary)
     assert review["set_aside"][0]["unit"] == "A02"
 
 
-def test_a_blocking_point_that_names_no_unit_keeps_every_reviewed_unit_open(tmp_path):
+def test_a_blocking_point_that_names_no_unit_blocks_as_itself_not_every_reviewed_unit(tmp_path):
     case = _case(tmp_path)
     summary, _ = _ask(case, [_point("loose", None)], blocking={"loose"})
-    assert summary["blocked_units"] == sorted(summary["scope"])
+    assert summary["blocked_units"] == [units.NO_UNIT]
     assert summary["topics"][0]["units"] == [units.UNKNOWN]
+    assert not set(summary["open_units"]) & set(summary["scope"])
 
 
 def test_rounds_kept_before_units_do_not_close_a_unit(tmp_path):
@@ -183,8 +185,9 @@ def test_rounds_kept_before_units_do_not_close_a_unit(tmp_path):
     directory.mkdir(parents=True)
     (directory / "summary.json").write_text(json.dumps({"round": "round-01", "documents": {}, "clear": True,
                                                         "closed": True, "topics": []}), encoding="utf-8")
+    assert len(service.status(case, 2)["open_units"]) == 5
     summary, _ = _ask(case)
-    assert summary["closed"] is False and len(summary["scope"]) == 5
+    assert len(summary["scope"]) == 5
 
 
 def test_the_human_round_names_units(tmp_path, capsys):
@@ -234,7 +237,7 @@ def test_a_closed_unit_edited_later_is_reviewed_for_its_change_only(tmp_path):
     summary, provider = _ask(case)
     assert summary["scope"] == ["A02"] and summary["changed_units"] == ["A02"]
     instruction = provider.instructions[0]
-    assert "has changed since" in instruction and "+7. The last rule of the second decision is about the spool size, now bounded." in instruction
+    assert "changed since its latest review" in instruction and "+7. The last rule of the second decision is about the spool size, now bounded." in instruction
 
 
 def test_a_point_on_an_unchanged_passage_of_a_changed_unit_is_set_aside(tmp_path):
@@ -255,4 +258,4 @@ def test_without_the_closed_text_in_git_a_changed_unit_is_reviewed_whole(tmp_pat
     _close_all(case)
     (case / "02_rules.md").write_text(RULES.replace("Rule two.", "Rule two, sharper."), encoding="utf-8")
     summary, provider = _ask(case)
-    assert summary["changed_units"] == [] and "has changed since" not in provider.instructions[0]
+    assert summary["changed_units"] == [] and "changed since its latest review" not in provider.instructions[0]

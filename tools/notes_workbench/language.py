@@ -313,6 +313,14 @@ def surface_findings(project: Path, spec: dict[str, Any]) -> list[dict[str, Any]
     module_functions = spec.get("module_functions") or {}
     owner = {symbol: module for module, symbols in module_functions.items() for symbol in symbols}
     module_internal = (spec.get("imports") or {}).get("module_internal") or {}
+    # model_surface_workbench.index reads this module's signature_parameters
+    from model_surface_workbench.attributes import addressed_enum_values
+
+    enums = {
+        name: declared.get("values") or ()
+        for name, declared in (spec.get("models") or {}).items()
+        if isinstance(declared, dict) and declared.get("kind") == "enum"
+    }
     findings: list[dict[str, Any]] = []
     for note in _iter_authored_notes(project):
         scope = note["scope"]
@@ -322,7 +330,10 @@ def surface_findings(project: Path, spec: dict[str, Any]) -> list[dict[str, Any]
         parameters = dict(signature_parameters(signature))
         scope_module = owner.get(scope.split(".", 1)[0])
         text = note["text"]
+        members = addressed_enum_values(text, enums)
         for match in _ATTRIBUTE_PATH_RE.finditer(text):
+            if match.group(0) in members:  # an enum member named by its value
+                continue
             root, chain = match.group(1), match.group(2)[1:].split(".")
             if root in _SURFACE_SKIP_ROOTS or root not in parameters:
                 continue
@@ -378,6 +389,21 @@ def dependency_bindings(spec: dict[str, Any]) -> list[dict[str, Any]]:
     }
     if not bound_types:
         return []
+    # The router backend may bind a factory parameter under another
+    # app.state attribute (wiring.state_bindings: {"store": {"factory_parameter":
+    # "store", "state_attribute": "portal_store"}}); the attribute code reads
+    # is then the declared one, not the parameter name.
+    router = (spec.get("rules") or {}).get("http_router_backend")
+    bindings = ((router or {}).get("wiring") or {}).get("state_bindings") if isinstance(router, dict) else None
+    if isinstance(bindings, dict):
+        for binding in bindings.values():
+            if not isinstance(binding, dict):
+                continue
+            parameter = binding.get("factory_parameter")
+            attribute = binding.get("state_attribute")
+            if (isinstance(parameter, str) and isinstance(attribute, str)
+                    and parameter in bound_types and attribute != parameter):
+                bound_types[attribute] = bound_types.pop(parameter)
     service_types = set(bound_types.values())
 
     findings: list[dict[str, Any]] = []
