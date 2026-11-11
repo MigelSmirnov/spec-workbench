@@ -1,0 +1,163 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "contradictory_failure_residue",
+   "text": "The first close or removal that fails stops the rest, so the\nstore's file is removed only after its companions are: what a failure\nleaves is the store's file with some of its companions, an empty store of\nthe release's version, which the next start opens as any store.",
+   "question": "Exactly which files may remain after each possible failure? A failure removing the store file occurs after every removable companion is gone, so it can leave the store file with no companion, while an early failure can leave all companions, contrary to the single description \"with some of its companions\".",
+   "options": [
+    "Allow zero, some, or all companions according to the failed step",
+    "Require at least one companion to remain after every failure",
+    "Treat failure of the final store-file removal differently from companion or close failure"
+   ],
+   "default_guess": "Allow whatever suffix of the ordered cleanup was not attempted, including zero or all companions.",
+   "witness": {
+    "initial": "A newly made empty store has a regular store file and no companion files; closing its connection succeeds, but removing the store file fails.",
+    "events": [
+     "instance_lifecycle calls discard_new_store after a listener fails",
+     "store closes the connection",
+     "store finds no companion file to remove",
+     "removing the store file fails"
+    ],
+    "outcomes": [
+     "The ordered effects leave the store file with no companion.",
+     "The stated failure residue requires the store file with some companions."
+    ],
+    "observer": "The owner inspecting the store directory and the next start"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "cleanup_outcome_contradiction",
+   "text": "A stopped start: one diagnostic naming the first failed item and no value,\n  nothing served, no file left that the start made but one it could not\n  remove — a probe, a file of the store's temporary name, or an empty store\n  made new (A17 rule 2).",
+   "question": "Does the permitted \"empty store made new\" residue include every SQLite companion left after discard_new_store stops, or must the failed start leave only the main store file?",
+   "options": [
+    "The empty-store exception includes the main file and any remaining SQLite companions",
+    "Only the main store file may remain",
+    "Every remaining companion must be named as a separate permitted residue"
+   ],
+   "default_guess": "Treat the main file and its remaining SQLite companions as one empty-store residue.",
+   "witness": {
+    "initial": "A new store has regular `-wal`, `-shm`, and `-journal` companions.",
+    "events": [
+     "The service listener fails after the store was made",
+     "discard_new_store closes the store connection",
+     "Removal of `-wal` fails and cleanup stops"
+    ],
+    "outcomes": [
+     "The changed operation leaves the main store file and all three companions.",
+     "The flow outcome can be read as permitting only one empty store file and no other file made by the start."
+    ],
+    "observer": "The host administrator inspecting the directory after the stopped start"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "underspecified_failure_output",
+   "text": "None; a failed removal is named in the start's one diagnostic beside the\nsurface that could not be opened.",
+   "question": "How does discard_new_store tell instance_lifecycle whether the failure was the connection close or which companion/store removal failed, when its only declared output is the boolean saying whether the main store file is gone?",
+   "options": [
+    "Return a structured cleanup result identifying the failed close or path category",
+    "Return only the boolean and let the caller emit one generic removal-failed label",
+    "Emit or mutate the start diagnostic from inside store"
+   ],
+   "default_guess": "Return a structured non-throwing result containing `removed` and a value-free failure item, while exposing only `removed` as the success fact.",
+   "witness": {
+    "initial": "The new store and all three regular companions exist, but removing `-shm` is denied.",
+    "events": [
+     "instance_lifecycle calls discard_new_store",
+     "discard_new_store removes `-wal`",
+     "discard_new_store fails on `-shm` and stops"
+    ],
+    "outcomes": [
+     "An implementation returning only `false` produces a generic cleanup-failed diagnostic.",
+     "An implementation returns or otherwise communicates that the `-shm` removal failed, producing a specific diagnostic beside the failed surface."
+    ],
+    "observer": "The host administrator reading the start's diagnostic"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "ambiguous_file_type",
+   "text": "each removed when it is\na regular file, and last the store's file. A path of another type is left\nas it is.",
+   "question": "Is a companion path that is a symbolic link to a regular file considered a regular file and removed, or considered a path of another type and left? The text must specify whether the type test follows symbolic links.",
+   "options": [
+    "Use the path entry's own type and leave every symbolic link",
+    "Follow the link for the regular-file test and unlink the companion path",
+    "Reject or report symbolic links as cleanup failures"
+   ],
+   "default_guess": "Use a non-following type check and leave symbolic links unchanged.",
+   "witness": {
+    "initial": "`store-wal` is a symbolic link to a regular file; the main store and other companion paths are regular files.",
+    "events": [
+     "instance_lifecycle calls discard_new_store",
+     "store checks the type of `store-wal`"
+    ],
+    "outcomes": [
+     "A following type check classifies it as regular and unlinks `store-wal`.",
+     "A non-following type check classifies it as a symbolic link and leaves it."
+    ],
+    "observer": "The owner inspecting whether the symbolic-link directory entry remains"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "underspecified_disappearance_race",
+   "text": "each removed when it is\na regular file",
+   "question": "If a companion is observed as a regular file but disappears before its removal, is the resulting not-found condition a successful already-absent result or a failed removal that stops the remaining cleanup?",
+   "options": [
+    "Treat not-found during removal as success and continue",
+    "Treat every removal error, including not-found, as failure and stop",
+    "Make the type check and removal atomic or otherwise exclude concurrent filesystem changes"
+   ],
+   "default_guess": "Treat not-found as already removed and continue.",
+   "witness": {
+    "initial": "All three companion paths and the main store file are regular files.",
+    "events": [
+     "discard_new_store observes `-wal` as a regular file",
+     "Another host process removes `-wal` before Registry's removal call",
+     "Registry's attempt reports that the path is absent"
+    ],
+    "outcomes": [
+     "Registry treats the desired absence as success, removes the remaining companions and the main store file, and returns true.",
+     "Registry treats the removal call as failed, stops, leaves the main store and later companions, and returns false."
+    ],
+    "observer": "instance_lifecycle through the result and the owner through the remaining files"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "underspecified_close_failure_state",
+   "text": "The store's one connection — `open_store` opens no other — is closed; then,\nin this order, the companion files SQLite may keep beside the store under\nits name with a suffix, `-wal`, `-shm`, `-journal`, each removed when it is\na regular file, and last the store's file. A path of another type is left\nas it is. The first close or removal that fails stops the rest",
+   "question": "After the close operation reports failure, must the connection be regarded as still open, already closed, or in an unknown state, and may discard_new_store rely on process termination to release it?",
+   "options": [
+    "A failed close leaves the connection open and no file removal is attempted",
+    "A close may report failure after making the connection unusable, but no file removal is attempted",
+    "The operation must force or retry closure before returning"
+   ],
+   "default_guess": "Treat the connection state as unknown after a close failure, attempt no removals, report the cleanup failure, and rely on process termination to release any remaining handle.",
+   "witness": {
+    "initial": "The new store's sole connection is open and its close call reports an I/O error.",
+    "events": [
+     "instance_lifecycle calls discard_new_store",
+     "the connection's close operation reports failure",
+     "discard_new_store stops before examining companion files"
+    ],
+    "outcomes": [
+     "The connection remains open until the process ends.",
+     "The close invalidated the connection despite reporting an error, so it is already closed."
+    ],
+    "observer": "The host process and any diagnostic or resource-leak instrumentation"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"contradictory_failure_residue\",\"text\":\"The first close or removal that fails stops the rest, so the\\nstore's file is removed only after its companions are: what a failure\\nleaves is the store's file with some of its companions, an empty store of\\nthe release's version, which the next start opens as any store.\",\"question\":\"Exactly which files may remain after each possible failure? A failure removing the store file occurs after every removable companion is gone, so it can leave the store file with no companion, while an early failure can leave all companions, contrary to the single description \\\"with some of its companions\\\".\",\"options\":[\"Allow zero, some, or all companions according to the failed step\",\"Require at least one companion to remain after every failure\",\"Treat failure of the final store-file removal differently from companion or close failure\"],\"default_guess\":\"Allow whatever suffix of the ordered cleanup was not attempted, including zero or all companions.\",\"witness\":{\"initial\":\"A newly made empty store has a regular store file and no companion files; closing its connection succeeds, but removing the store file fails.\",\"events\":[\"instance_lifecycle calls discard_new_store after a listener fails\",\"store closes the connection\",\"store finds no companion file to remove\",\"removing the store file fails\"],\"outcomes\":[\"The ordered effects leave the store file with no companion.\",\"The stated failure residue requires the store file with some companions.\"],\"observer\":\"The owner inspecting the store directory and the next start\"}},{\"subject\":\"context\",\"kind\":\"cleanup_outcome_contradiction\",\"text\":\"A stopped start: one diagnostic naming the first failed item and no value,\\n  nothing served, no file left that the start made but one it could not\\n  remove — a probe, a file of the store's temporary name, or an empty store\\n  made new (A17 rule 2).\",\"question\":\"Does the permitted \\\"empty store made new\\\" residue include every SQLite companion left after discard_new_store stops, or must the failed start leave only the main store file?\",\"options\":[\"The empty-store exception includes the main file and any remaining SQLite companions\",\"Only the main store file may remain\",\"Every remaining companion must be named as a separate permitted residue\"],\"default_guess\":\"Treat the main file and its remaining SQLite companions as one empty-store residue.\",\"witness\":{\"initial\":\"A new store has regular `-wal`, `-shm`, and `-journal` companions.\",\"events\":[\"The service listener fails after the store was made\",\"discard_new_store closes the store connection\",\"Removal of `-wal` fails and cleanup stops\"],\"outcomes\":[\"The changed operation leaves the main store file and all three companions.\",\"The flow outcome can be read as permitting only one empty store file and no other file made by the start.\"],\"observer\":\"The host administrator inspecting the directory after the stopped start\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"underspecified_failure_output\",\"text\":\"None; a failed removal is named in the start's one diagnostic beside the\\nsurface that could not be opened.\",\"question\":\"How does discard_new_store tell instance_lifecycle whether the failure was the connection close or which companion/store removal failed, when its only declared output is the boolean saying whether the main store file is gone?\",\"options\":[\"Return a structured cleanup result identifying the failed close or path category\",\"Return only the boolean and let the caller emit one generic removal-failed label\",\"Emit or mutate the start diagnostic from inside store\"],\"default_guess\":\"Return a structured non-throwing result containing `removed` and a value-free failure item, while exposing only `removed` as the success fact.\",\"witness\":{\"initial\":\"The new store and all three regular companions exist, but removing `-shm` is denied.\",\"events\":[\"instance_lifecycle calls discard_new_store\",\"discard_new_store removes `-wal`\",\"discard_new_store fails on `-shm` and stops\"],\"outcomes\":[\"An implementation returning only `false` produces a generic cleanup-failed diagnostic.\",\"An implementation returns or otherwise communicates that the `-shm` removal failed, producing a specific diagnostic beside the failed surface.\"],\"observer\":\"The host administrator reading the start's diagnostic\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"ambiguous_file_type\",\"text\":\"each removed when it is\\na regular file, and last the store's file. A path of another type is left\\nas it is.\",\"question\":\"Is a companion path that is a symbolic link to a regular file considered a regular file and removed, or considered a path of another type and left? The text must specify whether the type test follows symbolic links.\",\"options\":[\"Use the path entry's own type and leave every symbolic link\",\"Follow the link for the regular-file test and unlink the companion path\",\"Reject or report symbolic links as cleanup failures\"],\"default_guess\":\"Use a non-following type check and leave symbolic links unchanged.\",\"witness\":{\"initial\":\"`store-wal` is a symbolic link to a regular file; the main store and other companion paths are regular files.\",\"events\":[\"instance_lifecycle calls discard_new_store\",\"store checks the type of `store-wal`\"],\"outcomes\":[\"A following type check classifies it as regular and unlinks `store-wal`.\",\"A non-following type check classifies it as a symbolic link and leaves it.\"],\"observer\":\"The owner inspecting whether the symbolic-link directory entry remains\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"underspecified_disappearance_race\",\"text\":\"each removed when it is\\na regular file\",\"question\":\"If a companion is observed as a regular file but disappears before its removal, is the resulting not-found condition a successful already-absent result or a failed removal that stops the remaining cleanup?\",\"options\":[\"Treat not-found during removal as success and continue\",\"Treat every removal error, including not-found, as failure and stop\",\"Make the type check and removal atomic or otherwise exclude concurrent filesystem changes\"],\"default_guess\":\"Treat not-found as already removed and continue.\",\"witness\":{\"initial\":\"All three companion paths and the main store file are regular files.\",\"events\":[\"discard_new_store observes `-wal` as a regular file\",\"Another host process removes `-wal` before Registry's removal call\",\"Registry's attempt reports that the path is absent\"],\"outcomes\":[\"Registry treats the desired absence as success, removes the remaining companions and the main store file, and returns true.\",\"Registry treats the removal call as failed, stops, leaves the main store and later companions, and returns false.\"],\"observer\":\"instance_lifecycle through the result and the owner through the remaining files\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"underspecified_close_failure_state\",\"text\":\"The store's one connection — `open_store` opens no other — is closed; then,\\nin this order, the companion files SQLite may keep beside the store under\\nits name with a suffix, `-wal`, `-shm`, `-journal`, each removed when it is\\na regular file, and last the store's file. A path of another type is left\\nas it is. The first close or removal that fails stops the rest\",\"question\":\"After the close operation reports failure, must the connection be regarded as still open, already closed, or in an unknown state, and may discard_new_store rely on process termination to release it?\",\"options\":[\"A failed close leaves the connection open and no file removal is attempted\",\"A close may report failure after making the connection unusable, but no file removal is attempted\",\"The operation must force or retry closure before returning\"],\"default_guess\":\"Treat the connection state as unknown after a close failure, attempt no removals, report the cleanup failure, and rely on process termination to release any remaining handle.\",\"witness\":{\"initial\":\"The new store's sole connection is open and its close call reports an I/O error.\",\"events\":[\"instance_lifecycle calls discard_new_store\",\"the connection's close operation reports failure\",\"discard_new_store stops before examining companion files\"],\"outcomes\":[\"The connection remains open until the process ends.\",\"The close invalidated the connection despite reporting an error, so it is already closed.\"],\"observer\":\"The host process and any diagnostic or resource-leak instrumentation\"}}]}",
+ "set_aside": []
+}

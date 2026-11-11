@@ -1,0 +1,188 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:instance_lifecycle.start_instance backup pass",
+   "kind": "undefined_constant",
+   "text": "`backups.run_daily_backup_if_due` every imported `BACKUP_LOOK_SECONDS`, each\nfrom the start as Conventions, \"Passes\", says.",
+   "question": "What module exports `BACKUP_LOOK_SECONDS`, what is its value, and is the first lookup scheduled relative to process start or to the moment serving begins?",
+   "options": [
+    "Import it from `data_provider` with value 60 seconds and anchor lookups at process start",
+    "Use another interval no greater than 60 seconds",
+    "Start the interval only after both listeners are ready"
+   ],
+   "default_guess": "Import it from `data_provider` as 60 seconds and anchor the schedule at process start.",
+   "witness": {
+    "initial": "A normal start begins at 02:59:30 UTC and finishes opening both listeners at 03:00:10.",
+    "events": [
+     "The host starts Registry.",
+     "The listener checks take forty seconds.",
+     "The backup pass begins according to the implementer's reading of the unspecified interval and anchor."
+    ],
+    "outcomes": [
+     "A process-start-anchored lookup observes the date before 03:00 and then after 03:00, so the day's backup runs.",
+     "A serving-anchored lookup has no earlier observation of that date before 03:00, so the day's backup does not run."
+    ],
+    "observer": "The owner inspecting the backup location"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store companion classification",
+   "kind": "file_type_ambiguity",
+   "text": "each removed when it is\na regular file, and last the store's file. A path of another type is left\nas it is.",
+   "question": "Is a symbolic link to a regular file considered a regular file here, or must the test examine the directory entry without following links?",
+   "options": [
+    "Use a non-following type check and leave every symbolic link untouched",
+    "Follow symbolic links when classifying, then unlink the symbolic-link entry",
+    "Refuse cleanup when any target is a symbolic link"
+   ],
+   "default_guess": "Use a non-following type check and leave symbolic links untouched.",
+   "witness": {
+    "initial": "The new store exists and its `-wal` pathname is a symbolic link to a regular file.",
+    "events": [
+     "A listener fails.",
+     "`discard_new_store` closes the store connection.",
+     "It classifies the `-wal` pathname."
+    ],
+    "outcomes": [
+     "A following regular-file test classifies it as regular and removes the symbolic-link entry before removing the store.",
+     "A non-following test classifies the entry as a symbolic link and leaves it before removing the store."
+    ],
+    "observer": "The host owner inspecting the store directory"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store path inspection",
+   "kind": "missing_error_semantics",
+   "text": "each removed when it is\na regular file",
+   "question": "What happens when Registry cannot determine whether a companion pathname is a regular file: does that inspection failure stop cleanup, count as a non-regular path, or get retried?",
+   "options": [
+    "Treat an inspection error as the first cleanup failure and stop",
+    "Treat an uninspectable path as another type, leave it, and continue",
+    "Retry transient inspection errors before deciding"
+   ],
+   "default_guess": "Treat an inspection error as the first cleanup failure and stop.",
+   "witness": {
+    "initial": "A new store and its `-wal` file exist, but inspecting the `-wal` entry returns an I/O or permission error.",
+    "events": [
+     "A listener fails.",
+     "Registry closes the store connection.",
+     "Registry attempts to classify the `-wal` pathname."
+    ],
+    "outcomes": [
+     "The inspection error stops cleanup, leaving the store and returning false.",
+     "The pathname is treated as not known to be regular; Registry continues and removes the store, returning true."
+    ],
+    "observer": "The start caller and the owner inspecting the diagnostic and store directory"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store suffix-path ownership",
+   "kind": "file_ownership_gap",
+   "text": "Deletes the store's companion files and then the store file it made, when\nit can; touches no other file.",
+   "question": "When an exact `-wal`, `-shm`, or `-journal` pathname existed before this start and was not created by SQLite for the new store, is it a companion that must be deleted or an “other file” that must not be touched, and how can Registry distinguish the cases?",
+   "options": [
+    "Every regular file at an exact companion pathname is treated as the store's companion and deleted",
+    "Only a companion known to have been created for this store is deleted",
+    "The start is refused if any companion pathname pre-exists"
+   ],
+   "default_guess": "Refuse creation or cleanup when a companion pathname pre-exists unless Registry can establish that it belongs to this store.",
+   "witness": {
+    "initial": "The configured store file is absent, but an unrelated regular file already exists at the configured pathname plus `-wal`.",
+    "events": [
+     "`open_store` makes the new store.",
+     "A listener fails.",
+     "`discard_new_store` examines the exact `-wal` pathname."
+    ],
+    "outcomes": [
+     "Treating exact suffix paths as companions deletes the pre-existing file.",
+     "Applying “touches no other file” preserves the pre-existing file."
+    ],
+    "observer": "The owner of the pre-existing file"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store close failure",
+   "kind": "incomplete_error_contract",
+   "text": "None; a failed removal is named in the start's one diagnostic beside the\nsurface that could not be opened.",
+   "question": "When closing the store connection fails before any removal is attempted, must the start diagnostic also say that the store was left, must it name a close failure, or must it mention only the listener failure?",
+   "options": [
+    "Report the listener failure and that cleanup left the store, without exposing the path",
+    "Report the listener failure and specifically name the connection-close failure",
+    "Report only the listener failure because the Errors section mentions removal failures only"
+   ],
+   "default_guess": "Report the listener failure and that cleanup left the store, without exposing its configured path.",
+   "witness": {
+    "initial": "A listener cannot open and closing the new store's connection fails; the store file remains.",
+    "events": [
+     "`start_instance` receives the listener failure.",
+     "It calls `discard_new_store`.",
+     "The connection close fails and stops the remaining cleanup."
+    ],
+    "outcomes": [
+     "The one diagnostic names the failed surface and says the new store was left.",
+     "The one diagnostic names only the failed surface because no removal itself failed."
+    ],
+    "observer": "The host owner reading the start diagnostic"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store result for non-regular store path",
+   "kind": "output_ambiguity",
+   "text": "Whether it was removed: true when the store's file is gone; false\notherwise.",
+   "question": "If the store pathname now contains a non-regular object that the operation leaves in place, does “the store's file is gone” mean the original regular database file no longer exists or that the pathname itself is absent?",
+   "options": [
+    "Return false whenever the store pathname still exists in any form",
+    "Return true when no regular database file exists there, even if another path type remains",
+    "Treat replacement of the pathname as a cleanup failure and return false"
+   ],
+   "default_guess": "Return false whenever the pathname still exists in any form.",
+   "witness": {
+    "initial": "After the new store is opened but before cleanup reaches its final pathname, the host replaces that pathname with a directory or symbolic link.",
+    "events": [
+     "A listener fails.",
+     "Registry closes the connection and processes the companions.",
+     "Registry reaches the store pathname and leaves the non-regular object as required."
+    ],
+    "outcomes": [
+     "Pathname-based interpretation returns false because something remains at the store path.",
+     "Regular-file interpretation returns true because the store's regular file is gone."
+    ],
+    "observer": "`start_instance` through its cleanup diagnostic and the host owner inspecting the path"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "flow:start_instance listener admission gate",
+   "kind": "queue_behavior_gap",
+   "text": "a connection that arrives meanwhile waits in the\nlistener's queue and is accepted now, or is closed unanswered when the\nstart fails.",
+   "question": "What must happen when more connections arrive before the second listener opens than the first listener's finite queue can hold, and what backlog or refusal behavior provides the stated guarantee?",
+   "options": [
+    "Configure a specified backlog and allow excess connections to fail or time out",
+    "Require every connection to remain queued, which needs an explicit bound or admission mechanism",
+    "Accept and hold connections in application code without answering until startup succeeds"
+   ],
+   "default_guess": "Use the platform listener queue with a release-defined backlog and specify that excess connections may fail without a Registry answer.",
+   "witness": {
+    "initial": "The owner-interface listener is open, the service-API listener is still being opened, and the owner-interface listener's pending queue is full.",
+    "events": [
+     "Another owner client attempts to connect before startup completes.",
+     "The service-API listener later opens successfully."
+    ],
+    "outcomes": [
+     "With the platform's finite queue, the extra connection is refused or times out instead of waiting to be accepted.",
+     "With an application admission mechanism or a larger required queue, the connection waits and is accepted after startup succeeds."
+    ],
+    "observer": "The owner client attempting the connection"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:instance_lifecycle.start_instance backup pass\",\"kind\":\"undefined_constant\",\"text\":\"`backups.run_daily_backup_if_due` every imported `BACKUP_LOOK_SECONDS`, each\\nfrom the start as Conventions, \\\"Passes\\\", says.\",\"question\":\"What module exports `BACKUP_LOOK_SECONDS`, what is its value, and is the first lookup scheduled relative to process start or to the moment serving begins?\",\"options\":[\"Import it from `data_provider` with value 60 seconds and anchor lookups at process start\",\"Use another interval no greater than 60 seconds\",\"Start the interval only after both listeners are ready\"],\"default_guess\":\"Import it from `data_provider` as 60 seconds and anchor the schedule at process start.\",\"witness\":{\"initial\":\"A normal start begins at 02:59:30 UTC and finishes opening both listeners at 03:00:10.\",\"events\":[\"The host starts Registry.\",\"The listener checks take forty seconds.\",\"The backup pass begins according to the implementer's reading of the unspecified interval and anchor.\"],\"outcomes\":[\"A process-start-anchored lookup observes the date before 03:00 and then after 03:00, so the day's backup runs.\",\"A serving-anchored lookup has no earlier observation of that date before 03:00, so the day's backup does not run.\"],\"observer\":\"The owner inspecting the backup location\"}},{\"subject\":\"public_op:store.discard_new_store companion classification\",\"kind\":\"file_type_ambiguity\",\"text\":\"each removed when it is\\na regular file, and last the store's file. A path of another type is left\\nas it is.\",\"question\":\"Is a symbolic link to a regular file considered a regular file here, or must the test examine the directory entry without following links?\",\"options\":[\"Use a non-following type check and leave every symbolic link untouched\",\"Follow symbolic links when classifying, then unlink the symbolic-link entry\",\"Refuse cleanup when any target is a symbolic link\"],\"default_guess\":\"Use a non-following type check and leave symbolic links untouched.\",\"witness\":{\"initial\":\"The new store exists and its `-wal` pathname is a symbolic link to a regular file.\",\"events\":[\"A listener fails.\",\"`discard_new_store` closes the store connection.\",\"It classifies the `-wal` pathname.\"],\"outcomes\":[\"A following regular-file test classifies it as regular and removes the symbolic-link entry before removing the store.\",\"A non-following test classifies the entry as a symbolic link and leaves it before removing the store.\"],\"observer\":\"The host owner inspecting the store directory\"}},{\"subject\":\"public_op:store.discard_new_store path inspection\",\"kind\":\"missing_error_semantics\",\"text\":\"each removed when it is\\na regular file\",\"question\":\"What happens when Registry cannot determine whether a companion pathname is a regular file: does that inspection failure stop cleanup, count as a non-regular path, or get retried?\",\"options\":[\"Treat an inspection error as the first cleanup failure and stop\",\"Treat an uninspectable path as another type, leave it, and continue\",\"Retry transient inspection errors before deciding\"],\"default_guess\":\"Treat an inspection error as the first cleanup failure and stop.\",\"witness\":{\"initial\":\"A new store and its `-wal` file exist, but inspecting the `-wal` entry returns an I/O or permission error.\",\"events\":[\"A listener fails.\",\"Registry closes the store connection.\",\"Registry attempts to classify the `-wal` pathname.\"],\"outcomes\":[\"The inspection error stops cleanup, leaving the store and returning false.\",\"The pathname is treated as not known to be regular; Registry continues and removes the store, returning true.\"],\"observer\":\"The start caller and the owner inspecting the diagnostic and store directory\"}},{\"subject\":\"public_op:store.discard_new_store suffix-path ownership\",\"kind\":\"file_ownership_gap\",\"text\":\"Deletes the store's companion files and then the store file it made, when\\nit can; touches no other file.\",\"question\":\"When an exact `-wal`, `-shm`, or `-journal` pathname existed before this start and was not created by SQLite for the new store, is it a companion that must be deleted or an “other file” that must not be touched, and how can Registry distinguish the cases?\",\"options\":[\"Every regular file at an exact companion pathname is treated as the store's companion and deleted\",\"Only a companion known to have been created for this store is deleted\",\"The start is refused if any companion pathname pre-exists\"],\"default_guess\":\"Refuse creation or cleanup when a companion pathname pre-exists unless Registry can establish that it belongs to this store.\",\"witness\":{\"initial\":\"The configured store file is absent, but an unrelated regular file already exists at the configured pathname plus `-wal`.\",\"events\":[\"`open_store` makes the new store.\",\"A listener fails.\",\"`discard_new_store` examines the exact `-wal` pathname.\"],\"outcomes\":[\"Treating exact suffix paths as companions deletes the pre-existing file.\",\"Applying “touches no other file” preserves the pre-existing file.\"],\"observer\":\"The owner of the pre-existing file\"}},{\"subject\":\"public_op:store.discard_new_store close failure\",\"kind\":\"incomplete_error_contract\",\"text\":\"None; a failed removal is named in the start's one diagnostic beside the\\nsurface that could not be opened.\",\"question\":\"When closing the store connection fails before any removal is attempted, must the start diagnostic also say that the store was left, must it name a close failure, or must it mention only the listener failure?\",\"options\":[\"Report the listener failure and that cleanup left the store, without exposing the path\",\"Report the listener failure and specifically name the connection-close failure\",\"Report only the listener failure because the Errors section mentions removal failures only\"],\"default_guess\":\"Report the listener failure and that cleanup left the store, without exposing its configured path.\",\"witness\":{\"initial\":\"A listener cannot open and closing the new store's connection fails; the store file remains.\",\"events\":[\"`start_instance` receives the listener failure.\",\"It calls `discard_new_store`.\",\"The connection close fails and stops the remaining cleanup.\"],\"outcomes\":[\"The one diagnostic names the failed surface and says the new store was left.\",\"The one diagnostic names only the failed surface because no removal itself failed.\"],\"observer\":\"The host owner reading the start diagnostic\"}},{\"subject\":\"public_op:store.discard_new_store result for non-regular store path\",\"kind\":\"output_ambiguity\",\"text\":\"Whether it was removed: true when the store's file is gone; false\\notherwise.\",\"question\":\"If the store pathname now contains a non-regular object that the operation leaves in place, does “the store's file is gone” mean the original regular database file no longer exists or that the pathname itself is absent?\",\"options\":[\"Return false whenever the store pathname still exists in any form\",\"Return true when no regular database file exists there, even if another path type remains\",\"Treat replacement of the pathname as a cleanup failure and return false\"],\"default_guess\":\"Return false whenever the pathname still exists in any form.\",\"witness\":{\"initial\":\"After the new store is opened but before cleanup reaches its final pathname, the host replaces that pathname with a directory or symbolic link.\",\"events\":[\"A listener fails.\",\"Registry closes the connection and processes the companions.\",\"Registry reaches the store pathname and leaves the non-regular object as required.\"],\"outcomes\":[\"Pathname-based interpretation returns false because something remains at the store path.\",\"Regular-file interpretation returns true because the store's regular file is gone.\"],\"observer\":\"`start_instance` through its cleanup diagnostic and the host owner inspecting the path\"}},{\"subject\":\"flow:start_instance listener admission gate\",\"kind\":\"queue_behavior_gap\",\"text\":\"a connection that arrives meanwhile waits in the\\nlistener's queue and is accepted now, or is closed unanswered when the\\nstart fails.\",\"question\":\"What must happen when more connections arrive before the second listener opens than the first listener's finite queue can hold, and what backlog or refusal behavior provides the stated guarantee?\",\"options\":[\"Configure a specified backlog and allow excess connections to fail or time out\",\"Require every connection to remain queued, which needs an explicit bound or admission mechanism\",\"Accept and hold connections in application code without answering until startup succeeds\"],\"default_guess\":\"Use the platform listener queue with a release-defined backlog and specify that excess connections may fail without a Registry answer.\",\"witness\":{\"initial\":\"The owner-interface listener is open, the service-API listener is still being opened, and the owner-interface listener's pending queue is full.\",\"events\":[\"Another owner client attempts to connect before startup completes.\",\"The service-API listener later opens successfully.\"],\"outcomes\":[\"With the platform's finite queue, the extra connection is refused or times out instead of waiting to be accepted.\",\"With an application admission mechanism or a larger required queue, the connection waits and is accepted after startup succeeds.\"],\"observer\":\"The owner client attempting the connection\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,166 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "contradictory cleanup policy",
+   "text": "The first close or removal that fails stops the rest",
+   "question": "Must cleanup stop at the first failure, or must it continue trying every removable file so that A17's guarantee that a failed start leaves no file it made except one it could not remove remains true?",
+   "options": [
+    "Stop at the first failed close or removal, leaving every later file untried.",
+    "Record the first failure but continue attempting all companion files and the store file.",
+    "Continue only far enough to attempt removal of the store file."
+   ],
+   "default_guess": "Record the first failure but continue attempting every remaining removal.",
+   "witness": {
+    "initial": "A new empty store exists with regular `-wal`, `-shm` and `-journal` companions; the store file and all companions except `-wal` are removable.",
+    "events": [
+     "The host starts Registry.",
+     "The service API listener fails after the owner-interface listener opened.",
+     "`module:instance_lifecycle` calls `store.discard_new_store`.",
+     "Removal of `-wal` fails."
+    ],
+    "outcomes": [
+     "The changed operation stops immediately, leaving the removable `-shm`, `-journal` and store files.",
+     "A17's cleanup guarantee is implemented by continuing, so the removable later files and store file are deleted and only `-wal` remains."
+    ],
+    "observer": "The owner inspecting the host, and the next Registry start."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "contradictory failure residue",
+   "text": "what a failure leaves is the store's file with some of its companions",
+   "question": "What must remain when all companion removals succeed but removal of the store file itself fails?",
+   "options": [
+    "The store file alone remains.",
+    "The store file must remain with at least one companion.",
+    "“some of its companions” includes zero companions."
+   ],
+   "default_guess": "The store file alone remains; rewrite the residue statement to allow zero or more companions.",
+   "witness": {
+    "initial": "A new store has three regular companion files; every companion is removable, but the store file itself is not removable.",
+    "events": [
+     "A listener fails.",
+     "The store connection closes.",
+     "Registry removes `-wal`, `-shm` and `-journal` in order.",
+     "Removal of the store file fails."
+    ],
+    "outcomes": [
+     "The prescribed order leaves the store file with no companion.",
+     "The residue sentence says a failure leaves the store file with some of its companions."
+    ],
+    "observer": "The owner inspecting the store directory and the next start."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "missing diagnostic result",
+   "text": "None; a failed removal is named in the start's one diagnostic beside the surface that could not be opened.",
+   "question": "What failure information does this operation provide to `instance_lifecycle`, and exactly what must the start diagnostic say, given that the declared output is only a boolean and the operation declares no error?",
+   "options": [
+    "Return only `false`; the caller adds a generic statement that cleanup failed.",
+    "Return structured failure details identifying close versus removal and the path or suffix.",
+    "The operation itself mutates or appends to the caller's diagnostic through an unstated side effect."
+   ],
+   "default_guess": "Return a structured cleanup result containing the boolean and a non-secret failure category and suffix, from which the caller builds the single diagnostic.",
+   "witness": {
+    "initial": "A listener fails and removal of the regular `-shm` companion fails.",
+    "events": [
+     "`instance_lifecycle` calls `discard_new_store`.",
+     "The operation stops and reports that the store file is not gone.",
+     "The caller constructs the one start diagnostic."
+    ],
+    "outcomes": [
+     "An implementation receiving only `false` reports generically that the new store was left.",
+     "An implementation with unstated failure details reports that removal of `-shm` failed."
+    ],
+    "observer": "The owner reading the start diagnostic."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "unspecified close failure",
+   "text": "The first close or removal that fails stops the rest",
+   "question": "When closing the connection fails, must that close failure be named in the start diagnostic, be described as a failed removal, or remain unreported?",
+   "options": [
+    "Name the connection-close failure beside the listener failure.",
+    "Report only that cleanup failed or the store was left.",
+    "Do not mention the close failure because the Errors section names only a failed removal."
+   ],
+   "default_guess": "Name a generic store-cleanup failure without exposing a value, and distinguish internally that the failed step was connection close.",
+   "witness": {
+    "initial": "A new store and its companions exist, and closing its connection reports failure.",
+    "events": [
+     "A listener fails.",
+     "`discard_new_store` attempts to close the store connection.",
+     "The close fails, so no removal is attempted.",
+     "The start emits its one diagnostic."
+    ],
+    "outcomes": [
+     "The diagnostic names the failed close as the cleanup failure.",
+     "The diagnostic names only the listener failure, because the Errors section specifies only failed removal."
+    ],
+    "observer": "The owner diagnosing the stopped start."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "ambiguous file type test",
+   "text": "each removed when it is a regular file. A path of another type is left as it is.",
+   "question": "Is a symbolic link to a regular file a regular file for this rule, or a path of another type that must be left untouched?",
+   "options": [
+    "Use non-following metadata: a symbolic link is not a regular file and remains.",
+    "Follow the link when classifying: it qualifies as regular, then unlink the companion directory entry.",
+    "Refuse the cleanup when any companion path is a symbolic link."
+   ],
+   "default_guess": "Use non-following metadata and leave every symbolic link untouched.",
+   "witness": {
+    "initial": "The new store exists and its `-wal` path is a symbolic link to a regular file; the other companion paths are absent.",
+    "events": [
+     "A listener fails.",
+     "The connection closes.",
+     "Cleanup examines the `-wal` path."
+    ],
+    "outcomes": [
+     "A non-following type check classifies the path as a symbolic link and leaves it.",
+     "A following type check classifies its target as regular and unlinks the `-wal` symbolic link."
+    ],
+    "observer": "The owner inspecting the store directory."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "unspecified filesystem race",
+   "text": "each removed when it is a regular file",
+   "question": "What happens if a companion disappears or changes type between its type check and its removal, and what filesystem identity or no-follow guarantee must the implementation use?",
+   "options": [
+    "Treat disappearance as already removed, but stop if the directory entry changed to another type.",
+    "Treat any removal error after a successful regular-file check as the first failure.",
+    "Use an atomic or directory-handle-based no-follow removal strategy and fail if the checked entry is no longer the entry removed."
+   ],
+   "default_guess": "Use non-following, directory-handle-based operations; disappearance counts as success, while replacement with a different entry stops cleanup without removing the replacement.",
+   "witness": {
+    "initial": "The `-journal` companion is a regular file when cleanup begins.",
+    "events": [
+     "Registry checks that `-journal` is regular.",
+     "The host administrator replaces it with a directory before Registry removes it.",
+     "Registry performs the removal step."
+    ],
+    "outcomes": [
+     "An implementation rechecking the entry leaves the directory and continues or stops according to its unstated race policy.",
+     "An implementation acting on the earlier classification attempts removal, treats the resulting error as the first failure, and stops the rest."
+    ],
+    "observer": "The owner inspecting the residue and the next Registry start."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"contradictory cleanup policy\",\"text\":\"The first close or removal that fails stops the rest\",\"question\":\"Must cleanup stop at the first failure, or must it continue trying every removable file so that A17's guarantee that a failed start leaves no file it made except one it could not remove remains true?\",\"options\":[\"Stop at the first failed close or removal, leaving every later file untried.\",\"Record the first failure but continue attempting all companion files and the store file.\",\"Continue only far enough to attempt removal of the store file.\"],\"default_guess\":\"Record the first failure but continue attempting every remaining removal.\",\"witness\":{\"initial\":\"A new empty store exists with regular `-wal`, `-shm` and `-journal` companions; the store file and all companions except `-wal` are removable.\",\"events\":[\"The host starts Registry.\",\"The service API listener fails after the owner-interface listener opened.\",\"`module:instance_lifecycle` calls `store.discard_new_store`.\",\"Removal of `-wal` fails.\"],\"outcomes\":[\"The changed operation stops immediately, leaving the removable `-shm`, `-journal` and store files.\",\"A17's cleanup guarantee is implemented by continuing, so the removable later files and store file are deleted and only `-wal` remains.\"],\"observer\":\"The owner inspecting the host, and the next Registry start.\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"contradictory failure residue\",\"text\":\"what a failure leaves is the store's file with some of its companions\",\"question\":\"What must remain when all companion removals succeed but removal of the store file itself fails?\",\"options\":[\"The store file alone remains.\",\"The store file must remain with at least one companion.\",\"“some of its companions” includes zero companions.\"],\"default_guess\":\"The store file alone remains; rewrite the residue statement to allow zero or more companions.\",\"witness\":{\"initial\":\"A new store has three regular companion files; every companion is removable, but the store file itself is not removable.\",\"events\":[\"A listener fails.\",\"The store connection closes.\",\"Registry removes `-wal`, `-shm` and `-journal` in order.\",\"Removal of the store file fails.\"],\"outcomes\":[\"The prescribed order leaves the store file with no companion.\",\"The residue sentence says a failure leaves the store file with some of its companions.\"],\"observer\":\"The owner inspecting the store directory and the next start.\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"missing diagnostic result\",\"text\":\"None; a failed removal is named in the start's one diagnostic beside the surface that could not be opened.\",\"question\":\"What failure information does this operation provide to `instance_lifecycle`, and exactly what must the start diagnostic say, given that the declared output is only a boolean and the operation declares no error?\",\"options\":[\"Return only `false`; the caller adds a generic statement that cleanup failed.\",\"Return structured failure details identifying close versus removal and the path or suffix.\",\"The operation itself mutates or appends to the caller's diagnostic through an unstated side effect.\"],\"default_guess\":\"Return a structured cleanup result containing the boolean and a non-secret failure category and suffix, from which the caller builds the single diagnostic.\",\"witness\":{\"initial\":\"A listener fails and removal of the regular `-shm` companion fails.\",\"events\":[\"`instance_lifecycle` calls `discard_new_store`.\",\"The operation stops and reports that the store file is not gone.\",\"The caller constructs the one start diagnostic.\"],\"outcomes\":[\"An implementation receiving only `false` reports generically that the new store was left.\",\"An implementation with unstated failure details reports that removal of `-shm` failed.\"],\"observer\":\"The owner reading the start diagnostic.\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"unspecified close failure\",\"text\":\"The first close or removal that fails stops the rest\",\"question\":\"When closing the connection fails, must that close failure be named in the start diagnostic, be described as a failed removal, or remain unreported?\",\"options\":[\"Name the connection-close failure beside the listener failure.\",\"Report only that cleanup failed or the store was left.\",\"Do not mention the close failure because the Errors section names only a failed removal.\"],\"default_guess\":\"Name a generic store-cleanup failure without exposing a value, and distinguish internally that the failed step was connection close.\",\"witness\":{\"initial\":\"A new store and its companions exist, and closing its connection reports failure.\",\"events\":[\"A listener fails.\",\"`discard_new_store` attempts to close the store connection.\",\"The close fails, so no removal is attempted.\",\"The start emits its one diagnostic.\"],\"outcomes\":[\"The diagnostic names the failed close as the cleanup failure.\",\"The diagnostic names only the listener failure, because the Errors section specifies only failed removal.\"],\"observer\":\"The owner diagnosing the stopped start.\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"ambiguous file type test\",\"text\":\"each removed when it is a regular file. A path of another type is left as it is.\",\"question\":\"Is a symbolic link to a regular file a regular file for this rule, or a path of another type that must be left untouched?\",\"options\":[\"Use non-following metadata: a symbolic link is not a regular file and remains.\",\"Follow the link when classifying: it qualifies as regular, then unlink the companion directory entry.\",\"Refuse the cleanup when any companion path is a symbolic link.\"],\"default_guess\":\"Use non-following metadata and leave every symbolic link untouched.\",\"witness\":{\"initial\":\"The new store exists and its `-wal` path is a symbolic link to a regular file; the other companion paths are absent.\",\"events\":[\"A listener fails.\",\"The connection closes.\",\"Cleanup examines the `-wal` path.\"],\"outcomes\":[\"A non-following type check classifies the path as a symbolic link and leaves it.\",\"A following type check classifies its target as regular and unlinks the `-wal` symbolic link.\"],\"observer\":\"The owner inspecting the store directory.\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"unspecified filesystem race\",\"text\":\"each removed when it is a regular file\",\"question\":\"What happens if a companion disappears or changes type between its type check and its removal, and what filesystem identity or no-follow guarantee must the implementation use?\",\"options\":[\"Treat disappearance as already removed, but stop if the directory entry changed to another type.\",\"Treat any removal error after a successful regular-file check as the first failure.\",\"Use an atomic or directory-handle-based no-follow removal strategy and fail if the checked entry is no longer the entry removed.\"],\"default_guess\":\"Use non-following, directory-handle-based operations; disappearance counts as success, while replacement with a different entry stops cleanup without removing the replacement.\",\"witness\":{\"initial\":\"The `-journal` companion is a regular file when cleanup begins.\",\"events\":[\"Registry checks that `-journal` is regular.\",\"The host administrator replaces it with a directory before Registry removes it.\",\"Registry performs the removal step.\"],\"outcomes\":[\"An implementation rechecking the entry leaves the directory and continues or stops according to its unstated race policy.\",\"An implementation acting on the earlier classification attempts removal, treats the resulting error as the first failure, and stops the rest.\"],\"observer\":\"The owner inspecting the residue and the next Registry start.\"}}]}",
+ "set_aside": []
+}
