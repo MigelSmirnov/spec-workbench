@@ -22,9 +22,11 @@ found values State 1 left to "State 6" without a value and two facts without a
 home. The owner answered (2026-11-11): the object kinds and characteristics
 (M02, "Declared vocabularies"), the customer languages `es`, `ru`, `en`, and
 the alias length decided for the data's protection (M01). The last audit
-sequence number and the migration closure, both facts of one store's history
-(R0-89), are held by a new model, M12 StoreHistory; the closure stays a value
-(M10).
+sequence number, durable in States 2 and 3 without a model, gets one: M12
+AuditSequence. The migration closure (M10), kept as a record of its own by
+the owner's decision of 2026-10-31, is an entity identified by the digest of
+the file it accepted: a value cannot be a record of its own (SPEC_STANDARD
+§15.1.1).
 
 This state names the concepts Registry needs, the facts each carries in domain
 words, its identity (`value` or `entity`, `MODEL_IDENTITY_EVIDENCE.md`), who
@@ -774,14 +776,20 @@ without its values.
 
 ### Identity
 
-value
+entity
 
 ### Identity evidence
 
-Substitution: there is at most one, and two records of "the migration
-succeeded at instant T" would mean the same thing. Continuity: it is written
-once and never changes; it is a fact about the store's history (R0-89), not
-a thing with a life.
+It is identified by the digest of the file the import accepted, the one
+identity it has (codex round-04 T1); Registry mints no identifier for it.
+Substitution: a closure is not interchangeable with an equal value elsewhere:
+it is the record a pointer the import brought in names as its publisher (M05)
+and the audit entry of the import names (M09), and the record whose presence
+refuses a second import (R0-79). Continuity: it is written once and never
+changes; it lasts for the rest of its store's history (R0-89). Until
+2026-11-11 it was declared a value; the owner's decision of 2026-10-31 that
+it is a record of its own, addressed by the pointers and the audit, is what
+SPEC_STANDARD §15.1.1 calls an entity.
 
 ### Source of truth
 
@@ -795,11 +803,9 @@ without it (R0-89).
 
 ### Persistence candidate
 
-Embedded in the store's history (M12), at most one per store history
-(R0-89): an instance that restores a store from before the import may import
-again, and that history then holds its own closure. It has no identifier of
-its own: a value is never a record with its own identity (SPEC_STANDARD
-§15.1.1); the audit names it by the digest of the file it accepted (M09).
+Durable, a record of its own, at most one per store (R0-89): an instance that
+restores a store from before the import may import again, and that store
+then holds its own closure.
 
 ### Open questions
 
@@ -856,36 +862,18 @@ Temporary runtime state; never a durable record beyond its life.
 
 None for identity.
 
-## Model M12 — StoreHistory
+## Model M12 — AuditSequence
 
 ### Meaning
 
-The facts of one store's history that no other record holds (R0-89): the last
-audit sequence number that history ever wrote (M09; State 2 A15 rule 5) and,
-once the import has succeeded, its migration closure (M10). Exactly one per
-store history. Added on 2026-11-11: both facts were durable in States 1–3
-without a model that holds them.
+The last audit sequence number a store's history ever wrote (M09; State 2 A15
+rule 5), kept apart from the entries so that erasing old entries never lowers
+it and a number is never reused (R0-66). Exactly one per store. Added on
+2026-11-11: States 2 and 3 kept it durable without a model that holds it.
 
-Facts:
-
-- the last audit sequence number the history ever wrote: 0 for a store made
-  new, then moved to each new entry's number in that entry's transaction;
-  never lowered, also when old entries are erased (R0-66);
-- the migration closure (M10), absent until the one import succeeds, then
-  present for the rest of the history.
-
-The two facts change for different reasons — every audit append, and the
-one import — but they are kept in one record because they share one scope
-and one life, the store's history (R0-89), and no caller reads either apart
-from the store it is in. Each is changed only by its own transaction, and
-neither changes the other.
-
-Registry has no restore operation (R0-89): the owner puts a backup in the
-place of a lost store, outside Registry, and Registry starts on it as on any
-store. A restored store therefore holds this record exactly as the backup
-holds it — the backup's last sequence number, and its migration closure when
-the backup was made after the import, none when it was made before — and
-Registry neither knows nor records that the store was restored.
+Facts: the last sequence number, a whole number — 0 for a store made new,
+then moved to each new entry's number in that entry's transaction, and by
+nothing else; never lowered.
 
 ### Identity
 
@@ -893,39 +881,40 @@ entity
 
 ### Identity evidence
 
-Substitution: a store holds one history; a second record with equal facts
-would be a second history of one store, which R0-89 does not have.
-Continuity: the history stays the same while its last sequence number moves
-with every entry and its migration closure appears.
-
-It has no identifier: it is identified by the store that holds it, exactly
-one per store, and nothing names it — no answer, no record, no audit entry.
-Registry makes it, with no closure and number 0, in the transaction that
-makes a new, empty store (State 2 A17 rule 5); it never makes a second one.
+Substitution: a store has one sequence; a second record with an equal number
+would be a second numbering of one log, which M09 does not have. Continuity:
+it stays the same sequence while its number moves with every entry.
+It has no identifier: it is identified by the store that holds it, and
+nothing names it — no answer, no record, no audit entry. Registry makes it,
+with number 0, in the transaction that makes a new, empty store (State 2 A17
+rule 5) and never makes a second one.
 
 ### Source of truth
 
-Registry's own store: the audit log's appends (M09) and the accepted import
-(M10).
+The audit log's appends (M09).
 
 ### Lifecycle candidate
 
 ```text
-made with a new store (number 0, no closure) -> number moves -> closure recorded (once)
+made with a new store (0) -> moved by each audit append
 ```
 
-A store a backup replaced is in whatever point of this lifecycle the backup
-holds (R0-89); it is not a transition Registry makes.
+Registry has no restore operation (R0-89): the owner puts a backup in the
+place of a lost store, outside Registry, and Registry starts on it as on any
+store. A restored store holds this record as the backup holds it, the same
+record continued; Registry neither knows nor records that the store was
+restored.
 
 ### Persistence candidate
 
-Durable, exactly one per store, made with the store and changed only inside
-the transaction of an audit append or of the import.
+Durable, exactly one per store, changed only inside the transaction of an
+audit append.
 
 ### Open questions
 
-None. No caller reads it as such: the audit view, the backup record (A18) and
-the import's refusal (R0-79) read its facts.
+None. It is read only inside Registry: by the audit append, which takes the
+next number, and by a backup, which records the number in its own readable
+record (State 2 A18); no answer returns it.
 
 ## Declared vocabularies
 
