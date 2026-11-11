@@ -1,0 +1,125 @@
+{
+ "open_points": [
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "kind": "output_shape",
+   "text": "For an accepted file, its bytes as read — which `operations` hands to\n`owner_sessions.keep_uploaded_file` — and its digest, the SHA-256 of those\nbytes, which Registry computes and never takes from a caller.",
+   "question": "Does this output shape apply only in `upload` mode, or must `mapping` mode also return the already-kept bytes and their digest alongside the mapping?",
+   "options": [
+    "Only `upload` returns bytes and digest; `mapping` returns the mapping and digest.",
+    "Both modes return bytes and digest, with `mapping` additionally returning the mapping.",
+    "`upload` returns bytes and digest; `mapping` returns only the mapping because its file identity is already known."
+   ],
+   "default_guess": "Return bytes and digest only for `upload`; return the mapping and digest, but not duplicate bytes, for `mapping`.",
+   "witness": {
+    "initial": "An owner session already keeps an accepted import file, and production has no migration closure.",
+    "events": [
+     "The owner asks for `mapping` mode with one valid pick.",
+     "`operations` passes the kept file's bytes to `migration_import.read_import_mapping`."
+    ],
+    "outcomes": [
+     "The operation returns the mapping and digest without returning the bytes again.",
+     "The operation returns the mapping, digest and the complete kept bytes because the output sentence applies to every accepted file."
+    ],
+    "observer": "`operations`, whose expected return contract and memory use differ."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "kind": "validation_result_shape",
+   "text": "and whether the mapping is clean — no malformed record, no conflict,\nno missing value, no given name or alias outside A02's form and at least\none pick — which alone lets the confirmation\nstep be shown.",
+   "question": "How must the mapping identify an owner-given display name or alias that is outside A02's form, and what refusal kind and field information must be produced if the same defect is found again at confirmation?",
+   "options": [
+    "Add a collection of invalid given values, each naming its project and field, and return the same field-specific failures at confirmation.",
+    "Return only `clean: false`, without identifying the offending project or field.",
+    "Treat an invalid given value as an `invalid_request` refusal instead of returning a mapping."
+   ],
+   "default_guess": "Include field-specific invalid-value entries in the mapping and return corresponding field-specific stage-(4) failures at confirmation.",
+   "witness": {
+    "initial": "A valid uploaded file contains project P; the owner picks P and supplies an alias of 41 Unicode code points.",
+    "events": [
+     "The owner asks to view the mapping.",
+     "The mapping operation applies A02's alias-length rule."
+    ],
+    "outcomes": [
+     "The mapping contains an entry identifying P's `alias` as invalid and is not clean.",
+     "The mapping merely says it is not clean, because only malformed records, conflicts and missing values have specified detail structures."
+    ],
+    "observer": "The owner, who either sees which field must be corrected or only sees that confirmation is unavailable."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:`public_op:operations.perform_owner_operation`",
+   "kind": "stream_lifecycle",
+   "text": "request's declared length, or that it declared none, and its unread byte\nstream, which `owner_interface` hands on without reading and this operation\npasses, unread, to `migration_import.read_import_mapping`, which alone\nconsumes it within the request.",
+   "question": "Who disposes of, drains or closes the unread remainder of the request stream when processing returns before `migration_import` consumes it, including session, CSRF, closure and declared-length refusals, and may the connection be reused afterward?",
+   "options": [
+    "`operations` or the transport closes the stream and connection without reading the remainder.",
+    "The transport drains the remainder after the operation returns and may reuse the connection.",
+    "The unread remainder is abandoned, with connection-reuse behavior left to the server framework."
+   ],
+   "default_guess": "Make the transport close the request stream and prevent connection reuse whenever the operation returns with unread upload bytes.",
+   "witness": {
+    "initial": "The owner has a valid persistent connection and submits an upload whose declared length exceeds `IMPORT_FILE_MAX_BYTES`, with a body still available on the stream.",
+    "events": [
+     "`migration_import.read_import_mapping` refuses before reading any byte.",
+     "The owner sends another request on the same connection."
+    ],
+    "outcomes": [
+     "The server drains or otherwise disposes of the first body and correctly parses the next request.",
+     "The first body remains unread, so the connection is closed or the next request cannot be parsed on that connection."
+    ],
+    "observer": "The owner interface client."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "ownership_contradiction",
+   "text": "the 60 seconds of the session pass and of the minute\nlook are ones that `instance_lifecycle` applies, calling `owner_sessions` and\n`backups` at those intervals.",
+   "question": "How does `instance_lifecycle` measure these intervals while `clock.monotonic_reading` says A13's 60 seconds are measured between its readings, names only `owner_sessions` as its caller, and `clock` hides the host clocks: does lifecycle use `clock`, a host timer directly, or delegate interval measurement to the called modules?",
+   "options": [
+    "`instance_lifecycle` imports and calls `clock.monotonic_reading` to schedule both passes.",
+    "`instance_lifecycle` uses a host or framework timer directly, outside `clock`.",
+    "`instance_lifecycle` calls frequently and `owner_sessions` and `backups` decide from clock readings whether their intervals are due."
+   ],
+   "default_guess": "Have `instance_lifecycle` use an explicit monotonic scheduling capability owned by `clock`, and add the corresponding caller and import edge.",
+   "witness": {
+    "initial": "The instance has just started; an owner session is near expiry, and 30 seconds have elapsed since the last pass.",
+    "events": [
+     "The host wall clock is moved backward by ten minutes.",
+     "Execution continues for another 30 monotonic seconds."
+    ],
+    "outcomes": [
+     "A monotonic schedule invokes the pass at the intended 60-second point and the expired session is ended.",
+     "A wall-clock-based lifecycle timer delays the pass after the clock change and the expired session remains until later."
+    ],
+    "observer": "The owner, whose expired session remains present for a different duration."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Constants each module imports",
+   "kind": "standard_violation",
+   "text": "This table is\nevery such edge — consumer, provider `data_provider`, the symbols — and the\none source of these imports; a module imports no constant it does not list,\nand names none it does not import.",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Replace this competing prose/table authority with the corresponding complete and minimal `module_internal` entries for each consumer's imports from `data_provider`.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Constants each module imports",
+   "kind": "standard_violation",
+   "text": "`configuration` imports `load_runtime_settings` from `runtime_settings` and\ncalls it itself, once per start (`runtime_settings.load_runtime_settings`,\nCallers).",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Declare `configuration` → `runtime_settings` → `load_runtime_settings` in `module_internal`, leaving the prose to describe the call rather than authorize the import.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"kind\":\"output_shape\",\"text\":\"For an accepted file, its bytes as read — which `operations` hands to\\n`owner_sessions.keep_uploaded_file` — and its digest, the SHA-256 of those\\nbytes, which Registry computes and never takes from a caller.\",\"question\":\"Does this output shape apply only in `upload` mode, or must `mapping` mode also return the already-kept bytes and their digest alongside the mapping?\",\"options\":[\"Only `upload` returns bytes and digest; `mapping` returns the mapping and digest.\",\"Both modes return bytes and digest, with `mapping` additionally returning the mapping.\",\"`upload` returns bytes and digest; `mapping` returns only the mapping because its file identity is already known.\"],\"default_guess\":\"Return bytes and digest only for `upload`; return the mapping and digest, but not duplicate bytes, for `mapping`.\",\"witness\":{\"initial\":\"An owner session already keeps an accepted import file, and production has no migration closure.\",\"events\":[\"The owner asks for `mapping` mode with one valid pick.\",\"`operations` passes the kept file's bytes to `migration_import.read_import_mapping`.\"],\"outcomes\":[\"The operation returns the mapping and digest without returning the bytes again.\",\"The operation returns the mapping, digest and the complete kept bytes because the output sentence applies to every accepted file.\"],\"observer\":\"`operations`, whose expected return contract and memory use differ.\"}},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"kind\":\"validation_result_shape\",\"text\":\"and whether the mapping is clean — no malformed record, no conflict,\\nno missing value, no given name or alias outside A02's form and at least\\none pick — which alone lets the confirmation\\nstep be shown.\",\"question\":\"How must the mapping identify an owner-given display name or alias that is outside A02's form, and what refusal kind and field information must be produced if the same defect is found again at confirmation?\",\"options\":[\"Add a collection of invalid given values, each naming its project and field, and return the same field-specific failures at confirmation.\",\"Return only `clean: false`, without identifying the offending project or field.\",\"Treat an invalid given value as an `invalid_request` refusal instead of returning a mapping.\"],\"default_guess\":\"Include field-specific invalid-value entries in the mapping and return corresponding field-specific stage-(4) failures at confirmation.\",\"witness\":{\"initial\":\"A valid uploaded file contains project P; the owner picks P and supplies an alias of 41 Unicode code points.\",\"events\":[\"The owner asks to view the mapping.\",\"The mapping operation applies A02's alias-length rule.\"],\"outcomes\":[\"The mapping contains an entry identifying P's `alias` as invalid and is not clean.\",\"The mapping merely says it is not clean, because only malformed records, conflicts and missing values have specified detail structures.\"],\"observer\":\"The owner, who either sees which field must be corrected or only sees that confirmation is unavailable.\"}},{\"subject\":\"50_public_apis_5_surfaces.md:`public_op:operations.perform_owner_operation`\",\"kind\":\"stream_lifecycle\",\"text\":\"request's declared length, or that it declared none, and its unread byte\\nstream, which `owner_interface` hands on without reading and this operation\\npasses, unread, to `migration_import.read_import_mapping`, which alone\\nconsumes it within the request.\",\"question\":\"Who disposes of, drains or closes the unread remainder of the request stream when processing returns before `migration_import` consumes it, including session, CSRF, closure and declared-length refusals, and may the connection be reused afterward?\",\"options\":[\"`operations` or the transport closes the stream and connection without reading the remainder.\",\"The transport drains the remainder after the operation returns and may reuse the connection.\",\"The unread remainder is abandoned, with connection-reuse behavior left to the server framework.\"],\"default_guess\":\"Make the transport close the request stream and prevent connection reuse whenever the operation returns with unread upload bytes.\",\"witness\":{\"initial\":\"The owner has a valid persistent connection and submits an upload whose declared length exceeds `IMPORT_FILE_MAX_BYTES`, with a body still available on the stream.\",\"events\":[\"`migration_import.read_import_mapping` refuses before reading any byte.\",\"The owner sends another request on the same connection.\"],\"outcomes\":[\"The server drains or otherwise disposes of the first body and correctly parses the next request.\",\"The first body remains unread, so the connection is closed or the next request cannot be parsed on that connection.\"],\"observer\":\"The owner interface client.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"ownership_contradiction\",\"text\":\"the 60 seconds of the session pass and of the minute\\nlook are ones that `instance_lifecycle` applies, calling `owner_sessions` and\\n`backups` at those intervals.\",\"question\":\"How does `instance_lifecycle` measure these intervals while `clock.monotonic_reading` says A13's 60 seconds are measured between its readings, names only `owner_sessions` as its caller, and `clock` hides the host clocks: does lifecycle use `clock`, a host timer directly, or delegate interval measurement to the called modules?\",\"options\":[\"`instance_lifecycle` imports and calls `clock.monotonic_reading` to schedule both passes.\",\"`instance_lifecycle` uses a host or framework timer directly, outside `clock`.\",\"`instance_lifecycle` calls frequently and `owner_sessions` and `backups` decide from clock readings whether their intervals are due.\"],\"default_guess\":\"Have `instance_lifecycle` use an explicit monotonic scheduling capability owned by `clock`, and add the corresponding caller and import edge.\",\"witness\":{\"initial\":\"The instance has just started; an owner session is near expiry, and 30 seconds have elapsed since the last pass.\",\"events\":[\"The host wall clock is moved backward by ten minutes.\",\"Execution continues for another 30 monotonic seconds.\"],\"outcomes\":[\"A monotonic schedule invokes the pass at the intended 60-second point and the expired session is ended.\",\"A wall-clock-based lifecycle timer delays the pass after the clock change and the expired session remains until later.\"],\"observer\":\"The owner, whose expired session remains present for a different duration.\"}},{\"subject\":\"50_public_apis_0_conventions.md:Constants each module imports\",\"kind\":\"standard_violation\",\"text\":\"This table is\\nevery such edge — consumer, provider `data_provider`, the symbols — and the\\none source of these imports; a module imports no constant it does not list,\\nand names none it does not import.\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Replace this competing prose/table authority with the corresponding complete and minimal `module_internal` entries for each consumer's imports from `data_provider`.\"},{\"subject\":\"50_public_apis_0_conventions.md:Constants each module imports\",\"kind\":\"standard_violation\",\"text\":\"`configuration` imports `load_runtime_settings` from `runtime_settings` and\\ncalls it itself, once per start (`runtime_settings.load_runtime_settings`,\\nCallers).\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Declare `configuration` → `runtime_settings` → `load_runtime_settings` in `module_internal`, leaving the prose to describe the call rather than authorize the import.\"}]}",
+ "set_aside": []
+}

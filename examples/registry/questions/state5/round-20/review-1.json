@@ -1,0 +1,164 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:configuration.load_configuration",
+   "kind": "contradictory_input_ownership",
+   "text": "None; it calls `runtime_settings.load_runtime_settings` itself and checks\nthe settings it answers.\n\n`capability:instance_lifecycle.start_instance` calls\n   `capability:configuration.load_configuration`, which takes the settings\n   `capability:runtime_settings.load_runtime_settings` reads from the\n   `REGISTRY_` items A17 rule 1 lists",
+   "question": "Does `instance_lifecycle` call `load_runtime_settings` and pass its result, or does `load_configuration` take no input and call it itself?",
+   "options": [
+    "`load_configuration` takes no input and performs the sole settings load",
+    "`instance_lifecycle` loads settings and passes them to `load_configuration`"
+   ],
+   "default_guess": "Make `load_configuration` take no input and call `load_runtime_settings` exactly once.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:migration_import.read_import_mapping output by mode",
+   "kind": "ambiguous_output",
+   "text": "For an accepted file, its bytes as read — which `operations` hands to\n`owner_sessions.keep_uploaded_file` — and its digest, the SHA-256 of those\nbytes, which Registry computes and never takes from a caller.",
+   "question": "Are the file bytes returned only in `upload` mode, or also in every successful `mapping` call?",
+   "options": [
+    "Return bytes and digest only for `upload`; return the mapping and digest for `mapping`",
+    "Return bytes and digest in both modes"
+   ],
+   "default_guess": "Return the bytes only for an accepted upload and omit them from mapping results.",
+   "witness": {
+    "initial": "An owner session already keeps an accepted import file and requests a mapping for one picked project.",
+    "events": [
+     "The owner submits valid picks and Customer values.",
+     "`operations` calls `read_import_mapping` in `mapping` mode."
+    ],
+    "outcomes": [
+     "The result contains the kept file's bytes again because the sentence applies to every accepted file.",
+     "The result contains the digest and mapping but no bytes because the bytes are only needed for `keep_uploaded_file` after upload."
+    ],
+    "observer": "`operations`, its contract tests, and memory instrumentation"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:migration_import.read_import_mapping cleanliness of Customer kind",
+   "kind": "missing_validation_rule",
+   "text": "and whether the mapping is clean — no malformed record, no conflict,\nno missing value, no given name or alias outside A02's form and at least\none pick — which alone lets the confirmation\nstep be shown.",
+   "question": "What happens when a supplied Customer kind is present but is not `person` or `company`, and how is that defect represented in the mapping?",
+   "options": [
+    "The mapping is not clean and reports the Customer kind as an invalid supplied value",
+    "Presence alone satisfies this operation's cleanliness test, so the mapping is clean if everything else passes",
+    "Treat the request itself as `invalid_request` rather than returning a mapping"
+   ],
+   "default_guess": "Return an unclean mapping that identifies the Customer by v1 value and names its invalid `kind`.",
+   "witness": {
+    "initial": "A valid accepted file has one picked project, no malformed imported record or production conflict, and one Customer to make.",
+    "events": [
+     "The owner gives that Customer a valid name and the kind `partnership`.",
+     "The owner asks to show the import confirmation step."
+    ],
+    "outcomes": [
+     "The step is shown because the kind is present and the stated clean test names only missing values and out-of-form names or aliases.",
+     "The step is withheld because M04 limits Customer kind to `person` or `company`, so the supplied kind is treated as an invalid mapping value."
+    ],
+    "observer": "The owner sees whether a confirmation step is shown and whether the kind is reported as defective."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "upload byte stream lifecycle",
+   "kind": "resource_ownership",
+   "text": "request's declared length, or that it declared none, and its unread byte\nstream, which `owner_interface` hands on without reading and this operation\npasses, unread, to `migration_import.read_import_mapping`, which alone\nconsumes it within the request.",
+   "question": "Who must drain or close the upload stream after success and after each early refusal, including a declared length over the limit where no byte is read?",
+   "options": [
+    "`read_import_mapping` owns and closes the stream on every return path",
+    "`operations` closes it after `read_import_mapping` returns",
+    "The transport retains ownership and disposes of any unread body"
+   ],
+   "default_guess": "Keep transport ownership explicit and require `operations` to close the request stream in a finally path without draining an over-limit body.",
+   "witness": {
+    "initial": "A client uploads over a reusable connection with a declared length above `IMPORT_FILE_MAX_BYTES`.",
+    "events": [
+     "`read_import_mapping` refuses the upload before reading any byte.",
+     "The client sends another request on the same connection."
+    ],
+    "outcomes": [
+     "The stream is closed or discarded, so the next request is parsed normally.",
+     "The unread upload body remains for the transport, so the connection cannot be reused or the next request is misframed."
+    ],
+    "observer": "The client and the owner-interface transport"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle 60-second schedules",
+   "kind": "unspecified_scheduling_semantics",
+   "text": "the 60 seconds of the session pass and of the minute\nlook are ones that `instance_lifecycle` applies, calling `owner_sessions` and\n`backups` at those intervals.",
+   "question": "Are the two calls scheduled at fixed offsets from process start or 60 seconds after the preceding call finishes, what happens to missed ticks after suspension or a long call, and what monotonic timing source may `instance_lifecycle` use?",
+   "options": [
+    "Fixed-rate monotonic schedules from process start, skipping ticks while a call is running",
+    "Fixed-delay schedules, starting each 60-second delay after the preceding call finishes",
+    "Fixed-rate schedules that catch up missed ticks immediately"
+   ],
+   "default_guess": "Use independent fixed-rate monotonic schedules, skip overlapping or missed ticks, and run each capability once at the next scheduled tick.",
+   "unit": "?"
+  },
+  {
+   "subject": "clock.monotonic_reading caller surface",
+   "kind": "contradictory_dependency",
+   "text": "### Callers\n\n`module:owner_sessions`.\n\n### Enforces\n\nEvery limit of A13 — 8 hours, 30, 15 and 10 minutes, 60 seconds — is\nmeasured between two of these readings and never by the wall clock.",
+   "question": "How can `instance_lifecycle` apply the 60-second session-pass schedule using the required monotonic clock when it is not a caller of `clock.monotonic_reading`?",
+   "options": [
+    "Add `instance_lifecycle` as a caller of `clock.monotonic_reading`",
+    "Remove the scheduling 60 seconds from this operation's guarantee and let the runtime scheduler supply monotonic timing",
+    "Have `owner_sessions` own the session-pass timer despite the changed module boundary"
+   ],
+   "default_guess": "Add `instance_lifecycle` as a caller and make it use `clock.monotonic_reading` for both interval schedules.",
+   "unit": "?"
+  },
+  {
+   "subject": "Constants each module imports",
+   "kind": "standard_violation",
+   "text": "`module:data_provider` has no operation: it exports constants, and a module\nthat names one imports it (SPEC_STANDARD §6.10, §7, §15.3.1). This table is\nevery such edge — consumer, provider `data_provider`, the symbols — and the\none source of these imports; a module imports no constant it does not list,\nand names none it does not import.",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Make these edges entries of `module_internal[consumer][data_provider]` and describe that structure, rather than declaring this prose table to be another authoritative import source.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration import of load_runtime_settings",
+   "kind": "standard_violation",
+   "text": "`configuration` imports `load_runtime_settings` from `runtime_settings` and\ncalls it itself, once per start (`runtime_settings.load_runtime_settings`,\nCallers).",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Declare `module_internal.configuration.runtime_settings = [\"load_runtime_settings\"]`; leave the passage to describe call behavior, not to establish the import.",
+   "unit": "?"
+  },
+  {
+   "subject": "store construction of AuditSequence",
+   "kind": "standard_violation",
+   "text": "A17 rule 5: only the temporary name is removed, no other file; a store made\nnew holds no record but M12 AuditSequence at 0 and is of the imported\n`STORE_VERSION` constant;",
+   "rule": "Для provider-а `models` перечисляй ровно модели, enum и interface, которые\n  consumer непосредственно называет, конструирует или проверяет в своём\n  runtime коде.",
+   "section": "7",
+   "question": "Declare `AuditSequence` in `module_internal.store.models`, or rewrite the contract so `store` does not directly name or construct that model.",
+   "unit": "?"
+  },
+  {
+   "subject": "migration_import output note naming keep_uploaded_file",
+   "kind": "standard_violation",
+   "text": "For an accepted file, its bytes as read — which `operations` hands to\n`owner_sessions.keep_uploaded_file` — and its digest, the SHA-256 of those\nbytes, which Registry computes and never takes from a caller.",
+   "rule": "note, которая не должна создавать ребро, не называет чужой экспорт целым\n      словом",
+   "section": "7",
+   "question": "Rewrite this output contract without naming `keep_uploaded_file`, because `migration_import` does not call it and the name would create a false dependency edge.",
+   "unit": "?"
+  },
+  {
+   "subject": "operations call to read_import_mapping",
+   "kind": "standard_violation",
+   "text": "request's declared length, or that it declared none, and its unread byte\nstream, which `owner_interface` hands on without reading and this operation\npasses, unread, to `migration_import.read_import_mapping`, which alone\nconsumes it within the request.",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "Declare `read_import_mapping` under `module_internal.operations.migration_import`, since this passage requires `operations` to call it directly.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:configuration.load_configuration\",\"kind\":\"contradictory_input_ownership\",\"text\":\"None; it calls `runtime_settings.load_runtime_settings` itself and checks\\nthe settings it answers.\\n\\n`capability:instance_lifecycle.start_instance` calls\\n   `capability:configuration.load_configuration`, which takes the settings\\n   `capability:runtime_settings.load_runtime_settings` reads from the\\n   `REGISTRY_` items A17 rule 1 lists\",\"question\":\"Does `instance_lifecycle` call `load_runtime_settings` and pass its result, or does `load_configuration` take no input and call it itself?\",\"options\":[\"`load_configuration` takes no input and performs the sole settings load\",\"`instance_lifecycle` loads settings and passes them to `load_configuration`\"],\"default_guess\":\"Make `load_configuration` take no input and call `load_runtime_settings` exactly once.\"},{\"subject\":\"public_op:migration_import.read_import_mapping output by mode\",\"kind\":\"ambiguous_output\",\"text\":\"For an accepted file, its bytes as read — which `operations` hands to\\n`owner_sessions.keep_uploaded_file` — and its digest, the SHA-256 of those\\nbytes, which Registry computes and never takes from a caller.\",\"question\":\"Are the file bytes returned only in `upload` mode, or also in every successful `mapping` call?\",\"options\":[\"Return bytes and digest only for `upload`; return the mapping and digest for `mapping`\",\"Return bytes and digest in both modes\"],\"default_guess\":\"Return the bytes only for an accepted upload and omit them from mapping results.\",\"witness\":{\"initial\":\"An owner session already keeps an accepted import file and requests a mapping for one picked project.\",\"events\":[\"The owner submits valid picks and Customer values.\",\"`operations` calls `read_import_mapping` in `mapping` mode.\"],\"outcomes\":[\"The result contains the kept file's bytes again because the sentence applies to every accepted file.\",\"The result contains the digest and mapping but no bytes because the bytes are only needed for `keep_uploaded_file` after upload.\"],\"observer\":\"`operations`, its contract tests, and memory instrumentation\"}},{\"subject\":\"public_op:migration_import.read_import_mapping cleanliness of Customer kind\",\"kind\":\"missing_validation_rule\",\"text\":\"and whether the mapping is clean — no malformed record, no conflict,\\nno missing value, no given name or alias outside A02's form and at least\\none pick — which alone lets the confirmation\\nstep be shown.\",\"question\":\"What happens when a supplied Customer kind is present but is not `person` or `company`, and how is that defect represented in the mapping?\",\"options\":[\"The mapping is not clean and reports the Customer kind as an invalid supplied value\",\"Presence alone satisfies this operation's cleanliness test, so the mapping is clean if everything else passes\",\"Treat the request itself as `invalid_request` rather than returning a mapping\"],\"default_guess\":\"Return an unclean mapping that identifies the Customer by v1 value and names its invalid `kind`.\",\"witness\":{\"initial\":\"A valid accepted file has one picked project, no malformed imported record or production conflict, and one Customer to make.\",\"events\":[\"The owner gives that Customer a valid name and the kind `partnership`.\",\"The owner asks to show the import confirmation step.\"],\"outcomes\":[\"The step is shown because the kind is present and the stated clean test names only missing values and out-of-form names or aliases.\",\"The step is withheld because M04 limits Customer kind to `person` or `company`, so the supplied kind is treated as an invalid mapping value.\"],\"observer\":\"The owner sees whether a confirmation step is shown and whether the kind is reported as defective.\"}},{\"subject\":\"upload byte stream lifecycle\",\"kind\":\"resource_ownership\",\"text\":\"request's declared length, or that it declared none, and its unread byte\\nstream, which `owner_interface` hands on without reading and this operation\\npasses, unread, to `migration_import.read_import_mapping`, which alone\\nconsumes it within the request.\",\"question\":\"Who must drain or close the upload stream after success and after each early refusal, including a declared length over the limit where no byte is read?\",\"options\":[\"`read_import_mapping` owns and closes the stream on every return path\",\"`operations` closes it after `read_import_mapping` returns\",\"The transport retains ownership and disposes of any unread body\"],\"default_guess\":\"Keep transport ownership explicit and require `operations` to close the request stream in a finally path without draining an over-limit body.\",\"witness\":{\"initial\":\"A client uploads over a reusable connection with a declared length above `IMPORT_FILE_MAX_BYTES`.\",\"events\":[\"`read_import_mapping` refuses the upload before reading any byte.\",\"The client sends another request on the same connection.\"],\"outcomes\":[\"The stream is closed or discarded, so the next request is parsed normally.\",\"The unread upload body remains for the transport, so the connection cannot be reused or the next request is misframed.\"],\"observer\":\"The client and the owner-interface transport\"}},{\"subject\":\"instance_lifecycle 60-second schedules\",\"kind\":\"unspecified_scheduling_semantics\",\"text\":\"the 60 seconds of the session pass and of the minute\\nlook are ones that `instance_lifecycle` applies, calling `owner_sessions` and\\n`backups` at those intervals.\",\"question\":\"Are the two calls scheduled at fixed offsets from process start or 60 seconds after the preceding call finishes, what happens to missed ticks after suspension or a long call, and what monotonic timing source may `instance_lifecycle` use?\",\"options\":[\"Fixed-rate monotonic schedules from process start, skipping ticks while a call is running\",\"Fixed-delay schedules, starting each 60-second delay after the preceding call finishes\",\"Fixed-rate schedules that catch up missed ticks immediately\"],\"default_guess\":\"Use independent fixed-rate monotonic schedules, skip overlapping or missed ticks, and run each capability once at the next scheduled tick.\"},{\"subject\":\"clock.monotonic_reading caller surface\",\"kind\":\"contradictory_dependency\",\"text\":\"### Callers\\n\\n`module:owner_sessions`.\\n\\n### Enforces\\n\\nEvery limit of A13 — 8 hours, 30, 15 and 10 minutes, 60 seconds — is\\nmeasured between two of these readings and never by the wall clock.\",\"question\":\"How can `instance_lifecycle` apply the 60-second session-pass schedule using the required monotonic clock when it is not a caller of `clock.monotonic_reading`?\",\"options\":[\"Add `instance_lifecycle` as a caller of `clock.monotonic_reading`\",\"Remove the scheduling 60 seconds from this operation's guarantee and let the runtime scheduler supply monotonic timing\",\"Have `owner_sessions` own the session-pass timer despite the changed module boundary\"],\"default_guess\":\"Add `instance_lifecycle` as a caller and make it use `clock.monotonic_reading` for both interval schedules.\"},{\"subject\":\"Constants each module imports\",\"kind\":\"standard_violation\",\"text\":\"`module:data_provider` has no operation: it exports constants, and a module\\nthat names one imports it (SPEC_STANDARD §6.10, §7, §15.3.1). This table is\\nevery such edge — consumer, provider `data_provider`, the symbols — and the\\none source of these imports; a module imports no constant it does not list,\\nand names none it does not import.\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Make these edges entries of `module_internal[consumer][data_provider]` and describe that structure, rather than declaring this prose table to be another authoritative import source.\"},{\"subject\":\"configuration import of load_runtime_settings\",\"kind\":\"standard_violation\",\"text\":\"`configuration` imports `load_runtime_settings` from `runtime_settings` and\\ncalls it itself, once per start (`runtime_settings.load_runtime_settings`,\\nCallers).\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Declare `module_internal.configuration.runtime_settings = [\\\"load_runtime_settings\\\"]`; leave the passage to describe call behavior, not to establish the import.\"},{\"subject\":\"store construction of AuditSequence\",\"kind\":\"standard_violation\",\"text\":\"A17 rule 5: only the temporary name is removed, no other file; a store made\\nnew holds no record but M12 AuditSequence at 0 and is of the imported\\n`STORE_VERSION` constant;\",\"rule\":\"Для provider-а `models` перечисляй ровно модели, enum и interface, которые\\n  consumer непосредственно называет, конструирует или проверяет в своём\\n  runtime коде.\",\"section\":\"7\",\"question\":\"Declare `AuditSequence` in `module_internal.store.models`, or rewrite the contract so `store` does not directly name or construct that model.\"},{\"subject\":\"migration_import output note naming keep_uploaded_file\",\"kind\":\"standard_violation\",\"text\":\"For an accepted file, its bytes as read — which `operations` hands to\\n`owner_sessions.keep_uploaded_file` — and its digest, the SHA-256 of those\\nbytes, which Registry computes and never takes from a caller.\",\"rule\":\"note, которая не должна создавать ребро, не называет чужой экспорт целым\\n      словом\",\"section\":\"7\",\"question\":\"Rewrite this output contract without naming `keep_uploaded_file`, because `migration_import` does not call it and the name would create a false dependency edge.\"},{\"subject\":\"operations call to read_import_mapping\",\"kind\":\"standard_violation\",\"text\":\"request's declared length, or that it declared none, and its unread byte\\nstream, which `owner_interface` hands on without reading and this operation\\npasses, unread, to `migration_import.read_import_mapping`, which alone\\nconsumes it within the request.\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"Declare `read_import_mapping` under `module_internal.operations.migration_import`, since this passage requires `operations` to call it directly.\"}]}",
+ "set_aside": []
+}

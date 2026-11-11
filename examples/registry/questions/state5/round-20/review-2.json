@@ -1,0 +1,125 @@
+{
+ "open_points": [
+  {
+   "subject": "Constants each module imports",
+   "kind": "standard_violation",
+   "text": "This table is every such edge — consumer, provider `data_provider`, the symbols — and the\none source of these imports; a module imports no constant it does not list,\nand names none it does not import.",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Replace this separate authoritative table with the corresponding `module_internal` edges, or state that the table is only a rendering of those edges and cannot be an independent import authority.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration import of load_runtime_settings",
+   "kind": "standard_violation",
+   "text": "`configuration` imports `load_runtime_settings` from `runtime_settings` and\ncalls it itself, once per start (`runtime_settings.load_runtime_settings`,\nCallers).",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Declare `module_internal[configuration][runtime_settings] = [\"load_runtime_settings\"]`; retain prose only as an explanation of the structurally declared dependency.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.open_store",
+   "kind": "contradictory initial state",
+   "text": "`module:store`. Open the store for the running instance, or make a new,\nempty one (A17 rule 5).\n\nOpens or creates the store file; a store made new holds one record, M12\nAuditSequence at 0, made with it, and no other.",
+   "question": "Does “empty” mean literally no records, or no domain records except the required M12 AuditSequence record at 0?",
+   "options": [
+    "A new store contains no records",
+    "A new store contains exactly M12 AuditSequence at 0 and no other record"
+   ],
+   "default_guess": "Treat “empty” as domain-empty and create exactly one M12 AuditSequence record at 0.",
+   "witness": {
+    "initial": "The configured store file does not exist and its directory exists.",
+    "events": [
+     "`instance_lifecycle` calls `store.open_store`.",
+     "`store` creates and completes the new store."
+    ],
+    "outcomes": [
+     "Reading the new store finds no record, as “make a new, empty one” says.",
+     "Reading the new store finds one M12 AuditSequence record at 0, as State impact says."
+    ],
+    "observer": "The first audit append or backup snapshot that reads the audit sequence."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:migration_import.read_import_mapping output by mode",
+   "kind": "mode-dependent output unspecified",
+   "text": "For an accepted file, its bytes as read — which `operations` hands to\n`owner_sessions.keep_uploaded_file` — and its digest, the SHA-256 of those\nbytes, which Registry computes and never takes from a caller.",
+   "question": "Are the bytes returned only for an accepted `upload` call, or also for every accepted `mapping` call over already-kept bytes?",
+   "options": [
+    "Return bytes and digest in both `upload` and `mapping` modes",
+    "Return bytes and digest only at `upload`; return the mapping and file digest at `mapping`",
+    "Return bytes only at `upload`, but return the digest in both modes"
+   ],
+   "default_guess": "Return bytes only at `upload`, and return the digest in both modes so mappings can identify the kept file.",
+   "witness": {
+    "initial": "An owner session already keeps an accepted import file.",
+    "events": [
+     "The owner submits picks and mapping values.",
+     "`operations` calls `read_import_mapping` in `mapping` mode with the kept file's bytes."
+    ],
+    "outcomes": [
+     "The operation returns the full file bytes again together with the digest and mapping.",
+     "The operation returns only the mapping and digest; the bytes remain solely in `owner_sessions`."
+    ],
+    "observer": "`operations`, and any memory or local-contract test inspecting the returned value."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:migration_import.read_import_mapping cleanliness",
+   "kind": "invalid Customer kind untreated",
+   "text": "and whether the mapping is clean — no malformed record, no conflict,\nno missing value, no given name or alias outside A02's form and at least\none pick — which alone lets the confirmation\nstep be shown.",
+   "question": "Does an owner-given Customer kind outside the closed `person`/`company` vocabulary make the mapping unclean, and if so how is that defect represented?",
+   "options": [
+    "It makes the mapping unclean and is reported as an invalid Customer kind",
+    "Any nonblank kind is accepted because this cleanliness clause checks only missing values, names and aliases",
+    "It is accepted while mapping but refused only when confirmation rechecks the values"
+   ],
+   "default_guess": "Treat a kind outside `person`/`company` as an invalid mapping value, make the mapping unclean, and name the Customer and field in the defect.",
+   "witness": {
+    "initial": "There is no migration closure; an accepted file contains one valid project linked to one v1 customer value, with no malformed brought-in record or production-id conflict.",
+    "events": [
+     "The owner picks the project.",
+     "The owner supplies valid project and Customer names, a valid alias, and Customer kind `partnership`.",
+     "The owner asks to show the import confirmation step."
+    ],
+    "outcomes": [
+     "Because the quoted cleanliness rule mentions only missing values and invalid names or aliases, the mapping is clean and the confirmation step is shown.",
+     "Because M04 closes Customer kind to `person` or `company`, the mapping is not clean and no confirmation step is shown."
+    ],
+    "observer": "The owner, who either sees the confirmation step or an invalid-kind defect."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "clock, instance_lifecycle and the 60-second session pass",
+   "kind": "caller and timing ownership contradiction",
+   "text": "Every limit of A13 — 8 hours, 30, 15 and 10 minutes, 60 seconds — is\nmeasured between two of these readings and never by the wall clock.\n\n### Callers\n\n`module:owner_sessions`.\n\nAny limit or schedule: the 8 hours and the 30, 15 and 10 minutes are\n`data_provider`'s constants that `owner_sessions` applies; the 03:00 is one\nthat `backups` applies; the 60 seconds of the session pass and of the minute\nlook are ones that `instance_lifecycle` applies, calling `owner_sessions` and\n`backups` at those intervals.",
+   "question": "How does `instance_lifecycle` measure the 60-second session-pass interval if it applies that schedule, every A13 duration must be measured between `clock.monotonic_reading` readings, and `instance_lifecycle` is not a caller of that operation?",
+   "options": [
+    "Add `instance_lifecycle` as a caller and importer of `clock.monotonic_reading`",
+    "Let `instance_lifecycle` use a separate monotonic scheduler and revise the claim that the interval is measured between readings of this operation",
+    "Move application of the session-pass interval back to `owner_sessions`"
+   ],
+   "default_guess": "Add `instance_lifecycle` as a caller of `clock.monotonic_reading` and declare the corresponding direct import.",
+   "witness": {
+    "initial": "A running instance uses a replaceable test clock whose monotonic reading is fixed until the test advances it.",
+    "events": [
+     "`instance_lifecycle` starts the session-expiry pass schedule.",
+     "The test advances or leaves fixed the replacement monotonic clock while real process time passes."
+    ],
+    "outcomes": [
+     "If `instance_lifecycle` measures the interval through `clock.monotonic_reading`, no pass is due until the replacement reading advances by 60 seconds.",
+     "If `instance_lifecycle` uses an undeclared scheduler or host timer, the pass becomes due after 60 seconds of that timer even though the replacement reading did not advance."
+    ],
+    "observer": "A timing test and sessions that are ended by the pass."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Constants each module imports\",\"kind\":\"standard_violation\",\"text\":\"This table is every such edge — consumer, provider `data_provider`, the symbols — and the\\none source of these imports; a module imports no constant it does not list,\\nand names none it does not import.\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Replace this separate authoritative table with the corresponding `module_internal` edges, or state that the table is only a rendering of those edges and cannot be an independent import authority.\"},{\"subject\":\"configuration import of load_runtime_settings\",\"kind\":\"standard_violation\",\"text\":\"`configuration` imports `load_runtime_settings` from `runtime_settings` and\\ncalls it itself, once per start (`runtime_settings.load_runtime_settings`,\\nCallers).\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Declare `module_internal[configuration][runtime_settings] = [\\\"load_runtime_settings\\\"]`; retain prose only as an explanation of the structurally declared dependency.\"},{\"subject\":\"public_op:store.open_store\",\"kind\":\"contradictory initial state\",\"text\":\"`module:store`. Open the store for the running instance, or make a new,\\nempty one (A17 rule 5).\\n\\nOpens or creates the store file; a store made new holds one record, M12\\nAuditSequence at 0, made with it, and no other.\",\"question\":\"Does “empty” mean literally no records, or no domain records except the required M12 AuditSequence record at 0?\",\"options\":[\"A new store contains no records\",\"A new store contains exactly M12 AuditSequence at 0 and no other record\"],\"default_guess\":\"Treat “empty” as domain-empty and create exactly one M12 AuditSequence record at 0.\",\"witness\":{\"initial\":\"The configured store file does not exist and its directory exists.\",\"events\":[\"`instance_lifecycle` calls `store.open_store`.\",\"`store` creates and completes the new store.\"],\"outcomes\":[\"Reading the new store finds no record, as “make a new, empty one” says.\",\"Reading the new store finds one M12 AuditSequence record at 0, as State impact says.\"],\"observer\":\"The first audit append or backup snapshot that reads the audit sequence.\"}},{\"subject\":\"public_op:migration_import.read_import_mapping output by mode\",\"kind\":\"mode-dependent output unspecified\",\"text\":\"For an accepted file, its bytes as read — which `operations` hands to\\n`owner_sessions.keep_uploaded_file` — and its digest, the SHA-256 of those\\nbytes, which Registry computes and never takes from a caller.\",\"question\":\"Are the bytes returned only for an accepted `upload` call, or also for every accepted `mapping` call over already-kept bytes?\",\"options\":[\"Return bytes and digest in both `upload` and `mapping` modes\",\"Return bytes and digest only at `upload`; return the mapping and file digest at `mapping`\",\"Return bytes only at `upload`, but return the digest in both modes\"],\"default_guess\":\"Return bytes only at `upload`, and return the digest in both modes so mappings can identify the kept file.\",\"witness\":{\"initial\":\"An owner session already keeps an accepted import file.\",\"events\":[\"The owner submits picks and mapping values.\",\"`operations` calls `read_import_mapping` in `mapping` mode with the kept file's bytes.\"],\"outcomes\":[\"The operation returns the full file bytes again together with the digest and mapping.\",\"The operation returns only the mapping and digest; the bytes remain solely in `owner_sessions`.\"],\"observer\":\"`operations`, and any memory or local-contract test inspecting the returned value.\"}},{\"subject\":\"public_op:migration_import.read_import_mapping cleanliness\",\"kind\":\"invalid Customer kind untreated\",\"text\":\"and whether the mapping is clean — no malformed record, no conflict,\\nno missing value, no given name or alias outside A02's form and at least\\none pick — which alone lets the confirmation\\nstep be shown.\",\"question\":\"Does an owner-given Customer kind outside the closed `person`/`company` vocabulary make the mapping unclean, and if so how is that defect represented?\",\"options\":[\"It makes the mapping unclean and is reported as an invalid Customer kind\",\"Any nonblank kind is accepted because this cleanliness clause checks only missing values, names and aliases\",\"It is accepted while mapping but refused only when confirmation rechecks the values\"],\"default_guess\":\"Treat a kind outside `person`/`company` as an invalid mapping value, make the mapping unclean, and name the Customer and field in the defect.\",\"witness\":{\"initial\":\"There is no migration closure; an accepted file contains one valid project linked to one v1 customer value, with no malformed brought-in record or production-id conflict.\",\"events\":[\"The owner picks the project.\",\"The owner supplies valid project and Customer names, a valid alias, and Customer kind `partnership`.\",\"The owner asks to show the import confirmation step.\"],\"outcomes\":[\"Because the quoted cleanliness rule mentions only missing values and invalid names or aliases, the mapping is clean and the confirmation step is shown.\",\"Because M04 closes Customer kind to `person` or `company`, the mapping is not clean and no confirmation step is shown.\"],\"observer\":\"The owner, who either sees the confirmation step or an invalid-kind defect.\"}},{\"subject\":\"clock, instance_lifecycle and the 60-second session pass\",\"kind\":\"caller and timing ownership contradiction\",\"text\":\"Every limit of A13 — 8 hours, 30, 15 and 10 minutes, 60 seconds — is\\nmeasured between two of these readings and never by the wall clock.\\n\\n### Callers\\n\\n`module:owner_sessions`.\\n\\nAny limit or schedule: the 8 hours and the 30, 15 and 10 minutes are\\n`data_provider`'s constants that `owner_sessions` applies; the 03:00 is one\\nthat `backups` applies; the 60 seconds of the session pass and of the minute\\nlook are ones that `instance_lifecycle` applies, calling `owner_sessions` and\\n`backups` at those intervals.\",\"question\":\"How does `instance_lifecycle` measure the 60-second session-pass interval if it applies that schedule, every A13 duration must be measured between `clock.monotonic_reading` readings, and `instance_lifecycle` is not a caller of that operation?\",\"options\":[\"Add `instance_lifecycle` as a caller and importer of `clock.monotonic_reading`\",\"Let `instance_lifecycle` use a separate monotonic scheduler and revise the claim that the interval is measured between readings of this operation\",\"Move application of the session-pass interval back to `owner_sessions`\"],\"default_guess\":\"Add `instance_lifecycle` as a caller of `clock.monotonic_reading` and declare the corresponding direct import.\",\"witness\":{\"initial\":\"A running instance uses a replaceable test clock whose monotonic reading is fixed until the test advances it.\",\"events\":[\"`instance_lifecycle` starts the session-expiry pass schedule.\",\"The test advances or leaves fixed the replacement monotonic clock while real process time passes.\"],\"outcomes\":[\"If `instance_lifecycle` measures the interval through `clock.monotonic_reading`, no pass is due until the replacement reading advances by 60 seconds.\",\"If `instance_lifecycle` uses an undeclared scheduler or host timer, the pass becomes due after 60 seconds of that timer even though the replacement reading did not advance.\"],\"observer\":\"A timing test and sessions that are ended by the pass.\"}}]}",
+ "set_aside": []
+}
