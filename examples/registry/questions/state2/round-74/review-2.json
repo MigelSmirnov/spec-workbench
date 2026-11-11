@@ -1,0 +1,393 @@
+{
+ "open_points": [
+  {
+   "subject": "State 2 time source",
+   "kind": "missing_decision",
+   "text": "where time comes from and what it means: the source of every instant the product writes or compares, its representation, and how many readings one operation takes",
+   "question": "What clock or authority supplies Registry's current instant, and how is it injected into every operation that writes or compares time?",
+   "options": [
+    "An injected clock port supplies time",
+    "Each operation receives a datetime parameter",
+    "One declared authority module supplies time"
+   ],
+   "default_guess": "Use an injected clock port backed by an aware UTC system clock.",
+   "unit": "?"
+  },
+  {
+   "subject": "State 2 instant representation",
+   "kind": "missing_decision",
+   "text": "Every time Registry records is an instant in UTC with time zone (L16).",
+   "question": "What concrete in-memory, persistence and comparison representation is required, including precision, normalization and treatment of non-UTC offsets?",
+   "options": [
+    "Timezone-aware datetimes normalized to UTC",
+    "RFC 3339 UTC strings",
+    "Integer Unix timestamps at a declared precision"
+   ],
+   "default_guess": "Use timezone-aware datetimes normalized to UTC and preserve microsecond precision.",
+   "witness": {
+    "initial": "An import contains a syntactically valid instant with offset +01:00.",
+    "events": [
+     "The owner uploads the import file.",
+     "Registry validates the imported instant."
+    ],
+    "outcomes": [
+     "Registry accepts the offset-aware value and normalizes it to UTC.",
+     "Registry refuses it because only a +00:00 representation is accepted."
+    ],
+    "observer": "The owner sees either a mapping or an upload refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A07 publish transaction",
+   "kind": "time_read_count",
+   "text": "Publishing a pointer assigns its version, marks the type's published pointer `superseded` with its instant, and stores the new pointer `published` — all in one transaction, or none of it (R0-17, R0-35).",
+   "question": "Does one publish read the clock once for both the old pointer's superseded instant and the new pointer's published instant, or separately for each write?",
+   "options": [
+    "One reading shared by the whole publish",
+    "One reading for each affected pointer"
+   ],
+   "default_guess": "Read once and use the same instant for both changes.",
+   "witness": {
+    "initial": "A project has one published estimate pointer.",
+    "events": [
+     "An authenticated caller publishes the next estimate pointer.",
+     "Registry supersedes the old pointer and creates the new pointer."
+    ],
+    "outcomes": [
+     "Both pointer facts carry exactly the same instant.",
+     "The superseded instant is later than the new pointer's published instant because the clock was read twice."
+    ],
+    "observer": "A reader of the artifact history sees whether the instants are equal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 accepted import",
+   "kind": "time_read_count",
+   "text": "A Customer the import makes is created at the import's instant with revision 1.",
+   "question": "Which import facts share the single import instant—new Customers, the migration closure, the audit entry and any other newly written facts—and when is that instant read relative to commit?",
+   "options": [
+    "One pre-commit reading shared by every fact created by the import",
+    "Separate readings for Customers, closure and audit entry",
+    "The transaction commit time supplied by the store"
+   ],
+   "default_guess": "Read the clock once inside the operation before persistence and use that instant for every new import fact.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 imported instants",
+   "kind": "vague_refusal",
+   "text": "an instant cannot be read",
+   "question": "Exactly which serialized timestamp forms are readable, which offsets and precisions are allowed, and are readable non-UTC values normalized or refused?",
+   "options": [
+    "Accept RFC 3339 offsets and normalize to UTC",
+    "Accept only RFC 3339 values explicitly in UTC",
+    "Accept the source format later declared by the import contract"
+   ],
+   "default_guess": "Accept RFC 3339 timezone-aware instants and normalize them to UTC.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 file digest",
+   "kind": "missing_definition",
+   "text": "The mapping names the file by its digest.",
+   "question": "Which digest algorithm, byte encoding and displayed representation identify the file, and how must a digest collision be handled?",
+   "options": [
+    "SHA-256 over the exact uploaded bytes, lowercase hexadecimal",
+    "A typed digest carrying algorithm and encoded value",
+    "A digest algorithm selected later by the file contract"
+   ],
+   "default_guess": "Use SHA-256 over the exact uploaded bytes and represent it as lowercase hexadecimal.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 and A02 mapping validation",
+   "kind": "contradiction",
+   "text": "The same checks hold for every action that gives the value — a create and a correction, which are refused at stage (4); and the names and aliases the import's mapping gives, which A16 rule 1 handles: such a value is shown in the mapping, keeps the confirmation step from being shown, and refuses a confirmation, while the mapping request itself is answered.",
+   "question": "Is a mapping request containing an invalid supplied name or alias an answered validation result, as A02 and A16 say, or a stage-(4) refusal under A04's rule that every operation checks given values and answers its first failure?",
+   "options": [
+    "Answer the mapping and report the invalid values; refuse only showing or using confirmation",
+    "Refuse the mapping request at stage (4)",
+    "Define mapping validation as a stated exception to A04's stage-(4) refusal"
+   ],
+   "default_guess": "Treat mapping as a validation response that reports invalid values, and state it as an explicit exception to A04.",
+   "witness": {
+    "initial": "An owner session holds a readable import file and the owner supplies a 41-code-point alias for a picked project.",
+    "events": [
+     "The owner asks Registry to show the mapping."
+    ],
+    "outcomes": [
+     "A02 and A16 answer the mapping, show the invalid alias and withhold the confirmation step.",
+     "A04 stage (4) treats the alias as the first failing value check and refuses the mapping operation."
+    ],
+    "observer": "The owner either sees the mapping or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 formal invariant",
+   "kind": "invariant_test_gap",
+   "text": "stored(P with rooms, pointers) and stored(new customers of P)\n  and closure.file_digest = digest(f) and one AuditEntry, in one transaction",
+   "question": "Which Required tests item must explicitly show, after a successful import, that all picked projects, rooms, pointers and Customers, the matching closure digest and exactly one audit entry were committed together?",
+   "options": [
+    "Extend Required test 1 to assert every successful-transaction fact",
+    "Add a dedicated successful-import invariant test"
+   ],
+   "default_guess": "Add a dedicated successful-import test asserting every listed fact and exactly one audit entry.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 transaction failure",
+   "kind": "invariant_test_gap",
+   "text": "A failure during the transaction leaves no project, no Customer and no\n   closure.",
+   "question": "Must the failure test also show that no room, pointer or audit entry remains, as required by the formal all-in-one-transaction invariant?",
+   "options": [
+    "Add rooms, pointers and the audit entry to this test's absence assertions",
+    "Rely on transaction infrastructure tests outside A16"
+   ],
+   "default_guess": "Extend the test to assert that no project, room, pointer, Customer, closure or audit entry remains.",
+   "unit": "?"
+  },
+  {
+   "subject": "A01 archived project repeat",
+   "kind": "contradiction",
+   "text": "create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:\n  rights fail or project archived => refused, store unchanged",
+   "question": "Does the `project archived => refused` invariant apply to a repeat of `create a project`, or only to room and pointer creates whose parent project is archived?",
+   "options": [
+    "Only add-room and publish repeats are refused for an archived parent",
+    "Every create repeat involving an archived project is refused",
+    "Project-create repeats are an explicit exception"
+   ],
+   "default_guess": "Limit the archive refusal to add-room and publish repeats, so a project-create repeat answers the archived project as rule 3 and Required test 4 require.",
+   "witness": {
+    "initial": "An archived Project retains the request id and unchanged creation facts from its original create.",
+    "events": [
+     "The owner repeats `create a project` with that request id and equal facts."
+    ],
+    "outcomes": [
+     "Rule 3 and Required test 4 answer the archived Project unchanged.",
+     "The formal invariant refuses the call because the project is archived."
+    ],
+    "observer": "The owner sees either the Project answer or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A01 request-id uniqueness invariant",
+   "kind": "invariant_test_gap",
+   "text": "for each model m in {Project, Customer}, and per project for m in\n{Room, ArtifactPointer}:\n  for records r1 != r2 of m with r1.request_id and r2.request_id present:\n    r1.request_id != r2.request_id",
+   "question": "Which Required tests demonstrate uniqueness and concurrent same-request-id handling for Customer, Room and ArtifactPointer, not only Project?",
+   "options": [
+    "Add one concurrent test for each model and scope",
+    "Use one parameterized test over all four model/scope combinations"
+   ],
+   "default_guess": "Use a parameterized concurrency test covering Project, Customer, Room per project and ArtifactPointer per project.",
+   "unit": "?"
+  },
+  {
+   "subject": "A02 missing-value predicate",
+   "kind": "vague_semantics",
+   "text": "missing(v) <=> v is absent or strip(v) = \"\"",
+   "question": "Which exact whitespace definition and stripping operation determine whether a string is blank?",
+   "options": [
+    "The runtime's Unicode-aware `str.strip` semantics",
+    "The Unicode White_Space property",
+    "Only an explicitly listed ASCII whitespace set"
+   ],
+   "default_guess": "Use the runtime's Unicode-aware string stripping semantics and name it explicitly.",
+   "witness": {
+    "initial": "A required project display name consists only of a Unicode whitespace character whose treatment differs between candidate stripping rules.",
+    "events": [
+     "The owner submits the create-project form."
+    ],
+    "outcomes": [
+     "One implementation classifies the value as missing and refuses the create.",
+     "Another implementation stores the value exactly as written."
+    ],
+    "observer": "The owner sees either a missing-value refusal or a created project."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A02 applicability of blank rules",
+   "kind": "type_scope",
+   "text": "A required value given as an empty string or as white space only is missing",
+   "question": "Do the missing and blank rules apply only to textual values, and what must happen if a non-string value reaches this check?",
+   "options": [
+    "Apply blank checks only to fields declared as strings",
+    "Convert every value to text before checking",
+    "Refuse a value whose runtime type does not match its declared field type before blank checking"
+   ],
+   "default_guess": "Apply blank checking only to declared string fields and let schema/type validation refuse other runtime types.",
+   "unit": "?"
+  },
+  {
+   "subject": "A02 Customer kind",
+   "kind": "missing_refusal",
+   "text": "a Customer's kind stays required (rule 1)",
+   "question": "Is a present Customer kind outside the State 1 vocabulary `person`, `company` refused, and does that same refusal apply to recording, correction and import mapping/confirmation?",
+   "options": [
+    "Refuse every value outside `person` and `company` in every supplying action",
+    "Check only presence and allow any nonblank kind",
+    "Validate ordinary actions but not import values"
+   ],
+   "default_guess": "Refuse any value outside `person` and `company` for every action that supplies Customer kind.",
+   "witness": {
+    "initial": "No Customer exists for v1 customer reference X, and an import mapping supplies kind `individual`.",
+    "events": [
+     "The owner requests the mapping.",
+     "The owner attempts confirmation if possible."
+    ],
+    "outcomes": [
+     "Registry treats `individual` as invalid because Customer kind is a closed vocabulary.",
+     "Registry accepts it because A02 only makes kind required and does not list its vocabulary among the refusals."
+    ],
+    "observer": "The owner sees whether the value blocks confirmation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A02 numeric characteristics",
+   "kind": "exact_refusal",
+   "text": "a floor area not\n   greater than zero, a number of rooms that is not a whole number of at\n   least 1, or a floor that is not a whole number",
+   "question": "Are non-finite numbers, booleans, numeric strings and decimal representations such as `1.0` accepted or refused for these numeric fields?",
+   "options": [
+    "Accept only finite JSON numbers; accept `1.0` when mathematically integral and reject booleans and strings",
+    "Accept only integer lexical representations for whole-number fields",
+    "Coerce numeric strings and booleans using the implementation language"
+   ],
+   "default_guess": "Accept only finite numeric values of the declared schema type, reject booleans and strings, and accept mathematically integral values such as `1.0` for whole-number fields.",
+   "witness": {
+    "initial": "The owner supplies a number of rooms encoded as the numeric value 1.0.",
+    "events": [
+     "The owner creates a project."
+    ],
+    "outcomes": [
+     "Registry accepts it because its mathematical value is a whole number of at least 1.",
+     "Registry refuses it because its representation is not an integer."
+    ],
+    "observer": "The owner sees acceptance or a value refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A02 required-value invariant",
+   "kind": "invariant_test_gap",
+   "text": "for every stored required value v: not missing(v)",
+   "question": "Which Required tests item must show that an actually absent required value—not only a whitespace-only value—is refused and never stored?",
+   "options": [
+    "Extend Required test 1 with an absent display name",
+    "Add a parameterized test for every required field"
+   ],
+   "default_guess": "Add a parameterized test covering absence and blank input for every required field governed by A02.",
+   "unit": "?"
+  },
+  {
+   "subject": "A04 last-changed invariant",
+   "kind": "invariant_test_gap",
+   "text": "accepted and changed(r) and r keeps a revision\n                          => r.revision' = r.revision + 1\n                             and r.last_changed' = now",
+   "question": "Which Required tests item must assert both the one-step revision increment and the exact last-changed instant supplied by the operation for each class of accepted change?",
+   "options": [
+    "Add a parameterized invariant test for every revision-moving action",
+    "Extend the existing archive and correction tests with clock and revision assertions"
+   ],
+   "default_guess": "Add a parameterized test using a fixed clock for every revision-moving Project and Customer action.",
+   "unit": "?"
+  },
+  {
+   "subject": "M06 AgentSession start value",
+   "kind": "carried_question",
+   "text": "its start value and how a stale version is checked are State 2's (round 28 judgement P4).",
+   "question": "What is the initial access version, which operations must state it, and what exact answer and state result follow when it is absent or stale?",
+   "options": [
+    "Start at 1; every owner access mutation states it; absent or unequal is refused stale",
+    "Start at 0; increment on every access change; absent or unequal is refused stale",
+    "Only confirmation-bearing owner mutations state it"
+   ],
+   "default_guess": "Start at 1 and require the current access version on every owner action that can change session access; refuse absent or unequal values as stale without change.",
+   "unit": "?"
+  },
+  {
+   "subject": "M06 AgentSession ending",
+   "kind": "carried_question",
+   "text": "What ends a session, and whether its record is kept after, is State 2's (R0-47).",
+   "question": "Which event ends an AgentSession, what happens to in-flight and later calls, and is the ended record deleted or retained?",
+   "options": [
+    "Kernel explicitly ends it and Registry deletes it",
+    "Kernel explicitly ends it and Registry retains an ended tombstone",
+    "Expiry or inactivity ends it automatically"
+   ],
+   "default_guess": "Require an authenticated Kernel end-session operation, delete the session and refuse later calls as an unregistered session.",
+   "unit": "?"
+  },
+  {
+   "subject": "M09 AuditEntry refused attempts",
+   "kind": "carried_question",
+   "text": "whether refused attempts are recorded is settled in State 2, round 28 P1",
+   "question": "Which refused operations, if any, create audit entries, and what outcome and subject are recorded without leaking personal values or hidden record existence?",
+   "options": [
+    "No refused operation is audited",
+    "Audit every authenticated refused change",
+    "Audit only a closed set of security-relevant refusals"
+   ],
+   "default_guess": "Do not create Registry audit entries for refused attempts unless a closed, explicitly defined security-event set is added.",
+   "unit": "?"
+  },
+  {
+   "subject": "M09 agent-authority reads",
+   "kind": "carried_question",
+   "text": "Whether refused attempts and agent-authority reads leave an\nentry is State 2's (round 28 P1; R0-58 says ordinary reads do not).",
+   "question": "Are all agent-authority reads excluded from the audit log, including refused reads, or is some closed subset recorded?",
+   "options": [
+    "No agent-authority read is audited",
+    "Only refused agent-authority reads are audited",
+    "A declared subset of sensitive reads is audited"
+   ],
+   "default_guess": "Audit no agent-authority reads, following R0-58's exclusion of ordinary reads.",
+   "unit": "?"
+  },
+  {
+   "subject": "M11 OwnerSession lifetime",
+   "kind": "carried_question",
+   "text": "Its lifetime,\nexpiry and sign-in throttling are State 2's (R0-30, carried).",
+   "question": "What are the absolute and idle lifetimes, which requests refresh idle activity, and exactly when an expired session is removed and refused?",
+   "options": [
+    "Both absolute and idle expiry, with every authenticated owner request refreshing idle activity",
+    "Absolute expiry only",
+    "Idle expiry only"
+   ],
+   "default_guess": "Use explicit absolute and idle deadlines; every authenticated owner request updates the last-request instant, and either elapsed deadline ends the session before processing the action.",
+   "unit": "?"
+  },
+  {
+   "subject": "M11 sign-in throttling",
+   "kind": "carried_question",
+   "text": "Its lifetime,\nexpiry and sign-in throttling are State 2's (R0-30, carried).",
+   "question": "What key, window, attempt threshold, delay or lockout, reset rule and refusal response define sign-in throttling?",
+   "options": [
+    "Per-source and global sliding-window rate limits",
+    "Exponential delay per source",
+    "Temporary lockout of owner sign-in after a fixed number of failures"
+   ],
+   "default_guess": "Use a bounded per-source sliding-window limit with a generic refusal and no durable account lockout.",
+   "unit": "?"
+  },
+  {
+   "subject": "M11 owner-operation time readings",
+   "kind": "time_read_count",
+   "text": "the instant of its last request, which starts as the instant it\nbegan",
+   "question": "Does sign-in use one clock reading for the session's begun instant, initial last-request instant and calculated expiry, and does each later request take exactly one reading for expiry checks and last-request update?",
+   "options": [
+    "One reading per sign-in or owner request",
+    "Separate readings for checks and writes",
+    "Store-provided transaction time"
+   ],
+   "default_guess": "Use exactly one clock reading per sign-in and one per subsequent owner request.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"State 2 time source\",\"kind\":\"missing_decision\",\"text\":\"where time comes from and what it means: the source of every instant the product writes or compares, its representation, and how many readings one operation takes\",\"question\":\"What clock or authority supplies Registry's current instant, and how is it injected into every operation that writes or compares time?\",\"options\":[\"An injected clock port supplies time\",\"Each operation receives a datetime parameter\",\"One declared authority module supplies time\"],\"default_guess\":\"Use an injected clock port backed by an aware UTC system clock.\"},{\"subject\":\"State 2 instant representation\",\"kind\":\"missing_decision\",\"text\":\"Every time Registry records is an instant in UTC with time zone (L16).\",\"question\":\"What concrete in-memory, persistence and comparison representation is required, including precision, normalization and treatment of non-UTC offsets?\",\"options\":[\"Timezone-aware datetimes normalized to UTC\",\"RFC 3339 UTC strings\",\"Integer Unix timestamps at a declared precision\"],\"default_guess\":\"Use timezone-aware datetimes normalized to UTC and preserve microsecond precision.\",\"witness\":{\"initial\":\"An import contains a syntactically valid instant with offset +01:00.\",\"events\":[\"The owner uploads the import file.\",\"Registry validates the imported instant.\"],\"outcomes\":[\"Registry accepts the offset-aware value and normalizes it to UTC.\",\"Registry refuses it because only a +00:00 representation is accepted.\"],\"observer\":\"The owner sees either a mapping or an upload refusal.\"}},{\"subject\":\"A07 publish transaction\",\"kind\":\"time_read_count\",\"text\":\"Publishing a pointer assigns its version, marks the type's published pointer `superseded` with its instant, and stores the new pointer `published` — all in one transaction, or none of it (R0-17, R0-35).\",\"question\":\"Does one publish read the clock once for both the old pointer's superseded instant and the new pointer's published instant, or separately for each write?\",\"options\":[\"One reading shared by the whole publish\",\"One reading for each affected pointer\"],\"default_guess\":\"Read once and use the same instant for both changes.\",\"witness\":{\"initial\":\"A project has one published estimate pointer.\",\"events\":[\"An authenticated caller publishes the next estimate pointer.\",\"Registry supersedes the old pointer and creates the new pointer.\"],\"outcomes\":[\"Both pointer facts carry exactly the same instant.\",\"The superseded instant is later than the new pointer's published instant because the clock was read twice.\"],\"observer\":\"A reader of the artifact history sees whether the instants are equal.\"}},{\"subject\":\"A16 accepted import\",\"kind\":\"time_read_count\",\"text\":\"A Customer the import makes is created at the import's instant with revision 1.\",\"question\":\"Which import facts share the single import instant—new Customers, the migration closure, the audit entry and any other newly written facts—and when is that instant read relative to commit?\",\"options\":[\"One pre-commit reading shared by every fact created by the import\",\"Separate readings for Customers, closure and audit entry\",\"The transaction commit time supplied by the store\"],\"default_guess\":\"Read the clock once inside the operation before persistence and use that instant for every new import fact.\"},{\"subject\":\"A16 imported instants\",\"kind\":\"vague_refusal\",\"text\":\"an instant cannot be read\",\"question\":\"Exactly which serialized timestamp forms are readable, which offsets and precisions are allowed, and are readable non-UTC values normalized or refused?\",\"options\":[\"Accept RFC 3339 offsets and normalize to UTC\",\"Accept only RFC 3339 values explicitly in UTC\",\"Accept the source format later declared by the import contract\"],\"default_guess\":\"Accept RFC 3339 timezone-aware instants and normalize them to UTC.\"},{\"subject\":\"A16 file digest\",\"kind\":\"missing_definition\",\"text\":\"The mapping names the file by its digest.\",\"question\":\"Which digest algorithm, byte encoding and displayed representation identify the file, and how must a digest collision be handled?\",\"options\":[\"SHA-256 over the exact uploaded bytes, lowercase hexadecimal\",\"A typed digest carrying algorithm and encoded value\",\"A digest algorithm selected later by the file contract\"],\"default_guess\":\"Use SHA-256 over the exact uploaded bytes and represent it as lowercase hexadecimal.\"},{\"subject\":\"A16 and A02 mapping validation\",\"kind\":\"contradiction\",\"text\":\"The same checks hold for every action that gives the value — a create and a correction, which are refused at stage (4); and the names and aliases the import's mapping gives, which A16 rule 1 handles: such a value is shown in the mapping, keeps the confirmation step from being shown, and refuses a confirmation, while the mapping request itself is answered.\",\"question\":\"Is a mapping request containing an invalid supplied name or alias an answered validation result, as A02 and A16 say, or a stage-(4) refusal under A04's rule that every operation checks given values and answers its first failure?\",\"options\":[\"Answer the mapping and report the invalid values; refuse only showing or using confirmation\",\"Refuse the mapping request at stage (4)\",\"Define mapping validation as a stated exception to A04's stage-(4) refusal\"],\"default_guess\":\"Treat mapping as a validation response that reports invalid values, and state it as an explicit exception to A04.\",\"witness\":{\"initial\":\"An owner session holds a readable import file and the owner supplies a 41-code-point alias for a picked project.\",\"events\":[\"The owner asks Registry to show the mapping.\"],\"outcomes\":[\"A02 and A16 answer the mapping, show the invalid alias and withhold the confirmation step.\",\"A04 stage (4) treats the alias as the first failing value check and refuses the mapping operation.\"],\"observer\":\"The owner either sees the mapping or a refusal.\"}},{\"subject\":\"A16 formal invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"stored(P with rooms, pointers) and stored(new customers of P)\\n  and closure.file_digest = digest(f) and one AuditEntry, in one transaction\",\"question\":\"Which Required tests item must explicitly show, after a successful import, that all picked projects, rooms, pointers and Customers, the matching closure digest and exactly one audit entry were committed together?\",\"options\":[\"Extend Required test 1 to assert every successful-transaction fact\",\"Add a dedicated successful-import invariant test\"],\"default_guess\":\"Add a dedicated successful-import test asserting every listed fact and exactly one audit entry.\"},{\"subject\":\"A16 transaction failure\",\"kind\":\"invariant_test_gap\",\"text\":\"A failure during the transaction leaves no project, no Customer and no\\n   closure.\",\"question\":\"Must the failure test also show that no room, pointer or audit entry remains, as required by the formal all-in-one-transaction invariant?\",\"options\":[\"Add rooms, pointers and the audit entry to this test's absence assertions\",\"Rely on transaction infrastructure tests outside A16\"],\"default_guess\":\"Extend the test to assert that no project, room, pointer, Customer, closure or audit entry remains.\"},{\"subject\":\"A01 archived project repeat\",\"kind\":\"contradiction\",\"text\":\"create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:\\n  rights fail or project archived => refused, store unchanged\",\"question\":\"Does the `project archived => refused` invariant apply to a repeat of `create a project`, or only to room and pointer creates whose parent project is archived?\",\"options\":[\"Only add-room and publish repeats are refused for an archived parent\",\"Every create repeat involving an archived project is refused\",\"Project-create repeats are an explicit exception\"],\"default_guess\":\"Limit the archive refusal to add-room and publish repeats, so a project-create repeat answers the archived project as rule 3 and Required test 4 require.\",\"witness\":{\"initial\":\"An archived Project retains the request id and unchanged creation facts from its original create.\",\"events\":[\"The owner repeats `create a project` with that request id and equal facts.\"],\"outcomes\":[\"Rule 3 and Required test 4 answer the archived Project unchanged.\",\"The formal invariant refuses the call because the project is archived.\"],\"observer\":\"The owner sees either the Project answer or a refusal.\"}},{\"subject\":\"A01 request-id uniqueness invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"for each model m in {Project, Customer}, and per project for m in\\n{Room, ArtifactPointer}:\\n  for records r1 != r2 of m with r1.request_id and r2.request_id present:\\n    r1.request_id != r2.request_id\",\"question\":\"Which Required tests demonstrate uniqueness and concurrent same-request-id handling for Customer, Room and ArtifactPointer, not only Project?\",\"options\":[\"Add one concurrent test for each model and scope\",\"Use one parameterized test over all four model/scope combinations\"],\"default_guess\":\"Use a parameterized concurrency test covering Project, Customer, Room per project and ArtifactPointer per project.\"},{\"subject\":\"A02 missing-value predicate\",\"kind\":\"vague_semantics\",\"text\":\"missing(v) <=> v is absent or strip(v) = \\\"\\\"\",\"question\":\"Which exact whitespace definition and stripping operation determine whether a string is blank?\",\"options\":[\"The runtime's Unicode-aware `str.strip` semantics\",\"The Unicode White_Space property\",\"Only an explicitly listed ASCII whitespace set\"],\"default_guess\":\"Use the runtime's Unicode-aware string stripping semantics and name it explicitly.\",\"witness\":{\"initial\":\"A required project display name consists only of a Unicode whitespace character whose treatment differs between candidate stripping rules.\",\"events\":[\"The owner submits the create-project form.\"],\"outcomes\":[\"One implementation classifies the value as missing and refuses the create.\",\"Another implementation stores the value exactly as written.\"],\"observer\":\"The owner sees either a missing-value refusal or a created project.\"}},{\"subject\":\"A02 applicability of blank rules\",\"kind\":\"type_scope\",\"text\":\"A required value given as an empty string or as white space only is missing\",\"question\":\"Do the missing and blank rules apply only to textual values, and what must happen if a non-string value reaches this check?\",\"options\":[\"Apply blank checks only to fields declared as strings\",\"Convert every value to text before checking\",\"Refuse a value whose runtime type does not match its declared field type before blank checking\"],\"default_guess\":\"Apply blank checking only to declared string fields and let schema/type validation refuse other runtime types.\"},{\"subject\":\"A02 Customer kind\",\"kind\":\"missing_refusal\",\"text\":\"a Customer's kind stays required (rule 1)\",\"question\":\"Is a present Customer kind outside the State 1 vocabulary `person`, `company` refused, and does that same refusal apply to recording, correction and import mapping/confirmation?\",\"options\":[\"Refuse every value outside `person` and `company` in every supplying action\",\"Check only presence and allow any nonblank kind\",\"Validate ordinary actions but not import values\"],\"default_guess\":\"Refuse any value outside `person` and `company` for every action that supplies Customer kind.\",\"witness\":{\"initial\":\"No Customer exists for v1 customer reference X, and an import mapping supplies kind `individual`.\",\"events\":[\"The owner requests the mapping.\",\"The owner attempts confirmation if possible.\"],\"outcomes\":[\"Registry treats `individual` as invalid because Customer kind is a closed vocabulary.\",\"Registry accepts it because A02 only makes kind required and does not list its vocabulary among the refusals.\"],\"observer\":\"The owner sees whether the value blocks confirmation.\"}},{\"subject\":\"A02 numeric characteristics\",\"kind\":\"exact_refusal\",\"text\":\"a floor area not\\n   greater than zero, a number of rooms that is not a whole number of at\\n   least 1, or a floor that is not a whole number\",\"question\":\"Are non-finite numbers, booleans, numeric strings and decimal representations such as `1.0` accepted or refused for these numeric fields?\",\"options\":[\"Accept only finite JSON numbers; accept `1.0` when mathematically integral and reject booleans and strings\",\"Accept only integer lexical representations for whole-number fields\",\"Coerce numeric strings and booleans using the implementation language\"],\"default_guess\":\"Accept only finite numeric values of the declared schema type, reject booleans and strings, and accept mathematically integral values such as `1.0` for whole-number fields.\",\"witness\":{\"initial\":\"The owner supplies a number of rooms encoded as the numeric value 1.0.\",\"events\":[\"The owner creates a project.\"],\"outcomes\":[\"Registry accepts it because its mathematical value is a whole number of at least 1.\",\"Registry refuses it because its representation is not an integer.\"],\"observer\":\"The owner sees acceptance or a value refusal.\"}},{\"subject\":\"A02 required-value invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"for every stored required value v: not missing(v)\",\"question\":\"Which Required tests item must show that an actually absent required value—not only a whitespace-only value—is refused and never stored?\",\"options\":[\"Extend Required test 1 with an absent display name\",\"Add a parameterized test for every required field\"],\"default_guess\":\"Add a parameterized test covering absence and blank input for every required field governed by A02.\"},{\"subject\":\"A04 last-changed invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"accepted and changed(r) and r keeps a revision\\n                          => r.revision' = r.revision + 1\\n                             and r.last_changed' = now\",\"question\":\"Which Required tests item must assert both the one-step revision increment and the exact last-changed instant supplied by the operation for each class of accepted change?\",\"options\":[\"Add a parameterized invariant test for every revision-moving action\",\"Extend the existing archive and correction tests with clock and revision assertions\"],\"default_guess\":\"Add a parameterized test using a fixed clock for every revision-moving Project and Customer action.\"},{\"subject\":\"M06 AgentSession start value\",\"kind\":\"carried_question\",\"text\":\"its start value and how a stale version is checked are State 2's (round 28 judgement P4).\",\"question\":\"What is the initial access version, which operations must state it, and what exact answer and state result follow when it is absent or stale?\",\"options\":[\"Start at 1; every owner access mutation states it; absent or unequal is refused stale\",\"Start at 0; increment on every access change; absent or unequal is refused stale\",\"Only confirmation-bearing owner mutations state it\"],\"default_guess\":\"Start at 1 and require the current access version on every owner action that can change session access; refuse absent or unequal values as stale without change.\"},{\"subject\":\"M06 AgentSession ending\",\"kind\":\"carried_question\",\"text\":\"What ends a session, and whether its record is kept after, is State 2's (R0-47).\",\"question\":\"Which event ends an AgentSession, what happens to in-flight and later calls, and is the ended record deleted or retained?\",\"options\":[\"Kernel explicitly ends it and Registry deletes it\",\"Kernel explicitly ends it and Registry retains an ended tombstone\",\"Expiry or inactivity ends it automatically\"],\"default_guess\":\"Require an authenticated Kernel end-session operation, delete the session and refuse later calls as an unregistered session.\"},{\"subject\":\"M09 AuditEntry refused attempts\",\"kind\":\"carried_question\",\"text\":\"whether refused attempts are recorded is settled in State 2, round 28 P1\",\"question\":\"Which refused operations, if any, create audit entries, and what outcome and subject are recorded without leaking personal values or hidden record existence?\",\"options\":[\"No refused operation is audited\",\"Audit every authenticated refused change\",\"Audit only a closed set of security-relevant refusals\"],\"default_guess\":\"Do not create Registry audit entries for refused attempts unless a closed, explicitly defined security-event set is added.\"},{\"subject\":\"M09 agent-authority reads\",\"kind\":\"carried_question\",\"text\":\"Whether refused attempts and agent-authority reads leave an\\nentry is State 2's (round 28 P1; R0-58 says ordinary reads do not).\",\"question\":\"Are all agent-authority reads excluded from the audit log, including refused reads, or is some closed subset recorded?\",\"options\":[\"No agent-authority read is audited\",\"Only refused agent-authority reads are audited\",\"A declared subset of sensitive reads is audited\"],\"default_guess\":\"Audit no agent-authority reads, following R0-58's exclusion of ordinary reads.\"},{\"subject\":\"M11 OwnerSession lifetime\",\"kind\":\"carried_question\",\"text\":\"Its lifetime,\\nexpiry and sign-in throttling are State 2's (R0-30, carried).\",\"question\":\"What are the absolute and idle lifetimes, which requests refresh idle activity, and exactly when an expired session is removed and refused?\",\"options\":[\"Both absolute and idle expiry, with every authenticated owner request refreshing idle activity\",\"Absolute expiry only\",\"Idle expiry only\"],\"default_guess\":\"Use explicit absolute and idle deadlines; every authenticated owner request updates the last-request instant, and either elapsed deadline ends the session before processing the action.\"},{\"subject\":\"M11 sign-in throttling\",\"kind\":\"carried_question\",\"text\":\"Its lifetime,\\nexpiry and sign-in throttling are State 2's (R0-30, carried).\",\"question\":\"What key, window, attempt threshold, delay or lockout, reset rule and refusal response define sign-in throttling?\",\"options\":[\"Per-source and global sliding-window rate limits\",\"Exponential delay per source\",\"Temporary lockout of owner sign-in after a fixed number of failures\"],\"default_guess\":\"Use a bounded per-source sliding-window limit with a generic refusal and no durable account lockout.\"},{\"subject\":\"M11 owner-operation time readings\",\"kind\":\"time_read_count\",\"text\":\"the instant of its last request, which starts as the instant it\\nbegan\",\"question\":\"Does sign-in use one clock reading for the session's begun instant, initial last-request instant and calculated expiry, and does each later request take exactly one reading for expiry checks and last-request update?\",\"options\":[\"One reading per sign-in or owner request\",\"Separate readings for checks and writes\",\"Store-provided transaction time\"],\"default_guess\":\"Use exactly one clock reading per sign-in and one per subsequent owner request.\"}]}",
+ "set_aside": []
+}
