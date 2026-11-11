@@ -135,6 +135,10 @@ conflict at confirmation => store unchanged
     refused.
 11. Asking for the import's confirmation step while the mapping shows a
     conflicting id is refused, and no confirmation value is made.
+12. An accepted import stores every picked project with its rooms and
+    pointers, the Customers it made, one closure holding the file's digest and
+    exactly one audit entry; a failure inside its transaction leaves none of
+    them — no project, room, pointer, Customer, closure or entry.
 
 ### Consequence
 
@@ -586,11 +590,14 @@ A17 and A18 reopened it (rule 2): every category naming them was reviewed, and n
 outcome changed; concurrency now names A18 too, whose one-snapshot copy and
 non-overlapping runs (rule 1) it relies on.
 
-Performed again on 2026-11-11, after that day's changes to A02, A15, A16,
-A17, A18 and A19 reopened it (rule 2): every category naming them —
+Performed again on 2026-11-11, after that day's changes to A01, A02, A04,
+A07, A13, A15, A16, A17, A18 and A19 reopened it (rule 2): every category naming them —
 injection_interpreted_input (A02, A16, A19), secrets, authentication and
-concurrency (A15, A17, A18), browser_boundary (A19), files_artifacts (A16,
-A18) — was reviewed; A15's new tests of concurrent appends rest on its rule 5,
+concurrency (A01, A04, A07, A13, A15, A17, A18), browser_boundary (A13, A19),
+files_artifacts (A07, A16, A18), authorization (A04) — was reviewed; the
+changes to A01, A04 and A07 name constants and an exception of the
+mapping's stage (4), and A07's concurrent publishes are those of different
+request ids, which change no outcome; A15's new tests of concurrent appends rest on its rule 5,
 which concurrency now names. No outcome changed. files_artifacts now names A19 too, whose
 import size limit is counted over the bytes received, never over a declared
 length (rule 4); a new store's one audit sequence (A17 rule 5) changes no

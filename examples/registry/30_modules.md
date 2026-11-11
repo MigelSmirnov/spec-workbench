@@ -164,8 +164,8 @@ later line, and modules on one line do not know each other.
   through `random_values.equal_in_constant_time` (A13 rule 7, A17 rule 6).
 - **What the release declares.** Every value the generated code reads that
   is neither a setting of the environment (`runtime_settings`) nor a member
-  of an enumeration or a field's form in `models` — statuses, kinds,
-  languages, the object's characteristics greater than zero or at least 1 —
+  of an enumeration or a field's type in `models` — statuses, kinds,
+  languages, a whole number —
   is a constant of `data_provider`, its one home (SPEC_STANDARD §6.10, §15.3.1): the artifact vocabulary with each
   type's owner service (A22), the services' rights (A09 rule 2), the store
   version and the store's temporary-name suffix (A17 rule 5), the two backup
@@ -310,7 +310,7 @@ address each surface listens on, which the configuration does not name
 (A17 rules 1, 2); the owner session's limits — 8 hours, 30 minutes, the 15
 minutes and five refusals of the sign-in, the 10 minutes of a confirmation,
 the 60 seconds of the pass (A13); the request id's 128 characters (A01 rule
-1), the alias's 40 (A02 rule 4), the 32 bytes of a secret value and of a
+1), the alias's 40 and the characteristics' bounds (A02 rule 4), the 32 bytes of a secret value and of a
 configured secret (A13 rule 7, A17 rule 3). The list names groups; the data
 closure names each constant, and every one is exported.
 
@@ -357,6 +357,8 @@ CONFIRMATION_VALID_MINUTES
 SESSION_PASS_SECONDS
 REQUEST_ID_MAX_CHARACTERS
 ALIAS_MAX_CHARACTERS
+OBJECT_FLOOR_AREA_MIN_EXCLUSIVE
+OBJECT_ROOMS_MIN
 SECRET_MIN_BYTES
 ```
 

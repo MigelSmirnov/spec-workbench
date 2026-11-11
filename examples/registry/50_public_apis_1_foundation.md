@@ -364,8 +364,10 @@ number of rooms, a floor; a customer language; a Customer's kind.
 Nothing when every present value is within its form; otherwise every value
 outside it, each with its field and its kind: `outside_form` for an alias
 over the imported `ALIAS_MAX_CHARACTERS` constant, counted in Unicode code
-points, a floor area not greater than zero, a number of rooms that is not a
-whole number of at least 1, a floor that is not a whole number;
+points, a floor area not greater than the imported
+`OBJECT_FLOOR_AREA_MIN_EXCLUSIVE` constant, a number of rooms that is not a
+whole number of at least the imported `OBJECT_ROOMS_MIN` constant, a floor
+that is not a whole number;
 `outside_closed_list` for a kind or language outside its enumeration.
 
 ### Observable effect

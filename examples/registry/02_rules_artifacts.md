@@ -16,7 +16,8 @@ commits, and two concurrent publishes of one type answer 500.
    `published` — all in one transaction, or none of it (R0-17, R0-35).
 2. Every publish and every withdrawal on one project's pointers is
    serialised with the others: each runs on the result of the one before.
-   Two concurrent publishes of a type are both accepted with consecutive
+   Two concurrent publishes of a type with different request ids are both
+   accepted with consecutive
    versions; a withdrawal that runs after a publish superseded its pointer is
    refused as withdrawing a superseded pointer; a publish that runs after a
    withdrawal makes the next version `published`; a second withdrawal of one

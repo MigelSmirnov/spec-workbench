@@ -110,7 +110,7 @@ second authority beside them. The values are the data closure's.
 | consumer | constants it imports from `data_provider` |
 |---|---|
 | `random_values` | `SECRET_MIN_BYTES` |
-| `given_values` | `REQUEST_ID_MAX_CHARACTERS`, `ALIAS_MAX_CHARACTERS` |
+| `given_values` | `REQUEST_ID_MAX_CHARACTERS`, `ALIAS_MAX_CHARACTERS`, `OBJECT_FLOOR_AREA_MIN_EXCLUSIVE`, `OBJECT_ROOMS_MIN` |
 | `configuration` | `SERVICE_RIGHTS`, `SECRET_MIN_BYTES` |
 | `store` | `STORE_VERSION`, `STORE_TEMPORARY_SUFFIX` |
 | `audit_log` | `RELEASE_VERSION`, `CONTRACT_VERSION` |
@@ -141,8 +141,9 @@ the owner interface renders and State 6 declares as `models`' vocabulary.
 | `invalid_request` | (4) | `missing_value` (A02 rule 1); `malformed_request_id` (A01 rule 1); `outside_closed_list` (A19 rule 3) — a value outside its enumeration, an
 object kind or a customer language included (A02 rule 4); `outside_form` — a
 present value outside the form State 1 declares: an alias over the imported
-`ALIAS_MAX_CHARACTERS` constant, a floor area not greater than zero, a number
-of rooms that is not a whole number of at least 1, a floor that is not a
+`ALIAS_MAX_CHARACTERS` constant, a floor area not greater than the imported
+`OBJECT_FLOOR_AREA_MIN_EXCLUSIVE`, a number of rooms that is not a whole
+number of at least the imported `OBJECT_ROOMS_MIN`, a floor that is not a
 whole number (A02 rule 4); `duplicate_pick` — a project, or a Customer's v1 value, given twice (A16 rule 1); `unknown_artifact_type` (A22 rule 5); `date_after_today` (A15 rule 3, R0-84); `file_too_large`; `file_unreadable` — bytes that do not parse as the format States 5 and 6 declare; `file_malformed` — a file that parses but holds two projects with one id, or a project whose id or status is missing or not of its field's shape; a status outside its vocabulary is not this, but a malformed record of a pick (A16 rule 4) (A19 rule 4, A16 rule 3) | the caller fixes the request |
 | `stale` | (5) | `stale_revision` (A04 rules 2, 3); `stale_access_version` (A12 rule 3) | the owner reads again |
 | `refused` | (6) | `archived`, `active` (erasing an active project), `anonymised`, `erased`, `customer_restricted`, `customer_ended`, `customer_erased`, `conflict` (A01 rule 5), `not_granted`, `not_pending`, `withdrawn`, `superseded`, `import_closed`, `file_not_kept`, `mapping_not_clean`, `no_picks` | the owner reads the record's state |

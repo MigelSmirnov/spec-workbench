@@ -23,7 +23,9 @@ each create once.
    makes, unique for every create it means as new — printable text of at most
    128 characters, made from at least 16 random bytes, as a random UUID is; a
    blank one is missing (A02). That it is random is the caller's duty;
-   Registry checks its form only. The owner interface makes
+   Registry checks its form only, so the 16 bytes reach no Registry code. The
+   128 is the data provider's constant `REQUEST_ID_MAX_CHARACTERS`, which the
+   checking code imports (SPEC_STANDARD §15.3.1). The owner interface makes
    one when it renders a create form; Cabinet Kernel gives one as an input
    field of 'add a room' and of 'publish an artifact pointer' (R0-78).
 2. Registry keeps the request id with the record the create made, written once
@@ -102,6 +104,10 @@ create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
     answered as not found (A10).
 11. Repeating a publish after its type was removed is refused as an unknown
     type (A22).
+12. Two concurrent creates with one request id — of a project, a Customer,
+    a room of one project, a pointer of one project — make one record; the
+    other answers it. The same request id for rooms of two different
+    projects makes two rooms.
 
 ### Consequence
 
@@ -129,11 +135,12 @@ merges records because they look alike (R0-34).
    greater than zero, a number of rooms that is not a whole number of at
    least 1, or a floor that is not a whole number (M02); a customer language outside `es`, `ru`, `en` (M04). An
    absent object kind, characteristic or customer language is never refused
-   (rule 3); a Customer's kind stays required (rule 1). The characteristics'
-   bounds are their fields' types — a floor area a decimal greater than zero,
-   a number of rooms a whole number of at least 1, a floor a whole number —
-   which State 6 declares in `models` as forms (SPEC_STANDARD §15.2 check 0),
-   not policy values: no threshold constant holds them. The same checks hold
+   (rule 3); a Customer's kind stays required (rule 1). The bounds are
+   values of the release, each the data provider's constant the checking
+   code imports (SPEC_STANDARD §15.3.1): the floor area's exclusive lower
+   bound, 0, as `OBJECT_FLOOR_AREA_MIN_EXCLUSIVE`, and the number of rooms'
+   lower bound, 1, as `OBJECT_ROOMS_MIN`; that a number of rooms and a floor
+   are whole numbers is their fields' type (SPEC_STANDARD §15.2 check 0). The same checks hold
    for every action that gives the value — a create and a correction, which
    are refused at stage (4); and the names and aliases the import's mapping
    gives, which A16 rule 1 handles and A04 rule 6 excepts: such a value is
@@ -153,8 +160,9 @@ merges records because they look alike (R0-34).
 missing(v) <=> v is absent or strip(v) = ""
 for every stored required value v: not missing(v)
 stored(v) = given(v) whenever not missing(v)
-for every stored object: rooms absent or (rooms is a whole number and rooms >= 1)
-                         area absent or area > 0; floor absent or floor is a whole number
+for every stored object: rooms absent or (rooms is a whole number and rooms >= OBJECT_ROOMS_MIN)
+                         area absent or area > OBJECT_FLOOR_AREA_MIN_EXCLUSIVE
+                         floor absent or floor is a whole number
 for every stored alias a: a absent or code_points(a) <= ALIAS_MAX_CHARACTERS
 ```
 
@@ -169,7 +177,9 @@ for every stored alias a: a absent or code_points(a) <= ALIAS_MAX_CHARACTERS
    refused naming both values; one created with no kind and no
    characteristic is accepted.
 6. A number of rooms of 0 and one of 2.5 are each refused as out of form;
-   1 and 7 are stored. A floor of -1 is stored; 1.5 is refused.
+   1 and 7 are stored. A floor of -1 is stored; 1.5 is refused. A floor area
+   of 0.01 is stored as given; one of 0 or -3 is refused; a project with no
+   characteristic at all is stored without one.
 
 ### Consequence
 
@@ -263,8 +273,10 @@ card it showed, and what the owner emptied is cleared.
    them. The import's mapping request is the one operation whose stage (4)
    answers instead of refusing for the values the owner gives in it: a
    missing or out-of-form name, alias or Customer value is shown in the
-   mapping, which is its answer (A16 rule 1, A02 rule 4); the file's own
-   checks and the picks still refuse as A16 rules 1 and 3 say.
+   mapping, which is its answer (A16 rule 1, A02 rule 4), as are malformed
+   records, conflicts and missing values (A16 rule 1); only the file's own
+   checks (A16 rule 3) and a pick that is not a project of the file or is
+   given twice refuse the request.
 
 ### Formal invariants
 
