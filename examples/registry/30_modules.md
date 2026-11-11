@@ -1,6 +1,11 @@
 # State 3 — Registry module responsibilities
 
-Draft of 2026-11-01. Derived from the accepted State 2 decisions A01–A22
+Draft of 2026-11-01, reopened on 2026-11-11 by the pre-contract data
+closure: every value the generated code reads has one home, the constants of
+`data_provider` (SPEC_STANDARD §6.10, §15.3.1), which replaces the former
+release_declarations module; the environment is read by `runtime_settings` alone
+(§6.11), and `configuration` checks what it loaded; M12 AuditSequence is
+`audit_log`'s. Derived from the accepted State 2 decisions A01–A22
 (`02_rules_*.md`) over the models of State 1 (`01_models.md`). A module owns
 one hidden mechanism and has one reason to change; its public surface is
 smaller than what it hides. Each accepted decision has one primary owner, the
@@ -13,26 +18,26 @@ which no module owns. The table is the one mapping; `30_trace.json` records the 
 
 | decision | primary owner | consumers |
 |---|---|---|
-| A01 | `projects` | `given_values`, `customers`, `artifact_pointers`, `store`, `owner_interface` |
-| A02 | `given_values` | `projects`, `customers`, `artifact_pointers`, `agent_sessions`, `migration_import` |
+| A01 | `projects` | `given_values`, `data_provider`, `customers`, `artifact_pointers`, `store`, `owner_interface` |
+| A02 | `given_values` | `data_provider`, `projects`, `customers`, `artifact_pointers`, `agent_sessions`, `migration_import` |
 | A03 | `projects` | `customers` |
 | A04 | `operations` | `projects`, `customers`, `agent_sessions`, `owner_interface` |
 | A05 | `projects` | `customers`, `artifact_pointers`, `agent_sessions`, `operations` |
 | A06 | `store` | `projects`, `customers`, `artifact_pointers`, `agent_sessions`, `audit_log`, `migration_import` |
 | A07 | `artifact_pointers` | `store` |
 | A08 | `artifact_pointers` | `operations`, `service_access` |
-| A09 | `service_access` | `release_declarations`, `operations` |
+| A09 | `service_access` | `data_provider`, `operations` |
 | A10 | `agent_sessions` | `operations` |
 | A11 | `agent_sessions` | `operations`, `owner_interface` |
 | A12 | `agent_sessions` | `owner_interface` |
-| A13 | `owner_sessions` | `clock`, `random_values`, `owner_interface`, `operations` |
+| A13 | `owner_sessions` | `data_provider`, `clock`, `random_values`, `owner_interface`, `operations` |
 | A14 | `audit_log` | `operations` |
 | A15 | `audit_log` | `store`, `backups` |
 | A16 | `migration_import` | `owner_sessions`, `owner_interface`, `projects`, `customers`, `artifact_pointers` |
-| A17 | `configuration` | `store`, `backups`, `service_access`, `owner_sessions`, `instance_lifecycle` |
-| A18 | `backups` | `store`, `clock`, `instance_lifecycle`, `owner_interface` |
-| A19 | `owner_interface` | `store`, `migration_import` |
-| A22 | `release_declarations` | `artifact_pointers`, `migration_import` |
+| A17 | `configuration` | `runtime_settings`, `data_provider`, `store`, `backups`, `service_access`, `owner_sessions`, `instance_lifecycle` |
+| A18 | `backups` | `data_provider`, `store`, `clock`, `instance_lifecycle`, `owner_interface` |
+| A19 | `owner_interface` | `data_provider`, `store`, `migration_import` |
+| A22 | `artifact_pointers` | `data_provider`, `migration_import` |
 
 A20 and A21 have no runtime owner. A20 is a property of the release — which
 dependencies it names and installs — made and checked by the release process,
@@ -56,7 +61,9 @@ at the temporary path `backups` names for it. The dependency direction is fixed,
 
 ```text
 models
-clock, random_values, release_declarations, given_values
+data_provider
+clock, random_values, given_values
+runtime_settings
 configuration
 store
 audit_log, service_access, owner_sessions
@@ -155,12 +162,22 @@ later line, and modules on one line do not know each other.
   ("Identity formats") and every 32-byte value of A13 rule 7 comes from
   `random_values`; every comparison of a presented secret with a held one goes
   through `random_values.equal_in_constant_time` (A13 rule 7, A17 rule 6).
-- **What the release declares.** The artifact vocabulary (A22), the services'
-  rights (A09 rule 2), the store version, the temporary-name suffix of the
-  store (A17 rule 5), the two backup prefixes (A18 rule 5) and the release's
-  and contract's versions are
-  `release_declarations`'; nothing reads them from the configuration or the
-  store (A22 rule 2, A09 rule 1).
+- **What the release declares.** Every value the generated code reads that
+  is not a setting of the environment is a constant of `data_provider`, its
+  one home (SPEC_STANDARD §6.10, §15.3.1): the artifact vocabulary with each
+  type's owner service (A22), the services' rights (A09 rule 2), the store
+  version and the store's temporary-name suffix (A17 rule 5), the two backup
+  prefixes, the daily time, the look and the retention (A18 rules 1, 4, 5),
+  the import file's size limit (A19 rule 4), the release's and contract's
+  versions, the address each surface listens on (A17 rules 1, 2), the owner
+  session's limits (A13), the lengths of A01 rule 1, A02 rule 4, A13 rule 7
+  and A17 rule 3. A module that needs one imports it; nothing reads them from
+  the configuration or the store (A22 rule 2, A09 rule 1), and no module
+  restates one.
+- **The environment.** Only `runtime_settings` reads the process
+  environment, and only the `REGISTRY_` items A17 rule 1 lists (owner,
+  2026-11-11); every other module receives the settings it needs from
+  `configuration`, which checks them.
 - **Secrets never leave.** No module puts a secret, a confirmation value, a
   CSRF value or an owner session's identity into a record, a log line, a diagnostic,
   an audit entry, a URL or the data of an answer (A13 rule 7, A17 rule 6).
@@ -176,9 +193,10 @@ later line, and modules on one line do not know each other.
 
 ### Owns
 
-The models M01–M11 as the domain's vocabulary, the declared vocabularies of
-State 1 — for the artifact types only the shape of a type with its owner
-service, whose members are `release_declarations`' — and the disclosure class
+The models M01–M12 as the domain's vocabulary, the declared vocabularies of
+State 1 as enumerations — for the artifact types only the shape of a type
+with its owner service, whose rows are `data_provider`'s, so a stored
+pointer of a type a later release removed still reads (A22 rule 4) — and the disclosure class
 of every fact ("Disclosure classes by field"),
 the order of the classes (A09 rule 4), and the refusal vocabulary: each refusal
 kind with the stage of A04 rule 6 it belongs to.
@@ -212,7 +230,8 @@ Nothing.
 ### Must not own
 
 Any limit or schedule: the 8 hours, 30, 15 and 10 minutes and the 60 seconds
-are `owner_sessions`', the 03:00 and the minute look `backups'`.
+are `data_provider`'s constants that `owner_sessions` applies, the 03:00 and
+the minute look constants that `backups` applies.
 
 ### Hides
 
@@ -244,7 +263,7 @@ held one in constant time (A13 rule 7, A17 rule 6).
 
 ### Knows
 
-Nothing.
+`data_provider`, for the length of a secret value (A13 rule 7).
 
 ### Must not own
 
@@ -267,52 +286,81 @@ equal_in_constant_time
 - kind: deep
 - hidden mechanism: the one source of randomness and the one constant-time comparison
 
-## `release_declarations`
+## `data_provider`
 
 ### Owns
 
-What a release declares and a running instance reads from it alone: A22 — the
-artifact types with their owner services, the first release's one type
-(`estimate`, PresuPro) — A09 rule 2's table of the services, their operations
-and their highest classes; the store version; the store's temporary-name
-suffix (A17 rule 5); the kept and temporary backup prefixes, neither beginning
-with the other (A18 rule 5); the import file's size limit (A19 rule 4, its
-value State 6's); the release's own version and its contract version: every
-audit entry names both (M09), a backup's record the release (A18 rule 1); the
-address each surface listens on, which the configuration does not name (A17
-rules 1, 2).
+The typed constants of the data closure, the one home of each value the
+generated code reads that is not a setting of the environment (SPEC_STANDARD
+§6.10, §15.3.1; reopened 2026-11-11, replacing the former
+release_declarations module): the
+artifact types with their owner services, the first release's one row
+(`estimate`, PresuPro) (A22); A09 rule 2's table of the services, their
+operations and their highest classes; the store version and the store's
+temporary-name suffix (A17 rule 5); the kept and temporary backup prefixes,
+neither beginning with the other, the daily time, the minute look and the
+retention of 30 × 24 hours (A18 rules 1, 4, 5); the import file's size limit
+(A19 rule 4); the release's own version and its contract version, which
+every audit entry names (M09) and a backup's record names (A18 rule 1); the
+address each surface listens on, which the configuration does not name
+(A17 rules 1, 2); the owner session's limits — 8 hours, 30 minutes, the 15
+minutes and five refusals of the sign-in, the 10 minutes of a confirmation,
+the 60 seconds of the pass (A13); the request id's 128 characters (A01 rule
+1), the alias's 40 (A02 rule 4), the 32 bytes of a secret value and of a
+configured secret (A13 rule 7, A17 rule 3). The list names groups; the data
+closure names each constant, and every one is exported.
 
 ### Knows
 
-`models`.
+`models`, for the row models and enumerations of its tables.
 
 ### Must not own
 
-What a vocabulary change does to existing pointers (A22 rules 4, 5 are
-`artifact_pointers`'), how a right is checked (`service_access`), anything read
-from the configuration or the store.
+Behaviour, selection, validation or defaults: what a vocabulary change does
+to existing pointers and whether a type is declared (A22 rules 3–5,
+`artifact_pointers`), how a right is checked (`service_access`), anything
+read from the configuration or the store.
 
 ### Hides
 
-Where in the release the declarations live and how they are loaded.
+The values from every generator's prompt: a generated consumer is given the
+name and type of a constant and imports it, so the running code reads the
+value while the generator never sees it (SPEC_STANDARD §15.9).
 
 ### Candidate public capabilities
 
 ```text
-declared_artifact_types
-owner_service_of_type
-rights_of_service
-store_version_of_release
-backup_name_prefixes
-release_versions
-listener_addresses
-import_size_limit
+ARTIFACT_TYPE_OWNERS
+SERVICE_RIGHTS
+STORE_VERSION
+STORE_TEMPORARY_SUFFIX
+BACKUP_KEPT_PREFIX
+BACKUP_TEMPORARY_PREFIX
+BACKUP_DAILY_TIME_UTC
+BACKUP_LOOK_SECONDS
+BACKUP_RETENTION_HOURS
+IMPORT_FILE_MAX_BYTES
+RELEASE_VERSION
+CONTRACT_VERSION
+OWNER_INTERFACE_LISTEN_ADDRESS
+SERVICE_API_LISTEN_ADDRESS
+OWNER_SESSION_MAX_HOURS
+OWNER_SESSION_IDLE_MINUTES
+SIGN_IN_WINDOW_MINUTES
+SIGN_IN_REFUSAL_LIMIT
+SIGN_IN_LOCKOUT_MINUTES
+CONFIRMATION_VALID_MINUTES
+SESSION_PASS_SECONDS
+REQUEST_ID_MAX_CHARACTERS
+ALIAS_MAX_CHARACTERS
+SECRET_MIN_BYTES
 ```
 
 ### Depth assessment
 
 - kind: deep
-- hidden mechanism: the release's fixed declarations, read once and never from outside the release
+- hidden mechanism: the one home of every policy value; a value moves here
+  once and every reader imports it
 
 ## `given_values`
 
@@ -323,11 +371,14 @@ white space only is missing, a present value is kept exactly as written, an
 optional value blank is absent. A01 rule 1's check of a request id's form —
 printable text of at most 128 characters, not blank — and A01 rule 6's
 comparison of the facts of a create with a record's current facts, as A02
-reads them, a fact of several parts by its parts whatever their order.
+reads them, a fact of several parts by its parts whatever their order. A02
+rule 4: a present value outside the form State 1 declares — the alias's
+length, a value outside its enumeration, a characteristic out of its range —
+refused at stage (4), every such value named.
 
 ### Knows
 
-`models`.
+`models`, `data_provider`.
 
 ### Must not own
 
@@ -355,31 +406,71 @@ facts_equal_for_repeat
 - kind: deep
 - hidden mechanism: the one rule by which every given value is read and compared
 
+## `runtime_settings`
+
+### Owns
+
+A17 rule 1's reading of the environment, and only it: the closed table of
+the `REGISTRY_` items — the store's location, the backup location, the
+backup key, the owner credential, the four service tokens — loaded at each
+call of `load_runtime_settings` into the settings, each item with its type,
+whether it is required (the four tokens each optional, every other item
+required) and its normalization; no default for any item (A17 rule 5); a
+variable that names no item is not read (owner, 2026-11-11). Emitted
+deterministically (SPEC_STANDARD §6.11); the variables' names are the data
+closure's.
+
+### Knows
+
+`models`.
+
+### Must not own
+
+Any check across items — the tokens all or none, a secret's length, two
+secrets equal, the store and backup location apart — which are
+`configuration`'s; opening the store or probing the backup location.
+
+### Hides
+
+Environment reading and the per-item normalization.
+
+### Candidate public capabilities
+
+```text
+load_runtime_settings
+```
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: the closed environment table and its per-item validation
+
 ## `configuration`
 
 ### Owns
 
-A17: reading the `REGISTRY_` environment variables and nothing else; the start
-checks in rule 2's one order — no unknown item, one service token for each
-service `release_declarations` lists, all or none, the other items present, each well formed, each secret at least 32 bytes,
-no two secrets equal — with the diagnostic naming the failed item and never its
+A17: the start checks of rule 2 in its one order over the settings
+`runtime_settings` loads — the service tokens of the services
+`data_provider`'s rights table lists, all or none, the other items present,
+each well formed, each secret at least the 32 bytes `data_provider` holds, no
+two secrets equal — with the diagnostic naming the failed item and never its
 value; that no default is applied (rule 5); an owner-only start when no token
 is given (rule 1). The path checks of rule 5 that need no file — the store and
 the backup location apart, compared with every link resolved — are its too.
 
 ### Knows
 
-`models`, `release_declarations`.
+`models`, `data_provider`, `runtime_settings`.
 
 ### Must not own
 
-Opening or making the store (`store`), probing the backup location
-(`backups`), what a token may do (`service_access`), the credential check of a
-sign-in (`owner_sessions`).
+Reading the environment (`runtime_settings`), opening or making the store
+(`store`), probing the backup location (`backups`), what a token may do
+(`service_access`), the credential check of a sign-in (`owner_sessions`).
 
 ### Hides
 
-The environment, path resolution, and the order of the checks.
+Path resolution and the order of the checks.
 
 ### Candidate public capabilities
 
@@ -390,7 +481,7 @@ load_configuration
 ### Depth assessment
 
 - kind: deep
-- hidden mechanism: the ordered start checks of A17 over the process environment
+- hidden mechanism: the ordered start checks of A17 over the loaded settings
 
 ## `store`
 
@@ -433,7 +524,7 @@ deciding nothing about it — so the reading needs no call upward to
 
 ### Knows
 
-`models`, `clock`, `release_declarations`, `configuration`.
+`models`, `clock`, `data_provider`, `configuration`.
 
 ### Must not own
 
@@ -468,7 +559,8 @@ copy_store_snapshot
 
 A14 and A15: appending an entry (M09) inside the transaction of the change it
 records, with the next sequence number after the last the store's history ever
-wrote, kept apart from the entries so an erasure never lowers it (A15 rule 5);
+wrote, kept apart from the entries — M12 AuditSequence, made at 0 with a new
+store — so an erasure never lowers it (A15 rule 5);
 the actions that write an entry and the subject each names (M09); the outcome
 `accepted` (A14 rule 6); that no entry is ever changed (A15 rule 1); the
 erasure before a date — not later than today, every entry before 00:00 UTC of
@@ -480,7 +572,7 @@ store ever wrote, for a backup's record (A18 rule 1).
 
 ### Knows
 
-`models`, `release_declarations`, `store`.
+`models`, `data_provider`, `store`.
 
 ### Must not own
 
@@ -521,7 +613,7 @@ token and opens no service API, so no service call reaches it (A17 rule 1).
 
 ### Knows
 
-`models`, `release_declarations`, `random_values`, `configuration`.
+`models`, `data_provider`, `random_values`, `configuration`.
 
 ### Must not own
 
@@ -567,7 +659,7 @@ session's lock.
 
 ### Knows
 
-`models`, `clock`, `random_values`, `configuration`.
+`models`, `data_provider`, `clock`, `random_values`, `configuration`.
 
 ### Must not own
 
@@ -711,9 +803,10 @@ published pointer and stores the new one in one transaction, at most one
 project; the reference and digest as given. A08 rules 3–7: the owner service
 fixed by the type, the publisher and the withdrawing principal recorded, a
 withdrawal naming the pointer alone. A01 for the publish's request id, its
-repeat answering the pointer whatever its status now. A22 rules 3–5: a removed
-type's pointers kept as they are, its publish, latest read and withdrawal
-refused. The pointers' list (A06 rule 3), the latest of a type, and a
+repeat answering the pointer whatever its status now. A22, as its primary
+owner: a type is declared when `data_provider`'s artifact type table holds it,
+and its owner service is that row's; rules 3–5: a removed type's pointers
+kept as they are, its publish, latest read and withdrawal refused. The pointers' list (A06 rule 3), the latest of a type, and a
 project's `published` pointers in that list's order, for the agent projection
 (State 1, "Projections and answers"; A06 rule 8). Deleting every pointer of a
 project deleted whole (R0-60), in the transaction `operations` opens for it.
@@ -721,7 +814,7 @@ project deleted whole (R0-60), in the transaction `operations` opens for it.
 ### Knows
 
 `models`, `given_values`, `random_values`, `store`,
-`release_declarations`, `projects`.
+`data_provider`, `projects`.
 
 ### Must not own
 
@@ -824,7 +917,7 @@ malformed.
 ### Knows
 
 `models`, `given_values`, `random_values`, `store`,
-`release_declarations`, `owner_sessions`, `customers`, `projects`,
+`data_provider`, `owner_sessions`, `customers`, `projects`,
 `artifact_pointers`.
 
 ### Must not own
@@ -866,7 +959,7 @@ for the owner interface. No run in an owner-only start (rule 9).
 
 ### Knows
 
-`models`, `clock`, `configuration`, `release_declarations`, `store`,
+`models`, `clock`, `configuration`, `data_provider`, `store`,
 `audit_log`.
 
 ### Must not own
@@ -1028,7 +1121,7 @@ that a restart ends every owner session (A13 rule 2).
 
 ### Knows
 
-`models`, `release_declarations`, `configuration`, `store`,
+`models`, `data_provider`, `configuration`, `store`,
 `owner_sessions`, `backups`, `service_api`, `owner_interface`.
 
 ### Must not own
