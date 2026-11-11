@@ -985,7 +985,9 @@ the consistent copy without agent sessions at the path `module:backups` names
 and checks a decrypted copy (A18 rules 2, 4). `module:clock` gives the look's
 instant. `module:data_provider` holds the prefixes, the daily time, the retention and
 the release as constants `module:backups` imports.
-`module:instance_lifecycle` runs the look every minute. Nothing is written to
+`module:instance_lifecycle` runs the look at the interval of the imported
+`BACKUP_LOOK_SECONDS` constant, 60 seconds; `module:backups` applies the
+03:00 and the retention, and decides nothing about when it is called. Nothing is written to
 the store and no entry is made.
 
 Crossing models: a temporary path; the copy's instant and last audit sequence
@@ -996,7 +998,7 @@ key; the kept name made from the instant.
 ### Steps
 
 1. **Due?** `capability:backups.run_daily_backup_if_due`, called by
-   `module:instance_lifecycle` at least once a minute, reads
+   `module:instance_lifecycle` every `BACKUP_LOOK_SECONDS`, reads
    `capability:clock.recorded_now`. A run starts when an earlier look of this
    process saw this date before 03:00, the look is at or after 03:00, this
    process did not run this date, no run is going, and no kept backup of the
