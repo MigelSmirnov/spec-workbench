@@ -1,0 +1,191 @@
+{
+ "open_points": [
+  {
+   "subject": "A09 rule 5 and A13 rule 4 — sign-in",
+   "kind": "contradiction",
+   "text": "Every owner action is made in an owner session (A13), never with a service token; no token carries the owner's rights.\nSign-in is the one owner request made without a session: it is checked for the credential and the lockout only, carries no CSRF value, and the session cookie it sets is sent only to Registry's origin (rule 1).",
+   "question": "Is sign-in excluded from A09's term \"owner action\", so that it may be accepted without an existing owner session?",
+   "options": [
+    "Sign-in is not an owner action for A09 rule 5 and is the sole sessionless owner request.",
+    "Sign-in is an owner action and A09 rule 5 requires a session, making initial sign-in impossible.",
+    "Rewrite A09 rule 5 to state the sign-in exception explicitly."
+   ],
+   "default_guess": "Treat sign-in as the sole exception and rewrite A09 rule 5 to say so.",
+   "witness": {
+    "initial": "No owner session exists, the correct owner credential is supplied, and no lockout is active.",
+    "events": [
+     "The owner submits the sign-in request without a session."
+    ],
+    "outcomes": [
+     "A13 rule 4 accepts the credential and creates an owner session.",
+     "A09 rule 5 refuses the request because every owner action must already be made in an owner session."
+    ],
+    "observer": "The owner attempting to sign in."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 — representation of clock readings",
+   "kind": "unspecified_representation",
+   "text": "Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8). An owner session is never recorded (M11), so its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock",
+   "question": "What exact representations and precision does `clock` return for monotonic readings and UTC wall-clock instants, and how are duration additions and boundary comparisons rounded?",
+   "options": [
+    "Monotonic integer nanoseconds plus timezone-aware UTC datetimes at a declared precision.",
+    "Monotonic floating-point seconds plus timezone-aware UTC datetimes.",
+    "Opaque backend-specific values that support exact duration arithmetic and ordering."
+   ],
+   "default_guess": "Use monotonic integer nanoseconds and timezone-aware UTC datetimes, preserving microsecond precision in stored instants.",
+   "witness": {
+    "initial": "A session's idle limit is represented at a sub-microsecond boundary.",
+    "events": [
+     "The session has a request whose actual arrival is 0.4 microseconds before the 30-minute limit.",
+     "Registry converts or rounds the monotonic reading and checks validity."
+    ],
+    "outcomes": [
+     "A representation preserving the reading serves the request because it is before the limit.",
+     "A representation rounded to microseconds places it exactly at the limit and refuses it."
+    ],
+    "observer": "The owner making the request."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 — successful sign-in clock sampling",
+   "kind": "unspecified_sampling",
+   "text": "under which each takes its monotonic reading, compares the credential, reads the count, decides and updates it, and only then releases it.",
+   "question": "Must the one monotonic reading taken before credential comparison also become the successful session's `began`, `last_request`, and latest-expiry basis, or may session creation take another reading after comparison?",
+   "options": [
+    "Reuse the single pre-comparison reading for all sign-in and new-session time facts.",
+    "Take a second reading after credential comparison to initialise the session.",
+    "Take one reading after credential comparison instead, while still holding the sign-in lock."
+   ],
+   "default_guess": "Reuse the explicitly required single reading for the lockout decision and all initial session time facts.",
+   "witness": {
+    "initial": "No lockout is active, and credential comparison begins at monotonic time T but completes one second later.",
+    "events": [
+     "The owner signs in successfully.",
+     "The owner sends another request at T plus 8 hours and 0.5 seconds."
+    ],
+    "outcomes": [
+     "If the pre-comparison reading initialises the session, the later request is refused as past the 8-hour limit.",
+     "If a post-comparison reading initialises the session, the later request is served."
+    ],
+    "observer": "The owner using the session."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 — owner-request clock sampling",
+   "kind": "unspecified_sampling",
+   "text": "An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts; before the first request it runs from the sign-in. Validity is checked when a request arrives",
+   "question": "Does each owner request take exactly one monotonic reading that is used both to check validity and to set `last_request`, and at what defined event is that reading taken?",
+   "options": [
+    "Take one reading at admission and use it for both the validity check and `last_request`.",
+    "Take one reading for validity and a later reading when updating `last_request`.",
+    "Use an independently captured transport-arrival instant for `last_request` and a clock reading for validity."
+   ],
+   "default_guess": "Take one monotonic reading when admission begins and use it for both decisions.",
+   "witness": {
+    "initial": "A session is one microsecond short of its idle limit when an owner request begins admission.",
+    "events": [
+     "The request's first clock read occurs before the limit.",
+     "Processing crosses the limit before `last_request` is updated.",
+     "A later request arrives between the expiry calculated from the first and second readings."
+    ],
+    "outcomes": [
+     "With one shared reading, the later request is refused at the earlier new idle deadline.",
+     "With a second update reading, the later request is served because the idle deadline is later."
+    ],
+    "observer": "The owner making the later request."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15 rule 3 and rule 4 — erasure across UTC midnight",
+   "kind": "unspecified_sampling",
+   "text": "The date of an erasure is a date not later than today, the current date in UTC; a later date is refused. Every entry whose instant is before 00:00 UTC of that date is removed.\nThe erasure's own entry is written after the removal, in the same transaction, with the current instant; it is therefore never removed by the erasure that wrote it.",
+   "question": "How many UTC wall-clock readings does an audit erasure take, and which reading defines both `today` for validation and the erasure entry's current instant when the operation crosses midnight?",
+   "options": [
+    "Capture one UTC instant inside the write transaction and derive both `today` and the audit instant from it.",
+    "Validate `today` at request admission and take a separate audit instant in the transaction.",
+    "Read `today` and the audit instant separately at their respective checks."
+   ],
+   "default_guess": "Capture one UTC instant after taking the store write lock and derive both values from it.",
+   "witness": {
+    "initial": "It is 23:59:59.999999 UTC and the owner submits an erasure whose date is the following UTC day.",
+    "events": [
+     "The operation begins before midnight.",
+     "It takes the store write lock and commits after midnight."
+    ],
+    "outcomes": [
+     "If `today` is sampled at admission, the date is later than today and the erasure is refused.",
+     "If one transaction-time reading is taken after midnight, the date equals today and the erasure is accepted."
+    ],
+    "observer": "The owner and the resulting audit log."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 — accepted import instant",
+   "kind": "unspecified_sampling",
+   "text": "An accepted import stores every picked project with its rooms and pointers, the Customers it makes, the migration closure (M10) and its one audit entry (M09) in one transaction.\nA Customer the import makes is created at the import's instant with revision 1.",
+   "question": "What is the import's single instant, when is it read, and must that same UTC reading be used for every new Customer, the migration closure, and the import audit entry?",
+   "options": [
+    "Take one UTC reading inside the transaction and use it for every fact created by the import.",
+    "Take a separate reading for each new Customer, the closure, and the audit entry.",
+    "Define the closure instant as commit time while using an earlier operation instant for Customers and audit."
+   ],
+   "default_guess": "Take one UTC reading after the transaction has obtained its write lock and use it for all facts the import creates.",
+   "witness": {
+    "initial": "A valid import creates two Customers, a migration closure, and an audit entry while the wall clock advances between writes.",
+    "events": [
+     "The owner confirms the import.",
+     "Registry writes all imported results in one transaction.",
+     "The owner later reads the Customers and audit log."
+    ],
+    "outcomes": [
+     "A single operation reading gives both Customers and the audit entry the same instant.",
+     "Separate readings give the Customers or audit entry observably different instants."
+    ],
+    "observer": "The owner reading the imported Customers and audit log."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21 — security review after the latest A13 change",
+   "kind": "review_not_reperformed",
+   "text": "A change to a decision a category names reopens this review.\nPerformed again on 2026-11-11, after that day's changes to A01, A02, A04, A07, A13, A15, A16, A17, A18 and A19 reopened it (rule 2): every category naming them — injection_interpreted_input (A02, A16, A19), secrets, authentication and concurrency (A01, A04, A07, A13, A15, A17, A18), browser_boundary (A13, A19), files_artifacts (A07, A16, A18), authorization (A04) — was reviewed;",
+   "question": "Was the security review performed again after the A13 change now under review, and what are the resulting outcomes for every category that names A13?",
+   "options": [
+    "Add a new performed-review record covering the latest A13 change and its affected categories.",
+    "State that the review is currently reopened and not yet complete.",
+    "Establish that the existing 2026-11-11 record includes this exact change."
+   ],
+   "default_guess": "Treat A21 as reopened until a new review record explicitly covers this A13 diff.",
+   "witness": {
+    "initial": "The recorded 2026-11-11 review is the latest review, and A13 is changed afterward as the round states.",
+    "events": [
+     "A consumer checks A21 rule 2 and the performed-review records before accepting State 2."
+    ],
+    "outcomes": [
+     "Rule 2 makes the security review open because the latest A13 change has no subsequent review record.",
+     "The heading and existing PERFORMED record can be read as claiming the review remains complete."
+    ],
+    "observer": "The State 2 reviewer or release gate relying on A21."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 rule 2 — SIGN_IN_REFUSAL_LIMIT",
+   "kind": "standard_violation",
+   "text": "the five refusals of rule 3 are\n   `SIGN_IN_REFUSAL_LIMIT`.",
+   "rule": "константа поставщика — `the imported X constant`",
+   "section": "15.3.1",
+   "question": "The passage must name this threshold as `the imported SIGN_IN_REFUSAL_LIMIT constant`, giving the decided value an explicit provider-constant path to generated code.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A09 rule 5 and A13 rule 4 — sign-in\",\"kind\":\"contradiction\",\"text\":\"Every owner action is made in an owner session (A13), never with a service token; no token carries the owner's rights.\\nSign-in is the one owner request made without a session: it is checked for the credential and the lockout only, carries no CSRF value, and the session cookie it sets is sent only to Registry's origin (rule 1).\",\"question\":\"Is sign-in excluded from A09's term \\\"owner action\\\", so that it may be accepted without an existing owner session?\",\"options\":[\"Sign-in is not an owner action for A09 rule 5 and is the sole sessionless owner request.\",\"Sign-in is an owner action and A09 rule 5 requires a session, making initial sign-in impossible.\",\"Rewrite A09 rule 5 to state the sign-in exception explicitly.\"],\"default_guess\":\"Treat sign-in as the sole exception and rewrite A09 rule 5 to say so.\",\"witness\":{\"initial\":\"No owner session exists, the correct owner credential is supplied, and no lockout is active.\",\"events\":[\"The owner submits the sign-in request without a session.\"],\"outcomes\":[\"A13 rule 4 accepts the credential and creates an owner session.\",\"A09 rule 5 refuses the request because every owner action must already be made in an owner session.\"],\"observer\":\"The owner attempting to sign in.\"}},{\"subject\":\"A13 — representation of clock readings\",\"kind\":\"unspecified_representation\",\"text\":\"Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8). An owner session is never recorded (M11), so its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock\",\"question\":\"What exact representations and precision does `clock` return for monotonic readings and UTC wall-clock instants, and how are duration additions and boundary comparisons rounded?\",\"options\":[\"Monotonic integer nanoseconds plus timezone-aware UTC datetimes at a declared precision.\",\"Monotonic floating-point seconds plus timezone-aware UTC datetimes.\",\"Opaque backend-specific values that support exact duration arithmetic and ordering.\"],\"default_guess\":\"Use monotonic integer nanoseconds and timezone-aware UTC datetimes, preserving microsecond precision in stored instants.\",\"witness\":{\"initial\":\"A session's idle limit is represented at a sub-microsecond boundary.\",\"events\":[\"The session has a request whose actual arrival is 0.4 microseconds before the 30-minute limit.\",\"Registry converts or rounds the monotonic reading and checks validity.\"],\"outcomes\":[\"A representation preserving the reading serves the request because it is before the limit.\",\"A representation rounded to microseconds places it exactly at the limit and refuses it.\"],\"observer\":\"The owner making the request.\"}},{\"subject\":\"A13 — successful sign-in clock sampling\",\"kind\":\"unspecified_sampling\",\"text\":\"under which each takes its monotonic reading, compares the credential, reads the count, decides and updates it, and only then releases it.\",\"question\":\"Must the one monotonic reading taken before credential comparison also become the successful session's `began`, `last_request`, and latest-expiry basis, or may session creation take another reading after comparison?\",\"options\":[\"Reuse the single pre-comparison reading for all sign-in and new-session time facts.\",\"Take a second reading after credential comparison to initialise the session.\",\"Take one reading after credential comparison instead, while still holding the sign-in lock.\"],\"default_guess\":\"Reuse the explicitly required single reading for the lockout decision and all initial session time facts.\",\"witness\":{\"initial\":\"No lockout is active, and credential comparison begins at monotonic time T but completes one second later.\",\"events\":[\"The owner signs in successfully.\",\"The owner sends another request at T plus 8 hours and 0.5 seconds.\"],\"outcomes\":[\"If the pre-comparison reading initialises the session, the later request is refused as past the 8-hour limit.\",\"If a post-comparison reading initialises the session, the later request is served.\"],\"observer\":\"The owner using the session.\"}},{\"subject\":\"A13 — owner-request clock sampling\",\"kind\":\"unspecified_sampling\",\"text\":\"An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts; before the first request it runs from the sign-in. Validity is checked when a request arrives\",\"question\":\"Does each owner request take exactly one monotonic reading that is used both to check validity and to set `last_request`, and at what defined event is that reading taken?\",\"options\":[\"Take one reading at admission and use it for both the validity check and `last_request`.\",\"Take one reading for validity and a later reading when updating `last_request`.\",\"Use an independently captured transport-arrival instant for `last_request` and a clock reading for validity.\"],\"default_guess\":\"Take one monotonic reading when admission begins and use it for both decisions.\",\"witness\":{\"initial\":\"A session is one microsecond short of its idle limit when an owner request begins admission.\",\"events\":[\"The request's first clock read occurs before the limit.\",\"Processing crosses the limit before `last_request` is updated.\",\"A later request arrives between the expiry calculated from the first and second readings.\"],\"outcomes\":[\"With one shared reading, the later request is refused at the earlier new idle deadline.\",\"With a second update reading, the later request is served because the idle deadline is later.\"],\"observer\":\"The owner making the later request.\"}},{\"subject\":\"A15 rule 3 and rule 4 — erasure across UTC midnight\",\"kind\":\"unspecified_sampling\",\"text\":\"The date of an erasure is a date not later than today, the current date in UTC; a later date is refused. Every entry whose instant is before 00:00 UTC of that date is removed.\\nThe erasure's own entry is written after the removal, in the same transaction, with the current instant; it is therefore never removed by the erasure that wrote it.\",\"question\":\"How many UTC wall-clock readings does an audit erasure take, and which reading defines both `today` for validation and the erasure entry's current instant when the operation crosses midnight?\",\"options\":[\"Capture one UTC instant inside the write transaction and derive both `today` and the audit instant from it.\",\"Validate `today` at request admission and take a separate audit instant in the transaction.\",\"Read `today` and the audit instant separately at their respective checks.\"],\"default_guess\":\"Capture one UTC instant after taking the store write lock and derive both values from it.\",\"witness\":{\"initial\":\"It is 23:59:59.999999 UTC and the owner submits an erasure whose date is the following UTC day.\",\"events\":[\"The operation begins before midnight.\",\"It takes the store write lock and commits after midnight.\"],\"outcomes\":[\"If `today` is sampled at admission, the date is later than today and the erasure is refused.\",\"If one transaction-time reading is taken after midnight, the date equals today and the erasure is accepted.\"],\"observer\":\"The owner and the resulting audit log.\"}},{\"subject\":\"A16 — accepted import instant\",\"kind\":\"unspecified_sampling\",\"text\":\"An accepted import stores every picked project with its rooms and pointers, the Customers it makes, the migration closure (M10) and its one audit entry (M09) in one transaction.\\nA Customer the import makes is created at the import's instant with revision 1.\",\"question\":\"What is the import's single instant, when is it read, and must that same UTC reading be used for every new Customer, the migration closure, and the import audit entry?\",\"options\":[\"Take one UTC reading inside the transaction and use it for every fact created by the import.\",\"Take a separate reading for each new Customer, the closure, and the audit entry.\",\"Define the closure instant as commit time while using an earlier operation instant for Customers and audit.\"],\"default_guess\":\"Take one UTC reading after the transaction has obtained its write lock and use it for all facts the import creates.\",\"witness\":{\"initial\":\"A valid import creates two Customers, a migration closure, and an audit entry while the wall clock advances between writes.\",\"events\":[\"The owner confirms the import.\",\"Registry writes all imported results in one transaction.\",\"The owner later reads the Customers and audit log.\"],\"outcomes\":[\"A single operation reading gives both Customers and the audit entry the same instant.\",\"Separate readings give the Customers or audit entry observably different instants.\"],\"observer\":\"The owner reading the imported Customers and audit log.\"}},{\"subject\":\"A21 — security review after the latest A13 change\",\"kind\":\"review_not_reperformed\",\"text\":\"A change to a decision a category names reopens this review.\\nPerformed again on 2026-11-11, after that day's changes to A01, A02, A04, A07, A13, A15, A16, A17, A18 and A19 reopened it (rule 2): every category naming them — injection_interpreted_input (A02, A16, A19), secrets, authentication and concurrency (A01, A04, A07, A13, A15, A17, A18), browser_boundary (A13, A19), files_artifacts (A07, A16, A18), authorization (A04) — was reviewed;\",\"question\":\"Was the security review performed again after the A13 change now under review, and what are the resulting outcomes for every category that names A13?\",\"options\":[\"Add a new performed-review record covering the latest A13 change and its affected categories.\",\"State that the review is currently reopened and not yet complete.\",\"Establish that the existing 2026-11-11 record includes this exact change.\"],\"default_guess\":\"Treat A21 as reopened until a new review record explicitly covers this A13 diff.\",\"witness\":{\"initial\":\"The recorded 2026-11-11 review is the latest review, and A13 is changed afterward as the round states.\",\"events\":[\"A consumer checks A21 rule 2 and the performed-review records before accepting State 2.\"],\"outcomes\":[\"Rule 2 makes the security review open because the latest A13 change has no subsequent review record.\",\"The heading and existing PERFORMED record can be read as claiming the review remains complete.\"],\"observer\":\"The State 2 reviewer or release gate relying on A21.\"}},{\"subject\":\"A13 rule 2 — SIGN_IN_REFUSAL_LIMIT\",\"kind\":\"standard_violation\",\"text\":\"the five refusals of rule 3 are\\n   `SIGN_IN_REFUSAL_LIMIT`.\",\"rule\":\"константа поставщика — `the imported X constant`\",\"section\":\"15.3.1\",\"question\":\"The passage must name this threshold as `the imported SIGN_IN_REFUSAL_LIMIT constant`, giving the decided value an explicit provider-constant path to generated code.\"}]}",
+ "set_aside": []
+}

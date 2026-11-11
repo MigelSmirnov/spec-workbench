@@ -1,0 +1,227 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 owner-session lifecycle",
+   "kind": "contradiction",
+   "text": "The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request; the owner's sign-out; the instance's restart (M11 is never durable).",
+   "question": "Does reaching a time limit end and clear the session immediately, or merely make it invalid until the next 60-second pass ends and clears it?",
+   "options": [
+    "The limit immediately ends and clears the session.",
+    "The limit makes the session invalid, but only the next pass ends it and drops its confirmation and upload."
+   ],
+   "default_guess": "Treat the limit as immediate invalidation and the next pass as physical removal and clearing.",
+   "witness": {
+    "initial": "An owner session has a pending confirmation and an uploaded file and is one second short of its idle limit; the next cleanup pass is still 40 seconds away.",
+    "events": [
+     "The monotonic clock advances two seconds.",
+     "The owner makes a request, which is refused.",
+     "The test inspects the session before the scheduled pass and again when the pass runs."
+    ],
+    "outcomes": [
+     "The session and its pending values ceased to exist when the limit was reached.",
+     "The session remains present but invalid, with its pending values, until the pass ends it and drops them."
+    ],
+    "observer": "The required-test harness inspecting owner-session runtime state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 owner-request arrival instant",
+   "kind": "undefined instant",
+   "text": "Validity is checked when a request arrives (A04 rule 6, stage 1);",
+   "question": "What event defines the request's arrival instant: receipt by the server, entry into the request handler, acquisition of a session-related lock, or the actual session check?",
+   "options": [
+    "Capture one monotonic reading when the server receives the request.",
+    "Capture it when the handler begins authentication.",
+    "Capture it immediately before the session check."
+   ],
+   "default_guess": "Capture one monotonic reading at the start of request handling and use it as the request's arrival instant.",
+   "witness": {
+    "initial": "A session's idle limit is at monotonic time 30:00.000.",
+    "events": [
+     "The owner's request reaches the server at 29:59.999.",
+     "Scheduling or lock contention delays the session check until 30:00.001."
+    ],
+    "outcomes": [
+     "The request arrived before expiry, is served, and restarts the idle period.",
+     "The session check occurs after expiry, so the request is refused."
+    ],
+    "observer": "The owner receives either the requested answer or a sign-in refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 owner-request monotonic sampling",
+   "kind": "reading count",
+   "text": "An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts;",
+   "question": "Does each owner request take one monotonic reading shared by session validity, the new last-request value and any confirmation-age check, or may those checks take separate readings?",
+   "options": [
+    "Take one reading for the request and share it across all monotonic decisions.",
+    "Take separate readings for session validity, last-request update and confirmation validity.",
+    "Specify separate readings only for operations whose semantics require them."
+   ],
+   "default_guess": "Take one arrival reading and use it for all monotonic decisions made by that request.",
+   "witness": {
+    "initial": "The session remains valid, and its pending confirmation will become exactly 10 minutes old between two possible clock reads in one submission.",
+    "events": [
+     "The owner submits the correct CSRF and confirmation values just before the confirmation deadline.",
+     "The implementation performs the session and confirmation checks."
+    ],
+    "outcomes": [
+     "One shared arrival reading sees the confirmation as valid and the submission proceeds.",
+     "A later second reading sees the confirmation as expired, refuses the submission and clears it."
+    ],
+    "observer": "The owner sees either the action's result or an expired-confirmation refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 admitted session mutation versus cleanup",
+   "kind": "ordering conflict",
+   "text": "a request that passes it completes even if a limit or a sign-out comes while it runs",
+   "question": "If a confirmation, upload or other session-changing request passes the session check but the cleanup pass or sign-out acquires the locks first and ends the session, must the admitted request still succeed, must termination wait for it, or must it be rechecked and refused?",
+   "options": [
+    "Admission is final, so termination waits until every admitted session mutation finishes.",
+    "Lock order is final, so a request acquiring the lock after termination is rechecked and refused.",
+    "The admitted request completes, but any session-local result is immediately discarded."
+   ],
+   "default_guess": "Make admission final and require cleanup or sign-out to serialize after already-admitted session mutations.",
+   "witness": {
+    "initial": "A valid session has one second of idle life left and no uploaded file.",
+    "events": [
+     "The owner starts an upload; it passes the session check and then waits for the import lock.",
+     "The idle limit is reached.",
+     "The cleanup pass acquires the import lock and the session lock before the upload does.",
+     "The upload later acquires the locks."
+    ],
+    "outcomes": [
+     "The upload was already admitted, so it succeeds and cleanup must not have ended the session ahead of it.",
+     "Cleanup ends the session first, so the upload is rechecked or otherwise refused.",
+     "The upload answers success but its file is discarded because the session has already ended."
+    ],
+    "observer": "The owner sees success or refusal; the required-test harness sees whether an upload survives in an ended session."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 session-pass cadence",
+   "kind": "vague schedule",
+   "text": "at a pass over the sessions it makes every 60 seconds from the start",
+   "question": "Is the pass scheduled at fixed monotonic deadlines from process start, 60 seconds after the preceding pass starts, or 60 seconds after it finishes, and when is the first pass?",
+   "options": [
+    "Run at fixed deadlines start+60s, start+120s and so on.",
+    "Run immediately at start and then every 60 seconds.",
+    "Wait 60 seconds after each pass finishes before starting the next."
+   ],
+   "default_guess": "Run the first pass at start+60 seconds and subsequent passes at fixed monotonic 60-second deadlines.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 session-pass clock sampling",
+   "kind": "reading count",
+   "text": "the pass alone ends sessions by their limits, taking the import lock and then each session's lock (A16 rule 2) and deciding under them.",
+   "question": "Does a pass take one monotonic reading for all sessions, or a new reading for each session after acquiring its lock, and is the import lock held across the entire pass or reacquired for each session?",
+   "options": [
+    "Take one reading and hold the import lock while visiting every session.",
+    "Take one reading but acquire the import lock separately for each session.",
+    "Take a new reading after acquiring each session's locks."
+   ],
+   "default_guess": "Take one monotonic reading for the whole pass, acquire the import lock once, and use that snapshot for every session decision.",
+   "witness": {
+    "initial": "Two sessions have the same idle deadline, and acquiring the second session's lock is delayed across that deadline.",
+    "events": [
+     "A cleanup pass begins just before the deadline and reads or does not yet read the monotonic clock.",
+     "It checks the first session.",
+     "It obtains the second session's lock just after the deadline."
+    ],
+    "outcomes": [
+     "One pass-wide reading keeps both sessions until the next pass.",
+     "Per-session readings keep the first session but end the second in the same pass."
+    ],
+    "observer": "The required-test harness inspecting which sessions and pending values the pass removed."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 monotonic session-time representation",
+   "kind": "missing representation",
+   "text": "its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock",
+   "question": "What exact type, unit and arithmetic representation stores monotonic readings and deadlines?",
+   "options": [
+    "Integer nanoseconds from the monotonic backend.",
+    "Floating-point seconds from the monotonic backend.",
+    "Opaque monotonic instants plus typed duration arithmetic."
+   ],
+   "default_guess": "Use opaque monotonic instants backed by integer nanoseconds and typed duration arithmetic.",
+   "unit": "?"
+  },
+  {
+   "subject": "A15 audit erasure time",
+   "kind": "reading count",
+   "text": "The erasure's own entry is written after the removal, in the same transaction, with the current instant; it is therefore never removed by the erasure that wrote it.",
+   "question": "Must validation of the supplied date, calculation of its UTC boundary and the erasure entry's instant use one UTC wall-clock reading, or may the operation read the wall clock more than once?",
+   "options": [
+    "Take one UTC reading and derive both today and the entry instant from it.",
+    "Read once for today and again when writing the audit entry.",
+    "Permit multiple readings but reject or retry if a wall-clock change would break the invariant."
+   ],
+   "default_guess": "Take one UTC wall-clock reading for the whole erasure transaction.",
+   "witness": {
+    "initial": "The UTC wall clock reads 00:00:00.500 on date D, and the owner asks to erase entries before D.",
+    "events": [
+     "Registry validates that D is not later than today.",
+     "Before the audit entry is timestamped, the wall clock is moved back to 23:59:59.500 on D-1.",
+     "Registry removes old entries and writes the erasure entry."
+    ],
+    "outcomes": [
+     "One reading gives the erasure entry an instant on D, satisfying e.instant >= start_of(D).",
+     "Two readings accept the request using day D but timestamp its entry before start_of(D), violating the formal invariant."
+    ],
+    "observer": "The owner reading the audit log and the invariant test."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 import instant across transactional records",
+   "kind": "reading count",
+   "text": "A Customer the import makes is created at the import's instant with revision 1.",
+   "question": "Is there one UTC import instant shared by every new Customer, the MigrationClosure and the import AuditEntry, and at what point in the transaction is it read?",
+   "options": [
+    "Take one UTC reading after locks are held and use it for every record written by the transaction.",
+    "Take separate UTC readings for Customers, closure and audit entry.",
+    "Define the import instant as the commit instant supplied by the persistence layer."
+   ],
+   "default_guess": "Take one UTC reading after all required locks are held and before constructing the transaction, then use it for every imported record, closure and audit entry.",
+   "witness": {
+    "initial": "An import will create two Customers, one closure and one audit entry while the wall clock is adjustable.",
+    "events": [
+     "The owner confirms the import.",
+     "The wall clock advances or is changed between construction of the Customers, closure and audit entry.",
+     "The transaction commits."
+    ],
+    "outcomes": [
+     "All records carry one identical import instant.",
+     "The Customers, closure and audit entry carry distinct instants despite describing one accepted import."
+    ],
+    "observer": "The owner or a contract test reading the imported Customers, migration closure and audit log."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21 files_artifacts security review",
+   "kind": "review scope",
+   "text": "files_artifacts (A07, A16, A18)",
+   "question": "Because the A13 change now decides when an expired session's uploaded file is retained and dropped, must files_artifacts be reopened and name A13, or is its reference to A16 considered sufficient evidence?",
+   "options": [
+    "Reopen files_artifacts and add A13 as a direct reference.",
+    "State explicitly that A16's reference to A13 is sufficient and that the outcome was reviewed.",
+    "Treat the cleanup timing as outside the files_artifacts category."
+   ],
+   "default_guess": "Reopen files_artifacts and add A13 as a direct reference.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 owner-session lifecycle\",\"kind\":\"contradiction\",\"text\":\"The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request; the owner's sign-out; the instance's restart (M11 is never durable).\",\"question\":\"Does reaching a time limit end and clear the session immediately, or merely make it invalid until the next 60-second pass ends and clears it?\",\"options\":[\"The limit immediately ends and clears the session.\",\"The limit makes the session invalid, but only the next pass ends it and drops its confirmation and upload.\"],\"default_guess\":\"Treat the limit as immediate invalidation and the next pass as physical removal and clearing.\",\"witness\":{\"initial\":\"An owner session has a pending confirmation and an uploaded file and is one second short of its idle limit; the next cleanup pass is still 40 seconds away.\",\"events\":[\"The monotonic clock advances two seconds.\",\"The owner makes a request, which is refused.\",\"The test inspects the session before the scheduled pass and again when the pass runs.\"],\"outcomes\":[\"The session and its pending values ceased to exist when the limit was reached.\",\"The session remains present but invalid, with its pending values, until the pass ends it and drops them.\"],\"observer\":\"The required-test harness inspecting owner-session runtime state.\"}},{\"subject\":\"A13 owner-request arrival instant\",\"kind\":\"undefined instant\",\"text\":\"Validity is checked when a request arrives (A04 rule 6, stage 1);\",\"question\":\"What event defines the request's arrival instant: receipt by the server, entry into the request handler, acquisition of a session-related lock, or the actual session check?\",\"options\":[\"Capture one monotonic reading when the server receives the request.\",\"Capture it when the handler begins authentication.\",\"Capture it immediately before the session check.\"],\"default_guess\":\"Capture one monotonic reading at the start of request handling and use it as the request's arrival instant.\",\"witness\":{\"initial\":\"A session's idle limit is at monotonic time 30:00.000.\",\"events\":[\"The owner's request reaches the server at 29:59.999.\",\"Scheduling or lock contention delays the session check until 30:00.001.\"],\"outcomes\":[\"The request arrived before expiry, is served, and restarts the idle period.\",\"The session check occurs after expiry, so the request is refused.\"],\"observer\":\"The owner receives either the requested answer or a sign-in refusal.\"}},{\"subject\":\"A13 owner-request monotonic sampling\",\"kind\":\"reading count\",\"text\":\"An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts;\",\"question\":\"Does each owner request take one monotonic reading shared by session validity, the new last-request value and any confirmation-age check, or may those checks take separate readings?\",\"options\":[\"Take one reading for the request and share it across all monotonic decisions.\",\"Take separate readings for session validity, last-request update and confirmation validity.\",\"Specify separate readings only for operations whose semantics require them.\"],\"default_guess\":\"Take one arrival reading and use it for all monotonic decisions made by that request.\",\"witness\":{\"initial\":\"The session remains valid, and its pending confirmation will become exactly 10 minutes old between two possible clock reads in one submission.\",\"events\":[\"The owner submits the correct CSRF and confirmation values just before the confirmation deadline.\",\"The implementation performs the session and confirmation checks.\"],\"outcomes\":[\"One shared arrival reading sees the confirmation as valid and the submission proceeds.\",\"A later second reading sees the confirmation as expired, refuses the submission and clears it.\"],\"observer\":\"The owner sees either the action's result or an expired-confirmation refusal.\"}},{\"subject\":\"A13 admitted session mutation versus cleanup\",\"kind\":\"ordering conflict\",\"text\":\"a request that passes it completes even if a limit or a sign-out comes while it runs\",\"question\":\"If a confirmation, upload or other session-changing request passes the session check but the cleanup pass or sign-out acquires the locks first and ends the session, must the admitted request still succeed, must termination wait for it, or must it be rechecked and refused?\",\"options\":[\"Admission is final, so termination waits until every admitted session mutation finishes.\",\"Lock order is final, so a request acquiring the lock after termination is rechecked and refused.\",\"The admitted request completes, but any session-local result is immediately discarded.\"],\"default_guess\":\"Make admission final and require cleanup or sign-out to serialize after already-admitted session mutations.\",\"witness\":{\"initial\":\"A valid session has one second of idle life left and no uploaded file.\",\"events\":[\"The owner starts an upload; it passes the session check and then waits for the import lock.\",\"The idle limit is reached.\",\"The cleanup pass acquires the import lock and the session lock before the upload does.\",\"The upload later acquires the locks.\"],\"outcomes\":[\"The upload was already admitted, so it succeeds and cleanup must not have ended the session ahead of it.\",\"Cleanup ends the session first, so the upload is rechecked or otherwise refused.\",\"The upload answers success but its file is discarded because the session has already ended.\"],\"observer\":\"The owner sees success or refusal; the required-test harness sees whether an upload survives in an ended session.\"}},{\"subject\":\"A13 session-pass cadence\",\"kind\":\"vague schedule\",\"text\":\"at a pass over the sessions it makes every 60 seconds from the start\",\"question\":\"Is the pass scheduled at fixed monotonic deadlines from process start, 60 seconds after the preceding pass starts, or 60 seconds after it finishes, and when is the first pass?\",\"options\":[\"Run at fixed deadlines start+60s, start+120s and so on.\",\"Run immediately at start and then every 60 seconds.\",\"Wait 60 seconds after each pass finishes before starting the next.\"],\"default_guess\":\"Run the first pass at start+60 seconds and subsequent passes at fixed monotonic 60-second deadlines.\"},{\"subject\":\"A13 session-pass clock sampling\",\"kind\":\"reading count\",\"text\":\"the pass alone ends sessions by their limits, taking the import lock and then each session's lock (A16 rule 2) and deciding under them.\",\"question\":\"Does a pass take one monotonic reading for all sessions, or a new reading for each session after acquiring its lock, and is the import lock held across the entire pass or reacquired for each session?\",\"options\":[\"Take one reading and hold the import lock while visiting every session.\",\"Take one reading but acquire the import lock separately for each session.\",\"Take a new reading after acquiring each session's locks.\"],\"default_guess\":\"Take one monotonic reading for the whole pass, acquire the import lock once, and use that snapshot for every session decision.\",\"witness\":{\"initial\":\"Two sessions have the same idle deadline, and acquiring the second session's lock is delayed across that deadline.\",\"events\":[\"A cleanup pass begins just before the deadline and reads or does not yet read the monotonic clock.\",\"It checks the first session.\",\"It obtains the second session's lock just after the deadline.\"],\"outcomes\":[\"One pass-wide reading keeps both sessions until the next pass.\",\"Per-session readings keep the first session but end the second in the same pass.\"],\"observer\":\"The required-test harness inspecting which sessions and pending values the pass removed.\"}},{\"subject\":\"A13 monotonic session-time representation\",\"kind\":\"missing representation\",\"text\":\"its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock\",\"question\":\"What exact type, unit and arithmetic representation stores monotonic readings and deadlines?\",\"options\":[\"Integer nanoseconds from the monotonic backend.\",\"Floating-point seconds from the monotonic backend.\",\"Opaque monotonic instants plus typed duration arithmetic.\"],\"default_guess\":\"Use opaque monotonic instants backed by integer nanoseconds and typed duration arithmetic.\"},{\"subject\":\"A15 audit erasure time\",\"kind\":\"reading count\",\"text\":\"The erasure's own entry is written after the removal, in the same transaction, with the current instant; it is therefore never removed by the erasure that wrote it.\",\"question\":\"Must validation of the supplied date, calculation of its UTC boundary and the erasure entry's instant use one UTC wall-clock reading, or may the operation read the wall clock more than once?\",\"options\":[\"Take one UTC reading and derive both today and the entry instant from it.\",\"Read once for today and again when writing the audit entry.\",\"Permit multiple readings but reject or retry if a wall-clock change would break the invariant.\"],\"default_guess\":\"Take one UTC wall-clock reading for the whole erasure transaction.\",\"witness\":{\"initial\":\"The UTC wall clock reads 00:00:00.500 on date D, and the owner asks to erase entries before D.\",\"events\":[\"Registry validates that D is not later than today.\",\"Before the audit entry is timestamped, the wall clock is moved back to 23:59:59.500 on D-1.\",\"Registry removes old entries and writes the erasure entry.\"],\"outcomes\":[\"One reading gives the erasure entry an instant on D, satisfying e.instant >= start_of(D).\",\"Two readings accept the request using day D but timestamp its entry before start_of(D), violating the formal invariant.\"],\"observer\":\"The owner reading the audit log and the invariant test.\"}},{\"subject\":\"A16 import instant across transactional records\",\"kind\":\"reading count\",\"text\":\"A Customer the import makes is created at the import's instant with revision 1.\",\"question\":\"Is there one UTC import instant shared by every new Customer, the MigrationClosure and the import AuditEntry, and at what point in the transaction is it read?\",\"options\":[\"Take one UTC reading after locks are held and use it for every record written by the transaction.\",\"Take separate UTC readings for Customers, closure and audit entry.\",\"Define the import instant as the commit instant supplied by the persistence layer.\"],\"default_guess\":\"Take one UTC reading after all required locks are held and before constructing the transaction, then use it for every imported record, closure and audit entry.\",\"witness\":{\"initial\":\"An import will create two Customers, one closure and one audit entry while the wall clock is adjustable.\",\"events\":[\"The owner confirms the import.\",\"The wall clock advances or is changed between construction of the Customers, closure and audit entry.\",\"The transaction commits.\"],\"outcomes\":[\"All records carry one identical import instant.\",\"The Customers, closure and audit entry carry distinct instants despite describing one accepted import.\"],\"observer\":\"The owner or a contract test reading the imported Customers, migration closure and audit log.\"}},{\"subject\":\"A21 files_artifacts security review\",\"kind\":\"review scope\",\"text\":\"files_artifacts (A07, A16, A18)\",\"question\":\"Because the A13 change now decides when an expired session's uploaded file is retained and dropped, must files_artifacts be reopened and name A13, or is its reference to A16 considered sufficient evidence?\",\"options\":[\"Reopen files_artifacts and add A13 as a direct reference.\",\"State explicitly that A16's reference to A13 is sufficient and that the outcome was reviewed.\",\"Treat the cleanup timing as outside the files_artifacts category.\"],\"default_guess\":\"Reopen files_artifacts and add A13 as a direct reference.\"}]}",
+ "set_aside": []
+}
