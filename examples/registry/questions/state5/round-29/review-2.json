@@ -1,0 +1,137 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_1_foundation.md:`public_op:store.discard_new_store`",
+   "subject": "partial store cleanup",
+   "kind": "contradiction",
+   "text": "Every connection to the new store is closed first; then the store's file and\neach of those companion files that exists are removed, each tried once\nwhatever an earlier close or removal did. What a failed close or removal\nleaves is an empty store of the release's version, which the next start\nopens as any store.",
+   "question": "If removing a companion fails but removing the main store succeeds, does cleanup leave an orphan companion or retain the main empty store, and what must the next start do with that residue?",
+   "options": [
+    "Try every removal independently, allowing only a companion file to remain and revise the empty-store guarantee",
+    "Remove companions first and retain the main store when any close or companion removal fails",
+    "Make cleanup transactional by another specified mechanism"
+   ],
+   "default_guess": "Retain the main empty store whenever any close or companion cleanup fails, then report cleanup failure.",
+   "witness": {
+    "initial": "A newly created empty store has its main file and a `-wal` companion; the listener fails to open.",
+    "events": [
+     "`module:instance_lifecycle` calls `store.discard_new_store`.",
+     "Removing `-wal` fails.",
+     "Removing the main store file succeeds."
+    ],
+    "outcomes": [
+     "The procedure that tries every removal leaves only `-wal`, with no empty store to open next time.",
+     "The stated failure guarantee leaves the main empty store of the release's version for the next start."
+    ],
+    "observer": "The host administrator and the next Registry start"
+   }
+  },
+  {
+   "unit": "50_public_apis_1_foundation.md:`public_op:store.discard_new_store`",
+   "subject": "companion-file ownership and file kind",
+   "kind": "ambiguous target",
+   "text": "every companion file\nSQLite keeps beside it under the store's name with a suffix — `-journal`,\n`-wal`, `-shm`",
+   "question": "Does the operation remove every filesystem entry at those three exact paths, including a pre-existing entry or symbolic link, or only a regular SQLite companion known to have been created for this new store?",
+   "options": [
+    "Remove every entry at the three exact paths without following links",
+    "Remove only regular files created or observed as SQLite companions during this start",
+    "Treat an unrecognised or pre-existing entry as a cleanup failure and leave it untouched"
+   ],
+   "default_guess": "Use the three exact paths as owned cleanup targets, unlink them without following links, and state that ownership explicitly.",
+   "witness": {
+    "initial": "The configured main store path is absent, but a pre-existing regular file already occupies the path formed by appending `-wal`.",
+    "events": [
+     "The start creates a new empty store.",
+     "A listener fails.",
+     "Cleanup examines the `-wal` path."
+    ],
+    "outcomes": [
+     "An implementation treating the suffix paths as owned deletes the pre-existing file.",
+     "An implementation requiring provenance preserves it because this start did not create it."
+    ],
+    "observer": "The host administrator"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_1_foundation.md:`public_op:store.discard_new_store`\",\"subject\":\"partial store cleanup\",\"kind\":\"contradiction\",\"text\":\"Every connection to the new store is closed first; then the store's file and\\neach of those companion files that exists are removed, each tried once\\nwhatever an earlier close or removal did. What a failed close or removal\\nleaves is an empty store of the release's version, which the next start\\nopens as any store.\",\"question\":\"If removing a companion fails but removing the main store succeeds, does cleanup leave an orphan companion or retain the main empty store, and what must the next start do with that residue?\",\"options\":[\"Try every removal independently, allowing only a companion file to remain and revise the empty-store guarantee\",\"Remove companions first and retain the main store when any close or companion removal fails\",\"Make cleanup transactional by another specified mechanism\"],\"default_guess\":\"Retain the main empty store whenever any close or companion cleanup fails, then report cleanup failure.\",\"witness\":{\"initial\":\"A newly created empty store has its main file and a `-wal` companion; the listener fails to open.\",\"events\":[\"`module:instance_lifecycle` calls `store.discard_new_store`.\",\"Removing `-wal` fails.\",\"Removing the main store file succeeds.\"],\"outcomes\":[\"The procedure that tries every removal leaves only `-wal`, with no empty store to open next time.\",\"The stated failure guarantee leaves the main empty store of the release's version for the next start.\"],\"observer\":\"The host administrator and the next Registry start\"}},{\"unit\":\"50_public_apis_1_foundation.md:`public_op:store.discard_new_store`\",\"subject\":\"companion-file ownership and file kind\",\"kind\":\"ambiguous target\",\"text\":\"every companion file\\nSQLite keeps beside it under the store's name with a suffix — `-journal`,\\n`-wal`, `-shm`\",\"question\":\"Does the operation remove every filesystem entry at those three exact paths, including a pre-existing entry or symbolic link, or only a regular SQLite companion known to have been created for this new store?\",\"options\":[\"Remove every entry at the three exact paths without following links\",\"Remove only regular files created or observed as SQLite companions during this start\",\"Treat an unrecognised or pre-existing entry as a cleanup failure and leave it untouched\"],\"default_guess\":\"Use the three exact paths as owned cleanup targets, unlink them without following links, and state that ownership explicitly.\",\"witness\":{\"initial\":\"The configured main store path is absent, but a pre-existing regular file already occupies the path formed by appending `-wal`.\",\"events\":[\"The start creates a new empty store.\",\"A listener fails.\",\"Cleanup examines the `-wal` path.\"],\"outcomes\":[\"An implementation treating the suffix paths as owned deletes the pre-existing file.\",\"An implementation requiring provenance preserves it because this start did not create it.\"],\"observer\":\"The host administrator\"}},{\"unit\":\"context: agreement of the earlier states' texts with this state\",\"subject\":\"failed-start diagnostic after partial cleanup\",\"kind\":\"contradictory diagnostic\",\"text\":\"which names the surface that could\\n   not be opened and, when the new store could not be removed, that it was\\n   left;\",\"question\":\"When the main store file is gone but one companion remains, what must the single diagnostic say, since the new store was not left even though `discard_new_store` answers false?\",\"options\":[\"Say generically that cleanup was incomplete\",\"Say that the store was left, despite only a companion remaining\",\"Treat removal of the main file as success and omit the companion failure\",\"Name the specific remaining companion kind\"],\"default_guess\":\"Say that cleanup was incomplete without including a path or value.\",\"witness\":{\"initial\":\"A listener fails after creation of a new store with a `-shm` companion.\",\"events\":[\"The main store file is removed.\",\"Removal of `-shm` fails.\",\"`discard_new_store` returns false because not every named file is gone.\"],\"outcomes\":[\"The flow's diagnostic says the new store was left.\",\"The filesystem shows that only a companion was left, so the diagnostic reports incomplete cleanup instead.\"],\"observer\":\"The owner monitoring standard error\"}},{\"unit\":\"context: agreement of the earlier states' texts with this state\",\"subject\":\"owner-only listener gate\",\"kind\":\"contradiction\",\"text\":\"Until both listeners of step 4 are open, an opened one accepts\\n   no connection: a connection that arrives meanwhile waits in the\\n   listener's queue and is accepted now, or is closed unanswered when the\\n   start fails.\",\"question\":\"In an owner-only start, where the service API listener is deliberately never opened, is the owner listener gated forever or does “both listeners” mean all listeners required for that start mode?\",\"options\":[\"Require both physical listeners, so an owner-only instance never accepts owner requests\",\"Require every listener selected by the loaded configuration, so the sole owner listener begins accepting once open\"],\"default_guess\":\"Interpret the gate as all listeners required for the selected start mode.\",\"witness\":{\"initial\":\"The configuration contains no service tokens and no service API address, producing an owner-only start.\",\"events\":[\"`module:instance_lifecycle` opens the owner-interface listener.\",\"It correctly opens no service API listener.\",\"The owner connects through the VPN.\"],\"outcomes\":[\"A literal implementation waits forever for both listeners and never serves the owner.\",\"A mode-aware implementation treats the required listener set as complete and serves the owner interface.\"],\"observer\":\"The owner\"}},{\"unit\":\"context: agreement of the earlier states' texts with this state\",\"subject\":\"pre-serve listener queue\",\"kind\":\"unspecified capacity\",\"text\":\"a connection that arrives meanwhile waits in the\\n   listener's queue and is accepted now, or is closed unanswered when the\\n   start fails.\",\"question\":\"What happens when more connections arrive before serving than the listener queue can hold, and what queue capacity or overload result is required?\",\"options\":[\"Fix a backlog large enough for a declared bound and reject excess connections\",\"Use the platform default backlog and permit excess connections to fail or time out\",\"Prevent connection establishment until the complete listener set is ready\"],\"default_guess\":\"Use a declared finite backlog and specify that excess connection attempts may fail without a Registry response.\",\"witness\":{\"initial\":\"The owner listener is open while the service listener is still being opened.\",\"events\":[\"More owner clients initiate connections than the listener backlog can hold.\",\"The service listener then opens successfully.\"],\"outcomes\":[\"With one backlog choice, every connection described by the passage waits and is later accepted.\",\"With another backlog choice, excess clients fail or time out before serving begins.\"],\"observer\":\"The connecting owner clients\"}}]}",
+ "set_aside": [
+  {
+   "unit": "context: agreement of the earlier states' texts with this state",
+   "subject": "failed-start diagnostic after partial cleanup",
+   "kind": "contradictory diagnostic",
+   "text": "which names the surface that could\n   not be opened and, when the new store could not be removed, that it was\n   left;",
+   "question": "When the main store file is gone but one companion remains, what must the single diagnostic say, since the new store was not left even though `discard_new_store` answers false?",
+   "options": [
+    "Say generically that cleanup was incomplete",
+    "Say that the store was left, despite only a companion remaining",
+    "Treat removal of the main file as success and omit the companion failure",
+    "Name the specific remaining companion kind"
+   ],
+   "default_guess": "Say that cleanup was incomplete without including a path or value.",
+   "witness": {
+    "initial": "A listener fails after creation of a new store with a `-shm` companion.",
+    "events": [
+     "The main store file is removed.",
+     "Removal of `-shm` fails.",
+     "`discard_new_store` returns false because not every named file is gone."
+    ],
+    "outcomes": [
+     "The flow's diagnostic says the new store was left.",
+     "The filesystem shows that only a companion was left, so the diagnostic reports incomplete cleanup instead."
+    ],
+    "observer": "The owner monitoring standard error"
+   }
+  },
+  {
+   "unit": "context: agreement of the earlier states' texts with this state",
+   "subject": "owner-only listener gate",
+   "kind": "contradiction",
+   "text": "Until both listeners of step 4 are open, an opened one accepts\n   no connection: a connection that arrives meanwhile waits in the\n   listener's queue and is accepted now, or is closed unanswered when the\n   start fails.",
+   "question": "In an owner-only start, where the service API listener is deliberately never opened, is the owner listener gated forever or does “both listeners” mean all listeners required for that start mode?",
+   "options": [
+    "Require both physical listeners, so an owner-only instance never accepts owner requests",
+    "Require every listener selected by the loaded configuration, so the sole owner listener begins accepting once open"
+   ],
+   "default_guess": "Interpret the gate as all listeners required for the selected start mode.",
+   "witness": {
+    "initial": "The configuration contains no service tokens and no service API address, producing an owner-only start.",
+    "events": [
+     "`module:instance_lifecycle` opens the owner-interface listener.",
+     "It correctly opens no service API listener.",
+     "The owner connects through the VPN."
+    ],
+    "outcomes": [
+     "A literal implementation waits forever for both listeners and never serves the owner.",
+     "A mode-aware implementation treats the required listener set as complete and serves the owner interface."
+    ],
+    "observer": "The owner"
+   }
+  },
+  {
+   "unit": "context: agreement of the earlier states' texts with this state",
+   "subject": "pre-serve listener queue",
+   "kind": "unspecified capacity",
+   "text": "a connection that arrives meanwhile waits in the\n   listener's queue and is accepted now, or is closed unanswered when the\n   start fails.",
+   "question": "What happens when more connections arrive before serving than the listener queue can hold, and what queue capacity or overload result is required?",
+   "options": [
+    "Fix a backlog large enough for a declared bound and reject excess connections",
+    "Use the platform default backlog and permit excess connections to fail or time out",
+    "Prevent connection establishment until the complete listener set is ready"
+   ],
+   "default_guess": "Use a declared finite backlog and specify that excess connection attempts may fail without a Registry response.",
+   "witness": {
+    "initial": "The owner listener is open while the service listener is still being opened.",
+    "events": [
+     "More owner clients initiate connections than the listener backlog can hold.",
+     "The service listener then opens successfully."
+    ],
+    "outcomes": [
+     "With one backlog choice, every connection described by the passage waits and is later accepted.",
+     "With another backlog choice, excess clients fail or time out before serving begins."
+    ],
+    "observer": "The connecting owner clients"
+   }
+  }
+ ]
+}

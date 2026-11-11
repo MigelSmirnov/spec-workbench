@@ -1,0 +1,199 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:store.discard_new_store input",
+   "kind": "input_shape",
+   "text": "The store `open_store` answered as made new.",
+   "question": "What concrete value does `discard_new_store` receive: an opaque store handle containing its path and connections, a path, a connection, or another structure?",
+   "options": [
+    "An opaque store handle containing the canonical path and every owned connection",
+    "The store file path only",
+    "A primary SQLite connection from which the path is recovered"
+   ],
+   "default_guess": "Use an opaque store handle containing the canonical path and every connection owned by `module:store`.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store connection scope",
+   "kind": "connection_scope",
+   "text": "Every connection to the new store is closed first",
+   "question": "Which connections count as every connection, and in what order are multiple connections closed?",
+   "options": [
+    "Every connection tracked by `module:store`, in a fixed declared order",
+    "Only the connection returned by `open_store`",
+    "Any process connection discoverable at the time, in unspecified order"
+   ],
+   "default_guess": "Close every connection tracked by `module:store`, in reverse creation order.",
+   "witness": {
+    "initial": "The new store has a primary connection and a second store-owned connection, and closing one of them will fail.",
+    "events": [
+     "The owner-interface listener fails to open.",
+     "`instance_lifecycle` calls `store.discard_new_store`.",
+     "One implementation closes only the primary connection; another closes both store-owned connections."
+    ],
+    "outcomes": [
+     "The second connection remains able to hold or recreate SQLite companion files until process exit.",
+     "Both connections have been attempted before file removal."
+    ],
+    "observer": "The host and the next Registry start see different files and lock state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store removal order",
+   "kind": "effect_order",
+   "text": "then the store's file and each of those companion files that exists are removed, each tried once whatever an earlier close or removal did.",
+   "question": "In what exact order are `-journal`, `-wal`, and `-shm` tested and removed after the store file?",
+   "options": [
+    "Exactly `-journal`, then `-wal`, then `-shm`",
+    "Filesystem or discovery order",
+    "Any order because only the final absence matters"
+   ],
+   "default_guess": "Remove the store file first, then `-journal`, `-wal`, and `-shm` in the order written.",
+   "witness": {
+    "initial": "The store file and all three companion files exist; the third removal attempt is forced to fail.",
+    "events": [
+     "A listener fails and cleanup begins.",
+     "One implementation removes companions in the written suffix order.",
+     "Another implementation removes companions in filesystem discovery order."
+    ],
+    "outcomes": [
+     "One companion remains because it was the third attempted path.",
+     "A different companion remains because it was the third attempted path."
+    ],
+    "observer": "The host diagnostic and the next start see different remnants."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store failure result",
+   "kind": "contradictory_postcondition",
+   "text": "What a failed close or removal leaves is an empty store of the release's version, which the next start opens as any store.",
+   "question": "How can this postcondition hold when every removal is attempted independently and may leave only a companion file, may remove the store despite a failed close, or may remove some files needed to open the remaining store?",
+   "options": [
+    "Cleanup must be all-or-nothing and preserve a complete empty store on any failure",
+    "Partial remnants are allowed and the quoted empty-store postcondition must be weakened",
+    "After any failure Registry must recreate and validate an empty store before returning"
+   ],
+   "default_guess": "Allow partial remnants, return false, and replace the claim with an exact statement that any subset of the four named files may remain.",
+   "witness": {
+    "initial": "A newly created empty store has its main file and a `-wal` file.",
+    "events": [
+     "The service listener fails to open.",
+     "Cleanup removes the main store file successfully.",
+     "Removal of the `-wal` file fails."
+    ],
+    "outcomes": [
+     "The independent-attempt rule leaves only `store-wal`, which is not an empty store the next start can open.",
+     "The quoted postcondition says an empty store of the release's version remains and the next start opens it normally."
+    ],
+    "observer": "The next Registry start sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store result timing",
+   "kind": "completion_boundary",
+   "text": "Whether it was removed: true when the store's file and every companion file SQLite keeps beside it under the store's name with a suffix — `-journal`, `-wal`, `-shm` — are all gone; false otherwise.",
+   "question": "At what instant is absence decided when a connection failed to close and process termination may subsequently release it, delete a journal, or cause SQLite to update or recreate a companion file?",
+   "options": [
+    "Immediately after the four removal attempts",
+    "After all connection handles are definitively released",
+    "After process termination, reported by the next start"
+   ],
+   "default_guess": "Return only after every store-owned connection is definitively released, then test the four paths immediately after the removal attempts.",
+   "witness": {
+    "initial": "Closing one SQLite connection reports failure and a companion file still exists.",
+    "events": [
+     "Cleanup attempts every deletion and computes its result.",
+     "The process then terminates and the operating system releases the failed connection."
+    ],
+    "outcomes": [
+     "An implementation evaluating immediately returns false.",
+     "An implementation treating process termination as part of cleanup observes the companion gone and treats removal as successful."
+    ],
+    "observer": "The start diagnostic and the host monitoring the files see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "flow:start_instance owner-only serving gate",
+   "kind": "contradiction",
+   "text": "Until both listeners of step 4 are open, an opened one accepts no connection:",
+   "question": "Does “both listeners” mean both configured listeners, so that an owner-only start may serve after its sole listener opens, or literally two listeners, which prevents an owner-only start from ever serving?",
+   "options": [
+    "All listeners required by this start are open; one listener is sufficient for owner-only mode",
+    "Exactly two listeners must be open",
+    "Owner-only mode is an explicit exception to this sentence"
+   ],
+   "default_guess": "Interpret it as all listeners required by the selected mode and rewrite the sentence accordingly.",
+   "witness": {
+    "initial": "The configuration contains none of the service tokens or service API address, so this is an owner-only start.",
+    "events": [
+     "Registry opens the owner-interface listener successfully.",
+     "There is no service API listener to open.",
+     "An owner connects to the owner interface."
+    ],
+    "outcomes": [
+     "Under the literal “both listeners” gate, the owner connection is never accepted.",
+     "Under the later owner-only outcome, the owner interface is served after its sole listener opens."
+    ],
+    "observer": "The owner sees either a working interface or a connection that never receives an answer."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "flow:start_instance pre-serving listener queue",
+   "kind": "transport_semantics",
+   "text": "a connection that arrives meanwhile waits in the listener's queue and is accepted now, or is closed unanswered when the start fails.",
+   "question": "What counts as an arrived connection, and what must happen when the listener backlog is full or the platform refuses or times out a connection before Registry begins accepting?",
+   "options": [
+    "Only a connection successfully placed in the kernel backlog counts as arrived",
+    "Every connection attempt after the first listener is opened must be queued or explicitly closed by Registry",
+    "Backlog overflow, refusal and timeout are platform-dependent outcomes outside this guarantee"
+   ],
+   "default_guess": "Count only connections successfully queued by the listening socket and state that backlog overflow and pre-accept transport failure are platform behavior.",
+   "witness": {
+    "initial": "The owner listener is open, the service listener has not opened yet, and the owner listener's backlog is full.",
+    "events": [
+     "Another owner client attempts to connect before serving begins.",
+     "The platform either refuses or times out that attempt rather than queueing it."
+    ],
+    "outcomes": [
+     "The quoted exhaustive outcomes require the connection to wait or be closed only when the start fails.",
+     "Ordinary bounded-backlog behavior permits refusal or timeout even though the start later succeeds."
+    ],
+    "observer": "The owner client sees a failed connection instead of a delayed response."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21 security review of the A17 listener change",
+   "kind": "incomplete_reopened_review",
+   "text": "with their text form, their exclusive binding and IPv6-only listening, and\nthe networks R0-28, R0-29 and R0-48 give each surface, were reviewed under authentication_credential_abuse and secrets: no outcome\nchanged",
+   "question": "Was the changed exclusive binding and serve-only-after-all-listeners behavior also reviewed under `concurrency`, whose review explicitly references A17, or is the reopened concurrency review still incomplete?",
+   "options": [
+    "Concurrency was reviewed and the performed-again passage must say so",
+    "Concurrency was not reviewed and A21 remains reopened",
+    "Only address reachability changed, so concurrency should stop referencing A17"
+   ],
+   "default_guess": "Review the change under concurrency and record that review explicitly.",
+   "witness": {
+    "initial": "A21's concurrency category references A17, and A17's listener opening and exclusive binding behavior has changed.",
+    "events": [
+     "A21 rule 2 reopens every category that names the changed decision.",
+     "The performed-again passage records review under authentication_credential_abuse and secrets only."
+    ],
+    "outcomes": [
+     "Applying A21 rule 2 leaves the concurrency review reopened.",
+     "Treating the recorded passage as complete closes the security review without reviewing concurrency."
+    ],
+    "observer": "The security-review gate and later agents deciding whether State 2 is closed see different status."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:store.discard_new_store input\",\"kind\":\"input_shape\",\"text\":\"The store `open_store` answered as made new.\",\"question\":\"What concrete value does `discard_new_store` receive: an opaque store handle containing its path and connections, a path, a connection, or another structure?\",\"options\":[\"An opaque store handle containing the canonical path and every owned connection\",\"The store file path only\",\"A primary SQLite connection from which the path is recovered\"],\"default_guess\":\"Use an opaque store handle containing the canonical path and every connection owned by `module:store`.\"},{\"subject\":\"public_op:store.discard_new_store connection scope\",\"kind\":\"connection_scope\",\"text\":\"Every connection to the new store is closed first\",\"question\":\"Which connections count as every connection, and in what order are multiple connections closed?\",\"options\":[\"Every connection tracked by `module:store`, in a fixed declared order\",\"Only the connection returned by `open_store`\",\"Any process connection discoverable at the time, in unspecified order\"],\"default_guess\":\"Close every connection tracked by `module:store`, in reverse creation order.\",\"witness\":{\"initial\":\"The new store has a primary connection and a second store-owned connection, and closing one of them will fail.\",\"events\":[\"The owner-interface listener fails to open.\",\"`instance_lifecycle` calls `store.discard_new_store`.\",\"One implementation closes only the primary connection; another closes both store-owned connections.\"],\"outcomes\":[\"The second connection remains able to hold or recreate SQLite companion files until process exit.\",\"Both connections have been attempted before file removal.\"],\"observer\":\"The host and the next Registry start see different files and lock state.\"}},{\"subject\":\"public_op:store.discard_new_store removal order\",\"kind\":\"effect_order\",\"text\":\"then the store's file and each of those companion files that exists are removed, each tried once whatever an earlier close or removal did.\",\"question\":\"In what exact order are `-journal`, `-wal`, and `-shm` tested and removed after the store file?\",\"options\":[\"Exactly `-journal`, then `-wal`, then `-shm`\",\"Filesystem or discovery order\",\"Any order because only the final absence matters\"],\"default_guess\":\"Remove the store file first, then `-journal`, `-wal`, and `-shm` in the order written.\",\"witness\":{\"initial\":\"The store file and all three companion files exist; the third removal attempt is forced to fail.\",\"events\":[\"A listener fails and cleanup begins.\",\"One implementation removes companions in the written suffix order.\",\"Another implementation removes companions in filesystem discovery order.\"],\"outcomes\":[\"One companion remains because it was the third attempted path.\",\"A different companion remains because it was the third attempted path.\"],\"observer\":\"The host diagnostic and the next start see different remnants.\"}},{\"subject\":\"public_op:store.discard_new_store failure result\",\"kind\":\"contradictory_postcondition\",\"text\":\"What a failed close or removal leaves is an empty store of the release's version, which the next start opens as any store.\",\"question\":\"How can this postcondition hold when every removal is attempted independently and may leave only a companion file, may remove the store despite a failed close, or may remove some files needed to open the remaining store?\",\"options\":[\"Cleanup must be all-or-nothing and preserve a complete empty store on any failure\",\"Partial remnants are allowed and the quoted empty-store postcondition must be weakened\",\"After any failure Registry must recreate and validate an empty store before returning\"],\"default_guess\":\"Allow partial remnants, return false, and replace the claim with an exact statement that any subset of the four named files may remain.\",\"witness\":{\"initial\":\"A newly created empty store has its main file and a `-wal` file.\",\"events\":[\"The service listener fails to open.\",\"Cleanup removes the main store file successfully.\",\"Removal of the `-wal` file fails.\"],\"outcomes\":[\"The independent-attempt rule leaves only `store-wal`, which is not an empty store the next start can open.\",\"The quoted postcondition says an empty store of the release's version remains and the next start opens it normally.\"],\"observer\":\"The next Registry start sees the difference.\"}},{\"subject\":\"public_op:store.discard_new_store result timing\",\"kind\":\"completion_boundary\",\"text\":\"Whether it was removed: true when the store's file and every companion file SQLite keeps beside it under the store's name with a suffix — `-journal`, `-wal`, `-shm` — are all gone; false otherwise.\",\"question\":\"At what instant is absence decided when a connection failed to close and process termination may subsequently release it, delete a journal, or cause SQLite to update or recreate a companion file?\",\"options\":[\"Immediately after the four removal attempts\",\"After all connection handles are definitively released\",\"After process termination, reported by the next start\"],\"default_guess\":\"Return only after every store-owned connection is definitively released, then test the four paths immediately after the removal attempts.\",\"witness\":{\"initial\":\"Closing one SQLite connection reports failure and a companion file still exists.\",\"events\":[\"Cleanup attempts every deletion and computes its result.\",\"The process then terminates and the operating system releases the failed connection.\"],\"outcomes\":[\"An implementation evaluating immediately returns false.\",\"An implementation treating process termination as part of cleanup observes the companion gone and treats removal as successful.\"],\"observer\":\"The start diagnostic and the host monitoring the files see the difference.\"}},{\"subject\":\"flow:start_instance owner-only serving gate\",\"kind\":\"contradiction\",\"text\":\"Until both listeners of step 4 are open, an opened one accepts no connection:\",\"question\":\"Does “both listeners” mean both configured listeners, so that an owner-only start may serve after its sole listener opens, or literally two listeners, which prevents an owner-only start from ever serving?\",\"options\":[\"All listeners required by this start are open; one listener is sufficient for owner-only mode\",\"Exactly two listeners must be open\",\"Owner-only mode is an explicit exception to this sentence\"],\"default_guess\":\"Interpret it as all listeners required by the selected mode and rewrite the sentence accordingly.\",\"witness\":{\"initial\":\"The configuration contains none of the service tokens or service API address, so this is an owner-only start.\",\"events\":[\"Registry opens the owner-interface listener successfully.\",\"There is no service API listener to open.\",\"An owner connects to the owner interface.\"],\"outcomes\":[\"Under the literal “both listeners” gate, the owner connection is never accepted.\",\"Under the later owner-only outcome, the owner interface is served after its sole listener opens.\"],\"observer\":\"The owner sees either a working interface or a connection that never receives an answer.\"}},{\"subject\":\"flow:start_instance pre-serving listener queue\",\"kind\":\"transport_semantics\",\"text\":\"a connection that arrives meanwhile waits in the listener's queue and is accepted now, or is closed unanswered when the start fails.\",\"question\":\"What counts as an arrived connection, and what must happen when the listener backlog is full or the platform refuses or times out a connection before Registry begins accepting?\",\"options\":[\"Only a connection successfully placed in the kernel backlog counts as arrived\",\"Every connection attempt after the first listener is opened must be queued or explicitly closed by Registry\",\"Backlog overflow, refusal and timeout are platform-dependent outcomes outside this guarantee\"],\"default_guess\":\"Count only connections successfully queued by the listening socket and state that backlog overflow and pre-accept transport failure are platform behavior.\",\"witness\":{\"initial\":\"The owner listener is open, the service listener has not opened yet, and the owner listener's backlog is full.\",\"events\":[\"Another owner client attempts to connect before serving begins.\",\"The platform either refuses or times out that attempt rather than queueing it.\"],\"outcomes\":[\"The quoted exhaustive outcomes require the connection to wait or be closed only when the start fails.\",\"Ordinary bounded-backlog behavior permits refusal or timeout even though the start later succeeds.\"],\"observer\":\"The owner client sees a failed connection instead of a delayed response.\"}},{\"subject\":\"A21 security review of the A17 listener change\",\"kind\":\"incomplete_reopened_review\",\"text\":\"with their text form, their exclusive binding and IPv6-only listening, and\\nthe networks R0-28, R0-29 and R0-48 give each surface, were reviewed under authentication_credential_abuse and secrets: no outcome\\nchanged\",\"question\":\"Was the changed exclusive binding and serve-only-after-all-listeners behavior also reviewed under `concurrency`, whose review explicitly references A17, or is the reopened concurrency review still incomplete?\",\"options\":[\"Concurrency was reviewed and the performed-again passage must say so\",\"Concurrency was not reviewed and A21 remains reopened\",\"Only address reachability changed, so concurrency should stop referencing A17\"],\"default_guess\":\"Review the change under concurrency and record that review explicitly.\",\"witness\":{\"initial\":\"A21's concurrency category references A17, and A17's listener opening and exclusive binding behavior has changed.\",\"events\":[\"A21 rule 2 reopens every category that names the changed decision.\",\"The performed-again passage records review under authentication_credential_abuse and secrets only.\"],\"outcomes\":[\"Applying A21 rule 2 leaves the concurrency review reopened.\",\"Treating the recorded passage as complete closes the security review without reviewing concurrency.\"],\"observer\":\"The security-review gate and later agents deciding whether State 2 is closed see different status.\"}}]}",
+ "set_aside": []
+}

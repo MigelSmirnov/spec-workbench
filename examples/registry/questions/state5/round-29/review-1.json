@@ -1,0 +1,176 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "contradictory cleanup outcome",
+   "text": "What a failed close or removal leaves is an empty store of the release's version, which the next start opens as any store.",
+   "question": "What must remain when removal succeeds for the store file but fails for one companion file, and how must the next start handle that partial state?",
+   "options": [
+    "The store file must be preserved whenever any companion cannot be removed, leaving an empty store to reopen.",
+    "Partial deletion is allowed; the next start creates a new store and explicitly removes or validates every leftover companion.",
+    "Partial deletion is allowed and the next start treats the leftover companion according to SQLite without any additional cleanup guarantee."
+   ],
+   "default_guess": "Remove companions before the store file and remove the store file only if every companion removal succeeded.",
+   "witness": {
+    "initial": "A newly created empty store has a store file and a `-wal` companion.",
+    "events": [
+     "A listener fails to open.",
+     "`module:instance_lifecycle` calls `store.discard_new_store`.",
+     "The store file is removed successfully, but removal of `-wal` fails.",
+     "The host starts Registry again."
+    ],
+    "outcomes": [
+     "The quoted passage requires an empty store of the release's version to remain and be opened by the next start.",
+     "The per-file effect permits the store file to be gone while `-wal` remains, so `store.open_store` makes a new store rather than opening the store that was left."
+    ],
+    "observer": "The host administrator and the next Registry start"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "unspecified removal order",
+   "text": "then the store's file and each of those companion files that exists are removed, each tried once whatever an earlier close or removal did.",
+   "question": "In what order must the store file, `-journal`, `-wal`, and `-shm` be removed?",
+   "options": [
+    "Remove the store file first, then `-journal`, `-wal`, and `-shm`.",
+    "Remove all companions first and the store file last.",
+    "The order is deliberately unspecified and callers must accept any resulting subset after failures."
+   ],
+   "default_guess": "Remove `-journal`, `-wal`, and `-shm` first in the listed order, then remove the store file.",
+   "witness": {
+    "initial": "A new store has its store file, `-wal`, and `-shm`; the filesystem will fail the second removal attempt.",
+    "events": [
+     "A listener fails and cleanup starts.",
+     "One implementation removes the store file first.",
+     "Another implementation removes companions first."
+    ],
+    "outcomes": [
+     "The first implementation leaves `-wal` and `-shm`.",
+     "The second implementation leaves `-shm` and the store file."
+    ],
+    "observer": "The next start and the host administrator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "unspecified close failure handling",
+   "text": "Every connection to the new store is closed first; then the store's file and each of those companion files that exists are removed, each tried once whatever an earlier close or removal did.",
+   "question": "When closing one store connection fails, must cleanup attempt to close every remaining connection before attempting every removal, and in what order are connection closes attempted?",
+   "options": [
+    "Attempt every connection close once despite earlier close failures, then attempt every removal.",
+    "Stop closing further connections after the first close failure but still attempt every removal.",
+    "Abort all further cleanup after a close failure."
+   ],
+   "default_guess": "Attempt every known connection close once in a fixed order, then attempt every file removal regardless of close results.",
+   "witness": {
+    "initial": "The new store has two open connections.",
+    "events": [
+     "A listener fails to open.",
+     "Closing the first connection reports failure.",
+     "Cleanup proceeds under two implementations."
+    ],
+    "outcomes": [
+     "One implementation attempts and succeeds in closing the second connection before removing files.",
+     "The other leaves the second connection open and immediately attempts the removals."
+    ],
+    "observer": "The process during cleanup and the filesystem on platforms that prevent deletion of open database files"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "ambiguous companion identification",
+   "text": "every companion file SQLite keeps beside it under the store's name with a suffix — `-journal`, `-wal`, `-shm`",
+   "question": "Are cleanup targets defined solely by these three exact path names, or must Registry establish that an entry is an SQLite-created regular file before removing it, and how are links or directories at those paths handled?",
+   "options": [
+    "Unlink any filesystem entry at each exact companion path without following links.",
+    "Remove only regular files known to have been created by this store's SQLite connections.",
+    "Treat a non-regular entry or link as a failed removal and leave it untouched."
+   ],
+   "default_guess": "Operate on the three exact directory entries without following links; remove regular files and symlinks by unlinking the entry, and treat directories or other unremovable entries as failure.",
+   "witness": {
+    "initial": "Before cleanup, `<store>-wal` is a symbolic link rather than the WAL file SQLite originally created.",
+    "events": [
+     "A listener fails and `store.discard_new_store` examines the companion path.",
+     "One implementation treats the exact path as the cleanup target.",
+     "Another requires it to be a regular SQLite-created file."
+    ],
+    "outcomes": [
+     "The first unlinks the symbolic link without touching its target.",
+     "The second leaves the symbolic link and returns false."
+    ],
+    "observer": "The host administrator and the next Registry start"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store State impact",
+   "kind": "contradictory file scope",
+   "text": "Whether it was removed: true when the store's file and every companion file SQLite keeps beside it under the store's name with a suffix — `-journal`, `-wal`, `-shm` — are all gone; false otherwise.\n\nDeletes the store file it made and the SQLite files beside it, when it can; touches no other file.",
+   "question": "Does cleanup cover exactly the store file and the three enumerated companion names, or every SQLite file beside the store that its connections created?",
+   "options": [
+    "Exactly the store file plus `-journal`, `-wal`, and `-shm`.",
+    "Every adjacent SQLite-created file, including any other SQLite temporary or journal naming form.",
+    "The three names in this release, with any additional form requiring an explicit future specification change."
+   ],
+   "default_guess": "Exactly the store file plus the three enumerated companion paths.",
+   "unit": "?"
+  },
+  {
+   "subject": "flow:start_instance step 5",
+   "kind": "owner-only contradiction",
+   "text": "Until both listeners of step 4 are open, an opened one accepts no connection: a connection that arrives meanwhile waits in the listener's queue and is accepted now, or is closed unanswered when the start fails. Only now the surfaces answer:\n   `capability:service_api.serve_service_request` and\n   `capability:owner_interface.serve_owner_request`. An owner-only start\n   has no service API listener: a service call fails to connect and Registry\n   answers nothing (A17 rule 1, owner, 2026-11-01).",
+   "question": "For an owner-only start, when may the owner listener begin accepting connections even though a second listener will never exist?",
+   "options": [
+    "“Both listeners” means every listener required for this start, so the owner listener accepts immediately after it opens in owner-only mode.",
+    "Owner-only mode still waits for a nonexistent service listener and therefore never serves.",
+    "Owner-only mode has a separately specified activation condition after the decision not to create the service listener."
+   ],
+   "default_guess": "Interpret “both listeners” as all listeners required by the loaded configuration; in owner-only mode the owner listener is activated once it alone is open.",
+   "witness": {
+    "initial": "Configuration is valid for an owner-only start, so no service tokens or service API address exist.",
+    "events": [
+     "`instance_lifecycle` opens the owner-interface listener.",
+     "An owner connects.",
+     "No service API listener is opened."
+    ],
+    "outcomes": [
+     "The first sentence keeps the owner connection queued forever because both listeners are never open.",
+     "The owner-only clauses say the owner interface is served alone, so the connection is accepted after the owner listener opens."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "flow:start_instance listener queue",
+   "kind": "unspecified queue capacity and overflow",
+   "text": "a connection that arrives meanwhile waits in the listener's queue and is accepted now, or is closed unanswered when the start fails.",
+   "question": "What backlog capacity and overflow behavior are required when more connections arrive before serving begins than the listener's queue can hold?",
+   "options": [
+    "The implementation must provision or manage an effectively unbounded queue so every connection waits.",
+    "Overflowing connections may be refused, reset, or time out even when the start later succeeds.",
+    "The release fixes a finite backlog and a required overflow outcome."
+   ],
+   "default_guess": "Use the platform's normal finite backlog and permit overflowed connections to fail without a Registry response.",
+   "witness": {
+    "initial": "The owner listener is open, the service listener has not finished opening, and the platform's accept queue is full.",
+    "events": [
+     "Another client attempts to connect before both required listeners are open.",
+     "The service listener later opens successfully and Registry begins serving."
+    ],
+    "outcomes": [
+     "A literal implementation of the passage preserves the new connection in a queue and later accepts it.",
+     "A normal finite-backlog implementation refuses, resets, or times out the connection although the start succeeds."
+    ],
+    "observer": "The connecting client"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"contradictory cleanup outcome\",\"text\":\"What a failed close or removal leaves is an empty store of the release's version, which the next start opens as any store.\",\"question\":\"What must remain when removal succeeds for the store file but fails for one companion file, and how must the next start handle that partial state?\",\"options\":[\"The store file must be preserved whenever any companion cannot be removed, leaving an empty store to reopen.\",\"Partial deletion is allowed; the next start creates a new store and explicitly removes or validates every leftover companion.\",\"Partial deletion is allowed and the next start treats the leftover companion according to SQLite without any additional cleanup guarantee.\"],\"default_guess\":\"Remove companions before the store file and remove the store file only if every companion removal succeeded.\",\"witness\":{\"initial\":\"A newly created empty store has a store file and a `-wal` companion.\",\"events\":[\"A listener fails to open.\",\"`module:instance_lifecycle` calls `store.discard_new_store`.\",\"The store file is removed successfully, but removal of `-wal` fails.\",\"The host starts Registry again.\"],\"outcomes\":[\"The quoted passage requires an empty store of the release's version to remain and be opened by the next start.\",\"The per-file effect permits the store file to be gone while `-wal` remains, so `store.open_store` makes a new store rather than opening the store that was left.\"],\"observer\":\"The host administrator and the next Registry start\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"unspecified removal order\",\"text\":\"then the store's file and each of those companion files that exists are removed, each tried once whatever an earlier close or removal did.\",\"question\":\"In what order must the store file, `-journal`, `-wal`, and `-shm` be removed?\",\"options\":[\"Remove the store file first, then `-journal`, `-wal`, and `-shm`.\",\"Remove all companions first and the store file last.\",\"The order is deliberately unspecified and callers must accept any resulting subset after failures.\"],\"default_guess\":\"Remove `-journal`, `-wal`, and `-shm` first in the listed order, then remove the store file.\",\"witness\":{\"initial\":\"A new store has its store file, `-wal`, and `-shm`; the filesystem will fail the second removal attempt.\",\"events\":[\"A listener fails and cleanup starts.\",\"One implementation removes the store file first.\",\"Another implementation removes companions first.\"],\"outcomes\":[\"The first implementation leaves `-wal` and `-shm`.\",\"The second implementation leaves `-shm` and the store file.\"],\"observer\":\"The next start and the host administrator\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"unspecified close failure handling\",\"text\":\"Every connection to the new store is closed first; then the store's file and each of those companion files that exists are removed, each tried once whatever an earlier close or removal did.\",\"question\":\"When closing one store connection fails, must cleanup attempt to close every remaining connection before attempting every removal, and in what order are connection closes attempted?\",\"options\":[\"Attempt every connection close once despite earlier close failures, then attempt every removal.\",\"Stop closing further connections after the first close failure but still attempt every removal.\",\"Abort all further cleanup after a close failure.\"],\"default_guess\":\"Attempt every known connection close once in a fixed order, then attempt every file removal regardless of close results.\",\"witness\":{\"initial\":\"The new store has two open connections.\",\"events\":[\"A listener fails to open.\",\"Closing the first connection reports failure.\",\"Cleanup proceeds under two implementations.\"],\"outcomes\":[\"One implementation attempts and succeeds in closing the second connection before removing files.\",\"The other leaves the second connection open and immediately attempts the removals.\"],\"observer\":\"The process during cleanup and the filesystem on platforms that prevent deletion of open database files\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"ambiguous companion identification\",\"text\":\"every companion file SQLite keeps beside it under the store's name with a suffix — `-journal`, `-wal`, `-shm`\",\"question\":\"Are cleanup targets defined solely by these three exact path names, or must Registry establish that an entry is an SQLite-created regular file before removing it, and how are links or directories at those paths handled?\",\"options\":[\"Unlink any filesystem entry at each exact companion path without following links.\",\"Remove only regular files known to have been created by this store's SQLite connections.\",\"Treat a non-regular entry or link as a failed removal and leave it untouched.\"],\"default_guess\":\"Operate on the three exact directory entries without following links; remove regular files and symlinks by unlinking the entry, and treat directories or other unremovable entries as failure.\",\"witness\":{\"initial\":\"Before cleanup, `<store>-wal` is a symbolic link rather than the WAL file SQLite originally created.\",\"events\":[\"A listener fails and `store.discard_new_store` examines the companion path.\",\"One implementation treats the exact path as the cleanup target.\",\"Another requires it to be a regular SQLite-created file.\"],\"outcomes\":[\"The first unlinks the symbolic link without touching its target.\",\"The second leaves the symbolic link and returns false.\"],\"observer\":\"The host administrator and the next Registry start\"}},{\"subject\":\"public_op:store.discard_new_store State impact\",\"kind\":\"contradictory file scope\",\"text\":\"Whether it was removed: true when the store's file and every companion file SQLite keeps beside it under the store's name with a suffix — `-journal`, `-wal`, `-shm` — are all gone; false otherwise.\\n\\nDeletes the store file it made and the SQLite files beside it, when it can; touches no other file.\",\"question\":\"Does cleanup cover exactly the store file and the three enumerated companion names, or every SQLite file beside the store that its connections created?\",\"options\":[\"Exactly the store file plus `-journal`, `-wal`, and `-shm`.\",\"Every adjacent SQLite-created file, including any other SQLite temporary or journal naming form.\",\"The three names in this release, with any additional form requiring an explicit future specification change.\"],\"default_guess\":\"Exactly the store file plus the three enumerated companion paths.\"},{\"subject\":\"flow:start_instance step 5\",\"kind\":\"owner-only contradiction\",\"text\":\"Until both listeners of step 4 are open, an opened one accepts no connection: a connection that arrives meanwhile waits in the listener's queue and is accepted now, or is closed unanswered when the start fails. Only now the surfaces answer:\\n   `capability:service_api.serve_service_request` and\\n   `capability:owner_interface.serve_owner_request`. An owner-only start\\n   has no service API listener: a service call fails to connect and Registry\\n   answers nothing (A17 rule 1, owner, 2026-11-01).\",\"question\":\"For an owner-only start, when may the owner listener begin accepting connections even though a second listener will never exist?\",\"options\":[\"“Both listeners” means every listener required for this start, so the owner listener accepts immediately after it opens in owner-only mode.\",\"Owner-only mode still waits for a nonexistent service listener and therefore never serves.\",\"Owner-only mode has a separately specified activation condition after the decision not to create the service listener.\"],\"default_guess\":\"Interpret “both listeners” as all listeners required by the loaded configuration; in owner-only mode the owner listener is activated once it alone is open.\",\"witness\":{\"initial\":\"Configuration is valid for an owner-only start, so no service tokens or service API address exist.\",\"events\":[\"`instance_lifecycle` opens the owner-interface listener.\",\"An owner connects.\",\"No service API listener is opened.\"],\"outcomes\":[\"The first sentence keeps the owner connection queued forever because both listeners are never open.\",\"The owner-only clauses say the owner interface is served alone, so the connection is accepted after the owner listener opens.\"],\"observer\":\"The owner\"}},{\"subject\":\"flow:start_instance listener queue\",\"kind\":\"unspecified queue capacity and overflow\",\"text\":\"a connection that arrives meanwhile waits in the listener's queue and is accepted now, or is closed unanswered when the start fails.\",\"question\":\"What backlog capacity and overflow behavior are required when more connections arrive before serving begins than the listener's queue can hold?\",\"options\":[\"The implementation must provision or manage an effectively unbounded queue so every connection waits.\",\"Overflowing connections may be refused, reset, or time out even when the start later succeeds.\",\"The release fixes a finite backlog and a required overflow outcome.\"],\"default_guess\":\"Use the platform's normal finite backlog and permit overflowed connections to fail without a Registry response.\",\"witness\":{\"initial\":\"The owner listener is open, the service listener has not finished opening, and the platform's accept queue is full.\",\"events\":[\"Another client attempts to connect before both required listeners are open.\",\"The service listener later opens successfully and Registry begins serving.\"],\"outcomes\":[\"A literal implementation of the passage preserves the new connection in a queue and later accepts it.\",\"A normal finite-backlog implementation refuses, resets, or times out the connection although the start succeeds.\"],\"observer\":\"The connecting client\"}}]}",
+ "set_aside": []
+}
