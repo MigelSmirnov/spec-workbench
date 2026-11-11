@@ -1,0 +1,201 @@
+{
+ "open_points": [
+  {
+   "subject": "boundary between `data_provider` constants and `models` enumerations",
+   "kind": "ownership_contradiction",
+   "text": "Every value the generated code reads that\n  is not a setting of the environment is a constant of `data_provider`, its\n  one home (SPEC_STANDARD §6.10, §15.3.1)",
+   "question": "Are enumeration members and numeric form bounds values owned by `data_provider`, or are model enumerations and structural bounds exceptions to this assertion?",
+   "options": [
+    "Only release-policy constants belong to `data_provider`; enumeration members belong to `models` and structural numeric bounds remain model rules.",
+    "Every enum member and numeric bound must also be exported by `data_provider`.",
+    "Replace the universal assertion with an explicit exhaustive list of values owned by `data_provider`."
+   ],
+   "default_guess": "Treat model enumeration members and structural bounds as explicit exceptions, and narrow the assertion to named release-policy constants.",
+   "witness": {
+    "initial": "A create supplies object kind `apartment` and a room count of 1.",
+    "events": [
+     "`given_values` validates the supplied values.",
+     "A later release changes one of the allowed forms."
+    ],
+    "outcomes": [
+     "The validator imports the enum from `models` and uses the model-declared bound directly.",
+     "The validator imports corresponding constants from `data_provider`; the missing constants must first be invented."
+    ],
+    "observer": "The generator, dependency graph and future release author see different owners and affected modules."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "environment-variable names",
+   "kind": "ownership_ambiguity",
+   "text": "Emitted\ndeterministically (SPEC_STANDARD §6.11); the variables' names are the data\nclosure's.",
+   "question": "Does `runtime_settings` own the exact environment-variable names as part of its closed table, or does `data_provider` own and export them?",
+   "options": [
+    "`runtime_settings` owns the names and table.",
+    "`data_provider` exports every environment-variable name and `runtime_settings` imports them.",
+    "A separate schema module owns the settings names and types."
+   ],
+   "default_guess": "Make `runtime_settings` the sole owner of the names because they define its environment boundary.",
+   "unit": "?"
+  },
+  {
+   "subject": "loaded runtime settings record",
+   "kind": "missing_owner",
+   "text": "the closed table of\nthe `REGISTRY_` items — the store's location, the backup location, the\nbackup key, the owner credential, the four service tokens — loaded at each\ncall of `load_runtime_settings` into the settings, each item with its type,\nwhether it is required (the four tokens each optional, every other item\nrequired) and its normalization",
+   "question": "Which module owns the settings record/type returned by `load_runtime_settings`, including its fields and normalized representations?",
+   "options": [
+    "`runtime_settings` owns and exports a `RuntimeSettings` type.",
+    "`models` owns the settings type despite configuration being outside M01–M12.",
+    "`configuration` owns the checked configuration type, while `runtime_settings` returns an explicitly owned raw-settings type."
+   ],
+   "default_guess": "Have `runtime_settings` own a raw `RuntimeSettings` type and `configuration` own a distinct checked configuration type.",
+   "unit": "?"
+  },
+  {
+   "subject": "per-item normalization and ordered configuration checks",
+   "kind": "responsibility_overlap",
+   "text": "### Hides\n\nEnvironment reading and the per-item normalization.",
+   "question": "Does per-item normalization merely preserve parse results for `configuration`, or may `runtime_settings` reject malformed values even though `configuration` owns the ordered well-formedness checks and first diagnostic?",
+   "options": [
+    "`runtime_settings` returns normalized values or per-item parse failures without choosing the startup failure; `configuration` applies the mandated order.",
+    "`runtime_settings` rejects malformed items immediately, before cross-item checks.",
+    "Move all per-item well-formedness checking into `configuration`; `runtime_settings` only reads raw values."
+   ],
+   "default_guess": "Return per-item parse results and let `configuration` choose the first failure in A17's order.",
+   "witness": {
+    "initial": "Three service tokens are present, the fourth is missing, and the store-location value is malformed.",
+    "events": [
+     "`runtime_settings` loads and normalizes the environment.",
+     "`configuration` performs startup checks."
+    ],
+    "outcomes": [
+     "Loading rejects the malformed store location before `configuration` sees the missing token.",
+     "Loading preserves the malformed result; `configuration` first reports the missing token as A17 rule 2 requires."
+    ],
+    "observer": "The operator sees a different first startup diagnostic."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ownership of the complete A17 startup-check order",
+   "kind": "ownership_conflict",
+   "text": "A17: the start checks of rule 2 in its one order over the settings\n`runtime_settings` loads",
+   "question": "Does `configuration` own only the settings and path-comparison prefix of the order, or the complete order including backup probing, store opening and listener opening, which it is forbidden to perform and whose modules are later in the dependency graph?",
+   "options": [
+    "`instance_lifecycle` owns the complete orchestration order; `configuration` owns only checks it can perform.",
+    "`configuration` owns the complete order and must be allowed to call `backups`, `store` and listener modules.",
+    "Split the order into an explicit protocol whose steps have separate owners and whose sequence is owned by `instance_lifecycle`."
+   ],
+   "default_guess": "Make `instance_lifecycle` own the complete sequence and define the exact subset of checks returned by `configuration`.",
+   "unit": "?"
+  },
+  {
+   "subject": "creation of M12 AuditSequence in a new store",
+   "kind": "ownership_dependency_conflict",
+   "text": "kept apart from the entries — M12 AuditSequence, made at 0 with a new\nstore — so an erasure never lowers it (A15 rule 5);",
+   "question": "Which module creates the initial AuditSequence row at 0, given that `audit_log` owns M12 but `store` creates the new database and may not know the later `audit_log` module?",
+   "options": [
+    "`store` physically creates the row as an explicit initialization exception while `audit_log` owns its meaning and later changes.",
+    "`audit_log` supplies an initializer that `store` invokes without reversing the dependency.",
+    "Move ownership of AuditSequence initialization and persistence to `store`, leaving sequence allocation behavior in `audit_log`.",
+    "Change the module order or introduce a lower-level persistence provider for audit state."
+   ],
+   "default_guess": "Explicitly assign physical initialization at 0 to `store` and semantic allocation and mutation to `audit_log`.",
+   "witness": {
+    "initial": "The configured store file does not exist.",
+    "events": [
+     "`instance_lifecycle` asks `store` to make the new store.",
+     "The first accepted audited action is committed.",
+     "A backup snapshot reads the audit sequence."
+    ],
+    "outcomes": [
+     "`store` creates M12 at 0, so the first entry becomes 1 and the backup records 1.",
+     "`store` refuses to create an `audit_log`-owned record or omits it; the first append must invent recovery behavior or fails."
+    ],
+    "observer": "The owner sees the first action or backup fail, or sees a different initial sequence state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "artifact-type representation after a release removes a type",
+   "kind": "representation_ambiguity",
+   "text": "The models M01–M12 as the domain's vocabulary, the declared vocabularies of\nState 1 as enumerations — for the artifact types only the shape of a type\nwith its owner service, whose rows are `data_provider`'s, so a stored\npointer of a type a later release removed still reads (A22 rule 4)",
+   "question": "What model type represents a stored artifact type that is no longer a row of the current `data_provider` table, while current declarations still require typed rows and validation?",
+   "options": [
+    "Use a stable artifact-type-name value for stored pointers and a separate current-declaration table.",
+    "Keep every historical name as an enum member and mark only current table rows as declared.",
+    "Deserialize unknown historical strings into a dedicated removed/unknown variant.",
+    "Use the current enum only, which makes removed historical rows unreadable."
+   ],
+   "default_guess": "Separate the stable stored artifact-type name from the current release's declaration table.",
+   "witness": {
+    "initial": "Release 1 stores a published `estimate` pointer.",
+    "events": [
+     "Release 2 removes `estimate` from `ARTIFACT_TYPE_OWNERS`.",
+     "The owner lists the project's artifact history."
+    ],
+    "outcomes": [
+     "The stored stable type name decodes and the pointer is listed with its old status.",
+     "The current enumeration rejects `estimate`, so the stored pointer cannot be read."
+    ],
+    "observer": "The owner and services reading artifact history see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A02 form validation owned by `given_values`",
+   "kind": "public_surface_gap",
+   "text": "### Candidate public capabilities\n\n```text\nread_required_text\nread_optional_text\ncheck_request_id_form\nfacts_equal_for_repeat\n```",
+   "question": "Through which exported capability do `projects`, `customers` and `migration_import` invoke the alias-length, enumeration-membership and characteristic-range checks that `given_values` owns?",
+   "options": [
+    "Add a public capability that validates all supplied value forms and returns every failure.",
+    "Add typed validation capabilities for alias, object and customer values.",
+    "Fold validation into `read_required_text` and `read_optional_text`.",
+    "Let each record module implement the checks despite `given_values` owning A02 rule 4."
+   ],
+   "default_guess": "Add typed validation capabilities owned by `given_values` that can report all failures of stage (4).",
+   "witness": {
+    "initial": "A create supplies a 41-code-point alias and an invalid object kind.",
+    "events": [
+     "`projects` performs stage (4) using only the listed `given_values` capabilities."
+    ],
+    "outcomes": [
+     "The implementation invents an unlisted validation function and reports both failures.",
+     "The implementation treats validation as `projects`' responsibility or omits one check."
+    ],
+    "observer": "The owner sees either the required two named failures or an incomplete/different refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "`backups` dependency on `audit_log`",
+   "kind": "unclear_dependency",
+   "text": "### Knows\n\n`models`, `clock`, `configuration`, `data_provider`, `store`,\n`audit_log`.",
+   "question": "What symbol does `backups` directly use from `audit_log`, given that `store.copy_store_snapshot` must return the audit sequence read as the snapshot's first read?",
+   "options": [
+    "Remove the `backups` → `audit_log` dependency; use the sequence returned with the store snapshot.",
+    "Call `audit_log.last_audit_sequence` inside the snapshot transaction through an explicit transaction capability.",
+    "Use `audit_log.last_audit_sequence` separately from the snapshot.",
+    "Retain the dependency only for a shared audit-sequence type and name that symbol explicitly."
+   ],
+   "default_guess": "Remove the runtime dependency and have `store` return the sequence belonging to the fixed snapshot.",
+   "witness": {
+    "initial": "The store's current sequence is n.",
+    "events": [
+     "A backup fixes its read snapshot at n.",
+     "Another transaction commits audit entry n + 1 before the backup record is written.",
+     "`backups` obtains the number for the readable record."
+    ],
+    "outcomes": [
+     "Using the value returned by `store` records n and the backup passes its sequence check.",
+     "Calling `audit_log.last_audit_sequence` separately records n + 1, so the decrypted snapshot contains n and the backup is rejected or mislabeled."
+    ],
+    "observer": "The owner sees a kept backup in one implementation and a failed backup run in the other."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"boundary between `data_provider` constants and `models` enumerations\",\"kind\":\"ownership_contradiction\",\"text\":\"Every value the generated code reads that\\n  is not a setting of the environment is a constant of `data_provider`, its\\n  one home (SPEC_STANDARD §6.10, §15.3.1)\",\"question\":\"Are enumeration members and numeric form bounds values owned by `data_provider`, or are model enumerations and structural bounds exceptions to this assertion?\",\"options\":[\"Only release-policy constants belong to `data_provider`; enumeration members belong to `models` and structural numeric bounds remain model rules.\",\"Every enum member and numeric bound must also be exported by `data_provider`.\",\"Replace the universal assertion with an explicit exhaustive list of values owned by `data_provider`.\"],\"default_guess\":\"Treat model enumeration members and structural bounds as explicit exceptions, and narrow the assertion to named release-policy constants.\",\"witness\":{\"initial\":\"A create supplies object kind `apartment` and a room count of 1.\",\"events\":[\"`given_values` validates the supplied values.\",\"A later release changes one of the allowed forms.\"],\"outcomes\":[\"The validator imports the enum from `models` and uses the model-declared bound directly.\",\"The validator imports corresponding constants from `data_provider`; the missing constants must first be invented.\"],\"observer\":\"The generator, dependency graph and future release author see different owners and affected modules.\"}},{\"subject\":\"environment-variable names\",\"kind\":\"ownership_ambiguity\",\"text\":\"Emitted\\ndeterministically (SPEC_STANDARD §6.11); the variables' names are the data\\nclosure's.\",\"question\":\"Does `runtime_settings` own the exact environment-variable names as part of its closed table, or does `data_provider` own and export them?\",\"options\":[\"`runtime_settings` owns the names and table.\",\"`data_provider` exports every environment-variable name and `runtime_settings` imports them.\",\"A separate schema module owns the settings names and types.\"],\"default_guess\":\"Make `runtime_settings` the sole owner of the names because they define its environment boundary.\"},{\"subject\":\"loaded runtime settings record\",\"kind\":\"missing_owner\",\"text\":\"the closed table of\\nthe `REGISTRY_` items — the store's location, the backup location, the\\nbackup key, the owner credential, the four service tokens — loaded at each\\ncall of `load_runtime_settings` into the settings, each item with its type,\\nwhether it is required (the four tokens each optional, every other item\\nrequired) and its normalization\",\"question\":\"Which module owns the settings record/type returned by `load_runtime_settings`, including its fields and normalized representations?\",\"options\":[\"`runtime_settings` owns and exports a `RuntimeSettings` type.\",\"`models` owns the settings type despite configuration being outside M01–M12.\",\"`configuration` owns the checked configuration type, while `runtime_settings` returns an explicitly owned raw-settings type.\"],\"default_guess\":\"Have `runtime_settings` own a raw `RuntimeSettings` type and `configuration` own a distinct checked configuration type.\"},{\"subject\":\"per-item normalization and ordered configuration checks\",\"kind\":\"responsibility_overlap\",\"text\":\"### Hides\\n\\nEnvironment reading and the per-item normalization.\",\"question\":\"Does per-item normalization merely preserve parse results for `configuration`, or may `runtime_settings` reject malformed values even though `configuration` owns the ordered well-formedness checks and first diagnostic?\",\"options\":[\"`runtime_settings` returns normalized values or per-item parse failures without choosing the startup failure; `configuration` applies the mandated order.\",\"`runtime_settings` rejects malformed items immediately, before cross-item checks.\",\"Move all per-item well-formedness checking into `configuration`; `runtime_settings` only reads raw values.\"],\"default_guess\":\"Return per-item parse results and let `configuration` choose the first failure in A17's order.\",\"witness\":{\"initial\":\"Three service tokens are present, the fourth is missing, and the store-location value is malformed.\",\"events\":[\"`runtime_settings` loads and normalizes the environment.\",\"`configuration` performs startup checks.\"],\"outcomes\":[\"Loading rejects the malformed store location before `configuration` sees the missing token.\",\"Loading preserves the malformed result; `configuration` first reports the missing token as A17 rule 2 requires.\"],\"observer\":\"The operator sees a different first startup diagnostic.\"}},{\"subject\":\"ownership of the complete A17 startup-check order\",\"kind\":\"ownership_conflict\",\"text\":\"A17: the start checks of rule 2 in its one order over the settings\\n`runtime_settings` loads\",\"question\":\"Does `configuration` own only the settings and path-comparison prefix of the order, or the complete order including backup probing, store opening and listener opening, which it is forbidden to perform and whose modules are later in the dependency graph?\",\"options\":[\"`instance_lifecycle` owns the complete orchestration order; `configuration` owns only checks it can perform.\",\"`configuration` owns the complete order and must be allowed to call `backups`, `store` and listener modules.\",\"Split the order into an explicit protocol whose steps have separate owners and whose sequence is owned by `instance_lifecycle`.\"],\"default_guess\":\"Make `instance_lifecycle` own the complete sequence and define the exact subset of checks returned by `configuration`.\"},{\"subject\":\"creation of M12 AuditSequence in a new store\",\"kind\":\"ownership_dependency_conflict\",\"text\":\"kept apart from the entries — M12 AuditSequence, made at 0 with a new\\nstore — so an erasure never lowers it (A15 rule 5);\",\"question\":\"Which module creates the initial AuditSequence row at 0, given that `audit_log` owns M12 but `store` creates the new database and may not know the later `audit_log` module?\",\"options\":[\"`store` physically creates the row as an explicit initialization exception while `audit_log` owns its meaning and later changes.\",\"`audit_log` supplies an initializer that `store` invokes without reversing the dependency.\",\"Move ownership of AuditSequence initialization and persistence to `store`, leaving sequence allocation behavior in `audit_log`.\",\"Change the module order or introduce a lower-level persistence provider for audit state.\"],\"default_guess\":\"Explicitly assign physical initialization at 0 to `store` and semantic allocation and mutation to `audit_log`.\",\"witness\":{\"initial\":\"The configured store file does not exist.\",\"events\":[\"`instance_lifecycle` asks `store` to make the new store.\",\"The first accepted audited action is committed.\",\"A backup snapshot reads the audit sequence.\"],\"outcomes\":[\"`store` creates M12 at 0, so the first entry becomes 1 and the backup records 1.\",\"`store` refuses to create an `audit_log`-owned record or omits it; the first append must invent recovery behavior or fails.\"],\"observer\":\"The owner sees the first action or backup fail, or sees a different initial sequence state.\"}},{\"subject\":\"artifact-type representation after a release removes a type\",\"kind\":\"representation_ambiguity\",\"text\":\"The models M01–M12 as the domain's vocabulary, the declared vocabularies of\\nState 1 as enumerations — for the artifact types only the shape of a type\\nwith its owner service, whose rows are `data_provider`'s, so a stored\\npointer of a type a later release removed still reads (A22 rule 4)\",\"question\":\"What model type represents a stored artifact type that is no longer a row of the current `data_provider` table, while current declarations still require typed rows and validation?\",\"options\":[\"Use a stable artifact-type-name value for stored pointers and a separate current-declaration table.\",\"Keep every historical name as an enum member and mark only current table rows as declared.\",\"Deserialize unknown historical strings into a dedicated removed/unknown variant.\",\"Use the current enum only, which makes removed historical rows unreadable.\"],\"default_guess\":\"Separate the stable stored artifact-type name from the current release's declaration table.\",\"witness\":{\"initial\":\"Release 1 stores a published `estimate` pointer.\",\"events\":[\"Release 2 removes `estimate` from `ARTIFACT_TYPE_OWNERS`.\",\"The owner lists the project's artifact history.\"],\"outcomes\":[\"The stored stable type name decodes and the pointer is listed with its old status.\",\"The current enumeration rejects `estimate`, so the stored pointer cannot be read.\"],\"observer\":\"The owner and services reading artifact history see the difference.\"}},{\"subject\":\"A02 form validation owned by `given_values`\",\"kind\":\"public_surface_gap\",\"text\":\"### Candidate public capabilities\\n\\n```text\\nread_required_text\\nread_optional_text\\ncheck_request_id_form\\nfacts_equal_for_repeat\\n```\",\"question\":\"Through which exported capability do `projects`, `customers` and `migration_import` invoke the alias-length, enumeration-membership and characteristic-range checks that `given_values` owns?\",\"options\":[\"Add a public capability that validates all supplied value forms and returns every failure.\",\"Add typed validation capabilities for alias, object and customer values.\",\"Fold validation into `read_required_text` and `read_optional_text`.\",\"Let each record module implement the checks despite `given_values` owning A02 rule 4.\"],\"default_guess\":\"Add typed validation capabilities owned by `given_values` that can report all failures of stage (4).\",\"witness\":{\"initial\":\"A create supplies a 41-code-point alias and an invalid object kind.\",\"events\":[\"`projects` performs stage (4) using only the listed `given_values` capabilities.\"],\"outcomes\":[\"The implementation invents an unlisted validation function and reports both failures.\",\"The implementation treats validation as `projects`' responsibility or omits one check.\"],\"observer\":\"The owner sees either the required two named failures or an incomplete/different refusal.\"}},{\"subject\":\"`backups` dependency on `audit_log`\",\"kind\":\"unclear_dependency\",\"text\":\"### Knows\\n\\n`models`, `clock`, `configuration`, `data_provider`, `store`,\\n`audit_log`.\",\"question\":\"What symbol does `backups` directly use from `audit_log`, given that `store.copy_store_snapshot` must return the audit sequence read as the snapshot's first read?\",\"options\":[\"Remove the `backups` → `audit_log` dependency; use the sequence returned with the store snapshot.\",\"Call `audit_log.last_audit_sequence` inside the snapshot transaction through an explicit transaction capability.\",\"Use `audit_log.last_audit_sequence` separately from the snapshot.\",\"Retain the dependency only for a shared audit-sequence type and name that symbol explicitly.\"],\"default_guess\":\"Remove the runtime dependency and have `store` return the sequence belonging to the fixed snapshot.\",\"witness\":{\"initial\":\"The store's current sequence is n.\",\"events\":[\"A backup fixes its read snapshot at n.\",\"Another transaction commits audit entry n + 1 before the backup record is written.\",\"`backups` obtains the number for the readable record.\"],\"outcomes\":[\"Using the value returned by `store` records n and the backup passes its sequence check.\",\"Calling `audit_log.last_audit_sequence` separately records n + 1, so the decrypted snapshot contains n and the backup is rejected or mislabeled.\"],\"observer\":\"The owner sees a kept backup in one implementation and a failed backup run in the other.\"}}]}",
+ "set_aside": []
+}

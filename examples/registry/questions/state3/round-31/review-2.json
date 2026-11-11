@@ -1,0 +1,301 @@
+{
+ "open_points": [
+  {
+   "subject": "30_modules.md:`data_provider`: ownership of enumeration values",
+   "kind": "contradictory ownership",
+   "text": "Every value the generated code reads that is not a setting of the environment is a constant of `data_provider`, its one home (SPEC_STANDARD §6.10, §15.3.1)",
+   "question": "Are the member values of the non-artifact enumerations owned by `models` or constants owned by `data_provider`, and which module changes when an enumeration member changes?",
+   "options": [
+    "`models` owns all enumeration members; narrow `data_provider`'s one-home claim to policy and release constants",
+    "`data_provider` owns enumeration-member values and `models` owns only their shapes",
+    "Duplicate the values in both modules"
+   ],
+   "default_guess": "Keep enumeration members in `models` and narrow the blanket `data_provider` claim.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`data_provider`: store version",
+   "kind": "missing constant value",
+   "text": "the store version and the store's temporary-name suffix (A17 rule 5)",
+   "question": "What exact value does `STORE_VERSION` have in this release?",
+   "options": [
+    "A specified integer schema version",
+    "The release version reused as the store version",
+    "A build-supplied opaque string"
+   ],
+   "default_guess": "Use integer store version 1.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`data_provider`: temporary store suffix",
+   "kind": "missing constant value",
+   "text": "the store version and the store's temporary-name suffix (A17 rule 5)",
+   "question": "What exact string does `STORE_TEMPORARY_SUFFIX` contain, including its punctuation, and how is it appended to the configured store name?",
+   "options": [
+    "Append `.tmp` to the complete store path",
+    "Append `.new` to the complete store path",
+    "Insert a suffix before the store file extension"
+   ],
+   "default_guess": "Append `.tmp` to the complete configured store path.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`data_provider`: release and contract versions",
+   "kind": "missing constant values",
+   "text": "the release's own version and its contract version, which every audit entry names (M09) and a backup's record names (A18 rule 1)",
+   "question": "What are the exact `RELEASE_VERSION` and `CONTRACT_VERSION` values, and are they literals in `data_provider` or injected deterministically by the release build?",
+   "options": [
+    "Explicit literals fixed by this release",
+    "Values injected from verified release metadata",
+    "One shared version used for both"
+   ],
+   "default_guess": "Inject two distinct, verified build-metadata values and fail the build when either is absent.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`data_provider`: listener addresses",
+   "kind": "missing constant values",
+   "text": "the address each surface listens on, which the configuration does not name (A17 rules 1, 2)",
+   "question": "What exact host/interface and port are `OWNER_INTERFACE_LISTEN_ADDRESS` and `SERVICE_API_LISTEN_ADDRESS`?",
+   "options": [
+    "Two explicit host-and-port constants",
+    "Host constants with ports supplied elsewhere",
+    "Unix-domain sockets rather than TCP addresses"
+   ],
+   "default_guess": "Use separate TCP listeners on `0.0.0.0`, with release-fixed ports 8000 for the service API and 8001 for the owner interface.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`data_provider`: backup clock polling interval",
+   "kind": "underspecified constant",
+   "text": "the daily time, the minute look and the retention of 30 × 24 hours (A18 rules 1, 4, 5)",
+   "question": "What exact value does `BACKUP_LOOK_SECONDS` have: 60 seconds or some other interval no greater than one minute?",
+   "options": [
+    "Exactly 60 seconds",
+    "A shorter fixed interval",
+    "A scheduler that guarantees at least one look per minute without a fixed interval"
+   ],
+   "default_guess": "Set `BACKUP_LOOK_SECONDS` to 60.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`runtime_settings`: environment variable names",
+   "kind": "missing data ownership",
+   "text": "Emitted deterministically (SPEC_STANDARD §6.11); the variables' names are the data closure's.",
+   "question": "Which module owns the exact environment-variable-name table, and what are the exact names for the store path, backup path, backup key, owner credential and four service tokens?",
+   "options": [
+    "`runtime_settings` owns literal names such as `REGISTRY_BACKUP_KEY`",
+    "`data_provider` exports every variable name",
+    "Names are generated mechanically from settings-field names"
+   ],
+   "default_guess": "Have `runtime_settings` own an explicit closed table of literal names generated mechanically once and checked for collisions.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`runtime_settings`: setting types and normalization",
+   "kind": "underspecified normalization",
+   "text": "loaded at each call of `load_runtime_settings` into the settings, each item with its type, whether it is required (the four tokens each optional, every other item required) and its normalization",
+   "question": "What is each setting's concrete type and normalization, especially the text-to-bytes encoding for secrets and whether whitespace or Unicode normalization is applied?",
+   "options": [
+    "Paths become resolved path values and secrets become exact UTF-8 bytes without trimming or Unicode normalization",
+    "All values remain strings and byte length is measured after UTF-8 encoding only when checked",
+    "Whitespace is trimmed and Unicode is normalized before validation"
+   ],
+   "default_guess": "Parse paths as path values; encode secrets as exact UTF-8 bytes without trimming or Unicode normalization.",
+   "witness": {
+    "initial": "The owner sets a credential containing non-ASCII characters and leading or trailing spaces.",
+    "events": [
+     "`runtime_settings` reads the environment value.",
+     "`configuration` checks that the credential is at least 32 bytes and compares it with the other secrets."
+    ],
+    "outcomes": [
+     "One implementation preserves the exact value and counts its UTF-8 bytes.",
+     "Another trims or Unicode-normalizes it before counting and comparison, accepting, refusing or authenticating a different credential."
+    ],
+    "observer": "The owner at startup or sign-in."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`runtime_settings` and `configuration`: no-default rule",
+   "kind": "two owners",
+   "text": "no default for any item (A17 rule 5)",
+   "question": "Does `runtime_settings` enforce absence by emitting a missing value, or does `configuration` own the entire no-default decision and reject absence? The `configuration` section also claims “that no default is applied (rule 5)”.",
+   "options": [
+    "`runtime_settings` never synthesizes a value; `configuration` owns rejection of missing required values",
+    "`runtime_settings` rejects missing required variables before producing settings",
+    "Both modules independently enforce the rule"
+   ],
+   "default_guess": "Let `runtime_settings` preserve absence without defaults and let `configuration` own the ordered rejection.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`runtime_settings` and `configuration`: per-item validity",
+   "kind": "unclear responsibility boundary",
+   "text": "Environment reading and the per-item normalization.",
+   "question": "Which module decides that one individual item is malformed, given that `runtime_settings` hides per-item normalization while `configuration` owns the ordered check that each item is well formed?",
+   "options": [
+    "`runtime_settings` returns typed success-or-error results and `configuration` orders and reports those errors",
+    "`runtime_settings` returns raw values and `configuration` performs all parsing and validation",
+    "`runtime_settings` rejects malformed input immediately"
+   ],
+   "default_guess": "Return typed per-item parse results from `runtime_settings`; have `configuration` select and report the first error in A17's order.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`configuration`: constant-time secret comparison",
+   "kind": "missing dependency",
+   "text": "`models`, `data_provider`, `runtime_settings`.",
+   "question": "How can `configuration` enforce secret distinctness while every secret comparison goes through `random_values.equal_in_constant_time`, when `random_values` is absent from its `Knows` list?",
+   "options": [
+    "Add `random_values` to `configuration`'s dependencies",
+    "Move secret-distinctness checking to `random_values` behind one aggregate capability",
+    "Permit ordinary equality during startup"
+   ],
+   "default_guess": "Add `random_values` to `configuration`'s dependencies and call `equal_in_constant_time` for every distinctness comparison.",
+   "witness": {
+    "initial": "Two configured service-token values are equal.",
+    "events": [
+     "`runtime_settings` loads both tokens.",
+     "`configuration` performs A17's distinctness check."
+    ],
+    "outcomes": [
+     "An implementation following the `Knows` list uses ordinary equality or cannot implement the check through the required module.",
+     "An implementation following the global secret-comparison rule imports `random_values` despite the declared dependency graph."
+    ],
+    "observer": "The architecture validator and, through timing behavior, a caller able to repeat starts or observe diagnostics."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`audit_log`: creation of M12 AuditSequence",
+   "kind": "owner/dependency gap",
+   "text": "M12 AuditSequence, made at 0 with a new store",
+   "question": "Which module creates and persists the initial M12 record in the transaction that creates a store, given that `audit_log` owns M12 but `store` is earlier in the dependency order and may not know `audit_log`?",
+   "options": [
+    "`store` initializes an opaque audit-sequence storage cell to 0 as part of its schema, while `audit_log` owns its meaning and later transitions",
+    "`instance_lifecycle` invokes a new `audit_log` initialization capability after `store` creates the database",
+    "Reverse or relax the dependency so `store` calls `audit_log`"
+   ],
+   "default_guess": "Have `store` initialize the opaque storage cell to 0 atomically with the new schema, while `audit_log` exclusively owns its semantics and updates.",
+   "witness": {
+    "initial": "The configured store file does not exist.",
+    "events": [
+     "`instance_lifecycle` asks `store` to make the new store.",
+     "The new store must contain exactly one M12 record at 0 before it is renamed complete."
+    ],
+    "outcomes": [
+     "`store` creates the record itself despite M12 being declared `audit_log`'s.",
+     "The store is created empty and some later caller initializes M12 through `audit_log`, introducing a new step and possible incomplete state."
+    ],
+    "observer": "The next startup, a backup, or the first audited change."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`models`: removed artifact-type representation",
+   "kind": "underspecified historical model",
+   "text": "for the artifact types only the shape of a type with its owner service, whose rows are `data_provider`'s, so a stored pointer of a type a later release removed still reads (A22 rule 4)",
+   "question": "How is a stored pointer's removed type decoded after its row is absent from the current `data_provider` table?",
+   "options": [
+    "Persist the type as an opaque string and validate current declarations separately",
+    "Keep every historical type as a model-enum member while only current rows appear in `data_provider`",
+    "Use an open vocabulary model with known and unknown variants"
+   ],
+   "default_guess": "Persist artifact types as opaque vocabulary tokens and use the current `data_provider` table only for publish/latest/withdraw declaration checks.",
+   "witness": {
+    "initial": "A store contains a published pointer of type `estimate`.",
+    "events": [
+     "A later release removes `estimate` from `data_provider`'s artifact table.",
+     "The owner lists the project's artifacts."
+    ],
+    "outcomes": [
+     "A closed enum derived from the current rows cannot decode the pointer, so the list fails.",
+     "An open or historical representation decodes and returns the retained pointer as A22 requires."
+    ],
+    "observer": "The owner or a service listing artifacts."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`given_values`: A02 rule 4 capability",
+   "kind": "missing public capability",
+   "text": "A02 rule 4: a present value outside the form State 1 declares — the alias's length, a value outside its enumeration, a characteristic out of its range — refused at stage (4), every such value named.",
+   "question": "Through which public capability do `projects`, `customers` and `migration_import` invoke these validations and obtain all failures, since none of the listed candidate capabilities covers enumeration, alias-length or characteristic-range validation?",
+   "options": [
+    "Add one validation capability returning every invalid value",
+    "Add separate validators for aliases, enumerations and object characteristics",
+    "Expand `read_required_text` and `read_optional_text` into typed readers"
+   ],
+   "default_guess": "Add a typed `validate_given_values` capability that returns all stage-(4) failures without changing values.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`data_provider`: table row types",
+   "kind": "model ownership gap",
+   "text": "`models`, for the row models and enumerations of its tables.",
+   "question": "Which `models`-owned row types represent `ARTIFACT_TYPE_OWNERS` and `SERVICE_RIGHTS`, since M01–M12 and the declared vocabularies name no service-rights row model and no concrete artifact-owner row model?",
+   "options": [
+    "Add explicit value models for artifact-owner and service-right rows to `models`",
+    "Make the row types private structures owned by `data_provider`",
+    "Represent both tables with untyped tuples or mappings"
+   ],
+   "default_guess": "Add explicit identity-free value models in `models` for both row shapes.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`migration_import`: upload-size enforcement",
+   "kind": "unclear action owner",
+   "text": "A16 and M10: reading an uploaded file as data under the release's size limit (A19 rule 4)",
+   "question": "Which module reads the request stream and refuses it before parsing or replacing the session's kept file: `owner_interface`, `operations`, `migration_import`, or `owner_sessions`?",
+   "options": [
+    "`migration_import` consumes the bounded stream through an operation and hands accepted bytes to `owner_sessions`",
+    "`owner_interface` enforces the byte limit before calling `operations`",
+    "`owner_sessions.keep_uploaded_file` performs bounded reading and replacement atomically"
+   ],
+   "default_guess": "Have `migration_import` consume and bound the stream through `operations`, then call `owner_sessions` only after the complete upload is accepted.",
+   "witness": {
+    "initial": "A session already keeps a valid import file.",
+    "events": [
+     "The owner uploads a new stream whose declared length is below the limit but whose received bytes exceed it.",
+     "The receiver reaches byte 52428801."
+    ],
+    "outcomes": [
+     "The transport or session module replaces the old file incrementally before `migration_import` refuses the new upload.",
+     "`migration_import` bounds the stream first, refuses it, and the old kept file remains unchanged."
+    ],
+    "observer": "The owner when reopening the import mapping."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`backups`: audit-sequence dependency",
+   "kind": "contradictory dependency",
+   "text": "`models`, `clock`, `configuration`, `data_provider`, `store`,\n`audit_log`.",
+   "question": "Why may `backups` know `audit_log` when `store.copy_store_snapshot` is specified to return the snapshot's sequence and the `store` section says the reading needs no upward call to `audit_log`?",
+   "options": [
+    "Remove the `backups` → `audit_log` dependency and use the value returned by `store`",
+    "Have `backups` call `audit_log.last_audit_sequence`, contradicting the snapshot-first-read mechanism",
+    "Retain the dependency for a different explicitly named use"
+   ],
+   "default_guess": "Remove `audit_log` from `backups`' `Knows` list and use the sequence returned with the store snapshot.",
+   "witness": {
+    "initial": "A write commits while a backup is fixing its snapshot.",
+    "events": [
+     "The store's first snapshot read obtains sequence n.",
+     "A concurrent audited transaction commits sequence n+1.",
+     "The backup writes its readable record."
+    ],
+    "outcomes": [
+     "Using the sequence returned by `store` records n, matching the snapshot.",
+     "Calling `audit_log.last_audit_sequence` separately may record n+1, causing the backup's check to fail or its record to describe a different state."
+    ],
+    "observer": "The backup checker and the owner monitoring backup success."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"30_modules.md:`data_provider`: ownership of enumeration values\",\"kind\":\"contradictory ownership\",\"text\":\"Every value the generated code reads that is not a setting of the environment is a constant of `data_provider`, its one home (SPEC_STANDARD §6.10, §15.3.1)\",\"question\":\"Are the member values of the non-artifact enumerations owned by `models` or constants owned by `data_provider`, and which module changes when an enumeration member changes?\",\"options\":[\"`models` owns all enumeration members; narrow `data_provider`'s one-home claim to policy and release constants\",\"`data_provider` owns enumeration-member values and `models` owns only their shapes\",\"Duplicate the values in both modules\"],\"default_guess\":\"Keep enumeration members in `models` and narrow the blanket `data_provider` claim.\"},{\"subject\":\"30_modules.md:`data_provider`: store version\",\"kind\":\"missing constant value\",\"text\":\"the store version and the store's temporary-name suffix (A17 rule 5)\",\"question\":\"What exact value does `STORE_VERSION` have in this release?\",\"options\":[\"A specified integer schema version\",\"The release version reused as the store version\",\"A build-supplied opaque string\"],\"default_guess\":\"Use integer store version 1.\"},{\"subject\":\"30_modules.md:`data_provider`: temporary store suffix\",\"kind\":\"missing constant value\",\"text\":\"the store version and the store's temporary-name suffix (A17 rule 5)\",\"question\":\"What exact string does `STORE_TEMPORARY_SUFFIX` contain, including its punctuation, and how is it appended to the configured store name?\",\"options\":[\"Append `.tmp` to the complete store path\",\"Append `.new` to the complete store path\",\"Insert a suffix before the store file extension\"],\"default_guess\":\"Append `.tmp` to the complete configured store path.\"},{\"subject\":\"30_modules.md:`data_provider`: release and contract versions\",\"kind\":\"missing constant values\",\"text\":\"the release's own version and its contract version, which every audit entry names (M09) and a backup's record names (A18 rule 1)\",\"question\":\"What are the exact `RELEASE_VERSION` and `CONTRACT_VERSION` values, and are they literals in `data_provider` or injected deterministically by the release build?\",\"options\":[\"Explicit literals fixed by this release\",\"Values injected from verified release metadata\",\"One shared version used for both\"],\"default_guess\":\"Inject two distinct, verified build-metadata values and fail the build when either is absent.\"},{\"subject\":\"30_modules.md:`data_provider`: listener addresses\",\"kind\":\"missing constant values\",\"text\":\"the address each surface listens on, which the configuration does not name (A17 rules 1, 2)\",\"question\":\"What exact host/interface and port are `OWNER_INTERFACE_LISTEN_ADDRESS` and `SERVICE_API_LISTEN_ADDRESS`?\",\"options\":[\"Two explicit host-and-port constants\",\"Host constants with ports supplied elsewhere\",\"Unix-domain sockets rather than TCP addresses\"],\"default_guess\":\"Use separate TCP listeners on `0.0.0.0`, with release-fixed ports 8000 for the service API and 8001 for the owner interface.\"},{\"subject\":\"30_modules.md:`data_provider`: backup clock polling interval\",\"kind\":\"underspecified constant\",\"text\":\"the daily time, the minute look and the retention of 30 × 24 hours (A18 rules 1, 4, 5)\",\"question\":\"What exact value does `BACKUP_LOOK_SECONDS` have: 60 seconds or some other interval no greater than one minute?\",\"options\":[\"Exactly 60 seconds\",\"A shorter fixed interval\",\"A scheduler that guarantees at least one look per minute without a fixed interval\"],\"default_guess\":\"Set `BACKUP_LOOK_SECONDS` to 60.\"},{\"subject\":\"30_modules.md:`runtime_settings`: environment variable names\",\"kind\":\"missing data ownership\",\"text\":\"Emitted deterministically (SPEC_STANDARD §6.11); the variables' names are the data closure's.\",\"question\":\"Which module owns the exact environment-variable-name table, and what are the exact names for the store path, backup path, backup key, owner credential and four service tokens?\",\"options\":[\"`runtime_settings` owns literal names such as `REGISTRY_BACKUP_KEY`\",\"`data_provider` exports every variable name\",\"Names are generated mechanically from settings-field names\"],\"default_guess\":\"Have `runtime_settings` own an explicit closed table of literal names generated mechanically once and checked for collisions.\"},{\"subject\":\"30_modules.md:`runtime_settings`: setting types and normalization\",\"kind\":\"underspecified normalization\",\"text\":\"loaded at each call of `load_runtime_settings` into the settings, each item with its type, whether it is required (the four tokens each optional, every other item required) and its normalization\",\"question\":\"What is each setting's concrete type and normalization, especially the text-to-bytes encoding for secrets and whether whitespace or Unicode normalization is applied?\",\"options\":[\"Paths become resolved path values and secrets become exact UTF-8 bytes without trimming or Unicode normalization\",\"All values remain strings and byte length is measured after UTF-8 encoding only when checked\",\"Whitespace is trimmed and Unicode is normalized before validation\"],\"default_guess\":\"Parse paths as path values; encode secrets as exact UTF-8 bytes without trimming or Unicode normalization.\",\"witness\":{\"initial\":\"The owner sets a credential containing non-ASCII characters and leading or trailing spaces.\",\"events\":[\"`runtime_settings` reads the environment value.\",\"`configuration` checks that the credential is at least 32 bytes and compares it with the other secrets.\"],\"outcomes\":[\"One implementation preserves the exact value and counts its UTF-8 bytes.\",\"Another trims or Unicode-normalizes it before counting and comparison, accepting, refusing or authenticating a different credential.\"],\"observer\":\"The owner at startup or sign-in.\"}},{\"subject\":\"30_modules.md:`runtime_settings` and `configuration`: no-default rule\",\"kind\":\"two owners\",\"text\":\"no default for any item (A17 rule 5)\",\"question\":\"Does `runtime_settings` enforce absence by emitting a missing value, or does `configuration` own the entire no-default decision and reject absence? The `configuration` section also claims “that no default is applied (rule 5)”.\",\"options\":[\"`runtime_settings` never synthesizes a value; `configuration` owns rejection of missing required values\",\"`runtime_settings` rejects missing required variables before producing settings\",\"Both modules independently enforce the rule\"],\"default_guess\":\"Let `runtime_settings` preserve absence without defaults and let `configuration` own the ordered rejection.\"},{\"subject\":\"30_modules.md:`runtime_settings` and `configuration`: per-item validity\",\"kind\":\"unclear responsibility boundary\",\"text\":\"Environment reading and the per-item normalization.\",\"question\":\"Which module decides that one individual item is malformed, given that `runtime_settings` hides per-item normalization while `configuration` owns the ordered check that each item is well formed?\",\"options\":[\"`runtime_settings` returns typed success-or-error results and `configuration` orders and reports those errors\",\"`runtime_settings` returns raw values and `configuration` performs all parsing and validation\",\"`runtime_settings` rejects malformed input immediately\"],\"default_guess\":\"Return typed per-item parse results from `runtime_settings`; have `configuration` select and report the first error in A17's order.\"},{\"subject\":\"30_modules.md:`configuration`: constant-time secret comparison\",\"kind\":\"missing dependency\",\"text\":\"`models`, `data_provider`, `runtime_settings`.\",\"question\":\"How can `configuration` enforce secret distinctness while every secret comparison goes through `random_values.equal_in_constant_time`, when `random_values` is absent from its `Knows` list?\",\"options\":[\"Add `random_values` to `configuration`'s dependencies\",\"Move secret-distinctness checking to `random_values` behind one aggregate capability\",\"Permit ordinary equality during startup\"],\"default_guess\":\"Add `random_values` to `configuration`'s dependencies and call `equal_in_constant_time` for every distinctness comparison.\",\"witness\":{\"initial\":\"Two configured service-token values are equal.\",\"events\":[\"`runtime_settings` loads both tokens.\",\"`configuration` performs A17's distinctness check.\"],\"outcomes\":[\"An implementation following the `Knows` list uses ordinary equality or cannot implement the check through the required module.\",\"An implementation following the global secret-comparison rule imports `random_values` despite the declared dependency graph.\"],\"observer\":\"The architecture validator and, through timing behavior, a caller able to repeat starts or observe diagnostics.\"}},{\"subject\":\"30_modules.md:`audit_log`: creation of M12 AuditSequence\",\"kind\":\"owner/dependency gap\",\"text\":\"M12 AuditSequence, made at 0 with a new store\",\"question\":\"Which module creates and persists the initial M12 record in the transaction that creates a store, given that `audit_log` owns M12 but `store` is earlier in the dependency order and may not know `audit_log`?\",\"options\":[\"`store` initializes an opaque audit-sequence storage cell to 0 as part of its schema, while `audit_log` owns its meaning and later transitions\",\"`instance_lifecycle` invokes a new `audit_log` initialization capability after `store` creates the database\",\"Reverse or relax the dependency so `store` calls `audit_log`\"],\"default_guess\":\"Have `store` initialize the opaque storage cell to 0 atomically with the new schema, while `audit_log` exclusively owns its semantics and updates.\",\"witness\":{\"initial\":\"The configured store file does not exist.\",\"events\":[\"`instance_lifecycle` asks `store` to make the new store.\",\"The new store must contain exactly one M12 record at 0 before it is renamed complete.\"],\"outcomes\":[\"`store` creates the record itself despite M12 being declared `audit_log`'s.\",\"The store is created empty and some later caller initializes M12 through `audit_log`, introducing a new step and possible incomplete state.\"],\"observer\":\"The next startup, a backup, or the first audited change.\"}},{\"subject\":\"30_modules.md:`models`: removed artifact-type representation\",\"kind\":\"underspecified historical model\",\"text\":\"for the artifact types only the shape of a type with its owner service, whose rows are `data_provider`'s, so a stored pointer of a type a later release removed still reads (A22 rule 4)\",\"question\":\"How is a stored pointer's removed type decoded after its row is absent from the current `data_provider` table?\",\"options\":[\"Persist the type as an opaque string and validate current declarations separately\",\"Keep every historical type as a model-enum member while only current rows appear in `data_provider`\",\"Use an open vocabulary model with known and unknown variants\"],\"default_guess\":\"Persist artifact types as opaque vocabulary tokens and use the current `data_provider` table only for publish/latest/withdraw declaration checks.\",\"witness\":{\"initial\":\"A store contains a published pointer of type `estimate`.\",\"events\":[\"A later release removes `estimate` from `data_provider`'s artifact table.\",\"The owner lists the project's artifacts.\"],\"outcomes\":[\"A closed enum derived from the current rows cannot decode the pointer, so the list fails.\",\"An open or historical representation decodes and returns the retained pointer as A22 requires.\"],\"observer\":\"The owner or a service listing artifacts.\"}},{\"subject\":\"30_modules.md:`given_values`: A02 rule 4 capability\",\"kind\":\"missing public capability\",\"text\":\"A02 rule 4: a present value outside the form State 1 declares — the alias's length, a value outside its enumeration, a characteristic out of its range — refused at stage (4), every such value named.\",\"question\":\"Through which public capability do `projects`, `customers` and `migration_import` invoke these validations and obtain all failures, since none of the listed candidate capabilities covers enumeration, alias-length or characteristic-range validation?\",\"options\":[\"Add one validation capability returning every invalid value\",\"Add separate validators for aliases, enumerations and object characteristics\",\"Expand `read_required_text` and `read_optional_text` into typed readers\"],\"default_guess\":\"Add a typed `validate_given_values` capability that returns all stage-(4) failures without changing values.\"},{\"subject\":\"30_modules.md:`data_provider`: table row types\",\"kind\":\"model ownership gap\",\"text\":\"`models`, for the row models and enumerations of its tables.\",\"question\":\"Which `models`-owned row types represent `ARTIFACT_TYPE_OWNERS` and `SERVICE_RIGHTS`, since M01–M12 and the declared vocabularies name no service-rights row model and no concrete artifact-owner row model?\",\"options\":[\"Add explicit value models for artifact-owner and service-right rows to `models`\",\"Make the row types private structures owned by `data_provider`\",\"Represent both tables with untyped tuples or mappings\"],\"default_guess\":\"Add explicit identity-free value models in `models` for both row shapes.\"},{\"subject\":\"30_modules.md:`migration_import`: upload-size enforcement\",\"kind\":\"unclear action owner\",\"text\":\"A16 and M10: reading an uploaded file as data under the release's size limit (A19 rule 4)\",\"question\":\"Which module reads the request stream and refuses it before parsing or replacing the session's kept file: `owner_interface`, `operations`, `migration_import`, or `owner_sessions`?\",\"options\":[\"`migration_import` consumes the bounded stream through an operation and hands accepted bytes to `owner_sessions`\",\"`owner_interface` enforces the byte limit before calling `operations`\",\"`owner_sessions.keep_uploaded_file` performs bounded reading and replacement atomically\"],\"default_guess\":\"Have `migration_import` consume and bound the stream through `operations`, then call `owner_sessions` only after the complete upload is accepted.\",\"witness\":{\"initial\":\"A session already keeps a valid import file.\",\"events\":[\"The owner uploads a new stream whose declared length is below the limit but whose received bytes exceed it.\",\"The receiver reaches byte 52428801.\"],\"outcomes\":[\"The transport or session module replaces the old file incrementally before `migration_import` refuses the new upload.\",\"`migration_import` bounds the stream first, refuses it, and the old kept file remains unchanged.\"],\"observer\":\"The owner when reopening the import mapping.\"}},{\"subject\":\"30_modules.md:`backups`: audit-sequence dependency\",\"kind\":\"contradictory dependency\",\"text\":\"`models`, `clock`, `configuration`, `data_provider`, `store`,\\n`audit_log`.\",\"question\":\"Why may `backups` know `audit_log` when `store.copy_store_snapshot` is specified to return the snapshot's sequence and the `store` section says the reading needs no upward call to `audit_log`?\",\"options\":[\"Remove the `backups` → `audit_log` dependency and use the value returned by `store`\",\"Have `backups` call `audit_log.last_audit_sequence`, contradicting the snapshot-first-read mechanism\",\"Retain the dependency for a different explicitly named use\"],\"default_guess\":\"Remove `audit_log` from `backups`' `Knows` list and use the sequence returned with the store snapshot.\",\"witness\":{\"initial\":\"A write commits while a backup is fixing its snapshot.\",\"events\":[\"The store's first snapshot read obtains sequence n.\",\"A concurrent audited transaction commits sequence n+1.\",\"The backup writes its readable record.\"],\"outcomes\":[\"Using the sequence returned by `store` records n, matching the snapshot.\",\"Calling `audit_log.last_audit_sequence` separately may record n+1, causing the backup's check to fail or its record to describe a different state.\"],\"observer\":\"The backup checker and the owner monitoring backup success.\"}}]}",
+ "set_aside": []
+}

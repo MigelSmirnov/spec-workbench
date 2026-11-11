@@ -1,0 +1,247 @@
+{
+ "open_points": [
+  {
+   "subject": "data_provider constant boundary",
+   "kind": "ownership_scope",
+   "text": "Every value the generated code reads that is not a setting of the environment is a constant of `data_provider`, its one home",
+   "question": "Does `data_provider` own only release policy constants, or literally every non-environment value read by generated code, including stored model facts, request values, clock readings and transaction results that other modules own?",
+   "options": [
+    "Limit this rule to the explicitly listed release policy constants.",
+    "Treat every non-environment runtime value as data owned or supplied by `data_provider`."
+   ],
+   "default_guess": "Limit it to the explicitly listed release policy constants.",
+   "unit": "?"
+  },
+  {
+   "subject": "data_provider constant values",
+   "kind": "missing_value",
+   "text": "the store version and the store's temporary-name suffix (A17 rule 5); the kept and temporary backup prefixes, neither beginning with the other, the daily time, the minute look and the retention of 30 × 24 hours (A18 rules 1, 4, 5); the import file's size limit (A19 rule 4); the release's own version and its contract version, which every audit entry names (M09) and a backup's record names (A18 rule 1); the address each surface listens on, which the configuration does not name (A17 rules 1, 2)",
+   "question": "What are the actual values of `STORE_VERSION`, `STORE_TEMPORARY_SUFFIX`, `BACKUP_LOOK_SECONDS`, `RELEASE_VERSION`, `CONTRACT_VERSION`, `OWNER_INTERFACE_LISTEN_ADDRESS` and `SERVICE_API_LISTEN_ADDRESS`, and are version values literals or release-build inputs?",
+   "options": [
+    "Specify every value as a literal in the data closure.",
+    "Define which values are injected by the release process and the exact source and format of each.",
+    "Leave consumers to choose values independently."
+   ],
+   "default_guess": "Specify stable technical literals and define release and contract versions as explicit build inputs with one authoritative source.",
+   "witness": {
+    "initial": "A production host starts a release with otherwise valid configuration.",
+    "events": [
+     "`instance_lifecycle` asks for the two listener addresses.",
+     "One implementation uses loopback addresses; another uses wildcard addresses."
+    ],
+    "outcomes": [
+     "Only local or explicitly proxied connections can reach the listeners.",
+     "Every interface of the host can reach the listeners unless host administration blocks it."
+    ],
+    "observer": "The owner and any machine with network reachability to the host"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "runtime_settings environment schema",
+   "kind": "missing_names_and_owner",
+   "text": "the closed table of the `REGISTRY_` items — the store's location, the backup location, the backup key, the owner credential, the four service tokens — loaded at each call of `load_runtime_settings` into the settings, each item with its type, whether it is required (the four tokens each optional, every other item required) and its normalization",
+   "question": "What is the exact environment-variable name, field name, type and normalization rule for each item, and which module owns those names, given that `runtime_settings` knows only `models` while the text also says the variables' names belong to the data closure?",
+   "options": [
+    "`runtime_settings` owns and declares the complete environment schema.",
+    "`data_provider` exports the environment schema and `runtime_settings` imports it.",
+    "A separate model or schema module owns it."
+   ],
+   "default_guess": "Make `runtime_settings` the sole owner of an explicit environment schema and list every exact variable and result-field name there.",
+   "witness": {
+    "initial": "The owner sets a store path in an otherwise complete environment.",
+    "events": [
+     "The owner sets `REGISTRY_STORE_PATH`.",
+     "One implementation expects `REGISTRY_STORE_PATH`; another expects `REGISTRY_STORE_LOCATION`."
+    ],
+    "outcomes": [
+     "Registry starts using the configured store.",
+     "Registry stops and diagnoses the store location as missing."
+    ],
+    "observer": "The owner starting Registry"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "runtime_settings and configuration validation boundary",
+   "kind": "two_owners",
+   "text": "A17: the start checks of rule 2 in its one order over the settings `runtime_settings` loads — the service tokens of the services `data_provider`'s rights table lists, all or none, the other items present, each well formed, each secret at least the 32 bytes `data_provider` holds, no two secrets equal",
+   "question": "Which module decides that an individual environment item is missing or malformed: `runtime_settings`, which assigns types and performs per-item normalization, or `configuration`, which owns the ordered presence and well-formedness checks?",
+   "options": [
+    "`runtime_settings` returns raw or parse-result values and `configuration` owns every diagnostic decision.",
+    "`runtime_settings` rejects malformed individual items, while `configuration` owns only cross-item checks.",
+    "Split checks by an explicit item-by-item table."
+   ],
+   "default_guess": "Have `runtime_settings` return raw values plus parse results without stopping; let `configuration` own the ordered failures and diagnostics.",
+   "witness": {
+    "initial": "The environment contains a malformed store location and an incomplete service-token set.",
+    "events": [
+     "`runtime_settings` loads the environment.",
+     "`configuration` is invoked."
+    ],
+    "outcomes": [
+     "The loader rejects the malformed path before `configuration` can report the first missing token.",
+     "The loader returns both conditions and `configuration` reports the missing token first, following A17's check order."
+    ],
+    "observer": "The owner reading the failed-start diagnostic"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "secret byte representation",
+   "kind": "undefined_normalization",
+   "text": "making the values of A13 rule 7 — the owner session's identity, its CSRF value, a confirmation value — of at least 32 bytes from the operating system's random source; comparing a presented secret with a held one in constant time",
+   "question": "In what byte representation are environment-provided credentials measured and compared, and how are browser or header text values decoded to those bytes before the 32-byte check and constant-time comparison?",
+   "options": [
+    "Treat secrets as encoded text and mandate one encoding and decoding rule.",
+    "Require a textual binary encoding such as base64 or hexadecimal and compare decoded bytes.",
+    "Treat environment strings as character sequences despite the byte requirement."
+   ],
+   "default_guess": "Declare an exact textual encoding and compare the decoded byte strings.",
+   "witness": {
+    "initial": "The owner credential contains non-ASCII characters and has fewer than 32 Unicode code points but more than 32 UTF-8 bytes.",
+    "events": [
+     "`runtime_settings` loads the credential.",
+     "`configuration` checks its length."
+    ],
+    "outcomes": [
+     "The credential passes because its encoded representation is at least 32 bytes.",
+     "The credential fails because the implementation counts characters or uses a different encoding."
+    ],
+    "observer": "The owner starting Registry"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "validated configuration record",
+   "kind": "unowned_record",
+   "text": "every other module receives the settings it needs from `configuration`, which checks them",
+   "question": "Which module owns the validated configuration record and its field vocabulary: `runtime_settings`, which loads “the settings”, or `configuration`, which checks and distributes them?",
+   "options": [
+    "`runtime_settings` owns a raw-settings record and `configuration` owns a distinct validated-configuration record.",
+    "`runtime_settings` owns one record that `configuration` validates in place.",
+    "Each consumer receives separate primitive arguments and there is no shared configuration record."
+   ],
+   "default_guess": "Use separate raw-settings and validated-configuration records, owned by `runtime_settings` and `configuration` respectively.",
+   "unit": "?"
+  },
+  {
+   "subject": "M12 AuditSequence creation",
+   "kind": "dependency_conflict",
+   "text": "M12 AuditSequence, made at 0 with a new store",
+   "question": "Who creates the initial M12 record in a new store? `audit_log` owns M12 but is later than `store` and cannot be known by it; `store` owns making the new store but must not own which domain record is written; and `instance_lifecycle` does not list `audit_log` among the modules it knows.",
+   "options": [
+    "Allow `store` to insert M12 mechanically as part of schema creation.",
+    "Have `audit_log` initialize M12 after the store opens and before the store is renamed complete.",
+    "Have `instance_lifecycle` coordinate an explicit audit-log initialization step and add the dependency.",
+    "Represent M12 as store metadata rather than a domain record owned by `audit_log`."
+   ],
+   "default_guess": "Treat the row as storage metadata initialized atomically by `store`, while leaving all later movement and meaning to `audit_log`.",
+   "witness": {
+    "initial": "The configured store does not exist.",
+    "events": [
+     "Registry creates a new store.",
+     "The process is interrupted at the boundary between creating the database and initializing the audit sequence.",
+     "Registry starts again on the resulting file."
+    ],
+    "outcomes": [
+     "The store already contains exactly one M12 at 0 and opens normally.",
+     "The store has no M12, so startup must repair it, reject it or allow the first audit append to guess an initial value."
+    ],
+    "observer": "The owner on the next start and the first action that writes an audit entry"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "import upload size enforcement",
+   "kind": "ownership_dependency_gap",
+   "text": "A16 and M10: reading an uploaded file as data under the release's size limit (A19 rule 4), refusing at upload a file that cannot be read",
+   "question": "Which module reads the request's declared length and limits the body before bytes are received? `migration_import` owns the size check and knows `data_provider`, but `owner_interface` owns the HTTP upload boundary, does not know either module, and says it owns no server check.",
+   "options": [
+    "`owner_interface` performs transport-level limiting using the constant.",
+    "`owner_interface` passes an unread request stream and declared length through `operations` to `migration_import`.",
+    "A shared upload adapter owns streaming and size enforcement."
+   ],
+   "default_guess": "Pass a bounded unread stream and declared length through `operations` to `migration_import`, with an explicit contract that no layer eagerly reads the body.",
+   "witness": {
+    "initial": "An authenticated owner submits an upload whose declared length exceeds 50 MiB.",
+    "events": [
+     "The HTTP request reaches `owner_interface`.",
+     "The size rule is applied either at the transport boundary or only after the body has been materialized."
+    ],
+    "outcomes": [
+     "Registry refuses before reading any body byte, as A19 requires.",
+     "Registry consumes or buffers some or all of the oversized body before refusing."
+    ],
+    "observer": "The owner, the HTTP client and the production host's memory and network monitors"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "import transaction orchestration",
+   "kind": "unclear_dependency_direction",
+   "text": "checking again at confirmation and, in the one transaction `operations` opens, which appends the import's audit entry, having each record written by its own module with its source identities and instants — `projects` the picked projects with their objects and rooms, `customers` the Customers it makes, `artifact_pointers` the pointers, the import as their publisher (M05) — and, once they are written, the closure (M10) with the confirmation id `operations` minted then, or nothing (rules 6, 7)",
+   "question": "Does `operations` call `projects`, `customers`, `artifact_pointers` and `migration_import` directly for an import, or does `migration_import` call the three record modules after `operations` hands it the transaction?",
+   "options": [
+    "`operations` orchestrates every participating module directly.",
+    "`migration_import` orchestrates the domain writers inside the transaction.",
+    "`migration_import` returns a checked write plan that `operations` dispatches."
+   ],
+   "default_guess": "Have `migration_import` return a checked write plan and let `operations` dispatch the writes and audit append in the transaction.",
+   "unit": "?"
+  },
+  {
+   "subject": "backups dependency on audit_log",
+   "kind": "extra_or_racing_dependency",
+   "text": "`models`, `clock`, `configuration`, `data_provider`, `store`, `audit_log`.",
+   "question": "What does `backups` directly import or call from `audit_log`? The store section says `copy_store_snapshot` reads M12 as the snapshot's first read and returns that exact sequence without an upward call, so using `audit_log.last_audit_sequence` would be redundant and could race the snapshot.",
+   "options": [
+    "Remove the `backups` → `audit_log` dependency and use only the sequence returned with the store snapshot.",
+    "Use `audit_log` only for a type or helper that must be named explicitly.",
+    "Read the live last sequence from `audit_log` when making the backup record."
+   ],
+   "default_guess": "Remove the dependency and use the sequence returned atomically by `store.copy_store_snapshot`.",
+   "witness": {
+    "initial": "The backup snapshot fixes at audit sequence n.",
+    "events": [
+     "A concurrent change commits audit sequence n + 1 after the snapshot is fixed.",
+     "`backups` either uses the snapshot result or asks `audit_log` for the live last sequence."
+    ],
+    "outcomes": [
+     "The record says n, matches the decrypted snapshot and the backup is kept.",
+     "The record says n + 1, fails the sequence check against the snapshot and the backup is deleted."
+    ],
+    "observer": "The owner viewing the newest kept backup and host diagnostics"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "random secret-value length",
+   "kind": "underspecified_value",
+   "text": "making the values of A13 rule 7 — the owner session's identity, its CSRF value, a confirmation value — of at least 32 bytes from the operating system's random source",
+   "question": "How many bytes does `make_secret_value` generate? The only exported constant is `SECRET_MIN_BYTES`, which supplies a minimum but not the generated length, while the data-closure rule says every value read by generated code has one home.",
+   "options": [
+    "Generate exactly `SECRET_MIN_BYTES`.",
+    "Add a separate generated-secret length constant.",
+    "Allow the implementation to choose any length of at least 32 bytes."
+   ],
+   "default_guess": "Generate exactly `SECRET_MIN_BYTES`.",
+   "witness": {
+    "initial": "The owner signs in and receives a session cookie and forms containing CSRF and confirmation values.",
+    "events": [
+     "One implementation generates 32-byte values.",
+     "Another generates 64-byte values."
+    ],
+    "outcomes": [
+     "Cookies and form values use the encoding length of 32 random bytes.",
+     "Cookies and form values use the encoding length of 64 random bytes."
+    ],
+    "observer": "The owner's browser and any contract test checking wire-size limits"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"data_provider constant boundary\",\"kind\":\"ownership_scope\",\"text\":\"Every value the generated code reads that is not a setting of the environment is a constant of `data_provider`, its one home\",\"question\":\"Does `data_provider` own only release policy constants, or literally every non-environment value read by generated code, including stored model facts, request values, clock readings and transaction results that other modules own?\",\"options\":[\"Limit this rule to the explicitly listed release policy constants.\",\"Treat every non-environment runtime value as data owned or supplied by `data_provider`.\"],\"default_guess\":\"Limit it to the explicitly listed release policy constants.\"},{\"subject\":\"data_provider constant values\",\"kind\":\"missing_value\",\"text\":\"the store version and the store's temporary-name suffix (A17 rule 5); the kept and temporary backup prefixes, neither beginning with the other, the daily time, the minute look and the retention of 30 × 24 hours (A18 rules 1, 4, 5); the import file's size limit (A19 rule 4); the release's own version and its contract version, which every audit entry names (M09) and a backup's record names (A18 rule 1); the address each surface listens on, which the configuration does not name (A17 rules 1, 2)\",\"question\":\"What are the actual values of `STORE_VERSION`, `STORE_TEMPORARY_SUFFIX`, `BACKUP_LOOK_SECONDS`, `RELEASE_VERSION`, `CONTRACT_VERSION`, `OWNER_INTERFACE_LISTEN_ADDRESS` and `SERVICE_API_LISTEN_ADDRESS`, and are version values literals or release-build inputs?\",\"options\":[\"Specify every value as a literal in the data closure.\",\"Define which values are injected by the release process and the exact source and format of each.\",\"Leave consumers to choose values independently.\"],\"default_guess\":\"Specify stable technical literals and define release and contract versions as explicit build inputs with one authoritative source.\",\"witness\":{\"initial\":\"A production host starts a release with otherwise valid configuration.\",\"events\":[\"`instance_lifecycle` asks for the two listener addresses.\",\"One implementation uses loopback addresses; another uses wildcard addresses.\"],\"outcomes\":[\"Only local or explicitly proxied connections can reach the listeners.\",\"Every interface of the host can reach the listeners unless host administration blocks it.\"],\"observer\":\"The owner and any machine with network reachability to the host\"}},{\"subject\":\"runtime_settings environment schema\",\"kind\":\"missing_names_and_owner\",\"text\":\"the closed table of the `REGISTRY_` items — the store's location, the backup location, the backup key, the owner credential, the four service tokens — loaded at each call of `load_runtime_settings` into the settings, each item with its type, whether it is required (the four tokens each optional, every other item required) and its normalization\",\"question\":\"What is the exact environment-variable name, field name, type and normalization rule for each item, and which module owns those names, given that `runtime_settings` knows only `models` while the text also says the variables' names belong to the data closure?\",\"options\":[\"`runtime_settings` owns and declares the complete environment schema.\",\"`data_provider` exports the environment schema and `runtime_settings` imports it.\",\"A separate model or schema module owns it.\"],\"default_guess\":\"Make `runtime_settings` the sole owner of an explicit environment schema and list every exact variable and result-field name there.\",\"witness\":{\"initial\":\"The owner sets a store path in an otherwise complete environment.\",\"events\":[\"The owner sets `REGISTRY_STORE_PATH`.\",\"One implementation expects `REGISTRY_STORE_PATH`; another expects `REGISTRY_STORE_LOCATION`.\"],\"outcomes\":[\"Registry starts using the configured store.\",\"Registry stops and diagnoses the store location as missing.\"],\"observer\":\"The owner starting Registry\"}},{\"subject\":\"runtime_settings and configuration validation boundary\",\"kind\":\"two_owners\",\"text\":\"A17: the start checks of rule 2 in its one order over the settings `runtime_settings` loads — the service tokens of the services `data_provider`'s rights table lists, all or none, the other items present, each well formed, each secret at least the 32 bytes `data_provider` holds, no two secrets equal\",\"question\":\"Which module decides that an individual environment item is missing or malformed: `runtime_settings`, which assigns types and performs per-item normalization, or `configuration`, which owns the ordered presence and well-formedness checks?\",\"options\":[\"`runtime_settings` returns raw or parse-result values and `configuration` owns every diagnostic decision.\",\"`runtime_settings` rejects malformed individual items, while `configuration` owns only cross-item checks.\",\"Split checks by an explicit item-by-item table.\"],\"default_guess\":\"Have `runtime_settings` return raw values plus parse results without stopping; let `configuration` own the ordered failures and diagnostics.\",\"witness\":{\"initial\":\"The environment contains a malformed store location and an incomplete service-token set.\",\"events\":[\"`runtime_settings` loads the environment.\",\"`configuration` is invoked.\"],\"outcomes\":[\"The loader rejects the malformed path before `configuration` can report the first missing token.\",\"The loader returns both conditions and `configuration` reports the missing token first, following A17's check order.\"],\"observer\":\"The owner reading the failed-start diagnostic\"}},{\"subject\":\"secret byte representation\",\"kind\":\"undefined_normalization\",\"text\":\"making the values of A13 rule 7 — the owner session's identity, its CSRF value, a confirmation value — of at least 32 bytes from the operating system's random source; comparing a presented secret with a held one in constant time\",\"question\":\"In what byte representation are environment-provided credentials measured and compared, and how are browser or header text values decoded to those bytes before the 32-byte check and constant-time comparison?\",\"options\":[\"Treat secrets as encoded text and mandate one encoding and decoding rule.\",\"Require a textual binary encoding such as base64 or hexadecimal and compare decoded bytes.\",\"Treat environment strings as character sequences despite the byte requirement.\"],\"default_guess\":\"Declare an exact textual encoding and compare the decoded byte strings.\",\"witness\":{\"initial\":\"The owner credential contains non-ASCII characters and has fewer than 32 Unicode code points but more than 32 UTF-8 bytes.\",\"events\":[\"`runtime_settings` loads the credential.\",\"`configuration` checks its length.\"],\"outcomes\":[\"The credential passes because its encoded representation is at least 32 bytes.\",\"The credential fails because the implementation counts characters or uses a different encoding.\"],\"observer\":\"The owner starting Registry\"}},{\"subject\":\"validated configuration record\",\"kind\":\"unowned_record\",\"text\":\"every other module receives the settings it needs from `configuration`, which checks them\",\"question\":\"Which module owns the validated configuration record and its field vocabulary: `runtime_settings`, which loads “the settings”, or `configuration`, which checks and distributes them?\",\"options\":[\"`runtime_settings` owns a raw-settings record and `configuration` owns a distinct validated-configuration record.\",\"`runtime_settings` owns one record that `configuration` validates in place.\",\"Each consumer receives separate primitive arguments and there is no shared configuration record.\"],\"default_guess\":\"Use separate raw-settings and validated-configuration records, owned by `runtime_settings` and `configuration` respectively.\"},{\"subject\":\"M12 AuditSequence creation\",\"kind\":\"dependency_conflict\",\"text\":\"M12 AuditSequence, made at 0 with a new store\",\"question\":\"Who creates the initial M12 record in a new store? `audit_log` owns M12 but is later than `store` and cannot be known by it; `store` owns making the new store but must not own which domain record is written; and `instance_lifecycle` does not list `audit_log` among the modules it knows.\",\"options\":[\"Allow `store` to insert M12 mechanically as part of schema creation.\",\"Have `audit_log` initialize M12 after the store opens and before the store is renamed complete.\",\"Have `instance_lifecycle` coordinate an explicit audit-log initialization step and add the dependency.\",\"Represent M12 as store metadata rather than a domain record owned by `audit_log`.\"],\"default_guess\":\"Treat the row as storage metadata initialized atomically by `store`, while leaving all later movement and meaning to `audit_log`.\",\"witness\":{\"initial\":\"The configured store does not exist.\",\"events\":[\"Registry creates a new store.\",\"The process is interrupted at the boundary between creating the database and initializing the audit sequence.\",\"Registry starts again on the resulting file.\"],\"outcomes\":[\"The store already contains exactly one M12 at 0 and opens normally.\",\"The store has no M12, so startup must repair it, reject it or allow the first audit append to guess an initial value.\"],\"observer\":\"The owner on the next start and the first action that writes an audit entry\"}},{\"subject\":\"import upload size enforcement\",\"kind\":\"ownership_dependency_gap\",\"text\":\"A16 and M10: reading an uploaded file as data under the release's size limit (A19 rule 4), refusing at upload a file that cannot be read\",\"question\":\"Which module reads the request's declared length and limits the body before bytes are received? `migration_import` owns the size check and knows `data_provider`, but `owner_interface` owns the HTTP upload boundary, does not know either module, and says it owns no server check.\",\"options\":[\"`owner_interface` performs transport-level limiting using the constant.\",\"`owner_interface` passes an unread request stream and declared length through `operations` to `migration_import`.\",\"A shared upload adapter owns streaming and size enforcement.\"],\"default_guess\":\"Pass a bounded unread stream and declared length through `operations` to `migration_import`, with an explicit contract that no layer eagerly reads the body.\",\"witness\":{\"initial\":\"An authenticated owner submits an upload whose declared length exceeds 50 MiB.\",\"events\":[\"The HTTP request reaches `owner_interface`.\",\"The size rule is applied either at the transport boundary or only after the body has been materialized.\"],\"outcomes\":[\"Registry refuses before reading any body byte, as A19 requires.\",\"Registry consumes or buffers some or all of the oversized body before refusing.\"],\"observer\":\"The owner, the HTTP client and the production host's memory and network monitors\"}},{\"subject\":\"import transaction orchestration\",\"kind\":\"unclear_dependency_direction\",\"text\":\"checking again at confirmation and, in the one transaction `operations` opens, which appends the import's audit entry, having each record written by its own module with its source identities and instants — `projects` the picked projects with their objects and rooms, `customers` the Customers it makes, `artifact_pointers` the pointers, the import as their publisher (M05) — and, once they are written, the closure (M10) with the confirmation id `operations` minted then, or nothing (rules 6, 7)\",\"question\":\"Does `operations` call `projects`, `customers`, `artifact_pointers` and `migration_import` directly for an import, or does `migration_import` call the three record modules after `operations` hands it the transaction?\",\"options\":[\"`operations` orchestrates every participating module directly.\",\"`migration_import` orchestrates the domain writers inside the transaction.\",\"`migration_import` returns a checked write plan that `operations` dispatches.\"],\"default_guess\":\"Have `migration_import` return a checked write plan and let `operations` dispatch the writes and audit append in the transaction.\"},{\"subject\":\"backups dependency on audit_log\",\"kind\":\"extra_or_racing_dependency\",\"text\":\"`models`, `clock`, `configuration`, `data_provider`, `store`, `audit_log`.\",\"question\":\"What does `backups` directly import or call from `audit_log`? The store section says `copy_store_snapshot` reads M12 as the snapshot's first read and returns that exact sequence without an upward call, so using `audit_log.last_audit_sequence` would be redundant and could race the snapshot.\",\"options\":[\"Remove the `backups` → `audit_log` dependency and use only the sequence returned with the store snapshot.\",\"Use `audit_log` only for a type or helper that must be named explicitly.\",\"Read the live last sequence from `audit_log` when making the backup record.\"],\"default_guess\":\"Remove the dependency and use the sequence returned atomically by `store.copy_store_snapshot`.\",\"witness\":{\"initial\":\"The backup snapshot fixes at audit sequence n.\",\"events\":[\"A concurrent change commits audit sequence n + 1 after the snapshot is fixed.\",\"`backups` either uses the snapshot result or asks `audit_log` for the live last sequence.\"],\"outcomes\":[\"The record says n, matches the decrypted snapshot and the backup is kept.\",\"The record says n + 1, fails the sequence check against the snapshot and the backup is deleted.\"],\"observer\":\"The owner viewing the newest kept backup and host diagnostics\"}},{\"subject\":\"random secret-value length\",\"kind\":\"underspecified_value\",\"text\":\"making the values of A13 rule 7 — the owner session's identity, its CSRF value, a confirmation value — of at least 32 bytes from the operating system's random source\",\"question\":\"How many bytes does `make_secret_value` generate? The only exported constant is `SECRET_MIN_BYTES`, which supplies a minimum but not the generated length, while the data-closure rule says every value read by generated code has one home.\",\"options\":[\"Generate exactly `SECRET_MIN_BYTES`.\",\"Add a separate generated-secret length constant.\",\"Allow the implementation to choose any length of at least 32 bytes.\"],\"default_guess\":\"Generate exactly `SECRET_MIN_BYTES`.\",\"witness\":{\"initial\":\"The owner signs in and receives a session cookie and forms containing CSRF and confirmation values.\",\"events\":[\"One implementation generates 32-byte values.\",\"Another generates 64-byte values.\"],\"outcomes\":[\"Cookies and form values use the encoding length of 32 random bytes.\",\"Cookies and form values use the encoding length of 64 random bytes.\"],\"observer\":\"The owner's browser and any contract test checking wire-size limits\"}}]}",
+ "set_aside": []
+}
