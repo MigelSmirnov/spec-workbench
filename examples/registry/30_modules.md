@@ -318,7 +318,11 @@ closure names each constant, and every one is exported.
 
 ### Knows
 
-`models`, for the row models and enumerations of its tables.
+`models`, for exactly the row models and enumerations of its two tables:
+`ArtifactTypeOwner` (a type with its owner service) and `ServiceName` for
+`ARTIFACT_TYPE_OWNERS`; `ServiceRight` (a service, an operation, the highest
+class) with `ServiceName`, `ServiceOperation` and `DisclosureClass` for
+`SERVICE_RIGHTS`. Its other constants are scalars and import nothing.
 
 ### Must not own
 
