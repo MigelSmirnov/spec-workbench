@@ -91,6 +91,32 @@ types and Python signatures are State 6's.
 - **Pure operations.** An operation whose State impact says "pure" reads no
   record, no clock and no environment and touches nothing.
 
+## Constants each module imports
+
+`module:data_provider` has no operation: it exports constants, and a module
+that names one imports it (SPEC_STANDARD §6.10, §7, §15.3.1). This table is
+every such edge — consumer, provider `data_provider`, the symbols — and the
+one source of these imports; a module imports no constant it does not list,
+and names none it does not import. The values are the data closure's.
+
+| consumer | constants it imports from `data_provider` |
+|---|---|
+| `random_values` | `SECRET_MIN_BYTES` |
+| `given_values` | `REQUEST_ID_MAX_CHARACTERS`, `ALIAS_MAX_CHARACTERS` |
+| `configuration` | `SERVICE_RIGHTS`, `SECRET_MIN_BYTES` |
+| `store` | `STORE_VERSION`, `STORE_TEMPORARY_SUFFIX` |
+| `audit_log` | `RELEASE_VERSION`, `CONTRACT_VERSION` |
+| `service_access` | `SERVICE_RIGHTS` |
+| `owner_sessions` | `OWNER_SESSION_MAX_HOURS`, `OWNER_SESSION_IDLE_MINUTES`, `SIGN_IN_WINDOW_MINUTES`, `SIGN_IN_REFUSAL_LIMIT`, `SIGN_IN_LOCKOUT_MINUTES`, `CONFIRMATION_VALID_MINUTES` |
+| `artifact_pointers` | `ARTIFACT_TYPE_OWNERS` |
+| `migration_import` | `ARTIFACT_TYPE_OWNERS`, `IMPORT_FILE_MAX_BYTES` |
+| `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `RELEASE_VERSION` |
+| `instance_lifecycle` | `OWNER_INTERFACE_LISTEN_ADDRESS`, `SERVICE_API_LISTEN_ADDRESS`, `SESSION_PASS_SECONDS`, `BACKUP_LOOK_SECONDS` |
+
+`configuration` imports `load_runtime_settings` from `runtime_settings` and
+calls it itself, once per start (`runtime_settings.load_runtime_settings`,
+Callers).
+
 ## Closed set of refusal codes
 
 A refusal is a code, the stage of A04 rule 6 it belongs to (`models`, State

@@ -231,10 +231,11 @@ Nothing.
 
 ### Must not own
 
-Any limit or schedule: the 8 hours, 30, 15 and 10 minutes and the 60 seconds
-are `data_provider`'s constants that `owner_sessions` applies; the 03:00 is
-one that `backups` applies; the minute look's 60 seconds is one that
-`instance_lifecycle` applies, calling `backups` at that interval.
+Any limit or schedule: the 8 hours and the 30, 15 and 10 minutes are
+`data_provider`'s constants that `owner_sessions` applies; the 03:00 is one
+that `backups` applies; the 60 seconds of the session pass and of the minute
+look are ones that `instance_lifecycle` applies, calling `owner_sessions` and
+`backups` at those intervals.
 
 ### Hides
 

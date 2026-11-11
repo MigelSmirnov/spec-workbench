@@ -437,7 +437,8 @@ rule 2's order up to the store and backup location apart.
 
 ### Inputs
 
-None; it takes the settings from `runtime_settings.load_runtime_settings`.
+None; it calls `runtime_settings.load_runtime_settings` itself and checks
+the settings it answers.
 
 ### Outputs
 
@@ -494,7 +495,8 @@ made under that name and renamed to the store's name once complete.
 ### Enforces
 
 A17 rule 5: only the temporary name is removed, no other file; a store made
-new is empty and of the imported `STORE_VERSION` constant;
+new holds no record but M12 AuditSequence at 0 and is of the imported
+`STORE_VERSION` constant;
 otherwise the store opens for reading and writing, passes `PRAGMA
 integrity_check` answering `ok` and `PRAGMA foreign_key_check` finding
 nothing, and carries the release's store version. The engine setting that
@@ -510,7 +512,8 @@ removes or, when it cannot, leaves for the next start (A17 rule 2).
 
 ### State impact
 
-Opens or creates the store file; writes no record.
+Opens or creates the store file; a store made new holds one record, M12
+AuditSequence at 0, made with it, and no other.
 
 ## `public_op:store.discard_new_store`
 

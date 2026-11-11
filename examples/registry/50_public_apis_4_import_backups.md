@@ -34,9 +34,12 @@ pick brings is refused (`outside_closed_list`), one given twice too
 
 ### Outputs
 
-For an accepted file, the file's digest, the SHA-256 of its bytes, which
-Registry computes and never takes from a caller. No refusal carries a
-digest: a file over the size limit is refused before it is read, and an
+For an accepted file, its bytes as read — which `operations` hands to
+`owner_sessions.keep_uploaded_file` — and its digest, the SHA-256 of those
+bytes, which Registry computes and never takes from a caller. No refusal
+carries a digest: a file over the size limit is refused before any of it is
+parsed — a declared length over it before any byte is read, otherwise as
+soon as more than it has been read — and an
 unreadable or malformed one is refused with its kind alone. At `upload`, each project the file holds with
 its id and status. At `mapping`, the mapping: the picked projects by `project_id`, each one's rooms —
 `room_id`, name, added instant — and pointers — every fact 'list artifacts'
@@ -46,7 +49,8 @@ Customers it will make by their v1 value with the projects each links, every
 malformed record of the picks, every id of a record the picks bring in that
 production already holds — no other production id — and every missing
 value; and whether the mapping is clean — no malformed record, no conflict,
-no missing value and at least one pick — which alone lets the confirmation
+no missing value, no given name or alias outside A02's form and at least
+one pick — which alone lets the confirmation
 step be shown. Every record the mapping names — malformed or conflicting —
 is named by its kind, its id as the file gives it (or that it has none) and
 its position among the file's records of that kind, so two records of one

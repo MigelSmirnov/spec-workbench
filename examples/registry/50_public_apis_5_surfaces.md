@@ -81,7 +81,10 @@ its one transaction with its entry and confirmation id (A04, A13, A14, A16).
 The session identity from the cookie; the CSRF value; the request — which
 action or page, its target, its stated revision or access version, its
 values, a confirmation value; for sign-in the credential; for an upload the
-file.
+request's declared length, or that it declared none, and its unread byte
+stream, which `owner_interface` hands on without reading and this operation
+passes, unread, to `migration_import.read_import_mapping`, which alone
+consumes it within the request.
 
 ### Outputs
 
