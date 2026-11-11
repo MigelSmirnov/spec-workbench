@@ -577,7 +577,7 @@ Security review: PERFORMED
 
 - authentication_credential_abuse: APPLICABLE; references: A09, A13, A17; affected: M11, owner credential, service tokens, sign-in, owner session cookie
 - secrets: APPLICABLE; references: A14, A17, A18; affected: owner credential, service tokens, backup key, diagnostics, audit log
-- authorization: APPLICABLE; references: A08, A09, A10, A11, A12; affected: M05, M06, every service operation, every agent-authority operation, owner session actions
+- authorization: APPLICABLE; references: A04, A08, A09, A10, A11, A12; affected: M05, M06, every service operation, every agent-authority operation, owner session actions
 - injection_interpreted_input: APPLICABLE; references: A02, A16, A19; affected: M03, M08, import file, every stored text value
 - external_callbacks_webhooks: NOT_APPLICABLE; rationale: Registry calls no other service and receives no callback (R0-18, R0-54), and every request is a caller's authenticated call (R0-27)
 - browser_boundary: APPLICABLE; references: A13, A19; affected: owner interface, CSRF protection, session cookie, rendering of agent-written text

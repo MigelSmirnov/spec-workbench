@@ -292,6 +292,9 @@ refused_sign_ins(last 15min) >= 5 => sign_in refused
 5. A sign-in during a lockout is refused and does not extend it.
 6. A confirmation value used once — even by a refused submission — is refused
    the second time; one older than 10 minutes is refused.
+7. A session with a request every 10 minutes is refused 8 hours after its
+   sign-in; a session signed out is refused at its next request, also within
+   its 30 minutes.
 
 ### Consequence
 

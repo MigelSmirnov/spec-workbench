@@ -57,7 +57,8 @@ each create once.
    principal or session repeating the request id is refused.
 7. A create without a request id is refused. Creates of one model carrying
    one request id, and the anonymisation or erasure that removes a request
-   id, are applied one at a time, each on the result of the one before: of
+   id, are applied one at a time, each on the result of the one before, in
+   the order their transactions take the store's one write lock: of
    two concurrent creates, the first makes the record and the second is a
    repeat or refused by rule 4 or 5 — or, when an erasure applied between
    them removed the request id, a new create (rule 8).
@@ -104,9 +105,11 @@ create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
     answered as not found (A10).
 11. Repeating a publish after its type was removed is refused as an unknown
     type (A22).
-12. Two concurrent creates with one request id — of a project, a Customer,
-    a room of one project, a pointer of one project — make one record; the
-    other answers it. The same request id for rooms of two different
+12. Two concurrent creates with one request id and equal facts — of a
+    project, a Customer, a room of one project, a pointer of one project by
+    one publisher (for Kernel, naming one session) — make one record; the
+    other answers it. With different facts, or another publisher, the second
+    is refused as a conflict. The same request id for rooms of two different
     projects makes two rooms.
 
 ### Consequence

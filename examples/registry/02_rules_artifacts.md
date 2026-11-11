@@ -15,7 +15,9 @@ commits, and two concurrent publishes of one type answer 500.
    pointer `superseded` with its instant, and stores the new pointer
    `published` — all in one transaction, or none of it (R0-17, R0-35).
 2. Every publish and every withdrawal on one project's pointers is
-   serialised with the others: each runs on the result of the one before.
+   serialised with the others: each runs on the result of the one before, in
+   the order their transactions take the store's one write lock, which is
+   also the order they commit in; that order is the first and the second.
    Two concurrent publishes of a type with different request ids are both
    accepted with consecutive
    versions; a withdrawal that runs after a publish superseded its pointer is
@@ -43,7 +45,8 @@ publish(p, t) accepted:
 
 ### Required tests
 
-1. Two concurrent publishes of `estimate` on one project make versions n+1 and
+1. Two concurrent publishes of `estimate` on one project, with different
+   request ids, make versions n+1 and
    n+2, the first `superseded`, the second `published`; neither answers an
    internal error.
 2. A failure after the version is assigned leaves no superseded pointer and no

@@ -94,6 +94,9 @@ erase(d) accepted => its erasure entry e has e.instant >= start_of(d)
    leaves exactly the new erasure entry.
 2. Erasing before a date older than every entry removes nothing and writes
    its own erasure entry with a confirmation id.
+8. Erasing before today, at 00:00:00 UTC of today, keeps the erasure's own
+   entry, whose instant is not before the start of that date, and removes an
+   entry made a microsecond before it.
 3. A date later than today is refused.
 4. After an erasure, the next entry's sequence number is one more than the
    erasure entry's.
