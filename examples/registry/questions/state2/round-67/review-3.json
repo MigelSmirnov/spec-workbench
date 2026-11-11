@@ -1,0 +1,364 @@
+{
+ "open_points": [
+  {
+   "subject": "A16 import validation against M02 and Declared vocabularies",
+   "kind": "missing_validation",
+   "text": "A brought-in record is malformed when: a required value is missing (A02); it names a project or room the file does not hold; an id occurs twice among the file's records of one kind; a status is outside its vocabulary, or a pointer is `withdrawn` (v1 never withdrew one, M05); a pointer's type is not declared or its owner service is not the type's (A22); the versions of a project's pointers of one type are not 1..n, or are not every one `superseded` but the highest, which is `published`; an instant cannot be read; an `active` project has an archived instant or an `archived` one has none; a `superseded` pointer has no superseded instant or a `published` one has one; a record's own instant of change, archiving or supersession is before its own instant of creation, adding or publishing.",
+   "question": "Must import refuse a picked project whose object kind is outside `apartment`, `house`, `commercial`, `other`, or whose floor area, room count or floor violates M02, and at which validation stage?",
+   "options": [
+    "Treat every M02 constraint and the object-kind vocabulary as import-malformation checks",
+    "Apply only the malformation checks enumerated in A16 rule 4 and preserve otherwise invalid imported values"
+   ],
+   "default_guess": "Treat every M02 constraint and the object-kind vocabulary as import-malformation checks at A04 stage 4.",
+   "witness": {
+    "initial": "The uploaded file contains one picked project with a valid id and status but object kind `warehouse` and floor area 0; production has no conflicting id.",
+    "events": [
+     "The owner uploads the file, picks that project and supplies every required mapping value.",
+     "The owner submits confirmation."
+    ],
+    "outcomes": [
+     "Registry refuses the import because the kind and characteristic violate M02 and the declared vocabulary.",
+     "Registry accepts the import because A16 rule 4 does not list either condition as malformed."
+    ],
+    "observer": "The owner and every later reader of the imported project"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A01-A04 validation of the newly closed Project alias rule",
+   "kind": "missing_check_order",
+   "text": "its alias, a short neutral label the owner may give, the name the agent sees (R0-82); at most 40 characters (owner, 2026-11-11; Open questions);",
+   "question": "Which State 2 value check refuses a create, correction or import alias longer than 40 Unicode code points, and what precedence does that refusal have over stale revision, archived state, conflicts and import malformation?",
+   "options": [
+    "Make alias length a stage-4 value check for every operation that accepts an alias",
+    "Check it only in selected contracts or interface forms",
+    "Treat the State 1 statement as descriptive and store longer aliases"
+   ],
+   "default_guess": "Make it a server-side A04 stage-4 value check for create, correction and import, before revision and lifecycle checks.",
+   "witness": {
+    "initial": "An active project is at revision 3.",
+    "events": [
+     "The owner submits a correction stating stale revision 2 and an alias of 41 Unicode code points."
+    ],
+    "outcomes": [
+     "Registry refuses at stage 4 for the alias length.",
+     "Registry reaches stage 5 and refuses as stale because no State 2 rule places the new alias check in stage 4."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A01-A04 validation of the newly closed Object and Customer vocabularies",
+   "kind": "missing_check_order",
+   "text": "(4) the values given (A02, A08, A22);",
+   "question": "Where do the M02 numeric constraints, the four-member object-kind vocabulary and the `es`, `ru`, `en` customer-language vocabulary enter A04's ordered checks for create and correction operations?",
+   "options": [
+    "They are stage-4 value checks even though A04 does not name their source",
+    "Only A02, A08 and A22 checks belong to stage 4, leaving the new model constraints unenforced here",
+    "State 6 may choose their validation and precedence"
+   ],
+   "default_guess": "Treat every closed vocabulary and M02 range constraint as a stage-4 server-side value check.",
+   "witness": {
+    "initial": "A Customer exists at revision 4.",
+    "events": [
+     "The owner corrects it while stating revision 3 and gives language `fr`."
+    ],
+    "outcomes": [
+     "Registry refuses the invalid language at stage 4 before checking the stale revision.",
+     "Registry refuses the stale revision at stage 5 because State 2 never assigns language validation to stage 4."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M10 MigrationClosure identity and A16 confirmation binding",
+   "kind": "digest_unspecified",
+   "text": "The mapping names the file by its digest.",
+   "question": "Which digest algorithm, byte representation and comparison rule identify the file and M10, and what happens if two different byte strings have the same digest?",
+   "options": [
+    "Use a specified collision-resistant digest over the exact uploaded bytes and treat equal digests as one file identity",
+    "Use an implementation-selected digest",
+    "Compare both digest and exact bytes when binding a confirmation"
+   ],
+   "default_guess": "Use SHA-256 over the exact uploaded bytes, represented as lowercase hexadecimal, and treat a digest collision as a refusal.",
+   "witness": {
+    "initial": "A session has uploaded file F1 and has a pending import confirmation bound to its digest and picks.",
+    "events": [
+     "The session uploads different bytes F2 that an available digest implementation maps to the same digest.",
+     "The owner submits the confirmation originally shown for F1."
+    ],
+    "outcomes": [
+     "Registry accepts F2 because confirmation and closure identity compare only the equal digest.",
+     "Registry refuses because the exact bytes changed or because a digest collision is detected."
+    ],
+    "observer": "The owner and readers of the imported records"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 import timestamps",
+   "kind": "time_reading_count",
+   "text": "An accepted import stores every picked project with its rooms and pointers, the Customers it makes, the migration closure (M10) and its one audit entry (M09) in one transaction.",
+   "question": "Does the import take one UTC wall-clock reading for the new Customers' creation instants, M10's success instant and M09's change instant, or separate readings, and does M10 record the reading before commit or the commit instant?",
+   "options": [
+    "Take one reading inside the transaction and use it for every fresh import timestamp",
+    "Take a separate reading for each record",
+    "Use the transaction commit instant supplied by the store"
+   ],
+   "default_guess": "Take one UTC wall-clock reading after the transaction has fixed its work and use it for every fresh timestamp in that transaction.",
+   "witness": {
+    "initial": "An import is ready immediately before the UTC clock advances to the next second or day.",
+    "events": [
+     "The owner confirms the import.",
+     "Registry creates Customers, M10 and the audit entry and commits."
+    ],
+    "outcomes": [
+     "Every fresh timestamp written by the import is equal.",
+     "The Customer, closure and audit entry carry different instants because each was read separately."
+    ],
+    "observer": "The owner reading the imported records and audit log"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 new-store initialization and M12",
+   "kind": "invariant_test_gap",
+   "text": "serving => checks_passed(config)",
+   "question": "Which Required tests item must show that a successfully created store contains exactly one M12 AuditSequence at 0 before Registry serves?",
+   "options": [
+    "Extend A17 Required test 5 to inspect exactly one M12 record at 0",
+    "Add a separate required test for new-store M12 initialization"
+   ],
+   "default_guess": "Extend A17 Required test 5 to assert exactly one M12 AuditSequence whose number is 0.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 kept-backup metadata invariant",
+   "kind": "invariant_test_gap",
+   "text": "every kept backup is encrypted, consistent, checked, and records\n  (instant, release, last sequence); no backup holds an agent session",
+   "question": "Which Required tests item must show that every kept backup records the snapshot's instant, making release and exact M12 last sequence, rather than merely being restorable?",
+   "options": [
+    "Add one test that reads the unencrypted record and compares all three fields with the fixed snapshot",
+    "Extend the concurrent-write test to assert the recorded snapshot instant and sequence and add a release assertion"
+   ],
+   "default_guess": "Add a dedicated test comparing all three recorded fields with the snapshot that was checked.",
+   "witness": {
+    "initial": "The store's M12 value is 41 when the backup snapshot is fixed and becomes 42 before the backup is renamed.",
+    "events": [
+     "The daily run creates, checks and keeps the backup.",
+     "The owner or a restore tool reads its unencrypted record."
+    ],
+    "outcomes": [
+     "The record contains the snapshot value 41 and the snapshot instant.",
+     "The record contains 42 or an unrelated instant even though the store copy itself is consistent."
+    ],
+    "observer": "The owner performing disaster recovery"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A18 retention invariant boundary",
+   "kind": "invariant_test_gap",
+   "text": "After a run in which the backup failed, backups older than 30 × 24 hours are still deleted.",
+   "question": "What Required test demonstrates the strict boundary established by rule 4: a backup exactly 30 × 24 hours old is retained while one even later is deleted?",
+   "options": [
+    "Test both exactly-at-cutoff retention and just-past-cutoff deletion",
+    "Test only a comfortably older backup"
+   ],
+   "default_guess": "Test both sides of the cutoff using one fixed deletion-step instant.",
+   "unit": "?"
+  },
+  {
+   "subject": "A21 security review after the 2026-11-11 changes",
+   "kind": "contradiction",
+   "text": "A change to a decision a category names reopens this review.",
+   "question": "Was the security review performed again after the listed 2026-11-11 changes to A17, A18 and A19, and what are the resulting category outcomes?",
+   "options": [
+    "Record a new review covering every affected category and retain or change its outcomes",
+    "Declare that these changes do not reopen the review and amend rule 2 accordingly"
+   ],
+   "default_guess": "Perform and record a new review for authentication_credential_abuse, secrets, injection_interpreted_input, browser_boundary, files_artifacts and concurrency.",
+   "witness": {
+    "initial": "A21's last recorded repeat was on 2026-11-01.",
+    "events": [
+     "A17, A18 and A19 change on 2026-11-11.",
+     "A21 rule 2 is applied."
+    ],
+    "outcomes": [
+     "The affected categories are reopened and the security review is not currently complete until a new result is recorded.",
+     "The review remains PERFORMED based only on the 2026-11-01 paragraph."
+    ],
+    "observer": "The release reviewer relying on A21's completeness claim"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21 reference invariant",
+   "kind": "invariant_test_gap",
+   "text": "APPLICABLE c => references(c) are decisions of States 0-2",
+   "question": "Which Required tests item must show that every reference of every APPLICABLE category resolves to an accepted State 0–2 decision?",
+   "options": [
+    "Add a test resolving every listed reference and checking its accepted status",
+    "Treat the prose list as sufficient without a check"
+   ],
+   "default_guess": "Add a test that resolves every reference and verifies that it is an accepted State 0–2 decision.",
+   "unit": "?"
+  },
+  {
+   "subject": "A21 category-outcome invariant",
+   "kind": "invariant_test_gap",
+   "text": "for each category c: outcome(c) in {APPLICABLE, NOT_APPLICABLE}",
+   "question": "Which Required tests item must show that all nine catalogue categories occur exactly once and have one of the two allowed outcomes, including NOT_APPLICABLE categories?",
+   "options": [
+    "Add a completeness-and-uniqueness check for the nine categories and both allowed outcomes",
+    "Check only APPLICABLE categories through their decisions' tests"
+   ],
+   "default_guess": "Add a catalogue comparison that requires all nine categories exactly once with an allowed outcome.",
+   "unit": "?"
+  },
+  {
+   "subject": "A22 artifact-vocabulary evolution",
+   "kind": "carried_question_unresolved",
+   "text": "What a change of it does to existing pointers is State 2's (A22).",
+   "question": "What exactly happens to existing pointers and read operations when a later release removes or changes an artifact type, and where is Accepted decision A22 that closes this State 1 question?",
+   "options": [
+    "Existing pointers remain listable and readable, but no new publish or request-id replay may use the removed type",
+    "Removed-type pointers become unreadable",
+    "A release may not remove a type while any pointer uses it"
+   ],
+   "default_guess": "Keep existing pointers readable as historical records, refuse new publishes and publish replays of the removed type, and define the behavior in A22.",
+   "witness": {
+    "initial": "A project has a published pointer of type `estimate`; a later release removes `estimate` from the vocabulary.",
+    "events": [
+     "A trusted caller lists the project's artifacts.",
+     "The caller asks for the latest artifact of type `estimate`."
+    ],
+    "outcomes": [
+     "The historical pointer remains visible and can be returned despite the type no longer being accepted for writes.",
+     "The list or latest read refuses `estimate` as an unknown type or hides the pointer."
+    ],
+    "observer": "The owner and trusted service reading artifact history"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19 import size refusal",
+   "kind": "refusal_mechanism",
+   "text": "a file over the limit is refused before it is read.",
+   "question": "What counts as reading for this rule, and how must Registry establish the byte length without trusting mutable or unavailable metadata?",
+   "options": [
+    "Determine length from trusted upload framing or metadata before reading any content bytes",
+    "Read at most 50 × 1024 × 1024 + 1 bytes and refuse before parsing or retaining the file",
+    "Spool the whole upload and check its final length before parsing"
+   ],
+   "default_guess": "Enforce the transport-declared length when trustworthy and independently stop after reading one byte beyond the limit; interpret 'before it is read' as before parsing or retaining the file.",
+   "witness": {
+    "initial": "A client uploads a 50 × 1024 × 1024 + 1 byte body without a trustworthy content length.",
+    "events": [
+     "Registry receives the upload."
+    ],
+    "outcomes": [
+     "Registry reads through the limit plus one byte, then refuses without parsing the file.",
+     "Registry cannot determine that it is over the limit without reading and either rejects all such uploads or reads the whole body before refusing."
+    ],
+    "observer": "The owner and the host resource monitor"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19 import size rule",
+   "kind": "missing_required_test",
+   "text": "The import file is read as data with a size limit of 50 MB, 50 × 1024 × 1024 bytes (owner, 2026-11-11); nothing in it is executed or evaluated, and a file over the limit is refused before it is read.",
+   "question": "Which Required tests item shows acceptance at exactly 50 × 1024 × 1024 bytes, refusal above it, and that an over-limit upload is not parsed or executed?",
+   "options": [
+    "Add boundary tests at the limit and one byte over, with an instrumented reader/parser",
+    "Rely on unrelated import-malformation tests"
+   ],
+   "default_guess": "Add instrumented boundary tests at exactly the limit and one byte over.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 execution invariant",
+   "kind": "invariant_test_gap",
+   "text": "no stored value is ever evaluated or executed",
+   "question": "Which Required tests item must show that stored text and imported file values cannot enter any evaluator, command, template, query structure or executable path?",
+   "options": [
+    "Add adversarial tests for every interpreted-input sink and for the import",
+    "Treat the three display/storage round-trip examples as proving non-execution"
+   ],
+   "default_guess": "Add adversarial sink tests, including an import containing executable-looking payloads.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 rendering invariant",
+   "kind": "invariant_test_gap",
+   "text": "render(v) = escape(v) for every stored value v",
+   "question": "How do the three example tests demonstrate the invariant for every rendering context and every stored-value field rather than only room name, access-request text and display name?",
+   "options": [
+    "Use a parameterized test over every stored-value field and every rendering context",
+    "Limit the invariant to the three fields named by the tests"
+   ],
+   "default_guess": "Use a parameterized test over the owner interface's complete field/context matrix.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 new empty store initialization",
+   "kind": "standard_violation",
+   "text": "no\n   record but its audit sequence at 0 (M12)",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Make the initial audit-sequence value reach generated code through one of §15.3.1's three paths, naming the imported provider constant if it is a policy constant.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 deletion policy",
+   "kind": "standard_violation",
+   "text": "more than 30 × 24 hours before the instant this step starts",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Replace the inline retention threshold with a named imported data-provider constant and make the rule name that symbol.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 erasure propagation rule",
+   "kind": "standard_violation",
+   "text": "more than 30 × 24\n   hours old (rule 4)",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Name the same imported retention-policy constant instead of repeating the inline threshold.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 formal invariant",
+   "kind": "standard_violation",
+   "text": "after a run whose deletions succeeded: no backup older than 30 × 24 hours and no\n  backup that failed its check exists",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Express the invariant using the named imported retention-policy constant that reaches generated code.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 Required test 2",
+   "kind": "standard_violation",
+   "text": "After a run in which the backup failed, backups older than 30 × 24 hours\n   are still deleted.",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Make the test refer to the same named imported retention-policy constant rather than carrying a separate literal policy value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 import-size policy",
+   "kind": "standard_violation",
+   "text": "The import file is read as data with a size limit of 50 MB, 50 × 1024 ×\n   1024 bytes (owner, 2026-11-11); nothing in it is executed or evaluated, and\n   a file over the limit is refused before it is read.",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Put the import-size threshold in a data-provider constant and have the behavior name the imported constant.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A16 import validation against M02 and Declared vocabularies\",\"kind\":\"missing_validation\",\"text\":\"A brought-in record is malformed when: a required value is missing (A02); it names a project or room the file does not hold; an id occurs twice among the file's records of one kind; a status is outside its vocabulary, or a pointer is `withdrawn` (v1 never withdrew one, M05); a pointer's type is not declared or its owner service is not the type's (A22); the versions of a project's pointers of one type are not 1..n, or are not every one `superseded` but the highest, which is `published`; an instant cannot be read; an `active` project has an archived instant or an `archived` one has none; a `superseded` pointer has no superseded instant or a `published` one has one; a record's own instant of change, archiving or supersession is before its own instant of creation, adding or publishing.\",\"question\":\"Must import refuse a picked project whose object kind is outside `apartment`, `house`, `commercial`, `other`, or whose floor area, room count or floor violates M02, and at which validation stage?\",\"options\":[\"Treat every M02 constraint and the object-kind vocabulary as import-malformation checks\",\"Apply only the malformation checks enumerated in A16 rule 4 and preserve otherwise invalid imported values\"],\"default_guess\":\"Treat every M02 constraint and the object-kind vocabulary as import-malformation checks at A04 stage 4.\",\"witness\":{\"initial\":\"The uploaded file contains one picked project with a valid id and status but object kind `warehouse` and floor area 0; production has no conflicting id.\",\"events\":[\"The owner uploads the file, picks that project and supplies every required mapping value.\",\"The owner submits confirmation.\"],\"outcomes\":[\"Registry refuses the import because the kind and characteristic violate M02 and the declared vocabulary.\",\"Registry accepts the import because A16 rule 4 does not list either condition as malformed.\"],\"observer\":\"The owner and every later reader of the imported project\"}},{\"subject\":\"A01-A04 validation of the newly closed Project alias rule\",\"kind\":\"missing_check_order\",\"text\":\"its alias, a short neutral label the owner may give, the name the agent sees (R0-82); at most 40 characters (owner, 2026-11-11; Open questions);\",\"question\":\"Which State 2 value check refuses a create, correction or import alias longer than 40 Unicode code points, and what precedence does that refusal have over stale revision, archived state, conflicts and import malformation?\",\"options\":[\"Make alias length a stage-4 value check for every operation that accepts an alias\",\"Check it only in selected contracts or interface forms\",\"Treat the State 1 statement as descriptive and store longer aliases\"],\"default_guess\":\"Make it a server-side A04 stage-4 value check for create, correction and import, before revision and lifecycle checks.\",\"witness\":{\"initial\":\"An active project is at revision 3.\",\"events\":[\"The owner submits a correction stating stale revision 2 and an alias of 41 Unicode code points.\"],\"outcomes\":[\"Registry refuses at stage 4 for the alias length.\",\"Registry reaches stage 5 and refuses as stale because no State 2 rule places the new alias check in stage 4.\"],\"observer\":\"The owner\"}},{\"subject\":\"A01-A04 validation of the newly closed Object and Customer vocabularies\",\"kind\":\"missing_check_order\",\"text\":\"(4) the values given (A02, A08, A22);\",\"question\":\"Where do the M02 numeric constraints, the four-member object-kind vocabulary and the `es`, `ru`, `en` customer-language vocabulary enter A04's ordered checks for create and correction operations?\",\"options\":[\"They are stage-4 value checks even though A04 does not name their source\",\"Only A02, A08 and A22 checks belong to stage 4, leaving the new model constraints unenforced here\",\"State 6 may choose their validation and precedence\"],\"default_guess\":\"Treat every closed vocabulary and M02 range constraint as a stage-4 server-side value check.\",\"witness\":{\"initial\":\"A Customer exists at revision 4.\",\"events\":[\"The owner corrects it while stating revision 3 and gives language `fr`.\"],\"outcomes\":[\"Registry refuses the invalid language at stage 4 before checking the stale revision.\",\"Registry refuses the stale revision at stage 5 because State 2 never assigns language validation to stage 4.\"],\"observer\":\"The owner\"}},{\"subject\":\"M10 MigrationClosure identity and A16 confirmation binding\",\"kind\":\"digest_unspecified\",\"text\":\"The mapping names the file by its digest.\",\"question\":\"Which digest algorithm, byte representation and comparison rule identify the file and M10, and what happens if two different byte strings have the same digest?\",\"options\":[\"Use a specified collision-resistant digest over the exact uploaded bytes and treat equal digests as one file identity\",\"Use an implementation-selected digest\",\"Compare both digest and exact bytes when binding a confirmation\"],\"default_guess\":\"Use SHA-256 over the exact uploaded bytes, represented as lowercase hexadecimal, and treat a digest collision as a refusal.\",\"witness\":{\"initial\":\"A session has uploaded file F1 and has a pending import confirmation bound to its digest and picks.\",\"events\":[\"The session uploads different bytes F2 that an available digest implementation maps to the same digest.\",\"The owner submits the confirmation originally shown for F1.\"],\"outcomes\":[\"Registry accepts F2 because confirmation and closure identity compare only the equal digest.\",\"Registry refuses because the exact bytes changed or because a digest collision is detected.\"],\"observer\":\"The owner and readers of the imported records\"}},{\"subject\":\"A16 import timestamps\",\"kind\":\"time_reading_count\",\"text\":\"An accepted import stores every picked project with its rooms and pointers, the Customers it makes, the migration closure (M10) and its one audit entry (M09) in one transaction.\",\"question\":\"Does the import take one UTC wall-clock reading for the new Customers' creation instants, M10's success instant and M09's change instant, or separate readings, and does M10 record the reading before commit or the commit instant?\",\"options\":[\"Take one reading inside the transaction and use it for every fresh import timestamp\",\"Take a separate reading for each record\",\"Use the transaction commit instant supplied by the store\"],\"default_guess\":\"Take one UTC wall-clock reading after the transaction has fixed its work and use it for every fresh timestamp in that transaction.\",\"witness\":{\"initial\":\"An import is ready immediately before the UTC clock advances to the next second or day.\",\"events\":[\"The owner confirms the import.\",\"Registry creates Customers, M10 and the audit entry and commits.\"],\"outcomes\":[\"Every fresh timestamp written by the import is equal.\",\"The Customer, closure and audit entry carry different instants because each was read separately.\"],\"observer\":\"The owner reading the imported records and audit log\"}},{\"subject\":\"A17 new-store initialization and M12\",\"kind\":\"invariant_test_gap\",\"text\":\"serving => checks_passed(config)\",\"question\":\"Which Required tests item must show that a successfully created store contains exactly one M12 AuditSequence at 0 before Registry serves?\",\"options\":[\"Extend A17 Required test 5 to inspect exactly one M12 record at 0\",\"Add a separate required test for new-store M12 initialization\"],\"default_guess\":\"Extend A17 Required test 5 to assert exactly one M12 AuditSequence whose number is 0.\"},{\"subject\":\"A18 kept-backup metadata invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"every kept backup is encrypted, consistent, checked, and records\\n  (instant, release, last sequence); no backup holds an agent session\",\"question\":\"Which Required tests item must show that every kept backup records the snapshot's instant, making release and exact M12 last sequence, rather than merely being restorable?\",\"options\":[\"Add one test that reads the unencrypted record and compares all three fields with the fixed snapshot\",\"Extend the concurrent-write test to assert the recorded snapshot instant and sequence and add a release assertion\"],\"default_guess\":\"Add a dedicated test comparing all three recorded fields with the snapshot that was checked.\",\"witness\":{\"initial\":\"The store's M12 value is 41 when the backup snapshot is fixed and becomes 42 before the backup is renamed.\",\"events\":[\"The daily run creates, checks and keeps the backup.\",\"The owner or a restore tool reads its unencrypted record.\"],\"outcomes\":[\"The record contains the snapshot value 41 and the snapshot instant.\",\"The record contains 42 or an unrelated instant even though the store copy itself is consistent.\"],\"observer\":\"The owner performing disaster recovery\"}},{\"subject\":\"A18 retention invariant boundary\",\"kind\":\"invariant_test_gap\",\"text\":\"After a run in which the backup failed, backups older than 30 × 24 hours are still deleted.\",\"question\":\"What Required test demonstrates the strict boundary established by rule 4: a backup exactly 30 × 24 hours old is retained while one even later is deleted?\",\"options\":[\"Test both exactly-at-cutoff retention and just-past-cutoff deletion\",\"Test only a comfortably older backup\"],\"default_guess\":\"Test both sides of the cutoff using one fixed deletion-step instant.\"},{\"subject\":\"A21 security review after the 2026-11-11 changes\",\"kind\":\"contradiction\",\"text\":\"A change to a decision a category names reopens this review.\",\"question\":\"Was the security review performed again after the listed 2026-11-11 changes to A17, A18 and A19, and what are the resulting category outcomes?\",\"options\":[\"Record a new review covering every affected category and retain or change its outcomes\",\"Declare that these changes do not reopen the review and amend rule 2 accordingly\"],\"default_guess\":\"Perform and record a new review for authentication_credential_abuse, secrets, injection_interpreted_input, browser_boundary, files_artifacts and concurrency.\",\"witness\":{\"initial\":\"A21's last recorded repeat was on 2026-11-01.\",\"events\":[\"A17, A18 and A19 change on 2026-11-11.\",\"A21 rule 2 is applied.\"],\"outcomes\":[\"The affected categories are reopened and the security review is not currently complete until a new result is recorded.\",\"The review remains PERFORMED based only on the 2026-11-01 paragraph.\"],\"observer\":\"The release reviewer relying on A21's completeness claim\"}},{\"subject\":\"A21 reference invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"APPLICABLE c => references(c) are decisions of States 0-2\",\"question\":\"Which Required tests item must show that every reference of every APPLICABLE category resolves to an accepted State 0–2 decision?\",\"options\":[\"Add a test resolving every listed reference and checking its accepted status\",\"Treat the prose list as sufficient without a check\"],\"default_guess\":\"Add a test that resolves every reference and verifies that it is an accepted State 0–2 decision.\"},{\"subject\":\"A21 category-outcome invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"for each category c: outcome(c) in {APPLICABLE, NOT_APPLICABLE}\",\"question\":\"Which Required tests item must show that all nine catalogue categories occur exactly once and have one of the two allowed outcomes, including NOT_APPLICABLE categories?\",\"options\":[\"Add a completeness-and-uniqueness check for the nine categories and both allowed outcomes\",\"Check only APPLICABLE categories through their decisions' tests\"],\"default_guess\":\"Add a catalogue comparison that requires all nine categories exactly once with an allowed outcome.\"},{\"subject\":\"A22 artifact-vocabulary evolution\",\"kind\":\"carried_question_unresolved\",\"text\":\"What a change of it does to existing pointers is State 2's (A22).\",\"question\":\"What exactly happens to existing pointers and read operations when a later release removes or changes an artifact type, and where is Accepted decision A22 that closes this State 1 question?\",\"options\":[\"Existing pointers remain listable and readable, but no new publish or request-id replay may use the removed type\",\"Removed-type pointers become unreadable\",\"A release may not remove a type while any pointer uses it\"],\"default_guess\":\"Keep existing pointers readable as historical records, refuse new publishes and publish replays of the removed type, and define the behavior in A22.\",\"witness\":{\"initial\":\"A project has a published pointer of type `estimate`; a later release removes `estimate` from the vocabulary.\",\"events\":[\"A trusted caller lists the project's artifacts.\",\"The caller asks for the latest artifact of type `estimate`.\"],\"outcomes\":[\"The historical pointer remains visible and can be returned despite the type no longer being accepted for writes.\",\"The list or latest read refuses `estimate` as an unknown type or hides the pointer.\"],\"observer\":\"The owner and trusted service reading artifact history\"}},{\"subject\":\"A19 import size refusal\",\"kind\":\"refusal_mechanism\",\"text\":\"a file over the limit is refused before it is read.\",\"question\":\"What counts as reading for this rule, and how must Registry establish the byte length without trusting mutable or unavailable metadata?\",\"options\":[\"Determine length from trusted upload framing or metadata before reading any content bytes\",\"Read at most 50 × 1024 × 1024 + 1 bytes and refuse before parsing or retaining the file\",\"Spool the whole upload and check its final length before parsing\"],\"default_guess\":\"Enforce the transport-declared length when trustworthy and independently stop after reading one byte beyond the limit; interpret 'before it is read' as before parsing or retaining the file.\",\"witness\":{\"initial\":\"A client uploads a 50 × 1024 × 1024 + 1 byte body without a trustworthy content length.\",\"events\":[\"Registry receives the upload.\"],\"outcomes\":[\"Registry reads through the limit plus one byte, then refuses without parsing the file.\",\"Registry cannot determine that it is over the limit without reading and either rejects all such uploads or reads the whole body before refusing.\"],\"observer\":\"The owner and the host resource monitor\"}},{\"subject\":\"A19 import size rule\",\"kind\":\"missing_required_test\",\"text\":\"The import file is read as data with a size limit of 50 MB, 50 × 1024 × 1024 bytes (owner, 2026-11-11); nothing in it is executed or evaluated, and a file over the limit is refused before it is read.\",\"question\":\"Which Required tests item shows acceptance at exactly 50 × 1024 × 1024 bytes, refusal above it, and that an over-limit upload is not parsed or executed?\",\"options\":[\"Add boundary tests at the limit and one byte over, with an instrumented reader/parser\",\"Rely on unrelated import-malformation tests\"],\"default_guess\":\"Add instrumented boundary tests at exactly the limit and one byte over.\"},{\"subject\":\"A19 execution invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"no stored value is ever evaluated or executed\",\"question\":\"Which Required tests item must show that stored text and imported file values cannot enter any evaluator, command, template, query structure or executable path?\",\"options\":[\"Add adversarial tests for every interpreted-input sink and for the import\",\"Treat the three display/storage round-trip examples as proving non-execution\"],\"default_guess\":\"Add adversarial sink tests, including an import containing executable-looking payloads.\"},{\"subject\":\"A19 rendering invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"render(v) = escape(v) for every stored value v\",\"question\":\"How do the three example tests demonstrate the invariant for every rendering context and every stored-value field rather than only room name, access-request text and display name?\",\"options\":[\"Use a parameterized test over every stored-value field and every rendering context\",\"Limit the invariant to the three fields named by the tests\"],\"default_guess\":\"Use a parameterized test over the owner interface's complete field/context matrix.\"},{\"subject\":\"A17 new empty store initialization\",\"kind\":\"standard_violation\",\"text\":\"no\\n   record but its audit sequence at 0 (M12)\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь\\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Make the initial audit-sequence value reach generated code through one of §15.3.1's three paths, naming the imported provider constant if it is a policy constant.\"},{\"subject\":\"A18 deletion policy\",\"kind\":\"standard_violation\",\"text\":\"more than 30 × 24 hours before the instant this step starts\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь\\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Replace the inline retention threshold with a named imported data-provider constant and make the rule name that symbol.\"},{\"subject\":\"A18 erasure propagation rule\",\"kind\":\"standard_violation\",\"text\":\"more than 30 × 24\\n   hours old (rule 4)\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь\\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Name the same imported retention-policy constant instead of repeating the inline threshold.\"},{\"subject\":\"A18 formal invariant\",\"kind\":\"standard_violation\",\"text\":\"after a run whose deletions succeeded: no backup older than 30 × 24 hours and no\\n  backup that failed its check exists\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь\\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Express the invariant using the named imported retention-policy constant that reaches generated code.\"},{\"subject\":\"A18 Required test 2\",\"kind\":\"standard_violation\",\"text\":\"After a run in which the backup failed, backups older than 30 × 24 hours\\n   are still deleted.\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь\\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Make the test refer to the same named imported retention-policy constant rather than carrying a separate literal policy value.\"},{\"subject\":\"A19 import-size policy\",\"kind\":\"standard_violation\",\"text\":\"The import file is read as data with a size limit of 50 MB, 50 × 1024 ×\\n   1024 bytes (owner, 2026-11-11); nothing in it is executed or evaluated, and\\n   a file over the limit is refused before it is read.\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь\\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Put the import-size threshold in a data-provider constant and have the behavior name the imported constant.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,354 @@
+{
+ "open_points": [
+  {
+   "subject": "time source for recorded instants and scheduling",
+   "kind": "underspecified_source",
+   "text": "Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension; instants Registry records and the 03:00 of A18 are UTC wall-clock time.",
+   "question": "Which concrete clock authorities provide the suspend-counting monotonic readings and UTC wall-clock instants, what representation each reading has, and how are they injected or imported by generated code?",
+   "options": [
+    "a declared clock port exposing suspend-counting monotonic and UTC datetime readings",
+    "a declared authority module wrapping operating-system clocks",
+    "direct ambient operating-system clock calls"
+   ],
+   "default_guess": "Use one declared clock port backed by an operating-system suspend-counting monotonic clock and an aware UTC wall clock.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 sign-in throttling",
+   "kind": "reading_count",
+   "text": "Registry counts the sign-ins refused for a wrong or missing credential whose instant is less than 15 minutes before now, for the whole instance: Registry tells no callers apart by address (R0-27). The fifth such refusal starts a lockout that lasts while now is less than 15 minutes after that refusal.",
+   "question": "How many monotonic-clock readings does one sign-in take, and is the same reading used to expire old refusals, timestamp the new refusal and decide whether the lockout has ended?",
+   "options": [
+    "one reading captured at arrival and reused for every check and update",
+    "a separate reading for each check and update"
+   ],
+   "default_guess": "Capture one monotonic reading at request arrival and reuse it throughout the sign-in operation.",
+   "witness": {
+    "initial": "Four counted refusals exist; the oldest is just under 15 minutes old and another sign-in arrives at the boundary.",
+    "events": [
+     "The owner submits a wrong credential while the monotonic clock crosses the 15-minute boundary during processing."
+    ],
+    "outcomes": [
+     "One captured reading retains the oldest refusal, so this is the fifth refusal and starts lockout.",
+     "Multiple readings expire the oldest refusal before insertion, so this is only the fourth counted refusal and no lockout starts."
+    ],
+    "observer": "The owner attempting the next sign-in"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15 erase audit entries before a date",
+   "kind": "reading_count",
+   "text": "The date of an erasure is a date not later than today, the current date in UTC; a later date is refused. Every entry whose instant is before 00:00 UTC of that date is removed.\n4. The erasure's own entry is written after the removal, in the same transaction, with the current instant; it is therefore never removed by the erasure that wrote it.",
+   "question": "How many UTC-clock readings does an erasure take, and which single instant, if any, determines both today and the erasure entry's instant?",
+   "options": [
+    "one UTC instant captured for the operation and used for both decisions",
+    "one reading for validation and another for the audit entry",
+    "today is captured at request arrival but the audit instant is captured at commit"
+   ],
+   "default_guess": "Capture one aware UTC instant after admission and use its date for validation and the instant for the entry.",
+   "witness": {
+    "initial": "It is 23:59:59 UTC and the owner submits an erasure whose date is tomorrow relative to request arrival.",
+    "events": [
+     "Registry validates the date while the UTC clock crosses midnight.",
+     "Registry removes entries and writes the erasure entry."
+    ],
+    "outcomes": [
+     "With one arrival reading, the date is later than today and the erasure is refused.",
+     "With a later validation reading, the date is today and the erasure is accepted."
+    ],
+    "observer": "The owner and readers of the audit log"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 formal invariant owner_session validity",
+   "kind": "missing_invariant_test",
+   "text": "owner_session s valid at t <=> t < s.began + 8h and\n                                t < s.last_request + 30min and\n                                not signed_out(s) and no restart since s.began",
+   "question": "Which Required tests item must show the 8-hour limit, sign-out condition, request-reset behaviour and exact boundary semantics of this equivalence?",
+   "options": [
+    "add one table-driven test covering every conjunct and equality boundary",
+    "add separate tests for absolute expiry, idle reset, sign-out and boundaries"
+   ],
+   "default_guess": "Add separate tests for absolute expiry, idle reset, sign-out and equality at both time limits.",
+   "unit": "?"
+  },
+  {
+   "subject": "A15 sequence ordering invariant",
+   "kind": "missing_invariant_test",
+   "text": "for entries e1 written before e2: e1.sequence < e2.sequence",
+   "question": "Which Required tests item must demonstrate increasing sequence numbers across ordinary appends and show that deleting high-numbered entries never permits reuse?",
+   "options": [
+    "extend test 4 with a pre-erasure high-water mark and assert the next number exceeds it",
+    "add a dedicated sequence-monotonicity and non-reuse test"
+   ],
+   "default_guess": "Add a dedicated test that records the pre-erasure maximum, erases all visible entries and asserts later entries exceed that maximum.",
+   "unit": "?"
+  },
+  {
+   "subject": "A15 erasure-entry instant invariant",
+   "kind": "missing_invariant_test",
+   "text": "erase(d) accepted => its erasure entry e has e.instant >= start_of(d)",
+   "question": "Which Required tests item must assert the erasure entry's instant relative to the supplied date boundary?",
+   "options": [
+    "extend test 1 to inspect the new entry's instant",
+    "add a dedicated boundary test"
+   ],
+   "default_guess": "Extend test 1 to assert that the surviving erasure entry has an instant at or after the date's UTC start.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 new-store AuditSequence",
+   "kind": "missing_required_test",
+   "text": "When the store's configured file does not exist and its directory does, Registry makes a new,\n   empty store of the running release's version there at the start — no\n   record but its audit sequence at 0 (M12) — under a\n   temporary name",
+   "question": "Which Required tests item must show that a newly completed store contains exactly one AuditSequence at 0 and that interrupted or failed creation cannot expose a store without it or with two of them?",
+   "options": [
+    "extend required test 5 to inspect AuditSequence in both the retained and successful-new-store cases",
+    "add a dedicated atomic new-store initialization test"
+   ],
+   "default_guess": "Add a dedicated atomic initialization test and also assert the retained empty store in test 5 has exactly one sequence at 0.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 configuration invariant",
+   "kind": "missing_invariant_test",
+   "text": "serving => checks_passed(config)",
+   "question": "Which Required tests item must demonstrate that Registry serves neither surface until every ordered configuration, location, store-integrity and listener check has passed?",
+   "options": [
+    "a table-driven failure test for every check before serving",
+    "one instrumented test proving no serving occurs before the final check"
+   ],
+   "default_guess": "Add a table-driven test for every failure point and assert that neither surface serves at each point.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 failed backup cleanup",
+   "kind": "contradiction",
+   "text": "When the decrypted file cannot be removed, or a failed\n   backup cannot be deleted, the backup stays under its temporary name and\n   is not kept, the run fails, the third step still runs, and the next run\n   removes what is left.\n\n4. A backup whose integrity check fails is deleted and reported.",
+   "question": "When integrity checking fails and deletion also fails, must the temporary backup remain for the next run or must the required test require it to have been deleted?",
+   "options": [
+    "permit the temporary file to remain and make the test conditional on deletion succeeding",
+    "require deletion and define the run as unable to finish until it succeeds"
+   ],
+   "default_guess": "Permit the temporary file to remain, require it to be reported, and change the test to assert deletion when deletion succeeds.",
+   "witness": {
+    "initial": "A run creates a backup whose integrity check fails; filesystem permissions then make deletion of that temporary backup fail.",
+    "events": [
+     "Registry reports the failed integrity check.",
+     "Registry attempts and fails to delete the temporary backup.",
+     "The third step completes."
+    ],
+    "outcomes": [
+     "Normative rule 4 leaves the failed backup under its temporary name for the next run.",
+     "Required test 4 says the failed backup is deleted."
+    ],
+    "observer": "The owner inspecting diagnostics and the backup location"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A18 formal invariant after deletion",
+   "kind": "contradiction",
+   "text": "after a run whose deletions succeeded: no backup older than 30 × 24 hours and no\n  backup that failed its check exists",
+   "question": "Does “backup” in this invariant include a failed backup left under the temporary prefix after its deletion failed, or only valid kept backups?",
+   "options": [
+    "restrict both clauses to kept backups",
+    "include temporary backups and require their deletion before deletions can be called successful"
+   ],
+   "default_guess": "Rewrite the invariant to refer explicitly to kept backups; temporary remnants are governed separately by the run-failure rule.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 kept-backup metadata invariant",
+   "kind": "missing_invariant_test",
+   "text": "every kept backup is encrypted, consistent, checked, and records\n  (instant, release, last sequence); no backup holds an agent session",
+   "question": "Which Required tests item must inspect a kept backup's readable record and prove that its instant, release and last sequence match the fixed snapshot?",
+   "options": [
+    "extend test 1 to inspect all three metadata values",
+    "add a dedicated metadata-to-snapshot consistency test"
+   ],
+   "default_guess": "Add a dedicated test that fixes a snapshot, keeps the backup and compares all three recorded values with that snapshot.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 restore history versus M12 continuity",
+   "kind": "contradiction",
+   "text": "A store the owner puts in\n   place of a lost one starts as any store (A17 rule 5) — by the release that\n   made its backup, or by a later one after that release's own store\n   migration — and begins its own history from the backup: numbering\n   continues from its last number (A15), and a store without the migration\n   closure accepts the import (A16).\n\nA restored store holds this record as the backup holds it, the same\nrecord continued; Registry neither knows nor records that the store was\nrestored.",
+   "question": "Is restoration the start of a new store history and AuditSequence continuity only by copied value, or is it continuation of the same AuditSequence entity and history?",
+   "options": [
+    "new history with a new store-scoped AuditSequence initialized from the backup value",
+    "same history and same AuditSequence entity continued from the backup"
+   ],
+   "default_guess": "Treat the restored database as a new history whose store-scoped AuditSequence starts at the backed-up value, matching R0-89's explicit new-history rule.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 import size enforcement",
+   "kind": "underspecified_refusal",
+   "text": "The import file is read as data with a size limit of 50 MB, 50 × 1024 ×\n   1024 bytes (owner, 2026-11-11); nothing in it is executed or evaluated, and\n   a file over the limit is refused before it is read.",
+   "question": "From which trustworthy length is an oversized upload refused before reading, and what happens when the transport length is absent, false or smaller than the bytes sent?",
+   "options": [
+    "require and validate a transport length before accepting any body",
+    "stream into a bounded reader and stop before byte 52,428,801",
+    "spool or buffer first and reject after measuring"
+   ],
+   "default_guess": "Use a bounded streaming reader, accept at most 52,428,800 bytes, and refuse as soon as one additional byte is offered without retaining or parsing the body.",
+   "witness": {
+    "initial": "An upload declares a length below 50 MB but sends more than 50 MB.",
+    "events": [
+     "The owner uploads the file.",
+     "Registry reaches the declared limit while more bytes remain."
+    ],
+    "outcomes": [
+     "Trusting the declared length reads and may parse an oversized body.",
+     "A bounded reader stops at byte 52,428,801 and refuses the upload."
+    ],
+    "observer": "The owner and the process's memory usage"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19 import size limit",
+   "kind": "missing_required_test",
+   "text": "a file over the limit is refused before it is read",
+   "question": "Which Required tests item must show acceptance at exactly 52,428,800 bytes, refusal above it, replacement semantics for the existing session upload, and that oversized content is not parsed or executed?",
+   "options": [
+    "add boundary tests at limit and limit plus one with an existing upload",
+    "add one oversized-file test only"
+   ],
+   "default_guess": "Add boundary tests at the limit and one byte above it, with an existing upload, and instrument parsing to prove it was not invoked.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 execution invariant",
+   "kind": "missing_invariant_test",
+   "text": "no stored value is ever evaluated or executed",
+   "question": "Which Required tests item must demonstrate that import content and stored values cannot become query, command, template or other executable structure?",
+   "options": [
+    "add tests for every interpreter boundary named by rules 1–4",
+    "add one representative import test"
+   ],
+   "default_guess": "Add tests covering HTML rendering, query/command value binding and malicious import content at every declared interpreter boundary.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 rendering invariant",
+   "kind": "insufficient_invariant_test",
+   "text": "render(v) = escape(v) for every stored value v",
+   "question": "How must Required tests show this universal invariant beyond the three selected fields, including stored pointer values, aliases, customer fields and imported values?",
+   "options": [
+    "a parameterized test over every stored text field and rendering context",
+    "narrow the invariant to the fields actually rendered and test each"
+   ],
+   "default_guess": "Enumerate every owner-interface rendering context and use a parameterized hostile-value test for every stored text field rendered there.",
+   "unit": "?"
+  },
+  {
+   "subject": "A21 security review after 2026-11-11 changes",
+   "kind": "unperformed_reopened_review",
+   "text": "A change to a decision a category names reopens this review.\n\nPerformed again on 2026-11-01, after that day's changes to A01, A04, A13, A16,\nA17 and A18 reopened it (rule 2): every category naming them was reviewed, and no\noutcome changed; concurrency now names A18 too, whose one-snapshot copy and\nnon-overlapping runs (rule 1) it relies on.",
+   "question": "What are the outcomes of the security review reopened by the 2026-11-11 changes to A17, A18 and A19?",
+   "options": [
+    "perform and record a new review dated 2026-11-11",
+    "leave A21 explicitly reopened and block State 2 closure"
+   ],
+   "default_guess": "Perform and record the reopened review before closing State 2.",
+   "unit": "?"
+  },
+  {
+   "subject": "A21 formal invariants",
+   "kind": "missing_invariant_test",
+   "text": "for each category c: outcome(c) in {APPLICABLE, NOT_APPLICABLE}\nAPPLICABLE c => references(c) are decisions of States 0-2",
+   "question": "Which Required tests item must enumerate all nine categories, validate each outcome and verify that every APPLICABLE reference resolves to an accepted State 0–2 decision?",
+   "options": [
+    "add a direct catalogue-completeness and reference-resolution test",
+    "treat each referenced decision's tests as sufficient"
+   ],
+   "default_guess": "Add a direct test for category completeness, legal outcomes and accepted-reference resolution; referenced decisions' own tests do not establish this invariant.",
+   "unit": "?"
+  },
+  {
+   "subject": "artifact vocabulary changes",
+   "kind": "missing_decision",
+   "text": "What a change of it does to existing pointers is State\n  2's (A22).",
+   "question": "Where is A22, and what exactly happens to existing pointers, reads, lists, latest-pointer requests and request-id replays when a later release removes or changes a type or its owner service?",
+   "options": [
+    "removed types remain readable historically but cannot be newly published; owner service on existing pointers never changes",
+    "removal makes all operations involving the type unknown, including reads",
+    "vocabulary entries may never be removed or reassigned"
+   ],
+   "default_guess": "Keep existing pointers readable with their recorded owner service, refuse new publishes and retries after removal, and return unknown type only for operations requiring a currently declared type.",
+   "unit": "?"
+  },
+  {
+   "subject": "new State 1 value constraints in A04 check ordering",
+   "kind": "missing_precedence",
+   "text": "(4) the\n   values given (A02, A08, A22);",
+   "question": "At which exact check and with which refusal are the newly decided 40-code-point alias limit, object-kind vocabulary, customer-language vocabulary, positive floor area, room-count minimum and integer floor enforced, and are all failures aggregated with other stage-4 failures?",
+   "options": [
+    "all are stage-4 value checks and every failing field is reported together",
+    "each model constraint has its own precedence within stage 4",
+    "some are deferred to State 6 contract decoding before A04's stages"
+   ],
+   "default_guess": "Make all domain constraints stage-4 checks, aggregate every failing value in that stage, and perform them after existence checks but before revision and lifecycle checks.",
+   "witness": {
+    "initial": "An existing active project has revision 4.",
+    "events": [
+     "The owner submits a correction stating revision 3, with a 41-code-point alias and an object kind outside the vocabulary."
+    ],
+    "outcomes": [
+     "If the new constraints are stage 4, Registry reports the alias and kind failures and never reaches the stale revision.",
+     "If contract decoding or revision checking has different precedence, Registry reports only invalid input or only stale revision."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "MigrationClosure file identity",
+   "kind": "underspecified_identity",
+   "text": "It is identified by the digest of the file the import accepted, the one\nidentity it has (codex round-04 T1); Registry mints no identifier for it.",
+   "question": "Which digest algorithm and byte representation define this identity, and what is Registry required to do if two different uploaded byte sequences have the same digest?",
+   "options": [
+    "declare a fixed cryptographic digest over the exact uploaded bytes and treat equality as identity",
+    "store byte length with the digest and refuse a conflicting pair",
+    "store a minted closure identity instead of using the digest as identity"
+   ],
+   "default_guess": "Use a declared SHA-256-style digest over the exact uploaded bytes, retain the byte length, and treat any same-digest/different-length observation as a refused integrity conflict.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 import invariant after M10 became an entity",
+   "kind": "missing_invariant_test",
+   "text": "and closure.file_digest = digest(f) and one AuditEntry, in one transaction",
+   "question": "Which Required tests item must show that a successful import creates the one MigrationClosure identified by the accepted file digest and exactly one audit entry in the same transaction?",
+   "options": [
+    "extend the successful-import test to inspect the closure and audit entry",
+    "add a dedicated success-transaction test"
+   ],
+   "default_guess": "Add a dedicated successful-import transaction test that inspects imported records, the closure identity and the single audit entry.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 retention policy constant",
+   "kind": "standard_violation",
+   "text": "Third, whatever the second step did, it deletes every kept\n   backup made more than 30 × 24 hours before the instant this step starts,\n   one cutoff for the whole step, and every file under the kept\n   prefix whose unencrypted record (rule 1) cannot be read.",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "Replace the embedded retention threshold with a named imported provider constant and state that symbol in the rule.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 import-size policy constant",
+   "kind": "standard_violation",
+   "text": "The import file is read as data with a size limit of 50 MB, 50 × 1024 ×\n   1024 bytes (owner, 2026-11-11); nothing in it is executed or evaluated, and\n   a file over the limit is refused before it is read.",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "Replace the embedded byte threshold with a named imported provider constant while retaining the decided value in that constant's data definition.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"time source for recorded instants and scheduling\",\"kind\":\"underspecified_source\",\"text\":\"Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension; instants Registry records and the 03:00 of A18 are UTC wall-clock time.\",\"question\":\"Which concrete clock authorities provide the suspend-counting monotonic readings and UTC wall-clock instants, what representation each reading has, and how are they injected or imported by generated code?\",\"options\":[\"a declared clock port exposing suspend-counting monotonic and UTC datetime readings\",\"a declared authority module wrapping operating-system clocks\",\"direct ambient operating-system clock calls\"],\"default_guess\":\"Use one declared clock port backed by an operating-system suspend-counting monotonic clock and an aware UTC wall clock.\"},{\"subject\":\"A13 sign-in throttling\",\"kind\":\"reading_count\",\"text\":\"Registry counts the sign-ins refused for a wrong or missing credential whose instant is less than 15 minutes before now, for the whole instance: Registry tells no callers apart by address (R0-27). The fifth such refusal starts a lockout that lasts while now is less than 15 minutes after that refusal.\",\"question\":\"How many monotonic-clock readings does one sign-in take, and is the same reading used to expire old refusals, timestamp the new refusal and decide whether the lockout has ended?\",\"options\":[\"one reading captured at arrival and reused for every check and update\",\"a separate reading for each check and update\"],\"default_guess\":\"Capture one monotonic reading at request arrival and reuse it throughout the sign-in operation.\",\"witness\":{\"initial\":\"Four counted refusals exist; the oldest is just under 15 minutes old and another sign-in arrives at the boundary.\",\"events\":[\"The owner submits a wrong credential while the monotonic clock crosses the 15-minute boundary during processing.\"],\"outcomes\":[\"One captured reading retains the oldest refusal, so this is the fifth refusal and starts lockout.\",\"Multiple readings expire the oldest refusal before insertion, so this is only the fourth counted refusal and no lockout starts.\"],\"observer\":\"The owner attempting the next sign-in\"}},{\"subject\":\"A15 erase audit entries before a date\",\"kind\":\"reading_count\",\"text\":\"The date of an erasure is a date not later than today, the current date in UTC; a later date is refused. Every entry whose instant is before 00:00 UTC of that date is removed.\\n4. The erasure's own entry is written after the removal, in the same transaction, with the current instant; it is therefore never removed by the erasure that wrote it.\",\"question\":\"How many UTC-clock readings does an erasure take, and which single instant, if any, determines both today and the erasure entry's instant?\",\"options\":[\"one UTC instant captured for the operation and used for both decisions\",\"one reading for validation and another for the audit entry\",\"today is captured at request arrival but the audit instant is captured at commit\"],\"default_guess\":\"Capture one aware UTC instant after admission and use its date for validation and the instant for the entry.\",\"witness\":{\"initial\":\"It is 23:59:59 UTC and the owner submits an erasure whose date is tomorrow relative to request arrival.\",\"events\":[\"Registry validates the date while the UTC clock crosses midnight.\",\"Registry removes entries and writes the erasure entry.\"],\"outcomes\":[\"With one arrival reading, the date is later than today and the erasure is refused.\",\"With a later validation reading, the date is today and the erasure is accepted.\"],\"observer\":\"The owner and readers of the audit log\"}},{\"subject\":\"A13 formal invariant owner_session validity\",\"kind\":\"missing_invariant_test\",\"text\":\"owner_session s valid at t <=> t < s.began + 8h and\\n                                t < s.last_request + 30min and\\n                                not signed_out(s) and no restart since s.began\",\"question\":\"Which Required tests item must show the 8-hour limit, sign-out condition, request-reset behaviour and exact boundary semantics of this equivalence?\",\"options\":[\"add one table-driven test covering every conjunct and equality boundary\",\"add separate tests for absolute expiry, idle reset, sign-out and boundaries\"],\"default_guess\":\"Add separate tests for absolute expiry, idle reset, sign-out and equality at both time limits.\"},{\"subject\":\"A15 sequence ordering invariant\",\"kind\":\"missing_invariant_test\",\"text\":\"for entries e1 written before e2: e1.sequence < e2.sequence\",\"question\":\"Which Required tests item must demonstrate increasing sequence numbers across ordinary appends and show that deleting high-numbered entries never permits reuse?\",\"options\":[\"extend test 4 with a pre-erasure high-water mark and assert the next number exceeds it\",\"add a dedicated sequence-monotonicity and non-reuse test\"],\"default_guess\":\"Add a dedicated test that records the pre-erasure maximum, erases all visible entries and asserts later entries exceed that maximum.\"},{\"subject\":\"A15 erasure-entry instant invariant\",\"kind\":\"missing_invariant_test\",\"text\":\"erase(d) accepted => its erasure entry e has e.instant >= start_of(d)\",\"question\":\"Which Required tests item must assert the erasure entry's instant relative to the supplied date boundary?\",\"options\":[\"extend test 1 to inspect the new entry's instant\",\"add a dedicated boundary test\"],\"default_guess\":\"Extend test 1 to assert that the surviving erasure entry has an instant at or after the date's UTC start.\"},{\"subject\":\"A17 new-store AuditSequence\",\"kind\":\"missing_required_test\",\"text\":\"When the store's configured file does not exist and its directory does, Registry makes a new,\\n   empty store of the running release's version there at the start — no\\n   record but its audit sequence at 0 (M12) — under a\\n   temporary name\",\"question\":\"Which Required tests item must show that a newly completed store contains exactly one AuditSequence at 0 and that interrupted or failed creation cannot expose a store without it or with two of them?\",\"options\":[\"extend required test 5 to inspect AuditSequence in both the retained and successful-new-store cases\",\"add a dedicated atomic new-store initialization test\"],\"default_guess\":\"Add a dedicated atomic initialization test and also assert the retained empty store in test 5 has exactly one sequence at 0.\"},{\"subject\":\"A17 configuration invariant\",\"kind\":\"missing_invariant_test\",\"text\":\"serving => checks_passed(config)\",\"question\":\"Which Required tests item must demonstrate that Registry serves neither surface until every ordered configuration, location, store-integrity and listener check has passed?\",\"options\":[\"a table-driven failure test for every check before serving\",\"one instrumented test proving no serving occurs before the final check\"],\"default_guess\":\"Add a table-driven test for every failure point and assert that neither surface serves at each point.\"},{\"subject\":\"A18 failed backup cleanup\",\"kind\":\"contradiction\",\"text\":\"When the decrypted file cannot be removed, or a failed\\n   backup cannot be deleted, the backup stays under its temporary name and\\n   is not kept, the run fails, the third step still runs, and the next run\\n   removes what is left.\\n\\n4. A backup whose integrity check fails is deleted and reported.\",\"question\":\"When integrity checking fails and deletion also fails, must the temporary backup remain for the next run or must the required test require it to have been deleted?\",\"options\":[\"permit the temporary file to remain and make the test conditional on deletion succeeding\",\"require deletion and define the run as unable to finish until it succeeds\"],\"default_guess\":\"Permit the temporary file to remain, require it to be reported, and change the test to assert deletion when deletion succeeds.\",\"witness\":{\"initial\":\"A run creates a backup whose integrity check fails; filesystem permissions then make deletion of that temporary backup fail.\",\"events\":[\"Registry reports the failed integrity check.\",\"Registry attempts and fails to delete the temporary backup.\",\"The third step completes.\"],\"outcomes\":[\"Normative rule 4 leaves the failed backup under its temporary name for the next run.\",\"Required test 4 says the failed backup is deleted.\"],\"observer\":\"The owner inspecting diagnostics and the backup location\"}},{\"subject\":\"A18 formal invariant after deletion\",\"kind\":\"contradiction\",\"text\":\"after a run whose deletions succeeded: no backup older than 30 × 24 hours and no\\n  backup that failed its check exists\",\"question\":\"Does “backup” in this invariant include a failed backup left under the temporary prefix after its deletion failed, or only valid kept backups?\",\"options\":[\"restrict both clauses to kept backups\",\"include temporary backups and require their deletion before deletions can be called successful\"],\"default_guess\":\"Rewrite the invariant to refer explicitly to kept backups; temporary remnants are governed separately by the run-failure rule.\"},{\"subject\":\"A18 kept-backup metadata invariant\",\"kind\":\"missing_invariant_test\",\"text\":\"every kept backup is encrypted, consistent, checked, and records\\n  (instant, release, last sequence); no backup holds an agent session\",\"question\":\"Which Required tests item must inspect a kept backup's readable record and prove that its instant, release and last sequence match the fixed snapshot?\",\"options\":[\"extend test 1 to inspect all three metadata values\",\"add a dedicated metadata-to-snapshot consistency test\"],\"default_guess\":\"Add a dedicated test that fixes a snapshot, keeps the backup and compares all three recorded values with that snapshot.\"},{\"subject\":\"A18 restore history versus M12 continuity\",\"kind\":\"contradiction\",\"text\":\"A store the owner puts in\\n   place of a lost one starts as any store (A17 rule 5) — by the release that\\n   made its backup, or by a later one after that release's own store\\n   migration — and begins its own history from the backup: numbering\\n   continues from its last number (A15), and a store without the migration\\n   closure accepts the import (A16).\\n\\nA restored store holds this record as the backup holds it, the same\\nrecord continued; Registry neither knows nor records that the store was\\nrestored.\",\"question\":\"Is restoration the start of a new store history and AuditSequence continuity only by copied value, or is it continuation of the same AuditSequence entity and history?\",\"options\":[\"new history with a new store-scoped AuditSequence initialized from the backup value\",\"same history and same AuditSequence entity continued from the backup\"],\"default_guess\":\"Treat the restored database as a new history whose store-scoped AuditSequence starts at the backed-up value, matching R0-89's explicit new-history rule.\"},{\"subject\":\"A19 import size enforcement\",\"kind\":\"underspecified_refusal\",\"text\":\"The import file is read as data with a size limit of 50 MB, 50 × 1024 ×\\n   1024 bytes (owner, 2026-11-11); nothing in it is executed or evaluated, and\\n   a file over the limit is refused before it is read.\",\"question\":\"From which trustworthy length is an oversized upload refused before reading, and what happens when the transport length is absent, false or smaller than the bytes sent?\",\"options\":[\"require and validate a transport length before accepting any body\",\"stream into a bounded reader and stop before byte 52,428,801\",\"spool or buffer first and reject after measuring\"],\"default_guess\":\"Use a bounded streaming reader, accept at most 52,428,800 bytes, and refuse as soon as one additional byte is offered without retaining or parsing the body.\",\"witness\":{\"initial\":\"An upload declares a length below 50 MB but sends more than 50 MB.\",\"events\":[\"The owner uploads the file.\",\"Registry reaches the declared limit while more bytes remain.\"],\"outcomes\":[\"Trusting the declared length reads and may parse an oversized body.\",\"A bounded reader stops at byte 52,428,801 and refuses the upload.\"],\"observer\":\"The owner and the process's memory usage\"}},{\"subject\":\"A19 import size limit\",\"kind\":\"missing_required_test\",\"text\":\"a file over the limit is refused before it is read\",\"question\":\"Which Required tests item must show acceptance at exactly 52,428,800 bytes, refusal above it, replacement semantics for the existing session upload, and that oversized content is not parsed or executed?\",\"options\":[\"add boundary tests at limit and limit plus one with an existing upload\",\"add one oversized-file test only\"],\"default_guess\":\"Add boundary tests at the limit and one byte above it, with an existing upload, and instrument parsing to prove it was not invoked.\"},{\"subject\":\"A19 execution invariant\",\"kind\":\"missing_invariant_test\",\"text\":\"no stored value is ever evaluated or executed\",\"question\":\"Which Required tests item must demonstrate that import content and stored values cannot become query, command, template or other executable structure?\",\"options\":[\"add tests for every interpreter boundary named by rules 1–4\",\"add one representative import test\"],\"default_guess\":\"Add tests covering HTML rendering, query/command value binding and malicious import content at every declared interpreter boundary.\"},{\"subject\":\"A19 rendering invariant\",\"kind\":\"insufficient_invariant_test\",\"text\":\"render(v) = escape(v) for every stored value v\",\"question\":\"How must Required tests show this universal invariant beyond the three selected fields, including stored pointer values, aliases, customer fields and imported values?\",\"options\":[\"a parameterized test over every stored text field and rendering context\",\"narrow the invariant to the fields actually rendered and test each\"],\"default_guess\":\"Enumerate every owner-interface rendering context and use a parameterized hostile-value test for every stored text field rendered there.\"},{\"subject\":\"A21 security review after 2026-11-11 changes\",\"kind\":\"unperformed_reopened_review\",\"text\":\"A change to a decision a category names reopens this review.\\n\\nPerformed again on 2026-11-01, after that day's changes to A01, A04, A13, A16,\\nA17 and A18 reopened it (rule 2): every category naming them was reviewed, and no\\noutcome changed; concurrency now names A18 too, whose one-snapshot copy and\\nnon-overlapping runs (rule 1) it relies on.\",\"question\":\"What are the outcomes of the security review reopened by the 2026-11-11 changes to A17, A18 and A19?\",\"options\":[\"perform and record a new review dated 2026-11-11\",\"leave A21 explicitly reopened and block State 2 closure\"],\"default_guess\":\"Perform and record the reopened review before closing State 2.\"},{\"subject\":\"A21 formal invariants\",\"kind\":\"missing_invariant_test\",\"text\":\"for each category c: outcome(c) in {APPLICABLE, NOT_APPLICABLE}\\nAPPLICABLE c => references(c) are decisions of States 0-2\",\"question\":\"Which Required tests item must enumerate all nine categories, validate each outcome and verify that every APPLICABLE reference resolves to an accepted State 0–2 decision?\",\"options\":[\"add a direct catalogue-completeness and reference-resolution test\",\"treat each referenced decision's tests as sufficient\"],\"default_guess\":\"Add a direct test for category completeness, legal outcomes and accepted-reference resolution; referenced decisions' own tests do not establish this invariant.\"},{\"subject\":\"artifact vocabulary changes\",\"kind\":\"missing_decision\",\"text\":\"What a change of it does to existing pointers is State\\n  2's (A22).\",\"question\":\"Where is A22, and what exactly happens to existing pointers, reads, lists, latest-pointer requests and request-id replays when a later release removes or changes a type or its owner service?\",\"options\":[\"removed types remain readable historically but cannot be newly published; owner service on existing pointers never changes\",\"removal makes all operations involving the type unknown, including reads\",\"vocabulary entries may never be removed or reassigned\"],\"default_guess\":\"Keep existing pointers readable with their recorded owner service, refuse new publishes and retries after removal, and return unknown type only for operations requiring a currently declared type.\"},{\"subject\":\"new State 1 value constraints in A04 check ordering\",\"kind\":\"missing_precedence\",\"text\":\"(4) the\\n   values given (A02, A08, A22);\",\"question\":\"At which exact check and with which refusal are the newly decided 40-code-point alias limit, object-kind vocabulary, customer-language vocabulary, positive floor area, room-count minimum and integer floor enforced, and are all failures aggregated with other stage-4 failures?\",\"options\":[\"all are stage-4 value checks and every failing field is reported together\",\"each model constraint has its own precedence within stage 4\",\"some are deferred to State 6 contract decoding before A04's stages\"],\"default_guess\":\"Make all domain constraints stage-4 checks, aggregate every failing value in that stage, and perform them after existence checks but before revision and lifecycle checks.\",\"witness\":{\"initial\":\"An existing active project has revision 4.\",\"events\":[\"The owner submits a correction stating revision 3, with a 41-code-point alias and an object kind outside the vocabulary.\"],\"outcomes\":[\"If the new constraints are stage 4, Registry reports the alias and kind failures and never reaches the stale revision.\",\"If contract decoding or revision checking has different precedence, Registry reports only invalid input or only stale revision.\"],\"observer\":\"The owner\"}},{\"subject\":\"MigrationClosure file identity\",\"kind\":\"underspecified_identity\",\"text\":\"It is identified by the digest of the file the import accepted, the one\\nidentity it has (codex round-04 T1); Registry mints no identifier for it.\",\"question\":\"Which digest algorithm and byte representation define this identity, and what is Registry required to do if two different uploaded byte sequences have the same digest?\",\"options\":[\"declare a fixed cryptographic digest over the exact uploaded bytes and treat equality as identity\",\"store byte length with the digest and refuse a conflicting pair\",\"store a minted closure identity instead of using the digest as identity\"],\"default_guess\":\"Use a declared SHA-256-style digest over the exact uploaded bytes, retain the byte length, and treat any same-digest/different-length observation as a refused integrity conflict.\"},{\"subject\":\"A16 import invariant after M10 became an entity\",\"kind\":\"missing_invariant_test\",\"text\":\"and closure.file_digest = digest(f) and one AuditEntry, in one transaction\",\"question\":\"Which Required tests item must show that a successful import creates the one MigrationClosure identified by the accepted file digest and exactly one audit entry in the same transaction?\",\"options\":[\"extend the successful-import test to inspect the closure and audit entry\",\"add a dedicated success-transaction test\"],\"default_guess\":\"Add a dedicated successful-import transaction test that inspects imported records, the closure identity and the single audit entry.\"},{\"subject\":\"A18 retention policy constant\",\"kind\":\"standard_violation\",\"text\":\"Third, whatever the second step did, it deletes every kept\\n   backup made more than 30 × 24 hours before the instant this step starts,\\n   one cutoff for the whole step, and every file under the kept\\n   prefix whose unencrypted record (rule 1) cannot be read.\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"Replace the embedded retention threshold with a named imported provider constant and state that symbol in the rule.\"},{\"subject\":\"A19 import-size policy constant\",\"kind\":\"standard_violation\",\"text\":\"The import file is read as data with a size limit of 50 MB, 50 × 1024 ×\\n   1024 bytes (owner, 2026-11-11); nothing in it is executed or evaluated, and\\n   a file over the limit is refused before it is read.\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"Replace the embedded byte threshold with a named imported provider constant while retaining the decided value in that constant's data definition.\"}]}",
+ "set_aside": []
+}
