@@ -42,7 +42,8 @@ carries a digest: a file over the size limit is refused before any of it is
 parsed — a declared length over it before any byte is read, otherwise as
 soon as more than it has been read; a stream that fails or ends before its
 declared length is refused as `file_unreadable`, replacing nothing kept and
-changing nothing of the session — and an
+changing nothing of the session but the instant of its last request, which
+every request carrying it moves (A13 rule 2) — and an
 unreadable or malformed one is refused with its kind alone. At `upload`, each project the file holds with
 its id and status. At `mapping`, the mapping: the picked projects by `project_id`, each one's rooms —
 `room_id`, name, added instant — and pointers — every fact 'list artifacts'
@@ -52,8 +53,8 @@ Customers it will make by their v1 value with the projects each links, every
 malformed record of the picks, every id of a record the picks bring in that
 production already holds — no other production id — and every missing
 value; and whether the mapping is clean — no malformed record, no conflict,
-no missing value, no given name or alias outside A02's form and at least
-one pick — which alone lets the confirmation
+no missing value, no given value outside its form or its enumeration —
+a name, an alias, a Customer's kind — and at least one pick — which alone lets the confirmation
 step be shown. Every record the mapping names — malformed or conflicting —
 is named by its kind, its id as the file gives it (or that it has none) and
 its position among the file's records of that kind, so two records of one
@@ -237,8 +238,9 @@ Creates and removes one file.
 
 ### Owner
 
-`module:backups`. The minute look: when a date's run is due, run it in its
-three steps (A18 rules 1, 4, 5).
+`module:backups`. The minute look: when a date's run is due, start it in its
+three steps and answer at once, the run going on apart; a look while a run
+goes on starts none (A18 rules 1, 4, 5; Conventions, "Passes").
 
 ### Callers
 

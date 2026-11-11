@@ -92,7 +92,7 @@ clock does not move and which counts a suspension of the host (A13 rule 2).
 
 ### Callers
 
-`module:owner_sessions`.
+`module:owner_sessions`, `module:instance_lifecycle`.
 
 ### Inputs
 
