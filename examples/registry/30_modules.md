@@ -163,8 +163,10 @@ later line, and modules on one line do not know each other.
   `random_values`; every comparison of a presented secret with a held one goes
   through `random_values.equal_in_constant_time` (A13 rule 7, A17 rule 6).
 - **What the release declares.** Every value the generated code reads that
-  is not a setting of the environment is a constant of `data_provider`, its
-  one home (SPEC_STANDARD §6.10, §15.3.1): the artifact vocabulary with each
+  is neither a setting of the environment (`runtime_settings`) nor a member
+  of an enumeration or a field's form in `models` — statuses, kinds,
+  languages, the object's characteristics greater than zero or at least 1 —
+  is a constant of `data_provider`, its one home (SPEC_STANDARD §6.10, §15.3.1): the artifact vocabulary with each
   type's owner service (A22), the services' rights (A09 rule 2), the store
   version and the store's temporary-name suffix (A17 rule 5), the two backup
   prefixes, the daily time, the look and the retention (A18 rules 1, 4, 5),
@@ -416,9 +418,14 @@ backup key, the owner credential, the four service tokens — loaded at each
 call of `load_runtime_settings` into the settings, each item with its type,
 whether it is required (the four tokens each optional, every other item
 required) and its normalization; no default for any item (A17 rule 5); a
-variable that names no item is not read (owner, 2026-11-11). Emitted
-deterministically (SPEC_STANDARD §6.11); the variables' names are the data
-closure's.
+variable that names no item is not read (owner, 2026-11-11). The table is
+its own — each variable's name, the field it fills and its form; the data
+closure writes it once, as `config.runtime_environment_variables`, and no
+other module holds a name. Every item is text taken as it is set: no
+trimming, no case or Unicode normalization; a secret's length is counted in
+the bytes of its UTF-8 encoding, and a presented credential is compared in
+those bytes (A17 rules 3, 6). Emitted deterministically (SPEC_STANDARD
+§6.11).
 
 ### Knows
 
@@ -492,7 +499,9 @@ transactions of actions run on, and the read connection a backup's copy
 takes its snapshot on while they go on, under the engine setting State 6
 fixes, the snapshot fixed by its first read, of the audit counter, with the
 clock read then (A18 rule 1): opening it for reading and
-writing at start, or making a new, empty store of the release's version under
+writing at start, or making a new, empty store of the release's version —
+holding no record but M12 AuditSequence at 0, which the release's statements
+make with the store, so `store` needs nothing from `audit_log` — under
 the temporary name and renaming it once complete, after removing a leftover of
 that name and no other file (A17 rule 5), and removing a store it made new
 when the start then fails at a listener (A17 rule 2); the full integrity check —
@@ -567,8 +576,9 @@ erasure before a date — not later than today, every entry before 00:00 UTC of
 it removed, so that the erasure's own entry `operations` appends after it,
 with its confirmation id, also when nothing was removed, is never removed by
 it (A15 rules 3, 4, 6); reading the log by sequence
-number for the owner (A15 rule 2, A06 rule 6). The last sequence number its
-store ever wrote, for a backup's record (A18 rule 1).
+number for the owner (A15 rule 2, A06 rule 6). A backup's record takes the
+last sequence number from the copy's own first read (`store`), not from
+`audit_log`.
 
 ### Knows
 
@@ -590,7 +600,6 @@ The sequence counter and how entries are stored and removed.
 append_audit_entry
 erase_audit_entries_before
 read_audit_entries
-last_audit_sequence
 ```
 
 ### Depth assessment
@@ -959,8 +968,7 @@ for the owner interface. No run in an owner-only start (rule 9).
 
 ### Knows
 
-`models`, `clock`, `configuration`, `data_provider`, `store`,
-`audit_log`.
+`models`, `clock`, `configuration`, `data_provider`, `store`.
 
 ### Must not own
 
