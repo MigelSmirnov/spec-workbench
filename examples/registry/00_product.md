@@ -1199,22 +1199,16 @@ identifies the object or its customer — stays a rule on its writer, the owner,
 as R0-82 says: Registry does not inspect its content, and an alias whose
 content breaks that rule is not refused.
 
-So an alias whose content breaks the rule does reach the agent, as a room
-name that breaks R0-68's rule does. This does not break R0-26: the alias is
-held as `business_confidential`, not `personal_data` (State 1, "Disclosure
-classes by field"), and Registry's guarantee that no `personal_data` value
-reaches an agent covers the values it holds in that class. Registry cannot
-tell a person's name from another word (R0-68), so the one protection it can
-give the alias is to keep it short; the owner's rule on its content is the
-rest.
-
-The same holds for a consumer's kept snapshot, which holds the alias (R0-82).
-R0-80's rule that no other service keeps a customer's name or the object's
-address binds the values Registry holds as `personal_data`, and a snapshot
-takes none of them. An alias whose content breaks the owner's rule carries a
-personal value into a snapshot by that breach, not by a copy R0-80 forbids;
-the owner ends it by correcting the alias, and a snapshot holds the corrected
-alias once its consumer reads the project again.
+So an alias whose content breaks the rule does reach the agent and a
+consumer's kept snapshot (R0-82), as a room name that breaks R0-68's rule
+reaches the agent. This breaks neither R0-26 nor R0-80: the alias is held as
+`business_confidential`, not `personal_data` (State 1, "Disclosure classes by
+field"), and Registry's guarantees that no `personal_data` value reaches an
+agent and that no other service keeps one cover the values it holds in that
+class. Registry cannot tell a person's name from another word (R0-68), so
+the one protection it gives the alias is its length; the owner's rule on its
+content is the rest, and Registry promises nothing further about a value
+that breaks it.
 
 ### R0-81 — The one-home rule is a target the services reach; Registry does not wait (owner, 2026-10-27, after round 23 T1; narrows R0-80)
 
