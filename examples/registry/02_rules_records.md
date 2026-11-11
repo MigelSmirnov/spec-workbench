@@ -129,10 +129,15 @@ merges records because they look alike (R0-34).
    greater than zero, a number of rooms that is not a whole number of at
    least 1, or a floor that is not a whole number (M02); a customer language outside `es`, `ru`, `en` (M04). An
    absent object kind, characteristic or customer language is never refused
-   (rule 3); a Customer's kind stays required (rule 1). The same checks hold
+   (rule 3); a Customer's kind stays required (rule 1). The characteristics'
+   bounds are their fields' types — a floor area a decimal greater than zero,
+   a number of rooms a whole number of at least 1, a floor a whole number —
+   which State 6 declares in `models` as forms (SPEC_STANDARD §15.2 check 0),
+   not policy values: no threshold constant holds them. The same checks hold
    for every action that gives the value — a create and a correction, which
    are refused at stage (4); and the names and aliases the import's mapping
-   gives, which A16 rule 1 handles: such a value is shown in the mapping,
+   gives, which A16 rule 1 handles and A04 rule 6 excepts: such a value is
+   shown in the mapping,
    keeps the confirmation step from being shown, and refuses a confirmation,
    while the mapping request itself is answered. The import file
    holds none of the other values: the v1 Registry has no object kind,
@@ -148,6 +153,9 @@ merges records because they look alike (R0-34).
 missing(v) <=> v is absent or strip(v) = ""
 for every stored required value v: not missing(v)
 stored(v) = given(v) whenever not missing(v)
+for every stored object: rooms absent or (rooms is a whole number and rooms >= 1)
+                         area absent or area > 0; floor absent or floor is a whole number
+for every stored alias a: a absent or code_points(a) <= ALIAS_MAX_CHARACTERS
 ```
 
 ### Required tests
@@ -160,6 +168,8 @@ stored(v) = given(v) whenever not missing(v)
 5. A project created with kind `villa`, or with a floor area of 0, is
    refused naming both values; one created with no kind and no
    characteristic is accepted.
+6. A number of rooms of 0 and one of 2.5 are each refused as out of form;
+   1 and 7 are stored. A floor of -1 is stored; 1.5 is refused.
 
 ### Consequence
 
@@ -250,7 +260,11 @@ card it showed, and what the owner emptied is cleared.
    exception: it is recognised after stages (1) to (4) and its project's
    archive check (A01 rule 3), and the rest of stage (6) does not apply to
    it. When several checks of one stage fail, the answer names every one of
-   them.
+   them. The import's mapping request is the one operation whose stage (4)
+   answers instead of refusing for the values the owner gives in it: a
+   missing or out-of-form name, alias or Customer value is shown in the
+   mapping, which is its answer (A16 rule 1, A02 rule 4); the file's own
+   checks and the picks still refuse as A16 rules 1 and 3 say.
 
 ### Formal invariants
 
