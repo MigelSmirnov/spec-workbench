@@ -868,13 +868,24 @@ without a model that holds them.
 
 Facts:
 
-- the last audit sequence number the history ever wrote: 0 for a history
-  that wrote none, then moved to each new entry's number in that entry's
-  transaction; never lowered, also when old entries are erased (R0-66); a
-  store restored from a backup begins its history from the number that
-  backup records (R0-89; State 2 A18);
+- the last audit sequence number the history ever wrote: 0 for a store made
+  new, then moved to each new entry's number in that entry's transaction;
+  never lowered, also when old entries are erased (R0-66);
 - the migration closure (M10), absent until the one import succeeds, then
   present for the rest of the history.
+
+The two facts change for different reasons — every audit append, and the
+one import — but they are kept in one record because they share one scope
+and one life, the store's history (R0-89), and no caller reads either apart
+from the store it is in. Each is changed only by its own transaction, and
+neither changes the other.
+
+Registry has no restore operation (R0-89): the owner puts a backup in the
+place of a lost store, outside Registry, and Registry starts on it as on any
+store. A restored store therefore holds this record exactly as the backup
+holds it — the backup's last sequence number, and its migration closure when
+the backup was made after the import, none when it was made before — and
+Registry neither knows nor records that the store was restored.
 
 ### Identity
 
@@ -885,8 +896,12 @@ entity
 Substitution: a store holds one history; a second record with equal facts
 would be a second history of one store, which R0-89 does not have.
 Continuity: the history stays the same while its last sequence number moves
-with every entry and its migration closure appears; a restore after a loss
-begins a new history, from the backup's facts (R0-89).
+with every entry and its migration closure appears.
+
+It has no identifier: it is identified by the store that holds it, exactly
+one per store, and nothing names it — no answer, no record, no audit entry.
+Registry makes it, with no closure and number 0, in the transaction that
+makes a new, empty store (State 2 A17 rule 5); it never makes a second one.
 
 ### Source of truth
 
@@ -896,8 +911,11 @@ Registry's own store: the audit log's appends (M09) and the accepted import
 ### Lifecycle candidate
 
 ```text
-begun (store made new, or restored) -> number moves -> closure recorded (once)
+made with a new store (number 0, no closure) -> number moves -> closure recorded (once)
 ```
+
+A store a backup replaced is in whatever point of this lifecycle the backup
+holds (R0-89); it is not a transition Registry makes.
 
 ### Persistence candidate
 
@@ -919,9 +937,11 @@ These are closed sets the specification declares; in State 6 they become
   an anonymised project (R0-62).
 - Customer kind: `person`, `company` (R0-37).
 - Object kind: `apartment`, `house`, `commercial` (premises for a business),
-  `other` (R0-38; owner, 2026-11-11; round 1 T10). `other` keeps the kind
-  optional in meaning as in form: an object no member describes is never
-  refused.
+  `other` (R0-38; owner, 2026-11-11; round 1 T10). Absent and `other` are two
+  facts the owner chooses between: absent says the kind was not stated;
+  `other` says it was stated and no other member describes it. Registry
+  records what the owner gave and never turns one into the other. A kind
+  outside these four is refused, and nothing changes.
 - Customer language: `es`, `ru`, `en` — the languages the owner writes to
   customers in, as ISO 639-1 codes (owner, 2026-11-11; round 1 T10).
 - Artifact pointer status: `published`, `superseded`, `withdrawn` (R0-14).
