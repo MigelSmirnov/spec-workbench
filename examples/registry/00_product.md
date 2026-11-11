@@ -1208,6 +1208,14 @@ tell a person's name from another word (R0-68), so the one protection it can
 give the alias is to keep it short; the owner's rule on its content is the
 rest.
 
+The same holds for a consumer's kept snapshot, which holds the alias (R0-82).
+R0-80's rule that no other service keeps a customer's name or the object's
+address binds the values Registry holds as `personal_data`, and a snapshot
+takes none of them. An alias whose content breaks the owner's rule carries a
+personal value into a snapshot by that breach, not by a copy R0-80 forbids;
+the owner ends it by correcting the alias, and a snapshot holds the corrected
+alias once its consumer reads the project again.
+
 ### R0-81 — The one-home rule is a target the services reach; Registry does not wait (owner, 2026-10-27, after round 23 T1; narrows R0-80)
 
 Production Registry starts without waiting for the other services. From its
