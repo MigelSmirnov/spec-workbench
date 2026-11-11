@@ -1,0 +1,465 @@
+{
+ "open_points": [
+  {
+   "subject": "M06 AgentSession lifecycle",
+   "kind": "carried_question_unanswered",
+   "text": "What ends a session, and whether its record is kept after, is State 2's (R0-47).",
+   "question": "What event ends an agent session, and is its M06 record then deleted, retained, or transformed?",
+   "options": [
+    "Kernel explicitly unregisters it and Registry deletes it",
+    "Kernel explicitly unregisters it and Registry retains a terminal record",
+    "It expires after a specified interval",
+    "It persists indefinitely"
+   ],
+   "default_guess": "Add an authenticated Kernel unregister operation that deletes the session and its grants.",
+   "witness": {
+    "initial": "Kernel registered session S and the owner granted project P to it.",
+    "events": [
+     "Kernel finishes or abandons S.",
+     "Later Kernel names S in an agent-authority call, and the owner opens the session list."
+    ],
+    "outcomes": [
+     "Registry still accepts S and the owner still sees its grants.",
+     "Registry treats S as unregistered and the owner no longer sees a live session."
+    ],
+    "observer": "Cabinet Kernel and the owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M06 access version",
+   "kind": "carried_question_unanswered",
+   "text": "its start value and how a stale version is checked are State 2's (round 28 judgement P4).",
+   "question": "What is an AgentSession's initial access version, which actions must state it, and what exact stale-version refusal and check order apply?",
+   "options": [
+    "Start at 1 and require the current version on every owner access change",
+    "Start at 0 and require the current version on every owner access change",
+    "Require a version only for selected changes",
+    "Do not enforce stale access versions"
+   ],
+   "default_guess": "Start at 1; every owner action that changes session access states it, and a mismatch is refused at A04 stage (5).",
+   "witness": {
+    "initial": "Session S has access version 1 and project P granted; two owner tabs both show version 1.",
+    "events": [
+     "Tab A revokes P.",
+     "Tab B, still stating version 1, grants project Q."
+    ],
+    "outcomes": [
+     "Tab B is refused as stale and Q is not granted.",
+     "Tab B is accepted and Q is granted."
+    ],
+    "observer": "The owner and subsequent Kernel calls"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "recorded instants across Registry",
+   "kind": "time_policy_missing",
+   "text": "Every time Registry records is an instant in UTC with time zone (L16).",
+   "question": "Which clock supplies every durable instant, what concrete precision and representation are used, and does one operation read it once for all records it writes or separately for each record?",
+   "options": [
+    "One UTC wall-clock read per operation, normalized to a fixed precision and reused for every resulting record",
+    "One UTC wall-clock read for each written field or record",
+    "A transaction/database timestamp supplies all durable instants",
+    "Different operations choose their own clock and precision"
+   ],
+   "default_guess": "Use one injected UTC wall-clock read per atomic operation, normalize it to a declared precision, and reuse it for every instant caused by that operation.",
+   "witness": {
+    "initial": "Project P is at revision 3 and an accepted correction must update P and write its audit entry in one transaction.",
+    "events": [
+     "The owner submits the correction.",
+     "Registry writes P.last_changed and the AuditEntry instant."
+    ],
+    "outcomes": [
+     "Both fields contain exactly the same instant from one reading.",
+     "The fields differ because Registry reads the clock separately for each write."
+    ],
+    "observer": "The owner reading the project and audit log"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 confirmation expiry",
+   "kind": "check_instant_unspecified",
+   "text": "It is valid only in that session, while less than 10 minutes have passed since it was shown",
+   "question": "Is confirmation age evaluated at request arrival, when the request acquires the session lock, or when the confirmation check actually runs, and is that same instant reused for all time checks in the submission?",
+   "options": [
+    "Use the request-arrival monotonic instant",
+    "Read the monotonic clock when the locked confirmation check runs",
+    "Read separately for session validity and confirmation validity"
+   ],
+   "default_guess": "Capture one monotonic instant at request arrival and use it for all admission and confirmation-expiry checks.",
+   "witness": {
+    "initial": "A confirmation was shown at monotonic time 0 and remains pending.",
+    "events": [
+     "A submission arrives at 9 minutes 59.9 seconds.",
+     "It waits for the session lock until 10 minutes 0.1 seconds."
+    ],
+    "outcomes": [
+     "It passes the age check because arrival was before expiry.",
+     "It is refused and clears the confirmation because the locked check occurs after expiry."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15 dated audit erasure",
+   "kind": "time_read_unspecified",
+   "text": "The date of an erasure is a date not later than today, the current date in UTC; a later date is refused.",
+   "question": "At what point is “today” read, is it the same clock reading that supplies the erasure entry's current instant, and how many wall-clock readings may the erasure take?",
+   "options": [
+    "Capture one UTC instant at request admission and derive both today and the entry instant from it",
+    "Read today during validation and read the entry instant again when writing",
+    "Evaluate today when the transaction obtains its serialization lock"
+   ],
+   "default_guess": "Capture one UTC instant after the operation obtains its transaction/serialization position and use it for validation and the erasure entry.",
+   "witness": {
+    "initial": "The UTC date is D at 23:59:59.9 and the owner submits an erasure before date D+1.",
+    "events": [
+     "The request arrives before midnight.",
+     "Its transaction begins after midnight."
+    ],
+    "outcomes": [
+     "The request is refused because D+1 was later than today at admission.",
+     "The request is accepted because D+1 is today when validation or the transaction runs."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15 concurrent audit allocation",
+   "kind": "order_term_undefined",
+   "text": "Of two concurrent changes, the one Registry applies first takes the lower number: the order of the numbers is the order the changes were applied in, and nothing else decides it.",
+   "question": "Which observable transaction event defines “applies first”: obtaining the audit serialization lock, beginning the transaction, performing the domain write, or committing?",
+   "options": [
+    "The transaction that obtains the audit-sequence serialization lock first",
+    "The transaction that commits first",
+    "The transaction that first changes its domain record",
+    "The request that arrived first"
+   ],
+   "default_guess": "Define application order as the order transactions atomically update M12 and commit.",
+   "witness": {
+    "initial": "AuditSequence is n; concurrent accepted changes A and B affect different records.",
+    "events": [
+     "A begins its domain work first but pauses.",
+     "B reaches the audit allocator and commits before A."
+    ],
+    "outcomes": [
+     "A receives n+1 because its domain change began first; B receives n+2.",
+     "B receives n+1 because it serialized or committed first; A receives n+2."
+    ],
+    "observer": "The owner reading the audit entries and their subjects"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15 sequence-order invariant",
+   "kind": "required_test_incomplete",
+   "text": "two concurrent changes take two distinct consecutive numbers.",
+   "question": "What Required tests assertion proves the invariant that the lower number belongs to the change applied first, rather than proving only uniqueness and consecutiveness?",
+   "options": [
+    "Coordinate two changes so their application order is known and assert the corresponding sequence order",
+    "Weaken the invariant to require only distinct consecutive numbers",
+    "Define application order as sequence-allocation order, then assert that ordering event explicitly"
+   ],
+   "default_guess": "Add a coordinated concurrency test that fixes which change reaches the atomic M12 update first and asserts that it receives n+1.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 retention comparison",
+   "kind": "precision_rule_ambiguous",
+   "text": "compares that UTC instant less 720 hours with each record's UTC instant (L16) at the precision the record holds it.",
+   "question": "How is the cutoff converted to the record's precision—truncated, rounded, or compared at full precision after expanding the stored value—and which side is converted?",
+   "options": [
+    "Truncate the cutoff to the record's precision before comparison",
+    "Round the cutoff to the record's precision",
+    "Interpret the stored instant exactly and compare it with the full-precision cutoff"
+   ],
+   "default_guess": "Store all instants at one declared precision and truncate the cutoff to that same precision before applying the strict older-than comparison.",
+   "witness": {
+    "initial": "A backup record holds 12:00:00 at second precision; the full-precision retention cutoff is 12:00:00.500000.",
+    "events": [
+     "The deletion step compares the record with its fixed cutoff."
+    ],
+    "outcomes": [
+     "The backup is kept because truncating the cutoff gives equality at 12:00:00.",
+     "The backup is deleted because 12:00:00 is older than the full-precision cutoff."
+    ],
+    "observer": "The owner inspecting kept backups"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A18 clock-forward scheduling",
+   "kind": "internal_contradiction",
+   "text": "A clock set forward past 03:00 of a date gives that date no run, the earlier look having seen another date",
+   "question": "Does a forward adjustment from before 03:00 to after 03:00 on the same UTC date start that date's run under the earlier-look rule, or suppress it under this passage?",
+   "options": [
+    "Start the run when the earlier look saw the same date before 03:00",
+    "Suppress every run whose exact 03:00 was crossed by a forward adjustment",
+    "Suppress only when the earlier look was on another date"
+   ],
+   "default_guess": "Start the run when the previous look saw the same UTC date before 03:00; suppress only dates jumped over entirely.",
+   "witness": {
+    "initial": "The process is running, has not run on date D, and looks at the wall clock at D 02:59 UTC.",
+    "events": [
+     "The host clock is advanced to D 03:01 UTC.",
+     "The process performs its next clock look."
+    ],
+    "outcomes": [
+     "A run starts because an earlier look of the same process saw D before 03:00.",
+     "No run starts because the clock was set forward past D's 03:00."
+    ],
+    "observer": "The owner observing backup creation and diagnostics"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A18 scheduling cadence",
+   "kind": "timing_behavior_open",
+   "text": "The process looks at the clock at least once a minute",
+   "question": "What exact polling schedule or maximum delay after 03:00 is required, and how is its phase established after start?",
+   "options": [
+    "Poll every 60 seconds from process start",
+    "Schedule a wall-clock wakeup at each minute boundary",
+    "Poll more frequently at an implementation-chosen interval",
+    "Guarantee only that a run starts within 60 seconds after 03:00"
+   ],
+   "default_guess": "Require a wall-clock check at least every 60 seconds and specify that a due run begins no later than 60 seconds after 03:00.",
+   "witness": {
+    "initial": "Registry is running continuously before 03:00 UTC and no backup for the date exists.",
+    "events": [
+     "03:00 UTC passes."
+    ],
+    "outcomes": [
+     "The run begins at 03:00:00.",
+     "The run begins as late as 03:00:59 because the implementation chose a different polling phase."
+    ],
+    "observer": "The owner reading the backup's recorded instant"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A18 store contention",
+   "kind": "later_decision_left_open",
+   "text": "how long either may wait for the other is a setting of the store's engine, with the files it uses, which State 6 fixes.",
+   "question": "What timeout and failure behavior apply when a backup snapshot and a write contend, and why is this State 2 concurrency behavior left for State 6?",
+   "options": [
+    "Wait indefinitely until the conflicting operation finishes",
+    "Use a fixed bounded busy timeout and fail the operation that times out",
+    "Retry the backup internally without failing the date",
+    "Give writes priority and fail or defer the backup"
+   ],
+   "default_guess": "Declare a bounded imported policy constant here; writes and backups wait up to it, after which the waiting operation fails without partial state.",
+   "witness": {
+    "initial": "A write transaction holds a conflicting store lock as the daily backup tries to fix its snapshot.",
+    "events": [
+     "The write remains blocked or open longer than one implementation's default database timeout."
+    ],
+    "outcomes": [
+     "The backup waits and eventually succeeds after the write commits.",
+     "The backup fails for the date with a busy/timeout diagnostic while the write succeeds."
+    ],
+    "observer": "The owner monitoring the backup run"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 configuration formation",
+   "kind": "refusal_conditions_undefined",
+   "text": "each well formed",
+   "question": "What exact syntax, encoding, and validation make every configuration item well formed, especially environment-provided secrets and the backup key?",
+   "options": [
+    "Secrets are literal UTF-8 environment strings and any value meeting the byte minimum is well formed",
+    "Secrets and the backup key must be base64 with declared decoded lengths",
+    "The backup key has a cryptographic-format requirement while tokens and credentials are arbitrary bytes",
+    "Each item has a separately specified parser and error condition"
+   ],
+   "default_guess": "Specify a parser for every item; encode ordinary secret strings as UTF-8 for length and comparison, and require the backup key in one explicit encoded format.",
+   "witness": {
+    "initial": "The configuration contains a backup key and owner credential made from 32 non-ASCII characters.",
+    "events": [
+     "Registry starts and performs the well-formedness and 32-byte checks."
+    ],
+    "outcomes": [
+     "The start succeeds because their UTF-8 encodings exceed 32 bytes.",
+     "The start fails because the implementation requires base64 or counts environment characters rather than encoded bytes."
+    ],
+    "observer": "The owner starting Registry"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 listener addresses",
+   "kind": "later_decision_left_open",
+   "text": "the listener of each surface opened at the address the release fixes",
+   "question": "What exact owner-interface and service-API addresses are fixed, and through what declared code path do those release values reach the listener code?",
+   "options": [
+    "Fixed literal addresses declared as imported release-policy constants",
+    "Configuration fields, despite rule 1 saying configuration names none",
+    "A deterministic authority module returning both addresses",
+    "Implementation defaults of the chosen web server"
+   ],
+   "default_guess": "Declare imported release constants for both bind addresses and ports, with the owner interface opened first.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 temporary store name",
+   "kind": "later_decision_left_open",
+   "text": "under a temporary name — the store's name with a suffix the release declares —",
+   "question": "What suffix is declared, how does it reach generated code, and what happens if the configured store name already ends with that suffix or the derived temporary path conflicts with an existing non-temporary file?",
+   "options": [
+    "Use one imported suffix constant and reject conflicting configured names",
+    "Always append the suffix even when the store name already ends with it",
+    "Use a uniquely generated temporary name rather than a fixed suffix"
+   ],
+   "default_guess": "Use an imported fixed suffix constant, reject a store path that collides with its derived temporary path, and treat only that exact derived path as removable.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 backup file naming",
+   "kind": "later_decision_left_open",
+   "text": "Kept and temporary names begin with two different prefixes the release declares, neither beginning with the other;",
+   "question": "What are the two prefixes, how do they reach code, and what exact grammar distinguishes Registry-owned files from unrelated names that merely share a prefix?",
+   "options": [
+    "Imported prefix constants plus a complete validated filename grammar",
+    "Imported prefix constants and every regular file beginning with them is Registry-owned",
+    "Configuration fields for both prefixes",
+    "Implementation-chosen literals"
+   ],
+   "default_guess": "Declare imported prefix constants and a complete filename grammar; operate only on names matching that grammar.",
+   "witness": {
+    "initial": "The backup directory contains a regular file whose name starts with the chosen temporary prefix but was not created by Registry.",
+    "events": [
+     "A backup run performs its first cleanup step."
+    ],
+    "outcomes": [
+     "Registry deletes it because prefix membership alone establishes ownership.",
+     "Registry leaves it because it does not match the complete Registry backup-name grammar."
+    ],
+    "observer": "The owner administering the backup location"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A18 kept-name construction",
+   "kind": "naming_rule_missing",
+   "text": "A kept name is made from the backup's instant and is never overwritten",
+   "question": "What exact encoding and precision of the instant forms the kept name, and how are two snapshots with the same representable instant distinguished?",
+   "options": [
+    "A fixed UTC timestamp format whose precision is high enough and collisions fail the run",
+    "A timestamp plus a deterministic unique suffix",
+    "The recorded instant at record precision, with an existing name causing the specified failure"
+   ],
+   "default_guess": "Specify a filesystem-safe UTC format at the same fixed precision as recorded instants; an exact collision fails as rule 5 states.",
+   "witness": {
+    "initial": "Two permitted runs produce snapshots whose recorded instants are equal at the stored precision, and the first kept file remains.",
+    "events": [
+     "The second run constructs its kept name."
+    ],
+    "outcomes": [
+     "It constructs the same name and fails without keeping the new backup.",
+     "It adds an implementation-chosen suffix and keeps both backups."
+    ],
+    "observer": "The owner inspecting the backup location"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 formal invariants",
+   "kind": "required_test_incomplete",
+   "text": "owner_session s valid at t <=> t < s.began + 8h and\n                                t < s.last_request + 30min and\n                                not signed_out(s) and no restart since s.began",
+   "question": "Which Required tests show the 8-hour boundary, exact boundary behavior, request-driven idle reset including concurrent arrivals, sign-out, and both directions of this biconditional?",
+   "options": [
+    "Add focused tests for every conjunct and exact boundary",
+    "Replace the biconditional with only the properties currently tested",
+    "Use a parameterized/model-based test over every validity condition"
+   ],
+   "default_guess": "Add parameterized boundary tests for all four conjuncts, plus request reset, concurrency, and sign-out.",
+   "unit": "?"
+  },
+  {
+   "subject": "A14 formal invariants",
+   "kind": "required_test_incomplete",
+   "text": "e.outcome = accepted",
+   "question": "Which Required tests item asserts that every written entry has outcome `accepted` and that no other outcome can be stored?",
+   "options": [
+    "Add a test reading representative entries and asserting the sole enum member `accepted`",
+    "Remove the outcome field and invariant",
+    "Add a schema/model check proving the closed outcome vocabulary has only `accepted`"
+   ],
+   "default_guess": "Add a model/schema check and a runtime test asserting that all created entries carry the `accepted` enum member.",
+   "unit": "?"
+  },
+  {
+   "subject": "A14 entry equivalence",
+   "kind": "required_test_incomplete",
+   "text": "entry e exists <=> accepted action a in M09.actions, with changed(a) or a an\n                   erasure of old entries, and e written in the transaction\n                   of a",
+   "question": "Which Required tests prove the forward and reverse directions for ordinary accepted changes and for the special no-removal audit erasure?",
+   "options": [
+    "Add representative accepted-change and empty-erasure tests that inspect both state and entry transactionality",
+    "Narrow the invariant to only the refusal and failure cases currently tested",
+    "Bind this invariant to tests in A15 as well as A14"
+   ],
+   "default_guess": "Add an accepted ordinary change test and bind A15's empty-erasure test explicitly to this invariant.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 accepted-import invariant",
+   "kind": "required_test_incomplete",
+   "text": "stored(P with rooms, pointers) and stored(new customers of P)\n  and closure.file_digest = digest(f) and one AuditEntry, in one transaction",
+   "question": "Which Required tests item asserts on a successful import that every selected project, room, pointer and new Customer, the closure digest, exactly one audit entry, and the audit sequence all commit together?",
+   "options": [
+    "Add a successful-import transaction test asserting every listed result",
+    "Expand the failure test to inject failure after each component write",
+    "Use both a success assertion and failure injection at every write boundary"
+   ],
+   "default_guess": "Add a full successful-import assertion and parameterized failure injection across every component of the transaction.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 serving invariant",
+   "kind": "required_test_incomplete",
+   "text": "serving => checks_passed(config)",
+   "question": "Which Required tests item proves Registry exposes neither surface before every ordered configuration check passes, including delayed or failing probes and integrity checks?",
+   "options": [
+    "Instrument every check and assert listeners become reachable only after the last passes",
+    "Weaken the invariant to startup success implying checks passed",
+    "Add failure injection at every check before listener opening"
+   ],
+   "default_guess": "Add ordered failure-injection tests proving no listener is reachable until the final pre-listener check passes.",
+   "unit": "?"
+  },
+  {
+   "subject": "A22 vocabulary-change invariant",
+   "kind": "required_test_incomplete",
+   "text": "pointers are never removed or rewritten by a vocabulary change",
+   "question": "What Required tests assertion shows that every fact of every existing pointer—not only its presence and status—remains byte-for-byte unchanged across a type removal?",
+   "options": [
+    "Snapshot all pointer facts before the release change and compare them afterward",
+    "Narrow the invariant to presence and status only",
+    "Add individual assertions for id, type, owner, version, reference, digest, status, instants and principals"
+   ],
+   "default_guess": "Snapshot and compare the complete pointer records across the release change.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 rendering invariant",
+   "kind": "required_test_incomplete",
+   "text": "render(v) = escape(v) for every stored value v",
+   "question": "How do the Required tests demonstrate the universal invariant for every stored field and every HTML context rather than only room names and access-request text?",
+   "options": [
+    "Use a context-aware parameterized test over every rendered field and HTML insertion context",
+    "Narrow the invariant to the two tested fields",
+    "Prove all rendering goes through one escaped-text primitive and test that primitive plus route integration"
+   ],
+   "default_guess": "Require every template insertion to use one context-aware escaped-text primitive, with structural enforcement and representative route tests.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M06 AgentSession lifecycle\",\"kind\":\"carried_question_unanswered\",\"text\":\"What ends a session, and whether its record is kept after, is State 2's (R0-47).\",\"question\":\"What event ends an agent session, and is its M06 record then deleted, retained, or transformed?\",\"options\":[\"Kernel explicitly unregisters it and Registry deletes it\",\"Kernel explicitly unregisters it and Registry retains a terminal record\",\"It expires after a specified interval\",\"It persists indefinitely\"],\"default_guess\":\"Add an authenticated Kernel unregister operation that deletes the session and its grants.\",\"witness\":{\"initial\":\"Kernel registered session S and the owner granted project P to it.\",\"events\":[\"Kernel finishes or abandons S.\",\"Later Kernel names S in an agent-authority call, and the owner opens the session list.\"],\"outcomes\":[\"Registry still accepts S and the owner still sees its grants.\",\"Registry treats S as unregistered and the owner no longer sees a live session.\"],\"observer\":\"Cabinet Kernel and the owner\"}},{\"subject\":\"M06 access version\",\"kind\":\"carried_question_unanswered\",\"text\":\"its start value and how a stale version is checked are State 2's (round 28 judgement P4).\",\"question\":\"What is an AgentSession's initial access version, which actions must state it, and what exact stale-version refusal and check order apply?\",\"options\":[\"Start at 1 and require the current version on every owner access change\",\"Start at 0 and require the current version on every owner access change\",\"Require a version only for selected changes\",\"Do not enforce stale access versions\"],\"default_guess\":\"Start at 1; every owner action that changes session access states it, and a mismatch is refused at A04 stage (5).\",\"witness\":{\"initial\":\"Session S has access version 1 and project P granted; two owner tabs both show version 1.\",\"events\":[\"Tab A revokes P.\",\"Tab B, still stating version 1, grants project Q.\"],\"outcomes\":[\"Tab B is refused as stale and Q is not granted.\",\"Tab B is accepted and Q is granted.\"],\"observer\":\"The owner and subsequent Kernel calls\"}},{\"subject\":\"recorded instants across Registry\",\"kind\":\"time_policy_missing\",\"text\":\"Every time Registry records is an instant in UTC with time zone (L16).\",\"question\":\"Which clock supplies every durable instant, what concrete precision and representation are used, and does one operation read it once for all records it writes or separately for each record?\",\"options\":[\"One UTC wall-clock read per operation, normalized to a fixed precision and reused for every resulting record\",\"One UTC wall-clock read for each written field or record\",\"A transaction/database timestamp supplies all durable instants\",\"Different operations choose their own clock and precision\"],\"default_guess\":\"Use one injected UTC wall-clock read per atomic operation, normalize it to a declared precision, and reuse it for every instant caused by that operation.\",\"witness\":{\"initial\":\"Project P is at revision 3 and an accepted correction must update P and write its audit entry in one transaction.\",\"events\":[\"The owner submits the correction.\",\"Registry writes P.last_changed and the AuditEntry instant.\"],\"outcomes\":[\"Both fields contain exactly the same instant from one reading.\",\"The fields differ because Registry reads the clock separately for each write.\"],\"observer\":\"The owner reading the project and audit log\"}},{\"subject\":\"A13 confirmation expiry\",\"kind\":\"check_instant_unspecified\",\"text\":\"It is valid only in that session, while less than 10 minutes have passed since it was shown\",\"question\":\"Is confirmation age evaluated at request arrival, when the request acquires the session lock, or when the confirmation check actually runs, and is that same instant reused for all time checks in the submission?\",\"options\":[\"Use the request-arrival monotonic instant\",\"Read the monotonic clock when the locked confirmation check runs\",\"Read separately for session validity and confirmation validity\"],\"default_guess\":\"Capture one monotonic instant at request arrival and use it for all admission and confirmation-expiry checks.\",\"witness\":{\"initial\":\"A confirmation was shown at monotonic time 0 and remains pending.\",\"events\":[\"A submission arrives at 9 minutes 59.9 seconds.\",\"It waits for the session lock until 10 minutes 0.1 seconds.\"],\"outcomes\":[\"It passes the age check because arrival was before expiry.\",\"It is refused and clears the confirmation because the locked check occurs after expiry.\"],\"observer\":\"The owner\"}},{\"subject\":\"A15 dated audit erasure\",\"kind\":\"time_read_unspecified\",\"text\":\"The date of an erasure is a date not later than today, the current date in UTC; a later date is refused.\",\"question\":\"At what point is “today” read, is it the same clock reading that supplies the erasure entry's current instant, and how many wall-clock readings may the erasure take?\",\"options\":[\"Capture one UTC instant at request admission and derive both today and the entry instant from it\",\"Read today during validation and read the entry instant again when writing\",\"Evaluate today when the transaction obtains its serialization lock\"],\"default_guess\":\"Capture one UTC instant after the operation obtains its transaction/serialization position and use it for validation and the erasure entry.\",\"witness\":{\"initial\":\"The UTC date is D at 23:59:59.9 and the owner submits an erasure before date D+1.\",\"events\":[\"The request arrives before midnight.\",\"Its transaction begins after midnight.\"],\"outcomes\":[\"The request is refused because D+1 was later than today at admission.\",\"The request is accepted because D+1 is today when validation or the transaction runs.\"],\"observer\":\"The owner\"}},{\"subject\":\"A15 concurrent audit allocation\",\"kind\":\"order_term_undefined\",\"text\":\"Of two concurrent changes, the one Registry applies first takes the lower number: the order of the numbers is the order the changes were applied in, and nothing else decides it.\",\"question\":\"Which observable transaction event defines “applies first”: obtaining the audit serialization lock, beginning the transaction, performing the domain write, or committing?\",\"options\":[\"The transaction that obtains the audit-sequence serialization lock first\",\"The transaction that commits first\",\"The transaction that first changes its domain record\",\"The request that arrived first\"],\"default_guess\":\"Define application order as the order transactions atomically update M12 and commit.\",\"witness\":{\"initial\":\"AuditSequence is n; concurrent accepted changes A and B affect different records.\",\"events\":[\"A begins its domain work first but pauses.\",\"B reaches the audit allocator and commits before A.\"],\"outcomes\":[\"A receives n+1 because its domain change began first; B receives n+2.\",\"B receives n+1 because it serialized or committed first; A receives n+2.\"],\"observer\":\"The owner reading the audit entries and their subjects\"}},{\"subject\":\"A15 sequence-order invariant\",\"kind\":\"required_test_incomplete\",\"text\":\"two concurrent changes take two distinct consecutive numbers.\",\"question\":\"What Required tests assertion proves the invariant that the lower number belongs to the change applied first, rather than proving only uniqueness and consecutiveness?\",\"options\":[\"Coordinate two changes so their application order is known and assert the corresponding sequence order\",\"Weaken the invariant to require only distinct consecutive numbers\",\"Define application order as sequence-allocation order, then assert that ordering event explicitly\"],\"default_guess\":\"Add a coordinated concurrency test that fixes which change reaches the atomic M12 update first and asserts that it receives n+1.\"},{\"subject\":\"A18 retention comparison\",\"kind\":\"precision_rule_ambiguous\",\"text\":\"compares that UTC instant less 720 hours with each record's UTC instant (L16) at the precision the record holds it.\",\"question\":\"How is the cutoff converted to the record's precision—truncated, rounded, or compared at full precision after expanding the stored value—and which side is converted?\",\"options\":[\"Truncate the cutoff to the record's precision before comparison\",\"Round the cutoff to the record's precision\",\"Interpret the stored instant exactly and compare it with the full-precision cutoff\"],\"default_guess\":\"Store all instants at one declared precision and truncate the cutoff to that same precision before applying the strict older-than comparison.\",\"witness\":{\"initial\":\"A backup record holds 12:00:00 at second precision; the full-precision retention cutoff is 12:00:00.500000.\",\"events\":[\"The deletion step compares the record with its fixed cutoff.\"],\"outcomes\":[\"The backup is kept because truncating the cutoff gives equality at 12:00:00.\",\"The backup is deleted because 12:00:00 is older than the full-precision cutoff.\"],\"observer\":\"The owner inspecting kept backups\"}},{\"subject\":\"A18 clock-forward scheduling\",\"kind\":\"internal_contradiction\",\"text\":\"A clock set forward past 03:00 of a date gives that date no run, the earlier look having seen another date\",\"question\":\"Does a forward adjustment from before 03:00 to after 03:00 on the same UTC date start that date's run under the earlier-look rule, or suppress it under this passage?\",\"options\":[\"Start the run when the earlier look saw the same date before 03:00\",\"Suppress every run whose exact 03:00 was crossed by a forward adjustment\",\"Suppress only when the earlier look was on another date\"],\"default_guess\":\"Start the run when the previous look saw the same UTC date before 03:00; suppress only dates jumped over entirely.\",\"witness\":{\"initial\":\"The process is running, has not run on date D, and looks at the wall clock at D 02:59 UTC.\",\"events\":[\"The host clock is advanced to D 03:01 UTC.\",\"The process performs its next clock look.\"],\"outcomes\":[\"A run starts because an earlier look of the same process saw D before 03:00.\",\"No run starts because the clock was set forward past D's 03:00.\"],\"observer\":\"The owner observing backup creation and diagnostics\"}},{\"subject\":\"A18 scheduling cadence\",\"kind\":\"timing_behavior_open\",\"text\":\"The process looks at the clock at least once a minute\",\"question\":\"What exact polling schedule or maximum delay after 03:00 is required, and how is its phase established after start?\",\"options\":[\"Poll every 60 seconds from process start\",\"Schedule a wall-clock wakeup at each minute boundary\",\"Poll more frequently at an implementation-chosen interval\",\"Guarantee only that a run starts within 60 seconds after 03:00\"],\"default_guess\":\"Require a wall-clock check at least every 60 seconds and specify that a due run begins no later than 60 seconds after 03:00.\",\"witness\":{\"initial\":\"Registry is running continuously before 03:00 UTC and no backup for the date exists.\",\"events\":[\"03:00 UTC passes.\"],\"outcomes\":[\"The run begins at 03:00:00.\",\"The run begins as late as 03:00:59 because the implementation chose a different polling phase.\"],\"observer\":\"The owner reading the backup's recorded instant\"}},{\"subject\":\"A18 store contention\",\"kind\":\"later_decision_left_open\",\"text\":\"how long either may wait for the other is a setting of the store's engine, with the files it uses, which State 6 fixes.\",\"question\":\"What timeout and failure behavior apply when a backup snapshot and a write contend, and why is this State 2 concurrency behavior left for State 6?\",\"options\":[\"Wait indefinitely until the conflicting operation finishes\",\"Use a fixed bounded busy timeout and fail the operation that times out\",\"Retry the backup internally without failing the date\",\"Give writes priority and fail or defer the backup\"],\"default_guess\":\"Declare a bounded imported policy constant here; writes and backups wait up to it, after which the waiting operation fails without partial state.\",\"witness\":{\"initial\":\"A write transaction holds a conflicting store lock as the daily backup tries to fix its snapshot.\",\"events\":[\"The write remains blocked or open longer than one implementation's default database timeout.\"],\"outcomes\":[\"The backup waits and eventually succeeds after the write commits.\",\"The backup fails for the date with a busy/timeout diagnostic while the write succeeds.\"],\"observer\":\"The owner monitoring the backup run\"}},{\"subject\":\"A17 configuration formation\",\"kind\":\"refusal_conditions_undefined\",\"text\":\"each well formed\",\"question\":\"What exact syntax, encoding, and validation make every configuration item well formed, especially environment-provided secrets and the backup key?\",\"options\":[\"Secrets are literal UTF-8 environment strings and any value meeting the byte minimum is well formed\",\"Secrets and the backup key must be base64 with declared decoded lengths\",\"The backup key has a cryptographic-format requirement while tokens and credentials are arbitrary bytes\",\"Each item has a separately specified parser and error condition\"],\"default_guess\":\"Specify a parser for every item; encode ordinary secret strings as UTF-8 for length and comparison, and require the backup key in one explicit encoded format.\",\"witness\":{\"initial\":\"The configuration contains a backup key and owner credential made from 32 non-ASCII characters.\",\"events\":[\"Registry starts and performs the well-formedness and 32-byte checks.\"],\"outcomes\":[\"The start succeeds because their UTF-8 encodings exceed 32 bytes.\",\"The start fails because the implementation requires base64 or counts environment characters rather than encoded bytes.\"],\"observer\":\"The owner starting Registry\"}},{\"subject\":\"A17 listener addresses\",\"kind\":\"later_decision_left_open\",\"text\":\"the listener of each surface opened at the address the release fixes\",\"question\":\"What exact owner-interface and service-API addresses are fixed, and through what declared code path do those release values reach the listener code?\",\"options\":[\"Fixed literal addresses declared as imported release-policy constants\",\"Configuration fields, despite rule 1 saying configuration names none\",\"A deterministic authority module returning both addresses\",\"Implementation defaults of the chosen web server\"],\"default_guess\":\"Declare imported release constants for both bind addresses and ports, with the owner interface opened first.\"},{\"subject\":\"A17 temporary store name\",\"kind\":\"later_decision_left_open\",\"text\":\"under a temporary name — the store's name with a suffix the release declares —\",\"question\":\"What suffix is declared, how does it reach generated code, and what happens if the configured store name already ends with that suffix or the derived temporary path conflicts with an existing non-temporary file?\",\"options\":[\"Use one imported suffix constant and reject conflicting configured names\",\"Always append the suffix even when the store name already ends with it\",\"Use a uniquely generated temporary name rather than a fixed suffix\"],\"default_guess\":\"Use an imported fixed suffix constant, reject a store path that collides with its derived temporary path, and treat only that exact derived path as removable.\"},{\"subject\":\"A18 backup file naming\",\"kind\":\"later_decision_left_open\",\"text\":\"Kept and temporary names begin with two different prefixes the release declares, neither beginning with the other;\",\"question\":\"What are the two prefixes, how do they reach code, and what exact grammar distinguishes Registry-owned files from unrelated names that merely share a prefix?\",\"options\":[\"Imported prefix constants plus a complete validated filename grammar\",\"Imported prefix constants and every regular file beginning with them is Registry-owned\",\"Configuration fields for both prefixes\",\"Implementation-chosen literals\"],\"default_guess\":\"Declare imported prefix constants and a complete filename grammar; operate only on names matching that grammar.\",\"witness\":{\"initial\":\"The backup directory contains a regular file whose name starts with the chosen temporary prefix but was not created by Registry.\",\"events\":[\"A backup run performs its first cleanup step.\"],\"outcomes\":[\"Registry deletes it because prefix membership alone establishes ownership.\",\"Registry leaves it because it does not match the complete Registry backup-name grammar.\"],\"observer\":\"The owner administering the backup location\"}},{\"subject\":\"A18 kept-name construction\",\"kind\":\"naming_rule_missing\",\"text\":\"A kept name is made from the backup's instant and is never overwritten\",\"question\":\"What exact encoding and precision of the instant forms the kept name, and how are two snapshots with the same representable instant distinguished?\",\"options\":[\"A fixed UTC timestamp format whose precision is high enough and collisions fail the run\",\"A timestamp plus a deterministic unique suffix\",\"The recorded instant at record precision, with an existing name causing the specified failure\"],\"default_guess\":\"Specify a filesystem-safe UTC format at the same fixed precision as recorded instants; an exact collision fails as rule 5 states.\",\"witness\":{\"initial\":\"Two permitted runs produce snapshots whose recorded instants are equal at the stored precision, and the first kept file remains.\",\"events\":[\"The second run constructs its kept name.\"],\"outcomes\":[\"It constructs the same name and fails without keeping the new backup.\",\"It adds an implementation-chosen suffix and keeps both backups.\"],\"observer\":\"The owner inspecting the backup location\"}},{\"subject\":\"A13 formal invariants\",\"kind\":\"required_test_incomplete\",\"text\":\"owner_session s valid at t <=> t < s.began + 8h and\\n                                t < s.last_request + 30min and\\n                                not signed_out(s) and no restart since s.began\",\"question\":\"Which Required tests show the 8-hour boundary, exact boundary behavior, request-driven idle reset including concurrent arrivals, sign-out, and both directions of this biconditional?\",\"options\":[\"Add focused tests for every conjunct and exact boundary\",\"Replace the biconditional with only the properties currently tested\",\"Use a parameterized/model-based test over every validity condition\"],\"default_guess\":\"Add parameterized boundary tests for all four conjuncts, plus request reset, concurrency, and sign-out.\"},{\"subject\":\"A14 formal invariants\",\"kind\":\"required_test_incomplete\",\"text\":\"e.outcome = accepted\",\"question\":\"Which Required tests item asserts that every written entry has outcome `accepted` and that no other outcome can be stored?\",\"options\":[\"Add a test reading representative entries and asserting the sole enum member `accepted`\",\"Remove the outcome field and invariant\",\"Add a schema/model check proving the closed outcome vocabulary has only `accepted`\"],\"default_guess\":\"Add a model/schema check and a runtime test asserting that all created entries carry the `accepted` enum member.\"},{\"subject\":\"A14 entry equivalence\",\"kind\":\"required_test_incomplete\",\"text\":\"entry e exists <=> accepted action a in M09.actions, with changed(a) or a an\\n                   erasure of old entries, and e written in the transaction\\n                   of a\",\"question\":\"Which Required tests prove the forward and reverse directions for ordinary accepted changes and for the special no-removal audit erasure?\",\"options\":[\"Add representative accepted-change and empty-erasure tests that inspect both state and entry transactionality\",\"Narrow the invariant to only the refusal and failure cases currently tested\",\"Bind this invariant to tests in A15 as well as A14\"],\"default_guess\":\"Add an accepted ordinary change test and bind A15's empty-erasure test explicitly to this invariant.\"},{\"subject\":\"A16 accepted-import invariant\",\"kind\":\"required_test_incomplete\",\"text\":\"stored(P with rooms, pointers) and stored(new customers of P)\\n  and closure.file_digest = digest(f) and one AuditEntry, in one transaction\",\"question\":\"Which Required tests item asserts on a successful import that every selected project, room, pointer and new Customer, the closure digest, exactly one audit entry, and the audit sequence all commit together?\",\"options\":[\"Add a successful-import transaction test asserting every listed result\",\"Expand the failure test to inject failure after each component write\",\"Use both a success assertion and failure injection at every write boundary\"],\"default_guess\":\"Add a full successful-import assertion and parameterized failure injection across every component of the transaction.\"},{\"subject\":\"A17 serving invariant\",\"kind\":\"required_test_incomplete\",\"text\":\"serving => checks_passed(config)\",\"question\":\"Which Required tests item proves Registry exposes neither surface before every ordered configuration check passes, including delayed or failing probes and integrity checks?\",\"options\":[\"Instrument every check and assert listeners become reachable only after the last passes\",\"Weaken the invariant to startup success implying checks passed\",\"Add failure injection at every check before listener opening\"],\"default_guess\":\"Add ordered failure-injection tests proving no listener is reachable until the final pre-listener check passes.\"},{\"subject\":\"A22 vocabulary-change invariant\",\"kind\":\"required_test_incomplete\",\"text\":\"pointers are never removed or rewritten by a vocabulary change\",\"question\":\"What Required tests assertion shows that every fact of every existing pointer—not only its presence and status—remains byte-for-byte unchanged across a type removal?\",\"options\":[\"Snapshot all pointer facts before the release change and compare them afterward\",\"Narrow the invariant to presence and status only\",\"Add individual assertions for id, type, owner, version, reference, digest, status, instants and principals\"],\"default_guess\":\"Snapshot and compare the complete pointer records across the release change.\"},{\"subject\":\"A19 rendering invariant\",\"kind\":\"required_test_incomplete\",\"text\":\"render(v) = escape(v) for every stored value v\",\"question\":\"How do the Required tests demonstrate the universal invariant for every stored field and every HTML context rather than only room names and access-request text?\",\"options\":[\"Use a context-aware parameterized test over every rendered field and HTML insertion context\",\"Narrow the invariant to the two tested fields\",\"Prove all rendering goes through one escaped-text primitive and test that primitive plus route integration\"],\"default_guess\":\"Require every template insertion to use one context-aware escaped-text primitive, with structural enforcement and representative route tests.\"}]}",
+ "set_aside": []
+}

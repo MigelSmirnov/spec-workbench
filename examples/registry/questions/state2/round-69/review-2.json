@@ -1,0 +1,156 @@
+{
+ "open_points": [
+  {
+   "subject": "A15 concurrent audit sequence allocation",
+   "kind": "required_test_gap",
+   "text": "two concurrent changes take two distinct consecutive numbers.",
+   "question": "What must the test show about which concurrent change receives the lower number: must it prove that the change Registry applies first receives it, and what observable event identifies that application order?",
+   "options": [
+    "The transaction that commits first receives the lower number.",
+    "The transaction that first acquires the store's write serialization receives the lower number.",
+    "Either assignment is allowed provided the numbers are distinct and consecutive."
+   ],
+   "default_guess": "Treat acquisition of the transaction's serialization lock as application order and assert that its change receives the lower number.",
+   "witness": {
+    "initial": "The audit sequence is n and two accepted changes A and B are submitted concurrently.",
+    "events": [
+     "Caller A submits change A.",
+     "Caller B submits change B concurrently.",
+     "Registry begins processing A before B, but both implementations satisfy the stated test by writing n + 1 and n + 2."
+    ],
+    "outcomes": [
+     "A receives n + 1 and B receives n + 2 because first processing or lock acquisition defines application order.",
+     "B receives n + 1 and A receives n + 2 because commit order defines application order."
+    ],
+    "observer": "The owner reading the audit log sees different subjects attached to n + 1 and n + 2."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A18 backup retention instant representation",
+   "kind": "time_precision",
+   "text": "compares that UTC instant less 720 hours with each record's UTC instant (L16) at the precision the record holds it.",
+   "question": "What precision does a backup record hold, and must the cutoff be truncated, rounded, or compared at full precision when it is not exactly representable at that precision?",
+   "options": [
+    "Store and compare whole UTC seconds, truncating the cutoff to seconds.",
+    "Store UTC microseconds and compare exact represented instants.",
+    "Compare at full clock precision, treating the recorded value as the exact instant at the start of its represented unit."
+   ],
+   "default_guess": "Store UTC instants to microsecond precision and compare their represented values directly, with no rounding during retention.",
+   "witness": {
+    "initial": "A kept backup record holds `06:00:00` at whole-second precision; the deletion step reads a current time whose 720-hour cutoff is `06:00:00.500`.",
+    "events": [
+     "The backup run fixes the cutoff once.",
+     "Registry compares the record with that cutoff."
+    ],
+    "outcomes": [
+     "The backup is deleted because `06:00:00` is earlier than `06:00:00.500`.",
+     "The backup is kept because the cutoff is reduced to the record's precision and both compare as `06:00:00`."
+    ],
+    "observer": "The owner sees either the backup remain in the newest-backup listing and location or be deleted."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19 import upload size",
+   "kind": "counted_bytes",
+   "text": "The limit is counted over the bytes Registry receives, never over a length the request declares: a declared length over the limit is refused before any byte is read; otherwise Registry reads the upload up to one byte more than the limit and refuses it as soon as it holds more than the limit, whatever length was declared or whether one was.",
+   "question": "Are the counted bytes only the uploaded file payload, or the complete HTTP request body including multipart framing, and what parsing is permitted to isolate the payload before the size decision?",
+   "options": [
+    "Count only file-content bytes while the HTTP multipart decoder streams them.",
+    "Count every byte of the HTTP request body, including multipart framing.",
+    "Require a raw, non-multipart upload whose entire body is the file."
+   ],
+   "default_guess": "Count only streamed file-content bytes; decoding the transport framing is not parsing the import file.",
+   "witness": {
+    "initial": "The uploaded file contains exactly 50 × 1024 × 1024 bytes and is carried in a multipart request whose framing adds more bytes.",
+    "events": [
+     "The owner uploads the file with no declared length for the file part.",
+     "Registry receives the multipart body."
+    ],
+    "outcomes": [
+     "The upload is accepted because only the file part is counted and it is exactly at the limit.",
+     "The upload is refused because the complete received body exceeds the limit."
+    ],
+    "observer": "The owner either receives the mapping or a too-large refusal, and the session's prior uploaded file is retained only in the latter case."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M06 AgentSession lifecycle",
+   "kind": "carried_question",
+   "text": "What ends a session, and whether its record is kept after, is State 2's (R0-47).",
+   "question": "Which event or condition ends an AgentSession?",
+   "options": [
+    "An explicit deregistration call from Cabinet Kernel ends it.",
+    "A timeout or expiry ends it.",
+    "Agent sessions never end through Registry and remain until their store is replaced."
+   ],
+   "default_guess": "Provide an authenticated Kernel deregistration operation that ends the named session.",
+   "unit": "?"
+  },
+  {
+   "subject": "M06 AgentSession persistence after ending",
+   "kind": "carried_question",
+   "text": "What ends a session, and whether its record is kept after, is State 2's (R0-47).",
+   "question": "After an AgentSession ends, is its record deleted, retained as an ended record, or retained for a fixed period?",
+   "options": [
+    "Delete it and all embedded grants, active project, and pending request immediately.",
+    "Retain a durable ended tombstone indefinitely.",
+    "Retain it for a specified bounded period and then delete it."
+   ],
+   "default_guess": "Delete the session record and its embedded state atomically when it ends.",
+   "unit": "?"
+  },
+  {
+   "subject": "M06 access-version initial value",
+   "kind": "carried_question",
+   "text": "its start value and how a stale version is checked are State 2's (round 28 judgement P4).",
+   "question": "What access-version value does a newly registered AgentSession start with?",
+   "options": [
+    "Start at 1.",
+    "Start at 0.",
+    "Leave it absent until the first access change."
+   ],
+   "default_guess": "Start at 1 when the session is registered.",
+   "unit": "?"
+  },
+  {
+   "subject": "M06 stale access-version checks",
+   "kind": "carried_question",
+   "text": "its start value and how a stale version is checked are State 2's (round 28 judgement P4).",
+   "question": "Which operations must state an access version, at what check stage is it compared, and what exact refusal is returned when it is stale or missing?",
+   "options": [
+    "Every owner operation changing the session states the current access version; stale or missing is refused at A04 stage (5).",
+    "Only grant and revoke state it; active-project and pending-request changes use no optimistic check.",
+    "All session reads and changes state it, including Kernel operations."
+   ],
+   "default_guess": "Require the current version on every owner action that changes the granted set, active project, or pending request, and refuse stale or missing versions at A04 stage (5).",
+   "witness": {
+    "initial": "An AgentSession has access version 3 and a pending request; two owner tabs both display version 3.",
+    "events": [
+     "The first tab grants a project, moving the version to 4.",
+     "The second tab clears the active project while submitting version 3."
+    ],
+    "outcomes": [
+     "The second action is refused as stale and leaves the session unchanged.",
+     "The second action is accepted because only grant and revoke check the access version."
+    ],
+    "observer": "The owner and Kernel observe different active-project state and access version."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A22 declared artifact vocabulary",
+   "kind": "standard_violation",
+   "text": "The declared types are part of the specification and of the release; a running instance reads them from its release, never from its configuration or its store (R0-33).",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Replace the unspecified release lookup with the applicable generated-code path: declare the closed type vocabulary as a models enumeration and give the type-to-owner policy mapping an explicitly imported data-provider constant, or otherwise state that the passage is only a design fact not read by generated code.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A15 concurrent audit sequence allocation\",\"kind\":\"required_test_gap\",\"text\":\"two concurrent changes take two distinct consecutive numbers.\",\"question\":\"What must the test show about which concurrent change receives the lower number: must it prove that the change Registry applies first receives it, and what observable event identifies that application order?\",\"options\":[\"The transaction that commits first receives the lower number.\",\"The transaction that first acquires the store's write serialization receives the lower number.\",\"Either assignment is allowed provided the numbers are distinct and consecutive.\"],\"default_guess\":\"Treat acquisition of the transaction's serialization lock as application order and assert that its change receives the lower number.\",\"witness\":{\"initial\":\"The audit sequence is n and two accepted changes A and B are submitted concurrently.\",\"events\":[\"Caller A submits change A.\",\"Caller B submits change B concurrently.\",\"Registry begins processing A before B, but both implementations satisfy the stated test by writing n + 1 and n + 2.\"],\"outcomes\":[\"A receives n + 1 and B receives n + 2 because first processing or lock acquisition defines application order.\",\"B receives n + 1 and A receives n + 2 because commit order defines application order.\"],\"observer\":\"The owner reading the audit log sees different subjects attached to n + 1 and n + 2.\"}},{\"subject\":\"A18 backup retention instant representation\",\"kind\":\"time_precision\",\"text\":\"compares that UTC instant less 720 hours with each record's UTC instant (L16) at the precision the record holds it.\",\"question\":\"What precision does a backup record hold, and must the cutoff be truncated, rounded, or compared at full precision when it is not exactly representable at that precision?\",\"options\":[\"Store and compare whole UTC seconds, truncating the cutoff to seconds.\",\"Store UTC microseconds and compare exact represented instants.\",\"Compare at full clock precision, treating the recorded value as the exact instant at the start of its represented unit.\"],\"default_guess\":\"Store UTC instants to microsecond precision and compare their represented values directly, with no rounding during retention.\",\"witness\":{\"initial\":\"A kept backup record holds `06:00:00` at whole-second precision; the deletion step reads a current time whose 720-hour cutoff is `06:00:00.500`.\",\"events\":[\"The backup run fixes the cutoff once.\",\"Registry compares the record with that cutoff.\"],\"outcomes\":[\"The backup is deleted because `06:00:00` is earlier than `06:00:00.500`.\",\"The backup is kept because the cutoff is reduced to the record's precision and both compare as `06:00:00`.\"],\"observer\":\"The owner sees either the backup remain in the newest-backup listing and location or be deleted.\"}},{\"subject\":\"A19 import upload size\",\"kind\":\"counted_bytes\",\"text\":\"The limit is counted over the bytes Registry receives, never over a length the request declares: a declared length over the limit is refused before any byte is read; otherwise Registry reads the upload up to one byte more than the limit and refuses it as soon as it holds more than the limit, whatever length was declared or whether one was.\",\"question\":\"Are the counted bytes only the uploaded file payload, or the complete HTTP request body including multipart framing, and what parsing is permitted to isolate the payload before the size decision?\",\"options\":[\"Count only file-content bytes while the HTTP multipart decoder streams them.\",\"Count every byte of the HTTP request body, including multipart framing.\",\"Require a raw, non-multipart upload whose entire body is the file.\"],\"default_guess\":\"Count only streamed file-content bytes; decoding the transport framing is not parsing the import file.\",\"witness\":{\"initial\":\"The uploaded file contains exactly 50 × 1024 × 1024 bytes and is carried in a multipart request whose framing adds more bytes.\",\"events\":[\"The owner uploads the file with no declared length for the file part.\",\"Registry receives the multipart body.\"],\"outcomes\":[\"The upload is accepted because only the file part is counted and it is exactly at the limit.\",\"The upload is refused because the complete received body exceeds the limit.\"],\"observer\":\"The owner either receives the mapping or a too-large refusal, and the session's prior uploaded file is retained only in the latter case.\"}},{\"subject\":\"M06 AgentSession lifecycle\",\"kind\":\"carried_question\",\"text\":\"What ends a session, and whether its record is kept after, is State 2's (R0-47).\",\"question\":\"Which event or condition ends an AgentSession?\",\"options\":[\"An explicit deregistration call from Cabinet Kernel ends it.\",\"A timeout or expiry ends it.\",\"Agent sessions never end through Registry and remain until their store is replaced.\"],\"default_guess\":\"Provide an authenticated Kernel deregistration operation that ends the named session.\"},{\"subject\":\"M06 AgentSession persistence after ending\",\"kind\":\"carried_question\",\"text\":\"What ends a session, and whether its record is kept after, is State 2's (R0-47).\",\"question\":\"After an AgentSession ends, is its record deleted, retained as an ended record, or retained for a fixed period?\",\"options\":[\"Delete it and all embedded grants, active project, and pending request immediately.\",\"Retain a durable ended tombstone indefinitely.\",\"Retain it for a specified bounded period and then delete it.\"],\"default_guess\":\"Delete the session record and its embedded state atomically when it ends.\"},{\"subject\":\"M06 access-version initial value\",\"kind\":\"carried_question\",\"text\":\"its start value and how a stale version is checked are State 2's (round 28 judgement P4).\",\"question\":\"What access-version value does a newly registered AgentSession start with?\",\"options\":[\"Start at 1.\",\"Start at 0.\",\"Leave it absent until the first access change.\"],\"default_guess\":\"Start at 1 when the session is registered.\"},{\"subject\":\"M06 stale access-version checks\",\"kind\":\"carried_question\",\"text\":\"its start value and how a stale version is checked are State 2's (round 28 judgement P4).\",\"question\":\"Which operations must state an access version, at what check stage is it compared, and what exact refusal is returned when it is stale or missing?\",\"options\":[\"Every owner operation changing the session states the current access version; stale or missing is refused at A04 stage (5).\",\"Only grant and revoke state it; active-project and pending-request changes use no optimistic check.\",\"All session reads and changes state it, including Kernel operations.\"],\"default_guess\":\"Require the current version on every owner action that changes the granted set, active project, or pending request, and refuse stale or missing versions at A04 stage (5).\",\"witness\":{\"initial\":\"An AgentSession has access version 3 and a pending request; two owner tabs both display version 3.\",\"events\":[\"The first tab grants a project, moving the version to 4.\",\"The second tab clears the active project while submitting version 3.\"],\"outcomes\":[\"The second action is refused as stale and leaves the session unchanged.\",\"The second action is accepted because only grant and revoke check the access version.\"],\"observer\":\"The owner and Kernel observe different active-project state and access version.\"}},{\"subject\":\"A22 declared artifact vocabulary\",\"kind\":\"standard_violation\",\"text\":\"The declared types are part of the specification and of the release; a running instance reads them from its release, never from its configuration or its store (R0-33).\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Replace the unspecified release lookup with the applicable generated-code path: declare the closed type vocabulary as a models enumeration and give the type-to-owner policy mapping an explicitly imported data-provider constant, or otherwise state that the passage is only a design fact not read by generated code.\"}]}",
+ "set_aside": []
+}
