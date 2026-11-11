@@ -45,6 +45,7 @@ publish(p, t) accepted:
 
 ### Required tests
 
+0. The first publish of a type on a project makes version 1, `published`.
 1. Two concurrent publishes of `estimate` on one project, with different
    request ids, make versions n+1 and
    n+2, the first `superseded`, the second `published`; neither answers an

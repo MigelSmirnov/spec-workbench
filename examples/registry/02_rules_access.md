@@ -197,7 +197,13 @@ sees every change as a new version.
    which a change of the wall clock does not move and which counts the time
    the host or its VM was suspended, so a session does not outlive a
    suspension; instants Registry records
-   and the 03:00 of A18 are UTC wall-clock time. Both readings reach the code
+   and the 03:00 of A18 are UTC wall-clock time. Each duration is one value
+   of the release, the data provider's constant the code imports
+   (SPEC_STANDARD §15.3.1): `OWNER_SESSION_MAX_HOURS` (8),
+   `OWNER_SESSION_IDLE_MINUTES` (30), `SIGN_IN_WINDOW_MINUTES` and
+   `SIGN_IN_LOCKOUT_MINUTES` (15), `CONFIRMATION_VALID_MINUTES` (10),
+   `SESSION_PASS_SECONDS` (60); the five refusals of rule 3 are
+   `SIGN_IN_REFUSAL_LIMIT`. Both readings reach the code
    through `clock` alone, emitted from the `system_clock_backend` IR whose
    `time_source_policy` the data closure declares (SPEC_STANDARD §6.8). An owner session is never
    recorded (M11), so its instants — when it began, its last request, when
@@ -237,7 +243,8 @@ sees every change as a new version.
    included — and is not counted; the lockout is not extended. A successful
    sign-in clears the count. Count and lockout are runtime state, like the
    owner session, and a restart clears them. Concurrent sign-ins are counted
-   one at a time.
+   one at a time, in the order they take the instance's one sign-in lock,
+   under which each reads the count, decides and updates it.
 4. A refused sign-in answers the same whatever was wrong, and never echoes
    the credential. Sign-in is the one owner request made without a session:
    it is checked for the credential and the lockout only, carries no CSRF
@@ -295,6 +302,12 @@ refused_sign_ins(last 15min) >= 5 => sign_in refused
 7. A session with a request every 10 minutes is refused 8 hours after its
    sign-in; a session signed out is refused at its next request, also within
    its 30 minutes.
+8. A request a microsecond before 30 minutes after the last one is served;
+   one exactly 30 minutes after it is refused.
+9. With the clocks replaced in the test: moving the wall clock back or
+   forward by hours changes no session's validity; a suspension of 31
+   minutes, counted by the monotonic reading, ends the session at its next
+   request.
 
 ### Consequence
 
