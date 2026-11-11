@@ -52,7 +52,9 @@ boundaries, "Network surface"): the service API, for the four services of A09,
 and the owner interface. Which networks reach each surface, and the HTTPS that
 carries the owner interface from another machine, are the host's
 administration (R0-28, R0-29, R0-48; Explicit exclusions): Registry serves
-each surface on a listener of its own and decides nothing about reachability.
+each surface on a listener of its own, at its configured address, and
+decides nothing about reachability beyond that listener's own form — bound
+exclusively, an IPv6 one for IPv6 alone (A17 rule 1).
 The modules are the parts of that one program, not services. Only `store`
 opens a SQLite database — the store's, and the decrypted copy of a backup that
 `backups` hands it by path to check — and only `backups` names, renames or
