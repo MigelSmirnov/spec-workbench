@@ -1,0 +1,185 @@
+{
+ "open_points": [
+  {
+   "subject": "M06 AgentSession lifecycle",
+   "kind": "missing_decision",
+   "text": "What ends a session, and whether its record is kept after, is State 2's (R0-47).",
+   "question": "Which events end an agent session, what happens to its grants, active project and pending request, whether the record is deleted or retained, and what registering the same identity does afterward?",
+   "options": [
+    "Ending deletes the record and all access; later registration creates a fresh session.",
+    "Ending retains a tombstone and later registration remains refused or returns the ended session.",
+    "Ending marks the record ended but later registration reactivates it under specified rules."
+   ],
+   "default_guess": "Delete the session and all embedded access state; a later registration of the same identity creates a fresh session.",
+   "witness": {
+    "initial": "Agent session S is registered, granted project P and then ended by Kernel.",
+    "events": [
+     "Kernel later registers identity S again.",
+     "Kernel reads S's access or calls an operation on P."
+    ],
+    "outcomes": [
+     "S is a fresh session with no grants.",
+     "The retained ended record is returned or registration is refused, and S cannot behave as a fresh session."
+    ],
+    "observer": "Cabinet Kernel and the owner interface"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M06 access version",
+   "kind": "missing_decision",
+   "text": "its start value and how a stale version is checked are State 2's (round 28 judgement P4).",
+   "question": "What is an AgentSession's initial access version, which owner actions must state it, and exactly when a missing or unequal version is refused?",
+   "options": [
+    "Start at 1; every access-changing owner action must state the current version.",
+    "Start at 0; every access-changing owner action must state the current version.",
+    "Use no optimistic check for some or all session changes."
+   ],
+   "default_guess": "Start at 1 and require the current version on every owner action that can change the granted set, active project or pending request.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 monotonic time representation",
+   "kind": "missing_time_representation",
+   "text": "Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended",
+   "question": "Which concrete monotonic clock supplies these readings, and in what representation and precision are readings and deadlines held?",
+   "options": [
+    "An integer nanosecond suspend-aware monotonic clock such as CLOCK_BOOTTIME.",
+    "A floating-point seconds clock adjusted so suspension counts.",
+    "A monotonic clock that pauses during suspension, with elapsed suspension added separately."
+   ],
+   "default_guess": "Use a suspend-aware monotonic clock represented as integer nanoseconds, with deadlines stored in the same domain.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 timed operations",
+   "kind": "time_read_count",
+   "text": "Validity is checked when a request arrives (A04 rule 6, stage 1); a request that passes it completes even if a limit or a sign-out comes while it runs",
+   "question": "For each sign-in, request, confirmation display or submission, and expiry pass, how many monotonic readings are taken, and must checking a deadline and recording the event use the same captured reading?",
+   "options": [
+    "Capture one monotonic reading per operation and use it for every time decision and update in that operation.",
+    "Read separately for each check and timestamp update.",
+    "Define a different fixed sampling rule for each operation."
+   ],
+   "default_guess": "Capture one reading at operation arrival, use it for all checks and updates of that operation, and let an expiry pass capture one reading for the whole pass.",
+   "witness": {
+    "initial": "Session S has an idle deadline only a few clock ticks after request R arrives.",
+    "events": [
+     "R reaches the session check just before the deadline.",
+     "R updates last_request after the deadline would otherwise have passed.",
+     "A later request arrives near the next idle deadline."
+    ],
+    "outcomes": [
+     "One captured arrival reading admits R and starts the next 30 minutes from that arrival.",
+     "Separate readings admit R but start the next 30 minutes from the later update, producing a later expiry."
+    ],
+    "observer": "The owner making the later request"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 concurrent sign-ins",
+   "kind": "unspecified_order",
+   "text": "Concurrent sign-ins are counted one at a time.",
+   "question": "In what order are concurrent sign-ins applied, and what event determines that order?",
+   "options": [
+    "Order by acquisition of one sign-in-state lock.",
+    "Order by request arrival.",
+    "Give no externally prescribed order but require one of the serial histories."
+   ],
+   "default_guess": "Serialize them by acquisition of one lock protecting the refusal count and lockout state.",
+   "witness": {
+    "initial": "The instance has four counted wrong-credential refusals and no lockout.",
+    "events": [
+     "Caller A submits a wrong credential while caller B concurrently submits the right credential."
+    ],
+    "outcomes": [
+     "A is applied first, starts the lockout, and B is refused.",
+     "B is applied first, succeeds and clears the count; A is then merely the first new refusal."
+    ],
+    "observer": "Callers A and B"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 owner-session validity invariant",
+   "kind": "required_test_gap",
+   "text": "A session idle for 31 minutes is refused and asks for sign-in again.",
+   "question": "Which Required tests item must demonstrate the invariant's strict boundary at exactly `s.last_request + 30min`, where `t < s.last_request + 30min` becomes false?",
+   "options": [
+    "Change this test to check both just before and exactly at 30 minutes.",
+    "Add a separate exact-boundary test.",
+    "Change the invariant to a boundary that the 31-minute test actually specifies."
+   ],
+   "default_guess": "Add assertions that a request immediately before 30 minutes is accepted and one exactly at 30 minutes is refused.",
+   "unit": "?"
+  },
+  {
+   "subject": "A07 publish timestamps",
+   "kind": "time_read_count",
+   "text": "Publishing a pointer assigns its version, marks the type's published pointer `superseded` with its instant, and stores the new pointer `published` — all in one transaction, or none of it (R0-17, R0-35).",
+   "question": "Does one publish read UTC time once for both the old pointer's superseded instant and the new pointer's published instant, or separately for each write?",
+   "options": [
+    "One reading shared by both status changes.",
+    "Two readings in a specified order.",
+    "Two readings with no required equality or ordering beyond transaction order."
+   ],
+   "default_guess": "Read the UTC clock once after taking the write lock and use that instant for both pointer changes.",
+   "witness": {
+    "initial": "Pointer v1 is published for project P and type estimate.",
+    "events": [
+     "A publish of v2 takes the write lock.",
+     "Registry supersedes v1 and writes v2."
+    ],
+    "outcomes": [
+     "v1.superseded_at equals v2.published_at.",
+     "v1.superseded_at and v2.published_at differ because the clock was read twice."
+    ],
+    "observer": "A reader of the artifact history"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A07 gap-free version invariant",
+   "kind": "required_test_gap",
+   "text": "Two concurrent publishes of `estimate` on one project, with different request ids, make versions n+1 and n+2, the first `superseded`, the second `published`; neither answers an internal error.",
+   "question": "Which Required tests item must show the invariant's empty-history case that the first version is 1, rather than only showing increments from an assumed n?",
+   "options": [
+    "Extend this test to cover both an empty history and an existing version n.",
+    "Add a separate first-publish test.",
+    "Remove the `1..n` and `(or 1)` claims from the formal invariant."
+   ],
+   "default_guess": "Add a test that the first accepted publish on an empty project/type history receives version 1.",
+   "unit": "?"
+  },
+  {
+   "subject": "A15 erasure clock sampling",
+   "kind": "time_read_count",
+   "text": "The erasure's own entry is written after the removal, in the same transaction, with the current instant; it is therefore never removed by the erasure that wrote it.",
+   "question": "Are `today`, the removal cutoff and the erasure entry's instant derived from one captured UTC reading, and what happens if the wall clock moves backward while the transaction runs?",
+   "options": [
+    "Capture one UTC instant after taking the write lock and derive today, the cutoff validation and the entry instant from it.",
+    "Read separately and refuse or retry if the later reading is before the accepted cutoff.",
+    "Read separately and permit an erasure entry whose instant is before the cutoff."
+   ],
+   "default_guess": "Capture one UTC instant inside the transaction after acquiring the write lock and use it for all date validation and for the erasure entry.",
+   "witness": {
+    "initial": "The owner asks to erase before date D while the wall clock reads shortly after 00:00 UTC on D.",
+    "events": [
+     "Registry validates that D is not later than today.",
+     "The wall clock is set backward to the preceding date before the erasure entry is timestamped.",
+     "Registry removes old entries and appends its own entry."
+    ],
+    "outcomes": [
+     "A single captured instant gives the new entry an instant at or after start_of(D), satisfying both erasure invariants.",
+     "Separate readings give the new entry an instant before start_of(D), contradicting the formal invariant even though it was inserted after removal."
+    ],
+    "observer": "The owner reading the audit log and any invariant check"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M06 AgentSession lifecycle\",\"kind\":\"missing_decision\",\"text\":\"What ends a session, and whether its record is kept after, is State 2's (R0-47).\",\"question\":\"Which events end an agent session, what happens to its grants, active project and pending request, whether the record is deleted or retained, and what registering the same identity does afterward?\",\"options\":[\"Ending deletes the record and all access; later registration creates a fresh session.\",\"Ending retains a tombstone and later registration remains refused or returns the ended session.\",\"Ending marks the record ended but later registration reactivates it under specified rules.\"],\"default_guess\":\"Delete the session and all embedded access state; a later registration of the same identity creates a fresh session.\",\"witness\":{\"initial\":\"Agent session S is registered, granted project P and then ended by Kernel.\",\"events\":[\"Kernel later registers identity S again.\",\"Kernel reads S's access or calls an operation on P.\"],\"outcomes\":[\"S is a fresh session with no grants.\",\"The retained ended record is returned or registration is refused, and S cannot behave as a fresh session.\"],\"observer\":\"Cabinet Kernel and the owner interface\"}},{\"subject\":\"M06 access version\",\"kind\":\"missing_decision\",\"text\":\"its start value and how a stale version is checked are State 2's (round 28 judgement P4).\",\"question\":\"What is an AgentSession's initial access version, which owner actions must state it, and exactly when a missing or unequal version is refused?\",\"options\":[\"Start at 1; every access-changing owner action must state the current version.\",\"Start at 0; every access-changing owner action must state the current version.\",\"Use no optimistic check for some or all session changes.\"],\"default_guess\":\"Start at 1 and require the current version on every owner action that can change the granted set, active project or pending request.\"},{\"subject\":\"A13 monotonic time representation\",\"kind\":\"missing_time_representation\",\"text\":\"Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended\",\"question\":\"Which concrete monotonic clock supplies these readings, and in what representation and precision are readings and deadlines held?\",\"options\":[\"An integer nanosecond suspend-aware monotonic clock such as CLOCK_BOOTTIME.\",\"A floating-point seconds clock adjusted so suspension counts.\",\"A monotonic clock that pauses during suspension, with elapsed suspension added separately.\"],\"default_guess\":\"Use a suspend-aware monotonic clock represented as integer nanoseconds, with deadlines stored in the same domain.\"},{\"subject\":\"A13 timed operations\",\"kind\":\"time_read_count\",\"text\":\"Validity is checked when a request arrives (A04 rule 6, stage 1); a request that passes it completes even if a limit or a sign-out comes while it runs\",\"question\":\"For each sign-in, request, confirmation display or submission, and expiry pass, how many monotonic readings are taken, and must checking a deadline and recording the event use the same captured reading?\",\"options\":[\"Capture one monotonic reading per operation and use it for every time decision and update in that operation.\",\"Read separately for each check and timestamp update.\",\"Define a different fixed sampling rule for each operation.\"],\"default_guess\":\"Capture one reading at operation arrival, use it for all checks and updates of that operation, and let an expiry pass capture one reading for the whole pass.\",\"witness\":{\"initial\":\"Session S has an idle deadline only a few clock ticks after request R arrives.\",\"events\":[\"R reaches the session check just before the deadline.\",\"R updates last_request after the deadline would otherwise have passed.\",\"A later request arrives near the next idle deadline.\"],\"outcomes\":[\"One captured arrival reading admits R and starts the next 30 minutes from that arrival.\",\"Separate readings admit R but start the next 30 minutes from the later update, producing a later expiry.\"],\"observer\":\"The owner making the later request\"}},{\"subject\":\"A13 concurrent sign-ins\",\"kind\":\"unspecified_order\",\"text\":\"Concurrent sign-ins are counted one at a time.\",\"question\":\"In what order are concurrent sign-ins applied, and what event determines that order?\",\"options\":[\"Order by acquisition of one sign-in-state lock.\",\"Order by request arrival.\",\"Give no externally prescribed order but require one of the serial histories.\"],\"default_guess\":\"Serialize them by acquisition of one lock protecting the refusal count and lockout state.\",\"witness\":{\"initial\":\"The instance has four counted wrong-credential refusals and no lockout.\",\"events\":[\"Caller A submits a wrong credential while caller B concurrently submits the right credential.\"],\"outcomes\":[\"A is applied first, starts the lockout, and B is refused.\",\"B is applied first, succeeds and clears the count; A is then merely the first new refusal.\"],\"observer\":\"Callers A and B\"}},{\"subject\":\"A13 owner-session validity invariant\",\"kind\":\"required_test_gap\",\"text\":\"A session idle for 31 minutes is refused and asks for sign-in again.\",\"question\":\"Which Required tests item must demonstrate the invariant's strict boundary at exactly `s.last_request + 30min`, where `t < s.last_request + 30min` becomes false?\",\"options\":[\"Change this test to check both just before and exactly at 30 minutes.\",\"Add a separate exact-boundary test.\",\"Change the invariant to a boundary that the 31-minute test actually specifies.\"],\"default_guess\":\"Add assertions that a request immediately before 30 minutes is accepted and one exactly at 30 minutes is refused.\"},{\"subject\":\"A07 publish timestamps\",\"kind\":\"time_read_count\",\"text\":\"Publishing a pointer assigns its version, marks the type's published pointer `superseded` with its instant, and stores the new pointer `published` — all in one transaction, or none of it (R0-17, R0-35).\",\"question\":\"Does one publish read UTC time once for both the old pointer's superseded instant and the new pointer's published instant, or separately for each write?\",\"options\":[\"One reading shared by both status changes.\",\"Two readings in a specified order.\",\"Two readings with no required equality or ordering beyond transaction order.\"],\"default_guess\":\"Read the UTC clock once after taking the write lock and use that instant for both pointer changes.\",\"witness\":{\"initial\":\"Pointer v1 is published for project P and type estimate.\",\"events\":[\"A publish of v2 takes the write lock.\",\"Registry supersedes v1 and writes v2.\"],\"outcomes\":[\"v1.superseded_at equals v2.published_at.\",\"v1.superseded_at and v2.published_at differ because the clock was read twice.\"],\"observer\":\"A reader of the artifact history\"}},{\"subject\":\"A07 gap-free version invariant\",\"kind\":\"required_test_gap\",\"text\":\"Two concurrent publishes of `estimate` on one project, with different request ids, make versions n+1 and n+2, the first `superseded`, the second `published`; neither answers an internal error.\",\"question\":\"Which Required tests item must show the invariant's empty-history case that the first version is 1, rather than only showing increments from an assumed n?\",\"options\":[\"Extend this test to cover both an empty history and an existing version n.\",\"Add a separate first-publish test.\",\"Remove the `1..n` and `(or 1)` claims from the formal invariant.\"],\"default_guess\":\"Add a test that the first accepted publish on an empty project/type history receives version 1.\"},{\"subject\":\"A15 erasure clock sampling\",\"kind\":\"time_read_count\",\"text\":\"The erasure's own entry is written after the removal, in the same transaction, with the current instant; it is therefore never removed by the erasure that wrote it.\",\"question\":\"Are `today`, the removal cutoff and the erasure entry's instant derived from one captured UTC reading, and what happens if the wall clock moves backward while the transaction runs?\",\"options\":[\"Capture one UTC instant after taking the write lock and derive today, the cutoff validation and the entry instant from it.\",\"Read separately and refuse or retry if the later reading is before the accepted cutoff.\",\"Read separately and permit an erasure entry whose instant is before the cutoff.\"],\"default_guess\":\"Capture one UTC instant inside the transaction after acquiring the write lock and use it for all date validation and for the erasure entry.\",\"witness\":{\"initial\":\"The owner asks to erase before date D while the wall clock reads shortly after 00:00 UTC on D.\",\"events\":[\"Registry validates that D is not later than today.\",\"The wall clock is set backward to the preceding date before the erasure entry is timestamped.\",\"Registry removes old entries and appends its own entry.\"],\"outcomes\":[\"A single captured instant gives the new entry an instant at or after start_of(D), satisfying both erasure invariants.\",\"Separate readings give the new entry an instant before start_of(D), contradicting the formal invariant even though it was inserted after removal.\"],\"observer\":\"The owner reading the audit log and any invariant check\"}}]}",
+ "set_aside": []
+}

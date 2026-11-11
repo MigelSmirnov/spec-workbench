@@ -1,0 +1,137 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 owner-session time representation",
+   "kind": "missing_time_representation",
+   "text": "Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension; instants Registry records and the 03:00 of A18 are UTC wall-clock time.",
+   "question": "What exact representations and precision do monotonic readings and UTC wall-clock instants have, including the representation stored in an OwnerSession and the representation persisted for recorded instants?",
+   "options": [
+    "Monotonic integer ticks with a declared unit and arbitrary origin; persisted timezone-aware UTC datetimes to microsecond precision",
+    "Monotonic duration values; persisted integer UTC epoch microseconds",
+    "Backend-specific numeric and datetime representations, provided they preserve the stated ordering and precision"
+   ],
+   "default_guess": "Use monotonic integer nanoseconds with an arbitrary process-local origin for session state, and timezone-aware UTC datetimes persisted to microsecond precision.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 session validity invariant",
+   "kind": "missing_required_test",
+   "text": "owner_session s valid at t <=> t < s.began + 8h and\n                                t < s.last_request + 30min and\n                                not signed_out(s) and no restart since s.began",
+   "question": "Which Required tests item must show that changing the wall clock does not change session validity and that host or VM suspension does count toward both limits?",
+   "options": [
+    "Add a test that jumps the wall clock in both directions without changing validity and suspends monotonic time past a limit to cause refusal",
+    "Treat the existing idle and eight-hour tests as sufficient without exercising the required clock semantics"
+   ],
+   "default_guess": "Add an explicit wall-clock-jump and suspension test.",
+   "witness": {
+    "initial": "An owner session has been idle for 5 minutes and has not reached its eight-hour limit.",
+    "events": [
+     "The host or VM is suspended for 31 minutes and then resumed.",
+     "The owner sends a request immediately after resume."
+    ],
+    "outcomes": [
+     "The request is refused because the monotonic source counted the suspension.",
+     "The request is accepted because the chosen monotonic source stopped while suspended."
+    ],
+    "observer": "The owner and the session-validity test see acceptance versus refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13, A07, A14, A15 and A16 operation time sampling",
+   "kind": "missing_clock_read_count",
+   "text": "Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8).",
+   "question": "For each operation, how many clock readings are taken, at what stage, and which facts share one reading—for example a publish's published and superseded instants, a change and its audit entry, an import's Customers, closure and audit entry, and a request's validity and last-request update?",
+   "options": [
+    "Each operation takes one appropriate clock reading after checks and reuses it for every instant it writes or compares",
+    "Each written fact takes its own reading",
+    "Each operation declares its own sampling points explicitly"
+   ],
+   "default_guess": "Take one clock reading per atomic operation after admission and reuse it for all instants written by that transaction; take one monotonic reading at request arrival for all session checks and updates.",
+   "witness": {
+    "initial": "A project has one published pointer of a type.",
+    "events": [
+     "A publisher performs one accepted publish, which supersedes the old pointer and writes the new pointer in one transaction."
+    ],
+    "outcomes": [
+     "The old pointer's superseded instant and the new pointer's published instant are identical because the operation uses one reading.",
+     "The two instants differ because each fact reads the clock separately."
+    ],
+    "observer": "The owner reading the artifact history sees equal versus distinct instants."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15 dated erasure boundary",
+   "kind": "ambiguous_antecedent",
+   "text": "Erasing before today, at 00:00:00 UTC of today, keeps the erasure's own entry, whose instant is not before the start of that date, and removes an entry made a microsecond before it.",
+   "question": "Does “a microsecond before it” mean a microsecond before the start of today or a microsecond before the erasure entry's instant?",
+   "options": [
+    "A microsecond before the start of today, so the entry is at 23:59:59.999999 of the preceding date",
+    "A microsecond before the erasure entry, even if both entries are on today"
+   ],
+   "default_guess": "It means a microsecond before the start of today.",
+   "witness": {
+    "initial": "The erasure is recorded at 00:00:00.000005 UTC, and the log contains one entry at 00:00:00.000004 UTC today.",
+    "events": [
+     "The owner erases entries before today."
+    ],
+    "outcomes": [
+     "The existing entry remains because it is not before the start of today.",
+     "The existing entry is removed because it is a microsecond before the erasure entry."
+    ],
+    "observer": "The owner reading the audit log sees whether the existing entry remains."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15 erasure time snapshot",
+   "kind": "missing_time_precedence",
+   "text": "The date of an erasure is a date not later than today, the current date in UTC; a later date is refused. Every entry whose instant is before 00:00 UTC of that date is removed.",
+   "question": "Is “today” and the erasure entry's current instant derived from one wall-clock reading, and at what point in the operation is that reading taken?",
+   "options": [
+    "Read the wall clock once after admission and derive both today and the erasure entry's instant from it",
+    "Check today when validating the request and read the entry instant separately when writing",
+    "Fix today at request arrival but read the entry instant when the transaction takes the write lock"
+   ],
+   "default_guess": "Read once while holding the write lock, then derive both today and the entry instant from that reading.",
+   "witness": {
+    "initial": "At 23:59:59.999999 UTC the owner submits an erasure whose date is the next UTC date.",
+    "events": [
+     "Validation and the transaction straddle midnight."
+    ],
+    "outcomes": [
+     "The erasure is refused because the supplied date was later than today at the operation's fixed instant.",
+     "The erasure is accepted because the implementation reads today after midnight."
+    ],
+    "observer": "The owner sees refusal versus an accepted erasure and its audit entry."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 Required test 7",
+   "kind": "ambiguous_test_condition",
+   "text": "a session signed out is refused at its next request, also within its 30 minutes.",
+   "question": "What must be within the 30-minute interval: the sign-out, the next request, or both, and from which last-request instant is the interval measured?",
+   "options": [
+    "Both sign-out and the next request occur before the idle limit that would otherwise apply, isolating sign-out as the refusal cause",
+    "Only sign-out must occur while the session is valid",
+    "Only the next request must be less than 30 minutes after sign-out"
+   ],
+   "default_guess": "Sign out a valid session and make the next request before its pre-sign-out idle deadline, so sign-out is the only refusal cause.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 duration policy",
+   "kind": "standard_violation",
+   "text": "Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension;",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The passage must assign these fixed policy durations to named imported data-provider constants, or explicitly make them fields of the settings object if they are environment-dependent.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 owner-session time representation\",\"kind\":\"missing_time_representation\",\"text\":\"Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension; instants Registry records and the 03:00 of A18 are UTC wall-clock time.\",\"question\":\"What exact representations and precision do monotonic readings and UTC wall-clock instants have, including the representation stored in an OwnerSession and the representation persisted for recorded instants?\",\"options\":[\"Monotonic integer ticks with a declared unit and arbitrary origin; persisted timezone-aware UTC datetimes to microsecond precision\",\"Monotonic duration values; persisted integer UTC epoch microseconds\",\"Backend-specific numeric and datetime representations, provided they preserve the stated ordering and precision\"],\"default_guess\":\"Use monotonic integer nanoseconds with an arbitrary process-local origin for session state, and timezone-aware UTC datetimes persisted to microsecond precision.\"},{\"subject\":\"A13 session validity invariant\",\"kind\":\"missing_required_test\",\"text\":\"owner_session s valid at t <=> t < s.began + 8h and\\n                                t < s.last_request + 30min and\\n                                not signed_out(s) and no restart since s.began\",\"question\":\"Which Required tests item must show that changing the wall clock does not change session validity and that host or VM suspension does count toward both limits?\",\"options\":[\"Add a test that jumps the wall clock in both directions without changing validity and suspends monotonic time past a limit to cause refusal\",\"Treat the existing idle and eight-hour tests as sufficient without exercising the required clock semantics\"],\"default_guess\":\"Add an explicit wall-clock-jump and suspension test.\",\"witness\":{\"initial\":\"An owner session has been idle for 5 minutes and has not reached its eight-hour limit.\",\"events\":[\"The host or VM is suspended for 31 minutes and then resumed.\",\"The owner sends a request immediately after resume.\"],\"outcomes\":[\"The request is refused because the monotonic source counted the suspension.\",\"The request is accepted because the chosen monotonic source stopped while suspended.\"],\"observer\":\"The owner and the session-validity test see acceptance versus refusal.\"}},{\"subject\":\"A13, A07, A14, A15 and A16 operation time sampling\",\"kind\":\"missing_clock_read_count\",\"text\":\"Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8).\",\"question\":\"For each operation, how many clock readings are taken, at what stage, and which facts share one reading—for example a publish's published and superseded instants, a change and its audit entry, an import's Customers, closure and audit entry, and a request's validity and last-request update?\",\"options\":[\"Each operation takes one appropriate clock reading after checks and reuses it for every instant it writes or compares\",\"Each written fact takes its own reading\",\"Each operation declares its own sampling points explicitly\"],\"default_guess\":\"Take one clock reading per atomic operation after admission and reuse it for all instants written by that transaction; take one monotonic reading at request arrival for all session checks and updates.\",\"witness\":{\"initial\":\"A project has one published pointer of a type.\",\"events\":[\"A publisher performs one accepted publish, which supersedes the old pointer and writes the new pointer in one transaction.\"],\"outcomes\":[\"The old pointer's superseded instant and the new pointer's published instant are identical because the operation uses one reading.\",\"The two instants differ because each fact reads the clock separately.\"],\"observer\":\"The owner reading the artifact history sees equal versus distinct instants.\"}},{\"subject\":\"A15 dated erasure boundary\",\"kind\":\"ambiguous_antecedent\",\"text\":\"Erasing before today, at 00:00:00 UTC of today, keeps the erasure's own entry, whose instant is not before the start of that date, and removes an entry made a microsecond before it.\",\"question\":\"Does “a microsecond before it” mean a microsecond before the start of today or a microsecond before the erasure entry's instant?\",\"options\":[\"A microsecond before the start of today, so the entry is at 23:59:59.999999 of the preceding date\",\"A microsecond before the erasure entry, even if both entries are on today\"],\"default_guess\":\"It means a microsecond before the start of today.\",\"witness\":{\"initial\":\"The erasure is recorded at 00:00:00.000005 UTC, and the log contains one entry at 00:00:00.000004 UTC today.\",\"events\":[\"The owner erases entries before today.\"],\"outcomes\":[\"The existing entry remains because it is not before the start of today.\",\"The existing entry is removed because it is a microsecond before the erasure entry.\"],\"observer\":\"The owner reading the audit log sees whether the existing entry remains.\"}},{\"subject\":\"A15 erasure time snapshot\",\"kind\":\"missing_time_precedence\",\"text\":\"The date of an erasure is a date not later than today, the current date in UTC; a later date is refused. Every entry whose instant is before 00:00 UTC of that date is removed.\",\"question\":\"Is “today” and the erasure entry's current instant derived from one wall-clock reading, and at what point in the operation is that reading taken?\",\"options\":[\"Read the wall clock once after admission and derive both today and the erasure entry's instant from it\",\"Check today when validating the request and read the entry instant separately when writing\",\"Fix today at request arrival but read the entry instant when the transaction takes the write lock\"],\"default_guess\":\"Read once while holding the write lock, then derive both today and the entry instant from that reading.\",\"witness\":{\"initial\":\"At 23:59:59.999999 UTC the owner submits an erasure whose date is the next UTC date.\",\"events\":[\"Validation and the transaction straddle midnight.\"],\"outcomes\":[\"The erasure is refused because the supplied date was later than today at the operation's fixed instant.\",\"The erasure is accepted because the implementation reads today after midnight.\"],\"observer\":\"The owner sees refusal versus an accepted erasure and its audit entry.\"}},{\"subject\":\"A13 Required test 7\",\"kind\":\"ambiguous_test_condition\",\"text\":\"a session signed out is refused at its next request, also within its 30 minutes.\",\"question\":\"What must be within the 30-minute interval: the sign-out, the next request, or both, and from which last-request instant is the interval measured?\",\"options\":[\"Both sign-out and the next request occur before the idle limit that would otherwise apply, isolating sign-out as the refusal cause\",\"Only sign-out must occur while the session is valid\",\"Only the next request must be less than 30 minutes after sign-out\"],\"default_guess\":\"Sign out a valid session and make the next request before its pre-sign-out idle deadline, so sign-out is the only refusal cause.\"},{\"subject\":\"A13 duration policy\",\"kind\":\"standard_violation\",\"text\":\"Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension;\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The passage must assign these fixed policy durations to named imported data-provider constants, or explicitly make them fields of the settings object if they are environment-dependent.\"}]}",
+ "set_aside": []
+}

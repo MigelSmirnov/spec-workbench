@@ -1,0 +1,218 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 time source",
+   "kind": "missing_representation",
+   "text": "its instants — when it began, its last request, when\n   its confirmation was shown — and its expiry at the latest are held as\n   readings of that monotonic clock",
+   "question": "In what exact type, unit, precision and comparison representation are monotonic readings and derived deadlines held?",
+   "options": [
+    "integer nanoseconds from a suspend-aware monotonic source",
+    "floating-point seconds",
+    "an opaque monotonic-instant and duration type supplied by the clock port"
+   ],
+   "default_guess": "Use opaque monotonic instants backed by integer nanoseconds, with deadlines formed by adding exact durations.",
+   "unit": "?"
+  },
+  {
+   "subject": "State 2 time policy across A01, A04, A07, A13, A14, A15 and A16",
+   "kind": "clock_read_count",
+   "text": "Both readings reach the code\n   through `clock` alone",
+   "question": "How many monotonic and UTC wall-clock readings does each operation take, and which timestamps and checks within one operation must share the same reading? This must cover at least session admission and activity, sign-in throttling, create/change timestamps and their audit entry, both timestamps of a publish, audit erasure's `today` and entry instant, and all timestamps of an import.",
+   "options": [
+    "one monotonic reading and one UTC reading at operation admission, reused everywhere applicable",
+    "one reading at each check or timestamp write",
+    "an operation-specific list of read points and shared readings"
+   ],
+   "default_guess": "Specify operation-specific read points, normally one reading per clock per atomic operation and reuse it for every timestamp and time-dependent check in that operation.",
+   "witness": {
+    "initial": "The owner starts erasing audit entries before 2026-11-11 while the UTC wall clock reads 2026-11-11; the clock is then set back to 2026-11-10 before the erasure entry is made.",
+    "events": [
+     "The owner submits the confirmed erasure.",
+     "Registry checks that the supplied date is not later than today.",
+     "The host's wall clock is changed backward before Registry timestamps the erasure entry.",
+     "Registry commits the removal and its own entry."
+    ],
+    "outcomes": [
+     "A single operation reading is reused, so the erasure entry has an instant on or after 2026-11-11 00:00:00 UTC and the invariant holds.",
+     "Separate readings are used, so the entry can receive an instant before 2026-11-11 00:00:00 UTC and violate the stated invariant."
+    ],
+    "observer": "The owner reading the audit log, and any invariant check of the store"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A07 publish timestamps",
+   "kind": "timestamp_identity",
+   "text": "Publishing a pointer assigns its version, marks the type's published\n   pointer `superseded` with its instant, and stores the new pointer\n   `published` — all in one transaction",
+   "question": "Does one accepted publish give the old pointer's superseded instant and the new pointer's published instant the same UTC reading, or may it read the clock separately for them?",
+   "options": [
+    "the same instant from one clock read",
+    "two independently read instants",
+    "a specified ordering with possibly distinct instants"
+   ],
+   "default_guess": "Use one UTC reading for both facts of the atomic publish.",
+   "witness": {
+    "initial": "A project has pointer version n published, and the wall clock advances between two possible reads during the next publish.",
+    "events": [
+     "A caller publishes version n+1.",
+     "Registry supersedes version n and stores version n+1 in one transaction."
+    ],
+    "outcomes": [
+     "Both pointer facts carry the same instant.",
+     "The superseded instant of n and published instant of n+1 differ."
+    ],
+    "observer": "The owner or an authorized reader of artifact history"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A04 and A14 change/audit timestamps",
+   "kind": "timestamp_identity",
+   "text": "the instant of the change",
+   "question": "For an accepted audited action that also moves a record's `last_changed`, must the audit entry instant equal that `last_changed` instant, or may the two be separate clock readings?",
+   "options": [
+    "the same instant",
+    "separate instants ordered record change then audit write",
+    "separate instants with no required relation"
+   ],
+   "default_guess": "Use one UTC reading and store it as both the record's last-changed instant and the audit entry's instant.",
+   "witness": {
+    "initial": "A Project is at revision 3 and the UTC clock advances during a confirmed correction.",
+    "events": [
+     "The owner corrects the Project.",
+     "Registry moves its revision and last-changed instant and writes the audit entry in the transaction."
+    ],
+    "outcomes": [
+     "The Project and audit entry carry one identical instant.",
+     "The Project and audit entry carry different instants even though the entry describes that change."
+    ],
+    "observer": "The owner comparing the project card with the audit log"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 import timestamps",
+   "kind": "timestamp_identity",
+   "text": "A Customer the import makes is\n  created at the import's instant with revision 1.",
+   "question": "What exactly is the import's instant, and must every imported Customer's created instant, the MigrationClosure instant and the import AuditEntry instant use that one reading?",
+   "options": [
+    "one UTC reading shared by all import-created facts",
+    "one reading per created record and closure or entry",
+    "one transaction instant supplied by the store"
+   ],
+   "default_guess": "Take one UTC reading after admission and reuse it for every fresh timestamp written by the import transaction.",
+   "witness": {
+    "initial": "An accepted import will create two Customers, one MigrationClosure and one AuditEntry while the clock advances.",
+    "events": [
+     "The owner confirms the import.",
+     "Registry constructs the records and commits them in one transaction."
+    ],
+    "outcomes": [
+     "Every fresh import timestamp is identical.",
+     "Customers, closure and audit entry may have different timestamps according to construction order."
+    ],
+    "observer": "The owner reading imported Customers and the audit log; store invariant checks also see the closure"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A09 formal invariants",
+   "kind": "invariant_test_gap",
+   "text": "class(answer(op)) <= highest_class(s)\nhighest_class(Cabinet Kernel) = business_confidential",
+   "question": "Which Required tests item must show that an allowed operation never returns a class above the token ceiling and specifically that Cabinet Kernel's ceiling is `business_confidential`? The existing refusals test operation rights, not the disclosure class of an otherwise allowed answer.",
+   "options": [
+    "add a test of an allowed Kernel operation whose projection is asserted to contain no `personal_data`",
+    "add contract tests for every service row's highest class",
+    "identify an existing Required tests item and state the class assertions it must make"
+   ],
+   "default_guess": "Add contract tests for every service ceiling, including an allowed Kernel projection asserted to be at most `business_confidential`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 owner-session invariant",
+   "kind": "invariant_test_gap",
+   "text": "t < s.last_request + 30min",
+   "question": "Which Required tests item shows the strict boundary required by this invariant—accepted immediately before 30 minutes and refused exactly at 30 minutes? Test 1 only says that 31 minutes is refused.",
+   "options": [
+    "add an exact-boundary test at 30 minutes",
+    "change the invariant to the boundary actually intended",
+    "state that the 31-minute test is intended to cover only eventual expiry and add a separate invariant witness"
+   ],
+   "default_guess": "Add an exact-boundary test showing acceptance just before 30 minutes and refusal at exactly 30 minutes.",
+   "unit": "?"
+  },
+  {
+   "subject": "A07 publication invariants",
+   "kind": "invariant_test_gap",
+   "text": "versions of p, t are 1..n without gaps or repeats\npublish(p, t) accepted:\n  new.version = max(version of p, t) + 1 (or 1)",
+   "question": "Which Required tests item shows that the first accepted publish receives version 1? The concurrent test begins from an unspecified n and only shows n+1 and n+2.",
+   "options": [
+    "add a first-publish test asserting version 1",
+    "extend Required test 1 to include the empty-history case",
+    "remove the untested `(or 1)` branch from the formal invariant"
+   ],
+   "default_guess": "Add a test that publishes into an empty project/type history and asserts version 1.",
+   "unit": "?"
+  },
+  {
+   "subject": "A07 single-published invariant",
+   "kind": "invariant_test_gap",
+   "text": "count(pointer of p, t with status published) <= 1",
+   "question": "Which Required tests item must demonstrate that concurrent publication never exposes a committed state with two `published` pointers, rather than merely asserting the final statuses?",
+   "options": [
+    "add a concurrent observer/read assertion",
+    "state that the invariant ranges only over committed states and verify the transaction constraint",
+    "identify an existing test as asserting the invariant throughout and say how it observes that"
+   ],
+   "default_guess": "State that the invariant ranges over committed states and add a concurrency test that repeatedly reads while both publishes run and never observes two published pointers.",
+   "unit": "?"
+  },
+  {
+   "subject": "A14 audit-entry invariant",
+   "kind": "invariant_test_gap",
+   "text": "entry e exists <=> accepted action a in M09.actions, with changed(a) or a an\n                   erasure of old entries, and e written in the transaction\n                   of a\ne.outcome = accepted",
+   "question": "Which Required tests item positively shows that an accepted listed state change writes exactly one entry in the same transaction and that its outcome is `accepted`? The current items cover refusals, no-op actions, failure rollback and reads.",
+   "options": [
+    "add one positive accepted-change test with transaction and outcome assertions",
+    "extend the failed-correction test with a successful control case",
+    "bind these invariant clauses to a named test in another decision"
+   ],
+   "default_guess": "Add a successful correction test asserting exactly one entry, the `accepted` outcome and atomic persistence with the correction.",
+   "unit": "?"
+  },
+  {
+   "subject": "A04 revision/time invariant",
+   "kind": "invariant_test_gap",
+   "text": "accepted and changed(r) and r keeps a revision\n                          => r.revision' = r.revision + 1\n                             and r.last_changed' = now",
+   "question": "Which Required tests item asserts that `last_changed` becomes the operation's decided `now` whenever the revision moves? The archiving test mentions only the revision.",
+   "options": [
+    "extend the archiving test to assert the new last-changed instant",
+    "add a correction test with a controlled clock",
+    "remove the timestamp clause from the formal invariant"
+   ],
+   "default_guess": "Add a controlled-clock correction test asserting both revision +1 and `last_changed` equal to the operation's single UTC reading.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 duration policy",
+   "kind": "standard_violation",
+   "text": "Every duration in this decision — the 8 hours, the 30, 15 and 10\n   minutes, the 60 seconds — is measured by the process's monotonic clock,\n   which a change of the wall clock does not move and which counts the time\n   the host or its VM was suspended, so a session does not outlive a\n   suspension;",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "Replace the bare duration thresholds that generated code reads with named data-provider constants and say that the code imports those constants.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 random-value size policy",
+   "kind": "standard_violation",
+   "text": "The session's identity, its CSRF value and a confirmation value are each at\n   least 32 bytes from the operating system's random source;",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "Replace the bare 32-byte threshold read by generated code with a named imported data-provider constant.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 time source\",\"kind\":\"missing_representation\",\"text\":\"its instants — when it began, its last request, when\\n   its confirmation was shown — and its expiry at the latest are held as\\n   readings of that monotonic clock\",\"question\":\"In what exact type, unit, precision and comparison representation are monotonic readings and derived deadlines held?\",\"options\":[\"integer nanoseconds from a suspend-aware monotonic source\",\"floating-point seconds\",\"an opaque monotonic-instant and duration type supplied by the clock port\"],\"default_guess\":\"Use opaque monotonic instants backed by integer nanoseconds, with deadlines formed by adding exact durations.\"},{\"subject\":\"State 2 time policy across A01, A04, A07, A13, A14, A15 and A16\",\"kind\":\"clock_read_count\",\"text\":\"Both readings reach the code\\n   through `clock` alone\",\"question\":\"How many monotonic and UTC wall-clock readings does each operation take, and which timestamps and checks within one operation must share the same reading? This must cover at least session admission and activity, sign-in throttling, create/change timestamps and their audit entry, both timestamps of a publish, audit erasure's `today` and entry instant, and all timestamps of an import.\",\"options\":[\"one monotonic reading and one UTC reading at operation admission, reused everywhere applicable\",\"one reading at each check or timestamp write\",\"an operation-specific list of read points and shared readings\"],\"default_guess\":\"Specify operation-specific read points, normally one reading per clock per atomic operation and reuse it for every timestamp and time-dependent check in that operation.\",\"witness\":{\"initial\":\"The owner starts erasing audit entries before 2026-11-11 while the UTC wall clock reads 2026-11-11; the clock is then set back to 2026-11-10 before the erasure entry is made.\",\"events\":[\"The owner submits the confirmed erasure.\",\"Registry checks that the supplied date is not later than today.\",\"The host's wall clock is changed backward before Registry timestamps the erasure entry.\",\"Registry commits the removal and its own entry.\"],\"outcomes\":[\"A single operation reading is reused, so the erasure entry has an instant on or after 2026-11-11 00:00:00 UTC and the invariant holds.\",\"Separate readings are used, so the entry can receive an instant before 2026-11-11 00:00:00 UTC and violate the stated invariant.\"],\"observer\":\"The owner reading the audit log, and any invariant check of the store\"}},{\"subject\":\"A07 publish timestamps\",\"kind\":\"timestamp_identity\",\"text\":\"Publishing a pointer assigns its version, marks the type's published\\n   pointer `superseded` with its instant, and stores the new pointer\\n   `published` — all in one transaction\",\"question\":\"Does one accepted publish give the old pointer's superseded instant and the new pointer's published instant the same UTC reading, or may it read the clock separately for them?\",\"options\":[\"the same instant from one clock read\",\"two independently read instants\",\"a specified ordering with possibly distinct instants\"],\"default_guess\":\"Use one UTC reading for both facts of the atomic publish.\",\"witness\":{\"initial\":\"A project has pointer version n published, and the wall clock advances between two possible reads during the next publish.\",\"events\":[\"A caller publishes version n+1.\",\"Registry supersedes version n and stores version n+1 in one transaction.\"],\"outcomes\":[\"Both pointer facts carry the same instant.\",\"The superseded instant of n and published instant of n+1 differ.\"],\"observer\":\"The owner or an authorized reader of artifact history\"}},{\"subject\":\"A04 and A14 change/audit timestamps\",\"kind\":\"timestamp_identity\",\"text\":\"the instant of the change\",\"question\":\"For an accepted audited action that also moves a record's `last_changed`, must the audit entry instant equal that `last_changed` instant, or may the two be separate clock readings?\",\"options\":[\"the same instant\",\"separate instants ordered record change then audit write\",\"separate instants with no required relation\"],\"default_guess\":\"Use one UTC reading and store it as both the record's last-changed instant and the audit entry's instant.\",\"witness\":{\"initial\":\"A Project is at revision 3 and the UTC clock advances during a confirmed correction.\",\"events\":[\"The owner corrects the Project.\",\"Registry moves its revision and last-changed instant and writes the audit entry in the transaction.\"],\"outcomes\":[\"The Project and audit entry carry one identical instant.\",\"The Project and audit entry carry different instants even though the entry describes that change.\"],\"observer\":\"The owner comparing the project card with the audit log\"}},{\"subject\":\"A16 import timestamps\",\"kind\":\"timestamp_identity\",\"text\":\"A Customer the import makes is\\n  created at the import's instant with revision 1.\",\"question\":\"What exactly is the import's instant, and must every imported Customer's created instant, the MigrationClosure instant and the import AuditEntry instant use that one reading?\",\"options\":[\"one UTC reading shared by all import-created facts\",\"one reading per created record and closure or entry\",\"one transaction instant supplied by the store\"],\"default_guess\":\"Take one UTC reading after admission and reuse it for every fresh timestamp written by the import transaction.\",\"witness\":{\"initial\":\"An accepted import will create two Customers, one MigrationClosure and one AuditEntry while the clock advances.\",\"events\":[\"The owner confirms the import.\",\"Registry constructs the records and commits them in one transaction.\"],\"outcomes\":[\"Every fresh import timestamp is identical.\",\"Customers, closure and audit entry may have different timestamps according to construction order.\"],\"observer\":\"The owner reading imported Customers and the audit log; store invariant checks also see the closure\"}},{\"subject\":\"A09 formal invariants\",\"kind\":\"invariant_test_gap\",\"text\":\"class(answer(op)) <= highest_class(s)\\nhighest_class(Cabinet Kernel) = business_confidential\",\"question\":\"Which Required tests item must show that an allowed operation never returns a class above the token ceiling and specifically that Cabinet Kernel's ceiling is `business_confidential`? The existing refusals test operation rights, not the disclosure class of an otherwise allowed answer.\",\"options\":[\"add a test of an allowed Kernel operation whose projection is asserted to contain no `personal_data`\",\"add contract tests for every service row's highest class\",\"identify an existing Required tests item and state the class assertions it must make\"],\"default_guess\":\"Add contract tests for every service ceiling, including an allowed Kernel projection asserted to be at most `business_confidential`.\"},{\"subject\":\"A13 owner-session invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"t < s.last_request + 30min\",\"question\":\"Which Required tests item shows the strict boundary required by this invariant—accepted immediately before 30 minutes and refused exactly at 30 minutes? Test 1 only says that 31 minutes is refused.\",\"options\":[\"add an exact-boundary test at 30 minutes\",\"change the invariant to the boundary actually intended\",\"state that the 31-minute test is intended to cover only eventual expiry and add a separate invariant witness\"],\"default_guess\":\"Add an exact-boundary test showing acceptance just before 30 minutes and refusal at exactly 30 minutes.\"},{\"subject\":\"A07 publication invariants\",\"kind\":\"invariant_test_gap\",\"text\":\"versions of p, t are 1..n without gaps or repeats\\npublish(p, t) accepted:\\n  new.version = max(version of p, t) + 1 (or 1)\",\"question\":\"Which Required tests item shows that the first accepted publish receives version 1? The concurrent test begins from an unspecified n and only shows n+1 and n+2.\",\"options\":[\"add a first-publish test asserting version 1\",\"extend Required test 1 to include the empty-history case\",\"remove the untested `(or 1)` branch from the formal invariant\"],\"default_guess\":\"Add a test that publishes into an empty project/type history and asserts version 1.\"},{\"subject\":\"A07 single-published invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"count(pointer of p, t with status published) <= 1\",\"question\":\"Which Required tests item must demonstrate that concurrent publication never exposes a committed state with two `published` pointers, rather than merely asserting the final statuses?\",\"options\":[\"add a concurrent observer/read assertion\",\"state that the invariant ranges only over committed states and verify the transaction constraint\",\"identify an existing test as asserting the invariant throughout and say how it observes that\"],\"default_guess\":\"State that the invariant ranges over committed states and add a concurrency test that repeatedly reads while both publishes run and never observes two published pointers.\"},{\"subject\":\"A14 audit-entry invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"entry e exists <=> accepted action a in M09.actions, with changed(a) or a an\\n                   erasure of old entries, and e written in the transaction\\n                   of a\\ne.outcome = accepted\",\"question\":\"Which Required tests item positively shows that an accepted listed state change writes exactly one entry in the same transaction and that its outcome is `accepted`? The current items cover refusals, no-op actions, failure rollback and reads.\",\"options\":[\"add one positive accepted-change test with transaction and outcome assertions\",\"extend the failed-correction test with a successful control case\",\"bind these invariant clauses to a named test in another decision\"],\"default_guess\":\"Add a successful correction test asserting exactly one entry, the `accepted` outcome and atomic persistence with the correction.\"},{\"subject\":\"A04 revision/time invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"accepted and changed(r) and r keeps a revision\\n                          => r.revision' = r.revision + 1\\n                             and r.last_changed' = now\",\"question\":\"Which Required tests item asserts that `last_changed` becomes the operation's decided `now` whenever the revision moves? The archiving test mentions only the revision.\",\"options\":[\"extend the archiving test to assert the new last-changed instant\",\"add a correction test with a controlled clock\",\"remove the timestamp clause from the formal invariant\"],\"default_guess\":\"Add a controlled-clock correction test asserting both revision +1 and `last_changed` equal to the operation's single UTC reading.\"},{\"subject\":\"A13 duration policy\",\"kind\":\"standard_violation\",\"text\":\"Every duration in this decision — the 8 hours, the 30, 15 and 10\\n   minutes, the 60 seconds — is measured by the process's monotonic clock,\\n   which a change of the wall clock does not move and which counts the time\\n   the host or its VM was suspended, so a session does not outlive a\\n   suspension;\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"Replace the bare duration thresholds that generated code reads with named data-provider constants and say that the code imports those constants.\"},{\"subject\":\"A13 random-value size policy\",\"kind\":\"standard_violation\",\"text\":\"The session's identity, its CSRF value and a confirmation value are each at\\n   least 32 bytes from the operating system's random source;\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"Replace the bare 32-byte threshold read by generated code with a named imported data-provider constant.\"}]}",
+ "set_aside": []
+}
