@@ -1,0 +1,157 @@
+{
+ "open_points": [
+  {
+   "subject": "A17 configuration mapping",
+   "kind": "unspecified names",
+   "text": "The configuration is a set of environment variables whose names begin with `REGISTRY_`, set as R0-23 says. Registry reads exactly the items below and no other variable",
+   "question": "What exact environment-variable name, settings-field name and settings-field type represent each new owner-interface and service-API address, and what exact item name appears in diagnostics?",
+   "options": [
+    "Use names such as `REGISTRY_OWNER_ADDRESS` and `REGISTRY_SERVICE_API_ADDRESS`, each mapped to one parsed address field.",
+    "Use separate host and port variables and settings fields for each listener.",
+    "Leave the concrete names and field shapes to the contracts or implementation."
+   ],
+   "default_guess": "Use `REGISTRY_OWNER_ADDRESS` and `REGISTRY_SERVICE_API_ADDRESS`, each as one required `host:port` string parsed into a typed host-and-port value.",
+   "witness": {
+    "initial": "A deployment sets all existing required variables and both intended listener addresses.",
+    "events": [
+     "The owner sets `REGISTRY_OWNER_ADDRESS` and `REGISTRY_SERVICE_API_ADDRESS`.",
+     "One implementation reads those names; another reads equally plausible names such as `REGISTRY_OWNER_LISTEN_ADDRESS` and `REGISTRY_SERVICE_LISTEN_ADDRESS`."
+    ],
+    "outcomes": [
+     "Registry starts and opens both listeners.",
+     "Registry reports the owner-interface address as missing."
+    ],
+    "observer": "The owner starting Registry"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 address validation",
+   "kind": "incomplete grammar",
+   "text": "An address is a host and a port, `host:port`: the host an IP address — an IPv6 one in brackets — and the port a whole number from 1 to 65535.",
+   "question": "What exact lexical grammar and normalization rules decide whether an address is well formed, including surrounding whitespace, leading zeroes or a leading plus on the port, non-ASCII digits, noncanonical IPv4 forms, IPv4-mapped IPv6, IPv6 zone identifiers and trailing characters?",
+   "options": [
+    "Accept every string accepted by a named strict IP-address parser plus an ASCII decimal port grammar.",
+    "Require canonical textual IP and port forms only.",
+    "Accept any parseable IP literal and integer after trimming whitespace."
+   ],
+   "default_guess": "Require the entire string to match a strict IP-literal grammar, brackets around IPv6, and an ASCII decimal port without sign or whitespace; accept noncanonical but valid IPv6 spellings.",
+   "witness": {
+    "initial": "All required configuration items are present and valid except that an address is `127.0.0.1:08781`.",
+    "events": [
+     "The owner starts Registry.",
+     "One implementation treats `08781` as the whole number 8781; another requires the canonical decimal spelling."
+    ],
+    "outcomes": [
+     "Registry opens the listener on port 8781.",
+     "Registry stops and names the address as malformed."
+    ],
+    "observer": "The owner and the startup test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 permitted listener hosts",
+   "kind": "unclear refusal condition",
+   "text": "The addresses are the deployment's, as R0-19 says — the host's loopback where Registry runs on the host, its internal network where it runs in a container — so the configuration names them",
+   "question": "Must Registry reject a syntactically valid address that is not the required loopback or internal-network address, such as `0.0.0.0:8781`, `[::]:8781`, a public interface or the VM Agent-facing interface, or is network confinement entirely a deployment obligation?",
+   "options": [
+    "Accept any valid IP literal and rely on deployment controls.",
+    "Reject wildcard, public and otherwise disallowed interfaces in Registry.",
+    "Check only that the address belongs to a local interface, leaving its network classification to deployment."
+   ],
+   "default_guess": "Accept any syntactically valid bindable IP address and treat reachability restrictions as deployment obligations, because the supplied earlier-state topology says Registry does not detect exposure.",
+   "witness": {
+    "initial": "The owner configures the owner interface as `0.0.0.0:8781`, and the host permits that bind.",
+    "events": [
+     "Registry validates the configuration and opens the listener.",
+     "One implementation checks only syntax and bindability; another interprets “the host's loopback” as a validation rule."
+    ],
+    "outcomes": [
+     "Registry starts and listens on every interface.",
+     "Registry stops and names the owner-interface address."
+    ],
+    "observer": "The owner and any machine able to reach the exposed interface"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 listener separation",
+   "kind": "unspecified collision rule",
+   "text": "the owner interface's first, then the service API's unless the start is owner-only, one that cannot be opened failing the start and closing the one already opened.",
+   "question": "Are the owner-interface and service-API addresses required to be distinct, and must socket options prevent both surfaces from successfully binding the same endpoint?",
+   "options": [
+    "Reject equal configured endpoints before opening either listener.",
+    "Allow equality but require the second bind to fail.",
+    "Allow any socket behavior, including shared-port binding when the runtime supports it."
+   ],
+   "default_guess": "Require distinct endpoints and reject equality as a configuration error before opening listeners.",
+   "witness": {
+    "initial": "All items are valid, and both listener addresses are `127.0.0.1:8781`.",
+    "events": [
+     "Registry opens the owner listener first.",
+     "One implementation uses ordinary exclusive binding; another enables a shared-port socket option."
+    ],
+    "outcomes": [
+     "The service bind fails, the owner listener is closed and startup stops.",
+     "Both listeners open on one endpoint, leaving request routing dependent on the runtime."
+    ],
+    "observer": "The owner and callers of both surfaces"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 Required test 8",
+   "kind": "ambiguous test subject",
+   "text": "An address `127.0.0.1:8781` is accepted, `[::1]:8781` too; `localhost:8781`, `127.0.0.1` and `127.0.0.1:0` stop the start, naming the item.",
+   "question": "Must these cases be demonstrated independently for the owner-interface address and the service-API address, and for the latter with all four tokens present, or is testing either address field sufficient?",
+   "options": [
+    "Run every accepted and refused example against both address items.",
+    "Test the parser once through either address item.",
+    "Test accepted forms on one address and refused forms on the other."
+   ],
+   "default_guess": "Apply every example to both configured address fields, with the four service tokens present when testing the service-API address.",
+   "witness": {
+    "initial": "A test suite exercises every literal listed in Required test 8 only through the owner-interface address.",
+    "events": [
+     "An implementation validates the owner address with the strict parser but passes the service address to a permissive runtime parser.",
+     "The suite runs the stated cases."
+    ],
+    "outcomes": [
+     "The suite passes although `localhost:8781` is accepted for the service API.",
+     "A suite interpreting the item as both addresses fails the implementation."
+    ],
+    "observer": "The code-factory gate and later test author"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 and A21 topology basis",
+   "kind": "contradictory reference",
+   "text": "R0-19 keeps which network may reach each surface the deployment's",
+   "question": "Which current earlier-state decision is the normative basis for listener reachability, given that the supplied R0-19 passage says it is replaced by R0-27, R0-28 and R0-29 and the later topology is further narrowed by R0-39 and R0-48?",
+   "options": [
+    "Replace the R0-19 claim with the current R0-28, R0-29, R0-39 and R0-48 requirements.",
+    "Treat the replaced R0-19 deployment rule as still normative for this limited purpose.",
+    "State the deployment obligation directly without relying on R0-19."
+   ],
+   "default_guess": "Cite the current R0-28, R0-29, R0-39 and R0-48 topology and state directly that Registry validates syntax and bindability but deployment enforces reachability.",
+   "witness": {
+    "initial": "The production Registry runs in VM Platform and Client Portal reaches its service API through WireGuard from the VPS.",
+    "events": [
+     "One implementer follows the referenced R0-19 same-host-only network rule.",
+     "Another follows the replacing R0-28/R0-39 topology."
+    ],
+    "outcomes": [
+     "The listener is confined so the cross-host WireGuard path cannot reach it.",
+     "The service listener is reachable over the protected cross-host channel."
+    ],
+    "observer": "Client Portal and the owner deploying Registry"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A17 configuration mapping\",\"kind\":\"unspecified names\",\"text\":\"The configuration is a set of environment variables whose names begin with `REGISTRY_`, set as R0-23 says. Registry reads exactly the items below and no other variable\",\"question\":\"What exact environment-variable name, settings-field name and settings-field type represent each new owner-interface and service-API address, and what exact item name appears in diagnostics?\",\"options\":[\"Use names such as `REGISTRY_OWNER_ADDRESS` and `REGISTRY_SERVICE_API_ADDRESS`, each mapped to one parsed address field.\",\"Use separate host and port variables and settings fields for each listener.\",\"Leave the concrete names and field shapes to the contracts or implementation.\"],\"default_guess\":\"Use `REGISTRY_OWNER_ADDRESS` and `REGISTRY_SERVICE_API_ADDRESS`, each as one required `host:port` string parsed into a typed host-and-port value.\",\"witness\":{\"initial\":\"A deployment sets all existing required variables and both intended listener addresses.\",\"events\":[\"The owner sets `REGISTRY_OWNER_ADDRESS` and `REGISTRY_SERVICE_API_ADDRESS`.\",\"One implementation reads those names; another reads equally plausible names such as `REGISTRY_OWNER_LISTEN_ADDRESS` and `REGISTRY_SERVICE_LISTEN_ADDRESS`.\"],\"outcomes\":[\"Registry starts and opens both listeners.\",\"Registry reports the owner-interface address as missing.\"],\"observer\":\"The owner starting Registry\"}},{\"subject\":\"A17 address validation\",\"kind\":\"incomplete grammar\",\"text\":\"An address is a host and a port, `host:port`: the host an IP address — an IPv6 one in brackets — and the port a whole number from 1 to 65535.\",\"question\":\"What exact lexical grammar and normalization rules decide whether an address is well formed, including surrounding whitespace, leading zeroes or a leading plus on the port, non-ASCII digits, noncanonical IPv4 forms, IPv4-mapped IPv6, IPv6 zone identifiers and trailing characters?\",\"options\":[\"Accept every string accepted by a named strict IP-address parser plus an ASCII decimal port grammar.\",\"Require canonical textual IP and port forms only.\",\"Accept any parseable IP literal and integer after trimming whitespace.\"],\"default_guess\":\"Require the entire string to match a strict IP-literal grammar, brackets around IPv6, and an ASCII decimal port without sign or whitespace; accept noncanonical but valid IPv6 spellings.\",\"witness\":{\"initial\":\"All required configuration items are present and valid except that an address is `127.0.0.1:08781`.\",\"events\":[\"The owner starts Registry.\",\"One implementation treats `08781` as the whole number 8781; another requires the canonical decimal spelling.\"],\"outcomes\":[\"Registry opens the listener on port 8781.\",\"Registry stops and names the address as malformed.\"],\"observer\":\"The owner and the startup test\"}},{\"subject\":\"A17 permitted listener hosts\",\"kind\":\"unclear refusal condition\",\"text\":\"The addresses are the deployment's, as R0-19 says — the host's loopback where Registry runs on the host, its internal network where it runs in a container — so the configuration names them\",\"question\":\"Must Registry reject a syntactically valid address that is not the required loopback or internal-network address, such as `0.0.0.0:8781`, `[::]:8781`, a public interface or the VM Agent-facing interface, or is network confinement entirely a deployment obligation?\",\"options\":[\"Accept any valid IP literal and rely on deployment controls.\",\"Reject wildcard, public and otherwise disallowed interfaces in Registry.\",\"Check only that the address belongs to a local interface, leaving its network classification to deployment.\"],\"default_guess\":\"Accept any syntactically valid bindable IP address and treat reachability restrictions as deployment obligations, because the supplied earlier-state topology says Registry does not detect exposure.\",\"witness\":{\"initial\":\"The owner configures the owner interface as `0.0.0.0:8781`, and the host permits that bind.\",\"events\":[\"Registry validates the configuration and opens the listener.\",\"One implementation checks only syntax and bindability; another interprets “the host's loopback” as a validation rule.\"],\"outcomes\":[\"Registry starts and listens on every interface.\",\"Registry stops and names the owner-interface address.\"],\"observer\":\"The owner and any machine able to reach the exposed interface\"}},{\"subject\":\"A17 listener separation\",\"kind\":\"unspecified collision rule\",\"text\":\"the owner interface's first, then the service API's unless the start is owner-only, one that cannot be opened failing the start and closing the one already opened.\",\"question\":\"Are the owner-interface and service-API addresses required to be distinct, and must socket options prevent both surfaces from successfully binding the same endpoint?\",\"options\":[\"Reject equal configured endpoints before opening either listener.\",\"Allow equality but require the second bind to fail.\",\"Allow any socket behavior, including shared-port binding when the runtime supports it.\"],\"default_guess\":\"Require distinct endpoints and reject equality as a configuration error before opening listeners.\",\"witness\":{\"initial\":\"All items are valid, and both listener addresses are `127.0.0.1:8781`.\",\"events\":[\"Registry opens the owner listener first.\",\"One implementation uses ordinary exclusive binding; another enables a shared-port socket option.\"],\"outcomes\":[\"The service bind fails, the owner listener is closed and startup stops.\",\"Both listeners open on one endpoint, leaving request routing dependent on the runtime.\"],\"observer\":\"The owner and callers of both surfaces\"}},{\"subject\":\"A17 Required test 8\",\"kind\":\"ambiguous test subject\",\"text\":\"An address `127.0.0.1:8781` is accepted, `[::1]:8781` too; `localhost:8781`, `127.0.0.1` and `127.0.0.1:0` stop the start, naming the item.\",\"question\":\"Must these cases be demonstrated independently for the owner-interface address and the service-API address, and for the latter with all four tokens present, or is testing either address field sufficient?\",\"options\":[\"Run every accepted and refused example against both address items.\",\"Test the parser once through either address item.\",\"Test accepted forms on one address and refused forms on the other.\"],\"default_guess\":\"Apply every example to both configured address fields, with the four service tokens present when testing the service-API address.\",\"witness\":{\"initial\":\"A test suite exercises every literal listed in Required test 8 only through the owner-interface address.\",\"events\":[\"An implementation validates the owner address with the strict parser but passes the service address to a permissive runtime parser.\",\"The suite runs the stated cases.\"],\"outcomes\":[\"The suite passes although `localhost:8781` is accepted for the service API.\",\"A suite interpreting the item as both addresses fails the implementation.\"],\"observer\":\"The code-factory gate and later test author\"}},{\"subject\":\"A17 and A21 topology basis\",\"kind\":\"contradictory reference\",\"text\":\"R0-19 keeps which network may reach each surface the deployment's\",\"question\":\"Which current earlier-state decision is the normative basis for listener reachability, given that the supplied R0-19 passage says it is replaced by R0-27, R0-28 and R0-29 and the later topology is further narrowed by R0-39 and R0-48?\",\"options\":[\"Replace the R0-19 claim with the current R0-28, R0-29, R0-39 and R0-48 requirements.\",\"Treat the replaced R0-19 deployment rule as still normative for this limited purpose.\",\"State the deployment obligation directly without relying on R0-19.\"],\"default_guess\":\"Cite the current R0-28, R0-29, R0-39 and R0-48 topology and state directly that Registry validates syntax and bindability but deployment enforces reachability.\",\"witness\":{\"initial\":\"The production Registry runs in VM Platform and Client Portal reaches its service API through WireGuard from the VPS.\",\"events\":[\"One implementer follows the referenced R0-19 same-host-only network rule.\",\"Another follows the replacing R0-28/R0-39 topology.\"],\"outcomes\":[\"The listener is confined so the cross-host WireGuard path cannot reach it.\",\"The service listener is reachable over the protected cross-host channel.\"],\"observer\":\"Client Portal and the owner deploying Registry\"}}]}",
+ "set_aside": []
+}
