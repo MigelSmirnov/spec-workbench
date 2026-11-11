@@ -59,18 +59,21 @@ lockout, no remembered backup date (A13 rules 2, 3; A18 rule 1).
 
 `module:instance_lifecycle` owns the order of the start and serves nothing
 until every check passed (A17 rule 2); it decides no check.
-`module:configuration` owns reading the `REGISTRY_` variables and every check
-of A17 that needs no file. `module:backups` owns the probe of the backup
+`module:runtime_settings` alone reads the environment: the `REGISTRY_` items
+A17 rule 1 lists, and no other variable. `module:configuration` owns every
+check of A17 that needs no file, over the settings it loaded. `module:backups` owns the probe of the backup
 location (A17 rule 2, A18 rule 5). `module:store` owns opening or making the
 store and its integrity and version checks (A17 rule 5).
-`module:release_declarations` gives the services a token is required for, the
-store version and temporary-name suffix, and the backup prefixes; nothing of
-them is read from the configuration. `module:service_api` and
+`module:data_provider` holds, as constants its readers import, the services
+a token is required for, the store version and temporary-name suffix, the
+backup prefixes and the listeners' addresses; nothing of them is read from
+the configuration. `module:service_api` and
 `module:owner_interface` are the two surfaces; `module:owner_sessions` and
 `module:backups` own the passes the running instance makes.
 
 Crossing models: the environment's `REGISTRY_` items enter
-`module:configuration` and leave as the loaded configuration — locations,
+`module:runtime_settings` and leave as the settings, which
+`module:configuration` checks and hands on as the loaded configuration — locations,
 the owner credential, the backup key and the service tokens, or none of the
 tokens for an owner-only start — or as one diagnostic naming the failed item;
 each secret then goes only to the module that uses it ("Secrets never leave").
@@ -81,27 +84,29 @@ diagnostic.
 
 1. **Read and check the configuration.**
    `capability:instance_lifecycle.start_instance` calls
-   `capability:configuration.load_configuration`, which reads the variables
-   whose names begin with `REGISTRY_` and no other, and checks them in A17
-   rule 2's order: no unknown item, by name in Unicode code point order; the
-   service tokens all of the services `capability:release_declarations.rights_of_service`
+   `capability:configuration.load_configuration`, which takes the settings
+   `capability:runtime_settings.load_runtime_settings` reads from the
+   `REGISTRY_` items A17 rule 1 lists — a variable that names no item is not
+   read (owner, 2026-11-11) — and checks them in A17 rule 2's order: the
+   service tokens all of the services the imported `SERVICE_RIGHTS` constant
    lists, or none, which makes an owner-only start; every other item present;
-   each well formed; each secret at least 32 bytes (rule 3); no two secrets
+   each well formed; each secret at least the imported `SECRET_MIN_BYTES`
+   constant, 32 bytes (rule 3); no two secrets
    equal (rule 4); the store and the backup location apart, every link
    resolved (rule 5). The first failure stops the start with a diagnostic
    naming the item and never its value. No default is applied (rule 5).
 2. **Probe the backup location.** `capability:backups.probe_backup_location`
    creates and removes a probe file under the temporary prefix
-   `capability:release_declarations.backup_name_prefixes` names (A17 rule 2,
+   the imported `BACKUP_TEMPORARY_PREFIX` constant names (A17 rule 2,
    A18 rule 5). A location that does not exist, or where the file cannot be
    created or removed, stops the start; a probe it could not remove stays
    and the next backup run removes it (A18 rule 4). No other file there is
    touched.
 3. **Open or make the store.** `capability:store.open_store` first removes a
-   file of the store's temporary name — the store's name with the suffix the
-   release declares — and no other file. When the store's file does not
+   file of the store's temporary name — the store's name with the imported
+   `STORE_TEMPORARY_SUFFIX` constant — and no other file. When the store's file does not
    exist and its directory does, it makes a new, empty store of
-   `capability:release_declarations.store_version_of_release` under the
+   the imported `STORE_VERSION` constant under the
    temporary name and renames it to the store's name once complete;
    otherwise it opens the store for reading and writing, runs the full
    integrity check and compares the store version with the release's (A17
@@ -114,7 +119,8 @@ diagnostic.
 4. **Open the listeners.** Last, `module:instance_lifecycle` opens the
    owner interface's listener and then, unless the start is owner-only, the
    service API's, each at the address
-   `capability:release_declarations.listener_addresses` gives — the
+   the imported `OWNER_INTERFACE_LISTEN_ADDRESS` and
+   `SERVICE_API_LISTEN_ADDRESS` constants give — the
    configuration names none (A17 rules 1, 2). One that cannot be opened stops
    the start with a diagnostic naming the surface: the listeners already
    opened are closed, and a store step 3 made new is removed by
@@ -620,7 +626,7 @@ pointers.
      `capability:artifact_pointers.latest_pointer_of_type` the one published
      pointer of a declared type, or that none is published — a withdrawal
      never falls back (R0-14) — and refuses a type
-     `capability:release_declarations.declared_artifact_types` does not
+     the imported `ARTIFACT_TYPE_OWNERS` constant does not
      declare as unknown (A22 rule 5).
 3. **Class.** `module:operations` computes the answer's class as the highest
    of its facts' and refuses it whole when it is above
@@ -778,8 +784,9 @@ interface (A08 rule 1, R0-88).
 
 `module:artifact_pointers` owns the version, the supersession, the one
 `published` pointer per type, the withdrawal, the publisher and the request
-id (A07, A08 rules 3–7, A01). `module:release_declarations` declares the
-types and their owner services (A22). `module:agent_sessions` checks Kernel's
+id (A07, A08 rules 3–7, A01). `module:data_provider` holds the
+types and their owner services as the imported `ARTIFACT_TYPE_OWNERS`
+constant (A22). `module:agent_sessions` checks Kernel's
 call (A10); `module:service_access` refuses every other service (A08 rule 2).
 `module:operations` resolves a withdrawn pointer's project before stage (2)
 (A08 rule 7). `module:projects` answers whether the project exists and is
@@ -800,15 +807,15 @@ owner.
    — no other service may publish — and stage (2)
    `capability:agent_sessions.check_agent_call`. Then
    `capability:artifact_pointers.publish_pointer`: (3) the project exists;
-   (4) the type among `capability:release_declarations.declared_artifact_types`,
+   (4) the type among the imported `ARTIFACT_TYPE_OWNERS` constant's,
    `uri` or `payload_ref` given and not blank, the request id well formed
    (A07 rule 6, A22 rule 5); the request id looked up among that project's
    pointers, its project and publisher among the facts — a repeat answers
    the pointer whatever its status now, and the archive check applies to it
    (A01 rules 3, 4, 6), and one with other facts is refused as a conflict;
    (6) an archived project refused, and the conflict. A new pointer gets a
-   minted id, the next version of its type, the owner service of
-   `capability:release_declarations.owner_service_of_type` and its
+   minted id, the next version of its type, the owner service its row of
+   the imported `ARTIFACT_TYPE_OWNERS` constant names and its
    publisher; the type's published pointer becomes `superseded` with its
    instant, all in the one transaction (A07 rules 1–3).
 2. **Withdraw.** The call names the pointer only. `module:operations` finds
@@ -865,8 +872,8 @@ reading the file, the mapping and its checks, the re-check at confirmation
 and the closure (A16, M10). `module:projects`, `module:customers` and
 `module:artifact_pointers` write their own imported records.
 `module:operations` opens the one transaction, mints the confirmation id and
-appends the entry. `module:release_declarations` gives the file's size limit
-and the declared types.
+appends the entry. `module:data_provider` holds the file's size limit
+and the declared types as constants `module:migration_import` imports.
 
 Crossing models: the file's bytes, kept only in memory and named by their
 digest; the mapping — the picked projects by `project_id`, their rooms and
@@ -883,7 +890,7 @@ minted `customer_ref`.
    (`capability:owner_sessions.admit_owner_request`). Holding them,
    `capability:migration_import.read_import_mapping` refuses when the closure
    exists (rule 8), refuses a file over
-   `capability:release_declarations.import_size_limit` (A19 rule 4) and a file that cannot be read, holds two projects with one id, or a
+   the imported `IMPORT_FILE_MAX_BYTES` constant (A19 rule 4) and a file that cannot be read, holds two projects with one id, or a
    project without a readable id or status (rule 3), and otherwise answers
    each project with its id and status. An accepted file is kept by
    `capability:owner_sessions.keep_uploaded_file`, replacing the session's
@@ -973,7 +980,8 @@ UTC of a date it saw before 03:00 (A18 rule 1).
 the backup's record, the names and the rotation (A18). `module:store` writes
 the consistent copy without agent sessions at the path `module:backups` names
 and checks a decrypted copy (A18 rules 2, 4). `module:clock` gives the look's
-instant. `module:release_declarations` gives the prefixes and the release.
+instant. `module:data_provider` holds the prefixes, the daily time, the retention and
+the release as constants `module:backups` imports.
 `module:instance_lifecycle` runs the look every minute. Nothing is written to
 the store and no entry is made.
 
@@ -992,8 +1000,8 @@ key; the kept name made from the instant.
    date exists — a file whose record cannot be read counting as none (A18
    rule 1). The date is remembered, a failed run included.
 2. **Clear temporary files.** Every regular file directly in the location
-   whose name begins with the temporary prefix of
-   `capability:release_declarations.backup_name_prefixes` is removed; a
+   whose name begins with the temporary prefix the
+   imported `BACKUP_TEMPORARY_PREFIX` constant names is removed; a
    failed removal stops the run (A18 rule 4).
 3. **Copy, encrypt, check.** `capability:store.copy_store_snapshot` writes one
    read snapshot of the store, the agent sessions removed, at the temporary
@@ -1006,7 +1014,7 @@ key; the kept name made from the instant.
    unencrypted copy before going on — a copy it cannot remove fails the run
    and is left, under the temporary prefix, for the next run's step 2; the
    backup records the instant, the release from
-   `capability:release_declarations.release_versions`, the sequence number
+   the imported `RELEASE_VERSION` constant, the sequence number
    and the key's digest; decrypts it into a second temporary file;
    `capability:store.check_store_file` opens that for reading only and checks
    the release's store version, the full integrity check and that its kept
