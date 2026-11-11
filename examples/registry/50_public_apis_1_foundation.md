@@ -582,12 +582,16 @@ The store `open_store` answered as made new.
 
 ### Outputs
 
-Whether it was removed.
+Whether it was removed: true when the store's file and the SQLite files
+beside it that its connection made (its journal or write-ahead log) are
+all gone; false otherwise.
 
 ### Observable effect
 
-The new, empty store is removed, or left as an empty store of the release's
-version when the removal fails.
+Every connection to the new store is closed first; then the store's file and
+the SQLite files its connection made beside it are removed. A close or a
+removal that fails leaves what remains as an empty store of the release's
+version, which the next start opens as any store.
 
 ### Enforces
 
@@ -601,7 +605,8 @@ surface that could not be opened.
 
 ### State impact
 
-Deletes one file it made; touches no other.
+Deletes the store file it made and the SQLite files beside it, when it can;
+touches no other file.
 
 ## `public_op:store.run_in_transaction`
 

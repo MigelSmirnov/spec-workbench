@@ -123,7 +123,7 @@ diagnostic.
 4. **Open the listeners.** Last, `module:instance_lifecycle` opens the
    owner interface's listener and then, unless the start is owner-only, the
    service API's, each at its address in the loaded configuration — the
-   deployment's, as R0-19 says (A17 rules 1, 2). One that cannot be opened stops
+   deployment's (A17 rule 1; R0-28, R0-48). One that cannot be opened stops
    the start with a diagnostic naming the surface: the listeners already
    opened are closed, then a store step 3 made new is removed, then the
    process ends with its one diagnostic, which names the surface that could

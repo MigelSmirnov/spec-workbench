@@ -189,9 +189,12 @@ closure is the one proof of success.
    an overlapping endpoint — and an IPv6 listener accepts IPv6 connections
    alone, never IPv4 ones mapped onto it; whether a port a closed listener
    left can be bound again at once is the platform's, which Registry
-   neither requires nor prevents. The addresses are the deployment's, as R0-19 says
-   — the host's loopback where Registry runs on the host, its internal
-   network where it runs in a container — so the configuration names them
+   neither requires nor prevents. The addresses are the deployment's: the
+   service API is reachable only in VM Platform and over the WireGuard
+   channel from the VPS, the owner interface only through the owner's VPN
+   (R0-28, R0-29, R0-48), and the interface each is bound to on that host,
+   or on a test instance's (R0-34), is the host's administration — so the
+   configuration names them
    (owner, 2026-11-11, replacing the release-fixed addresses of 2026-11-01:
    one release cannot hold both).
 2. Registry checks the configuration when it starts and serves nothing until
@@ -638,10 +641,11 @@ import size limit is counted over the bytes received, never over a declared
 length (rule 4); a new store's one audit sequence (A17 rule 5) changes no
 category's subject. A17's change of the same day — a variable that names no
 item is not read and does not stop the start — and its second, the
-listeners' addresses named by the configuration as the deployment's (R0-19),
+listeners' addresses named by the configuration as the deployment's (R0-28,
+R0-48),
 with their text form, their exclusive binding and IPv6-only listening, were
 reviewed under authentication_credential_abuse and secrets: no outcome
-changed — an address is no secret, and R0-19 keeps which network may reach
+changed — an address is no secret, and R0-28 and R0-48 keep which network may reach
 each surface the deployment's — since such
 a variable is never a credential Registry uses, never enters a diagnostic,
 and a misspelt secret leaves its item unset, which stops the start or makes
