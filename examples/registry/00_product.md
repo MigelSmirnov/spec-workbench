@@ -1199,6 +1199,15 @@ identifies the object or its customer — stays a rule on its writer, the owner,
 as R0-82 says: Registry does not inspect its content, and an alias whose
 content breaks that rule is not refused.
 
+So an alias whose content breaks the rule does reach the agent, as a room
+name that breaks R0-68's rule does. This does not break R0-26: the alias is
+held as `business_confidential`, not `personal_data` (State 1, "Disclosure
+classes by field"), and Registry's guarantee that no `personal_data` value
+reaches an agent covers the values it holds in that class. Registry cannot
+tell a person's name from another word (R0-68), so the one protection it can
+give the alias is to keep it short; the owner's rule on its content is the
+rest.
+
 ### R0-81 — The one-home rule is a target the services reach; Registry does not wait (owner, 2026-10-27, after round 23 T1; narrows R0-80)
 
 Production Registry starts without waiting for the other services. From its
