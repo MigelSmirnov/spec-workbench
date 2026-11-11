@@ -19,7 +19,10 @@ its projects, or, for the owner's picks, the mapping (A16 rules 1, 3–5).
 
 ### Inputs
 
-The read transaction; the mode, `upload` or `mapping`; the file's bytes;
+The read transaction; the mode, `upload` or `mapping`; at `upload`, the
+request's declared length, or that it declared none, and its unread byte
+stream, which this operation reads at most one byte past the imported
+`IMPORT_FILE_MAX_BYTES` constant; at `mapping`, the kept file's bytes;
 for `mapping`, the picks as the owner gave them, a list that keeps a
 project given twice so it can be refused — possibly empty — each with the display name and
 alias it arrives under, and for each Customer the import will make its

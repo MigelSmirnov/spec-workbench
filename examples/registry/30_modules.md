@@ -232,8 +232,9 @@ Nothing.
 ### Must not own
 
 Any limit or schedule: the 8 hours, 30, 15 and 10 minutes and the 60 seconds
-are `data_provider`'s constants that `owner_sessions` applies, the 03:00 and
-the minute look constants that `backups` applies.
+are `data_provider`'s constants that `owner_sessions` applies; the 03:00 is
+one that `backups` applies; the minute look's 60 seconds is one that
+`instance_lifecycle` applies, calling `backups` at that interval.
 
 ### Hides
 
@@ -416,9 +417,11 @@ A17 rule 1's reading of the environment, and only it: the closed table of
 the `REGISTRY_` items — the store's location, the backup location, the
 backup key, the owner credential, the four service tokens — loaded at each
 call of `load_runtime_settings` into the settings, each item with its type,
-whether it is required (the four tokens each optional, every other item
-required) and its normalization; no default for any item (A17 rule 5); a
-variable that names no item is not read (owner, 2026-11-11). The table is
+whether it is its normalization; every item optional at this level and absent when
+unset, so that `configuration` checks presence and form in A17 rule 2's one
+order; no default for any item (A17 rule 5); a variable that names no item
+is not read (owner, 2026-11-11). It checks nothing: it answers each item as
+set, or absent. The table is
 its own — each variable's name, the field it fills and its form; the data
 closure writes it once, as `config.runtime_environment_variables`, and no
 other module holds a name. Every item is text taken as it is set: no
@@ -433,9 +436,9 @@ those bytes (A17 rules 3, 6). Emitted deterministically (SPEC_STANDARD
 
 ### Must not own
 
-Any check across items — the tokens all or none, a secret's length, two
-secrets equal, the store and backup location apart — which are
-`configuration`'s; opening the store or probing the backup location.
+Any check of an item or across items — presence, form, the tokens all or
+none, a secret's length, two secrets equal, the store and backup location
+apart — which are `configuration`'s; opening the store or probing the backup location.
 
 ### Hides
 
@@ -450,14 +453,14 @@ load_runtime_settings
 ### Depth assessment
 
 - kind: deep
-- hidden mechanism: the closed environment table and its per-item validation
+- hidden mechanism: the closed environment table, read as set
 
 ## `configuration`
 
 ### Owns
 
-A17: the start checks of rule 2 in its one order over the settings
-`runtime_settings` loads — the service tokens of the services
+A17: every start check of rule 2, in its one order, over the settings
+`runtime_settings` loads as set — the service tokens of the services
 `data_provider`'s rights table lists, all or none, the other items present,
 each well formed, each secret at least the 32 bytes `data_provider` holds, no
 two secrets equal — with the diagnostic naming the failed item and never its
@@ -907,7 +910,10 @@ list_sessions
 ### Owns
 
 A16 and M10: reading an uploaded file as data under the release's size limit
-(A19 rule 4), refusing at upload a file that cannot be read, holds two
+(A19 rule 4) — from the declared length and the unread stream
+`owner_interface` hands on: a declared length over the limit refused before
+any byte is read, otherwise at most one byte more than the limit read and
+refused as soon as it holds more — refusing at upload a file that cannot be read, holds two
 projects with one id or a project without a readable id or status (rule 3);
 the mapping for the picks — rooms, pointers, names and aliases, the Customers
 it will make, malformed records and conflicting ids (rules 1, 3–5); that the
@@ -1089,7 +1095,9 @@ revision of the card it rendered, or none for one that shows none; A12 rule
 3's access version likewise. The session cookie and the CSRF value in its
 forms (A13 rules 1, 5, 7), no personal value or secret in a URL (R0-29). The
 newest backup's instant on its page (A18 rule 1). A16's upload, mapping and
-confirmation pages.
+confirmation pages. An upload's bytes are handed on as the request's
+declared length and its unread stream, never read or buffered here, so
+that `migration_import` alone applies A19 rule 4 to them.
 
 ### Knows
 

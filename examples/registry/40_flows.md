@@ -890,7 +890,10 @@ minted `customer_ref`.
    (`capability:owner_sessions.admit_owner_request`). Holding them,
    `capability:migration_import.read_import_mapping` refuses when the closure
    exists (rule 8), refuses a file over
-   the imported `IMPORT_FILE_MAX_BYTES` constant (A19 rule 4) and a file that cannot be read, holds two projects with one id, or a
+   the imported `IMPORT_FILE_MAX_BYTES` constant (A19 rule 4) — reading the
+   upload's stream, which `module:owner_interface` hands on unread with its
+   declared length: a declared length over it refused before any byte is
+   read, otherwise refused as soon as more than it has been read — and a file that cannot be read, holds two projects with one id, or a
    project without a readable id or status (rule 3), and otherwise answers
    each project with its id and status. An accepted file is kept by
    `capability:owner_sessions.keep_uploaded_file`, replacing the session's

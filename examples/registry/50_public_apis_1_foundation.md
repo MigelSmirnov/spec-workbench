@@ -389,9 +389,8 @@ Pure; touches no record.
 ### Owner
 
 `module:runtime_settings`. Read the `REGISTRY_` items A17 rule 1 lists from
-the process environment into the settings, each with its type, whether it
-is required and its normalization; no other variable is read (owner,
-2026-11-11).
+the process environment into the settings, each as set or absent; no other
+variable is read (owner, 2026-11-11).
 
 ### Callers
 
@@ -404,8 +403,8 @@ None; it reads the process environment.
 ### Outputs
 
 The settings: the store's location, the backup location, the backup key,
-the owner credential, each required; each of the four service tokens, or
-its absence.
+the owner credential and each of the four service tokens, each as set or
+absent.
 
 ### Observable effect
 
@@ -413,14 +412,13 @@ None.
 
 ### Enforces
 
-A17 rules 1 and 5 for each item alone: a required item missing or
-malformed refused, naming the item and never its value; no default applied.
-The checks across items are `configuration.load_configuration`'s.
+A17 rules 1 and 5: no other variable read, no default applied. Every check
+— presence, form and the checks across items — is
+`configuration.load_configuration`'s, in A17 rule 2's one order.
 
 ### Errors
 
-A diagnostic naming the first failed item, never its value; the start stops
-on it. Its shape is the emitted module's (SPEC_STANDARD §6.11).
+None: it checks nothing (SPEC_STANDARD §6.11).
 
 ### State impact
 
