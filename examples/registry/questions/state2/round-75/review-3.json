@@ -1,0 +1,283 @@
+{
+ "open_points": [
+  {
+   "subject": "A01",
+   "kind": "contradiction",
+   "text": "create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:\n  rights fail or project archived => refused, store unchanged",
+   "question": "Does an equal repeat of a Project create return the archived Project as rule 4 and Required test 4 require, or is it refused because the Project is archived as the formal invariant requires?",
+   "options": [
+    "Return the archived Project unchanged",
+    "Refuse the repeat because the Project is archived"
+   ],
+   "default_guess": "Return the archived Project unchanged and restrict the invariant's archive branch to Room and ArtifactPointer creates.",
+   "witness": {
+    "initial": "An archived Project has request id k and current facts f; the caller has the required rights.",
+    "events": [
+     "The owner repeats create-project with request id k and facts f."
+    ],
+    "outcomes": [
+     "A01 rule 4 and Required test 4 answer the archived Project unchanged.",
+     "The formal invariant refuses the call because the project is archived."
+    ],
+    "observer": "The owner receives either the Project or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A01",
+   "kind": "undefined form",
+   "text": "an opaque value the caller makes, unique for every create it means as new — printable text of at most 128 characters, made from at least 16 random bytes, as a random UUID is; a blank one is missing (A02). That it is random is the caller's duty; Registry checks its form only.",
+   "question": "What exact lexical form does Registry accept, what does “printable” include, is there a minimum encoded length, and does a UUID with fixed version bits satisfy “at least 16 random bytes”?",
+   "options": [
+    "Accept any nonblank Unicode-printable string of at most 128 code points and do not validate entropy",
+    "Accept only a specified UUID form",
+    "Define an ASCII alphabet and encoded-length bounds that demonstrate the required entropy"
+   ],
+   "default_guess": "Accept a canonical UUIDv4 or a nonblank printable identifier up to 128 code points, treating entropy as an unenforced caller obligation.",
+   "unit": "?"
+  },
+  {
+   "subject": "A01",
+   "kind": "invariant test gap",
+   "text": "Two 'create a project' calls with the same request id and equal facts make one project; the second answers it.",
+   "question": "Must this test run the calls concurrently and assert the request-id uniqueness invariant, or is a sequential retry sufficient?",
+   "options": [
+    "Require a concurrent race and assert that only one record carries the request id",
+    "Test only a sequential retry",
+    "Require both sequential and concurrent cases for every request-id scope"
+   ],
+   "default_guess": "Require both sequential and concurrent cases, including the per-project Room and ArtifactPointer scopes.",
+   "unit": "?"
+  },
+  {
+   "subject": "A01",
+   "kind": "standard_violation",
+   "text": "an opaque value the caller\n   makes, unique for every create it means as new — printable text of at most\n   128 characters, made from at least 16 random bytes, as a random UUID is;",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "The 128-character and 16-byte thresholds must become named imported data-provider constants, or be removed from generated-code behavior.",
+   "unit": "?"
+  },
+  {
+   "subject": "A07",
+   "kind": "time reading unspecified",
+   "text": "Publishing a pointer assigns its version, marks the type's published pointer `superseded` with its instant, and stores the new pointer `published` — all in one transaction, or none of it (R0-17, R0-35).",
+   "question": "Does one publish take one wall-clock reading for both the old pointer's superseded instant and the new pointer's published instant, and at what point relative to locking and the transaction is it taken?",
+   "options": [
+    "Take one reading after serialization and use it for both instants",
+    "Take a separate reading for each changed record",
+    "Use the database transaction or commit timestamp"
+   ],
+   "default_guess": "Take one UTC wall-clock reading after acquiring serialization and before writing, and use it for both instants.",
+   "witness": {
+    "initial": "A project has one published estimate pointer.",
+    "events": [
+     "The owner publishes the next estimate while the wall clock advances between writes."
+    ],
+    "outcomes": [
+     "Both pointers carry the same transition instant.",
+     "The old pointer's superseded instant and the new pointer's published instant differ."
+    ],
+    "observer": "A reader of pointer history sees either one atomic transition time or two times."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16",
+   "kind": "digest definition missing",
+   "text": "The mapping names the file by its digest. The owner confirms that mapping in the confirmation step (A13 rule 6); the confirmation applies the file of that digest, the picks, names, aliases and Customer values the mapping showed, nothing else;",
+   "question": "Which digest algorithm and output representation identify the file, and what canonical, unambiguous encoding and ordering are used to digest the picks and mapping values?",
+   "options": [
+    "SHA-256 of the exact uploaded bytes plus a separately specified length-prefixed canonical encoding of mapping inputs",
+    "A canonical serialization of the parsed file and mapping",
+    "An implementation-selected digest and serialization"
+   ],
+   "default_guess": "Use lowercase hexadecimal SHA-256 of the exact bytes and a versioned, length-prefixed canonical encoding for all bound inputs.",
+   "witness": {
+    "initial": "A file is uploaded and a confirmation is made for picks and text values whose concatenations can be encoded ambiguously.",
+    "events": [
+     "The owner submits a different grouping of values that produces the same byte concatenation under one plausible implementation."
+    ],
+    "outcomes": [
+     "A length-prefixed encoding gives a different digest and refuses the submission.",
+     "Plain concatenation gives the same digest and accepts the differently grouped inputs."
+    ],
+    "observer": "The owner sees the confirmation refused or the unintended mapping applied."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16",
+   "kind": "pick validation missing",
+   "text": "As the owner picks projects, the mapping shows for the picks only",
+   "question": "What happens when a request names a project id not present in the uploaded file, repeats a pick, or supplies picks in a different order?",
+   "options": [
+    "Refuse the mapping request as an invalid pick set",
+    "Ignore unknown and duplicate picks",
+    "Normalize duplicates and order but refuse unknown ids"
+   ],
+   "default_guess": "Treat picks as a set, reject every id absent from the uploaded file, and render them in a deterministic order.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16",
+   "kind": "invariant test gap",
+   "text": "import(file f, picks P) accepted =>\n  stored(P with rooms, pointers) and stored(new customers of P)\n  and closure.file_digest = digest(f) and one AuditEntry, in one transaction",
+   "question": "Which Required tests item demonstrates a successful import and asserts every part of this accepted-import invariant?",
+   "options": [
+    "Add a successful-import test asserting all picked projects, rooms, pointers, Customers, closure digest and exactly one audit entry",
+    "Treat the refusal and failure tests as sufficient",
+    "Split the invariant into separately witnessed successful-import checks"
+   ],
+   "default_guess": "Add one explicit successful-import test that reads and asserts every committed record and the single audit entry.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16",
+   "kind": "atomicity test gap",
+   "text": "A failure during the transaction leaves no project, no Customer and no closure.",
+   "question": "Must the failure test also assert that no Room, ArtifactPointer or AuditEntry remains, as the transaction rule and formal invariant require?",
+   "options": [
+    "Assert that none of the transaction's record kinds or audit entry remains",
+    "Assert only Project, Customer and closure absence",
+    "Use separate failure tests for each possible partial write"
+   ],
+   "default_guess": "Assert absence of Projects, Customers, Rooms, ArtifactPointers, the closure and the import AuditEntry.",
+   "witness": {
+    "initial": "The store contains none of the imported records.",
+    "events": [
+     "An import transaction fails after a Room or its AuditEntry has been written but before the Project, Customer and closure persist."
+    ],
+    "outcomes": [
+     "The stated test passes even though an orphan Room or AuditEntry remains.",
+     "A complete atomicity test fails on the residual Room or AuditEntry."
+    ],
+    "observer": "The owner or a later store inspection sees residual import state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16",
+   "kind": "time reading unspecified",
+   "text": "An accepted import stores every picked project with its rooms and pointers, the Customers it makes, the migration closure (M10) and its one audit entry (M09) in one transaction.",
+   "question": "Is there one import instant shared by each new Customer, the migration closure and the AuditEntry, and when is it read relative to validation and commit?",
+   "options": [
+    "Take one reading inside the transaction and use it for every fresh import timestamp",
+    "Take independent readings for each record",
+    "Use a database commit timestamp for all fresh fields"
+   ],
+   "default_guess": "Take one UTC reading after all checks while holding the locks and use it for every fresh timestamp written by the import.",
+   "witness": {
+    "initial": "A valid import is ready while the wall clock is near a visible boundary.",
+    "events": [
+     "The owner confirms the import and the transaction writes Customers, closure and AuditEntry across that boundary."
+    ],
+    "outcomes": [
+     "All new records carry one import instant.",
+     "The Customer, closure and AuditEntry carry different instants."
+    ],
+    "observer": "The owner reading imported Customers, closure evidence and audit history sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21",
+   "kind": "stale security review",
+   "text": "Performed again on 2026-11-11, after that day's changes to A02, A15, A16,\nA17, A18 and A19 reopened it (rule 2)",
+   "question": "Where is the required reopening of the concurrency review for the current A04 change, given that concurrency names A04 and A21 rule 2 reopens every category that names a changed decision?",
+   "options": [
+    "Review concurrency again and record A04 among the triggering changes",
+    "State that the current A04 change predates and was included in the recorded review",
+    "Remove A04 from the concurrency category if it is not actually relied upon"
+   ],
+   "default_guess": "Reopen concurrency for A04 and append an explicit review result.",
+   "unit": "?"
+  },
+  {
+   "subject": "A02",
+   "kind": "missing refusal condition",
+   "text": "A present value is refused when it is outside the form State 1 declares, at stage (4) of A04 rule 6, every such value named: an alias longer than 40 characters, counted as Unicode code points (R0-90, M01) — its length only, its content being the owner's rule (R0-82); an object kind outside `apartment`, `house`, `commercial`, `other` (M02); a floor area not greater than zero, a number of rooms that is not a whole number of at least 1, or a floor that is not a whole number (M02); a customer language outside `es`, `ru`, `en` (M04).",
+   "question": "What happens when the import supplies a present Customer kind outside State 1's `person` and `company` vocabulary, which this supposedly exhaustive list does not name?",
+   "options": [
+    "Show it as out of form in the mapping, withhold confirmation and refuse a crafted confirmation",
+    "Treat any nonblank Customer kind as valid",
+    "Refuse the mapping request immediately"
+   ],
+   "default_guess": "Apply the State 1 vocabulary at stage (4), show the invalid kind in the mapping, withhold the step and refuse confirmation.",
+   "witness": {
+    "initial": "A valid file contains a Customer to be made.",
+    "events": [
+     "The owner gives that Customer the nonblank kind `partnership` in the mapping."
+    ],
+    "outcomes": [
+     "The value is outside State 1's form, so the mapping flags it and confirmation is unavailable or refused.",
+     "Because A02's exhaustive list omits Customer kind, an implementation treats it as valid and imports it."
+    ],
+    "observer": "The owner sees either an out-of-form value or a successful import."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A02",
+   "kind": "numeric representation unspecified",
+   "text": "a floor area a decimal greater than zero, a number of rooms a whole number of at least 1, a floor a whole number",
+   "question": "Which input representations count as a decimal or whole number—for example `1.0`, exponent notation, booleans, NaN and infinities—and are mathematically integral decimals accepted for whole-number fields?",
+   "options": [
+    "Require finite JSON decimal numbers and accept an integral decimal such as 1.0 as whole",
+    "Require an integer lexical/schema type for rooms and floor",
+    "Accept any host-language numeric value satisfying the comparisons"
+   ],
+   "default_guess": "Require finite decimal input; accept rooms and floor only through an integer schema type, rejecting booleans, NaN, infinities and fractional lexical forms.",
+   "unit": "?"
+  },
+  {
+   "subject": "A02",
+   "kind": "invariant test gap",
+   "text": "A project created with kind `villa`, or with a floor area of 0, is refused naming both values; one created with no kind and no characteristic is accepted.",
+   "question": "Which Required tests item shows that a present positive floor area is accepted and stored, as required by the new stored-object invariant, and does “naming both values” mean one request containing both failures or two separate requests?",
+   "options": [
+    "Add a test with both invalid values that asserts both errors, plus a positive area that is stored",
+    "Interpret the existing sentence as one combined invalid request and regard absence as sufficient coverage",
+    "Use separate invalid requests and add an accepted positive-area case"
+   ],
+   "default_guess": "Test one request containing both invalid values and require both errors, then test a positive finite area is stored.",
+   "unit": "?"
+  },
+  {
+   "subject": "A02",
+   "kind": "standard_violation",
+   "text": "The characteristics'\n   bounds are their fields' types — a floor area a decimal greater than zero,\n   a number of rooms a whole number of at least 1, a floor a whole number —\n   which State 6 declares in `models` as forms (SPEC_STANDARD §15.2 check 0),\n   not policy values: no threshold constant holds them.",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "The greater-than-zero and at-least-one thresholds must become named imported data-provider constants; only the decimal or whole-number shape may remain a model field type.",
+   "unit": "?"
+  },
+  {
+   "subject": "A04",
+   "kind": "contradictory refusal semantics",
+   "text": "the file's own checks and the picks still refuse as A16 rules 1 and 3 say.",
+   "question": "Which request is refused for a picked malformed record or conflict: the mapping request, the request to show the confirmation step, or confirmation itself? A16 rule 1 says the mapping shows these problems, while this passage says the picks refuse.",
+   "options": [
+    "Answer the mapping with all picked problems, refuse only showing the confirmation step and confirmation",
+    "Refuse the mapping request for picked malformed records or conflicts",
+    "Distinguish upload-level structural failures from mapping annotations and state each result explicitly"
+   ],
+   "default_guess": "Refuse uploads only for A16 rule 3's whole-file structural failures; otherwise answer the mapping with annotations and withhold or refuse confirmation.",
+   "witness": {
+    "initial": "A readable uploaded file has a picked project containing a withdrawn pointer.",
+    "events": [
+     "The owner asks to see the mapping for that pick."
+    ],
+    "outcomes": [
+     "A16 rule 1 answers the mapping showing the malformed pointer and makes no confirmation value.",
+     "A04's statement that the picks refuse is implemented as a refusal of the mapping request."
+    ],
+    "observer": "The owner either sees the diagnostic mapping or only a refusal."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A01\",\"kind\":\"contradiction\",\"text\":\"create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:\\n  rights fail or project archived => refused, store unchanged\",\"question\":\"Does an equal repeat of a Project create return the archived Project as rule 4 and Required test 4 require, or is it refused because the Project is archived as the formal invariant requires?\",\"options\":[\"Return the archived Project unchanged\",\"Refuse the repeat because the Project is archived\"],\"default_guess\":\"Return the archived Project unchanged and restrict the invariant's archive branch to Room and ArtifactPointer creates.\",\"witness\":{\"initial\":\"An archived Project has request id k and current facts f; the caller has the required rights.\",\"events\":[\"The owner repeats create-project with request id k and facts f.\"],\"outcomes\":[\"A01 rule 4 and Required test 4 answer the archived Project unchanged.\",\"The formal invariant refuses the call because the project is archived.\"],\"observer\":\"The owner receives either the Project or a refusal.\"}},{\"subject\":\"A01\",\"kind\":\"undefined form\",\"text\":\"an opaque value the caller makes, unique for every create it means as new — printable text of at most 128 characters, made from at least 16 random bytes, as a random UUID is; a blank one is missing (A02). That it is random is the caller's duty; Registry checks its form only.\",\"question\":\"What exact lexical form does Registry accept, what does “printable” include, is there a minimum encoded length, and does a UUID with fixed version bits satisfy “at least 16 random bytes”?\",\"options\":[\"Accept any nonblank Unicode-printable string of at most 128 code points and do not validate entropy\",\"Accept only a specified UUID form\",\"Define an ASCII alphabet and encoded-length bounds that demonstrate the required entropy\"],\"default_guess\":\"Accept a canonical UUIDv4 or a nonblank printable identifier up to 128 code points, treating entropy as an unenforced caller obligation.\"},{\"subject\":\"A01\",\"kind\":\"invariant test gap\",\"text\":\"Two 'create a project' calls with the same request id and equal facts make one project; the second answers it.\",\"question\":\"Must this test run the calls concurrently and assert the request-id uniqueness invariant, or is a sequential retry sufficient?\",\"options\":[\"Require a concurrent race and assert that only one record carries the request id\",\"Test only a sequential retry\",\"Require both sequential and concurrent cases for every request-id scope\"],\"default_guess\":\"Require both sequential and concurrent cases, including the per-project Room and ArtifactPointer scopes.\"},{\"subject\":\"A01\",\"kind\":\"standard_violation\",\"text\":\"an opaque value the caller\\n   makes, unique for every create it means as new — printable text of at most\\n   128 characters, made from at least 16 random bytes, as a random UUID is;\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"The 128-character and 16-byte thresholds must become named imported data-provider constants, or be removed from generated-code behavior.\"},{\"subject\":\"A07\",\"kind\":\"time reading unspecified\",\"text\":\"Publishing a pointer assigns its version, marks the type's published pointer `superseded` with its instant, and stores the new pointer `published` — all in one transaction, or none of it (R0-17, R0-35).\",\"question\":\"Does one publish take one wall-clock reading for both the old pointer's superseded instant and the new pointer's published instant, and at what point relative to locking and the transaction is it taken?\",\"options\":[\"Take one reading after serialization and use it for both instants\",\"Take a separate reading for each changed record\",\"Use the database transaction or commit timestamp\"],\"default_guess\":\"Take one UTC wall-clock reading after acquiring serialization and before writing, and use it for both instants.\",\"witness\":{\"initial\":\"A project has one published estimate pointer.\",\"events\":[\"The owner publishes the next estimate while the wall clock advances between writes.\"],\"outcomes\":[\"Both pointers carry the same transition instant.\",\"The old pointer's superseded instant and the new pointer's published instant differ.\"],\"observer\":\"A reader of pointer history sees either one atomic transition time or two times.\"}},{\"subject\":\"A16\",\"kind\":\"digest definition missing\",\"text\":\"The mapping names the file by its digest. The owner confirms that mapping in the confirmation step (A13 rule 6); the confirmation applies the file of that digest, the picks, names, aliases and Customer values the mapping showed, nothing else;\",\"question\":\"Which digest algorithm and output representation identify the file, and what canonical, unambiguous encoding and ordering are used to digest the picks and mapping values?\",\"options\":[\"SHA-256 of the exact uploaded bytes plus a separately specified length-prefixed canonical encoding of mapping inputs\",\"A canonical serialization of the parsed file and mapping\",\"An implementation-selected digest and serialization\"],\"default_guess\":\"Use lowercase hexadecimal SHA-256 of the exact bytes and a versioned, length-prefixed canonical encoding for all bound inputs.\",\"witness\":{\"initial\":\"A file is uploaded and a confirmation is made for picks and text values whose concatenations can be encoded ambiguously.\",\"events\":[\"The owner submits a different grouping of values that produces the same byte concatenation under one plausible implementation.\"],\"outcomes\":[\"A length-prefixed encoding gives a different digest and refuses the submission.\",\"Plain concatenation gives the same digest and accepts the differently grouped inputs.\"],\"observer\":\"The owner sees the confirmation refused or the unintended mapping applied.\"}},{\"subject\":\"A16\",\"kind\":\"pick validation missing\",\"text\":\"As the owner picks projects, the mapping shows for the picks only\",\"question\":\"What happens when a request names a project id not present in the uploaded file, repeats a pick, or supplies picks in a different order?\",\"options\":[\"Refuse the mapping request as an invalid pick set\",\"Ignore unknown and duplicate picks\",\"Normalize duplicates and order but refuse unknown ids\"],\"default_guess\":\"Treat picks as a set, reject every id absent from the uploaded file, and render them in a deterministic order.\"},{\"subject\":\"A16\",\"kind\":\"invariant test gap\",\"text\":\"import(file f, picks P) accepted =>\\n  stored(P with rooms, pointers) and stored(new customers of P)\\n  and closure.file_digest = digest(f) and one AuditEntry, in one transaction\",\"question\":\"Which Required tests item demonstrates a successful import and asserts every part of this accepted-import invariant?\",\"options\":[\"Add a successful-import test asserting all picked projects, rooms, pointers, Customers, closure digest and exactly one audit entry\",\"Treat the refusal and failure tests as sufficient\",\"Split the invariant into separately witnessed successful-import checks\"],\"default_guess\":\"Add one explicit successful-import test that reads and asserts every committed record and the single audit entry.\"},{\"subject\":\"A16\",\"kind\":\"atomicity test gap\",\"text\":\"A failure during the transaction leaves no project, no Customer and no closure.\",\"question\":\"Must the failure test also assert that no Room, ArtifactPointer or AuditEntry remains, as the transaction rule and formal invariant require?\",\"options\":[\"Assert that none of the transaction's record kinds or audit entry remains\",\"Assert only Project, Customer and closure absence\",\"Use separate failure tests for each possible partial write\"],\"default_guess\":\"Assert absence of Projects, Customers, Rooms, ArtifactPointers, the closure and the import AuditEntry.\",\"witness\":{\"initial\":\"The store contains none of the imported records.\",\"events\":[\"An import transaction fails after a Room or its AuditEntry has been written but before the Project, Customer and closure persist.\"],\"outcomes\":[\"The stated test passes even though an orphan Room or AuditEntry remains.\",\"A complete atomicity test fails on the residual Room or AuditEntry.\"],\"observer\":\"The owner or a later store inspection sees residual import state.\"}},{\"subject\":\"A16\",\"kind\":\"time reading unspecified\",\"text\":\"An accepted import stores every picked project with its rooms and pointers, the Customers it makes, the migration closure (M10) and its one audit entry (M09) in one transaction.\",\"question\":\"Is there one import instant shared by each new Customer, the migration closure and the AuditEntry, and when is it read relative to validation and commit?\",\"options\":[\"Take one reading inside the transaction and use it for every fresh import timestamp\",\"Take independent readings for each record\",\"Use a database commit timestamp for all fresh fields\"],\"default_guess\":\"Take one UTC reading after all checks while holding the locks and use it for every fresh timestamp written by the import.\",\"witness\":{\"initial\":\"A valid import is ready while the wall clock is near a visible boundary.\",\"events\":[\"The owner confirms the import and the transaction writes Customers, closure and AuditEntry across that boundary.\"],\"outcomes\":[\"All new records carry one import instant.\",\"The Customer, closure and AuditEntry carry different instants.\"],\"observer\":\"The owner reading imported Customers, closure evidence and audit history sees the difference.\"}},{\"subject\":\"A21\",\"kind\":\"stale security review\",\"text\":\"Performed again on 2026-11-11, after that day's changes to A02, A15, A16,\\nA17, A18 and A19 reopened it (rule 2)\",\"question\":\"Where is the required reopening of the concurrency review for the current A04 change, given that concurrency names A04 and A21 rule 2 reopens every category that names a changed decision?\",\"options\":[\"Review concurrency again and record A04 among the triggering changes\",\"State that the current A04 change predates and was included in the recorded review\",\"Remove A04 from the concurrency category if it is not actually relied upon\"],\"default_guess\":\"Reopen concurrency for A04 and append an explicit review result.\"},{\"subject\":\"A02\",\"kind\":\"missing refusal condition\",\"text\":\"A present value is refused when it is outside the form State 1 declares, at stage (4) of A04 rule 6, every such value named: an alias longer than 40 characters, counted as Unicode code points (R0-90, M01) — its length only, its content being the owner's rule (R0-82); an object kind outside `apartment`, `house`, `commercial`, `other` (M02); a floor area not greater than zero, a number of rooms that is not a whole number of at least 1, or a floor that is not a whole number (M02); a customer language outside `es`, `ru`, `en` (M04).\",\"question\":\"What happens when the import supplies a present Customer kind outside State 1's `person` and `company` vocabulary, which this supposedly exhaustive list does not name?\",\"options\":[\"Show it as out of form in the mapping, withhold confirmation and refuse a crafted confirmation\",\"Treat any nonblank Customer kind as valid\",\"Refuse the mapping request immediately\"],\"default_guess\":\"Apply the State 1 vocabulary at stage (4), show the invalid kind in the mapping, withhold the step and refuse confirmation.\",\"witness\":{\"initial\":\"A valid file contains a Customer to be made.\",\"events\":[\"The owner gives that Customer the nonblank kind `partnership` in the mapping.\"],\"outcomes\":[\"The value is outside State 1's form, so the mapping flags it and confirmation is unavailable or refused.\",\"Because A02's exhaustive list omits Customer kind, an implementation treats it as valid and imports it.\"],\"observer\":\"The owner sees either an out-of-form value or a successful import.\"}},{\"subject\":\"A02\",\"kind\":\"numeric representation unspecified\",\"text\":\"a floor area a decimal greater than zero, a number of rooms a whole number of at least 1, a floor a whole number\",\"question\":\"Which input representations count as a decimal or whole number—for example `1.0`, exponent notation, booleans, NaN and infinities—and are mathematically integral decimals accepted for whole-number fields?\",\"options\":[\"Require finite JSON decimal numbers and accept an integral decimal such as 1.0 as whole\",\"Require an integer lexical/schema type for rooms and floor\",\"Accept any host-language numeric value satisfying the comparisons\"],\"default_guess\":\"Require finite decimal input; accept rooms and floor only through an integer schema type, rejecting booleans, NaN, infinities and fractional lexical forms.\"},{\"subject\":\"A02\",\"kind\":\"invariant test gap\",\"text\":\"A project created with kind `villa`, or with a floor area of 0, is refused naming both values; one created with no kind and no characteristic is accepted.\",\"question\":\"Which Required tests item shows that a present positive floor area is accepted and stored, as required by the new stored-object invariant, and does “naming both values” mean one request containing both failures or two separate requests?\",\"options\":[\"Add a test with both invalid values that asserts both errors, plus a positive area that is stored\",\"Interpret the existing sentence as one combined invalid request and regard absence as sufficient coverage\",\"Use separate invalid requests and add an accepted positive-area case\"],\"default_guess\":\"Test one request containing both invalid values and require both errors, then test a positive finite area is stored.\"},{\"subject\":\"A02\",\"kind\":\"standard_violation\",\"text\":\"The characteristics'\\n   bounds are their fields' types — a floor area a decimal greater than zero,\\n   a number of rooms a whole number of at least 1, a floor a whole number —\\n   which State 6 declares in `models` as forms (SPEC_STANDARD §15.2 check 0),\\n   not policy values: no threshold constant holds them.\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"The greater-than-zero and at-least-one thresholds must become named imported data-provider constants; only the decimal or whole-number shape may remain a model field type.\"},{\"subject\":\"A04\",\"kind\":\"contradictory refusal semantics\",\"text\":\"the file's own checks and the picks still refuse as A16 rules 1 and 3 say.\",\"question\":\"Which request is refused for a picked malformed record or conflict: the mapping request, the request to show the confirmation step, or confirmation itself? A16 rule 1 says the mapping shows these problems, while this passage says the picks refuse.\",\"options\":[\"Answer the mapping with all picked problems, refuse only showing the confirmation step and confirmation\",\"Refuse the mapping request for picked malformed records or conflicts\",\"Distinguish upload-level structural failures from mapping annotations and state each result explicitly\"],\"default_guess\":\"Refuse uploads only for A16 rule 3's whole-file structural failures; otherwise answer the mapping with annotations and withhold or refuse confirmation.\",\"witness\":{\"initial\":\"A readable uploaded file has a picked project containing a withdrawn pointer.\",\"events\":[\"The owner asks to see the mapping for that pick.\"],\"outcomes\":[\"A16 rule 1 answers the mapping showing the malformed pointer and makes no confirmation value.\",\"A04's statement that the picks refuse is implemented as a refusal of the mapping request.\"],\"observer\":\"The owner either sees the diagnostic mapping or only a refusal.\"}}]}",
+ "set_aside": []
+}

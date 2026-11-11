@@ -1,0 +1,441 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 owner-session expiry",
+   "kind": "contradictory lifecycle timing",
+   "text": "The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request; the owner's sign-out; the instance's restart (M11 is never durable). Registry ends it — and drops its pending confirmation and its uploaded file with it (M11) — at a pass over the sessions it makes every 60 seconds from the start; the pass alone ends sessions by their limits, taking the import lock and then each session's lock (A16 rule 2) and deciding under them.",
+   "question": "Does reaching a time limit end the session and drop its state immediately, or only make it invalid until the next cleanup pass ends it and drops its state?",
+   "options": [
+    "The deadline immediately ends and clears the session; the pass only removes an already-ended entry.",
+    "The deadline makes the session invalid, but the pass up to 60 seconds later ends it and clears its state.",
+    "Only the cleanup pass decides expiry, despite requests being refused from the deadline."
+   ],
+   "default_guess": "Treat the deadline as logical expiry that immediately refuses requests, and let the next pass perform physical removal and drop session state.",
+   "witness": {
+    "initial": "A valid session has an uploaded import file and reaches its idle deadline just after a cleanup pass.",
+    "events": [
+     "The owner makes no further request.",
+     "Before the next cleanup pass, another session attempts an import-related operation whose behaviour can depend on which uploads still exist."
+    ],
+    "outcomes": [
+     "The expired session is already ended and its upload is gone.",
+     "The session is invalid but still exists with its upload until the next pass."
+    ],
+    "observer": "Registry's import/session coordination and any diagnostic inspection of runtime state"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 monotonic time backend",
+   "kind": "unspecified clock representation",
+   "text": "Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension;",
+   "question": "Which concrete clock supplies these readings, in what unit and representation are readings and deadlines stored, and what guarantees that suspended time is included on every supported host?",
+   "options": [
+    "Use an elapsed-time clock that explicitly includes suspend time, storing integer nanoseconds.",
+    "Use the language runtime's ordinary monotonic clock and require supported platforms to include suspend time.",
+    "Use UTC wall time for persistence-free deadlines while detecting backward wall-clock changes."
+   ],
+   "default_guess": "Use an operating-system elapsed-time clock that includes suspension, represented as integer nanoseconds from an opaque clock epoch.",
+   "unit": "?"
+  },
+  {
+   "subject": "all State 2 operations that record time",
+   "kind": "missing wall-clock authority and sampling rule",
+   "text": "instants Registry records and the 03:00 of A18 are UTC wall-clock time.",
+   "question": "What concrete source supplies recorded UTC instants, what precision and canonical representation are used, and how many readings does one operation take when it writes several related instants?",
+   "options": [
+    "One UTC reading per operation, reused for every timestamp and audit fact written by that operation.",
+    "A separate UTC reading for every field written.",
+    "One reading per record, with related records allowed to differ."
+   ],
+   "default_guess": "Read an injected UTC clock once at the start of the committing operation and reuse that timezone-aware UTC instant for all timestamps caused by the operation.",
+   "witness": {
+    "initial": "A project has one published pointer and a publish of its successor is accepted.",
+    "events": [
+     "The publish marks the old pointer superseded, writes the new pointer published, and commits the transaction."
+    ],
+    "outcomes": [
+     "Both pointer facts use one operation instant.",
+     "The superseded and published instants come from separate clock readings and differ."
+    ],
+    "observer": "A caller reading pointer history"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 concurrent sign-out and admitted request",
+   "kind": "unclear serialization outcome",
+   "text": "Validity is checked when a request arrives (A04 rule 6, stage 1); a request that passes it completes even if a limit or a sign-out comes while it runs, and a restart that interrupts it leaves nothing of it (A04 rule 4). A sign-out is applied in turn with the session's other requests that change it: one admitted before it completes its change to the store, and leaves nothing in the ended session.",
+   "question": "If a request passes the session check but has not yet taken the session lock, and sign-out takes that lock first, must the admitted request still execute; and, for an upload or confirmation-state change, where can its session-local result go after sign-out has ended the session?",
+   "options": [
+    "Admission reserves completion, so sign-out must wait behind every already-admitted request.",
+    "Lock acquisition decides order; a sign-out that acquires first causes the waiting request to be refused on a recheck.",
+    "Store-changing work may finish after sign-out, but every session-local change is discarded."
+   ],
+   "default_guess": "Make admission and lock ordering one atomic gate: a request that has passed admission is ordered before a later sign-out and completes before the session is destroyed.",
+   "witness": {
+    "initial": "A valid session has no uploaded file.",
+    "events": [
+     "The owner starts an upload and it passes the session check.",
+     "Before the upload takes the session lock, the owner submits sign-out and sign-out takes the lock first."
+    ],
+    "outcomes": [
+     "The admitted upload completes, requiring the ended session to retain or discard a newly uploaded file.",
+     "The upload is refused after sign-out despite having passed the session check."
+    ],
+    "observer": "The owner attempting to continue the import after signing in again"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 confirmation input binding",
+   "kind": "unspecified digest construction",
+   "text": "and its inputs — for the import, the file's digest and the picks — kept as a digest of those values in a fixed order, never as the values themselves; a submission's inputs are bound when their digest equals it.",
+   "question": "Which digest algorithm, canonical encoding, field order, type/length framing, normalization and output representation define the confirmation-input digest?",
+   "options": [
+    "A named cryptographic digest over a canonical typed serialization.",
+    "A keyed MAC over a canonical typed serialization.",
+    "A language-specific serialization followed by a digest."
+   ],
+   "default_guess": "Use SHA-256 over a versioned, canonical, length-framed byte encoding of every bound field in an explicitly listed order.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 import file identity",
+   "kind": "unspecified digest construction",
+   "text": "The mapping names the file by its digest.",
+   "question": "Which algorithm and representation make the file digest, and is it computed over the exact uploaded bytes or over parsed/canonicalized file content?",
+   "options": [
+    "SHA-256 of the exact received bytes, encoded as lowercase hexadecimal.",
+    "SHA-256 of canonicalized parsed content.",
+    "A configurable cryptographic digest with its algorithm stored beside the value."
+   ],
+   "default_guess": "Use lowercase hexadecimal SHA-256 of the exact bytes received, with the algorithm fixed by the specification.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 formal invariant",
+   "kind": "missing invariant tests",
+   "text": "owner_session s valid at t <=> t < s.began + 8h and\n                                t < s.last_request + 30min and\n                                not signed_out(s) and no restart since s.began",
+   "question": "Which Required tests item demonstrates the eight-hour boundary, the exact equality boundaries, sign-out invalidation, and the conjunction of all four validity conditions?",
+   "options": [
+    "Add separate boundary tests for eight hours, thirty minutes, sign-out and restart.",
+    "Add one parameterized test explicitly asserting every clause and both sides of each strict boundary.",
+    "Declare the existing idle and restart examples sufficient and remove the untested clauses from the formal invariant."
+   ],
+   "default_guess": "Add a parameterized invariant test covering each clause, including exactly-at-limit refusal, plus sign-out and restart.",
+   "unit": "?"
+  },
+  {
+   "subject": "A01 request-id form",
+   "kind": "vague refusal condition",
+   "text": "an opaque value the caller makes, unique for every create it means as new — printable text of at most 128 characters, made from at least 16 random bytes, as a random UUID is; a blank one is missing (A02). That it is random is the caller's duty; Registry checks its form only.",
+   "question": "What exact characters count as printable, whether the 128 limit counts Unicode code points or encoded bytes, and which lexical checks constitute the form Registry enforces?",
+   "options": [
+    "Visible ASCII only, at most 128 bytes.",
+    "Unicode non-control characters, at most 128 code points.",
+    "A UUID or another explicitly enumerated encoding of at least 16 bytes of randomness."
+   ],
+   "default_guess": "Accept nonblank visible ASCII of at most 128 characters; treat entropy as an unenforced caller obligation.",
+   "unit": "?"
+  },
+  {
+   "subject": "A01 repeat comparison",
+   "kind": "ambiguous current-facts rule",
+   "text": "A create whose request id such a record carries is a repeat when the facts it supplies equal that record's current facts of the same kind: Registry answers the record as it stands now and changes nothing. A create whose request id an existing record carries, with facts that differ from that record's current ones — a different value, or the record corrected since — is refused, and nothing changes;",
+   "question": "Does any intervening correction permanently make the request id non-repeatable, or is only equality with the current create-supplied facts considered, so a record corrected away and then back can again be a repeat?",
+   "options": [
+    "Compare only current create-supplied facts; correction history is irrelevant.",
+    "Any correction since creation permanently makes the old create request id refuse.",
+    "Compare against an immutable snapshot of the original create inputs."
+   ],
+   "default_guess": "Compare the supplied facts with the current values of exactly the create-input fields; correction history by itself does not matter.",
+   "witness": {
+    "initial": "A project was created with request id K and display name A.",
+    "events": [
+     "The owner corrects the display name to B.",
+     "The owner corrects it back to A.",
+     "The caller repeats the original create with K and the original facts."
+    ],
+    "outcomes": [
+     "It is a repeat because the supplied facts equal the current facts.",
+     "It is refused because the record was corrected since the original create."
+    ],
+    "observer": "The caller retrying the create"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A01 compared facts",
+   "kind": "unspecified comparison set",
+   "text": "Facts are compared as A02 reads them: a required value as written, an optional value given blank the same as one not given; a fact made of several parts — the object's characteristics — by its parts, whatever their order.",
+   "question": "For each of Project, Customer, Room and ArtifactPointer, which exact fields are included in current_facts, especially generated ids, status, revision, timestamps, publisher, optional digest and customer/object fields?",
+   "options": [
+    "Only fields accepted as inputs by that create operation, with publisher and project included where rule 6 says.",
+    "Every current model fact except request_id.",
+    "Store an immutable normalized create-input snapshot and compare against it."
+   ],
+   "default_guess": "Compare only normalized create-input fields, plus the project and publisher explicitly required by rule 6; exclude generated and subsequently managed facts.",
+   "unit": "?"
+  },
+  {
+   "subject": "A01 formal invariants",
+   "kind": "missing invariant tests",
+   "text": "for each model m in {Project, Customer}, and per project for m in\n{Room, ArtifactPointer}:\n  for records r1 != r2 of m with r1.request_id and r2.request_id present:\n    r1.request_id != r2.request_id",
+   "question": "Which Required tests item demonstrates request-id uniqueness for Customer and per-project Room and ArtifactPointer records, rather than only the project example?",
+   "options": [
+    "Add one uniqueness/concurrency test for every model and the per-project scope.",
+    "Use a parameterized test over all four models.",
+    "Narrow the formal invariant to the model actually tested."
+   ],
+   "default_guess": "Add a parameterized uniqueness test for all four models, explicitly checking that Room and ArtifactPointer uniqueness is scoped per project.",
+   "unit": "?"
+  },
+  {
+   "subject": "A01 repeat on archived project",
+   "kind": "missing invariant test",
+   "text": "rights fail or project archived => refused, store unchanged",
+   "question": "Which Required tests item demonstrates that a repeated add-room or publish call on an archived project is refused with the store unchanged?",
+   "options": [
+    "Add archived-repeat tests for both add-room and publish.",
+    "Add one parameterized archived project-child create test.",
+    "Remove the archived clause from the formal invariant."
+   ],
+   "default_guess": "Add parameterized tests for a repeated room create and repeated publish after archiving.",
+   "unit": "?"
+  },
+  {
+   "subject": "A02 blank-value semantics",
+   "kind": "unspecified whitespace definition",
+   "text": "missing(v) <=> v is absent or strip(v) = \"\"",
+   "question": "Which characters does strip remove, and is the definition tied to Unicode White_Space, an HTTP/form parser, or a programming-language-specific strip operation?",
+   "options": [
+    "Unicode White_Space code points.",
+    "ASCII whitespace only.",
+    "The implementation language's built-in strip semantics."
+   ],
+   "default_guess": "Define blank using the Unicode White_Space property and count/retain the original value unchanged when it is not blank.",
+   "unit": "?"
+  },
+  {
+   "subject": "A02 numeric forms",
+   "kind": "vague refusal conditions",
+   "text": "a floor area not greater than zero, a number of rooms that is not a whole number of at least 1, or a floor that is not a whole number (M02);",
+   "question": "Which input representations count as decimal or whole numbers—for example 2.0, \"2\", exponent notation, booleans, NaN and infinity—and at what parsing stage are malformed representations refused?",
+   "options": [
+    "Accept JSON numbers only; integral-valued decimals such as 2.0 count as whole, while booleans and non-finite values do not.",
+    "Accept canonical decimal strings as well as numbers.",
+    "Require integer syntax for whole-number fields, so 2.0 is refused even though mathematically integral."
+   ],
+   "default_guess": "Accept finite JSON numbers only; require mathematical integrality for whole-number fields, reject booleans and non-finite values.",
+   "unit": "?"
+  },
+  {
+   "subject": "A02 stored-required-value invariant",
+   "kind": "missing invariant tests",
+   "text": "for every stored required value v: not missing(v)",
+   "question": "Which Required tests item demonstrates the invariant for every required field, including object address, Customer name and kind, room name and access-request text?",
+   "options": [
+    "Add a parameterized test over every required field.",
+    "State that a generated schema test enumerates all required fields and bind this invariant to it.",
+    "Narrow the invariant to the display-name example."
+   ],
+   "default_guess": "Add a schema-driven parameterized test covering absent, empty and whitespace-only values for every required field.",
+   "unit": "?"
+  },
+  {
+   "subject": "A02 object-characteristic invariant",
+   "kind": "incomplete invariant test",
+   "text": "for every stored object: rooms absent or (rooms is a whole number and rooms >= 1)\n                         area absent or area > 0; floor absent or floor is a whole number",
+   "question": "Which Required tests item shows that a valid positive decimal area is stored and that absent characteristics remain allowed, in addition to the listed invalid boundaries?",
+   "options": [
+    "Extend test 5 or 6 with a positive decimal area and explicit absence cases.",
+    "Add a parameterized test for absent, valid and invalid values of every characteristic.",
+    "Treat the current refusal examples as sufficient proof of the stored-state invariant."
+   ],
+   "default_guess": "Add a parameterized test with absent, valid and invalid cases for rooms, area and floor.",
+   "unit": "?"
+  },
+  {
+   "subject": "A04 import mapping exception",
+   "kind": "contradictory refusal wording",
+   "text": "The import's mapping request is the one operation whose stage (4) answers instead of refusing for the values the owner gives in it: a missing or out-of-form name, alias or Customer value is shown in the mapping, which is its answer (A16 rule 1, A02 rule 4); the file's own checks and the picks still refuse as A16 rules 1 and 3 say.",
+   "question": "Exactly which file and pick failures refuse the mapping request, given that A16 rule 1 says malformed picked records, conflicts and missing values are shown and prevent the confirmation step rather than refusing the mapping?",
+   "options": [
+    "Only whole-file upload failures from A16 rule 3 refuse; pick-level problems are shown in the mapping.",
+    "Selecting an invalid pick refuses the mapping request, while owner-entered value errors are shown.",
+    "All problems are shown by the mapping; only upload and confirmation requests can refuse."
+   ],
+   "default_guess": "Refuse only the whole-file structural failures explicitly assigned to upload by A16 rule 3; show all pick-level conflicts, malformed records and owner-value errors in the mapping.",
+   "unit": "?"
+  },
+  {
+   "subject": "A04 revision-and-time invariant",
+   "kind": "missing invariant test",
+   "text": "accepted and changed(r) and r keeps a revision\n                          => r.revision' = r.revision + 1\n                             and r.last_changed' = now",
+   "question": "Which Required tests item asserts both the one-step revision increase and equality of last_changed to the operation's decided instant?",
+   "options": [
+    "Extend the archiving test to assert revision and exact injected-clock time.",
+    "Add a parameterized test for every revision-moving action.",
+    "Remove last_changed from the formal invariant until a test names it."
+   ],
+   "default_guess": "Add a clock-controlled parameterized test for every revision-moving action, asserting both revision +1 and the exact single operation instant.",
+   "unit": "?"
+  },
+  {
+   "subject": "A04 check-order invariant",
+   "kind": "incomplete invariant tests",
+   "text": "answer(a) = first failing check of a in the order (1)..(6), else its effect",
+   "question": "Which Required tests item demonstrates every adjacent precedence boundary and the rule that all failures within the winning stage are named, rather than only the few combinations in tests 4, 5, 7 and 8?",
+   "options": [
+    "Add a table-driven test for every adjacent stage pair and multiple failures within one stage.",
+    "Narrow the invariant to the precedence combinations explicitly tested.",
+    "Declare a generated check-order test and name its witness here."
+   ],
+   "default_guess": "Add a table-driven test covering stages 1–6, skipped stages, and aggregation of simultaneous failures within the first failing stage.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 confirmation conflict race",
+   "kind": "unspecified concurrency precedence",
+   "text": "At confirmation Registry checks again. Any conflict — a project, room or pointer id production holds — or any malformed record of the picks refuses the whole import, and nothing changes (R0-50, R0-79).",
+   "question": "How is the conflict check serialized with an ordinary concurrent create using one of the imported ids, and which operation is allowed to win?",
+   "options": [
+    "Serialize import and all identity-creating operations; whichever takes the shared lock first wins.",
+    "Use database uniqueness and allow either transaction to win, translating the loser into its specified refusal.",
+    "Give an import confirmation precedence over ordinary creates once confirmation begins."
+   ],
+   "default_guess": "Use serializable database constraints and permit either transaction order; the loser receives its domain refusal and neither transaction leaves partial state.",
+   "witness": {
+    "initial": "Production does not yet contain room id X, and an import confirmation includes room id X.",
+    "events": [
+     "The owner confirms the import.",
+     "Concurrently, another accepted operation attempts to create a production record with id X before the import commits."
+    ],
+    "outcomes": [
+     "The ordinary create commits first and the import is wholly refused as conflicting.",
+     "The import commits first and the concurrent create is refused."
+    ],
+    "observer": "The owner confirming the import and the concurrent caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 accepted-import invariant",
+   "kind": "missing invariant tests",
+   "text": "import(file f, picks P) accepted =>\n  stored(P with rooms, pointers) and stored(new customers of P)\n  and closure.file_digest = digest(f) and one AuditEntry, in one transaction",
+   "question": "Which Required tests item asserts storage of rooms and pointers, exact closure digest, exactly one audit entry, and atomic absence of every one of those records after failure?",
+   "options": [
+    "Expand the transaction test to enumerate projects, rooms, pointers, Customers, closure and audit entry.",
+    "Add a dedicated accepted-import invariant test plus a failure-at-each-write test.",
+    "Narrow the formal invariant to the records currently asserted."
+   ],
+   "default_guess": "Add an accepted-import assertion for every listed record and a fault-injection test at each write boundary proving none survive failure.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 conflict invariant",
+   "kind": "incomplete invariant test",
+   "text": "conflict at confirmation => store unchanged",
+   "question": "Which Required tests item explicitly snapshots and compares the entire store after a confirmation-time conflict, rather than merely saying the import is refused?",
+   "options": [
+    "Extend the conflicting-id test to assert the whole store is unchanged.",
+    "Add a generic transaction rollback assertion for every confirmation refusal.",
+    "Remove this formal invariant and rely only on rule 6."
+   ],
+   "default_guess": "Extend the conflict test to compare the complete durable store before and after confirmation.",
+   "unit": "?"
+  },
+  {
+   "subject": "A21 security-review reopening",
+   "kind": "unperformed required review",
+   "text": "Performed again on 2026-11-11, after that day's changes to A02, A15, A16,\nA17, A18 and A19 reopened it (rule 2):",
+   "question": "A04 also changed and the concurrency category names A04; was that category reviewed again for the A04 change, and if so why is A04 absent from the list and review account?",
+   "options": [
+    "Add A04 to the 2026-11-11 reopening and state the concurrency review outcome.",
+    "Perform a new review dated after the A04 change.",
+    "Remove A04 from the concurrency references if that category does not rely on it."
+   ],
+   "default_guess": "Add A04 to the 2026-11-11 reopening and explicitly record that concurrency was reviewed for its new import-mapping exception.",
+   "unit": "?"
+  },
+  {
+   "subject": "M06 AgentSession lifecycle",
+   "kind": "carried model question",
+   "text": "What ends a session, and whether its record is kept after, is State 2's (R0-47).",
+   "question": "What ends an agent session, what happens to its grants, active project and pending request, and is the ended record deleted or retained?",
+   "options": [
+    "Kernel explicitly ends it and Registry deletes the record and all embedded access state.",
+    "The session expires by a State 2 timeout and is deleted.",
+    "It is marked ended and retained durably for a stated period."
+   ],
+   "default_guess": "Require an authenticated Kernel end operation that atomically deletes the AgentSession and its embedded access state.",
+   "unit": "?"
+  },
+  {
+   "subject": "M06 access version",
+   "kind": "carried model question",
+   "text": "None for identity. What moves the access version is stated above; its start value and how a stale version is checked are State 2's (round 28 judgement P4).",
+   "question": "What is the initial access version, which operations must state it, and exactly how stale or absent versions are refused relative to the A04 stages?",
+   "options": [
+    "Start at 1; every owner access mutation states it and stale or absent values fail at stage 5.",
+    "Start at 0; only confirmation-bound mutations state it.",
+    "Mint an opaque version and compare for equality."
+   ],
+   "default_guess": "Start at 1 and require every owner mutation of session access to state the current version, with stale or missing versions refused at A04 stage 5.",
+   "unit": "?"
+  },
+  {
+   "subject": "M09 audit coverage",
+   "kind": "carried model question",
+   "text": "None for identity. Whether refused attempts and agent-authority reads leave an entry is State 2's (round 28 P1; R0-58 says ordinary reads do not).",
+   "question": "Do refused attempts and agent-authority reads write audit entries; if some refused attempts do, which operations, failure stages and payload fields are recorded?",
+   "options": [
+    "Record no refused attempt and no read; only accepted significant state changes are audited.",
+    "Record security-relevant refusals only, under an exact closed list.",
+    "Record every refused write but no reads."
+   ],
+   "default_guess": "Write no audit entry for reads or refusals; audit only accepted significant changes listed by M09.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 time source",
+   "kind": "standard_violation",
+   "text": "Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension; instants Registry records\n   and the 03:00 of A18 are UTC wall-clock time.",
+   "rule": "Иначе устроена `time_source_policy` (§6.8): её тоже проверяет гейт фабрики, но до кода она доходит через IR `system_clock_backend` (ниже, «Что считается достижимостью листа»), и декларация ей не нужна.",
+   "section": "15.3.1",
+   "question": "The passage must name a decided time-source policy that reaches generated code through IR `system_clock_backend`, covering both elapsed and UTC readings.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 duration values",
+   "kind": "standard_violation",
+   "text": "Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension;",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The passage must give each duration a valid path to generated code, normally named imported policy constants with one declared home.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 random-value size",
+   "kind": "standard_violation",
+   "text": "The session's identity, its CSRF value and a confirmation value are each at least 32 bytes from the operating system's random source; each is compared in constant time and never appears in a URL, a log line, a diagnostic or an audit entry (R0-29, R0-37).",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The passage must route the 32-byte minimum to generated code through a named imported policy constant or another one of the three allowed paths.",
+   "unit": "?"
+  },
+  {
+   "subject": "A01 request-id bounds",
+   "kind": "standard_violation",
+   "text": "each carry a request id: an opaque value the caller\n   makes, unique for every create it means as new — printable text of at most\n   128 characters, made from at least 16 random bytes, as a random UUID is;",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The passage must route the 128-character maximum and 16-byte minimum to generated code through named imported policy constants or another allowed path.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 owner-session expiry\",\"kind\":\"contradictory lifecycle timing\",\"text\":\"The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request; the owner's sign-out; the instance's restart (M11 is never durable). Registry ends it — and drops its pending confirmation and its uploaded file with it (M11) — at a pass over the sessions it makes every 60 seconds from the start; the pass alone ends sessions by their limits, taking the import lock and then each session's lock (A16 rule 2) and deciding under them.\",\"question\":\"Does reaching a time limit end the session and drop its state immediately, or only make it invalid until the next cleanup pass ends it and drops its state?\",\"options\":[\"The deadline immediately ends and clears the session; the pass only removes an already-ended entry.\",\"The deadline makes the session invalid, but the pass up to 60 seconds later ends it and clears its state.\",\"Only the cleanup pass decides expiry, despite requests being refused from the deadline.\"],\"default_guess\":\"Treat the deadline as logical expiry that immediately refuses requests, and let the next pass perform physical removal and drop session state.\",\"witness\":{\"initial\":\"A valid session has an uploaded import file and reaches its idle deadline just after a cleanup pass.\",\"events\":[\"The owner makes no further request.\",\"Before the next cleanup pass, another session attempts an import-related operation whose behaviour can depend on which uploads still exist.\"],\"outcomes\":[\"The expired session is already ended and its upload is gone.\",\"The session is invalid but still exists with its upload until the next pass.\"],\"observer\":\"Registry's import/session coordination and any diagnostic inspection of runtime state\"}},{\"subject\":\"A13 monotonic time backend\",\"kind\":\"unspecified clock representation\",\"text\":\"Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension;\",\"question\":\"Which concrete clock supplies these readings, in what unit and representation are readings and deadlines stored, and what guarantees that suspended time is included on every supported host?\",\"options\":[\"Use an elapsed-time clock that explicitly includes suspend time, storing integer nanoseconds.\",\"Use the language runtime's ordinary monotonic clock and require supported platforms to include suspend time.\",\"Use UTC wall time for persistence-free deadlines while detecting backward wall-clock changes.\"],\"default_guess\":\"Use an operating-system elapsed-time clock that includes suspension, represented as integer nanoseconds from an opaque clock epoch.\"},{\"subject\":\"all State 2 operations that record time\",\"kind\":\"missing wall-clock authority and sampling rule\",\"text\":\"instants Registry records and the 03:00 of A18 are UTC wall-clock time.\",\"question\":\"What concrete source supplies recorded UTC instants, what precision and canonical representation are used, and how many readings does one operation take when it writes several related instants?\",\"options\":[\"One UTC reading per operation, reused for every timestamp and audit fact written by that operation.\",\"A separate UTC reading for every field written.\",\"One reading per record, with related records allowed to differ.\"],\"default_guess\":\"Read an injected UTC clock once at the start of the committing operation and reuse that timezone-aware UTC instant for all timestamps caused by the operation.\",\"witness\":{\"initial\":\"A project has one published pointer and a publish of its successor is accepted.\",\"events\":[\"The publish marks the old pointer superseded, writes the new pointer published, and commits the transaction.\"],\"outcomes\":[\"Both pointer facts use one operation instant.\",\"The superseded and published instants come from separate clock readings and differ.\"],\"observer\":\"A caller reading pointer history\"}},{\"subject\":\"A13 concurrent sign-out and admitted request\",\"kind\":\"unclear serialization outcome\",\"text\":\"Validity is checked when a request arrives (A04 rule 6, stage 1); a request that passes it completes even if a limit or a sign-out comes while it runs, and a restart that interrupts it leaves nothing of it (A04 rule 4). A sign-out is applied in turn with the session's other requests that change it: one admitted before it completes its change to the store, and leaves nothing in the ended session.\",\"question\":\"If a request passes the session check but has not yet taken the session lock, and sign-out takes that lock first, must the admitted request still execute; and, for an upload or confirmation-state change, where can its session-local result go after sign-out has ended the session?\",\"options\":[\"Admission reserves completion, so sign-out must wait behind every already-admitted request.\",\"Lock acquisition decides order; a sign-out that acquires first causes the waiting request to be refused on a recheck.\",\"Store-changing work may finish after sign-out, but every session-local change is discarded.\"],\"default_guess\":\"Make admission and lock ordering one atomic gate: a request that has passed admission is ordered before a later sign-out and completes before the session is destroyed.\",\"witness\":{\"initial\":\"A valid session has no uploaded file.\",\"events\":[\"The owner starts an upload and it passes the session check.\",\"Before the upload takes the session lock, the owner submits sign-out and sign-out takes the lock first.\"],\"outcomes\":[\"The admitted upload completes, requiring the ended session to retain or discard a newly uploaded file.\",\"The upload is refused after sign-out despite having passed the session check.\"],\"observer\":\"The owner attempting to continue the import after signing in again\"}},{\"subject\":\"A13 confirmation input binding\",\"kind\":\"unspecified digest construction\",\"text\":\"and its inputs — for the import, the file's digest and the picks — kept as a digest of those values in a fixed order, never as the values themselves; a submission's inputs are bound when their digest equals it.\",\"question\":\"Which digest algorithm, canonical encoding, field order, type/length framing, normalization and output representation define the confirmation-input digest?\",\"options\":[\"A named cryptographic digest over a canonical typed serialization.\",\"A keyed MAC over a canonical typed serialization.\",\"A language-specific serialization followed by a digest.\"],\"default_guess\":\"Use SHA-256 over a versioned, canonical, length-framed byte encoding of every bound field in an explicitly listed order.\"},{\"subject\":\"A16 import file identity\",\"kind\":\"unspecified digest construction\",\"text\":\"The mapping names the file by its digest.\",\"question\":\"Which algorithm and representation make the file digest, and is it computed over the exact uploaded bytes or over parsed/canonicalized file content?\",\"options\":[\"SHA-256 of the exact received bytes, encoded as lowercase hexadecimal.\",\"SHA-256 of canonicalized parsed content.\",\"A configurable cryptographic digest with its algorithm stored beside the value.\"],\"default_guess\":\"Use lowercase hexadecimal SHA-256 of the exact bytes received, with the algorithm fixed by the specification.\"},{\"subject\":\"A13 formal invariant\",\"kind\":\"missing invariant tests\",\"text\":\"owner_session s valid at t <=> t < s.began + 8h and\\n                                t < s.last_request + 30min and\\n                                not signed_out(s) and no restart since s.began\",\"question\":\"Which Required tests item demonstrates the eight-hour boundary, the exact equality boundaries, sign-out invalidation, and the conjunction of all four validity conditions?\",\"options\":[\"Add separate boundary tests for eight hours, thirty minutes, sign-out and restart.\",\"Add one parameterized test explicitly asserting every clause and both sides of each strict boundary.\",\"Declare the existing idle and restart examples sufficient and remove the untested clauses from the formal invariant.\"],\"default_guess\":\"Add a parameterized invariant test covering each clause, including exactly-at-limit refusal, plus sign-out and restart.\"},{\"subject\":\"A01 request-id form\",\"kind\":\"vague refusal condition\",\"text\":\"an opaque value the caller makes, unique for every create it means as new — printable text of at most 128 characters, made from at least 16 random bytes, as a random UUID is; a blank one is missing (A02). That it is random is the caller's duty; Registry checks its form only.\",\"question\":\"What exact characters count as printable, whether the 128 limit counts Unicode code points or encoded bytes, and which lexical checks constitute the form Registry enforces?\",\"options\":[\"Visible ASCII only, at most 128 bytes.\",\"Unicode non-control characters, at most 128 code points.\",\"A UUID or another explicitly enumerated encoding of at least 16 bytes of randomness.\"],\"default_guess\":\"Accept nonblank visible ASCII of at most 128 characters; treat entropy as an unenforced caller obligation.\"},{\"subject\":\"A01 repeat comparison\",\"kind\":\"ambiguous current-facts rule\",\"text\":\"A create whose request id such a record carries is a repeat when the facts it supplies equal that record's current facts of the same kind: Registry answers the record as it stands now and changes nothing. A create whose request id an existing record carries, with facts that differ from that record's current ones — a different value, or the record corrected since — is refused, and nothing changes;\",\"question\":\"Does any intervening correction permanently make the request id non-repeatable, or is only equality with the current create-supplied facts considered, so a record corrected away and then back can again be a repeat?\",\"options\":[\"Compare only current create-supplied facts; correction history is irrelevant.\",\"Any correction since creation permanently makes the old create request id refuse.\",\"Compare against an immutable snapshot of the original create inputs.\"],\"default_guess\":\"Compare the supplied facts with the current values of exactly the create-input fields; correction history by itself does not matter.\",\"witness\":{\"initial\":\"A project was created with request id K and display name A.\",\"events\":[\"The owner corrects the display name to B.\",\"The owner corrects it back to A.\",\"The caller repeats the original create with K and the original facts.\"],\"outcomes\":[\"It is a repeat because the supplied facts equal the current facts.\",\"It is refused because the record was corrected since the original create.\"],\"observer\":\"The caller retrying the create\"}},{\"subject\":\"A01 compared facts\",\"kind\":\"unspecified comparison set\",\"text\":\"Facts are compared as A02 reads them: a required value as written, an optional value given blank the same as one not given; a fact made of several parts — the object's characteristics — by its parts, whatever their order.\",\"question\":\"For each of Project, Customer, Room and ArtifactPointer, which exact fields are included in current_facts, especially generated ids, status, revision, timestamps, publisher, optional digest and customer/object fields?\",\"options\":[\"Only fields accepted as inputs by that create operation, with publisher and project included where rule 6 says.\",\"Every current model fact except request_id.\",\"Store an immutable normalized create-input snapshot and compare against it.\"],\"default_guess\":\"Compare only normalized create-input fields, plus the project and publisher explicitly required by rule 6; exclude generated and subsequently managed facts.\"},{\"subject\":\"A01 formal invariants\",\"kind\":\"missing invariant tests\",\"text\":\"for each model m in {Project, Customer}, and per project for m in\\n{Room, ArtifactPointer}:\\n  for records r1 != r2 of m with r1.request_id and r2.request_id present:\\n    r1.request_id != r2.request_id\",\"question\":\"Which Required tests item demonstrates request-id uniqueness for Customer and per-project Room and ArtifactPointer records, rather than only the project example?\",\"options\":[\"Add one uniqueness/concurrency test for every model and the per-project scope.\",\"Use a parameterized test over all four models.\",\"Narrow the formal invariant to the model actually tested.\"],\"default_guess\":\"Add a parameterized uniqueness test for all four models, explicitly checking that Room and ArtifactPointer uniqueness is scoped per project.\"},{\"subject\":\"A01 repeat on archived project\",\"kind\":\"missing invariant test\",\"text\":\"rights fail or project archived => refused, store unchanged\",\"question\":\"Which Required tests item demonstrates that a repeated add-room or publish call on an archived project is refused with the store unchanged?\",\"options\":[\"Add archived-repeat tests for both add-room and publish.\",\"Add one parameterized archived project-child create test.\",\"Remove the archived clause from the formal invariant.\"],\"default_guess\":\"Add parameterized tests for a repeated room create and repeated publish after archiving.\"},{\"subject\":\"A02 blank-value semantics\",\"kind\":\"unspecified whitespace definition\",\"text\":\"missing(v) <=> v is absent or strip(v) = \\\"\\\"\",\"question\":\"Which characters does strip remove, and is the definition tied to Unicode White_Space, an HTTP/form parser, or a programming-language-specific strip operation?\",\"options\":[\"Unicode White_Space code points.\",\"ASCII whitespace only.\",\"The implementation language's built-in strip semantics.\"],\"default_guess\":\"Define blank using the Unicode White_Space property and count/retain the original value unchanged when it is not blank.\"},{\"subject\":\"A02 numeric forms\",\"kind\":\"vague refusal conditions\",\"text\":\"a floor area not greater than zero, a number of rooms that is not a whole number of at least 1, or a floor that is not a whole number (M02);\",\"question\":\"Which input representations count as decimal or whole numbers—for example 2.0, \\\"2\\\", exponent notation, booleans, NaN and infinity—and at what parsing stage are malformed representations refused?\",\"options\":[\"Accept JSON numbers only; integral-valued decimals such as 2.0 count as whole, while booleans and non-finite values do not.\",\"Accept canonical decimal strings as well as numbers.\",\"Require integer syntax for whole-number fields, so 2.0 is refused even though mathematically integral.\"],\"default_guess\":\"Accept finite JSON numbers only; require mathematical integrality for whole-number fields, reject booleans and non-finite values.\"},{\"subject\":\"A02 stored-required-value invariant\",\"kind\":\"missing invariant tests\",\"text\":\"for every stored required value v: not missing(v)\",\"question\":\"Which Required tests item demonstrates the invariant for every required field, including object address, Customer name and kind, room name and access-request text?\",\"options\":[\"Add a parameterized test over every required field.\",\"State that a generated schema test enumerates all required fields and bind this invariant to it.\",\"Narrow the invariant to the display-name example.\"],\"default_guess\":\"Add a schema-driven parameterized test covering absent, empty and whitespace-only values for every required field.\"},{\"subject\":\"A02 object-characteristic invariant\",\"kind\":\"incomplete invariant test\",\"text\":\"for every stored object: rooms absent or (rooms is a whole number and rooms >= 1)\\n                         area absent or area > 0; floor absent or floor is a whole number\",\"question\":\"Which Required tests item shows that a valid positive decimal area is stored and that absent characteristics remain allowed, in addition to the listed invalid boundaries?\",\"options\":[\"Extend test 5 or 6 with a positive decimal area and explicit absence cases.\",\"Add a parameterized test for absent, valid and invalid values of every characteristic.\",\"Treat the current refusal examples as sufficient proof of the stored-state invariant.\"],\"default_guess\":\"Add a parameterized test with absent, valid and invalid cases for rooms, area and floor.\"},{\"subject\":\"A04 import mapping exception\",\"kind\":\"contradictory refusal wording\",\"text\":\"The import's mapping request is the one operation whose stage (4) answers instead of refusing for the values the owner gives in it: a missing or out-of-form name, alias or Customer value is shown in the mapping, which is its answer (A16 rule 1, A02 rule 4); the file's own checks and the picks still refuse as A16 rules 1 and 3 say.\",\"question\":\"Exactly which file and pick failures refuse the mapping request, given that A16 rule 1 says malformed picked records, conflicts and missing values are shown and prevent the confirmation step rather than refusing the mapping?\",\"options\":[\"Only whole-file upload failures from A16 rule 3 refuse; pick-level problems are shown in the mapping.\",\"Selecting an invalid pick refuses the mapping request, while owner-entered value errors are shown.\",\"All problems are shown by the mapping; only upload and confirmation requests can refuse.\"],\"default_guess\":\"Refuse only the whole-file structural failures explicitly assigned to upload by A16 rule 3; show all pick-level conflicts, malformed records and owner-value errors in the mapping.\"},{\"subject\":\"A04 revision-and-time invariant\",\"kind\":\"missing invariant test\",\"text\":\"accepted and changed(r) and r keeps a revision\\n                          => r.revision' = r.revision + 1\\n                             and r.last_changed' = now\",\"question\":\"Which Required tests item asserts both the one-step revision increase and equality of last_changed to the operation's decided instant?\",\"options\":[\"Extend the archiving test to assert revision and exact injected-clock time.\",\"Add a parameterized test for every revision-moving action.\",\"Remove last_changed from the formal invariant until a test names it.\"],\"default_guess\":\"Add a clock-controlled parameterized test for every revision-moving action, asserting both revision +1 and the exact single operation instant.\"},{\"subject\":\"A04 check-order invariant\",\"kind\":\"incomplete invariant tests\",\"text\":\"answer(a) = first failing check of a in the order (1)..(6), else its effect\",\"question\":\"Which Required tests item demonstrates every adjacent precedence boundary and the rule that all failures within the winning stage are named, rather than only the few combinations in tests 4, 5, 7 and 8?\",\"options\":[\"Add a table-driven test for every adjacent stage pair and multiple failures within one stage.\",\"Narrow the invariant to the precedence combinations explicitly tested.\",\"Declare a generated check-order test and name its witness here.\"],\"default_guess\":\"Add a table-driven test covering stages 1–6, skipped stages, and aggregation of simultaneous failures within the first failing stage.\"},{\"subject\":\"A16 confirmation conflict race\",\"kind\":\"unspecified concurrency precedence\",\"text\":\"At confirmation Registry checks again. Any conflict — a project, room or pointer id production holds — or any malformed record of the picks refuses the whole import, and nothing changes (R0-50, R0-79).\",\"question\":\"How is the conflict check serialized with an ordinary concurrent create using one of the imported ids, and which operation is allowed to win?\",\"options\":[\"Serialize import and all identity-creating operations; whichever takes the shared lock first wins.\",\"Use database uniqueness and allow either transaction to win, translating the loser into its specified refusal.\",\"Give an import confirmation precedence over ordinary creates once confirmation begins.\"],\"default_guess\":\"Use serializable database constraints and permit either transaction order; the loser receives its domain refusal and neither transaction leaves partial state.\",\"witness\":{\"initial\":\"Production does not yet contain room id X, and an import confirmation includes room id X.\",\"events\":[\"The owner confirms the import.\",\"Concurrently, another accepted operation attempts to create a production record with id X before the import commits.\"],\"outcomes\":[\"The ordinary create commits first and the import is wholly refused as conflicting.\",\"The import commits first and the concurrent create is refused.\"],\"observer\":\"The owner confirming the import and the concurrent caller\"}},{\"subject\":\"A16 accepted-import invariant\",\"kind\":\"missing invariant tests\",\"text\":\"import(file f, picks P) accepted =>\\n  stored(P with rooms, pointers) and stored(new customers of P)\\n  and closure.file_digest = digest(f) and one AuditEntry, in one transaction\",\"question\":\"Which Required tests item asserts storage of rooms and pointers, exact closure digest, exactly one audit entry, and atomic absence of every one of those records after failure?\",\"options\":[\"Expand the transaction test to enumerate projects, rooms, pointers, Customers, closure and audit entry.\",\"Add a dedicated accepted-import invariant test plus a failure-at-each-write test.\",\"Narrow the formal invariant to the records currently asserted.\"],\"default_guess\":\"Add an accepted-import assertion for every listed record and a fault-injection test at each write boundary proving none survive failure.\"},{\"subject\":\"A16 conflict invariant\",\"kind\":\"incomplete invariant test\",\"text\":\"conflict at confirmation => store unchanged\",\"question\":\"Which Required tests item explicitly snapshots and compares the entire store after a confirmation-time conflict, rather than merely saying the import is refused?\",\"options\":[\"Extend the conflicting-id test to assert the whole store is unchanged.\",\"Add a generic transaction rollback assertion for every confirmation refusal.\",\"Remove this formal invariant and rely only on rule 6.\"],\"default_guess\":\"Extend the conflict test to compare the complete durable store before and after confirmation.\"},{\"subject\":\"A21 security-review reopening\",\"kind\":\"unperformed required review\",\"text\":\"Performed again on 2026-11-11, after that day's changes to A02, A15, A16,\\nA17, A18 and A19 reopened it (rule 2):\",\"question\":\"A04 also changed and the concurrency category names A04; was that category reviewed again for the A04 change, and if so why is A04 absent from the list and review account?\",\"options\":[\"Add A04 to the 2026-11-11 reopening and state the concurrency review outcome.\",\"Perform a new review dated after the A04 change.\",\"Remove A04 from the concurrency references if that category does not rely on it.\"],\"default_guess\":\"Add A04 to the 2026-11-11 reopening and explicitly record that concurrency was reviewed for its new import-mapping exception.\"},{\"subject\":\"M06 AgentSession lifecycle\",\"kind\":\"carried model question\",\"text\":\"What ends a session, and whether its record is kept after, is State 2's (R0-47).\",\"question\":\"What ends an agent session, what happens to its grants, active project and pending request, and is the ended record deleted or retained?\",\"options\":[\"Kernel explicitly ends it and Registry deletes the record and all embedded access state.\",\"The session expires by a State 2 timeout and is deleted.\",\"It is marked ended and retained durably for a stated period.\"],\"default_guess\":\"Require an authenticated Kernel end operation that atomically deletes the AgentSession and its embedded access state.\"},{\"subject\":\"M06 access version\",\"kind\":\"carried model question\",\"text\":\"None for identity. What moves the access version is stated above; its start value and how a stale version is checked are State 2's (round 28 judgement P4).\",\"question\":\"What is the initial access version, which operations must state it, and exactly how stale or absent versions are refused relative to the A04 stages?\",\"options\":[\"Start at 1; every owner access mutation states it and stale or absent values fail at stage 5.\",\"Start at 0; only confirmation-bound mutations state it.\",\"Mint an opaque version and compare for equality.\"],\"default_guess\":\"Start at 1 and require every owner mutation of session access to state the current version, with stale or missing versions refused at A04 stage 5.\"},{\"subject\":\"M09 audit coverage\",\"kind\":\"carried model question\",\"text\":\"None for identity. Whether refused attempts and agent-authority reads leave an entry is State 2's (round 28 P1; R0-58 says ordinary reads do not).\",\"question\":\"Do refused attempts and agent-authority reads write audit entries; if some refused attempts do, which operations, failure stages and payload fields are recorded?\",\"options\":[\"Record no refused attempt and no read; only accepted significant state changes are audited.\",\"Record security-relevant refusals only, under an exact closed list.\",\"Record every refused write but no reads.\"],\"default_guess\":\"Write no audit entry for reads or refusals; audit only accepted significant changes listed by M09.\"},{\"subject\":\"A13 time source\",\"kind\":\"standard_violation\",\"text\":\"Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension; instants Registry records\\n   and the 03:00 of A18 are UTC wall-clock time.\",\"rule\":\"Иначе устроена `time_source_policy` (§6.8): её тоже проверяет гейт фабрики, но до кода она доходит через IR `system_clock_backend` (ниже, «Что считается достижимостью листа»), и декларация ей не нужна.\",\"section\":\"15.3.1\",\"question\":\"The passage must name a decided time-source policy that reaches generated code through IR `system_clock_backend`, covering both elapsed and UTC readings.\"},{\"subject\":\"A13 duration values\",\"kind\":\"standard_violation\",\"text\":\"Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension;\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The passage must give each duration a valid path to generated code, normally named imported policy constants with one declared home.\"},{\"subject\":\"A13 random-value size\",\"kind\":\"standard_violation\",\"text\":\"The session's identity, its CSRF value and a confirmation value are each at least 32 bytes from the operating system's random source; each is compared in constant time and never appears in a URL, a log line, a diagnostic or an audit entry (R0-29, R0-37).\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The passage must route the 32-byte minimum to generated code through a named imported policy constant or another one of the three allowed paths.\"},{\"subject\":\"A01 request-id bounds\",\"kind\":\"standard_violation\",\"text\":\"each carry a request id: an opaque value the caller\\n   makes, unique for every create it means as new — printable text of at most\\n   128 characters, made from at least 16 random bytes, as a random UUID is;\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The passage must route the 128-character maximum and 16-byte minimum to generated code through named imported policy constants or another allowed path.\"}]}",
+ "set_aside": []
+}

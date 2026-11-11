@@ -1,0 +1,260 @@
+{
+ "open_points": [
+  {
+   "subject": "A07 concurrent publication and A01 request-id replay",
+   "kind": "contradiction",
+   "text": "Two concurrent publishes of a type are both accepted with consecutive\n   versions",
+   "question": "Does A07 apply only when the concurrent publishes carry distinct request ids, or does it override A01 when both calls carry the same request id?",
+   "options": [
+    "A07 applies only to distinct request ids; equal request ids follow A01 and make one pointer.",
+    "Every concurrent publish makes a version, even when the request id repeats.",
+    "The first call wins and the second is refused rather than answered as a repeat."
+   ],
+   "default_guess": "Treat A07 as applying to distinct request ids and treat an equal request id as A01 replay.",
+   "witness": {
+    "initial": "Project P has published estimate pointer version n and is active; two otherwise identical publish calls carry the same new request id.",
+    "events": [
+     "Kernel sends both publish calls concurrently for the same project and type."
+    ],
+    "outcomes": [
+     "A01 makes one pointer at version n+1 and the other call answers that pointer unchanged.",
+     "A07 makes pointers at versions n+1 and n+2, superseding the first."
+    ],
+    "observer": "Kernel and every reader of P's pointer history"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A01 owner-session identity in publish replay",
+   "kind": "model contradiction",
+   "text": "for a publish its publisher too: another\n   principal or session repeating the request id is refused.",
+   "question": "How can Registry distinguish the owner session that first published the pointer when M05 stores the owner principal but no owner-session identity?",
+   "options": [
+    "All owner sessions represent the same owner principal, so a repeat from another owner session is allowed.",
+    "Store the publishing owner-session identity as an additional pointer or idempotency fact.",
+    "Keep separate request-id metadata that records the originating session without adding it to M05.",
+    "Refuse owner-session replays using runtime state only, making the result depend on whether the original session still exists."
+   ],
+   "default_guess": "Compare the recorded principal only, so all owner sessions are the same publisher unless M05 is explicitly changed.",
+   "witness": {
+    "initial": "Owner session S1 publishes pointer Q; M05 records its publisher as `owner`, not S1.",
+    "events": [
+     "A second live owner session S2 submits the same request id and equal publish facts."
+    ],
+    "outcomes": [
+     "The call is a repeat because the stored publisher and current publisher are both `owner`.",
+     "The call is refused because A01 says another session is a different publisher."
+    ],
+    "observer": "The owner using S2"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A01 request-id form",
+   "kind": "vague refusal condition",
+   "text": "printable text of at most\n   128 characters",
+   "question": "What is printable text, and are the 128 characters counted as Unicode code points, grapheme clusters, encoded bytes, or another unit?",
+   "options": [
+    "Unicode code points from an explicitly listed printable repertoire.",
+    "UTF-8 bytes with control characters refused.",
+    "Unicode scalar values except control and formatting characters.",
+    "Any string accepted by the transport, with only a 128-code-point limit."
+   ],
+   "default_guess": "Count Unicode code points and reject Unicode control characters, after defining the exact accepted repertoire.",
+   "witness": {
+    "initial": "No record carries request id K.",
+    "events": [
+     "A caller creates a project using a request id containing 128 emoji, or a newline among otherwise printable characters."
+    ],
+    "outcomes": [
+     "Registry accepts K because it has 128 Unicode code points and the chosen definition treats it as printable.",
+     "Registry refuses K because its UTF-8 representation exceeds 128 bytes or because the chosen printable predicate differs."
+    ],
+    "observer": "The caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A04 import mapping exception and A16 mapping response",
+   "kind": "contradiction",
+   "text": "the file's own\n   checks and the picks still refuse as A16 rules 1 and 3 say.",
+   "question": "When a picked record is malformed, must the mapping request be answered with the problem shown, or refused as this A04 passage says?",
+   "options": [
+    "Answer the mapping and show every malformed picked record; only upload-level failures in A16 rule 3 refuse before mapping.",
+    "Refuse the mapping request whenever a picked record is malformed.",
+    "Answer for owner-entered mapping values but refuse for malformed values originating in a picked file record."
+   ],
+   "default_guess": "Answer the mapping and show picked-record problems, because A16 rule 1 expressly describes that response and withholds only the confirmation step.",
+   "witness": {
+    "initial": "A readable uploaded file contains a picked project whose room has a missing required name.",
+    "events": [
+     "The owner asks to show the import mapping for that project."
+    ],
+    "outcomes": [
+     "A16 answers the mapping, displays the malformed room, and makes no confirmation value.",
+     "A04 treats the picked-record check as a refusal and does not answer the mapping."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 file and confirmation digests",
+   "kind": "unspecified deterministic recipe",
+   "text": "The mapping names\n   the file by its digest.",
+   "question": "Which digest algorithm, byte representation, output representation, and canonical encoding or ordering for the confirmation-bound values must every implementation use?",
+   "options": [
+    "SHA-256 of the uploaded bytes, represented as lowercase hexadecimal; confirmation inputs use a length-prefixed canonical encoding in a declared field order.",
+    "Another named cryptographic digest and canonical encoding.",
+    "An implementation-private digest recipe, allowing releases to produce different closure and audit identities."
+   ],
+   "default_guess": "Use SHA-256 over the exact uploaded bytes with lowercase hexadecimal output, and define a collision-safe length-prefixed canonical encoding and field order for confirmation inputs.",
+   "witness": {
+    "initial": "The owner uploads fixed bytes F and supplies mapping values whose concatenation is ambiguous without framing.",
+    "events": [
+     "Registry displays the file digest and creates a confirmation binding.",
+     "The accepted import stores the digest in its closure and audit entry."
+    ],
+    "outcomes": [
+     "One implementation stores a SHA-256 hexadecimal digest and binds length-prefixed fields.",
+     "Another stores a different digest or hashes a different serialization, producing a different closure identity or binding result."
+    ],
+    "observer": "The owner, audit reader, backup/restore tooling, and a later implementation reading the store"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 accepted-import invariant",
+   "kind": "missing required test",
+   "text": "import(file f, picks P) accepted =>\n  stored(P with rooms, pointers) and stored(new customers of P)\n  and closure.file_digest = digest(f) and one AuditEntry, in one transaction",
+   "question": "Which Required tests item must show a successful import storing all picked records and new Customers together with the matching closure digest and exactly one audit entry?",
+   "options": [
+    "Add one successful-import test asserting every conjunct and transaction membership.",
+    "Extend an existing test to state those assertions explicitly.",
+    "Split it into successful-content, closure-digest, audit-cardinality, and atomicity tests."
+   ],
+   "default_guess": "Add one successful-import test that asserts all conjuncts, including the matching digest and exactly one audit entry.",
+   "unit": "?"
+  },
+  {
+   "subject": "A21 review reopening after the A04 change",
+   "kind": "unperformed required review",
+   "text": "A change to a decision a category names reopens this review.",
+   "question": "A04 changed and the concurrency category names A04; where is the required renewed review and its recorded outcome?",
+   "options": [
+    "Perform and record a new review of the concurrency category for the changed A04 mapping exception.",
+    "Remove A04 from the concurrency references if the category no longer relies on it.",
+    "Change rule 2 to define a narrower reopening condition."
+   ],
+   "default_guess": "Perform and record the concurrency-category review for the current A04 change before closing A21.",
+   "unit": "?"
+  },
+  {
+   "subject": "A02 numeric characteristic forms",
+   "kind": "vague refusal condition",
+   "text": "a floor area a decimal greater than zero,\n   a number of rooms a whole number of at least 1, a floor a whole number",
+   "question": "What input representations count as a decimal or whole number, including whether `2.0`, numeric strings, exponents, non-finite values, and values outside an implementation integer or decimal range are accepted?",
+   "options": [
+    "Accept mathematical decimals and mathematically integral decimal values after parsing a precisely bounded decimal representation.",
+    "Require rooms and floor to use the transport's integer representation; reject `2.0` even though mathematically whole.",
+    "Accept numeric strings as well as numeric transport values.",
+    "Declare exact decimal precision, scale, integer bounds, and transport forms in the model schemas."
+   ],
+   "default_guess": "Declare finite decimal precision and range in the model schema, and require rooms and floor to use its integer representation.",
+   "witness": {
+    "initial": "An active owner session creates otherwise valid projects.",
+    "events": [
+     "The owner submits rooms as `2.0`, then as `\"2\"`, and submits an area using exponent notation."
+    ],
+    "outcomes": [
+     "The values are accepted because they denote a whole number and a positive decimal.",
+     "They are refused because their transport representation is not the declared integer or decimal form."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A02 stored-area invariant",
+   "kind": "missing required test",
+   "text": "area absent or area > 0",
+   "question": "Which Required tests item shows that a positive floor area is accepted and stored, rather than only showing that zero is refused and absence is accepted?",
+   "options": [
+    "Extend test 5 with a positive area that is stored.",
+    "Add a separate boundary test covering a smallest representable positive area and an ordinary positive area.",
+    "State that test 5 is intended to include and assert a positive accepted case."
+   ],
+   "default_guess": "Extend test 5 with an explicit positive area that is accepted and stored.",
+   "unit": "?"
+  },
+  {
+   "subject": "State 2 recorded-time source",
+   "kind": "unspecified time authority",
+   "text": "UTC wall-clock time",
+   "question": "What exact clock authority supplies recorded instants, what type and precision represents them, and how is that authority made available to generated code?",
+   "options": [
+    "An injected clock port returning timezone-aware UTC datetimes at a declared precision.",
+    "A declared authority module wrapping the system UTC clock.",
+    "Direct ambient system-clock calls in every module.",
+    "A datetime parameter supplied to every mutating operation."
+   ],
+   "default_guess": "Use one declared clock authority returning timezone-aware UTC datetimes at a fixed precision and inject it into mutating operations.",
+   "unit": "?"
+  },
+  {
+   "subject": "A07 and A16 operation-time sampling",
+   "kind": "unspecified reading count",
+   "text": "marks the type's published\n   pointer `superseded` with its instant, and stores the new pointer\n   `published`",
+   "question": "Does one operation take one wall-clock reading shared by every timestamp it writes, or a separate reading for each record and audit fact? The same decision is needed for an accepted import's new Customers, closure, and audit entry.",
+   "options": [
+    "One wall-clock reading per operation, shared by every fresh timestamp written by its transaction.",
+    "One reading per changed record.",
+    "One reading per timestamp field.",
+    "The caller supplies one datetime for the operation."
+   ],
+   "default_guess": "Take exactly one clock reading after admission and before the transaction writes, and use it for every fresh timestamp produced by that operation.",
+   "witness": {
+    "initial": "Project P has one published pointer, and the wall clock advances between possible reads.",
+    "events": [
+     "A publish supersedes the old pointer and stores the new pointer in one transaction."
+    ],
+    "outcomes": [
+     "Both status changes use one captured instant.",
+     "The old pointer's superseded instant and the new pointer's published instant differ because the implementation reads the clock twice."
+    ],
+    "observer": "The owner or service reading pointer history"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A02 characteristic thresholds",
+   "kind": "standard_violation",
+   "text": "The characteristics'\n   bounds are their fields' types — a floor area a decimal greater than zero,\n   a number of rooms a whole number of at least 1, a floor a whole number —\n   which State 6 declares in `models` as forms (SPEC_STANDARD §15.2 check 0),\n   not policy values: no threshold constant holds them.",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\n\n| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "The passage must give the greater-than-zero and at-least-one thresholds homes as imported data-provider constants, or remove them from generated-code policy; it must not declare that no threshold constant holds them.",
+   "unit": "?"
+  },
+  {
+   "subject": "A01 request-id limits",
+   "kind": "standard_violation",
+   "text": "printable text of at most\n   128 characters, made from at least 16 random bytes",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\n\n| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "The passage must name imported data-provider constants for the request-id maximum length and minimum random-source size, with one declared home for each value.",
+   "unit": "?"
+  },
+  {
+   "subject": "State 2 time-source delivery",
+   "kind": "standard_violation",
+   "text": "instants Registry records\n   and the 03:00 of A18 are UTC wall-clock time.",
+   "rule": "Иначе устроена\n`time_source_policy` (§6.8): её тоже проверяет гейт фабрики, но до кода она\nдоходит через IR `system_clock_backend` (ниже, «Что считается достижимостью\nлиста»), и декларация ей не нужна.",
+   "section": "15.3.1",
+   "question": "The passage must declare the time-source policy through the IR `system_clock_backend`, naming the wall-clock backend that supplies recorded UTC instants.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A07 concurrent publication and A01 request-id replay\",\"kind\":\"contradiction\",\"text\":\"Two concurrent publishes of a type are both accepted with consecutive\\n   versions\",\"question\":\"Does A07 apply only when the concurrent publishes carry distinct request ids, or does it override A01 when both calls carry the same request id?\",\"options\":[\"A07 applies only to distinct request ids; equal request ids follow A01 and make one pointer.\",\"Every concurrent publish makes a version, even when the request id repeats.\",\"The first call wins and the second is refused rather than answered as a repeat.\"],\"default_guess\":\"Treat A07 as applying to distinct request ids and treat an equal request id as A01 replay.\",\"witness\":{\"initial\":\"Project P has published estimate pointer version n and is active; two otherwise identical publish calls carry the same new request id.\",\"events\":[\"Kernel sends both publish calls concurrently for the same project and type.\"],\"outcomes\":[\"A01 makes one pointer at version n+1 and the other call answers that pointer unchanged.\",\"A07 makes pointers at versions n+1 and n+2, superseding the first.\"],\"observer\":\"Kernel and every reader of P's pointer history\"}},{\"subject\":\"A01 owner-session identity in publish replay\",\"kind\":\"model contradiction\",\"text\":\"for a publish its publisher too: another\\n   principal or session repeating the request id is refused.\",\"question\":\"How can Registry distinguish the owner session that first published the pointer when M05 stores the owner principal but no owner-session identity?\",\"options\":[\"All owner sessions represent the same owner principal, so a repeat from another owner session is allowed.\",\"Store the publishing owner-session identity as an additional pointer or idempotency fact.\",\"Keep separate request-id metadata that records the originating session without adding it to M05.\",\"Refuse owner-session replays using runtime state only, making the result depend on whether the original session still exists.\"],\"default_guess\":\"Compare the recorded principal only, so all owner sessions are the same publisher unless M05 is explicitly changed.\",\"witness\":{\"initial\":\"Owner session S1 publishes pointer Q; M05 records its publisher as `owner`, not S1.\",\"events\":[\"A second live owner session S2 submits the same request id and equal publish facts.\"],\"outcomes\":[\"The call is a repeat because the stored publisher and current publisher are both `owner`.\",\"The call is refused because A01 says another session is a different publisher.\"],\"observer\":\"The owner using S2\"}},{\"subject\":\"A01 request-id form\",\"kind\":\"vague refusal condition\",\"text\":\"printable text of at most\\n   128 characters\",\"question\":\"What is printable text, and are the 128 characters counted as Unicode code points, grapheme clusters, encoded bytes, or another unit?\",\"options\":[\"Unicode code points from an explicitly listed printable repertoire.\",\"UTF-8 bytes with control characters refused.\",\"Unicode scalar values except control and formatting characters.\",\"Any string accepted by the transport, with only a 128-code-point limit.\"],\"default_guess\":\"Count Unicode code points and reject Unicode control characters, after defining the exact accepted repertoire.\",\"witness\":{\"initial\":\"No record carries request id K.\",\"events\":[\"A caller creates a project using a request id containing 128 emoji, or a newline among otherwise printable characters.\"],\"outcomes\":[\"Registry accepts K because it has 128 Unicode code points and the chosen definition treats it as printable.\",\"Registry refuses K because its UTF-8 representation exceeds 128 bytes or because the chosen printable predicate differs.\"],\"observer\":\"The caller\"}},{\"subject\":\"A04 import mapping exception and A16 mapping response\",\"kind\":\"contradiction\",\"text\":\"the file's own\\n   checks and the picks still refuse as A16 rules 1 and 3 say.\",\"question\":\"When a picked record is malformed, must the mapping request be answered with the problem shown, or refused as this A04 passage says?\",\"options\":[\"Answer the mapping and show every malformed picked record; only upload-level failures in A16 rule 3 refuse before mapping.\",\"Refuse the mapping request whenever a picked record is malformed.\",\"Answer for owner-entered mapping values but refuse for malformed values originating in a picked file record.\"],\"default_guess\":\"Answer the mapping and show picked-record problems, because A16 rule 1 expressly describes that response and withholds only the confirmation step.\",\"witness\":{\"initial\":\"A readable uploaded file contains a picked project whose room has a missing required name.\",\"events\":[\"The owner asks to show the import mapping for that project.\"],\"outcomes\":[\"A16 answers the mapping, displays the malformed room, and makes no confirmation value.\",\"A04 treats the picked-record check as a refusal and does not answer the mapping.\"],\"observer\":\"The owner\"}},{\"subject\":\"A16 file and confirmation digests\",\"kind\":\"unspecified deterministic recipe\",\"text\":\"The mapping names\\n   the file by its digest.\",\"question\":\"Which digest algorithm, byte representation, output representation, and canonical encoding or ordering for the confirmation-bound values must every implementation use?\",\"options\":[\"SHA-256 of the uploaded bytes, represented as lowercase hexadecimal; confirmation inputs use a length-prefixed canonical encoding in a declared field order.\",\"Another named cryptographic digest and canonical encoding.\",\"An implementation-private digest recipe, allowing releases to produce different closure and audit identities.\"],\"default_guess\":\"Use SHA-256 over the exact uploaded bytes with lowercase hexadecimal output, and define a collision-safe length-prefixed canonical encoding and field order for confirmation inputs.\",\"witness\":{\"initial\":\"The owner uploads fixed bytes F and supplies mapping values whose concatenation is ambiguous without framing.\",\"events\":[\"Registry displays the file digest and creates a confirmation binding.\",\"The accepted import stores the digest in its closure and audit entry.\"],\"outcomes\":[\"One implementation stores a SHA-256 hexadecimal digest and binds length-prefixed fields.\",\"Another stores a different digest or hashes a different serialization, producing a different closure identity or binding result.\"],\"observer\":\"The owner, audit reader, backup/restore tooling, and a later implementation reading the store\"}},{\"subject\":\"A16 accepted-import invariant\",\"kind\":\"missing required test\",\"text\":\"import(file f, picks P) accepted =>\\n  stored(P with rooms, pointers) and stored(new customers of P)\\n  and closure.file_digest = digest(f) and one AuditEntry, in one transaction\",\"question\":\"Which Required tests item must show a successful import storing all picked records and new Customers together with the matching closure digest and exactly one audit entry?\",\"options\":[\"Add one successful-import test asserting every conjunct and transaction membership.\",\"Extend an existing test to state those assertions explicitly.\",\"Split it into successful-content, closure-digest, audit-cardinality, and atomicity tests.\"],\"default_guess\":\"Add one successful-import test that asserts all conjuncts, including the matching digest and exactly one audit entry.\"},{\"subject\":\"A21 review reopening after the A04 change\",\"kind\":\"unperformed required review\",\"text\":\"A change to a decision a category names reopens this review.\",\"question\":\"A04 changed and the concurrency category names A04; where is the required renewed review and its recorded outcome?\",\"options\":[\"Perform and record a new review of the concurrency category for the changed A04 mapping exception.\",\"Remove A04 from the concurrency references if the category no longer relies on it.\",\"Change rule 2 to define a narrower reopening condition.\"],\"default_guess\":\"Perform and record the concurrency-category review for the current A04 change before closing A21.\"},{\"subject\":\"A02 numeric characteristic forms\",\"kind\":\"vague refusal condition\",\"text\":\"a floor area a decimal greater than zero,\\n   a number of rooms a whole number of at least 1, a floor a whole number\",\"question\":\"What input representations count as a decimal or whole number, including whether `2.0`, numeric strings, exponents, non-finite values, and values outside an implementation integer or decimal range are accepted?\",\"options\":[\"Accept mathematical decimals and mathematically integral decimal values after parsing a precisely bounded decimal representation.\",\"Require rooms and floor to use the transport's integer representation; reject `2.0` even though mathematically whole.\",\"Accept numeric strings as well as numeric transport values.\",\"Declare exact decimal precision, scale, integer bounds, and transport forms in the model schemas.\"],\"default_guess\":\"Declare finite decimal precision and range in the model schema, and require rooms and floor to use its integer representation.\",\"witness\":{\"initial\":\"An active owner session creates otherwise valid projects.\",\"events\":[\"The owner submits rooms as `2.0`, then as `\\\"2\\\"`, and submits an area using exponent notation.\"],\"outcomes\":[\"The values are accepted because they denote a whole number and a positive decimal.\",\"They are refused because their transport representation is not the declared integer or decimal form.\"],\"observer\":\"The owner\"}},{\"subject\":\"A02 stored-area invariant\",\"kind\":\"missing required test\",\"text\":\"area absent or area > 0\",\"question\":\"Which Required tests item shows that a positive floor area is accepted and stored, rather than only showing that zero is refused and absence is accepted?\",\"options\":[\"Extend test 5 with a positive area that is stored.\",\"Add a separate boundary test covering a smallest representable positive area and an ordinary positive area.\",\"State that test 5 is intended to include and assert a positive accepted case.\"],\"default_guess\":\"Extend test 5 with an explicit positive area that is accepted and stored.\"},{\"subject\":\"State 2 recorded-time source\",\"kind\":\"unspecified time authority\",\"text\":\"UTC wall-clock time\",\"question\":\"What exact clock authority supplies recorded instants, what type and precision represents them, and how is that authority made available to generated code?\",\"options\":[\"An injected clock port returning timezone-aware UTC datetimes at a declared precision.\",\"A declared authority module wrapping the system UTC clock.\",\"Direct ambient system-clock calls in every module.\",\"A datetime parameter supplied to every mutating operation.\"],\"default_guess\":\"Use one declared clock authority returning timezone-aware UTC datetimes at a fixed precision and inject it into mutating operations.\"},{\"subject\":\"A07 and A16 operation-time sampling\",\"kind\":\"unspecified reading count\",\"text\":\"marks the type's published\\n   pointer `superseded` with its instant, and stores the new pointer\\n   `published`\",\"question\":\"Does one operation take one wall-clock reading shared by every timestamp it writes, or a separate reading for each record and audit fact? The same decision is needed for an accepted import's new Customers, closure, and audit entry.\",\"options\":[\"One wall-clock reading per operation, shared by every fresh timestamp written by its transaction.\",\"One reading per changed record.\",\"One reading per timestamp field.\",\"The caller supplies one datetime for the operation.\"],\"default_guess\":\"Take exactly one clock reading after admission and before the transaction writes, and use it for every fresh timestamp produced by that operation.\",\"witness\":{\"initial\":\"Project P has one published pointer, and the wall clock advances between possible reads.\",\"events\":[\"A publish supersedes the old pointer and stores the new pointer in one transaction.\"],\"outcomes\":[\"Both status changes use one captured instant.\",\"The old pointer's superseded instant and the new pointer's published instant differ because the implementation reads the clock twice.\"],\"observer\":\"The owner or service reading pointer history\"}},{\"subject\":\"A02 characteristic thresholds\",\"kind\":\"standard_violation\",\"text\":\"The characteristics'\\n   bounds are their fields' types — a floor area a decimal greater than zero,\\n   a number of rooms a whole number of at least 1, a floor a whole number —\\n   which State 6 declares in `models` as forms (SPEC_STANDARD §15.2 check 0),\\n   not policy values: no threshold constant holds them.\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь\\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\\n\\n| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"The passage must give the greater-than-zero and at-least-one thresholds homes as imported data-provider constants, or remove them from generated-code policy; it must not declare that no threshold constant holds them.\"},{\"subject\":\"A01 request-id limits\",\"kind\":\"standard_violation\",\"text\":\"printable text of at most\\n   128 characters, made from at least 16 random bytes\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь\\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\\n\\n| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"The passage must name imported data-provider constants for the request-id maximum length and minimum random-source size, with one declared home for each value.\"},{\"subject\":\"State 2 time-source delivery\",\"kind\":\"standard_violation\",\"text\":\"instants Registry records\\n   and the 03:00 of A18 are UTC wall-clock time.\",\"rule\":\"Иначе устроена\\n`time_source_policy` (§6.8): её тоже проверяет гейт фабрики, но до кода она\\nдоходит через IR `system_clock_backend` (ниже, «Что считается достижимостью\\nлиста»), и декларация ей не нужна.\",\"section\":\"15.3.1\",\"question\":\"The passage must declare the time-source policy through the IR `system_clock_backend`, naming the wall-clock backend that supplies recorded UTC instants.\"}]}",
+ "set_aside": []
+}
