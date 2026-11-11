@@ -191,8 +191,8 @@ closure is the one proof of success.
    left can be bound again at once is the platform's, which Registry
    neither requires nor prevents. The addresses are the deployment's: the
    service API is reachable only in VM Platform and over the WireGuard
-   channel from the VPS, the owner interface only through the owner's VPN
-   (R0-28, R0-29, R0-48), and the interface each is bound to on that host,
+   channel from the VPS, the owner interface from outside only through the
+   owner's VPN (R0-28, R0-29, R0-48), and the interface each is bound to on that host,
    or on a test instance's (R0-34), is the host's administration — so the
    configuration names them
    (owner, 2026-11-11, replacing the release-fixed addresses of 2026-11-01:
