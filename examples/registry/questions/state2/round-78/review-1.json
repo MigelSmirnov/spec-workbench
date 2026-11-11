@@ -1,0 +1,216 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 time sampling for operations",
+   "kind": "unspecified_read_count",
+   "text": "Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8).",
+   "question": "How many monotonic and UTC wall-clock readings does each operation take, and which effects of one operation must share the same reading?",
+   "options": [
+    "One monotonic reading and one wall-clock reading per operation",
+    "One reading per check or timestamp written",
+    "A single backend call returns a paired monotonic and wall-clock reading"
+   ],
+   "default_guess": "Take at most one reading of each clock per operation and reuse it for every decision and timestamp in that operation.",
+   "witness": {
+    "initial": "A project has one published pointer, and a publish of the next pointer is ready to run.",
+    "events": [
+     "The publisher starts one accepted publish.",
+     "The wall clock advances between superseding the old pointer and recording the new pointer."
+    ],
+    "outcomes": [
+     "Both pointer changes use one UTC reading and have the same instant.",
+     "The operation reads the wall clock twice, so the superseded and published instants differ."
+    ],
+    "observer": "A reader of the artifact history"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 owner-session instants",
+   "kind": "representation_unspecified",
+   "text": "its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock",
+   "question": "In what representation are monotonic instants stored and compared, including the precision required by the microsecond boundary test?",
+   "options": [
+    "Integer microseconds from an arbitrary monotonic origin",
+    "Integer nanoseconds from an arbitrary monotonic origin",
+    "Floating-point seconds",
+    "An opaque monotonic-instant value supplied by the clock port"
+   ],
+   "default_guess": "Use opaque clock-port instants backed by integer nanoseconds and durations converted exactly to the same unit.",
+   "witness": {
+    "initial": "A session's last request was recorded exactly 30 minutes minus one microsecond before the next request's arrival.",
+    "events": [
+     "The owner sends the next request.",
+     "Registry converts or rounds the monotonic reading to the implementer's chosen representation before comparing it."
+    ],
+    "outcomes": [
+     "A representation preserving microseconds treats the request as arriving before the limit and serves it.",
+     "A coarser or rounded representation treats the request as arriving at the limit and refuses it."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 expiry cleanup and Required test 9",
+   "kind": "contradiction",
+   "text": "Registry ends it — and drops its pending confirmation and its uploaded file with it (M11) — at a pass over the sessions it makes every 60 seconds from the start; the pass alone ends sessions by their limits, taking the import lock and then each session's lock (A16 rule 2) and deciding under them.\n\nWith the clocks replaced in the test: moving the wall clock back or forward by hours changes no session's validity; a suspension of 31 minutes, counted by the monotonic reading, ends the session at its next request.",
+   "question": "After a limit has been reached but before the cleanup pass, does the next request merely get refused, or does that request itself end the session and drop its pending confirmation and upload?",
+   "options": [
+    "Only the periodic pass ends the session; the request is refused without ending it",
+    "The first request after expiry ends the session immediately",
+    "Either the request or the pass may end it, whichever obtains the locks first"
+   ],
+   "default_guess": "The request is refused but does not end the session; only the periodic pass performs expiry cleanup.",
+   "witness": {
+    "initial": "An owner session contains an uploaded import file; the VM is suspended for 31 minutes and no expiry pass has run since resume.",
+    "events": [
+     "The VM resumes.",
+     "The owner request reaches the session check before the next expiry pass."
+    ],
+    "outcomes": [
+     "Under normative rule 2, the request is refused but the session and uploaded file remain until the pass.",
+     "Under Required test 9, the request ends the session immediately and the uploaded file is dropped."
+    ],
+    "observer": "A test inspecting the session state and uploaded-file cleanup"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A09 disclosure ceiling invariant",
+   "kind": "invariant_test_missing",
+   "text": "class(answer(op)) <= highest_class(s)",
+   "question": "Which Required tests item must show that an accepted operation never returns an answer above the calling service token's highest disclosure class?",
+   "options": [
+    "Add a test in which a business-confidential token is refused an otherwise permitted personal-data answer",
+    "Add a generated contract test for every service operation and output class",
+    "State that Required test 2 is intended to assert the class ceiling, not only operation refusal"
+   ],
+   "default_guess": "Add a generated test covering every service operation's output class against its service's ceiling.",
+   "unit": "?"
+  },
+  {
+   "subject": "A09 Cabinet Kernel maximum class invariant",
+   "kind": "invariant_test_missing",
+   "text": "highest_class(Cabinet Kernel) = business_confidential",
+   "question": "Which Required tests item must show that Cabinet Kernel's highest class is exactly `business_confidential` and cannot become `personal_data`?",
+   "options": [
+    "Add a direct manifest or rights-table assertion",
+    "Add an attempted personal-data read using Kernel's token",
+    "Make both checks part of one generated authorization-table test"
+   ],
+   "default_guess": "Add a direct derived-manifest assertion and a behavioral refusal test for a personal-data answer.",
+   "unit": "?"
+  },
+  {
+   "subject": "A04 revision and last-changed invariant",
+   "kind": "invariant_test_missing",
+   "text": "accepted and changed(r) and r keeps a revision\n                          => r.revision' = r.revision + 1\n                             and r.last_changed' = now",
+   "question": "Which Required tests item must show both the exact increment by one and that `last_changed` equals the operation's decided current instant?",
+   "options": [
+    "Extend the archiving test to assert the new revision and timestamp",
+    "Add a correction test that controls the clock and asserts both fields",
+    "Add one test for Project and one for Customer"
+   ],
+   "default_guess": "Add clock-controlled tests for both a Project change and a Customer change, asserting revision +1 and exact `last_changed`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A21 review record for the A07 change",
+   "kind": "change_description_conflict",
+   "text": "the changes to A01, A04 and A07 name constants and an exception of the mapping's stage (4), and A07's concurrent publishes are those of different request ids, which change no outcome;",
+   "question": "How must the security-review record describe A07 when the supplied A07 diff only adds the first-publish Required test and does not add a constant or a mapping-stage exception?",
+   "options": [
+    "Say that A07 added only the version-1 Required test and that this changes no security outcome",
+    "Identify a missing normative A07 change that the review record intended to describe",
+    "Remove A07 from the clause about constants and the mapping-stage exception"
+   ],
+   "default_guess": "State that A07 added a Required test for the first publish producing version 1 and that the added coverage changes no security outcome.",
+   "witness": {
+    "initial": "The accepted A07 text already contains the concurrent-publish rules; the reviewed diff adds only Required test 0.",
+    "events": [
+     "A security reviewer reads the 2026-11-11 review record.",
+     "The reviewer compares it with the supplied A07 diff."
+    ],
+    "outcomes": [
+     "The diff says A07 changed only by adding a first-publish test.",
+     "The review record attributes constants or a mapping-stage exception to the grouped A07 change and discusses concurrent publishes instead."
+    ],
+    "observer": "A security-review auditor"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M06 AgentSession lifecycle",
+   "kind": "model_question_carried",
+   "text": "What ends a session, and whether its record is kept after, is State 2's (R0-47).",
+   "question": "What events end an agent session, and is its record deleted, retained permanently, or retained for a bounded period afterward?",
+   "options": [
+    "Kernel explicitly ends it and Registry deletes it immediately",
+    "Kernel explicitly ends it and Registry retains a tombstone",
+    "It also ends on restart or inactivity",
+    "It remains durable until an explicit owner or Kernel action ends it"
+   ],
+   "default_guess": "Only Cabinet Kernel explicitly ends it; Registry deletes the session and its access state atomically.",
+   "unit": "?"
+  },
+  {
+   "subject": "M06 access-version initial value",
+   "kind": "model_question_carried",
+   "text": "its start value and how a stale version is checked are State 2's (round 28 judgement P4).",
+   "question": "What is the access version of a newly registered AgentSession?",
+   "options": [
+    "0",
+    "1",
+    "A backend-generated ordinal with no prescribed initial number"
+   ],
+   "default_guess": "Start at 1 when the session is registered.",
+   "unit": "?"
+  },
+  {
+   "subject": "M06 stale access-version handling",
+   "kind": "model_question_carried",
+   "text": "its start value and how a stale version is checked are State 2's (round 28 judgement P4).",
+   "question": "Which owner actions must state an access version, and what exact refusal and state-preservation behavior applies when it is missing or stale?",
+   "options": [
+    "Every owner action changing session access must state the current version; missing or unequal is refused unchanged",
+    "Only grants and revocations require it",
+    "A missing version is accepted, while only an unequal supplied version is stale",
+    "A stale version returns the current access state without changing it"
+   ],
+   "default_guess": "Every owner action that changes the granted set, active project, or pending request must state the current access version; a missing or unequal version is refused and changes nothing.",
+   "unit": "?"
+  },
+  {
+   "subject": "M09 refused attempts",
+   "kind": "model_question_carried",
+   "text": "whether refused attempts and agent-authority reads leave an entry is State 2's (round 28 P1; R0-58 says ordinary reads do not).",
+   "question": "Do any refused attempts write an AuditEntry; if so, which refusals and what outcome, subject, and principal do they record?",
+   "options": [
+    "No refused attempt is audited",
+    "Every authenticated refused change is audited",
+    "Only security-sensitive refusals are audited",
+    "Only refusals occurring after confirmation are audited"
+   ],
+   "default_guess": "No refused attempt writes an AuditEntry because the log records accepted significant state changes only.",
+   "unit": "?"
+  },
+  {
+   "subject": "M09 agent-authority reads",
+   "kind": "model_question_carried",
+   "text": "whether refused attempts and agent-authority reads leave an entry is State 2's (round 28 P1; R0-58 says ordinary reads do not).",
+   "question": "Are successful or refused agent-authority reads audited, or are all of them covered by the rule that ordinary reads are not recorded?",
+   "options": [
+    "No agent-authority read is audited",
+    "Successful agent-authority reads are audited",
+    "Only refused agent-authority reads are audited",
+    "Every agent-authority read is audited"
+   ],
+   "default_guess": "No agent-authority read writes an AuditEntry, whether accepted or refused.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 time sampling for operations\",\"kind\":\"unspecified_read_count\",\"text\":\"Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8).\",\"question\":\"How many monotonic and UTC wall-clock readings does each operation take, and which effects of one operation must share the same reading?\",\"options\":[\"One monotonic reading and one wall-clock reading per operation\",\"One reading per check or timestamp written\",\"A single backend call returns a paired monotonic and wall-clock reading\"],\"default_guess\":\"Take at most one reading of each clock per operation and reuse it for every decision and timestamp in that operation.\",\"witness\":{\"initial\":\"A project has one published pointer, and a publish of the next pointer is ready to run.\",\"events\":[\"The publisher starts one accepted publish.\",\"The wall clock advances between superseding the old pointer and recording the new pointer.\"],\"outcomes\":[\"Both pointer changes use one UTC reading and have the same instant.\",\"The operation reads the wall clock twice, so the superseded and published instants differ.\"],\"observer\":\"A reader of the artifact history\"}},{\"subject\":\"A13 owner-session instants\",\"kind\":\"representation_unspecified\",\"text\":\"its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock\",\"question\":\"In what representation are monotonic instants stored and compared, including the precision required by the microsecond boundary test?\",\"options\":[\"Integer microseconds from an arbitrary monotonic origin\",\"Integer nanoseconds from an arbitrary monotonic origin\",\"Floating-point seconds\",\"An opaque monotonic-instant value supplied by the clock port\"],\"default_guess\":\"Use opaque clock-port instants backed by integer nanoseconds and durations converted exactly to the same unit.\",\"witness\":{\"initial\":\"A session's last request was recorded exactly 30 minutes minus one microsecond before the next request's arrival.\",\"events\":[\"The owner sends the next request.\",\"Registry converts or rounds the monotonic reading to the implementer's chosen representation before comparing it.\"],\"outcomes\":[\"A representation preserving microseconds treats the request as arriving before the limit and serves it.\",\"A coarser or rounded representation treats the request as arriving at the limit and refuses it.\"],\"observer\":\"The owner\"}},{\"subject\":\"A13 expiry cleanup and Required test 9\",\"kind\":\"contradiction\",\"text\":\"Registry ends it — and drops its pending confirmation and its uploaded file with it (M11) — at a pass over the sessions it makes every 60 seconds from the start; the pass alone ends sessions by their limits, taking the import lock and then each session's lock (A16 rule 2) and deciding under them.\\n\\nWith the clocks replaced in the test: moving the wall clock back or forward by hours changes no session's validity; a suspension of 31 minutes, counted by the monotonic reading, ends the session at its next request.\",\"question\":\"After a limit has been reached but before the cleanup pass, does the next request merely get refused, or does that request itself end the session and drop its pending confirmation and upload?\",\"options\":[\"Only the periodic pass ends the session; the request is refused without ending it\",\"The first request after expiry ends the session immediately\",\"Either the request or the pass may end it, whichever obtains the locks first\"],\"default_guess\":\"The request is refused but does not end the session; only the periodic pass performs expiry cleanup.\",\"witness\":{\"initial\":\"An owner session contains an uploaded import file; the VM is suspended for 31 minutes and no expiry pass has run since resume.\",\"events\":[\"The VM resumes.\",\"The owner request reaches the session check before the next expiry pass.\"],\"outcomes\":[\"Under normative rule 2, the request is refused but the session and uploaded file remain until the pass.\",\"Under Required test 9, the request ends the session immediately and the uploaded file is dropped.\"],\"observer\":\"A test inspecting the session state and uploaded-file cleanup\"}},{\"subject\":\"A09 disclosure ceiling invariant\",\"kind\":\"invariant_test_missing\",\"text\":\"class(answer(op)) <= highest_class(s)\",\"question\":\"Which Required tests item must show that an accepted operation never returns an answer above the calling service token's highest disclosure class?\",\"options\":[\"Add a test in which a business-confidential token is refused an otherwise permitted personal-data answer\",\"Add a generated contract test for every service operation and output class\",\"State that Required test 2 is intended to assert the class ceiling, not only operation refusal\"],\"default_guess\":\"Add a generated test covering every service operation's output class against its service's ceiling.\"},{\"subject\":\"A09 Cabinet Kernel maximum class invariant\",\"kind\":\"invariant_test_missing\",\"text\":\"highest_class(Cabinet Kernel) = business_confidential\",\"question\":\"Which Required tests item must show that Cabinet Kernel's highest class is exactly `business_confidential` and cannot become `personal_data`?\",\"options\":[\"Add a direct manifest or rights-table assertion\",\"Add an attempted personal-data read using Kernel's token\",\"Make both checks part of one generated authorization-table test\"],\"default_guess\":\"Add a direct derived-manifest assertion and a behavioral refusal test for a personal-data answer.\"},{\"subject\":\"A04 revision and last-changed invariant\",\"kind\":\"invariant_test_missing\",\"text\":\"accepted and changed(r) and r keeps a revision\\n                          => r.revision' = r.revision + 1\\n                             and r.last_changed' = now\",\"question\":\"Which Required tests item must show both the exact increment by one and that `last_changed` equals the operation's decided current instant?\",\"options\":[\"Extend the archiving test to assert the new revision and timestamp\",\"Add a correction test that controls the clock and asserts both fields\",\"Add one test for Project and one for Customer\"],\"default_guess\":\"Add clock-controlled tests for both a Project change and a Customer change, asserting revision +1 and exact `last_changed`.\"},{\"subject\":\"A21 review record for the A07 change\",\"kind\":\"change_description_conflict\",\"text\":\"the changes to A01, A04 and A07 name constants and an exception of the mapping's stage (4), and A07's concurrent publishes are those of different request ids, which change no outcome;\",\"question\":\"How must the security-review record describe A07 when the supplied A07 diff only adds the first-publish Required test and does not add a constant or a mapping-stage exception?\",\"options\":[\"Say that A07 added only the version-1 Required test and that this changes no security outcome\",\"Identify a missing normative A07 change that the review record intended to describe\",\"Remove A07 from the clause about constants and the mapping-stage exception\"],\"default_guess\":\"State that A07 added a Required test for the first publish producing version 1 and that the added coverage changes no security outcome.\",\"witness\":{\"initial\":\"The accepted A07 text already contains the concurrent-publish rules; the reviewed diff adds only Required test 0.\",\"events\":[\"A security reviewer reads the 2026-11-11 review record.\",\"The reviewer compares it with the supplied A07 diff.\"],\"outcomes\":[\"The diff says A07 changed only by adding a first-publish test.\",\"The review record attributes constants or a mapping-stage exception to the grouped A07 change and discusses concurrent publishes instead.\"],\"observer\":\"A security-review auditor\"}},{\"subject\":\"M06 AgentSession lifecycle\",\"kind\":\"model_question_carried\",\"text\":\"What ends a session, and whether its record is kept after, is State 2's (R0-47).\",\"question\":\"What events end an agent session, and is its record deleted, retained permanently, or retained for a bounded period afterward?\",\"options\":[\"Kernel explicitly ends it and Registry deletes it immediately\",\"Kernel explicitly ends it and Registry retains a tombstone\",\"It also ends on restart or inactivity\",\"It remains durable until an explicit owner or Kernel action ends it\"],\"default_guess\":\"Only Cabinet Kernel explicitly ends it; Registry deletes the session and its access state atomically.\"},{\"subject\":\"M06 access-version initial value\",\"kind\":\"model_question_carried\",\"text\":\"its start value and how a stale version is checked are State 2's (round 28 judgement P4).\",\"question\":\"What is the access version of a newly registered AgentSession?\",\"options\":[\"0\",\"1\",\"A backend-generated ordinal with no prescribed initial number\"],\"default_guess\":\"Start at 1 when the session is registered.\"},{\"subject\":\"M06 stale access-version handling\",\"kind\":\"model_question_carried\",\"text\":\"its start value and how a stale version is checked are State 2's (round 28 judgement P4).\",\"question\":\"Which owner actions must state an access version, and what exact refusal and state-preservation behavior applies when it is missing or stale?\",\"options\":[\"Every owner action changing session access must state the current version; missing or unequal is refused unchanged\",\"Only grants and revocations require it\",\"A missing version is accepted, while only an unequal supplied version is stale\",\"A stale version returns the current access state without changing it\"],\"default_guess\":\"Every owner action that changes the granted set, active project, or pending request must state the current access version; a missing or unequal version is refused and changes nothing.\"},{\"subject\":\"M09 refused attempts\",\"kind\":\"model_question_carried\",\"text\":\"whether refused attempts and agent-authority reads leave an entry is State 2's (round 28 P1; R0-58 says ordinary reads do not).\",\"question\":\"Do any refused attempts write an AuditEntry; if so, which refusals and what outcome, subject, and principal do they record?\",\"options\":[\"No refused attempt is audited\",\"Every authenticated refused change is audited\",\"Only security-sensitive refusals are audited\",\"Only refusals occurring after confirmation are audited\"],\"default_guess\":\"No refused attempt writes an AuditEntry because the log records accepted significant state changes only.\"},{\"subject\":\"M09 agent-authority reads\",\"kind\":\"model_question_carried\",\"text\":\"whether refused attempts and agent-authority reads leave an entry is State 2's (round 28 P1; R0-58 says ordinary reads do not).\",\"question\":\"Are successful or refused agent-authority reads audited, or are all of them covered by the rule that ordinary reads are not recorded?\",\"options\":[\"No agent-authority read is audited\",\"Successful agent-authority reads are audited\",\"Only refused agent-authority reads are audited\",\"Every agent-authority read is audited\"],\"default_guess\":\"No agent-authority read writes an AuditEntry, whether accepted or refused.\"}]}",
+ "set_aside": []
+}
