@@ -386,7 +386,8 @@ last-changed at the instant, the request id kept. A repeat changes nothing.
 
 `customers.check_customer_eligible` asked once: (3) a named customer
 exists; (4) the request id's form, display name and address required, alias,
-kind and characteristics optional; then the request id among projects — a
+kind and characteristics optional, each given one within its form through
+`given_values` (A02 rule 4); then the request id among projects — a
 repeat with equal facts answers the project as it stands, archived included
 (A01 rules 3, 4), other facts are a conflict; (6) an erased, restricted or
 ended customer refused (A03 rule 5). A request id an erasure removed makes
@@ -395,7 +396,7 @@ a new create (A01 rule 8).
 ### Errors
 
 `not_found` (`unknown_customer`); `invalid_request` (`missing_value`,
-`malformed_request_id`, `outside_closed_list`); `refused` (`conflict`,
+`malformed_request_id`, `outside_closed_list`, `outside_form`); `refused` (`conflict`,
 `customer_erased`, `customer_restricted`, `customer_ended`).
 
 ### State impact
@@ -436,7 +437,7 @@ ended; keeping the named one is not newly naming it (A03 rule 5).
 ### Errors
 
 `not_found` (`unknown_project`, `unknown_customer`); `invalid_request`
-(`missing_value`, `outside_closed_list`); `stale` (`stale_revision`);
+(`missing_value`, `outside_closed_list`, `outside_form`); `stale` (`stale_revision`);
 `refused` (`archived`, `customer_erased`, `customer_restricted`,
 `customer_ended`).
 

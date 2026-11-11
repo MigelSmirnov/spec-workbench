@@ -34,8 +34,9 @@ pick brings is refused (`outside_closed_list`), one given twice too
 
 ### Outputs
 
-For an accepted file, its bytes as read — which `operations` hands to
-`owner_sessions.keep_uploaded_file` — and its digest, the SHA-256 of those
+At `upload`, for an accepted file, its bytes as read — which `operations`
+hands to `owner_sessions.keep_uploaded_file` — and, in both modes, the
+accepted file's digest, the SHA-256 of those
 bytes, which Registry computes and never takes from a caller. No refusal
 carries a digest: a file over the size limit is refused before any of it is
 parsed — a declared length over it before any byte is read, otherwise as
@@ -82,7 +83,9 @@ among them (A22 rule 7); ids compared per kind (rule 5); names read with
 `given_values` (A02): a display name, a Customer's name or kind absent or
 blank is no refusal here but a missing value the mapping shows — named by
 its subject, the picked project by `project_id` or the Customer by its v1
-value, and by its field — which keeps it from being clean; a required value
+value, and by its field — which keeps it from being clean; so does a given
+display name or alias outside A02's form, shown with its subject, its field
+and its kind (`outside_form`) beside the missing values; a required value
 missing inside a brought-in record is that record's malformation (rule 4); `confirm_import` refuses it (`mapping_not_clean`). Nothing is executed or evaluated (A19 rule 4).
 
 ### Errors

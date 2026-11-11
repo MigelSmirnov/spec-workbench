@@ -193,7 +193,9 @@ forms over the owner's operations (R0-29, A19).
 
 One HTTP request from the owner's browser: the session cookie, the form's
 fields with their CSRF value, a confirmation value where the step carries
-one, the revision or access version the rendered card carried.
+one, the revision or access version the rendered card carried; for an
+upload, its declared length and its body as an unread stream, which it hands
+to `operations.perform_owner_operation` without reading or buffering it.
 
 ### Outputs
 
@@ -211,6 +213,10 @@ no answer, however late it arrives, can remove a newer session's cookie.
 Two sign-ins of one browser whose answers cross make two valid sessions;
 the browser keeps the cookie it received last, and the other session,
 carried by no cookie, ends by its limits (A13 rule 2).
+After an upload's answer, whatever it was — accepted, or refused before any
+or after some bytes were read — `owner_interface` discards the unread
+remainder of the body without reading it into anything and closes the
+connection; a connection that carried an upload is never reused.
 
 ### Enforces
 
@@ -254,9 +260,14 @@ In order: `configuration.load_configuration`;
 `backups.probe_backup_location`; `store.open_store`; the owner interface's
 listener and then, unless the start is owner-only, the service API's, at
 the imported `OWNER_INTERFACE_LISTEN_ADDRESS` and
-`SERVICE_API_LISTEN_ADDRESS` constants; then the surfaces answer; every
-60 seconds `owner_sessions.end_expired_sessions`; at least once a minute,
-except in an owner-only start, `backups.run_daily_backup_if_due`.
+`SERVICE_API_LISTEN_ADDRESS` constants; then the surfaces answer; then two
+passes: `owner_sessions.end_expired_sessions` every imported
+`SESSION_PASS_SECONDS` and, except in an owner-only start,
+`backups.run_daily_backup_if_due` every imported `BACKUP_LOOK_SECONDS`. Each
+pass is timed by `clock.monotonic_reading`: its next call is that many
+seconds after its last call ended, so a long call or a suspension of the
+host delays it and missed calls are not made up; the two passes run apart,
+neither waiting for the other.
 
 ### Enforces
 

@@ -26,8 +26,8 @@ types and Python signatures are State 6's.
   or compares a date takes the action's instant and today's date as inputs:
   `operations` reads the instant once with `clock.recorded_now` when the
   transaction begins and derives today from it with `clock.today_in_utc`
-  ("Time"); the operation reads no clock. The exceptions are named: `owner_sessions` reads
-  `clock.monotonic_reading`, `backups` reads `clock.recorded_now` for its
+  ("Time"); the operation reads no clock. The exceptions are named: `owner_sessions` and
+  `instance_lifecycle`, for its passes, read `clock.monotonic_reading`, `backups` reads `clock.recorded_now` for its
   look, and `store` reads it at a backup copy's first read.
 - **The acting principal.** An operation that records who acted — a
   pointer's publisher or withdrawer, an audit entry — takes the acting
@@ -94,10 +94,12 @@ types and Python signatures are State 6's.
 ## Constants each module imports
 
 `module:data_provider` has no operation: it exports constants, and a module
-that names one imports it (SPEC_STANDARD §6.10, §7, §15.3.1). This table is
-every such edge — consumer, provider `data_provider`, the symbols — and the
-one source of these imports; a module imports no constant it does not list,
-and names none it does not import. The values are the data closure's.
+that names one imports it (SPEC_STANDARD §6.10, §15.3.1). The authority for
+these imports is the specification's `imports.module_internal`, as for every
+internal import (SPEC_STANDARD §7): State 6 writes each row below as the
+entry `module_internal[<consumer>]["data_provider"]`, the listed symbols and
+no other. This table is the design those entries are written from, not a
+second authority beside them. The values are the data closure's.
 
 | consumer | constants it imports from `data_provider` |
 |---|---|
@@ -113,9 +115,9 @@ and names none it does not import. The values are the data closure's.
 | `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `RELEASE_VERSION` |
 | `instance_lifecycle` | `OWNER_INTERFACE_LISTEN_ADDRESS`, `SERVICE_API_LISTEN_ADDRESS`, `SESSION_PASS_SECONDS`, `BACKUP_LOOK_SECONDS` |
 
-`configuration` imports `load_runtime_settings` from `runtime_settings` and
-calls it itself, once per start (`runtime_settings.load_runtime_settings`,
-Callers).
+Likewise `module_internal["configuration"]["runtime_settings"]` holds
+`load_runtime_settings`, which `configuration` calls itself, once per start;
+`instance_lifecycle` does not call it.
 
 ## Closed set of refusal codes
 
@@ -130,7 +132,11 @@ the owner interface renders and State 6 declares as `models`' vocabulary.
 | `not_permitted` | (1) | `outside_service_rights` (A09 rule 3); `csrf_refused` (A13 rule 5); `answer_above_class` (A09 rule 4) | the caller is not allowed this call |
 | `confirmation_refused` | (1) | `confirmation_not_pending` — the session holds no pending value: never shown, used up or cleared; `confirmation_other_value` — another value while the pending one is valid, which stays; `confirmation_bound_elsewhere` — the pending value given for another action, target, revision or inputs, now used up; `confirmation_expired` — cleared (A13 rule 6) | the owner submits the pending step again, or has it shown again |
 | `not_found` | (2), (3) | `agent_call_refused` — an unregistered session, a project outside the set, none active, an unknown pointer for Kernel: one answer (A10 rule 3, A08 rule 7); `unknown_project`, `unknown_customer`, `unknown_room`, `unknown_pointer`, `unknown_session` (State 0) | the caller re-reads |
-| `invalid_request` | (4) | `missing_value` (A02 rule 1); `malformed_request_id` (A01 rule 1); `outside_closed_list` (A19 rule 3); `duplicate_pick` — a project, or a Customer's v1 value, given twice (A16 rule 1); `unknown_artifact_type` (A22 rule 5); `date_after_today` (A15 rule 3, R0-84); `file_too_large`; `file_unreadable` — bytes that do not parse as the format States 5 and 6 declare; `file_malformed` — a file that parses but holds two projects with one id, or a project whose id or status is missing or not of its field's shape; a status outside its vocabulary is not this, but a malformed record of a pick (A16 rule 4) (A19 rule 4, A16 rule 3) | the caller fixes the request |
+| `invalid_request` | (4) | `missing_value` (A02 rule 1); `malformed_request_id` (A01 rule 1); `outside_closed_list` (A19 rule 3) — a value outside its enumeration, an
+object kind or a customer language included (A02 rule 4); `outside_form` — a
+present value outside the form State 1 declares: an alias over the imported
+`ALIAS_MAX_CHARACTERS` constant, a floor area not greater than zero, a number
+of rooms below 1, a floor that is not a whole number (A02 rule 4); `duplicate_pick` — a project, or a Customer's v1 value, given twice (A16 rule 1); `unknown_artifact_type` (A22 rule 5); `date_after_today` (A15 rule 3, R0-84); `file_too_large`; `file_unreadable` — bytes that do not parse as the format States 5 and 6 declare; `file_malformed` — a file that parses but holds two projects with one id, or a project whose id or status is missing or not of its field's shape; a status outside its vocabulary is not this, but a malformed record of a pick (A16 rule 4) (A19 rule 4, A16 rule 3) | the caller fixes the request |
 | `stale` | (5) | `stale_revision` (A04 rules 2, 3); `stale_access_version` (A12 rule 3) | the owner reads again |
 | `refused` | (6) | `archived`, `active` (erasing an active project), `anonymised`, `erased`, `customer_restricted`, `customer_ended`, `customer_erased`, `conflict` (A01 rule 5), `not_granted`, `not_pending`, `withdrawn`, `superseded`, `import_closed`, `file_not_kept`, `mapping_not_clean`, `no_picks` | the owner reads the record's state |
 | `internal_error` | — | `transaction_failed`: a store transaction did not commit, nothing changed (A04 rule 4) | the caller reads again before repeating |
