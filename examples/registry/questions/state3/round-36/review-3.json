@@ -1,0 +1,134 @@
+{
+ "open_points": [
+  {
+   "subject": "30_modules.md:`data_provider`",
+   "kind": "conflicting ownership scope",
+   "text": "The typed constants of the data closure, the one home of each value the generated code reads that is not a setting of the environment",
+   "question": "Does `data_provider` own literally every non-environment value, including enumeration members and field types owned by `models`, or only policy constants after excluding enumeration members and field types as the shared-facts passage does?",
+   "options": [
+    "`data_provider` owns only policy constants; `models` owns enumeration members and field types",
+    "`data_provider` also owns representations of enumeration members and field types",
+    "The two modules jointly own those values"
+   ],
+   "default_guess": "Limit `data_provider` to policy constants and leave enumeration members and field types solely in `models`.",
+   "witness": {
+    "initial": "Code must test whether a project status is `archived`.",
+    "events": [
+     "A careful implementer follows the shared-facts exclusion and compares a `models` enumeration member.",
+     "Another careful implementer follows `data_provider`'s literal ownership claim and expects a status value exported by `data_provider`."
+    ],
+    "outcomes": [
+     "The consumer imports and compares the enumeration from `models`.",
+     "The consumer imports or invents a `data_provider` constant, although no such export is listed."
+    ],
+    "observer": "The generator or strict-import validator sees different dependencies and may reject one implementation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`instance_lifecycle`",
+   "kind": "two owners for scheduling",
+   "text": "the 60-second pass of `owner_sessions` and the minute look of `backups`",
+   "question": "Does `instance_lifecycle` own the cadence, phase and invocation of both periodic calls, or do `owner_sessions` and `backups` own their own periodic scheduling as their Owns passages also say?",
+   "options": [
+    "`instance_lifecycle` alone schedules; the two modules only perform a requested pass or look",
+    "Each domain module schedules itself",
+    "`instance_lifecycle` and the domain modules share scheduling ownership"
+   ],
+   "default_guess": "Make `instance_lifecycle` the sole scheduler and make `owner_sessions` and `backups` own only the work and decisions performed when called.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`instance_lifecycle`",
+   "kind": "timer phase unspecified",
+   "text": "the 60-second pass of `owner_sessions` and the minute look of `backups`",
+   "question": "When does the first monotonic-timed pass or look occur after startup: immediately, one interval later, or at a wall-clock-aligned boundary?",
+   "options": [
+    "Run an initial pass and look immediately, then every interval",
+    "Wait 60 seconds before the first pass and look",
+    "Align the minute look to wall-clock minute boundaries and independently schedule the session pass"
+   ],
+   "default_guess": "Run both once immediately and then on fixed monotonic deadlines.",
+   "witness": {
+    "initial": "Registry starts at 02:59:30 UTC with service tokens and no kept backup for that date.",
+    "events": [
+     "`instance_lifecycle` starts its minute-look timer.",
+     "At 03:00 UTC the date's backup becomes eligible only if the same process previously looked before 03:00."
+    ],
+    "outcomes": [
+     "An immediate look at 02:59:30 supplies the earlier look, and the next look starts the backup.",
+     "A first look one minute after startup occurs after 03:00, so the date receives no backup."
+    ],
+    "observer": "The owner sees either a new kept backup or no backup for the date."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`instance_lifecycle`",
+   "kind": "periodic-task concurrency unspecified",
+   "text": "`instance_lifecycle` times its two passes by `clock.monotonic_reading`",
+   "question": "Are the owner-session pass and backup look independent periodic tasks, or does one synchronous scheduler run them serially and allow a long call to delay the other?",
+   "options": [
+    "Independent non-overlapping schedules, so a backup run cannot delay session expiry passes",
+    "One serial scheduler, so either call may delay the other",
+    "A serial scheduler whose missed deadlines are caught up after a long call"
+   ],
+   "default_guess": "Use independent schedules, with each kind non-overlapping with itself.",
+   "witness": {
+    "initial": "A backup run begins at 03:00 and lasts five minutes; an owner session reaches its limit at 03:01 with an uploaded file still held.",
+    "events": [
+     "The backup operation remains in progress through several 60-second session-pass deadlines.",
+     "The lifecycle scheduler reaches—or fails to reach—the session pass due at 03:01."
+    ],
+    "outcomes": [
+     "An independent session pass ends the session and drops its upload at about 03:01.",
+     "A serial scheduler delays the pass until the backup returns at about 03:05, retaining the ended session and upload meanwhile."
+    ],
+    "observer": "A lifecycle test or runtime-state inspector sees a four-minute difference in session and upload retention."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Facts several modules touch, and their one owner",
+   "kind": "non-atomic time pair",
+   "text": "An action has one instant: `operations` reads it from `clock.recorded_now` once, when the action's transaction begins, with today's date (`clock.today_in_utc`), and hands both to every module the action records a new instant or compares a date in.",
+   "question": "Must the action instant and UTC date be one coherent reading, and if so is the date derived from the instant or returned atomically with it?",
+   "options": [
+    "Derive the UTC date from the single `recorded_now` instant",
+    "Add one clock operation that atomically returns the instant and its UTC date",
+    "Permit separate reads even when midnight falls between them"
+   ],
+   "default_guess": "Read one UTC instant and derive its date from that instant.",
+   "witness": {
+    "initial": "The clock is at 23:59:59.999999 UTC and an audit entry has that instant.",
+    "events": [
+     "An owner-confirmed erasure transaction begins across midnight.",
+     "`operations` reads `recorded_now` immediately before midnight and `today_in_utc` immediately after midnight.",
+     "The audit module erases entries before the supplied current date and appends the erasure entry with the action instant."
+    ],
+    "outcomes": [
+     "Using the two readings literally removes the old entry and writes an erasure entry whose instant is before the start of the date it names, contradicting A15's invariant.",
+     "Using a coherent instant/date pair either treats the date as the earlier day or gives the action an instant after midnight, preserving the invariant."
+    ],
+    "observer": "The owner reading the audit log, and the A15 boundary test, see different retained entries and timestamps."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "contradictory review inventory",
+   "text": "every category naming them — injection_interpreted_input (A02, A16, A19), secrets, authentication and concurrency (A01, A04, A07, A13, A15, A17, A18), browser_boundary (A13, A19), files_artifacts (A07, A16, A18), authorization (A04) — was reviewed",
+   "question": "What is the complete set of changed decisions reviewed under each category, given that the authoritative concurrency category names changed A16 and the authoritative files_artifacts category names changed A19, while this inventory omits them?",
+   "options": [
+    "Add A16 to concurrency and A19 to files_artifacts in this inventory",
+    "Remove A16 and A19 from the authoritative category references",
+    "State that the parenthetical lists are illustrative rather than complete"
+   ],
+   "default_guess": "Correct the inventory by adding A16 to concurrency and A19 to files_artifacts.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"30_modules.md:`data_provider`\",\"kind\":\"conflicting ownership scope\",\"text\":\"The typed constants of the data closure, the one home of each value the generated code reads that is not a setting of the environment\",\"question\":\"Does `data_provider` own literally every non-environment value, including enumeration members and field types owned by `models`, or only policy constants after excluding enumeration members and field types as the shared-facts passage does?\",\"options\":[\"`data_provider` owns only policy constants; `models` owns enumeration members and field types\",\"`data_provider` also owns representations of enumeration members and field types\",\"The two modules jointly own those values\"],\"default_guess\":\"Limit `data_provider` to policy constants and leave enumeration members and field types solely in `models`.\",\"witness\":{\"initial\":\"Code must test whether a project status is `archived`.\",\"events\":[\"A careful implementer follows the shared-facts exclusion and compares a `models` enumeration member.\",\"Another careful implementer follows `data_provider`'s literal ownership claim and expects a status value exported by `data_provider`.\"],\"outcomes\":[\"The consumer imports and compares the enumeration from `models`.\",\"The consumer imports or invents a `data_provider` constant, although no such export is listed.\"],\"observer\":\"The generator or strict-import validator sees different dependencies and may reject one implementation.\"}},{\"subject\":\"30_modules.md:`instance_lifecycle`\",\"kind\":\"two owners for scheduling\",\"text\":\"the 60-second pass of `owner_sessions` and the minute look of `backups`\",\"question\":\"Does `instance_lifecycle` own the cadence, phase and invocation of both periodic calls, or do `owner_sessions` and `backups` own their own periodic scheduling as their Owns passages also say?\",\"options\":[\"`instance_lifecycle` alone schedules; the two modules only perform a requested pass or look\",\"Each domain module schedules itself\",\"`instance_lifecycle` and the domain modules share scheduling ownership\"],\"default_guess\":\"Make `instance_lifecycle` the sole scheduler and make `owner_sessions` and `backups` own only the work and decisions performed when called.\"},{\"subject\":\"30_modules.md:`instance_lifecycle`\",\"kind\":\"timer phase unspecified\",\"text\":\"the 60-second pass of `owner_sessions` and the minute look of `backups`\",\"question\":\"When does the first monotonic-timed pass or look occur after startup: immediately, one interval later, or at a wall-clock-aligned boundary?\",\"options\":[\"Run an initial pass and look immediately, then every interval\",\"Wait 60 seconds before the first pass and look\",\"Align the minute look to wall-clock minute boundaries and independently schedule the session pass\"],\"default_guess\":\"Run both once immediately and then on fixed monotonic deadlines.\",\"witness\":{\"initial\":\"Registry starts at 02:59:30 UTC with service tokens and no kept backup for that date.\",\"events\":[\"`instance_lifecycle` starts its minute-look timer.\",\"At 03:00 UTC the date's backup becomes eligible only if the same process previously looked before 03:00.\"],\"outcomes\":[\"An immediate look at 02:59:30 supplies the earlier look, and the next look starts the backup.\",\"A first look one minute after startup occurs after 03:00, so the date receives no backup.\"],\"observer\":\"The owner sees either a new kept backup or no backup for the date.\"}},{\"subject\":\"30_modules.md:`instance_lifecycle`\",\"kind\":\"periodic-task concurrency unspecified\",\"text\":\"`instance_lifecycle` times its two passes by `clock.monotonic_reading`\",\"question\":\"Are the owner-session pass and backup look independent periodic tasks, or does one synchronous scheduler run them serially and allow a long call to delay the other?\",\"options\":[\"Independent non-overlapping schedules, so a backup run cannot delay session expiry passes\",\"One serial scheduler, so either call may delay the other\",\"A serial scheduler whose missed deadlines are caught up after a long call\"],\"default_guess\":\"Use independent schedules, with each kind non-overlapping with itself.\",\"witness\":{\"initial\":\"A backup run begins at 03:00 and lasts five minutes; an owner session reaches its limit at 03:01 with an uploaded file still held.\",\"events\":[\"The backup operation remains in progress through several 60-second session-pass deadlines.\",\"The lifecycle scheduler reaches—or fails to reach—the session pass due at 03:01.\"],\"outcomes\":[\"An independent session pass ends the session and drops its upload at about 03:01.\",\"A serial scheduler delays the pass until the backup returns at about 03:05, retaining the ended session and upload meanwhile.\"],\"observer\":\"A lifecycle test or runtime-state inspector sees a four-minute difference in session and upload retention.\"}},{\"subject\":\"30_modules.md:Facts several modules touch, and their one owner\",\"kind\":\"non-atomic time pair\",\"text\":\"An action has one instant: `operations` reads it from `clock.recorded_now` once, when the action's transaction begins, with today's date (`clock.today_in_utc`), and hands both to every module the action records a new instant or compares a date in.\",\"question\":\"Must the action instant and UTC date be one coherent reading, and if so is the date derived from the instant or returned atomically with it?\",\"options\":[\"Derive the UTC date from the single `recorded_now` instant\",\"Add one clock operation that atomically returns the instant and its UTC date\",\"Permit separate reads even when midnight falls between them\"],\"default_guess\":\"Read one UTC instant and derive its date from that instant.\",\"witness\":{\"initial\":\"The clock is at 23:59:59.999999 UTC and an audit entry has that instant.\",\"events\":[\"An owner-confirmed erasure transaction begins across midnight.\",\"`operations` reads `recorded_now` immediately before midnight and `today_in_utc` immediately after midnight.\",\"The audit module erases entries before the supplied current date and appends the erasure entry with the action instant.\"],\"outcomes\":[\"Using the two readings literally removes the old entry and writes an erasure entry whose instant is before the start of the date it names, contradicting A15's invariant.\",\"Using a coherent instant/date pair either treats the date as the earlier day or gives the action an instant after midnight, preserving the invariant.\"],\"observer\":\"The owner reading the audit log, and the A15 boundary test, see different retained entries and timestamps.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"contradictory review inventory\",\"text\":\"every category naming them — injection_interpreted_input (A02, A16, A19), secrets, authentication and concurrency (A01, A04, A07, A13, A15, A17, A18), browser_boundary (A13, A19), files_artifacts (A07, A16, A18), authorization (A04) — was reviewed\",\"question\":\"What is the complete set of changed decisions reviewed under each category, given that the authoritative concurrency category names changed A16 and the authoritative files_artifacts category names changed A19, while this inventory omits them?\",\"options\":[\"Add A16 to concurrency and A19 to files_artifacts in this inventory\",\"Remove A16 and A19 from the authoritative category references\",\"State that the parenthetical lists are illustrative rather than complete\"],\"default_guess\":\"Correct the inventory by adding A16 to concurrency and A19 to files_artifacts.\"}]}",
+ "set_aside": []
+}
