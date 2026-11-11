@@ -176,16 +176,20 @@ closure is the one proof of success.
    the host an IP address — an IPv6 one in brackets — and the port a whole
    number from 1 to 65535, the data provider's constants `LISTEN_PORT_MIN`
    and `LISTEN_PORT_MAX`, which the checking code imports (SPEC_STANDARD
-   §15.3.1). The two addresses have different ports, so that the two
-   surfaces never share an endpoint, and Registry opens each listener for
-   itself alone, never with an option that lets another active socket bind
-   the same endpoint (no port sharing; rebinding a port a closed listener
-   left is not sharing). An IPv6 address is listened on for IPv6 alone, never
-   for IPv4 connections mapped onto it. Written as text, an IPv4 host is four
-   decimal numbers joined by dots and an IPv6 host the bracketed form any
-   IPv6 text form names, each read into the address it names; the port is
-   decimal digits without a leading zero. The configuration hands each
-   address on as its host and port. The addresses are the deployment's, as R0-19 says
+   §15.3.1). Written as text, with no sign and no white space anywhere: an
+   IPv4 host is four numbers from 0 to 255 in ASCII decimal digits, none
+   with a leading zero but 0 itself, joined by dots; an IPv6 host is in
+   brackets and is an address in the text form of RFC 4291 section 2.2,
+   with no zone identifier and not an IPv4-mapped address (`::ffff:0:0/96`);
+   the port is ASCII decimal digits without a leading zero. The
+   configuration hands each address on as its host and port. The two
+   addresses have different ports, so that the two surfaces' endpoints
+   never overlap, whatever their hosts. Registry binds each listener
+   exclusively — it sets no option that lets a second active socket bind
+   an overlapping endpoint — and an IPv6 listener accepts IPv6 connections
+   alone, never IPv4 ones mapped onto it; whether a port a closed listener
+   left can be bound again at once is the platform's, which Registry
+   neither requires nor prevents. The addresses are the deployment's, as R0-19 says
    — the host's loopback where Registry runs on the host, its internal
    network where it runs in a container — so the configuration names them
    (owner, 2026-11-11, replacing the release-fixed addresses of 2026-11-01:
@@ -288,6 +292,10 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= 32 bytes
    `localhost:8781`, `127.0.0.1` and `127.0.0.1:0` stop the start, naming the
    item. Two addresses with one port, `127.0.0.1:8781` and
    `0.0.0.0:8781`, stop the start naming the service API's address.
+9. `[fe80::1%eth0]:8781`, `[::ffff:127.0.0.1]:8781`, `127.0.0.01:8781` and
+   `127.0.0.1:08781` each stop the start, naming the item. While Registry
+   runs, a second socket binding the service API's endpoint fails; an IPv4
+   client cannot reach an IPv6 listener.
 6. A store made new holds exactly one audit sequence (M12), at 0, and no
    other record; a start interrupted before the store's rename leaves no
    store under the store's name, and the next start makes a new one with
@@ -631,7 +639,8 @@ length (rule 4); a new store's one audit sequence (A17 rule 5) changes no
 category's subject. A17's change of the same day — a variable that names no
 item is not read and does not stop the start — and its second, the
 listeners' addresses named by the configuration as the deployment's (R0-19),
-were reviewed under authentication_credential_abuse and secrets: no outcome
+with their text form, their exclusive binding and IPv6-only listening, were
+reviewed under authentication_credential_abuse and secrets: no outcome
 changed — an address is no secret, and R0-19 keeps which network may reach
 each surface the deployment's — since such
 a variable is never a credential Registry uses, never enters a diagnostic,
