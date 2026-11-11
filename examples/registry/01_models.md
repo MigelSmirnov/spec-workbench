@@ -159,7 +159,7 @@ Facts a Project carries, in domain words:
 - its display name, given by the owner, naming the object and the work and
   never a person (R0-82), held as `personal_data`;
 - its alias, a short neutral label the owner may give, the name the agent sees
-  (R0-82); at most 40 characters (owner, 2026-11-11; Open questions);
+  (R0-82); at most 40 characters (R0-90; Open questions);
 - its object, embedded, exactly one (R0-38, M02);
 - its customer link, optional: the `customer_ref` of a Customer (R0-16); kept
   even after that Customer's contact data is erased (R0-06, R0-67);
@@ -231,7 +231,8 @@ None. Settled by the owner on 2026-10-31:
   2026-11-11 by the owner's rule "in favour of the data": the alias is what
   the agent sees instead of the display name and the address (R0-82), so it is
   kept as short as a label that tells projects apart needs, leaving little room
-  for a personal value; a longer one is refused, never cut.
+  for a personal value; a longer one is refused, never cut (R0-90). Its
+  content stays a rule on the owner, not inspected (R0-82).
 - What an anonymised project keeps (R0-60, R0-62, carried): exactly what R0-62
   says as R0-87 narrows it (owner, 2026-10-31, codex round-02 T5) — id,
   status, the anonymised mark and its pointers. The owner's answer

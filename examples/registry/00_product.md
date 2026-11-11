@@ -1188,6 +1188,17 @@ each store's history; a store without the migration closure accepts the
 import (R0-79). What the owner does around a restore is the owner's and is not
 part of this specification, which describes what Registry does.
 
+### R0-90 — The alias's length is checked; its content stays the writer's (owner, 2026-11-11, during the pre-contract data closure; narrows R0-82)
+
+The alias is at most 40 characters, and Registry refuses a longer one; it is
+never cut. The owner decided the length "in favour of the data": the alias is
+what the agent sees instead of the display name and the address, and the
+shorter it is, the less room it leaves for a personal value. Only the length
+is checked. What the alias says — no person's name, no address, nothing that
+identifies the object or its customer — stays a rule on its writer, the owner,
+as R0-82 says: Registry does not inspect its content, and an alias whose
+content breaks that rule is not refused.
+
 ### R0-81 — The one-home rule is a target the services reach; Registry does not wait (owner, 2026-10-27, after round 23 T1; narrows R0-80)
 
 Production Registry starts without waiting for the other services. From its
@@ -1236,7 +1247,8 @@ R0-81 followed the same day, R0-82 and R0-83 answered round 24, R0-84
 round 25 and R0-85 round 26. R0-86 (2026-10-31) corrects a slip found by the
 State 1 draft; R0-87 (2026-10-31) answers State 1 round 2 T5; R0-88
 (2026-10-31) follows the State 2 draft; R0-89 (2026-10-31) follows State 2
-rounds 5–9.
+rounds 5–9; R0-90 (2026-11-11) records the owner's answer during the
+pre-contract data closure.
 
 ## Carried to later states
 

@@ -123,14 +123,21 @@ merges records because they look alike (R0-34).
 3. An optional value given as an empty string or white space only is absent.
 4. A present value is refused when it is outside the form State 1 declares,
    at stage (4) of A04 rule 6, every such value named: an alias longer than
-   40 characters, counted as Unicode code points (M01); an object kind
+   40 characters, counted as Unicode code points (R0-90, M01) — its length
+   only, its content being the owner's rule (R0-82); an object kind
    outside `apartment`, `house`, `commercial`, `other` (M02); a floor area not
    greater than zero, a number of rooms below 1, or a floor that is not a
    whole number (M02); a customer language outside `es`, `ru`, `en` (M04). An
-   absent kind, characteristic or language is never refused (rule 3). The
-   same checks hold for every action that gives the value — a create, a
-   correction, and the names and aliases the import's mapping gives (A16
-   rule 1).
+   absent object kind, characteristic or customer language is never refused
+   (rule 3); a Customer's kind stays required (rule 1). The same checks hold
+   for every action that gives the value — a create, a correction, and the
+   names and aliases the import's mapping gives (A16 rule 1). The import file
+   holds none of the other values: the v1 Registry has no object kind,
+   characteristic or customer language (State 1 M02, M04), and the import
+   gives none. The 40 is one value of the release, the data provider's
+   constant `ALIAS_MAX_CHARACTERS` = 40, which the checking code imports
+   (SPEC_STANDARD §15.3.1); the vocabularies reach the code as the model
+   enumerations State 6 declares.
 
 ### Formal invariants
 

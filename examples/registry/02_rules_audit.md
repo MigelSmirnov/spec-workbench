@@ -68,7 +68,10 @@ outcome but `accepted`.
 5. Sequence numbers are never reused within a store's history (M09): changes
    that write an entry are applied one at a time, and each entry takes the
    number after the last that history ever wrote, kept in the store apart
-   from the entries (M12 AuditSequence), so an erasure does not lower it. A store restored after a
+   from the entries (M12 AuditSequence), so an erasure does not lower it. Of
+   two concurrent changes, the one Registry applies first takes the lower
+   number: the order of the numbers is the order the changes were applied
+   in, and nothing else decides it. A store restored after a
    loss begins its own history from the backup's last number (R0-89).
 6. An erasure that removes no entry still writes its own entry naming the
    date, with its confirmation id: R0-66 makes the erasure leave an entry of

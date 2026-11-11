@@ -30,8 +30,8 @@ security review of States 0–2.
    name or alias the owner gives breaks A02 — an alias longer than 40
    characters included. While the
    mapping shows a malformed record, a conflict or a missing value, the
-   import's confirmation step is not shown; at confirmation Registry checks
-   again (rule 6). Each new
+   import's confirmation step is not shown; nor while a name or alias the
+   owner gives breaks A02; at confirmation Registry checks again (rule 6). Each new
    Customer's `customer_ref` is minted when the import is accepted.
 2. The uploaded file is kept in the owner session that uploaded it, in the
    process's memory only — never in the store, never on a disk — until the import is accepted, another file is uploaded in that
@@ -326,7 +326,9 @@ secret cannot be shared between holders.
    from a backup. Third, whatever the second step did, it deletes every kept
    backup made more than 30 × 24 hours before the instant this step starts,
    one cutoff for the whole step — a backup made exactly 30 × 24 hours before
-   it is kept. The 30 × 24 hours are one value of the release, the data
+   it is kept. The step reads the clock once, before it looks at any file,
+   and compares that UTC instant less 720 hours with each record's UTC
+   instant (L16) at the precision the record holds it. The 30 × 24 hours are one value of the release, the data
    provider's constant `BACKUP_RETENTION_HOURS` = 720, which the code that
    deletes imports (SPEC_STANDARD §15.3.1); no other place holds it. It also
    deletes every file under the kept
@@ -423,7 +425,7 @@ request text (M08) — and the import reads a file from outside.
    backend lowers this is the backend's.
 4. The import file is read as data with a size limit of 50 MB, 50 × 1024 ×
    1024 bytes (owner, 2026-11-11); nothing in it is executed or evaluated, and
-   a file over the limit is refused before it is read. The limit is counted
+   a file over the limit is refused before any of it is parsed. The limit is counted
    over the bytes Registry receives, never over a length the request
    declares: a declared length over the limit is refused before any byte is
    read; otherwise Registry reads the upload up to one byte more than the
@@ -550,7 +552,7 @@ Security review: PERFORMED
 - external_callbacks_webhooks: NOT_APPLICABLE; rationale: Registry calls no other service and receives no callback (R0-18, R0-54), and every request is a caller's authenticated call (R0-27)
 - browser_boundary: APPLICABLE; references: A13, A19; affected: owner interface, CSRF protection, session cookie, rendering of agent-written text
 - files_artifacts: APPLICABLE; references: A07, A08, A16, A18, A19, A22; affected: M05, M10, import file, backups, pointers as references whose payload Registry never reads (R0-02)
-- concurrency: APPLICABLE; references: A01, A04, A07, A12, A13, A14, A16, A18; affected: M01, M03, M04, M05, M06, M09, M10, M11, concurrent creates, corrections, publishes, session changes, single-use confirmation values, confirmations bound to no revision, resubmitted forms on records without a revision, creates racing the erasure that removes their request id, re-uploads replacing a confirmed file, concurrent import confirmations, backup snapshots taken while transactions go on, overlapping backup runs
+- concurrency: APPLICABLE; references: A01, A04, A07, A12, A13, A14, A15, A16, A18; affected: M01, M03, M04, M05, M06, M09, M10, M11, concurrent creates, corrections, publishes, session changes, single-use confirmation values, confirmations bound to no revision, resubmitted forms on records without a revision, creates racing the erasure that removes their request id, re-uploads replacing a confirmed file, concurrent import confirmations, backup snapshots taken while transactions go on, overlapping backup runs
 - dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies
 
 Performed again on 2026-11-01, after that day's changes to A01, A04, A13, A16,
@@ -558,11 +560,12 @@ A17 and A18 reopened it (rule 2): every category naming them was reviewed, and n
 outcome changed; concurrency now names A18 too, whose one-snapshot copy and
 non-overlapping runs (rule 1) it relies on.
 
-Performed again on 2026-11-11, after that day's changes to A02, A16, A17,
-A18 and A19 reopened it (rule 2): every category naming them —
+Performed again on 2026-11-11, after that day's changes to A02, A15, A16,
+A17, A18 and A19 reopened it (rule 2): every category naming them —
 injection_interpreted_input (A02, A16, A19), secrets, authentication and
-concurrency (A17, A18), browser_boundary (A19), files_artifacts (A16, A18) —
-was reviewed. No outcome changed. files_artifacts now names A19 too, whose
+concurrency (A15, A17, A18), browser_boundary (A19), files_artifacts (A16,
+A18) — was reviewed; A15's new tests of concurrent appends rest on its rule 5,
+which concurrency now names. No outcome changed. files_artifacts now names A19 too, whose
 import size limit is counted over the bytes received, never over a declared
 length (rule 4); a new store's one audit sequence (A17 rule 5) changes no
 category's subject.
