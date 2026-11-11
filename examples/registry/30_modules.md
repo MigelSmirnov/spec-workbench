@@ -416,19 +416,17 @@ facts_equal_for_repeat
 A17 rule 1's reading of the environment, and only it: the closed table of
 the `REGISTRY_` items — the store's location, the backup location, the
 backup key, the owner credential, the four service tokens — loaded at each
-call of `load_runtime_settings` into the settings, each item with its type,
-whether it is its normalization; every item optional at this level and absent when
-unset, so that `configuration` checks presence and form in A17 rule 2's one
-order; no default for any item (A17 rule 5); a variable that names no item
-is not read (owner, 2026-11-11). It checks nothing: it answers each item as
-set, or absent. The table is
-its own — each variable's name, the field it fills and its form; the data
-closure writes it once, as `config.runtime_environment_variables`, and no
-other module holds a name. Every item is text taken as it is set: no
-trimming, no case or Unicode normalization; a secret's length is counted in
-the bytes of its UTF-8 encoding, and a presented credential is compared in
-those bytes (A17 rules 3, 6). Emitted deterministically (SPEC_STANDARD
-§6.11).
+call of `load_runtime_settings` into the settings. The table holds, for each
+item, its variable's name, the settings field it fills and its type, which
+is text; nothing else. Every item is optional at this level and absent when
+unset, and is taken as it is set — no trimming, no case or Unicode
+normalization, no default (A17 rule 5) — so that `configuration` checks
+presence and form in A17 rule 2's one order. A variable that names no item
+is not read (owner, 2026-11-11). The table is its own: the data closure
+writes it once, as `config.runtime_environment_variables`, and no other
+module holds a name. A secret's length is counted in the bytes of its UTF-8
+encoding, and a presented credential is compared in those bytes (A17 rules
+3, 6). Emitted deterministically (SPEC_STANDARD §6.11).
 
 ### Knows
 
@@ -442,7 +440,7 @@ apart — which are `configuration`'s; opening the store or probing the backup l
 
 ### Hides
 
-Environment reading and the per-item normalization.
+Environment reading.
 
 ### Candidate public capabilities
 
@@ -459,14 +457,17 @@ load_runtime_settings
 
 ### Owns
 
-A17: every start check of rule 2, in its one order, over the settings
-`runtime_settings` loads as set — the service tokens of the services
+A17: the start checks of rule 2 that need no file, in its one order, over
+the settings `runtime_settings` loads as set — the service tokens of the services
 `data_provider`'s rights table lists, all or none, the other items present,
 each well formed, each secret at least the 32 bytes `data_provider` holds, no
 two secrets equal — with the diagnostic naming the failed item and never its
 value; that no default is applied (rule 5); an owner-only start when no token
-is given (rule 1). The path checks of rule 5 that need no file — the store and
-the backup location apart, compared with every link resolved — are its too.
+is given (rule 1); and last the path checks of rule 5 that need no file — the
+store and the backup location apart, compared with every link resolved. The
+checks after them — the backup probe (`backups`), opening or making the store
+(`store`) and the listeners — are run in rule 2's order by
+`instance_lifecycle`, which calls this module first.
 
 ### Knows
 
