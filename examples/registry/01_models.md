@@ -36,7 +36,13 @@ request supplies are named with it (State 0, "Carried to later states"); a fact
 that may be absent says so in domain words ("when given"). Field names, types,
 formal optionality and every answer shape belong to State 6; orders, replay
 mechanisms, correction semantics and token scopes belong to State 2 (State 0,
-"Carried to later states"; codex round-01 T5).
+"Carried to later states"; codex round-01 T5). SPEC_STANDARD §5's rule that
+every field is declared with its type is a rule of the specification's
+`models` section, and that section is State 6's output
+(`skills/spec-authoring/AUTHORING_SEQUENCE.md`): State 6 writes each model
+here with every fact as a typed field, and declares there what this state
+decides — its identity and its kind (§5, §15.1.1). This state holds every
+fact that becomes a field, so State 6 adds no fact a model does not list here.
 
 Every State 1 question the owner must answer is under a model's
 `Open questions`; a `BLOCK:` question stops State 2 until answered.
