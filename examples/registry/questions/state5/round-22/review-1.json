@@ -1,0 +1,179 @@
+{
+ "open_points": [
+  {
+   "subject": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "kind": "contradictory_epoch",
+   "text": "`instance_lifecycle` makes each of its two passes every\n  interval from the start, as A13 rule 2 says of the session pass: the n-th\n  call is due when `clock.monotonic_reading` shows n intervals since serving\n  began, the first one interval after;",
+   "question": "Is each pass anchored to process startup or to the instant the surfaces begin serving?",
+   "options": [
+    "Anchor both passes to process startup.",
+    "Anchor both passes to the instant the surfaces begin serving."
+   ],
+   "default_guess": "Anchor both passes to the instant the surfaces begin serving, because that is the explicit epoch in the scheduling formula.",
+   "witness": {
+    "initial": "The process starts at monotonic time 0, startup checks take 90 seconds, serving begins at time 90, and an owner signs in immediately with no later requests.",
+    "events": [
+     "The session reaches its 30-minute idle limit at time 1890.",
+     "The session pass follows either the process-start grid or the serving-start grid."
+    ],
+    "outcomes": [
+     "On the serving-start grid the pass runs at time 1890 and ends the session immediately.",
+     "On the process-start grid the surrounding calls are at times 1860 and 1920, so the expired session remains allocated until time 1920."
+    ],
+    "observer": "A lifecycle/session test or the host observing when the session and its uploaded file are released."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "kind": "missed_tick_ambiguity",
+   "text": "the n-th\n  call is due when `clock.monotonic_reading` shows n intervals since serving\n  began, the first one interval after; a call due while the previous call of\n  the same pass is still running is not made, and the pass waits for the\n  next due one.",
+   "question": "When several due instants pass during host suspension or scheduler starvation while no previous call is running, are all overdue calls made on resumption, exactly one call made, or all missed calls skipped until the next future due instant?",
+   "options": [
+    "Make every overdue call in order.",
+    "Make one call on resumption and continue on the original grid.",
+    "Skip all missed calls and wait for the next future grid instant."
+   ],
+   "default_guess": "Make one call on resumption and continue on the original grid.",
+   "witness": {
+    "initial": "Serving begins at monotonic time 0 with a 60-second pass interval; no call is running when the host is suspended at time 30.",
+    "events": [
+     "The host resumes when the monotonic reading is 210 seconds.",
+     "The scheduler evaluates the pass schedule."
+    ],
+    "outcomes": [
+     "Calls due at 60, 120 and 180 are made as overdue calls.",
+     "Only one call is made on resumption, or none is made until the call due at 240."
+    ],
+    "observer": "A deterministic lifecycle test observing calls to `owner_sessions.end_expired_sessions` or `backups.run_daily_backup_if_due`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "kind": "contradiction",
+   "text": "a call due while the previous call of\n  the same pass is still running is not made, and the pass waits for the\n  next due one.",
+   "question": "Must the backup due-check still be invoked at least once per minute while an earlier backup run is executing, as A18 rule 1 requires, or must every invocation of the backup pass be skipped until the earlier call returns?",
+   "options": [
+    "Invoke a non-overlapping due-check each minute even while the earlier backup run continues.",
+    "Skip the entire `run_daily_backup_if_due` call while its preceding call continues."
+   ],
+   "default_guess": "Separate the minute due-check from the long-running backup work so the clock is still examined each minute without overlapping backup runs.",
+   "witness": {
+    "initial": "A backup run begun on date D is still running across 03:00 UTC on date D+1.",
+    "events": [
+     "Before 03:00 on D+1, minute ticks occur while the earlier call is still running.",
+     "At 03:00 the earlier run is still running.",
+     "The earlier run finishes at 03:00:30, and the next tick is at 03:01."
+    ],
+    "outcomes": [
+     "Under A18's minute looks, the process observes D+1 before and at 03:00; after the old run finishes, the 03:01 check can find D+1 due.",
+     "Under the Passes rule, all calls while the old call runs are omitted; there is no earlier D+1 look before 03:00, so the D+1 backup is not due at 03:01."
+    ],
+    "observer": "The owner, who sees whether a backup for date D+1 is kept."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:public_op:instance_lifecycle.start_instance",
+   "kind": "caller_contradiction",
+   "text": "### Callers\n\n`module:owner_sessions`.",
+   "question": "Must `public_op:clock.monotonic_reading` also declare `module:instance_lifecycle` as a caller, now that `instance_lifecycle` directly uses it to time both passes?",
+   "options": [
+    "Add `module:instance_lifecycle` to the operation's callers and its direct import graph.",
+    "Have another module supply timing events so `instance_lifecycle` never calls `clock.monotonic_reading` directly."
+   ],
+   "default_guess": "Add `module:instance_lifecycle` as a caller and direct importer of `clock.monotonic_reading`.",
+   "witness": {
+    "initial": "A running instance has reached the first pass deadline.",
+    "events": [
+     "`instance_lifecycle` must decide from a monotonic reading whether the deadline has arrived."
+    ],
+    "outcomes": [
+     "Following the new pass text, `instance_lifecycle` calls `clock.monotonic_reading` directly.",
+     "Following the clock operation's caller contract, only `owner_sessions` may call it, so lifecycle timing must be supplied through an unspecified operation."
+    ],
+    "observer": "The State 6 import projection or an implementation test of the lifecycle module."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:public_op:migration_import.read_import_mapping",
+   "kind": "contradiction",
+   "text": "a stream that fails or ends before its\n  declared length is refused as `file_unreadable`, replacing nothing kept and\n  changing nothing of the session",
+   "question": "Does a failed or short upload still update the valid owner session's last-request reading, as A13 requires for every request carrying a valid session, or does it leave that reading unchanged?",
+   "options": [
+    "Restart the session's 30-minute idle period but leave its kept upload and other runtime state unchanged.",
+    "Leave every part of the session unchanged, including its last-request reading."
+   ],
+   "default_guess": "Restart the idle period because the request was admitted with a valid session; interpret “changing nothing” as changing neither the kept upload nor confirmation state.",
+   "witness": {
+    "initial": "A valid session's last request was at time 0 and it holds an earlier accepted upload.",
+    "events": [
+     "At time 29 minutes the owner submits an upload whose stream ends before its declared length.",
+     "At time 31 minutes the owner makes another request."
+    ],
+    "outcomes": [
+     "If every valid-session request restarts the idle period, the request at 31 minutes is admitted and the earlier upload remains kept.",
+     "If the failed upload changes nothing of the session, the session reached its idle limit at 30 minutes and the request at 31 minutes is refused."
+    ],
+    "observer": "The owner making the request at 31 minutes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:public_op:migration_import.read_import_mapping",
+   "kind": "refusal_definition_contradiction",
+   "text": "`file_unreadable` — bytes that do not parse as the format States 5 and 6 declare",
+   "question": "Must `file_unreadable` also cover transport failure and a stream ending before its declared length even when the received bytes form a parseable file?",
+   "options": [
+    "Broaden `file_unreadable` to include transport failure and declared-length shortfall.",
+    "Use a different refusal kind for transport failure or declared-length shortfall.",
+    "Accept parseable bytes despite the declared-length shortfall."
+   ],
+   "default_guess": "Broaden `file_unreadable` to include both parsing failure and failure to receive the complete declared body.",
+   "witness": {
+    "initial": "The request declares 1,000 bytes, but its stream cleanly ends after 900 bytes; those 900 bytes constitute a complete valid import file.",
+    "events": [
+     "`read_import_mapping` reads the stream to its end.",
+     "It classifies the result under the closed refusal vocabulary."
+    ],
+    "outcomes": [
+     "The operation text refuses it as `file_unreadable` because the stream ended before its declared length.",
+     "The refusal definition does not classify it as `file_unreadable` because the received bytes parse successfully, leaving acceptance or another unlisted kind."
+    ],
+    "observer": "The owner, who receives either an upload mapping or a `file_unreadable` refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:public_op:migration_import.read_import_mapping",
+   "kind": "cleanliness_contradiction",
+   "text": "and whether the mapping is clean — no malformed record, no conflict,\nno missing value, no given name or alias outside A02's form and at least\none pick — which alone lets the confirmation\nstep be shown.",
+   "question": "Is a mapping with an out-of-enumeration Customer kind clean under this exhaustive-looking definition, or non-clean as the Enforces passage says?",
+   "options": [
+    "Add every `outside_closed_list` Customer kind failure to the conditions making the mapping non-clean.",
+    "Treat the failure as informational and still mark the mapping clean.",
+    "Refuse the mapping request immediately instead of returning a non-clean mapping."
+   ],
+   "default_guess": "Mark the mapping non-clean and add the Customer-kind condition to the Outputs definition.",
+   "witness": {
+    "initial": "A valid file has one picked project and one Customer to create; there are no malformed records, conflicts, missing values, or invalid names or aliases.",
+    "events": [
+     "The owner supplies the Customer kind `partnership`, outside the declared enumeration.",
+     "`given_values.check_value_forms` returns `outside_closed_list`.",
+     "The mapping determines its `clean` value and whether the confirmation step may be shown."
+    ],
+    "outcomes": [
+     "Following the stated clean predicate, the mapping is clean because none of its listed disqualifiers applies.",
+     "Following the Enforces passage, the Customer-kind failure is shown and keeps the mapping from being clean."
+    ],
+    "observer": "The owner, who either receives or is denied the import confirmation step."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"kind\":\"contradictory_epoch\",\"text\":\"`instance_lifecycle` makes each of its two passes every\\n  interval from the start, as A13 rule 2 says of the session pass: the n-th\\n  call is due when `clock.monotonic_reading` shows n intervals since serving\\n  began, the first one interval after;\",\"question\":\"Is each pass anchored to process startup or to the instant the surfaces begin serving?\",\"options\":[\"Anchor both passes to process startup.\",\"Anchor both passes to the instant the surfaces begin serving.\"],\"default_guess\":\"Anchor both passes to the instant the surfaces begin serving, because that is the explicit epoch in the scheduling formula.\",\"witness\":{\"initial\":\"The process starts at monotonic time 0, startup checks take 90 seconds, serving begins at time 90, and an owner signs in immediately with no later requests.\",\"events\":[\"The session reaches its 30-minute idle limit at time 1890.\",\"The session pass follows either the process-start grid or the serving-start grid.\"],\"outcomes\":[\"On the serving-start grid the pass runs at time 1890 and ends the session immediately.\",\"On the process-start grid the surrounding calls are at times 1860 and 1920, so the expired session remains allocated until time 1920.\"],\"observer\":\"A lifecycle/session test or the host observing when the session and its uploaded file are released.\"}},{\"subject\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"kind\":\"missed_tick_ambiguity\",\"text\":\"the n-th\\n  call is due when `clock.monotonic_reading` shows n intervals since serving\\n  began, the first one interval after; a call due while the previous call of\\n  the same pass is still running is not made, and the pass waits for the\\n  next due one.\",\"question\":\"When several due instants pass during host suspension or scheduler starvation while no previous call is running, are all overdue calls made on resumption, exactly one call made, or all missed calls skipped until the next future due instant?\",\"options\":[\"Make every overdue call in order.\",\"Make one call on resumption and continue on the original grid.\",\"Skip all missed calls and wait for the next future grid instant.\"],\"default_guess\":\"Make one call on resumption and continue on the original grid.\",\"witness\":{\"initial\":\"Serving begins at monotonic time 0 with a 60-second pass interval; no call is running when the host is suspended at time 30.\",\"events\":[\"The host resumes when the monotonic reading is 210 seconds.\",\"The scheduler evaluates the pass schedule.\"],\"outcomes\":[\"Calls due at 60, 120 and 180 are made as overdue calls.\",\"Only one call is made on resumption, or none is made until the call due at 240.\"],\"observer\":\"A deterministic lifecycle test observing calls to `owner_sessions.end_expired_sessions` or `backups.run_daily_backup_if_due`.\"}},{\"subject\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"kind\":\"contradiction\",\"text\":\"a call due while the previous call of\\n  the same pass is still running is not made, and the pass waits for the\\n  next due one.\",\"question\":\"Must the backup due-check still be invoked at least once per minute while an earlier backup run is executing, as A18 rule 1 requires, or must every invocation of the backup pass be skipped until the earlier call returns?\",\"options\":[\"Invoke a non-overlapping due-check each minute even while the earlier backup run continues.\",\"Skip the entire `run_daily_backup_if_due` call while its preceding call continues.\"],\"default_guess\":\"Separate the minute due-check from the long-running backup work so the clock is still examined each minute without overlapping backup runs.\",\"witness\":{\"initial\":\"A backup run begun on date D is still running across 03:00 UTC on date D+1.\",\"events\":[\"Before 03:00 on D+1, minute ticks occur while the earlier call is still running.\",\"At 03:00 the earlier run is still running.\",\"The earlier run finishes at 03:00:30, and the next tick is at 03:01.\"],\"outcomes\":[\"Under A18's minute looks, the process observes D+1 before and at 03:00; after the old run finishes, the 03:01 check can find D+1 due.\",\"Under the Passes rule, all calls while the old call runs are omitted; there is no earlier D+1 look before 03:00, so the D+1 backup is not due at 03:01.\"],\"observer\":\"The owner, who sees whether a backup for date D+1 is kept.\"}},{\"subject\":\"50_public_apis_5_surfaces.md:public_op:instance_lifecycle.start_instance\",\"kind\":\"caller_contradiction\",\"text\":\"### Callers\\n\\n`module:owner_sessions`.\",\"question\":\"Must `public_op:clock.monotonic_reading` also declare `module:instance_lifecycle` as a caller, now that `instance_lifecycle` directly uses it to time both passes?\",\"options\":[\"Add `module:instance_lifecycle` to the operation's callers and its direct import graph.\",\"Have another module supply timing events so `instance_lifecycle` never calls `clock.monotonic_reading` directly.\"],\"default_guess\":\"Add `module:instance_lifecycle` as a caller and direct importer of `clock.monotonic_reading`.\",\"witness\":{\"initial\":\"A running instance has reached the first pass deadline.\",\"events\":[\"`instance_lifecycle` must decide from a monotonic reading whether the deadline has arrived.\"],\"outcomes\":[\"Following the new pass text, `instance_lifecycle` calls `clock.monotonic_reading` directly.\",\"Following the clock operation's caller contract, only `owner_sessions` may call it, so lifecycle timing must be supplied through an unspecified operation.\"],\"observer\":\"The State 6 import projection or an implementation test of the lifecycle module.\"}},{\"subject\":\"50_public_apis_4_import_backups.md:public_op:migration_import.read_import_mapping\",\"kind\":\"contradiction\",\"text\":\"a stream that fails or ends before its\\n  declared length is refused as `file_unreadable`, replacing nothing kept and\\n  changing nothing of the session\",\"question\":\"Does a failed or short upload still update the valid owner session's last-request reading, as A13 requires for every request carrying a valid session, or does it leave that reading unchanged?\",\"options\":[\"Restart the session's 30-minute idle period but leave its kept upload and other runtime state unchanged.\",\"Leave every part of the session unchanged, including its last-request reading.\"],\"default_guess\":\"Restart the idle period because the request was admitted with a valid session; interpret “changing nothing” as changing neither the kept upload nor confirmation state.\",\"witness\":{\"initial\":\"A valid session's last request was at time 0 and it holds an earlier accepted upload.\",\"events\":[\"At time 29 minutes the owner submits an upload whose stream ends before its declared length.\",\"At time 31 minutes the owner makes another request.\"],\"outcomes\":[\"If every valid-session request restarts the idle period, the request at 31 minutes is admitted and the earlier upload remains kept.\",\"If the failed upload changes nothing of the session, the session reached its idle limit at 30 minutes and the request at 31 minutes is refused.\"],\"observer\":\"The owner making the request at 31 minutes.\"}},{\"subject\":\"50_public_apis_4_import_backups.md:public_op:migration_import.read_import_mapping\",\"kind\":\"refusal_definition_contradiction\",\"text\":\"`file_unreadable` — bytes that do not parse as the format States 5 and 6 declare\",\"question\":\"Must `file_unreadable` also cover transport failure and a stream ending before its declared length even when the received bytes form a parseable file?\",\"options\":[\"Broaden `file_unreadable` to include transport failure and declared-length shortfall.\",\"Use a different refusal kind for transport failure or declared-length shortfall.\",\"Accept parseable bytes despite the declared-length shortfall.\"],\"default_guess\":\"Broaden `file_unreadable` to include both parsing failure and failure to receive the complete declared body.\",\"witness\":{\"initial\":\"The request declares 1,000 bytes, but its stream cleanly ends after 900 bytes; those 900 bytes constitute a complete valid import file.\",\"events\":[\"`read_import_mapping` reads the stream to its end.\",\"It classifies the result under the closed refusal vocabulary.\"],\"outcomes\":[\"The operation text refuses it as `file_unreadable` because the stream ended before its declared length.\",\"The refusal definition does not classify it as `file_unreadable` because the received bytes parse successfully, leaving acceptance or another unlisted kind.\"],\"observer\":\"The owner, who receives either an upload mapping or a `file_unreadable` refusal.\"}},{\"subject\":\"50_public_apis_4_import_backups.md:public_op:migration_import.read_import_mapping\",\"kind\":\"cleanliness_contradiction\",\"text\":\"and whether the mapping is clean — no malformed record, no conflict,\\nno missing value, no given name or alias outside A02's form and at least\\none pick — which alone lets the confirmation\\nstep be shown.\",\"question\":\"Is a mapping with an out-of-enumeration Customer kind clean under this exhaustive-looking definition, or non-clean as the Enforces passage says?\",\"options\":[\"Add every `outside_closed_list` Customer kind failure to the conditions making the mapping non-clean.\",\"Treat the failure as informational and still mark the mapping clean.\",\"Refuse the mapping request immediately instead of returning a non-clean mapping.\"],\"default_guess\":\"Mark the mapping non-clean and add the Customer-kind condition to the Outputs definition.\",\"witness\":{\"initial\":\"A valid file has one picked project and one Customer to create; there are no malformed records, conflicts, missing values, or invalid names or aliases.\",\"events\":[\"The owner supplies the Customer kind `partnership`, outside the declared enumeration.\",\"`given_values.check_value_forms` returns `outside_closed_list`.\",\"The mapping determines its `clean` value and whether the confirmation step may be shown.\"],\"outcomes\":[\"Following the stated clean predicate, the mapping is clean because none of its listed disqualifiers applies.\",\"Following the Enforces passage, the Customer-kind failure is shown and keeps the mapping from being clean.\"],\"observer\":\"The owner, who either receives or is denied the import confirmation step.\"}}]}",
+ "set_aside": []
+}

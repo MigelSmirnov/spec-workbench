@@ -1,0 +1,336 @@
+{
+ "open_points": [
+  {
+   "subject": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "kind": "schedule_anchor",
+   "text": "the n-th call is due when `clock.monotonic_reading` shows n intervals since serving began",
+   "question": "What exact event establishes the shared zero reading: process entry, completion of configuration, opening the first listener, opening all enabled listeners, or the moment both surfaces begin accepting requests?",
+   "options": [
+    "Process start establishes zero.",
+    "The first listener opening establishes zero.",
+    "All enabled listeners being ready and serving establishes zero."
+   ],
+   "default_guess": "Use the monotonic reading taken immediately after all enabled listeners are open and immediately before requests are served.",
+   "witness": {
+    "initial": "Registry starts shortly before 03:00 UTC, and configuration, store checks and listener opening take most of one backup-look interval.",
+    "events": [
+     "The host starts Registry.",
+     "The start checks finish and the surfaces begin serving around 03:00.",
+     "The scheduler computes the first backup-look deadline from its chosen zero."
+    ],
+    "outcomes": [
+     "A process-start anchor makes the first deadline already due when serving begins.",
+     "A serving-began anchor makes the first deadline one full interval later, potentially changing whether A18 observes the date's crossing of 03:00."
+    ],
+    "observer": "The owner observing whether that date receives a backup run."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "kind": "missed_intervals",
+   "text": "the n-th call is due when `clock.monotonic_reading` shows n intervals since serving began, the first one interval after; a call due while the previous call of the same pass is still running is not made, and the pass waits for the next due one",
+   "question": "When several deadlines elapse while the process or scheduler is suspended and no pass call was running, must it make one call on resumption, make every elapsed call in sequence, or skip all elapsed deadlines and wait for the next future deadline?",
+   "options": [
+    "Make one call immediately, then continue on the absolute interval grid.",
+    "Make one call for every elapsed deadline.",
+    "Skip elapsed deadlines and wait for the next future deadline."
+   ],
+   "default_guess": "Make one call immediately and then continue on the absolute interval grid.",
+   "witness": {
+    "initial": "A running instance has completed a pass and is then suspended for five pass intervals.",
+    "events": [
+     "The host suspends Registry while no pass is running.",
+     "The monotonic clock counts the suspension.",
+     "The host resumes Registry with five deadlines elapsed."
+    ],
+    "outcomes": [
+     "The scheduler invokes the pass once on resumption.",
+     "The scheduler invokes it five times successively, because none of the later calls is made while the previous call remains running."
+    ],
+    "observer": "A test clock or pass spy observing the number of calls, and potentially the host observing repeated backup diagnostics."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:`public_op:instance_lifecycle.start_instance`",
+   "kind": "caller_contradiction",
+   "text": "`backups.run_daily_backup_if_due` every imported `BACKUP_LOOK_SECONDS`, each\nfrom the start as Conventions, \"Passes\", says.",
+   "question": "Must `instance_lifecycle` call `clock.monotonic_reading`, and therefore be added to that operation's Callers and internal-import surface, or must another module own the timers? The conventions and State 3 require `instance_lifecycle` to use that operation, while `public_op:clock.monotonic_reading` lists only `module:owner_sessions` as a caller.",
+   "options": [
+    "Add `module:instance_lifecycle` as a caller and import `clock.monotonic_reading`.",
+    "Move scheduling into modules already declared as clock callers.",
+    "Let `instance_lifecycle` use an undeclared host timer instead of `clock`."
+   ],
+   "default_guess": "Add `module:instance_lifecycle` as a caller and declare its direct import of `clock.monotonic_reading`.",
+   "witness": {
+    "initial": "A test replaces Registry's clock and creates an owner session holding an upload.",
+    "events": [
+     "The test advances only the replacement monotonic clock past a pass deadline.",
+     "The process's real host timer is not advanced.",
+     "The test inspects whether the expiry pass ran and dropped the upload."
+    ],
+    "outcomes": [
+     "Following the new pass text and State 3, `instance_lifecycle` reads the replacement clock and runs the pass.",
+     "Following the clock operation's caller declaration, `instance_lifecycle` does not call it and a separately implemented host timer does not fire."
+    ],
+    "observer": "The deterministic test and the owner session whose upload is or is not dropped."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:given_values.check_value_forms`",
+   "kind": "numeric_input_form",
+   "text": "The values as `read_optional_text` and `read_required_text` answered them, each with the field it fills: an alias; an object kind; a floor area, a number of rooms, a floor; a customer language; a Customer's kind.",
+   "question": "How are the textual floor area, room count and floor converted to numbers, and which lexical forms are accepted before the range and whole-number checks?",
+   "options": [
+    "Parse a specified decimal grammar, allowing forms such as `1e1` only if that grammar says so.",
+    "Accept only canonical base-10 integer and decimal spellings.",
+    "Receive typed numeric values instead, contrary to the stated text-reader inputs."
+   ],
+   "default_guess": "Define a locale-independent JSON-style decimal grammar, reject non-finite values, and use exact decimal comparison for floor area and exact integer parsing for rooms and floor.",
+   "witness": {
+    "initial": "The owner submits a project form with floor area `1e1` and number of rooms `01`.",
+    "events": [
+     "`read_optional_text` preserves both strings.",
+     "`check_value_forms` checks their numeric form."
+    ],
+    "outcomes": [
+     "A general numeric parser accepts them as 10 and 1.",
+     "A canonical lexical parser rejects one or both as outside form."
+    ],
+    "observer": "The owner, who sees the project accepted or refused."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:given_values.check_value_forms`",
+   "kind": "output_shape",
+   "text": "otherwise every value\noutside it, each with its field and its kind",
+   "question": "What is the exact failure result: does an item contain the rejected value or only its field and kind, how are repeated or nested fields identified, and in what deterministic order are multiple failures returned?",
+   "options": [
+    "Return ordered records containing only field path and failure kind.",
+    "Return ordered records containing field path, failure kind and rejected value.",
+    "Return a map keyed by field, with no duplicate field entries."
+   ],
+   "default_guess": "Return a list in caller-declared field order, with one record per failure containing a stable field path and kind but not echoing the value.",
+   "witness": {
+    "initial": "One request supplies an overlong alias, an unknown object kind and two invalid characteristics.",
+    "events": [
+     "A caller passes all present values to `check_value_forms`.",
+     "The caller renders or converts the returned failures into a refusal."
+    ],
+    "outcomes": [
+     "One implementation returns field-and-kind records in input-field order without values.",
+     "Another returns the rejected values and orders records by failure kind or map-key order."
+    ],
+    "observer": "The owner or service client receiving differently shaped and ordered failure details."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "kind": "undefined_file_format",
+   "text": "bytes that do not parse as the format States 5 and 6 declare",
+   "question": "What exact import-file encoding, container syntax, record schema and version-discrimination rules does State 5 require? No such format is declared in the supplied State 5 text, and nothing is explicitly carried to a later state.",
+   "options": [
+    "Define the complete format in State 5.",
+    "Define a semantic record format in State 5 and only its typed serialization in State 6.",
+    "Explicitly carry the complete format decision to State 6."
+   ],
+   "default_guess": "Define the semantic record structure and version marker in State 5, leaving only its mechanical typed schema encoding to State 6.",
+   "witness": {
+    "initial": "The owner uploads bytes that are a valid representation under one plausible structured format but not another.",
+    "events": [
+     "`read_import_mapping` chooses a parser.",
+     "The operation attempts to enumerate projects."
+    ],
+    "outcomes": [
+     "The chosen parser accepts the file and returns its projects.",
+     "Another parser permitted by the text refuses it as `file_unreadable`."
+    ],
+    "observer": "The owner uploading the migration file."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "kind": "digest_representation",
+   "text": "the accepted file's digest, the SHA-256 of those\nbytes",
+   "question": "What value type and canonical representation carries the digest between modules, in mapping output, in confirmation bindings, in the closure and in the audit subject?",
+   "options": [
+    "Exactly 32 raw bytes.",
+    "Lowercase 64-character hexadecimal text.",
+    "Padded base64 text."
+   ],
+   "default_guess": "Use lowercase 64-character hexadecimal text as the canonical digest representation.",
+   "witness": {
+    "initial": "An accepted upload has a known SHA-256 digest.",
+    "events": [
+     "The mapping names the file by its digest.",
+     "A confirmation is bound to that digest.",
+     "The accepted import writes the closure and audit subject."
+    ],
+    "outcomes": [
+     "One implementation carries 32 raw bytes and hashes or serializes those bytes in the confirmation binding.",
+     "Another carries hexadecimal text and binds and stores that text."
+    ],
+    "observer": "The owner viewing the mapping and any module or test comparing confirmation, closure and audit digest values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "kind": "declared_length_excess",
+   "text": "a stream that fails or ends before its\ndeclared length is refused as `file_unreadable`",
+   "question": "What happens when the stream supplies more bytes than its declared length: stop at the declared length, read through end-of-stream, or refuse the length mismatch?",
+   "options": [
+    "Read exactly the declared length and leave the excess unread for connection disposal.",
+    "Ignore the declared length as a stopping point and read until stream end or the size limit.",
+    "Refuse any byte beyond the declared length as `file_unreadable`."
+   ],
+   "default_guess": "Treat declared length as exact framing: read that many bytes and let the surface close the connection without consuming any excess body bytes.",
+   "witness": {
+    "initial": "A request declares length L but its body stream contains L+1 bytes; the first L bytes form a valid file and the extra byte makes it invalid.",
+    "events": [
+     "`read_import_mapping` consumes the upload.",
+     "The parser checks the consumed bytes."
+    ],
+    "outcomes": [
+     "An implementation stopping at L accepts the valid file.",
+     "An implementation reading to stream end parses L+1 bytes and refuses it."
+    ],
+    "observer": "The owner receiving an accepted upload or `file_unreadable`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "kind": "refusal_definition_contradiction",
+   "text": "a stream that fails or ends before its\ndeclared length is refused as `file_unreadable`",
+   "question": "Does `file_unreadable` include a premature transport end even when the bytes actually received form a complete valid file? This passage says yes, while the closed refusal vocabulary defines `file_unreadable` as bytes that do not parse as the declared format.",
+   "options": [
+    "Transport truncation is always `file_unreadable`, regardless of whether the received prefix parses.",
+    "Accept a parseable file despite the larger declared length.",
+    "Introduce a distinct framing or length-mismatch failure kind."
+   ],
+   "default_guess": "Treat every premature end relative to a declared length as `file_unreadable` and broaden the closed-set definition accordingly.",
+   "witness": {
+    "initial": "A valid import file is L bytes, but the request declares L+1 and ends after sending exactly the valid L bytes.",
+    "events": [
+     "The stream ends before its declared length.",
+     "The received L bytes parse completely under the import format."
+    ],
+    "outcomes": [
+     "The changed operation text requires `file_unreadable`.",
+     "The closed-set definition does not classify the parseable bytes as `file_unreadable`, allowing acceptance."
+    ],
+    "observer": "The owner receiving either the upload mapping or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "kind": "cleanliness_contradiction",
+   "text": "and whether the mapping is clean — no malformed record, no conflict,\nno missing value, no given name or alias outside A02's form and at least\none pick",
+   "question": "Must a given Customer kind outside its enumeration make the mapping not clean? The Enforces passage newly says it does, but this exhaustive clean predicate omits it.",
+   "options": [
+    "Add every `outside_closed_list` Customer-kind failure to the not-clean predicate.",
+    "Keep the predicate as written, allowing such a mapping to be clean.",
+    "Treat the invalid kind as a malformed record instead."
+   ],
+   "default_guess": "Add Customer-kind `outside_closed_list` failures to the not-clean predicate.",
+   "witness": {
+    "initial": "A valid file has one picked project, no conflicts, no malformed records or missing values, valid names and aliases, but the owner gives the Customer kind `partnership`.",
+    "events": [
+     "`given_values.check_value_forms` reports `outside_closed_list`.",
+     "The mapping computes `clean` and decides whether its confirmation step may be shown."
+    ],
+    "outcomes": [
+     "Following the Outputs predicate, the mapping is clean and the confirmation step may be shown.",
+     "Following Enforces, the mapping is not clean and no confirmation step is shown."
+    ],
+    "observer": "The owner using the import mapping."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "kind": "duplicate_input_representation",
+   "text": "keyed by that v1\nvalue: at most one entry for each v1 value the picks bring in — one not yet\ngiven is no refusal, the mapping shows it missing; one for a v1 value no\npick brings is refused (`outside_closed_list`), one given twice too\n(`duplicate_pick`).",
+   "question": "How can the input preserve and detect a v1 Customer value given twice if it is keyed by that value with at most one entry, and exactly what request representation constitutes 'given twice'?",
+   "options": [
+    "Represent Customer values as an ordered list and detect duplicate keys during validation.",
+    "Represent them as a multimap retaining repeated keys.",
+    "Use a map and require the transport decoder to report duplicate object keys rather than overwrite them."
+   ],
+   "default_guess": "Use an ordered list of Customer-value records and validate uniqueness explicitly before constructing a keyed lookup.",
+   "witness": {
+    "initial": "The owner submits two Customer-value rows for the same v1 value with different kinds.",
+    "events": [
+     "The owner-interface request decoder constructs the operation input.",
+     "`read_import_mapping` checks duplicates."
+    ],
+    "outcomes": [
+     "A map decoder keeps one row, so the operation sees no duplicate and uses the surviving value.",
+     "A list or duplicate-preserving decoder reports `duplicate_pick`."
+    ],
+    "observer": "The owner, who sees either a mapping based on one row or a duplicate refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "kind": "position_numbering",
+   "text": "its position among the file's records of that kind",
+   "question": "Are record positions zero-based or one-based, and are they positions in source order before or after any parsing/filtering of records?",
+   "options": [
+    "One-based source-order position among all records of that kind.",
+    "Zero-based source-order position among all records of that kind.",
+    "One-based position among only successfully parsed records of that kind."
+   ],
+   "default_guess": "Use one-based source-order position among all syntactically located records of the kind, including malformed ones.",
+   "witness": {
+    "initial": "The second project record in the file has no id and is malformed.",
+    "events": [
+     "The mapping creates its malformed-record item.",
+     "The owner interface renders the record's position."
+    ],
+    "outcomes": [
+     "One implementation reports position 2.",
+     "Another reports index 1, or renumbers it after excluding an earlier unparseable record."
+    ],
+    "observer": "The owner locating the bad record in the export file."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "review_record_contradiction",
+   "text": "files_artifacts (A07, A16, A18)",
+   "question": "Was the `files_artifacts` category reopened and reviewed for the A19 change? The list of reviewed references omits A19, while the same passage later says `files_artifacts now names A19 too`.",
+   "options": [
+    "The review included A19 and the parenthesized reference list must include it.",
+    "The review omitted A19 and must be performed again.",
+    "The later claim that files_artifacts now names A19 is removed."
+   ],
+   "default_guess": "Amend the reviewed-category list to `files_artifacts (A07, A16, A18, A19)` and retain the conclusion only if that review was actually performed.",
+   "witness": {
+    "initial": "A19's import-size rule changed on 2026-11-11, reopening every security category that names it.",
+    "events": [
+     "A reviewer audits the recorded performed-again paragraph.",
+     "The reviewer compares the category's listed reviewed references with the paragraph's later assertion."
+    ],
+    "outcomes": [
+     "The parenthesized list records that A19 was not among the files-artifacts references reviewed.",
+     "The later sentence records that files-artifacts now names and reviewed A19."
+    ],
+    "observer": "The security reviewer deciding whether A21 rule 2 has been satisfied."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"kind\":\"schedule_anchor\",\"text\":\"the n-th call is due when `clock.monotonic_reading` shows n intervals since serving began\",\"question\":\"What exact event establishes the shared zero reading: process entry, completion of configuration, opening the first listener, opening all enabled listeners, or the moment both surfaces begin accepting requests?\",\"options\":[\"Process start establishes zero.\",\"The first listener opening establishes zero.\",\"All enabled listeners being ready and serving establishes zero.\"],\"default_guess\":\"Use the monotonic reading taken immediately after all enabled listeners are open and immediately before requests are served.\",\"witness\":{\"initial\":\"Registry starts shortly before 03:00 UTC, and configuration, store checks and listener opening take most of one backup-look interval.\",\"events\":[\"The host starts Registry.\",\"The start checks finish and the surfaces begin serving around 03:00.\",\"The scheduler computes the first backup-look deadline from its chosen zero.\"],\"outcomes\":[\"A process-start anchor makes the first deadline already due when serving begins.\",\"A serving-began anchor makes the first deadline one full interval later, potentially changing whether A18 observes the date's crossing of 03:00.\"],\"observer\":\"The owner observing whether that date receives a backup run.\"}},{\"subject\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"kind\":\"missed_intervals\",\"text\":\"the n-th call is due when `clock.monotonic_reading` shows n intervals since serving began, the first one interval after; a call due while the previous call of the same pass is still running is not made, and the pass waits for the next due one\",\"question\":\"When several deadlines elapse while the process or scheduler is suspended and no pass call was running, must it make one call on resumption, make every elapsed call in sequence, or skip all elapsed deadlines and wait for the next future deadline?\",\"options\":[\"Make one call immediately, then continue on the absolute interval grid.\",\"Make one call for every elapsed deadline.\",\"Skip elapsed deadlines and wait for the next future deadline.\"],\"default_guess\":\"Make one call immediately and then continue on the absolute interval grid.\",\"witness\":{\"initial\":\"A running instance has completed a pass and is then suspended for five pass intervals.\",\"events\":[\"The host suspends Registry while no pass is running.\",\"The monotonic clock counts the suspension.\",\"The host resumes Registry with five deadlines elapsed.\"],\"outcomes\":[\"The scheduler invokes the pass once on resumption.\",\"The scheduler invokes it five times successively, because none of the later calls is made while the previous call remains running.\"],\"observer\":\"A test clock or pass spy observing the number of calls, and potentially the host observing repeated backup diagnostics.\"}},{\"subject\":\"50_public_apis_5_surfaces.md:`public_op:instance_lifecycle.start_instance`\",\"kind\":\"caller_contradiction\",\"text\":\"`backups.run_daily_backup_if_due` every imported `BACKUP_LOOK_SECONDS`, each\\nfrom the start as Conventions, \\\"Passes\\\", says.\",\"question\":\"Must `instance_lifecycle` call `clock.monotonic_reading`, and therefore be added to that operation's Callers and internal-import surface, or must another module own the timers? The conventions and State 3 require `instance_lifecycle` to use that operation, while `public_op:clock.monotonic_reading` lists only `module:owner_sessions` as a caller.\",\"options\":[\"Add `module:instance_lifecycle` as a caller and import `clock.monotonic_reading`.\",\"Move scheduling into modules already declared as clock callers.\",\"Let `instance_lifecycle` use an undeclared host timer instead of `clock`.\"],\"default_guess\":\"Add `module:instance_lifecycle` as a caller and declare its direct import of `clock.monotonic_reading`.\",\"witness\":{\"initial\":\"A test replaces Registry's clock and creates an owner session holding an upload.\",\"events\":[\"The test advances only the replacement monotonic clock past a pass deadline.\",\"The process's real host timer is not advanced.\",\"The test inspects whether the expiry pass ran and dropped the upload.\"],\"outcomes\":[\"Following the new pass text and State 3, `instance_lifecycle` reads the replacement clock and runs the pass.\",\"Following the clock operation's caller declaration, `instance_lifecycle` does not call it and a separately implemented host timer does not fire.\"],\"observer\":\"The deterministic test and the owner session whose upload is or is not dropped.\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:given_values.check_value_forms`\",\"kind\":\"numeric_input_form\",\"text\":\"The values as `read_optional_text` and `read_required_text` answered them, each with the field it fills: an alias; an object kind; a floor area, a number of rooms, a floor; a customer language; a Customer's kind.\",\"question\":\"How are the textual floor area, room count and floor converted to numbers, and which lexical forms are accepted before the range and whole-number checks?\",\"options\":[\"Parse a specified decimal grammar, allowing forms such as `1e1` only if that grammar says so.\",\"Accept only canonical base-10 integer and decimal spellings.\",\"Receive typed numeric values instead, contrary to the stated text-reader inputs.\"],\"default_guess\":\"Define a locale-independent JSON-style decimal grammar, reject non-finite values, and use exact decimal comparison for floor area and exact integer parsing for rooms and floor.\",\"witness\":{\"initial\":\"The owner submits a project form with floor area `1e1` and number of rooms `01`.\",\"events\":[\"`read_optional_text` preserves both strings.\",\"`check_value_forms` checks their numeric form.\"],\"outcomes\":[\"A general numeric parser accepts them as 10 and 1.\",\"A canonical lexical parser rejects one or both as outside form.\"],\"observer\":\"The owner, who sees the project accepted or refused.\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:given_values.check_value_forms`\",\"kind\":\"output_shape\",\"text\":\"otherwise every value\\noutside it, each with its field and its kind\",\"question\":\"What is the exact failure result: does an item contain the rejected value or only its field and kind, how are repeated or nested fields identified, and in what deterministic order are multiple failures returned?\",\"options\":[\"Return ordered records containing only field path and failure kind.\",\"Return ordered records containing field path, failure kind and rejected value.\",\"Return a map keyed by field, with no duplicate field entries.\"],\"default_guess\":\"Return a list in caller-declared field order, with one record per failure containing a stable field path and kind but not echoing the value.\",\"witness\":{\"initial\":\"One request supplies an overlong alias, an unknown object kind and two invalid characteristics.\",\"events\":[\"A caller passes all present values to `check_value_forms`.\",\"The caller renders or converts the returned failures into a refusal.\"],\"outcomes\":[\"One implementation returns field-and-kind records in input-field order without values.\",\"Another returns the rejected values and orders records by failure kind or map-key order.\"],\"observer\":\"The owner or service client receiving differently shaped and ordered failure details.\"}},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"kind\":\"undefined_file_format\",\"text\":\"bytes that do not parse as the format States 5 and 6 declare\",\"question\":\"What exact import-file encoding, container syntax, record schema and version-discrimination rules does State 5 require? No such format is declared in the supplied State 5 text, and nothing is explicitly carried to a later state.\",\"options\":[\"Define the complete format in State 5.\",\"Define a semantic record format in State 5 and only its typed serialization in State 6.\",\"Explicitly carry the complete format decision to State 6.\"],\"default_guess\":\"Define the semantic record structure and version marker in State 5, leaving only its mechanical typed schema encoding to State 6.\",\"witness\":{\"initial\":\"The owner uploads bytes that are a valid representation under one plausible structured format but not another.\",\"events\":[\"`read_import_mapping` chooses a parser.\",\"The operation attempts to enumerate projects.\"],\"outcomes\":[\"The chosen parser accepts the file and returns its projects.\",\"Another parser permitted by the text refuses it as `file_unreadable`.\"],\"observer\":\"The owner uploading the migration file.\"}},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"kind\":\"digest_representation\",\"text\":\"the accepted file's digest, the SHA-256 of those\\nbytes\",\"question\":\"What value type and canonical representation carries the digest between modules, in mapping output, in confirmation bindings, in the closure and in the audit subject?\",\"options\":[\"Exactly 32 raw bytes.\",\"Lowercase 64-character hexadecimal text.\",\"Padded base64 text.\"],\"default_guess\":\"Use lowercase 64-character hexadecimal text as the canonical digest representation.\",\"witness\":{\"initial\":\"An accepted upload has a known SHA-256 digest.\",\"events\":[\"The mapping names the file by its digest.\",\"A confirmation is bound to that digest.\",\"The accepted import writes the closure and audit subject.\"],\"outcomes\":[\"One implementation carries 32 raw bytes and hashes or serializes those bytes in the confirmation binding.\",\"Another carries hexadecimal text and binds and stores that text.\"],\"observer\":\"The owner viewing the mapping and any module or test comparing confirmation, closure and audit digest values.\"}},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"kind\":\"declared_length_excess\",\"text\":\"a stream that fails or ends before its\\ndeclared length is refused as `file_unreadable`\",\"question\":\"What happens when the stream supplies more bytes than its declared length: stop at the declared length, read through end-of-stream, or refuse the length mismatch?\",\"options\":[\"Read exactly the declared length and leave the excess unread for connection disposal.\",\"Ignore the declared length as a stopping point and read until stream end or the size limit.\",\"Refuse any byte beyond the declared length as `file_unreadable`.\"],\"default_guess\":\"Treat declared length as exact framing: read that many bytes and let the surface close the connection without consuming any excess body bytes.\",\"witness\":{\"initial\":\"A request declares length L but its body stream contains L+1 bytes; the first L bytes form a valid file and the extra byte makes it invalid.\",\"events\":[\"`read_import_mapping` consumes the upload.\",\"The parser checks the consumed bytes.\"],\"outcomes\":[\"An implementation stopping at L accepts the valid file.\",\"An implementation reading to stream end parses L+1 bytes and refuses it.\"],\"observer\":\"The owner receiving an accepted upload or `file_unreadable`.\"}},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"kind\":\"refusal_definition_contradiction\",\"text\":\"a stream that fails or ends before its\\ndeclared length is refused as `file_unreadable`\",\"question\":\"Does `file_unreadable` include a premature transport end even when the bytes actually received form a complete valid file? This passage says yes, while the closed refusal vocabulary defines `file_unreadable` as bytes that do not parse as the declared format.\",\"options\":[\"Transport truncation is always `file_unreadable`, regardless of whether the received prefix parses.\",\"Accept a parseable file despite the larger declared length.\",\"Introduce a distinct framing or length-mismatch failure kind.\"],\"default_guess\":\"Treat every premature end relative to a declared length as `file_unreadable` and broaden the closed-set definition accordingly.\",\"witness\":{\"initial\":\"A valid import file is L bytes, but the request declares L+1 and ends after sending exactly the valid L bytes.\",\"events\":[\"The stream ends before its declared length.\",\"The received L bytes parse completely under the import format.\"],\"outcomes\":[\"The changed operation text requires `file_unreadable`.\",\"The closed-set definition does not classify the parseable bytes as `file_unreadable`, allowing acceptance.\"],\"observer\":\"The owner receiving either the upload mapping or a refusal.\"}},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"kind\":\"cleanliness_contradiction\",\"text\":\"and whether the mapping is clean — no malformed record, no conflict,\\nno missing value, no given name or alias outside A02's form and at least\\none pick\",\"question\":\"Must a given Customer kind outside its enumeration make the mapping not clean? The Enforces passage newly says it does, but this exhaustive clean predicate omits it.\",\"options\":[\"Add every `outside_closed_list` Customer-kind failure to the not-clean predicate.\",\"Keep the predicate as written, allowing such a mapping to be clean.\",\"Treat the invalid kind as a malformed record instead.\"],\"default_guess\":\"Add Customer-kind `outside_closed_list` failures to the not-clean predicate.\",\"witness\":{\"initial\":\"A valid file has one picked project, no conflicts, no malformed records or missing values, valid names and aliases, but the owner gives the Customer kind `partnership`.\",\"events\":[\"`given_values.check_value_forms` reports `outside_closed_list`.\",\"The mapping computes `clean` and decides whether its confirmation step may be shown.\"],\"outcomes\":[\"Following the Outputs predicate, the mapping is clean and the confirmation step may be shown.\",\"Following Enforces, the mapping is not clean and no confirmation step is shown.\"],\"observer\":\"The owner using the import mapping.\"}},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"kind\":\"duplicate_input_representation\",\"text\":\"keyed by that v1\\nvalue: at most one entry for each v1 value the picks bring in — one not yet\\ngiven is no refusal, the mapping shows it missing; one for a v1 value no\\npick brings is refused (`outside_closed_list`), one given twice too\\n(`duplicate_pick`).\",\"question\":\"How can the input preserve and detect a v1 Customer value given twice if it is keyed by that value with at most one entry, and exactly what request representation constitutes 'given twice'?\",\"options\":[\"Represent Customer values as an ordered list and detect duplicate keys during validation.\",\"Represent them as a multimap retaining repeated keys.\",\"Use a map and require the transport decoder to report duplicate object keys rather than overwrite them.\"],\"default_guess\":\"Use an ordered list of Customer-value records and validate uniqueness explicitly before constructing a keyed lookup.\",\"witness\":{\"initial\":\"The owner submits two Customer-value rows for the same v1 value with different kinds.\",\"events\":[\"The owner-interface request decoder constructs the operation input.\",\"`read_import_mapping` checks duplicates.\"],\"outcomes\":[\"A map decoder keeps one row, so the operation sees no duplicate and uses the surviving value.\",\"A list or duplicate-preserving decoder reports `duplicate_pick`.\"],\"observer\":\"The owner, who sees either a mapping based on one row or a duplicate refusal.\"}},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"kind\":\"position_numbering\",\"text\":\"its position among the file's records of that kind\",\"question\":\"Are record positions zero-based or one-based, and are they positions in source order before or after any parsing/filtering of records?\",\"options\":[\"One-based source-order position among all records of that kind.\",\"Zero-based source-order position among all records of that kind.\",\"One-based position among only successfully parsed records of that kind.\"],\"default_guess\":\"Use one-based source-order position among all syntactically located records of the kind, including malformed ones.\",\"witness\":{\"initial\":\"The second project record in the file has no id and is malformed.\",\"events\":[\"The mapping creates its malformed-record item.\",\"The owner interface renders the record's position.\"],\"outcomes\":[\"One implementation reports position 2.\",\"Another reports index 1, or renumbers it after excluding an earlier unparseable record.\"],\"observer\":\"The owner locating the bad record in the export file.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"review_record_contradiction\",\"text\":\"files_artifacts (A07, A16, A18)\",\"question\":\"Was the `files_artifacts` category reopened and reviewed for the A19 change? The list of reviewed references omits A19, while the same passage later says `files_artifacts now names A19 too`.\",\"options\":[\"The review included A19 and the parenthesized reference list must include it.\",\"The review omitted A19 and must be performed again.\",\"The later claim that files_artifacts now names A19 is removed.\"],\"default_guess\":\"Amend the reviewed-category list to `files_artifacts (A07, A16, A18, A19)` and retain the conclusion only if that review was actually performed.\",\"witness\":{\"initial\":\"A19's import-size rule changed on 2026-11-11, reopening every security category that names it.\",\"events\":[\"A reviewer audits the recorded performed-again paragraph.\",\"The reviewer compares the category's listed reviewed references with the paragraph's later assertion.\"],\"outcomes\":[\"The parenthesized list records that A19 was not among the files-artifacts references reviewed.\",\"The later sentence records that files-artifacts now names and reviewed A19.\"],\"observer\":\"The security reviewer deciding whether A21 rule 2 has been satisfied.\"}}]}",
+ "set_aside": []
+}
