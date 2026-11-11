@@ -1,0 +1,132 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "file_set_undefined",
+   "text": "the SQLite files beside it that its connection made (its journal or write-ahead log)",
+   "question": "Exactly which SQLite sidecar files must be removed, including whether a WAL shared-memory file and sidecars made by any of the store's connections are included?",
+   "options": [
+    "Remove only the rollback-journal or WAL file named by the parenthesis.",
+    "Remove every SQLite sidecar belonging to the store, including WAL shared-memory files.",
+    "Remove only sidecars whose creation this process explicitly observed."
+   ],
+   "default_guess": "Remove every recognized SQLite sidecar belonging to the new store, including journal, WAL and WAL shared-memory files.",
+   "witness": {
+    "initial": "A new store has database, -wal and -shm files beside it when listener opening fails.",
+    "events": [
+     "module:instance_lifecycle calls store.discard_new_store.",
+     "One implementation treats the parenthesis as exhaustive; another treats it as examples of all SQLite sidecars."
+    ],
+    "outcomes": [
+     "The database and -wal are removed but -shm remains.",
+     "The database, -wal and -shm are all removed."
+    ],
+    "observer": "The host administrator and the next start inspecting the directory."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "failure_control_flow",
+   "text": "A close or a removal that fails leaves what remains as an empty store of the release's version, which the next start opens as any store.",
+   "question": "After one connection close or one file removal fails, must the operation stop immediately, continue closing connections, continue attempting removals, or follow some other fixed sequence?",
+   "options": [
+    "Stop at the first failed close or removal.",
+    "Attempt every close, then attempt every removal despite earlier failures.",
+    "Attempt all closes, but perform no removal if any close fails; during removal stop at the first failure."
+   ],
+   "default_guess": "Attempt every close; if any close fails, remove nothing; otherwise attempt sidecar removals and the store-file removal in a fixed order.",
+   "witness": {
+    "initial": "Two connections are open on a new store and the first close fails after listener opening fails.",
+    "events": [
+     "module:instance_lifecycle calls store.discard_new_store.",
+     "One implementation stops at the failed close; another continues closing and deleting."
+    ],
+    "outcomes": [
+     "The second connection and every file remain.",
+     "The second connection is closed and some or all files are removed."
+    ],
+    "observer": "The host administrator, the returned boolean's caller and the next start."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "partial_deletion_contradiction",
+   "text": "then the store's file and the SQLite files its connection made beside it are removed. A close or a removal that fails leaves what remains as an empty store of the release's version, which the next start opens as any store.",
+   "question": "What fixed removal order and stopping rule guarantees that every permitted partial failure leaves an openable empty store rather than only sidecars or a store missing required sidecars?",
+   "options": [
+    "Remove all sidecars first and remove the store file last, stopping on the first failure.",
+    "Remove the store file first and then its sidecars.",
+    "Attempt every removal in an unspecified order and accept arbitrary remnants."
+   ],
+   "default_guess": "Remove sidecars first, stop on any sidecar failure, and remove the store file last.",
+   "witness": {
+    "initial": "The new store has a database file and a WAL sidecar; deletion of the WAL will fail but deletion of the database will succeed.",
+    "events": [
+     "A listener fails and module:instance_lifecycle invokes store.discard_new_store.",
+     "One implementation removes the database first; another removes the WAL first and stops when that removal fails."
+    ],
+    "outcomes": [
+     "Only the WAL remains, which is not an empty store the next start can open.",
+     "The database and WAL remain together as the empty store of the release's version."
+    ],
+    "observer": "The next start and the host administrator."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store output and diagnostic",
+   "kind": "close_failure_result",
+   "text": "Whether it was removed: true when the store's file and the SQLite files beside it that its connection made (its journal or write-ahead log) are all gone; false otherwise.",
+   "question": "If a connection close fails but every named file is nevertheless gone, is the answer true solely from file absence or false because cleanup failed, and must the close failure be added to the start diagnostic even though the Errors passage names only a failed removal?",
+   "options": [
+    "Return true because all named files are gone and do not report the close failure.",
+    "Return false and report the close failure beside the listener failure.",
+    "Return false but report only the listener failure because no removal failed."
+   ],
+   "default_guess": "Return false for any failed close and include that cleanup failure in the start's single diagnostic.",
+   "witness": {
+    "initial": "Closing a connection reports failure, but the platform permits unlinking its open SQLite files and all their paths disappear.",
+    "events": [
+     "store.discard_new_store attempts the close and removals.",
+     "One implementation applies the Outputs condition literally; another treats the failed close as failure of the operation."
+    ],
+    "outcomes": [
+     "It returns true and the start diagnostic names only the listener.",
+     "It returns false and the diagnostic also names the failed close or cleanup."
+    ],
+    "observer": "module:instance_lifecycle and the host administrator reading the diagnostic."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 listener deployment topology",
+   "kind": "scope_ambiguity",
+   "text": "The addresses are the deployment's: the service API is reachable only in VM Platform and over the WireGuard channel from the VPS, the owner interface only through the owner's VPN (R0-28, R0-29, R0-48), and the interface each is bound to on that host, or on a test instance's (R0-34), is the host's administration — so the configuration names them",
+   "question": "Do the stated reachability restrictions apply only to the production deployment described by R0-28 and R0-48, or also to test instances whose binding interface is delegated to their host administrator?",
+   "options": [
+    "They apply only to production; a test instance may use its host's loopback or test network.",
+    "They apply to every instance, including tests.",
+    "Tests have a separate unstated reachability policy."
+   ],
+   "default_guess": "Apply the VM Platform, WireGuard and owner-VPN restrictions to production only; let each test instance use an administratively isolated test interface.",
+   "witness": {
+    "initial": "A test instance is configured on a developer host with its service API bound to loopback, outside VM Platform and the production WireGuard channel.",
+    "events": [
+     "The host administrator starts the test instance.",
+     "One implementation or deployment checker applies the reachability sentence to every instance; another reads the R0-28/R0-48 topology as production-only."
+    ],
+    "outcomes": [
+     "The test binding is rejected or treated as a wrong deployment.",
+     "The test instance starts and serves its local test client."
+    ],
+    "observer": "The developer or automated test client."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"file_set_undefined\",\"text\":\"the SQLite files beside it that its connection made (its journal or write-ahead log)\",\"question\":\"Exactly which SQLite sidecar files must be removed, including whether a WAL shared-memory file and sidecars made by any of the store's connections are included?\",\"options\":[\"Remove only the rollback-journal or WAL file named by the parenthesis.\",\"Remove every SQLite sidecar belonging to the store, including WAL shared-memory files.\",\"Remove only sidecars whose creation this process explicitly observed.\"],\"default_guess\":\"Remove every recognized SQLite sidecar belonging to the new store, including journal, WAL and WAL shared-memory files.\",\"witness\":{\"initial\":\"A new store has database, -wal and -shm files beside it when listener opening fails.\",\"events\":[\"module:instance_lifecycle calls store.discard_new_store.\",\"One implementation treats the parenthesis as exhaustive; another treats it as examples of all SQLite sidecars.\"],\"outcomes\":[\"The database and -wal are removed but -shm remains.\",\"The database, -wal and -shm are all removed.\"],\"observer\":\"The host administrator and the next start inspecting the directory.\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"failure_control_flow\",\"text\":\"A close or a removal that fails leaves what remains as an empty store of the release's version, which the next start opens as any store.\",\"question\":\"After one connection close or one file removal fails, must the operation stop immediately, continue closing connections, continue attempting removals, or follow some other fixed sequence?\",\"options\":[\"Stop at the first failed close or removal.\",\"Attempt every close, then attempt every removal despite earlier failures.\",\"Attempt all closes, but perform no removal if any close fails; during removal stop at the first failure.\"],\"default_guess\":\"Attempt every close; if any close fails, remove nothing; otherwise attempt sidecar removals and the store-file removal in a fixed order.\",\"witness\":{\"initial\":\"Two connections are open on a new store and the first close fails after listener opening fails.\",\"events\":[\"module:instance_lifecycle calls store.discard_new_store.\",\"One implementation stops at the failed close; another continues closing and deleting.\"],\"outcomes\":[\"The second connection and every file remain.\",\"The second connection is closed and some or all files are removed.\"],\"observer\":\"The host administrator, the returned boolean's caller and the next start.\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"partial_deletion_contradiction\",\"text\":\"then the store's file and the SQLite files its connection made beside it are removed. A close or a removal that fails leaves what remains as an empty store of the release's version, which the next start opens as any store.\",\"question\":\"What fixed removal order and stopping rule guarantees that every permitted partial failure leaves an openable empty store rather than only sidecars or a store missing required sidecars?\",\"options\":[\"Remove all sidecars first and remove the store file last, stopping on the first failure.\",\"Remove the store file first and then its sidecars.\",\"Attempt every removal in an unspecified order and accept arbitrary remnants.\"],\"default_guess\":\"Remove sidecars first, stop on any sidecar failure, and remove the store file last.\",\"witness\":{\"initial\":\"The new store has a database file and a WAL sidecar; deletion of the WAL will fail but deletion of the database will succeed.\",\"events\":[\"A listener fails and module:instance_lifecycle invokes store.discard_new_store.\",\"One implementation removes the database first; another removes the WAL first and stops when that removal fails.\"],\"outcomes\":[\"Only the WAL remains, which is not an empty store the next start can open.\",\"The database and WAL remain together as the empty store of the release's version.\"],\"observer\":\"The next start and the host administrator.\"}},{\"subject\":\"public_op:store.discard_new_store output and diagnostic\",\"kind\":\"close_failure_result\",\"text\":\"Whether it was removed: true when the store's file and the SQLite files beside it that its connection made (its journal or write-ahead log) are all gone; false otherwise.\",\"question\":\"If a connection close fails but every named file is nevertheless gone, is the answer true solely from file absence or false because cleanup failed, and must the close failure be added to the start diagnostic even though the Errors passage names only a failed removal?\",\"options\":[\"Return true because all named files are gone and do not report the close failure.\",\"Return false and report the close failure beside the listener failure.\",\"Return false but report only the listener failure because no removal failed.\"],\"default_guess\":\"Return false for any failed close and include that cleanup failure in the start's single diagnostic.\",\"witness\":{\"initial\":\"Closing a connection reports failure, but the platform permits unlinking its open SQLite files and all their paths disappear.\",\"events\":[\"store.discard_new_store attempts the close and removals.\",\"One implementation applies the Outputs condition literally; another treats the failed close as failure of the operation.\"],\"outcomes\":[\"It returns true and the start diagnostic names only the listener.\",\"It returns false and the diagnostic also names the failed close or cleanup.\"],\"observer\":\"module:instance_lifecycle and the host administrator reading the diagnostic.\"}},{\"subject\":\"A17 listener deployment topology\",\"kind\":\"scope_ambiguity\",\"text\":\"The addresses are the deployment's: the service API is reachable only in VM Platform and over the WireGuard channel from the VPS, the owner interface only through the owner's VPN (R0-28, R0-29, R0-48), and the interface each is bound to on that host, or on a test instance's (R0-34), is the host's administration — so the configuration names them\",\"question\":\"Do the stated reachability restrictions apply only to the production deployment described by R0-28 and R0-48, or also to test instances whose binding interface is delegated to their host administrator?\",\"options\":[\"They apply only to production; a test instance may use its host's loopback or test network.\",\"They apply to every instance, including tests.\",\"Tests have a separate unstated reachability policy.\"],\"default_guess\":\"Apply the VM Platform, WireGuard and owner-VPN restrictions to production only; let each test instance use an administratively isolated test interface.\",\"witness\":{\"initial\":\"A test instance is configured on a developer host with its service API bound to loopback, outside VM Platform and the production WireGuard channel.\",\"events\":[\"The host administrator starts the test instance.\",\"One implementation or deployment checker applies the reachability sentence to every instance; another reads the R0-28/R0-48 topology as production-only.\"],\"outcomes\":[\"The test binding is rejected or treated as a wrong deployment.\",\"The test instance starts and serves its local test client.\"],\"observer\":\"The developer or automated test client.\"}}]}",
+ "set_aside": []
+}

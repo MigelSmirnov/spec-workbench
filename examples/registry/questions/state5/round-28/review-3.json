@@ -1,0 +1,170 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "incomplete_file_set",
+   "text": "the SQLite files\nbeside it that its connection made (its journal or write-ahead log)",
+   "question": "Exactly which SQLite companion files must be removed, including whether a WAL shared-memory file, rollback-journal variants, or companion files created while the database had its temporary name are included?",
+   "options": [
+    "Remove only the main database and its rollback-journal or WAL file.",
+    "Remove every SQLite companion file created for this database, including a WAL shared-memory file.",
+    "Remove a release-fixed list determined by the engine mode State 6 selects."
+   ],
+   "default_guess": "Remove the main database and every SQLite companion file that Registry can prove its connections created, including WAL and shared-memory files.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "ambiguous_failure_order",
+   "text": "Every connection to the new store is closed first; then the store's file and\nthe SQLite files its connection made beside it are removed. A close or a\nremoval that fails leaves what remains as an empty store of the release's\nversion, which the next start opens as any store.",
+   "question": "After one connection fails to close or one file fails to be removed, does the operation stop immediately or continue closing connections and attempting every remaining removal?",
+   "options": [
+    "Stop at the first close or removal failure.",
+    "Continue best-effort through every connection and every removal.",
+    "Stop after a close failure, but continue through removal failures."
+   ],
+   "default_guess": "Continue best-effort through every close and removal while recording that cleanup was incomplete.",
+   "witness": {
+    "initial": "A newly created store has two open Registry connections, a main database file, and a WAL companion file.",
+    "events": [
+     "The owner-interface listener fails to open, so instance_lifecycle calls discard_new_store.",
+     "Closing the first store connection fails."
+    ],
+    "outcomes": [
+     "One implementation stops immediately, leaving both database files and the second connection untouched.",
+     "Another implementation closes the second connection and attempts to remove both files."
+    ],
+    "observer": "The host administrator and the next Registry start see different remaining files and locks."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "provenance_gap",
+   "text": "the SQLite files beside it that its connection made",
+   "question": "How must the operation establish that a neighbouring SQLite-named file was made by this start's connection rather than pre-existing, replaced concurrently, or belonging to something else, so that the rule to touch no other file is preserved?",
+   "options": [
+    "Delete every conventional companion pathname derived from the store pathname.",
+    "Delete only companion files whose creation this start tracked.",
+    "Delete a conventional companion pathname only after verifying backend-specific ownership evidence."
+   ],
+   "default_guess": "Track the companion files created by this start and delete only those exact filesystem objects.",
+   "witness": {
+    "initial": "The configured store file is absent, but a pre-existing file already occupies the conventional WAL companion pathname.",
+    "events": [
+     "open_store creates a new store and opens its connection.",
+     "A listener fails and discard_new_store runs."
+    ],
+    "outcomes": [
+     "An implementation deriving companion names deletes the pre-existing file.",
+     "An implementation requiring proof that this start created the file preserves it."
+    ],
+    "observer": "The owner of the pre-existing file sees whether unrelated data was deleted."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "state_contradiction",
+   "text": "A close or a\nremoval that fails leaves what remains as an empty store of the release's\nversion, which the next start opens as any store.",
+   "question": "What state is required when cleanup removes the main store file but fails to remove a companion file, since the remaining companion alone is not an empty store that the next start can open?",
+   "options": [
+    "Partial removal is permitted; the next start must remove or otherwise handle orphaned companions before creating a store.",
+    "Removal must be arranged atomically enough that failure leaves the complete empty store.",
+    "If any companion cannot be removed, the main store must be retained or restored."
+   ],
+   "default_guess": "Retain the complete empty store whenever cleanup cannot remove all of its files; otherwise define explicit next-start cleanup for orphaned companions.",
+   "witness": {
+    "initial": "A new empty store consists of its main file and a SQLite companion file.",
+    "events": [
+     "A listener fails and discard_new_store closes the connections.",
+     "The main file is removed successfully.",
+     "Removing the companion file fails."
+    ],
+    "outcomes": [
+     "The changed passage says what remains is an empty versioned store that the next start opens.",
+     "The filesystem instead contains only an orphaned companion, so a straightforward next start finds no store and creates a new one."
+    ],
+    "observer": "The next Registry start and the host administrator see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store errors",
+   "kind": "diagnostic_gap",
+   "text": "None; a failed removal is named in the start's one diagnostic beside the\nsurface that could not be opened.",
+   "question": "When closing a store connection fails, must the start diagnostic name that cleanup failure, and if so under what failure description, since this passage names only a failed removal?",
+   "options": [
+    "Name a close failure beside the listener failure just like a removal failure.",
+    "Report only the listener failure and silently leave the connection to process termination.",
+    "Treat a close failure as a failed removal only when it prevents a file from being removed."
+   ],
+   "default_guess": "Name any incomplete store cleanup, including a close failure, beside the listener failure without including a path or other value.",
+   "witness": {
+    "initial": "A listener has failed and the new store's connection returns a close error.",
+    "events": [
+     "discard_new_store attempts the close.",
+     "The process emits its one start diagnostic."
+    ],
+    "outcomes": [
+     "One implementation reports only the surface that could not be opened because Errors mentions only failed removal.",
+     "Another reports the surface and the failed store close because Observable effect explicitly recognizes close failure."
+    ],
+    "observer": "The host administrator monitoring standard error sees different failure information."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 listener reachability",
+   "kind": "topology_contradiction",
+   "text": "the owner interface only through the owner's VPN",
+   "question": "Does this prohibit direct access from inside VM Platform, or is the VPN requirement limited to access from outside as R0-48 states?",
+   "options": [
+    "Every owner-interface connection, including one originating inside VM Platform, must traverse the owner's VPN.",
+    "Only access originating outside VM Platform must traverse the owner's VPN; local access is allowed.",
+    "Local access is allowed only from a separately enumerated administration endpoint."
+   ],
+   "default_guess": "Apply the VPN requirement only to access from outside VM Platform, matching R0-48.",
+   "witness": {
+    "initial": "Registry and an owner-operated browser or administration client are both inside VM Platform, with no traffic traversing the owner's VPN.",
+    "events": [
+     "The owner connects directly to the configured owner-interface address and signs in."
+    ],
+    "outcomes": [
+     "The changed A17 wording makes the connection a wrong deployment because it did not use the VPN.",
+     "R0-48 permits it because only access from outside is required to use the VPN."
+    ],
+    "observer": "The owner sees whether the direct local connection is supported."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 topology of test instances",
+   "kind": "scope_gap",
+   "text": "or on a test instance's (R0-34), is the host's administration",
+   "question": "Which network-reachability restrictions apply to a test instance, since the preceding VM Platform, WireGuard, and owner-VPN topology describes production while R0-34 defines only test identity separation?",
+   "options": [
+    "Test instances must reproduce the production VM Platform, WireGuard, and VPN reachability restrictions.",
+    "A test host's administrator may choose any interfaces and reachable networks.",
+    "Test instances have a separate fixed rule, such as loopback-only access."
+   ],
+   "default_guess": "Permit the test host administrator to choose test-only interfaces while preserving authentication and isolation from production data.",
+   "witness": {
+    "initial": "A test Registry with its own identity space runs on a developer machine outside VM Platform.",
+    "events": [
+     "The administrator configures both listeners on the machine's loopback interface.",
+     "The test client connects locally without WireGuard or the owner's VPN."
+    ],
+    "outcomes": [
+     "One implementation or deployment check accepts the addresses as the test host administrator's choice.",
+     "Another rejects the topology because the preceding sentence says the service API is reachable only in VM Platform and the owner interface only through the owner's VPN."
+    ],
+    "observer": "The test operator sees whether the test instance can start and be used locally."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"incomplete_file_set\",\"text\":\"the SQLite files\\nbeside it that its connection made (its journal or write-ahead log)\",\"question\":\"Exactly which SQLite companion files must be removed, including whether a WAL shared-memory file, rollback-journal variants, or companion files created while the database had its temporary name are included?\",\"options\":[\"Remove only the main database and its rollback-journal or WAL file.\",\"Remove every SQLite companion file created for this database, including a WAL shared-memory file.\",\"Remove a release-fixed list determined by the engine mode State 6 selects.\"],\"default_guess\":\"Remove the main database and every SQLite companion file that Registry can prove its connections created, including WAL and shared-memory files.\"},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"ambiguous_failure_order\",\"text\":\"Every connection to the new store is closed first; then the store's file and\\nthe SQLite files its connection made beside it are removed. A close or a\\nremoval that fails leaves what remains as an empty store of the release's\\nversion, which the next start opens as any store.\",\"question\":\"After one connection fails to close or one file fails to be removed, does the operation stop immediately or continue closing connections and attempting every remaining removal?\",\"options\":[\"Stop at the first close or removal failure.\",\"Continue best-effort through every connection and every removal.\",\"Stop after a close failure, but continue through removal failures.\"],\"default_guess\":\"Continue best-effort through every close and removal while recording that cleanup was incomplete.\",\"witness\":{\"initial\":\"A newly created store has two open Registry connections, a main database file, and a WAL companion file.\",\"events\":[\"The owner-interface listener fails to open, so instance_lifecycle calls discard_new_store.\",\"Closing the first store connection fails.\"],\"outcomes\":[\"One implementation stops immediately, leaving both database files and the second connection untouched.\",\"Another implementation closes the second connection and attempts to remove both files.\"],\"observer\":\"The host administrator and the next Registry start see different remaining files and locks.\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"provenance_gap\",\"text\":\"the SQLite files beside it that its connection made\",\"question\":\"How must the operation establish that a neighbouring SQLite-named file was made by this start's connection rather than pre-existing, replaced concurrently, or belonging to something else, so that the rule to touch no other file is preserved?\",\"options\":[\"Delete every conventional companion pathname derived from the store pathname.\",\"Delete only companion files whose creation this start tracked.\",\"Delete a conventional companion pathname only after verifying backend-specific ownership evidence.\"],\"default_guess\":\"Track the companion files created by this start and delete only those exact filesystem objects.\",\"witness\":{\"initial\":\"The configured store file is absent, but a pre-existing file already occupies the conventional WAL companion pathname.\",\"events\":[\"open_store creates a new store and opens its connection.\",\"A listener fails and discard_new_store runs.\"],\"outcomes\":[\"An implementation deriving companion names deletes the pre-existing file.\",\"An implementation requiring proof that this start created the file preserves it.\"],\"observer\":\"The owner of the pre-existing file sees whether unrelated data was deleted.\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"state_contradiction\",\"text\":\"A close or a\\nremoval that fails leaves what remains as an empty store of the release's\\nversion, which the next start opens as any store.\",\"question\":\"What state is required when cleanup removes the main store file but fails to remove a companion file, since the remaining companion alone is not an empty store that the next start can open?\",\"options\":[\"Partial removal is permitted; the next start must remove or otherwise handle orphaned companions before creating a store.\",\"Removal must be arranged atomically enough that failure leaves the complete empty store.\",\"If any companion cannot be removed, the main store must be retained or restored.\"],\"default_guess\":\"Retain the complete empty store whenever cleanup cannot remove all of its files; otherwise define explicit next-start cleanup for orphaned companions.\",\"witness\":{\"initial\":\"A new empty store consists of its main file and a SQLite companion file.\",\"events\":[\"A listener fails and discard_new_store closes the connections.\",\"The main file is removed successfully.\",\"Removing the companion file fails.\"],\"outcomes\":[\"The changed passage says what remains is an empty versioned store that the next start opens.\",\"The filesystem instead contains only an orphaned companion, so a straightforward next start finds no store and creates a new one.\"],\"observer\":\"The next Registry start and the host administrator see the difference.\"}},{\"subject\":\"public_op:store.discard_new_store errors\",\"kind\":\"diagnostic_gap\",\"text\":\"None; a failed removal is named in the start's one diagnostic beside the\\nsurface that could not be opened.\",\"question\":\"When closing a store connection fails, must the start diagnostic name that cleanup failure, and if so under what failure description, since this passage names only a failed removal?\",\"options\":[\"Name a close failure beside the listener failure just like a removal failure.\",\"Report only the listener failure and silently leave the connection to process termination.\",\"Treat a close failure as a failed removal only when it prevents a file from being removed.\"],\"default_guess\":\"Name any incomplete store cleanup, including a close failure, beside the listener failure without including a path or other value.\",\"witness\":{\"initial\":\"A listener has failed and the new store's connection returns a close error.\",\"events\":[\"discard_new_store attempts the close.\",\"The process emits its one start diagnostic.\"],\"outcomes\":[\"One implementation reports only the surface that could not be opened because Errors mentions only failed removal.\",\"Another reports the surface and the failed store close because Observable effect explicitly recognizes close failure.\"],\"observer\":\"The host administrator monitoring standard error sees different failure information.\"}},{\"subject\":\"A17 listener reachability\",\"kind\":\"topology_contradiction\",\"text\":\"the owner interface only through the owner's VPN\",\"question\":\"Does this prohibit direct access from inside VM Platform, or is the VPN requirement limited to access from outside as R0-48 states?\",\"options\":[\"Every owner-interface connection, including one originating inside VM Platform, must traverse the owner's VPN.\",\"Only access originating outside VM Platform must traverse the owner's VPN; local access is allowed.\",\"Local access is allowed only from a separately enumerated administration endpoint.\"],\"default_guess\":\"Apply the VPN requirement only to access from outside VM Platform, matching R0-48.\",\"witness\":{\"initial\":\"Registry and an owner-operated browser or administration client are both inside VM Platform, with no traffic traversing the owner's VPN.\",\"events\":[\"The owner connects directly to the configured owner-interface address and signs in.\"],\"outcomes\":[\"The changed A17 wording makes the connection a wrong deployment because it did not use the VPN.\",\"R0-48 permits it because only access from outside is required to use the VPN.\"],\"observer\":\"The owner sees whether the direct local connection is supported.\"}},{\"subject\":\"A17 topology of test instances\",\"kind\":\"scope_gap\",\"text\":\"or on a test instance's (R0-34), is the host's administration\",\"question\":\"Which network-reachability restrictions apply to a test instance, since the preceding VM Platform, WireGuard, and owner-VPN topology describes production while R0-34 defines only test identity separation?\",\"options\":[\"Test instances must reproduce the production VM Platform, WireGuard, and VPN reachability restrictions.\",\"A test host's administrator may choose any interfaces and reachable networks.\",\"Test instances have a separate fixed rule, such as loopback-only access.\"],\"default_guess\":\"Permit the test host administrator to choose test-only interfaces while preserving authentication and isolation from production data.\",\"witness\":{\"initial\":\"A test Registry with its own identity space runs on a developer machine outside VM Platform.\",\"events\":[\"The administrator configures both listeners on the machine's loopback interface.\",\"The test client connects locally without WireGuard or the owner's VPN.\"],\"outcomes\":[\"One implementation or deployment check accepts the addresses as the test host administrator's choice.\",\"Another rejects the topology because the preceding sentence says the service API is reachable only in VM Platform and the owner interface only through the owner's VPN.\"],\"observer\":\"The test operator sees whether the test instance can start and be used locally.\"}}]}",
+ "set_aside": []
+}

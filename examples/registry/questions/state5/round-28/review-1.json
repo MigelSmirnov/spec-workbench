@@ -1,0 +1,162 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "ambiguous_file_scope",
+   "text": "the SQLite files beside it that its connection made (its journal or write-ahead log)",
+   "question": "Exactly which SQLite companion files belong to the deletion set, including whether a WAL shared-memory file such as `-shm` is included, and are files made by every store connection included despite the singular “its connection”?",
+   "options": [
+    "Remove only the main database and the journal or WAL file named by the parenthesis.",
+    "Remove every SQLite companion file created for this database, including WAL shared-memory files.",
+    "Let the State 6 SQLite configuration determine an explicit closed list."
+   ],
+   "default_guess": "Remove every known SQLite companion file created for this database, including its WAL shared-memory file.",
+   "witness": {
+    "initial": "A new store has a main database file, a `-wal` file and a `-shm` file.",
+    "events": [
+     "The service listener fails and `module:instance_lifecycle` calls `store.discard_new_store`.",
+     "One implementation treats the parenthesis as exhaustive and removes only the database and `-wal`.",
+     "Another treats “the SQLite files beside it” as controlling and also removes `-shm`."
+    ],
+    "outcomes": [
+     "The `-shm` file remains and the operation may answer false.",
+     "All three files are gone and the operation answers true."
+    ],
+    "observer": "The host administrator and the next start."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "ambiguous_close_failure",
+   "text": "Every connection to the new store is closed first; then the store's file and the SQLite files its connection made beside it are removed. A close or a removal that fails leaves what remains as an empty store of the release's version, which the next start opens as any store.",
+   "question": "If closing one or more connections fails, must the operation stop before unlinking files, or must it continue attempting the removals; and must it continue trying the other connections after one close fails?",
+   "options": [
+    "Attempt every close, but perform no removal if any close fails.",
+    "Attempt every close and then attempt every removal even when a close failed.",
+    "Stop immediately at the first failed close."
+   ],
+   "default_guess": "Attempt every close and, if any remains unclosed, perform no removal and answer false.",
+   "witness": {
+    "initial": "A new store is open and one connection reports an error when closed, while the files themselves are unlinkable.",
+    "events": [
+     "A listener fails and cleanup begins.",
+     "One implementation reads “closed first; then” as requiring successful closure before deletion.",
+     "Another reads the acknowledged close-failure path as permitting best-effort deletion afterward."
+    ],
+    "outcomes": [
+     "The empty store remains and the result is false.",
+     "All files are removed and the result is true despite the failed close."
+    ],
+    "observer": "`module:instance_lifecycle`, through the cleanup result and its start diagnostic."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "contradictory_partial_cleanup",
+   "text": "A close or a removal that fails leaves what remains as an empty store of the release's version, which the next start opens as any store.",
+   "question": "What deletion order and failure policy guarantee that every failed cleanup leaves an openable empty store, rather than only orphaned SQLite companion files, and should already removed files be restored if that guarantee cannot be met?",
+   "options": [
+    "Remove companion files first and remove the main database only after all companion removals succeed.",
+    "Allow arbitrary partial deletion even though what remains may not be a store.",
+    "Make cleanup atomic through a rename or quarantine step."
+   ],
+   "default_guess": "Remove companion files first and keep the main database whenever any companion removal fails, so the next start still has an openable store.",
+   "witness": {
+    "initial": "The new database and its WAL exist; the database can be removed but the WAL cannot.",
+    "events": [
+     "The listener fails and cleanup removes files.",
+     "One implementation removes the database first and then fails to remove the WAL.",
+     "Another removes the main database last and retains it after the WAL removal fails."
+    ],
+    "outcomes": [
+     "Only an orphaned WAL remains, contrary to the passage saying what remains is an empty store the next start opens.",
+     "The main database remains as an empty release-version store that the next start can open."
+    ],
+    "observer": "The next start and the host administrator."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.discard_new_store",
+   "kind": "underspecified_error_reporting",
+   "text": "None; a failed removal is named in the start's one diagnostic beside the surface that could not be opened.",
+   "question": "Does a failed connection close also make the result false and get named as a cleanup failure in the start diagnostic, or is it deliberately omitted when the files are nevertheless all gone?",
+   "options": [
+    "Treat a close failure like a removal failure: answer false and name cleanup failure.",
+    "Define the boolean solely by file absence and never report a close failure.",
+    "Answer true when all files are gone but add the close failure to the diagnostic."
+   ],
+   "default_guess": "Treat any close failure as unsuccessful cleanup, answer false, and name a generic cleanup failure without exposing a value.",
+   "witness": {
+    "initial": "Closing a connection reports failure, but the operating system permits every database file to be unlinked.",
+    "events": [
+     "Cleanup attempts the close and then removes every file.",
+     "The caller constructs the stopped-start diagnostic."
+    ],
+    "outcomes": [
+     "Literal file-based output semantics produce true and the diagnostic names no cleanup failure.",
+     "Close-success semantics produce false and the diagnostic names cleanup failure beside the listener failure."
+    ],
+    "observer": "The host administrator reading the stopped-start diagnostic."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "unspecified_https_boundary",
+   "text": "the owner interface only through the owner's VPN (R0-28, R0-29, R0-48)",
+   "question": "Where is R0-29's required HTTPS terminated, and is the configured owner-interface listener itself HTTPS or an internal HTTP listener behind a specified TLS terminator?",
+   "options": [
+    "Registry terminates HTTPS and therefore needs certificate and key inputs not listed in the runtime settings.",
+    "A host-managed reverse proxy terminates HTTPS and forwards to Registry's configured listener.",
+    "The VPN is treated as sufficient and Registry serves plain HTTP to the remote owner, despite R0-29."
+   ],
+   "default_guess": "Use a host-managed TLS terminator in front of Registry and specify that the configured Registry listener is its internal HTTP endpoint.",
+   "witness": {
+    "initial": "The owner is on another machine and reaches VM Platform through the owner's VPN.",
+    "events": [
+     "The host starts Registry with only the configured owner-interface `host:port`; no TLS certificate or key is among the settings.",
+     "The owner opens the interface."
+    ],
+    "outcomes": [
+     "Registry must itself accept HTTPS, requiring undeclared certificate and key provisioning.",
+     "A host component terminates HTTPS and forwards HTTP to Registry, requiring an undeclared proxy boundary and trust rule."
+    ],
+    "observer": "The deployer configuring the listener and the owner connecting to it."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "contradictory_reachability_scope",
+   "text": "the owner interface only through the owner's VPN",
+   "question": "Is the VPN restriction absolute for every connection to the owner interface, or only for access from outside VM Platform as R0-48 states?",
+   "options": [
+    "Only outside access must use the owner's VPN; direct access from within VM Platform may be allowed.",
+    "Every access, including one originating inside VM Platform or locally on the host, must traverse the owner's VPN."
+   ],
+   "default_guess": "Apply the VPN requirement only to access from outside VM Platform, matching R0-48's explicit qualifier.",
+   "witness": {
+    "initial": "The owner or a host-administration tool is operating locally within VM Platform.",
+    "events": [
+     "It attempts to open the configured owner-interface endpoint without traversing the external VPN.",
+     "One deployment applies the changed sentence literally; another applies R0-48's “from outside” qualification."
+    ],
+    "outcomes": [
+     "The local connection is blocked because every connection must traverse the VPN.",
+     "The local connection is permitted because only outside access is VPN-constrained."
+    ],
+    "observer": "The owner or host administrator attempting local access."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"ambiguous_file_scope\",\"text\":\"the SQLite files beside it that its connection made (its journal or write-ahead log)\",\"question\":\"Exactly which SQLite companion files belong to the deletion set, including whether a WAL shared-memory file such as `-shm` is included, and are files made by every store connection included despite the singular “its connection”?\",\"options\":[\"Remove only the main database and the journal or WAL file named by the parenthesis.\",\"Remove every SQLite companion file created for this database, including WAL shared-memory files.\",\"Let the State 6 SQLite configuration determine an explicit closed list.\"],\"default_guess\":\"Remove every known SQLite companion file created for this database, including its WAL shared-memory file.\",\"witness\":{\"initial\":\"A new store has a main database file, a `-wal` file and a `-shm` file.\",\"events\":[\"The service listener fails and `module:instance_lifecycle` calls `store.discard_new_store`.\",\"One implementation treats the parenthesis as exhaustive and removes only the database and `-wal`.\",\"Another treats “the SQLite files beside it” as controlling and also removes `-shm`.\"],\"outcomes\":[\"The `-shm` file remains and the operation may answer false.\",\"All three files are gone and the operation answers true.\"],\"observer\":\"The host administrator and the next start.\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"ambiguous_close_failure\",\"text\":\"Every connection to the new store is closed first; then the store's file and the SQLite files its connection made beside it are removed. A close or a removal that fails leaves what remains as an empty store of the release's version, which the next start opens as any store.\",\"question\":\"If closing one or more connections fails, must the operation stop before unlinking files, or must it continue attempting the removals; and must it continue trying the other connections after one close fails?\",\"options\":[\"Attempt every close, but perform no removal if any close fails.\",\"Attempt every close and then attempt every removal even when a close failed.\",\"Stop immediately at the first failed close.\"],\"default_guess\":\"Attempt every close and, if any remains unclosed, perform no removal and answer false.\",\"witness\":{\"initial\":\"A new store is open and one connection reports an error when closed, while the files themselves are unlinkable.\",\"events\":[\"A listener fails and cleanup begins.\",\"One implementation reads “closed first; then” as requiring successful closure before deletion.\",\"Another reads the acknowledged close-failure path as permitting best-effort deletion afterward.\"],\"outcomes\":[\"The empty store remains and the result is false.\",\"All files are removed and the result is true despite the failed close.\"],\"observer\":\"`module:instance_lifecycle`, through the cleanup result and its start diagnostic.\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"contradictory_partial_cleanup\",\"text\":\"A close or a removal that fails leaves what remains as an empty store of the release's version, which the next start opens as any store.\",\"question\":\"What deletion order and failure policy guarantee that every failed cleanup leaves an openable empty store, rather than only orphaned SQLite companion files, and should already removed files be restored if that guarantee cannot be met?\",\"options\":[\"Remove companion files first and remove the main database only after all companion removals succeed.\",\"Allow arbitrary partial deletion even though what remains may not be a store.\",\"Make cleanup atomic through a rename or quarantine step.\"],\"default_guess\":\"Remove companion files first and keep the main database whenever any companion removal fails, so the next start still has an openable store.\",\"witness\":{\"initial\":\"The new database and its WAL exist; the database can be removed but the WAL cannot.\",\"events\":[\"The listener fails and cleanup removes files.\",\"One implementation removes the database first and then fails to remove the WAL.\",\"Another removes the main database last and retains it after the WAL removal fails.\"],\"outcomes\":[\"Only an orphaned WAL remains, contrary to the passage saying what remains is an empty store the next start opens.\",\"The main database remains as an empty release-version store that the next start can open.\"],\"observer\":\"The next start and the host administrator.\"}},{\"subject\":\"public_op:store.discard_new_store\",\"kind\":\"underspecified_error_reporting\",\"text\":\"None; a failed removal is named in the start's one diagnostic beside the surface that could not be opened.\",\"question\":\"Does a failed connection close also make the result false and get named as a cleanup failure in the start diagnostic, or is it deliberately omitted when the files are nevertheless all gone?\",\"options\":[\"Treat a close failure like a removal failure: answer false and name cleanup failure.\",\"Define the boolean solely by file absence and never report a close failure.\",\"Answer true when all files are gone but add the close failure to the diagnostic.\"],\"default_guess\":\"Treat any close failure as unsuccessful cleanup, answer false, and name a generic cleanup failure without exposing a value.\",\"witness\":{\"initial\":\"Closing a connection reports failure, but the operating system permits every database file to be unlinked.\",\"events\":[\"Cleanup attempts the close and then removes every file.\",\"The caller constructs the stopped-start diagnostic.\"],\"outcomes\":[\"Literal file-based output semantics produce true and the diagnostic names no cleanup failure.\",\"Close-success semantics produce false and the diagnostic names cleanup failure beside the listener failure.\"],\"observer\":\"The host administrator reading the stopped-start diagnostic.\"}},{\"subject\":\"context\",\"kind\":\"unspecified_https_boundary\",\"text\":\"the owner interface only through the owner's VPN (R0-28, R0-29, R0-48)\",\"question\":\"Where is R0-29's required HTTPS terminated, and is the configured owner-interface listener itself HTTPS or an internal HTTP listener behind a specified TLS terminator?\",\"options\":[\"Registry terminates HTTPS and therefore needs certificate and key inputs not listed in the runtime settings.\",\"A host-managed reverse proxy terminates HTTPS and forwards to Registry's configured listener.\",\"The VPN is treated as sufficient and Registry serves plain HTTP to the remote owner, despite R0-29.\"],\"default_guess\":\"Use a host-managed TLS terminator in front of Registry and specify that the configured Registry listener is its internal HTTP endpoint.\",\"witness\":{\"initial\":\"The owner is on another machine and reaches VM Platform through the owner's VPN.\",\"events\":[\"The host starts Registry with only the configured owner-interface `host:port`; no TLS certificate or key is among the settings.\",\"The owner opens the interface.\"],\"outcomes\":[\"Registry must itself accept HTTPS, requiring undeclared certificate and key provisioning.\",\"A host component terminates HTTPS and forwards HTTP to Registry, requiring an undeclared proxy boundary and trust rule.\"],\"observer\":\"The deployer configuring the listener and the owner connecting to it.\"}},{\"subject\":\"context\",\"kind\":\"contradictory_reachability_scope\",\"text\":\"the owner interface only through the owner's VPN\",\"question\":\"Is the VPN restriction absolute for every connection to the owner interface, or only for access from outside VM Platform as R0-48 states?\",\"options\":[\"Only outside access must use the owner's VPN; direct access from within VM Platform may be allowed.\",\"Every access, including one originating inside VM Platform or locally on the host, must traverse the owner's VPN.\"],\"default_guess\":\"Apply the VPN requirement only to access from outside VM Platform, matching R0-48's explicit qualifier.\",\"witness\":{\"initial\":\"The owner or a host-administration tool is operating locally within VM Platform.\",\"events\":[\"It attempts to open the configured owner-interface endpoint without traversing the external VPN.\",\"One deployment applies the changed sentence literally; another applies R0-48's “from outside” qualification.\"],\"outcomes\":[\"The local connection is blocked because every connection must traverse the VPN.\",\"The local connection is permitted because only outside access is VPN-constrained.\"],\"observer\":\"The owner or host administrator attempting local access.\"}}]}",
+ "retried": [
+  "{\"open_points\":[{\"subject\":\"50_public_apis_1_foundation.md:`public_op:store.discard_new_store`\",\"kind\":\"file_set\",\"text\":\"the SQLite files beside it that its connection made (its journal or write-ahead log)\",\"question\":\"Exactly which SQLite sidecar files must be removed, including whether a WAL shared-memory file is included?\",\"options\":[\"Remove the rollback journal or WAL only.\",\"Remove every SQLite sidecar used by the connection, including the WAL shared-memory file.\",\"Remove a release-fixed list of sidecar suffixes.\"],\"default_guess\":\"Remove every SQLite sidecar created by this start, including WAL and shared-memory files when present.\",\"witness\":{\"initial\":\"A newly created SQLite store is in WAL mode and has store, store-wal and store-shm files.\",\"events\":[\"The owner-interface listener fails to open.\",\"instance_lifecycle calls store.discard_new_store.\"],\"outcomes\":[\"The implementation treats store-shm as a SQLite file and removes all three files.\",\"The implementation reads the parenthesis as exhaustive, removes store and store-wal, and leaves store-shm.\"],\"observer\":\"The host administrator and the next start see the leftover file.\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:store.discard_new_store`\",\"kind\":\"file_provenance\",\"text\":\"the SQLite files its connection made beside it\",\"question\":\"How does the operation distinguish a sidecar made by this start from a pre-existing file with a SQLite sidecar name, and must such a pre-existing file be preserved?\",\"options\":[\"Delete conventional SQLite sidecar names whether or not this start created them.\",\"Track which sidecars this start created and delete only those.\",\"Refuse to create the new store if any conventional sidecar name already exists.\"],\"default_guess\":\"Record pre-existing sidecar names before opening the new store and delete only files created by this start.\",\"witness\":{\"initial\":\"The configured store file is absent, but an unrelated pre-existing file has the conventional store-wal name.\",\"events\":[\"open_store creates the new store.\",\"A listener fails.\",\"discard_new_store examines the conventional sidecar paths.\"],\"outcomes\":[\"The conventional-name file is deleted.\",\"The pre-existing file is preserved because this connection did not make it.\"],\"observer\":\"The owner of the pre-existing file sees whether it survives.\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:store.discard_new_store`\",\"kind\":\"close_failure\",\"text\":\"Every connection to the new store is closed first; then the store's file and the SQLite files its connection made beside it are removed. A close or a removal that fails leaves what remains as an empty store of the release's version, which the next start opens as any store.\",\"question\":\"When closing one connection fails, must the operation continue closing other connections and attempt file removal, or stop without removing anything?\",\"options\":[\"Stop at the first close failure and attempt no removals.\",\"Continue closing every connection, then attempt all removals.\",\"Continue cleanup only when no connection remains usable despite the reported close error.\"],\"default_guess\":\"Attempt every close, but perform no removal unless all connections are confirmed closed.\",\"witness\":{\"initial\":\"The new store has two connections, and closing the first reports failure.\",\"events\":[\"A listener fails.\",\"discard_new_store tries to close the connections.\"],\"outcomes\":[\"Cleanup stops and every database file remains.\",\"The second connection is closed and the files are then removed.\"],\"observer\":\"instance_lifecycle sees a different result and the host sees different remaining files.\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:store.discard_new_store`\",\"kind\":\"partial_cleanup_order\",\"text\":\"then the store's file and the SQLite files its connection made beside it are removed\",\"question\":\"In what order are the main store and its sidecars removed, and after one removal fails must removal of the remaining files continue?\",\"options\":[\"Remove sidecars first and the main store last; stop on failure.\",\"Remove the main store first and then the sidecars; stop on failure.\",\"Attempt every removal in a fixed order and report false if any target remains.\"],\"default_guess\":\"Attempt every sidecar first and remove the main store last only if the sidecars are gone.\",\"witness\":{\"initial\":\"A new store has a main file and a WAL file; removal of the WAL is made to fail.\",\"events\":[\"A listener fails.\",\"discard_new_store begins removal.\"],\"outcomes\":[\"The main file is removed first, leaving an orphan WAL that cannot be opened as a store.\",\"The WAL removal fails before the main file is removed, leaving the empty store available to the next start.\"],\"observer\":\"The next start observes either an absent main store or an existing empty store.\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:store.discard_new_store`\",\"kind\":\"effect_contradiction\",\"text\":\"A close or a removal that fails leaves what remains as an empty store of the release's version, which the next start opens as any store.\",\"question\":\"How must this guarantee be preserved when cleanup partially succeeds, since removing the main file while leaving a sidecar does not leave an empty store that the next start can open?\",\"options\":[\"The main store must never be removed until every sidecar has been removed successfully.\",\"Partial cleanup may leave only sidecars, and the claim that the next start opens what remains must be weakened.\",\"Any partial cleanup must reconstruct a valid empty main store before returning.\"],\"default_guess\":\"Make deletion of the main store the final step, after all closes and sidecar removals succeed.\"],\"witness\":{\"initial\":\"The main store and one sidecar exist, and only the sidecar's removal fails.\",\"events\":[\"discard_new_store removes the main store.\",\"discard_new_store fails to remove the sidecar.\",\"The process ends and Registry is started again.\"],\"outcomes\":[\"The next start finds no store to open and an orphan sidecar remains.\",\"The main file was retained, so the next start opens the empty release-version store.\"],\"observer\":\"The next start and the host administrator see the contradiction.\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:store.discard_new_store`\",\"kind\":\"result_and_diagnostic\",\"text\":\"None; a failed removal is named in the start's one diagnostic beside the surface that could not be opened.\",\"question\":\"What result and diagnostic are required for a failed close, which the observable effect treats as a possible failure but this Errors passage mentions only a failed removal?\",\"options\":[\"A close failure makes the result false and is named in the diagnostic.\",\"A close failure makes the result false, but the diagnostic generically says the store was left.\",\"A close failure is ignored if every file is ultimately gone, so the result is true and the diagnostic does not mention it.\"],\"default_guess\":\"Return false and name that cleanup left the store, without exposing connection details.\",\"witness\":{\"initial\":\"Closing the store reports an error, but the platform would still permit all database files to be unlinked.\",\"events\":[\"A listener fails.\",\"discard_new_store receives the close error.\",\"instance_lifecycle constructs its one diagnostic.\"],\"outcomes\":[\"The operation reports failure and the diagnostic names the failed close or incomplete cleanup.\",\"The operation removes all files, returns true under its output criterion, and the close failure is invisible.\"],\"observer\":\"The host administrator sees different diagnostics and cleanup status.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"test_topology\",\"text\":\"and the interface each is bound to on that host, or on a test instance's (R0-34), is the host's administration\",\"question\":\"What network-reachability restrictions apply to a test instance, and is a publicly reachable test listener conforming or a wrong deployment?\",\"options\":[\"Test instances must follow the production reachability restrictions.\",\"Test-instance reachability is entirely the host administrator's choice.\",\"Test instances have a separate fixed private or loopback-only rule.\"],\"default_guess\":\"Keep every test listener private or loopback-only, while treating enforcement as host administration.\",\"witness\":{\"initial\":\"A test instance has its own identity space and a syntactically valid service address of 0.0.0.0:8781.\",\"events\":[\"The administrator starts Registry with that configuration.\",\"A machine outside the intended test host connects to the service API.\"],\"outcomes\":[\"The deployment is conforming because the test interface is left to host administration.\",\"The deployment violates Registry's reachability rule because the production-only networks also constrain tests.\"],\"observer\":\"The test administrator and the external client see whether that exposure is permitted.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"scope_mismatch\",\"text\":\"the owner interface only through the owner's VPN (R0-28, R0-29, R0-48)\",\"question\":\"Does “only through the owner's VPN” prohibit a direct connection originating inside VM Platform, or does it apply only when the owner connects from outside as R0-48 states?\",\"options\":[\"Every owner-interface connection must traverse the owner's VPN.\",\"Only connections from outside the home server must traverse the VPN; an internal direct connection is allowed.\",\"The owner interface must have separate internal and VPN endpoints.\"],\"default_guess\":\"Apply the VPN requirement only to access from outside and allow an internal administrative connection.\",\"witness\":{\"initial\":\"The owner is operating inside the trusted VM Platform and can directly reach the configured owner-interface address without traversing the VPN.\",\"events\":[\"The owner makes a direct local request to the owner interface.\"],\"outcomes\":[\"The request is reachable because R0-48 restricts access from outside only.\",\"Host networking blocks the request because State 5 says the interface is reachable only through the VPN.\"],\"observer\":\"The owner sees whether the local interface is reachable.\"}}]}"
+ ],
+ "set_aside": []
+}
