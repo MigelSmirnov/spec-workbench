@@ -582,17 +582,19 @@ The store `open_store` answered as made new.
 
 ### Outputs
 
-Whether it was removed: true when the store's file and every companion file
-SQLite keeps beside it under the store's name with a suffix — `-journal`,
-`-wal`, `-shm` — are all gone; false otherwise.
+Whether it was removed: true when the store's file is gone; false
+otherwise.
 
 ### Observable effect
 
-Every connection to the new store is closed first; then the store's file and
-each of those companion files that exists are removed, each tried once
-whatever an earlier close or removal did. What a failed close or removal
-leaves is an empty store of the release's version, which the next start
-opens as any store.
+The store's one connection — `open_store` opens no other — is closed; then,
+in this order, the companion files SQLite may keep beside the store under
+its name with a suffix, `-wal`, `-shm`, `-journal`, each removed when it is
+a regular file, and last the store's file. A path of another type is left
+as it is. The first close or removal that fails stops the rest, so the
+store's file is removed only after its companions are: what a failure
+leaves is the store's file with some of its companions, an empty store of
+the release's version, which the next start opens as any store.
 
 ### Enforces
 
@@ -606,8 +608,8 @@ surface that could not be opened.
 
 ### State impact
 
-Deletes the store file it made and the SQLite files beside it, when it can;
-touches no other file.
+Deletes the store's companion files and then the store file it made, when
+it can; touches no other file.
 
 ## `public_op:store.run_in_transaction`
 

@@ -133,7 +133,8 @@ diagnostic.
    `capability:store.discard_new_store` — one it cannot remove is an empty
    store of the release's version, which the next start opens as any store
    (A17 rule 2). An existing store keeps its records as they were.
-5. **Serve.** Until both listeners of step 4 are open, an opened one accepts
+5. **Serve.** Until every listener step 4 opens is open — the owner
+   interface's alone in an owner-only start — an opened one accepts
    no connection: a connection that arrives meanwhile waits in the
    listener's queue and is accepted now, or is closed unanswered when the
    start fails. Only now the surfaces answer:
