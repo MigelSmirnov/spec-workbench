@@ -1,0 +1,319 @@
+{
+ "open_points": [
+  {
+   "subject": "A09 owner authentication versus A13 sign-in",
+   "kind": "contradiction",
+   "text": "Every owner action is made in an owner session (A13), never with a service token; no token carries the owner's rights.\n\nSign-in is the one owner request made without a session: it is checked for the credential and the lockout only, carries no CSRF value, and the session cookie it sets is sent only to Registry's origin (rule 1).",
+   "question": "Is sign-in an explicit exception to A09's rule that every owner action is made in an owner session, or is “owner action” intended to exclude sign-in?",
+   "options": [
+    "State that sign-in is the sole owner action/request allowed without an owner session",
+    "Define “owner action” to exclude authentication requests",
+    "Apply A09 literally and refuse sign-in without an existing session"
+   ],
+   "default_guess": "Make sign-in the explicit bootstrap exception to A09.",
+   "witness": {
+    "initial": "Registry has no owner session and is not in lockout.",
+    "events": [
+     "The owner submits the correct owner credential to sign in."
+    ],
+    "outcomes": [
+     "A13 treats sign-in as the permitted sessionless request and creates a session.",
+     "A09's literal rule refuses the action because it has no owner session, making the first session impossible."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 monotonic-clock representation",
+   "kind": "missing representation",
+   "text": "its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock",
+   "question": "In what representation are monotonic readings and deadlines held and compared: integer ticks, integer nanoseconds, floating-point seconds, timedeltas from an origin, or another specified form, and with what precision and overflow rules?",
+   "options": [
+    "Integer monotonic nanoseconds with deadlines in the same unit",
+    "Opaque monotonic-instant and duration types emitted by `clock`",
+    "Floating-point monotonic seconds"
+   ],
+   "default_guess": "Use opaque monotonic instants and durations supplied by `clock`, backed by integer nanoseconds.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 UTC wall-clock representation",
+   "kind": "missing representation",
+   "text": "instants Registry records\n   and the 03:00 of A18 are UTC wall-clock time.",
+   "question": "What exact code representation and precision must every recorded UTC instant use outside A18, including whether it is a timezone-aware datetime, an epoch value, or text and whether sub-microsecond readings are rounded, truncated, or rejected?",
+   "options": [
+    "Timezone-aware UTC datetime at microsecond precision, truncating finer readings",
+    "Integer epoch microseconds",
+    "Canonical UTC text with six fractional digits"
+   ],
+   "default_guess": "Use timezone-aware UTC datetimes at microsecond precision and truncate finer clock readings.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 number and binding of clock readings",
+   "kind": "missing read semantics",
+   "text": "Both readings reach the code\n   through `clock` alone",
+   "question": "For each sign-in, owner request, confirmation display, expiry pass and sign-in-throttling decision, how many monotonic and UTC readings are taken, and which fields and comparisons must share one reading?",
+   "options": [
+    "Take one relevant reading at operation admission and reuse it for all fields and comparisons in that operation",
+    "Read separately for each comparison and timestamp written",
+    "Let each operation choose its own read pattern"
+   ],
+   "default_guess": "Take one relevant clock reading at admission to each atomic decision and reuse it throughout that decision.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 request racing session termination",
+   "kind": "contradictory concurrency semantics",
+   "text": "a request that\n   passes it completes even if a limit or a sign-out comes while it runs\n\nThe requests of one owner session that change its state — showing a\n   confirmation step, uploading a file, a submission, a sign-out — are\n   applied one at a time, in the order in which they take the session's one\n   lock, after passing the session check",
+   "question": "If a request passes the session check but a sign-out or expiry pass acquires the session lock first and ends the session, must the admitted request still execute, be refused after rechecking under the lock, or execute but discard all session state?",
+   "options": [
+    "Admission is final: the request executes, with rules preventing it from leaving state in the ended session",
+    "Termination wins the lock: the request rechecks and is refused",
+    "The earlier arrival is ordered before termination regardless of lock acquisition"
+   ],
+   "default_guess": "Order admission and the last-request update under the session lock so a request admitted before termination completes before the termination.",
+   "witness": {
+    "initial": "A valid owner session has no pending confirmation and is close to expiry.",
+    "events": [
+     "The owner uploads a valid import file; the request passes the session check but has not acquired the session lock.",
+     "The expiry pass or a concurrent sign-out acquires the required locks first and ends the session.",
+     "The upload request then acquires the locks."
+    ],
+    "outcomes": [
+     "Because it passed the session check, the upload completes, potentially requiring special handling so no upload remains in the ended session.",
+     "Because the session is ended when the lock is acquired, the upload is refused and stores nothing."
+    ],
+    "observer": "The owner, who sees either an accepted upload/mapping or a session refusal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 last-request update versus expiry pass",
+   "kind": "missing atomicity and precedence",
+   "text": "its arrival restarts the 30\n   minutes — of concurrent requests the latest arrival counts",
+   "question": "When and under which lock is `last_request` updated, and does a request arriving before the idle deadline necessarily defeat an expiry pass that obtains the session lock first?",
+   "options": [
+    "Atomically validate and record arrival before an expiry pass may decide",
+    "The expiry pass may end the session if it obtains the lock first",
+    "Order solely by arrival time even if lock acquisition is later"
+   ],
+   "default_guess": "Validate and update `last_request` atomically under the session lock, ordered by arrival time.",
+   "witness": {
+    "initial": "A session's idle deadline is 12:30:00 and Registry is about to run its expiry pass.",
+    "events": [
+     "At 12:29:59.999 an owner request arrives and begins the session check.",
+     "At 12:30:00 the expiry pass acquires the session lock before the request records its arrival."
+    ],
+    "outcomes": [
+     "The arrival refreshes the session because it occurred before the deadline, so the request completes and the session remains valid.",
+     "The expiry pass sees the old `last_request`, ends the session, and the request is refused or cannot persist its refresh."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 owner-session validity invariant",
+   "kind": "invariant test gap",
+   "text": "owner_session s valid at t <=> t < s.began + 8h and\n                                t < s.last_request + 30min and\n                                not signed_out(s) and no restart since s.began",
+   "question": "Which Required tests must demonstrate the untested absolute eight-hour boundary and the `signed_out(s)` conjunct, including behavior exactly at eight hours and after sign-out?",
+   "options": [
+    "Add separate tests for the eight-hour boundary and sign-out",
+    "Add one table-driven test covering every conjunct and exact boundary",
+    "Declare existing tests sufficient despite not stating those observations"
+   ],
+   "default_guess": "Add explicit tests showing validity immediately before and refusal exactly at eight hours, plus refusal after sign-out.",
+   "unit": "?"
+  },
+  {
+   "subject": "A07 concurrent publishes and A01 replay",
+   "kind": "contradiction",
+   "text": "Two concurrent publishes of a type with different request ids are both\n   accepted with consecutive\n   versions\n\nTwo concurrent publishes of `estimate` on one project make versions n+1 and\n   n+2, the first `superseded`, the second `published`; neither answers an\n   internal error.",
+   "question": "Must A07 Required test 1 use two different request ids, or is it also asserting two versions when both calls carry one request id, contrary to A01 replay handling?",
+   "options": [
+    "Amend the test to say the concurrent publishes have different request ids",
+    "For one request id, make one pointer and answer it to both calls",
+    "Make two versions even for one request id"
+   ],
+   "default_guess": "Amend A07 Required test 1 to require different request ids; one request id must make one pointer.",
+   "witness": {
+    "initial": "A project has `estimate` version n published.",
+    "events": [
+     "Kernel concurrently submits two equal publishes with the same request id."
+    ],
+    "outcomes": [
+     "A01 treats the second call as a repeat: only version n+1 is made and both calls answer that pointer.",
+     "A07 Required test 1, read without the new request-id qualification, requires versions n+1 and n+2."
+    ],
+    "observer": "Kernel and readers of the artifact history"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A07 ordering of concurrent publish results",
+   "kind": "undefined ordering term",
+   "text": "the first `superseded`, the second `published`",
+   "question": "For concurrent calls, does “first” mean the call that arrived first, acquired serialization first, committed first, or received the lower version, and must the test control or merely observe that order?",
+   "options": [
+    "Define first as the publish serialized first and therefore assigned n+1",
+    "Define first by request arrival time",
+    "Require a deterministic request-id ordering"
+   ],
+   "default_guess": "Define first as the transaction serialized first, equivalently the one assigned n+1.",
+   "unit": "?"
+  },
+  {
+   "subject": "A07 publish and withdrawal timestamps",
+   "kind": "missing clock-read binding",
+   "text": "Publishing a pointer assigns its version, marks the type's published\n   pointer `superseded` with its instant, and stores the new pointer\n   `published` — all in one transaction, or none of it (R0-17, R0-35).",
+   "question": "Does one publish take one UTC reading shared by the new pointer's published instant and the previous pointer's superseded instant, or may those instants come from separate readings; likewise, how many readings does a withdrawal take?",
+   "options": [
+    "One UTC reading per publish or withdrawal, reused for every timestamp it writes",
+    "Separate readings for each affected record",
+    "One transaction-start reading and a separate commit reading"
+   ],
+   "default_guess": "Use one UTC reading per atomic publish or withdrawal and reuse it for every timestamp written.",
+   "witness": {
+    "initial": "A project has one published pointer of a declared type.",
+    "events": [
+     "A new pointer of that type is published while the wall clock advances between possible reads."
+    ],
+    "outcomes": [
+     "The old pointer's superseded instant equals the new pointer's published instant because the operation uses one reading.",
+     "The two instants differ because each record obtains a separate clock reading."
+    ],
+    "observer": "A caller listing artifact history"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A01 concurrent creates with unequal facts",
+   "kind": "contradiction",
+   "text": "Two concurrent creates with one request id — of a project, a Customer,\n    a room of one project, a pointer of one project — make one record; the\n    other answers it.",
+   "question": "Is this test limited to concurrent calls with equal facts, or must the losing call answer the created record even when its facts differ, contrary to A01 rules 5 and 7?",
+   "options": [
+    "Add “and equal facts”; unequal facts make one record and refuse the other call",
+    "Always answer the winning record regardless of the losing call's facts",
+    "Specify a deterministic winner and reject any nonwinning payload"
+   ],
+   "default_guess": "Limit the test to equal facts and explicitly require refusal of the unequal-facts call.",
+   "witness": {
+    "initial": "No Project carries request id `k`.",
+    "events": [
+     "One owner session concurrently creates a project with request id `k` and display name `Alpha`.",
+     "Another concurrently creates a project with request id `k` and display name `Beta`."
+    ],
+    "outcomes": [
+     "Under rules 5 and 7, one project is created and the call with different facts is refused.",
+     "Under Required test 12 as written, one project is created and the other call answers that project."
+    ],
+    "observer": "The owner making the losing call"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15 erasure date and audit instant",
+   "kind": "missing clock-read binding",
+   "text": "The date of an erasure is a date not later than today, the current date in\n   UTC; a later date is refused. Every entry whose instant is before 00:00 UTC\n   of that date is removed.\n\nThe erasure's own entry is written after the removal, in the same\n   transaction, with the current instant",
+   "question": "Does an erasure take one UTC reading that fixes both `today` and the audit entry's instant, or may validation and entry creation read the clock separately; at which point is that reading taken?",
+   "options": [
+    "One UTC reading at transaction admission fixes both today and the entry instant",
+    "Read once for date validation and again for the audit entry",
+    "Validate against request-arrival time and timestamp at commit"
+   ],
+   "default_guess": "Take one UTC reading inside the transaction and use it for both date validation and the erasure entry.",
+   "witness": {
+    "initial": "The UTC date is D and midnight starting D+1 is imminent.",
+    "events": [
+     "The owner submits an erasure whose date is D+1.",
+     "The operation spans the UTC midnight boundary."
+    ],
+    "outcomes": [
+     "A reading before midnight makes D+1 a later date, so the operation is refused.",
+     "A reading after midnight makes D+1 today, so the operation is accepted and writes its entry."
+    ],
+    "observer": "The owner and readers of the audit log"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15 erasure-entry instant invariant",
+   "kind": "invariant test gap",
+   "text": "erase(d) accepted => its erasure entry e has e.instant >= start_of(d)",
+   "question": "Which Required test must assert the erasure entry's instant relative to `start_of(d)`, especially at the date boundary?",
+   "options": [
+    "Add a test that inspects the entry instant for an accepted erasure",
+    "Extend Required test 1 to state and assert the instant comparison",
+    "Remove the invariant"
+   ],
+   "default_guess": "Extend the erasure test to assert that the new entry's instant is at or after the supplied date's UTC start.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 accepted import timestamp",
+   "kind": "missing clock-read binding",
+   "text": "A Customer the import makes is\n  created at the import's instant with revision 1.",
+   "question": "What is the import's single instant, when is it read, and must every new Customer, the MigrationClosure and the import AuditEntry use exactly that same UTC reading?",
+   "options": [
+    "One UTC reading inside the transaction shared by all imported Customers, the closure and the audit entry",
+    "A separate reading for each created record",
+    "One reading for Customers and closure, with the audit entry timestamped separately"
+   ],
+   "default_guess": "Read the UTC clock once inside the import transaction and reuse that instant for every new Customer, the closure and the audit entry.",
+   "witness": {
+    "initial": "A valid confirmed import will create two Customers, one closure and one audit entry.",
+    "events": [
+     "The import transaction begins just before the clock advances to a new microsecond or UTC day.",
+     "Registry writes the Customers, closure and audit entry."
+    ],
+    "outcomes": [
+     "All newly generated timestamps are identical because they represent one import instant.",
+     "The records carry different timestamps because their writes read the clock independently."
+    ],
+    "observer": "The owner reading Customers and the audit log, and any integrity check comparing the closure and audit event"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A09 service-rights table",
+   "kind": "standard_violation",
+   "text": "Every service token names one service; Registry knows from its own release\n   which operations that service may call and the highest disclosure class it\n   may receive (R0-26, R0-27). The configuration holds the tokens, not their\n   rights (R0-20, R0-23).",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The service-to-operations-and-highest-class policy must name the imported data-provider constant that carries this release table to generated code, or be explicitly left outside the generated specification.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 duration values",
+   "kind": "standard_violation",
+   "text": "Every duration in this decision — the 8 hours, the 30, 15 and 10\n   minutes, the 60 seconds — is measured by the process's monotonic clock,\n   which a change of the wall clock does not move and which counts the time\n   the host or its VM was suspended, so a session does not outlive a\n   suspension;",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Each release threshold used by the generated session and lockout code must be assigned to and named as an imported data-provider constant, rather than reaching code only as a prose literal.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 random-value minimum",
+   "kind": "standard_violation",
+   "text": "The session's identity, its CSRF value and a confirmation value are each at\n   least 32 bytes from the operating system's random source; each is compared\n   in constant time and never appears in a URL, a log line, a diagnostic or an\n   audit entry (R0-29, R0-37).",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The 32-byte generation threshold must become an imported data-provider constant named by the code's note, while the behavioral requirements remain behavior.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 backup schedule values",
+   "kind": "standard_violation",
+   "text": "Every day at\n   03:00 UTC, while Registry runs with its service tokens, it\n   makes one backup run; a 03:00 that finds Registry stopped, or in an\n   owner-only start (rule 9), makes no run, and none is made later in its\n   place. The process looks at the clock at least once a minute;",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The release's 03:00 UTC schedule and one-minute maximum polling interval must be named as imported data-provider constants, or explicitly classified as environment-dependent settings and exposed as settings fields.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A09 owner authentication versus A13 sign-in\",\"kind\":\"contradiction\",\"text\":\"Every owner action is made in an owner session (A13), never with a service token; no token carries the owner's rights.\\n\\nSign-in is the one owner request made without a session: it is checked for the credential and the lockout only, carries no CSRF value, and the session cookie it sets is sent only to Registry's origin (rule 1).\",\"question\":\"Is sign-in an explicit exception to A09's rule that every owner action is made in an owner session, or is “owner action” intended to exclude sign-in?\",\"options\":[\"State that sign-in is the sole owner action/request allowed without an owner session\",\"Define “owner action” to exclude authentication requests\",\"Apply A09 literally and refuse sign-in without an existing session\"],\"default_guess\":\"Make sign-in the explicit bootstrap exception to A09.\",\"witness\":{\"initial\":\"Registry has no owner session and is not in lockout.\",\"events\":[\"The owner submits the correct owner credential to sign in.\"],\"outcomes\":[\"A13 treats sign-in as the permitted sessionless request and creates a session.\",\"A09's literal rule refuses the action because it has no owner session, making the first session impossible.\"],\"observer\":\"The owner\"}},{\"subject\":\"A13 monotonic-clock representation\",\"kind\":\"missing representation\",\"text\":\"its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock\",\"question\":\"In what representation are monotonic readings and deadlines held and compared: integer ticks, integer nanoseconds, floating-point seconds, timedeltas from an origin, or another specified form, and with what precision and overflow rules?\",\"options\":[\"Integer monotonic nanoseconds with deadlines in the same unit\",\"Opaque monotonic-instant and duration types emitted by `clock`\",\"Floating-point monotonic seconds\"],\"default_guess\":\"Use opaque monotonic instants and durations supplied by `clock`, backed by integer nanoseconds.\"},{\"subject\":\"A13 UTC wall-clock representation\",\"kind\":\"missing representation\",\"text\":\"instants Registry records\\n   and the 03:00 of A18 are UTC wall-clock time.\",\"question\":\"What exact code representation and precision must every recorded UTC instant use outside A18, including whether it is a timezone-aware datetime, an epoch value, or text and whether sub-microsecond readings are rounded, truncated, or rejected?\",\"options\":[\"Timezone-aware UTC datetime at microsecond precision, truncating finer readings\",\"Integer epoch microseconds\",\"Canonical UTC text with six fractional digits\"],\"default_guess\":\"Use timezone-aware UTC datetimes at microsecond precision and truncate finer clock readings.\"},{\"subject\":\"A13 number and binding of clock readings\",\"kind\":\"missing read semantics\",\"text\":\"Both readings reach the code\\n   through `clock` alone\",\"question\":\"For each sign-in, owner request, confirmation display, expiry pass and sign-in-throttling decision, how many monotonic and UTC readings are taken, and which fields and comparisons must share one reading?\",\"options\":[\"Take one relevant reading at operation admission and reuse it for all fields and comparisons in that operation\",\"Read separately for each comparison and timestamp written\",\"Let each operation choose its own read pattern\"],\"default_guess\":\"Take one relevant clock reading at admission to each atomic decision and reuse it throughout that decision.\"},{\"subject\":\"A13 request racing session termination\",\"kind\":\"contradictory concurrency semantics\",\"text\":\"a request that\\n   passes it completes even if a limit or a sign-out comes while it runs\\n\\nThe requests of one owner session that change its state — showing a\\n   confirmation step, uploading a file, a submission, a sign-out — are\\n   applied one at a time, in the order in which they take the session's one\\n   lock, after passing the session check\",\"question\":\"If a request passes the session check but a sign-out or expiry pass acquires the session lock first and ends the session, must the admitted request still execute, be refused after rechecking under the lock, or execute but discard all session state?\",\"options\":[\"Admission is final: the request executes, with rules preventing it from leaving state in the ended session\",\"Termination wins the lock: the request rechecks and is refused\",\"The earlier arrival is ordered before termination regardless of lock acquisition\"],\"default_guess\":\"Order admission and the last-request update under the session lock so a request admitted before termination completes before the termination.\",\"witness\":{\"initial\":\"A valid owner session has no pending confirmation and is close to expiry.\",\"events\":[\"The owner uploads a valid import file; the request passes the session check but has not acquired the session lock.\",\"The expiry pass or a concurrent sign-out acquires the required locks first and ends the session.\",\"The upload request then acquires the locks.\"],\"outcomes\":[\"Because it passed the session check, the upload completes, potentially requiring special handling so no upload remains in the ended session.\",\"Because the session is ended when the lock is acquired, the upload is refused and stores nothing.\"],\"observer\":\"The owner, who sees either an accepted upload/mapping or a session refusal\"}},{\"subject\":\"A13 last-request update versus expiry pass\",\"kind\":\"missing atomicity and precedence\",\"text\":\"its arrival restarts the 30\\n   minutes — of concurrent requests the latest arrival counts\",\"question\":\"When and under which lock is `last_request` updated, and does a request arriving before the idle deadline necessarily defeat an expiry pass that obtains the session lock first?\",\"options\":[\"Atomically validate and record arrival before an expiry pass may decide\",\"The expiry pass may end the session if it obtains the lock first\",\"Order solely by arrival time even if lock acquisition is later\"],\"default_guess\":\"Validate and update `last_request` atomically under the session lock, ordered by arrival time.\",\"witness\":{\"initial\":\"A session's idle deadline is 12:30:00 and Registry is about to run its expiry pass.\",\"events\":[\"At 12:29:59.999 an owner request arrives and begins the session check.\",\"At 12:30:00 the expiry pass acquires the session lock before the request records its arrival.\"],\"outcomes\":[\"The arrival refreshes the session because it occurred before the deadline, so the request completes and the session remains valid.\",\"The expiry pass sees the old `last_request`, ends the session, and the request is refused or cannot persist its refresh.\"],\"observer\":\"The owner\"}},{\"subject\":\"A13 owner-session validity invariant\",\"kind\":\"invariant test gap\",\"text\":\"owner_session s valid at t <=> t < s.began + 8h and\\n                                t < s.last_request + 30min and\\n                                not signed_out(s) and no restart since s.began\",\"question\":\"Which Required tests must demonstrate the untested absolute eight-hour boundary and the `signed_out(s)` conjunct, including behavior exactly at eight hours and after sign-out?\",\"options\":[\"Add separate tests for the eight-hour boundary and sign-out\",\"Add one table-driven test covering every conjunct and exact boundary\",\"Declare existing tests sufficient despite not stating those observations\"],\"default_guess\":\"Add explicit tests showing validity immediately before and refusal exactly at eight hours, plus refusal after sign-out.\"},{\"subject\":\"A07 concurrent publishes and A01 replay\",\"kind\":\"contradiction\",\"text\":\"Two concurrent publishes of a type with different request ids are both\\n   accepted with consecutive\\n   versions\\n\\nTwo concurrent publishes of `estimate` on one project make versions n+1 and\\n   n+2, the first `superseded`, the second `published`; neither answers an\\n   internal error.\",\"question\":\"Must A07 Required test 1 use two different request ids, or is it also asserting two versions when both calls carry one request id, contrary to A01 replay handling?\",\"options\":[\"Amend the test to say the concurrent publishes have different request ids\",\"For one request id, make one pointer and answer it to both calls\",\"Make two versions even for one request id\"],\"default_guess\":\"Amend A07 Required test 1 to require different request ids; one request id must make one pointer.\",\"witness\":{\"initial\":\"A project has `estimate` version n published.\",\"events\":[\"Kernel concurrently submits two equal publishes with the same request id.\"],\"outcomes\":[\"A01 treats the second call as a repeat: only version n+1 is made and both calls answer that pointer.\",\"A07 Required test 1, read without the new request-id qualification, requires versions n+1 and n+2.\"],\"observer\":\"Kernel and readers of the artifact history\"}},{\"subject\":\"A07 ordering of concurrent publish results\",\"kind\":\"undefined ordering term\",\"text\":\"the first `superseded`, the second `published`\",\"question\":\"For concurrent calls, does “first” mean the call that arrived first, acquired serialization first, committed first, or received the lower version, and must the test control or merely observe that order?\",\"options\":[\"Define first as the publish serialized first and therefore assigned n+1\",\"Define first by request arrival time\",\"Require a deterministic request-id ordering\"],\"default_guess\":\"Define first as the transaction serialized first, equivalently the one assigned n+1.\"},{\"subject\":\"A07 publish and withdrawal timestamps\",\"kind\":\"missing clock-read binding\",\"text\":\"Publishing a pointer assigns its version, marks the type's published\\n   pointer `superseded` with its instant, and stores the new pointer\\n   `published` — all in one transaction, or none of it (R0-17, R0-35).\",\"question\":\"Does one publish take one UTC reading shared by the new pointer's published instant and the previous pointer's superseded instant, or may those instants come from separate readings; likewise, how many readings does a withdrawal take?\",\"options\":[\"One UTC reading per publish or withdrawal, reused for every timestamp it writes\",\"Separate readings for each affected record\",\"One transaction-start reading and a separate commit reading\"],\"default_guess\":\"Use one UTC reading per atomic publish or withdrawal and reuse it for every timestamp written.\",\"witness\":{\"initial\":\"A project has one published pointer of a declared type.\",\"events\":[\"A new pointer of that type is published while the wall clock advances between possible reads.\"],\"outcomes\":[\"The old pointer's superseded instant equals the new pointer's published instant because the operation uses one reading.\",\"The two instants differ because each record obtains a separate clock reading.\"],\"observer\":\"A caller listing artifact history\"}},{\"subject\":\"A01 concurrent creates with unequal facts\",\"kind\":\"contradiction\",\"text\":\"Two concurrent creates with one request id — of a project, a Customer,\\n    a room of one project, a pointer of one project — make one record; the\\n    other answers it.\",\"question\":\"Is this test limited to concurrent calls with equal facts, or must the losing call answer the created record even when its facts differ, contrary to A01 rules 5 and 7?\",\"options\":[\"Add “and equal facts”; unequal facts make one record and refuse the other call\",\"Always answer the winning record regardless of the losing call's facts\",\"Specify a deterministic winner and reject any nonwinning payload\"],\"default_guess\":\"Limit the test to equal facts and explicitly require refusal of the unequal-facts call.\",\"witness\":{\"initial\":\"No Project carries request id `k`.\",\"events\":[\"One owner session concurrently creates a project with request id `k` and display name `Alpha`.\",\"Another concurrently creates a project with request id `k` and display name `Beta`.\"],\"outcomes\":[\"Under rules 5 and 7, one project is created and the call with different facts is refused.\",\"Under Required test 12 as written, one project is created and the other call answers that project.\"],\"observer\":\"The owner making the losing call\"}},{\"subject\":\"A15 erasure date and audit instant\",\"kind\":\"missing clock-read binding\",\"text\":\"The date of an erasure is a date not later than today, the current date in\\n   UTC; a later date is refused. Every entry whose instant is before 00:00 UTC\\n   of that date is removed.\\n\\nThe erasure's own entry is written after the removal, in the same\\n   transaction, with the current instant\",\"question\":\"Does an erasure take one UTC reading that fixes both `today` and the audit entry's instant, or may validation and entry creation read the clock separately; at which point is that reading taken?\",\"options\":[\"One UTC reading at transaction admission fixes both today and the entry instant\",\"Read once for date validation and again for the audit entry\",\"Validate against request-arrival time and timestamp at commit\"],\"default_guess\":\"Take one UTC reading inside the transaction and use it for both date validation and the erasure entry.\",\"witness\":{\"initial\":\"The UTC date is D and midnight starting D+1 is imminent.\",\"events\":[\"The owner submits an erasure whose date is D+1.\",\"The operation spans the UTC midnight boundary.\"],\"outcomes\":[\"A reading before midnight makes D+1 a later date, so the operation is refused.\",\"A reading after midnight makes D+1 today, so the operation is accepted and writes its entry.\"],\"observer\":\"The owner and readers of the audit log\"}},{\"subject\":\"A15 erasure-entry instant invariant\",\"kind\":\"invariant test gap\",\"text\":\"erase(d) accepted => its erasure entry e has e.instant >= start_of(d)\",\"question\":\"Which Required test must assert the erasure entry's instant relative to `start_of(d)`, especially at the date boundary?\",\"options\":[\"Add a test that inspects the entry instant for an accepted erasure\",\"Extend Required test 1 to state and assert the instant comparison\",\"Remove the invariant\"],\"default_guess\":\"Extend the erasure test to assert that the new entry's instant is at or after the supplied date's UTC start.\"},{\"subject\":\"A16 accepted import timestamp\",\"kind\":\"missing clock-read binding\",\"text\":\"A Customer the import makes is\\n  created at the import's instant with revision 1.\",\"question\":\"What is the import's single instant, when is it read, and must every new Customer, the MigrationClosure and the import AuditEntry use exactly that same UTC reading?\",\"options\":[\"One UTC reading inside the transaction shared by all imported Customers, the closure and the audit entry\",\"A separate reading for each created record\",\"One reading for Customers and closure, with the audit entry timestamped separately\"],\"default_guess\":\"Read the UTC clock once inside the import transaction and reuse that instant for every new Customer, the closure and the audit entry.\",\"witness\":{\"initial\":\"A valid confirmed import will create two Customers, one closure and one audit entry.\",\"events\":[\"The import transaction begins just before the clock advances to a new microsecond or UTC day.\",\"Registry writes the Customers, closure and audit entry.\"],\"outcomes\":[\"All newly generated timestamps are identical because they represent one import instant.\",\"The records carry different timestamps because their writes read the clock independently.\"],\"observer\":\"The owner reading Customers and the audit log, and any integrity check comparing the closure and audit event\"}},{\"subject\":\"A09 service-rights table\",\"kind\":\"standard_violation\",\"text\":\"Every service token names one service; Registry knows from its own release\\n   which operations that service may call and the highest disclosure class it\\n   may receive (R0-26, R0-27). The configuration holds the tokens, not their\\n   rights (R0-20, R0-23).\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The service-to-operations-and-highest-class policy must name the imported data-provider constant that carries this release table to generated code, or be explicitly left outside the generated specification.\"},{\"subject\":\"A13 duration values\",\"kind\":\"standard_violation\",\"text\":\"Every duration in this decision — the 8 hours, the 30, 15 and 10\\n   minutes, the 60 seconds — is measured by the process's monotonic clock,\\n   which a change of the wall clock does not move and which counts the time\\n   the host or its VM was suspended, so a session does not outlive a\\n   suspension;\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Each release threshold used by the generated session and lockout code must be assigned to and named as an imported data-provider constant, rather than reaching code only as a prose literal.\"},{\"subject\":\"A13 random-value minimum\",\"kind\":\"standard_violation\",\"text\":\"The session's identity, its CSRF value and a confirmation value are each at\\n   least 32 bytes from the operating system's random source; each is compared\\n   in constant time and never appears in a URL, a log line, a diagnostic or an\\n   audit entry (R0-29, R0-37).\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The 32-byte generation threshold must become an imported data-provider constant named by the code's note, while the behavioral requirements remain behavior.\"},{\"subject\":\"A18 backup schedule values\",\"kind\":\"standard_violation\",\"text\":\"Every day at\\n   03:00 UTC, while Registry runs with its service tokens, it\\n   makes one backup run; a 03:00 that finds Registry stopped, or in an\\n   owner-only start (rule 9), makes no run, and none is made later in its\\n   place. The process looks at the clock at least once a minute;\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The release's 03:00 UTC schedule and one-minute maximum polling interval must be named as imported data-provider constants, or explicitly classified as environment-dependent settings and exposed as settings fields.\"}]}",
+ "set_aside": []
+}

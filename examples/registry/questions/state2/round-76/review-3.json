@@ -1,0 +1,301 @@
+{
+ "open_points": [
+  {
+   "subject": "A13",
+   "kind": "missing_representation",
+   "text": "Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension; instants Registry records and the 03:00 of A18 are UTC wall-clock time.",
+   "question": "What exact representations, units and precision does `clock` return for its monotonic reading and its UTC wall-clock reading?",
+   "options": [
+    "An integer monotonic duration in a fixed unit plus a timezone-aware UTC datetime with microsecond precision",
+    "A floating-point monotonic value plus a UTC epoch value",
+    "Another explicitly declared pair of representations"
+   ],
+   "default_guess": "Use an integer monotonic value in microseconds and a timezone-aware UTC datetime truncated to microseconds.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13",
+   "kind": "time_read_count",
+   "text": "Registry ends it — and drops its pending confirmation and its uploaded file with it (M11) — at a pass over the sessions it makes every 60 seconds from the start; the pass alone ends sessions by their limits, taking the import lock and then each session's lock (A16 rule 2) and deciding under them.",
+   "question": "Does one expiry pass take one monotonic reading for every session, or a new reading after each session's locks are acquired?",
+   "options": [
+    "One reading fixes `now` for the whole pass",
+    "One reading per session under its locks",
+    "Separate readings for each limit check"
+   ],
+   "default_guess": "Take one monotonic reading per session after acquiring that session's required locks.",
+   "witness": {
+    "initial": "Two sessions expire a few milliseconds apart while an expiry pass is delayed between processing them.",
+    "events": [
+     "Registry starts one expiry pass before either session expires.",
+     "Registry processes the first session, then reaches the second after both expiry instants."
+    ],
+    "outcomes": [
+     "With one reading for the pass, neither session ends in this pass.",
+     "With one reading per session, the second session ends in this pass."
+    ],
+    "observer": "The owner whose later request is accepted by one implementation and refused by the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13",
+   "kind": "time_read_count",
+   "text": "Registry counts the sign-ins refused for a wrong or missing credential whose instant is less than 15 minutes before now, for the whole instance: Registry tells no callers apart by address (R0-27). The fifth such refusal starts a lockout that lasts while now is less than 15 minutes after that refusal.",
+   "question": "Is `now` captured once for an entire sign-in attempt and reused for pruning, lockout checking and recording a refusal, or may those checks read the monotonic clock separately?",
+   "options": [
+    "One monotonic reading per sign-in attempt",
+    "A separate reading for each check and for recording the refusal"
+   ],
+   "default_guess": "Capture one monotonic reading when the sign-in attempt arrives and reuse it throughout the attempt.",
+   "witness": {
+    "initial": "Four counted refusals exist, and the oldest becomes exactly 15 minutes old while a fifth wrong sign-in is being checked.",
+    "events": [
+     "The fifth sign-in arrives just before the boundary.",
+     "The implementation prunes the count and records the new refusal while the boundary passes."
+    ],
+    "outcomes": [
+     "One captured arrival reading retains the old refusal, so this is the fifth counted refusal and starts lockout.",
+     "Separate readings may prune the old refusal before counting the new one, so no lockout starts."
+    ],
+    "observer": "The owner attempting the next sign-in with the correct credential."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13",
+   "kind": "invariant_test_gap",
+   "text": "owner_session s valid at t <=> t < s.began + 8h and\n                                t < s.last_request + 30min and\n                                not signed_out(s) and no restart since s.began",
+   "question": "Which Required tests must show the untested 8-hour absolute limit and the `signed_out(s)` clause of this formal invariant?",
+   "options": [
+    "Add separate tests for expiry at eight hours and refusal after sign-out",
+    "Add one test exercising both clauses independently in one history"
+   ],
+   "default_guess": "Add separate boundary tests for the eight-hour limit and for a signed-out session.",
+   "unit": "?"
+  },
+  {
+   "subject": "A07",
+   "kind": "test_precondition",
+   "text": "Two concurrent publishes of `estimate` on one project make versions n+1 and\n   n+2, the first `superseded`, the second `published`; neither answers an\n   internal error.",
+   "question": "Must these two publishes carry different request ids, as normative rule 2 now requires for this outcome?",
+   "options": [
+    "Yes, the test must explicitly give different request ids",
+    "No, the test also requires this result for one shared request id"
+   ],
+   "default_guess": "State explicitly that the two publishes use different request ids.",
+   "witness": {
+    "initial": "A project has published `estimate` version n.",
+    "events": [
+     "Kernel concurrently submits two equal publishes with the same request id."
+    ],
+    "outcomes": [
+     "Applying A01 makes one pointer and answers it to both calls.",
+     "Reading the Required tests item without the missing precondition makes two pointers, versions n+1 and n+2."
+    ],
+    "observer": "Kernel, which sees either one repeated pointer or two different versions."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A07",
+   "kind": "serialization_order",
+   "text": "Every publish and every withdrawal on one project's pointers is\n   serialised with the others: each runs on the result of the one before.",
+   "question": "What determines which of two concurrent publishes is applied first and therefore receives version n+1 rather than n+2?",
+   "options": [
+    "Order of lock acquisition, explicitly nondeterministic",
+    "Request arrival order",
+    "A deterministic ordering of request ids"
+   ],
+   "default_guess": "Use lock-acquisition order and specify that either concurrent request may receive n+1.",
+   "witness": {
+    "initial": "A project has `estimate` version n and two different new request ids A and B.",
+    "events": [
+     "Caller A and caller B publish concurrently.",
+     "Registry serialises the transactions."
+    ],
+    "outcomes": [
+     "A receives n+1 and B receives n+2.",
+     "B receives n+1 and A receives n+2."
+    ],
+    "observer": "The callers and every reader of the pointer history."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A07",
+   "kind": "time_read_count",
+   "text": "Publishing a pointer assigns its version, marks the type's published\n   pointer `superseded` with its instant, and stores the new pointer\n   `published` — all in one transaction, or none of it (R0-17, R0-35).",
+   "question": "Does one publish take one UTC wall-clock reading shared by the old pointer's superseded instant and the new pointer's published instant, or a separate reading for each?",
+   "options": [
+    "One shared instant for the whole publish",
+    "Two readings in a fixed order",
+    "Two readings with no required ordering beyond the transaction"
+   ],
+   "default_guess": "Take one UTC wall-clock reading and use it for both status changes.",
+   "witness": {
+    "initial": "Pointer version n is published.",
+    "events": [
+     "A new publish supersedes n and creates n+1.",
+     "A reader lists the two pointers with their instants."
+    ],
+    "outcomes": [
+     "The superseded and published instants are equal.",
+     "The superseded and published instants differ by the time between two clock reads."
+    ],
+    "observer": "The owner or service reading artifact history."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16",
+   "kind": "time_read_count",
+   "text": "An accepted import stores every picked project with its rooms and pointers,\n   the Customers it makes, the migration closure (M10) and its one audit entry\n   (M09) in one transaction.",
+   "question": "How many UTC wall-clock readings does an accepted import take for the created instants of new Customers, the closure's success instant and the audit entry's instant, and which of those instants must be equal?",
+   "options": [
+    "One reading shared by every fresh instant written by the import",
+    "One reading per record",
+    "One reading for Customers and another shared by the closure and audit entry"
+   ],
+   "default_guess": "Take one UTC wall-clock reading for the accepted import and use it for every fresh instant it writes.",
+   "witness": {
+    "initial": "An import will create two Customers and its closure and audit entry.",
+    "events": [
+     "The owner confirms the import.",
+     "Registry commits its one transaction.",
+     "The owner reads the Customers and audit log."
+    ],
+    "outcomes": [
+     "Every fresh instant written by the import is identical.",
+     "Customer, closure and audit instants differ according to when each was constructed."
+    ],
+    "observer": "The owner inspecting the imported records and audit log."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15",
+   "kind": "time_read_count",
+   "text": "The date of an erasure is a date not later than today, the current date in\n   UTC; a later date is refused. Every entry whose instant is before 00:00 UTC\n   of that date is removed.",
+   "question": "Is the UTC wall clock read once for the entire erasure and reused for validating `today` and writing the erasure entry, or read separately for those actions?",
+   "options": [
+    "One UTC reading fixes the operation's date and audit instant",
+    "One reading for date validation and another for the audit entry"
+   ],
+   "default_guess": "Capture one UTC instant when the erasure is admitted and derive both `today` and the erasure entry's instant from it.",
+   "witness": {
+    "initial": "The owner submits erasure date D immediately before UTC midnight at the end of D-1.",
+    "events": [
+     "Registry begins validation before midnight.",
+     "UTC midnight passes before the transaction writes its audit entry."
+    ],
+    "outcomes": [
+     "With one admission reading, D is later than today and the erasure is refused.",
+     "With a later validation reading, D is today and the erasure is accepted."
+    ],
+    "observer": "The owner, who sees refusal or acceptance and a changed audit log."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15",
+   "kind": "invariant_test_gap",
+   "text": "erase(d) accepted => its erasure entry e has e.instant >= start_of(d)",
+   "question": "Which Required tests item must assert the erasure entry's instant against `start_of(d)` as this formal invariant requires?",
+   "options": [
+    "Extend test 1 to inspect and compare the new entry's instant",
+    "Add a dedicated boundary test around 00:00 UTC"
+   ],
+   "default_guess": "Add a dedicated UTC-midnight boundary test that asserts the entry instant is not before `start_of(d)`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A01",
+   "kind": "test_precondition",
+   "text": "Two concurrent creates with one request id — of a project, a Customer,\n    a room of one project, a pointer of one project — make one record; the\n    other answers it.",
+   "question": "Must the concurrent creates supply equal facts, or does this test require the second call to answer the record even when its facts differ?",
+   "options": [
+    "The test is only for equal facts; differing facts are refused by rule 5",
+    "The test applies regardless of facts, overriding rule 5 for concurrency"
+   ],
+   "default_guess": "Add that the two calls supply equal facts; keep differing facts refused.",
+   "witness": {
+    "initial": "No record carries request id K.",
+    "events": [
+     "Caller A creates a project with request id K and display name Alpha.",
+     "Caller B concurrently creates a project with request id K and display name Beta."
+    ],
+    "outcomes": [
+     "Under rules 4, 5 and 7, one call creates a record and the other is refused because its facts differ.",
+     "Under the unqualified Required tests item, one creates a record and the other answers that record."
+    ],
+    "observer": "The two callers, one of whom sees either a refusal or a successful answer."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A01",
+   "kind": "serialization_order",
+   "text": "Creates of one model carrying\n   one request id, and the anonymisation or erasure that removes a request\n   id, are applied one at a time, each on the result of the one before: of\n   two concurrent creates, the first makes the record and the second is a\n   repeat or refused by rule 4 or 5",
+   "question": "What determines which concurrent create is `the first` when the calls carry the same request id but different facts?",
+   "options": [
+    "Lock-acquisition order, with either call allowed to win",
+    "Request arrival order",
+    "A deterministic ordering independent of scheduling"
+   ],
+   "default_guess": "Use lock-acquisition order and explicitly permit either call to win.",
+   "witness": {
+    "initial": "No project carries request id K.",
+    "events": [
+     "A create with facts Alpha and a create with facts Beta arrive concurrently with request id K.",
+     "Registry serialises them."
+    ],
+    "outcomes": [
+     "Alpha is created and Beta is refused.",
+     "Beta is created and Alpha is refused."
+    ],
+    "observer": "Both callers and later readers of the created project."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A04",
+   "kind": "check_precedence",
+   "text": "only the file's own\n   checks (A16 rule 3) and a pick that is not a project of the file or is\n   given twice refuse the request.",
+   "question": "At which stage are an unknown pick and a duplicated pick checked, and what is the answer when one coincides with malformed records, conflicts or missing values that the mapping normally answers instead of refusing?",
+   "options": [
+    "Pick validity is checked before mapping contents and always makes the request a refusal",
+    "All are stage (4) results and the answer reports both the refusal and mapping findings",
+    "The mapping answer takes precedence and invalid picks are refused only after its other findings are clear"
+   ],
+   "default_guess": "Check pick validity first within stage (4); any unknown or duplicate pick refuses the request without producing a mapping.",
+   "witness": {
+    "initial": "An uploaded readable file has one malformed project record.",
+    "events": [
+     "The owner asks for a mapping while naming the same project twice in the picks."
+    ],
+    "outcomes": [
+     "The request is refused because a pick is duplicated.",
+     "The request answers a mapping showing the malformed record, with the duplicate-pick problem included or deferred."
+    ],
+    "observer": "The owner using the import mapping."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21",
+   "kind": "contradiction",
+   "text": "authorization (A04) — was reviewed",
+   "question": "Does the authorization category reference A04, contrary to its Security review row (`references: A08, A09, A10, A11, A12`), or must this claim that authorization names A04 be removed?",
+   "options": [
+    "Add A04 to the authorization category's references and keep the re-review claim",
+    "Keep the category references unchanged and remove `authorization (A04)` from the re-review"
+   ],
+   "default_guess": "Add A04 to the authorization references because its ordered server-side checks affect authorization enforcement.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13\",\"kind\":\"missing_representation\",\"text\":\"Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension; instants Registry records and the 03:00 of A18 are UTC wall-clock time.\",\"question\":\"What exact representations, units and precision does `clock` return for its monotonic reading and its UTC wall-clock reading?\",\"options\":[\"An integer monotonic duration in a fixed unit plus a timezone-aware UTC datetime with microsecond precision\",\"A floating-point monotonic value plus a UTC epoch value\",\"Another explicitly declared pair of representations\"],\"default_guess\":\"Use an integer monotonic value in microseconds and a timezone-aware UTC datetime truncated to microseconds.\"},{\"subject\":\"A13\",\"kind\":\"time_read_count\",\"text\":\"Registry ends it — and drops its pending confirmation and its uploaded file with it (M11) — at a pass over the sessions it makes every 60 seconds from the start; the pass alone ends sessions by their limits, taking the import lock and then each session's lock (A16 rule 2) and deciding under them.\",\"question\":\"Does one expiry pass take one monotonic reading for every session, or a new reading after each session's locks are acquired?\",\"options\":[\"One reading fixes `now` for the whole pass\",\"One reading per session under its locks\",\"Separate readings for each limit check\"],\"default_guess\":\"Take one monotonic reading per session after acquiring that session's required locks.\",\"witness\":{\"initial\":\"Two sessions expire a few milliseconds apart while an expiry pass is delayed between processing them.\",\"events\":[\"Registry starts one expiry pass before either session expires.\",\"Registry processes the first session, then reaches the second after both expiry instants.\"],\"outcomes\":[\"With one reading for the pass, neither session ends in this pass.\",\"With one reading per session, the second session ends in this pass.\"],\"observer\":\"The owner whose later request is accepted by one implementation and refused by the other.\"}},{\"subject\":\"A13\",\"kind\":\"time_read_count\",\"text\":\"Registry counts the sign-ins refused for a wrong or missing credential whose instant is less than 15 minutes before now, for the whole instance: Registry tells no callers apart by address (R0-27). The fifth such refusal starts a lockout that lasts while now is less than 15 minutes after that refusal.\",\"question\":\"Is `now` captured once for an entire sign-in attempt and reused for pruning, lockout checking and recording a refusal, or may those checks read the monotonic clock separately?\",\"options\":[\"One monotonic reading per sign-in attempt\",\"A separate reading for each check and for recording the refusal\"],\"default_guess\":\"Capture one monotonic reading when the sign-in attempt arrives and reuse it throughout the attempt.\",\"witness\":{\"initial\":\"Four counted refusals exist, and the oldest becomes exactly 15 minutes old while a fifth wrong sign-in is being checked.\",\"events\":[\"The fifth sign-in arrives just before the boundary.\",\"The implementation prunes the count and records the new refusal while the boundary passes.\"],\"outcomes\":[\"One captured arrival reading retains the old refusal, so this is the fifth counted refusal and starts lockout.\",\"Separate readings may prune the old refusal before counting the new one, so no lockout starts.\"],\"observer\":\"The owner attempting the next sign-in with the correct credential.\"}},{\"subject\":\"A13\",\"kind\":\"invariant_test_gap\",\"text\":\"owner_session s valid at t <=> t < s.began + 8h and\\n                                t < s.last_request + 30min and\\n                                not signed_out(s) and no restart since s.began\",\"question\":\"Which Required tests must show the untested 8-hour absolute limit and the `signed_out(s)` clause of this formal invariant?\",\"options\":[\"Add separate tests for expiry at eight hours and refusal after sign-out\",\"Add one test exercising both clauses independently in one history\"],\"default_guess\":\"Add separate boundary tests for the eight-hour limit and for a signed-out session.\"},{\"subject\":\"A07\",\"kind\":\"test_precondition\",\"text\":\"Two concurrent publishes of `estimate` on one project make versions n+1 and\\n   n+2, the first `superseded`, the second `published`; neither answers an\\n   internal error.\",\"question\":\"Must these two publishes carry different request ids, as normative rule 2 now requires for this outcome?\",\"options\":[\"Yes, the test must explicitly give different request ids\",\"No, the test also requires this result for one shared request id\"],\"default_guess\":\"State explicitly that the two publishes use different request ids.\",\"witness\":{\"initial\":\"A project has published `estimate` version n.\",\"events\":[\"Kernel concurrently submits two equal publishes with the same request id.\"],\"outcomes\":[\"Applying A01 makes one pointer and answers it to both calls.\",\"Reading the Required tests item without the missing precondition makes two pointers, versions n+1 and n+2.\"],\"observer\":\"Kernel, which sees either one repeated pointer or two different versions.\"}},{\"subject\":\"A07\",\"kind\":\"serialization_order\",\"text\":\"Every publish and every withdrawal on one project's pointers is\\n   serialised with the others: each runs on the result of the one before.\",\"question\":\"What determines which of two concurrent publishes is applied first and therefore receives version n+1 rather than n+2?\",\"options\":[\"Order of lock acquisition, explicitly nondeterministic\",\"Request arrival order\",\"A deterministic ordering of request ids\"],\"default_guess\":\"Use lock-acquisition order and specify that either concurrent request may receive n+1.\",\"witness\":{\"initial\":\"A project has `estimate` version n and two different new request ids A and B.\",\"events\":[\"Caller A and caller B publish concurrently.\",\"Registry serialises the transactions.\"],\"outcomes\":[\"A receives n+1 and B receives n+2.\",\"B receives n+1 and A receives n+2.\"],\"observer\":\"The callers and every reader of the pointer history.\"}},{\"subject\":\"A07\",\"kind\":\"time_read_count\",\"text\":\"Publishing a pointer assigns its version, marks the type's published\\n   pointer `superseded` with its instant, and stores the new pointer\\n   `published` — all in one transaction, or none of it (R0-17, R0-35).\",\"question\":\"Does one publish take one UTC wall-clock reading shared by the old pointer's superseded instant and the new pointer's published instant, or a separate reading for each?\",\"options\":[\"One shared instant for the whole publish\",\"Two readings in a fixed order\",\"Two readings with no required ordering beyond the transaction\"],\"default_guess\":\"Take one UTC wall-clock reading and use it for both status changes.\",\"witness\":{\"initial\":\"Pointer version n is published.\",\"events\":[\"A new publish supersedes n and creates n+1.\",\"A reader lists the two pointers with their instants.\"],\"outcomes\":[\"The superseded and published instants are equal.\",\"The superseded and published instants differ by the time between two clock reads.\"],\"observer\":\"The owner or service reading artifact history.\"}},{\"subject\":\"A16\",\"kind\":\"time_read_count\",\"text\":\"An accepted import stores every picked project with its rooms and pointers,\\n   the Customers it makes, the migration closure (M10) and its one audit entry\\n   (M09) in one transaction.\",\"question\":\"How many UTC wall-clock readings does an accepted import take for the created instants of new Customers, the closure's success instant and the audit entry's instant, and which of those instants must be equal?\",\"options\":[\"One reading shared by every fresh instant written by the import\",\"One reading per record\",\"One reading for Customers and another shared by the closure and audit entry\"],\"default_guess\":\"Take one UTC wall-clock reading for the accepted import and use it for every fresh instant it writes.\",\"witness\":{\"initial\":\"An import will create two Customers and its closure and audit entry.\",\"events\":[\"The owner confirms the import.\",\"Registry commits its one transaction.\",\"The owner reads the Customers and audit log.\"],\"outcomes\":[\"Every fresh instant written by the import is identical.\",\"Customer, closure and audit instants differ according to when each was constructed.\"],\"observer\":\"The owner inspecting the imported records and audit log.\"}},{\"subject\":\"A15\",\"kind\":\"time_read_count\",\"text\":\"The date of an erasure is a date not later than today, the current date in\\n   UTC; a later date is refused. Every entry whose instant is before 00:00 UTC\\n   of that date is removed.\",\"question\":\"Is the UTC wall clock read once for the entire erasure and reused for validating `today` and writing the erasure entry, or read separately for those actions?\",\"options\":[\"One UTC reading fixes the operation's date and audit instant\",\"One reading for date validation and another for the audit entry\"],\"default_guess\":\"Capture one UTC instant when the erasure is admitted and derive both `today` and the erasure entry's instant from it.\",\"witness\":{\"initial\":\"The owner submits erasure date D immediately before UTC midnight at the end of D-1.\",\"events\":[\"Registry begins validation before midnight.\",\"UTC midnight passes before the transaction writes its audit entry.\"],\"outcomes\":[\"With one admission reading, D is later than today and the erasure is refused.\",\"With a later validation reading, D is today and the erasure is accepted.\"],\"observer\":\"The owner, who sees refusal or acceptance and a changed audit log.\"}},{\"subject\":\"A15\",\"kind\":\"invariant_test_gap\",\"text\":\"erase(d) accepted => its erasure entry e has e.instant >= start_of(d)\",\"question\":\"Which Required tests item must assert the erasure entry's instant against `start_of(d)` as this formal invariant requires?\",\"options\":[\"Extend test 1 to inspect and compare the new entry's instant\",\"Add a dedicated boundary test around 00:00 UTC\"],\"default_guess\":\"Add a dedicated UTC-midnight boundary test that asserts the entry instant is not before `start_of(d)`.\"},{\"subject\":\"A01\",\"kind\":\"test_precondition\",\"text\":\"Two concurrent creates with one request id — of a project, a Customer,\\n    a room of one project, a pointer of one project — make one record; the\\n    other answers it.\",\"question\":\"Must the concurrent creates supply equal facts, or does this test require the second call to answer the record even when its facts differ?\",\"options\":[\"The test is only for equal facts; differing facts are refused by rule 5\",\"The test applies regardless of facts, overriding rule 5 for concurrency\"],\"default_guess\":\"Add that the two calls supply equal facts; keep differing facts refused.\",\"witness\":{\"initial\":\"No record carries request id K.\",\"events\":[\"Caller A creates a project with request id K and display name Alpha.\",\"Caller B concurrently creates a project with request id K and display name Beta.\"],\"outcomes\":[\"Under rules 4, 5 and 7, one call creates a record and the other is refused because its facts differ.\",\"Under the unqualified Required tests item, one creates a record and the other answers that record.\"],\"observer\":\"The two callers, one of whom sees either a refusal or a successful answer.\"}},{\"subject\":\"A01\",\"kind\":\"serialization_order\",\"text\":\"Creates of one model carrying\\n   one request id, and the anonymisation or erasure that removes a request\\n   id, are applied one at a time, each on the result of the one before: of\\n   two concurrent creates, the first makes the record and the second is a\\n   repeat or refused by rule 4 or 5\",\"question\":\"What determines which concurrent create is `the first` when the calls carry the same request id but different facts?\",\"options\":[\"Lock-acquisition order, with either call allowed to win\",\"Request arrival order\",\"A deterministic ordering independent of scheduling\"],\"default_guess\":\"Use lock-acquisition order and explicitly permit either call to win.\",\"witness\":{\"initial\":\"No project carries request id K.\",\"events\":[\"A create with facts Alpha and a create with facts Beta arrive concurrently with request id K.\",\"Registry serialises them.\"],\"outcomes\":[\"Alpha is created and Beta is refused.\",\"Beta is created and Alpha is refused.\"],\"observer\":\"Both callers and later readers of the created project.\"}},{\"subject\":\"A04\",\"kind\":\"check_precedence\",\"text\":\"only the file's own\\n   checks (A16 rule 3) and a pick that is not a project of the file or is\\n   given twice refuse the request.\",\"question\":\"At which stage are an unknown pick and a duplicated pick checked, and what is the answer when one coincides with malformed records, conflicts or missing values that the mapping normally answers instead of refusing?\",\"options\":[\"Pick validity is checked before mapping contents and always makes the request a refusal\",\"All are stage (4) results and the answer reports both the refusal and mapping findings\",\"The mapping answer takes precedence and invalid picks are refused only after its other findings are clear\"],\"default_guess\":\"Check pick validity first within stage (4); any unknown or duplicate pick refuses the request without producing a mapping.\",\"witness\":{\"initial\":\"An uploaded readable file has one malformed project record.\",\"events\":[\"The owner asks for a mapping while naming the same project twice in the picks.\"],\"outcomes\":[\"The request is refused because a pick is duplicated.\",\"The request answers a mapping showing the malformed record, with the duplicate-pick problem included or deferred.\"],\"observer\":\"The owner using the import mapping.\"}},{\"subject\":\"A21\",\"kind\":\"contradiction\",\"text\":\"authorization (A04) — was reviewed\",\"question\":\"Does the authorization category reference A04, contrary to its Security review row (`references: A08, A09, A10, A11, A12`), or must this claim that authorization names A04 be removed?\",\"options\":[\"Add A04 to the authorization category's references and keep the re-review claim\",\"Keep the category references unchanged and remove `authorization (A04)` from the re-review\"],\"default_guess\":\"Add A04 to the authorization references because its ordered server-side checks affect authorization enforcement.\"}]}",
+ "set_aside": []
+}

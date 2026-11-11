@@ -1,0 +1,193 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 monotonic clock representation",
+   "kind": "missing_representation",
+   "text": "its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock",
+   "question": "In what exact type, unit and precision are monotonic readings represented and compared?",
+   "options": [
+    "opaque monotonic-instant and duration types",
+    "integer ticks in a declared unit",
+    "floating-point seconds"
+   ],
+   "default_guess": "Use integer nanoseconds or an equivalent opaque monotonic-instant type, with durations converted exactly to that unit.",
+   "witness": {
+    "initial": "A session's idle deadline is exactly 30 minutes after its stored last-request reading.",
+    "events": [
+     "The owner sends a request at the nominal deadline.",
+     "Registry compares the request time with the strict t < last_request + 30min limit."
+    ],
+    "outcomes": [
+     "An exact integer representation finds equality and refuses the request.",
+     "A floating-point representation rounds the request time below the deadline and accepts it."
+    ],
+    "observer": "the owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 clock readings for a session operation",
+   "kind": "missing_read_count",
+   "text": "Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8).",
+   "question": "For each sign-in and owner request, how many monotonic and UTC readings are taken, at which step are they taken, and which fields and checks must reuse the same reading?",
+   "options": [
+    "one monotonic reading per sign-in or request, reused for every session check and field; one UTC reading only when durable time is needed",
+    "separate readings for validation, arrival, stored fields and durable timestamps",
+    "one atomic call returning a monotonic/UTC pair"
+   ],
+   "default_guess": "Take one monotonic reading at request arrival and reuse it for session validity and last-request state; when durable time is needed, take one atomic monotonic/UTC pair.",
+   "witness": {
+    "initial": "A sign-in starts just before monotonic time m; creating the session takes a measurable interval.",
+    "events": [
+     "Registry creates the session and sets began and last_request.",
+     "The owner makes the first request just over 30 minutes after m but less than 30 minutes after session creation completed."
+    ],
+    "outcomes": [
+     "One reused reading makes began and last_request equal to m, so the request is refused as idle.",
+     "Separate readings put last_request later than began, so the request is accepted."
+    ],
+    "observer": "the owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A07 concurrent publish required test",
+   "kind": "rule_test_contradiction",
+   "text": "Two concurrent publishes of `estimate` on one project make versions n+1 and n+2, the first `superseded`, the second `published`; neither answers an internal error.",
+   "question": "Must this test explicitly use different request ids, or is it intended to require two versions even when both publishes use one request id?",
+   "options": [
+    "add that the publishes have different request ids",
+    "require two versions for every concurrent pair, contradicting A01 replay handling"
+   ],
+   "default_guess": "Add that the two publishes carry different request ids.",
+   "witness": {
+    "initial": "One project has latest `estimate` version n.",
+    "events": [
+     "The same publisher concurrently submits two equal publishes with one request id."
+    ],
+    "outcomes": [
+     "A01 treats the second call as a repeat, producing only version n+1.",
+     "The unqualified A07 test requires versions n+1 and n+2."
+    ],
+    "observer": "the publisher and any artifact-list reader"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A01 concurrent pointer-create required test",
+   "kind": "missing_test_precondition",
+   "text": "Two concurrent creates with one request id — of a project, a Customer, a room of one project, a pointer of one project — make one record; the other answers it.",
+   "question": "For the pointer case, must both calls carry the same publisher principal and, for agent calls, the same session?",
+   "options": [
+    "require the same publisher principal and session",
+    "allow different publishers or sessions and still answer the first pointer",
+    "expect the different publisher or session to be refused under rule 6"
+   ],
+   "default_guess": "State that both pointer publishes come from the same principal and the same agent session when applicable.",
+   "witness": {
+    "initial": "A project is active and granted to two Kernel agent sessions.",
+    "events": [
+     "Both sessions concurrently publish equal pointer facts with one request id.",
+     "One transaction creates the pointer first."
+    ],
+    "outcomes": [
+     "Rule 6 treats the session and publisher as facts, so the other session is refused.",
+     "The unqualified required test says the other call answers the created pointer."
+    ],
+    "observer": "the two Kernel sessions"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21 authorization review references",
+   "kind": "contradiction",
+   "text": "files_artifacts (A07, A16, A18), authorization (A04) — was reviewed",
+   "question": "Does the authorization category reference A04, as this passage claims, or does it reference only A08, A09, A10, A11 and A12 as the Security review entry says?",
+   "options": [
+    "add A04 to the authorization category's references",
+    "remove authorization (A04) from the performed-again passage",
+    "state that A04 was reviewed voluntarily rather than because the category names it"
+   ],
+   "default_guess": "Add A04 to the authorization category's references if its check-order change is intended to be authorization evidence; otherwise remove the claim that authorization names A04.",
+   "unit": "?"
+  },
+  {
+   "subject": "A15 audit-erasure time snapshot",
+   "kind": "missing_read_count",
+   "text": "The date of an erasure is a date not later than today, the current date in UTC; a later date is refused. Every entry whose instant is before 00:00 UTC of that date is removed.",
+   "question": "Does an erasure take one UTC reading and derive both today and its audit-entry instant from it, or may validation and entry creation take separate readings?",
+   "options": [
+    "one UTC reading reused for date validation, cutoff context and the erasure entry",
+    "separate readings at validation and audit append",
+    "a transaction-scoped clock snapshot fixed when the write lock is taken"
+   ],
+   "default_guess": "Fix one UTC instant after taking the write lock and derive today and the erasure entry's instant from it.",
+   "witness": {
+    "initial": "The UTC date is D and the log contains entries before the start of D+1.",
+    "events": [
+     "At 23:59:59.999 UTC the owner submits an erasure before D+1.",
+     "Midnight occurs while the operation waits for the store write lock."
+    ],
+    "outcomes": [
+     "A reading at request validation sees D and refuses the future date D+1.",
+     "A reading after taking the lock sees D+1 and accepts the same request."
+    ],
+    "observer": "the owner and readers of the audit log"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A07 publish timestamp readings",
+   "kind": "missing_read_count",
+   "text": "Publishing a pointer assigns its version, marks the type's published pointer `superseded` with its instant, and stores the new pointer `published` — all in one transaction, or none of it (R0-17, R0-35).",
+   "question": "Does one publish use one UTC reading for both the old pointer's superseded instant and the new pointer's published instant, or a separate reading for each?",
+   "options": [
+    "one shared UTC instant for the whole publish",
+    "two ordered UTC readings",
+    "a transaction timestamp supplied by the store"
+   ],
+   "default_guess": "Use one UTC instant fixed inside the serialized transaction for both changes.",
+   "witness": {
+    "initial": "Pointer P is currently published.",
+    "events": [
+     "A new pointer Q is published successfully.",
+     "A reader later reads the complete pointer history."
+    ],
+    "outcomes": [
+     "P.superseded_at equals Q.published_at because the operation used one reading.",
+     "P.superseded_at precedes Q.published_at because the operation used two readings."
+    ],
+    "observer": "the owner or service reading artifact history"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 accepted-import timestamps",
+   "kind": "missing_read_count",
+   "text": "An accepted import stores every picked project with its rooms and pointers, the Customers it makes, the migration closure (M10) and its one audit entry (M09) in one transaction.",
+   "question": "How many UTC readings does the import take for newly created Customers, the migration closure and the audit entry, and must all of those records carry the same import instant?",
+   "options": [
+    "one import instant shared by every new Customer, the closure and the audit entry",
+    "one reading per stored record",
+    "separate readings for domain records, closure and audit entry"
+   ],
+   "default_guess": "Take one UTC reading after the transaction acquires its write lock and reuse it as the import instant everywhere.",
+   "witness": {
+    "initial": "A valid import will create two Customers and one migration closure.",
+    "events": [
+     "The owner confirms the import.",
+     "Registry commits the imported records and the audit entry in one transaction."
+    ],
+    "outcomes": [
+     "Both Customers, the closure and the audit entry expose one identical instant.",
+     "Each record exposes a slightly different instant reflecting separate clock reads."
+    ],
+    "observer": "the owner reading the imported Customers and audit log"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 monotonic clock representation\",\"kind\":\"missing_representation\",\"text\":\"its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock\",\"question\":\"In what exact type, unit and precision are monotonic readings represented and compared?\",\"options\":[\"opaque monotonic-instant and duration types\",\"integer ticks in a declared unit\",\"floating-point seconds\"],\"default_guess\":\"Use integer nanoseconds or an equivalent opaque monotonic-instant type, with durations converted exactly to that unit.\",\"witness\":{\"initial\":\"A session's idle deadline is exactly 30 minutes after its stored last-request reading.\",\"events\":[\"The owner sends a request at the nominal deadline.\",\"Registry compares the request time with the strict t < last_request + 30min limit.\"],\"outcomes\":[\"An exact integer representation finds equality and refuses the request.\",\"A floating-point representation rounds the request time below the deadline and accepts it.\"],\"observer\":\"the owner\"}},{\"subject\":\"A13 clock readings for a session operation\",\"kind\":\"missing_read_count\",\"text\":\"Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8).\",\"question\":\"For each sign-in and owner request, how many monotonic and UTC readings are taken, at which step are they taken, and which fields and checks must reuse the same reading?\",\"options\":[\"one monotonic reading per sign-in or request, reused for every session check and field; one UTC reading only when durable time is needed\",\"separate readings for validation, arrival, stored fields and durable timestamps\",\"one atomic call returning a monotonic/UTC pair\"],\"default_guess\":\"Take one monotonic reading at request arrival and reuse it for session validity and last-request state; when durable time is needed, take one atomic monotonic/UTC pair.\",\"witness\":{\"initial\":\"A sign-in starts just before monotonic time m; creating the session takes a measurable interval.\",\"events\":[\"Registry creates the session and sets began and last_request.\",\"The owner makes the first request just over 30 minutes after m but less than 30 minutes after session creation completed.\"],\"outcomes\":[\"One reused reading makes began and last_request equal to m, so the request is refused as idle.\",\"Separate readings put last_request later than began, so the request is accepted.\"],\"observer\":\"the owner\"}},{\"subject\":\"A07 concurrent publish required test\",\"kind\":\"rule_test_contradiction\",\"text\":\"Two concurrent publishes of `estimate` on one project make versions n+1 and n+2, the first `superseded`, the second `published`; neither answers an internal error.\",\"question\":\"Must this test explicitly use different request ids, or is it intended to require two versions even when both publishes use one request id?\",\"options\":[\"add that the publishes have different request ids\",\"require two versions for every concurrent pair, contradicting A01 replay handling\"],\"default_guess\":\"Add that the two publishes carry different request ids.\",\"witness\":{\"initial\":\"One project has latest `estimate` version n.\",\"events\":[\"The same publisher concurrently submits two equal publishes with one request id.\"],\"outcomes\":[\"A01 treats the second call as a repeat, producing only version n+1.\",\"The unqualified A07 test requires versions n+1 and n+2.\"],\"observer\":\"the publisher and any artifact-list reader\"}},{\"subject\":\"A01 concurrent pointer-create required test\",\"kind\":\"missing_test_precondition\",\"text\":\"Two concurrent creates with one request id — of a project, a Customer, a room of one project, a pointer of one project — make one record; the other answers it.\",\"question\":\"For the pointer case, must both calls carry the same publisher principal and, for agent calls, the same session?\",\"options\":[\"require the same publisher principal and session\",\"allow different publishers or sessions and still answer the first pointer\",\"expect the different publisher or session to be refused under rule 6\"],\"default_guess\":\"State that both pointer publishes come from the same principal and the same agent session when applicable.\",\"witness\":{\"initial\":\"A project is active and granted to two Kernel agent sessions.\",\"events\":[\"Both sessions concurrently publish equal pointer facts with one request id.\",\"One transaction creates the pointer first.\"],\"outcomes\":[\"Rule 6 treats the session and publisher as facts, so the other session is refused.\",\"The unqualified required test says the other call answers the created pointer.\"],\"observer\":\"the two Kernel sessions\"}},{\"subject\":\"A21 authorization review references\",\"kind\":\"contradiction\",\"text\":\"files_artifacts (A07, A16, A18), authorization (A04) — was reviewed\",\"question\":\"Does the authorization category reference A04, as this passage claims, or does it reference only A08, A09, A10, A11 and A12 as the Security review entry says?\",\"options\":[\"add A04 to the authorization category's references\",\"remove authorization (A04) from the performed-again passage\",\"state that A04 was reviewed voluntarily rather than because the category names it\"],\"default_guess\":\"Add A04 to the authorization category's references if its check-order change is intended to be authorization evidence; otherwise remove the claim that authorization names A04.\"},{\"subject\":\"A15 audit-erasure time snapshot\",\"kind\":\"missing_read_count\",\"text\":\"The date of an erasure is a date not later than today, the current date in UTC; a later date is refused. Every entry whose instant is before 00:00 UTC of that date is removed.\",\"question\":\"Does an erasure take one UTC reading and derive both today and its audit-entry instant from it, or may validation and entry creation take separate readings?\",\"options\":[\"one UTC reading reused for date validation, cutoff context and the erasure entry\",\"separate readings at validation and audit append\",\"a transaction-scoped clock snapshot fixed when the write lock is taken\"],\"default_guess\":\"Fix one UTC instant after taking the write lock and derive today and the erasure entry's instant from it.\",\"witness\":{\"initial\":\"The UTC date is D and the log contains entries before the start of D+1.\",\"events\":[\"At 23:59:59.999 UTC the owner submits an erasure before D+1.\",\"Midnight occurs while the operation waits for the store write lock.\"],\"outcomes\":[\"A reading at request validation sees D and refuses the future date D+1.\",\"A reading after taking the lock sees D+1 and accepts the same request.\"],\"observer\":\"the owner and readers of the audit log\"}},{\"subject\":\"A07 publish timestamp readings\",\"kind\":\"missing_read_count\",\"text\":\"Publishing a pointer assigns its version, marks the type's published pointer `superseded` with its instant, and stores the new pointer `published` — all in one transaction, or none of it (R0-17, R0-35).\",\"question\":\"Does one publish use one UTC reading for both the old pointer's superseded instant and the new pointer's published instant, or a separate reading for each?\",\"options\":[\"one shared UTC instant for the whole publish\",\"two ordered UTC readings\",\"a transaction timestamp supplied by the store\"],\"default_guess\":\"Use one UTC instant fixed inside the serialized transaction for both changes.\",\"witness\":{\"initial\":\"Pointer P is currently published.\",\"events\":[\"A new pointer Q is published successfully.\",\"A reader later reads the complete pointer history.\"],\"outcomes\":[\"P.superseded_at equals Q.published_at because the operation used one reading.\",\"P.superseded_at precedes Q.published_at because the operation used two readings.\"],\"observer\":\"the owner or service reading artifact history\"}},{\"subject\":\"A16 accepted-import timestamps\",\"kind\":\"missing_read_count\",\"text\":\"An accepted import stores every picked project with its rooms and pointers, the Customers it makes, the migration closure (M10) and its one audit entry (M09) in one transaction.\",\"question\":\"How many UTC readings does the import take for newly created Customers, the migration closure and the audit entry, and must all of those records carry the same import instant?\",\"options\":[\"one import instant shared by every new Customer, the closure and the audit entry\",\"one reading per stored record\",\"separate readings for domain records, closure and audit entry\"],\"default_guess\":\"Take one UTC reading after the transaction acquires its write lock and reuse it as the import instant everywhere.\",\"witness\":{\"initial\":\"A valid import will create two Customers and one migration closure.\",\"events\":[\"The owner confirms the import.\",\"Registry commits the imported records and the audit entry in one transaction.\"],\"outcomes\":[\"Both Customers, the closure and the audit entry expose one identical instant.\",\"Each record exposes a slightly different instant reflecting separate clock reads.\"],\"observer\":\"the owner reading the imported Customers and audit log\"}}]}",
+ "set_aside": []
+}
