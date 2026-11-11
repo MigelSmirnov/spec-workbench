@@ -295,7 +295,9 @@ equal_in_constant_time
 ### Owns
 
 The typed constants of the data closure, the one home of each value the
-generated code reads that is not a setting of the environment (SPEC_STANDARD
+generated code reads that is neither a setting of the environment
+(`runtime_settings`) nor a member of an enumeration or a field's type
+(`models`) (SPEC_STANDARD
 §6.10, §15.3.1; reopened 2026-11-11, replacing the former
 release_declarations module): the
 artifact types with their owner services, the first release's one row
