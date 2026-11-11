@@ -216,7 +216,9 @@ carried by no cookie, ends by its limits (A13 rule 2).
 After an upload's answer, whatever it was — accepted, or refused before any
 or after some bytes were read — `owner_interface` discards the unread
 remainder of the body without reading it into anything and closes the
-connection; a connection that carried an upload is never reused.
+connection its listener accepted; a connection that carried an upload is
+never reused. A proxy or TLS terminator in front of Registry is the host's
+(Explicit exclusions).
 
 ### Enforces
 
@@ -263,11 +265,8 @@ the imported `OWNER_INTERFACE_LISTEN_ADDRESS` and
 `SERVICE_API_LISTEN_ADDRESS` constants; then the surfaces answer; then two
 passes: `owner_sessions.end_expired_sessions` every imported
 `SESSION_PASS_SECONDS` and, except in an owner-only start,
-`backups.run_daily_backup_if_due` every imported `BACKUP_LOOK_SECONDS`. Each
-pass is timed by `clock.monotonic_reading`: its next call is that many
-seconds after its last call ended, so a long call or a suspension of the
-host delays it and missed calls are not made up; the two passes run apart,
-neither waiting for the other.
+`backups.run_daily_backup_if_due` every imported `BACKUP_LOOK_SECONDS`, each
+from the start as Conventions, "Passes", says.
 
 ### Enforces
 

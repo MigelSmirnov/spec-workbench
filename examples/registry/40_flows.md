@@ -305,7 +305,10 @@ reached by its `customer_ref` only; no contact value crosses into a project.
    with `capability:given_values.check_request_id_form`, the display name and
    the object's address with `capability:given_values.read_required_text`,
    the alias, the object's kind and characteristics with
-   `capability:given_values.read_optional_text` (A02, R0-45, R0-82). Then the
+   `capability:given_values.read_optional_text`, and each one given within
+   its form with `capability:given_values.check_value_forms` — the alias's
+   length, the kind among its enumeration, the characteristics in range (A02
+   rules 1–4, R0-45, R0-82, R0-90). Then the
    request id is looked up among the projects: one carrying it whose current
    facts equal the given ones by `capability:given_values.facts_equal_for_repeat`
    is a repeat — answered as it stands, an archived one included, nothing

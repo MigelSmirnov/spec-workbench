@@ -156,8 +156,8 @@ later line, and modules on one line do not know each other.
   the minute look of A18 rule 1 by `backups` from `clock.recorded_now`; a
   backup's instant is the one `store` reads at the read that fixes the
   copy's snapshot (A18 rule 1), which `backups` records and never reads
-  itself. No other module
-  reads a clock.
+  itself; `instance_lifecycle` times its two passes by
+  `clock.monotonic_reading`. No other module reads a clock.
 - **Random values and secret comparison.** Every identity Registry mints
   ("Identity formats") and every 32-byte value of A13 rule 7 comes from
   `random_values`; every comparison of a presented secret with a held one goes
@@ -378,7 +378,9 @@ comparison of the facts of a create with a record's current facts, as A02
 reads them, a fact of several parts by its parts whatever their order. A02
 rule 4: a present value outside the form State 1 declares — the alias's
 length, a value outside its enumeration, a characteristic out of its range —
-refused at stage (4), every such value named.
+answered as a failure naming every such value and its kind, which the
+caller refuses at stage (4) or, for the import's mapping, shows (A16 rule
+1).
 
 ### Knows
 
@@ -402,6 +404,7 @@ composite facts.
 read_required_text
 read_optional_text
 check_request_id_form
+check_value_forms
 facts_equal_for_repeat
 ```
 
@@ -1139,7 +1142,7 @@ that a restart ends every owner session (A13 rule 2).
 
 ### Knows
 
-`models`, `data_provider`, `configuration`, `store`,
+`models`, `clock`, `data_provider`, `configuration`, `store`,
 `owner_sessions`, `backups`, `service_api`, `owner_interface`.
 
 ### Must not own

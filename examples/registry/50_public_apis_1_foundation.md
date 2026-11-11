@@ -342,6 +342,50 @@ None.
 
 Pure; touches no record.
 
+## `public_op:given_values.check_value_forms`
+
+### Owner
+
+`module:given_values`. Check the present values a caller gives against the
+form State 1 declares (A02 rule 4, R0-90).
+
+### Callers
+
+`module:projects`, `module:customers`, `module:migration_import`.
+
+### Inputs
+
+The values as `read_optional_text` and `read_required_text` answered them,
+each with the field it fills: an alias; an object kind; a floor area, a
+number of rooms, a floor; a customer language; a Customer's kind.
+
+### Outputs
+
+Nothing when every present value is within its form; otherwise every value
+outside it, each with its field and its kind: `outside_form` for an alias
+over the imported `ALIAS_MAX_CHARACTERS` constant, counted in Unicode code
+points, a floor area not greater than zero, a number of rooms that is not a
+whole number of at least 1, a floor that is not a whole number;
+`outside_closed_list` for a kind or language outside its enumeration.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A02 rule 4: an absent value is never checked here (rule 3); the caller
+refuses the failures at stage (4), except `migration_import`, which shows
+them in the mapping (A16 rule 1).
+
+### Errors
+
+None of its own: its failures are its answer.
+
+### State impact
+
+Pure; touches no record.
+
 ## `public_op:given_values.read_required_text`
 
 ### Owner

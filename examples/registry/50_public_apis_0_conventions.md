@@ -88,6 +88,12 @@ types and Python signatures are State 6's.
 - **Diagnostics.** A diagnostic — a stopped start's, a failed backup run's —
   is one line on the process's standard error, which the host keeps; it
   names the failure and never a value (A17 rule 2, A18 rule 5).
+- **Passes.** `instance_lifecycle` makes each of its two passes every
+  interval from the start, as A13 rule 2 says of the session pass: the n-th
+  call is due when `clock.monotonic_reading` shows n intervals since serving
+  began, the first one interval after; a call due while the previous call of
+  the same pass is still running is not made, and the pass waits for the
+  next due one. The passes run apart, neither waiting for the other.
 - **Pure operations.** An operation whose State impact says "pure" reads no
   record, no clock and no environment and touches nothing.
 
@@ -136,7 +142,8 @@ the owner interface renders and State 6 declares as `models`' vocabulary.
 object kind or a customer language included (A02 rule 4); `outside_form` — a
 present value outside the form State 1 declares: an alias over the imported
 `ALIAS_MAX_CHARACTERS` constant, a floor area not greater than zero, a number
-of rooms below 1, a floor that is not a whole number (A02 rule 4); `duplicate_pick` — a project, or a Customer's v1 value, given twice (A16 rule 1); `unknown_artifact_type` (A22 rule 5); `date_after_today` (A15 rule 3, R0-84); `file_too_large`; `file_unreadable` — bytes that do not parse as the format States 5 and 6 declare; `file_malformed` — a file that parses but holds two projects with one id, or a project whose id or status is missing or not of its field's shape; a status outside its vocabulary is not this, but a malformed record of a pick (A16 rule 4) (A19 rule 4, A16 rule 3) | the caller fixes the request |
+of rooms that is not a whole number of at least 1, a floor that is not a
+whole number (A02 rule 4); `duplicate_pick` — a project, or a Customer's v1 value, given twice (A16 rule 1); `unknown_artifact_type` (A22 rule 5); `date_after_today` (A15 rule 3, R0-84); `file_too_large`; `file_unreadable` — bytes that do not parse as the format States 5 and 6 declare; `file_malformed` — a file that parses but holds two projects with one id, or a project whose id or status is missing or not of its field's shape; a status outside its vocabulary is not this, but a malformed record of a pick (A16 rule 4) (A19 rule 4, A16 rule 3) | the caller fixes the request |
 | `stale` | (5) | `stale_revision` (A04 rules 2, 3); `stale_access_version` (A12 rule 3) | the owner reads again |
 | `refused` | (6) | `archived`, `active` (erasing an active project), `anonymised`, `erased`, `customer_restricted`, `customer_ended`, `customer_erased`, `conflict` (A01 rule 5), `not_granted`, `not_pending`, `withdrawn`, `superseded`, `import_closed`, `file_not_kept`, `mapping_not_clean`, `no_picks` | the owner reads the record's state |
 | `internal_error` | — | `transaction_failed`: a store transaction did not commit, nothing changed (A04 rule 4) | the caller reads again before repeating |

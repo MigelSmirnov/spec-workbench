@@ -40,7 +40,9 @@ accepted file's digest, the SHA-256 of those
 bytes, which Registry computes and never takes from a caller. No refusal
 carries a digest: a file over the size limit is refused before any of it is
 parsed — a declared length over it before any byte is read, otherwise as
-soon as more than it has been read — and an
+soon as more than it has been read; a stream that fails or ends before its
+declared length is refused as `file_unreadable`, replacing nothing kept and
+changing nothing of the session — and an
 unreadable or malformed one is refused with its kind alone. At `upload`, each project the file holds with
 its id and status. At `mapping`, the mapping: the picked projects by `project_id`, each one's rooms —
 `room_id`, name, added instant — and pointers — every fact 'list artifacts'
@@ -85,7 +87,9 @@ blank is no refusal here but a missing value the mapping shows — named by
 its subject, the picked project by `project_id` or the Customer by its v1
 value, and by its field — which keeps it from being clean; so does a given
 display name or alias outside A02's form, shown with its subject, its field
-and its kind (`outside_form`) beside the missing values; a required value
+and its kind (`outside_form`), and a given Customer kind outside its
+enumeration (`outside_closed_list`), beside the missing values — all found
+by `given_values.check_value_forms`; a required value
 missing inside a brought-in record is that record's malformation (rule 4); `confirm_import` refuses it (`mapping_not_clean`). Nothing is executed or evaluated (A19 rule 4).
 
 ### Errors

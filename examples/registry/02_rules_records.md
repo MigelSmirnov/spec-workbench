@@ -126,12 +126,15 @@ merges records because they look alike (R0-34).
    40 characters, counted as Unicode code points (R0-90, M01) — its length
    only, its content being the owner's rule (R0-82); an object kind
    outside `apartment`, `house`, `commercial`, `other` (M02); a floor area not
-   greater than zero, a number of rooms below 1, or a floor that is not a
-   whole number (M02); a customer language outside `es`, `ru`, `en` (M04). An
+   greater than zero, a number of rooms that is not a whole number of at
+   least 1, or a floor that is not a whole number (M02); a customer language outside `es`, `ru`, `en` (M04). An
    absent object kind, characteristic or customer language is never refused
    (rule 3); a Customer's kind stays required (rule 1). The same checks hold
-   for every action that gives the value — a create, a correction, and the
-   names and aliases the import's mapping gives (A16 rule 1). The import file
+   for every action that gives the value — a create and a correction, which
+   are refused at stage (4); and the names and aliases the import's mapping
+   gives, which A16 rule 1 handles: such a value is shown in the mapping,
+   keeps the confirmation step from being shown, and refuses a confirmation,
+   while the mapping request itself is answered. The import file
    holds none of the other values: the v1 Registry has no object kind,
    characteristic or customer language (State 1 M02, M04), and the import
    gives none. The 40 is one value of the release, the data provider's
