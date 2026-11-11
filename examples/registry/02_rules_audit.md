@@ -71,7 +71,9 @@ outcome but `accepted`.
    from the entries (M12 AuditSequence), so an erasure does not lower it. Of
    two concurrent changes, the one Registry applies first takes the lower
    number: the order of the numbers is the order the changes were applied
-   in, and nothing else decides it. A store restored after a
+   in, and nothing else decides it. A change is applied when its transaction
+   takes the store's one write lock, inside which it takes its number and
+   commits; so the order of the numbers is also the order of the commits. A store restored after a
    loss begins its own history from the backup's last number (R0-89).
 6. An erasure that removes no entry still writes its own entry naming the
    date, with its confirmation id: R0-66 makes the erasure leave an entry of
@@ -98,7 +100,8 @@ erase(d) accepted => its erasure entry e has e.instant >= start_of(d)
 5. No operation of any service token reads the log.
 6. Two accepted changes in turn write entries numbered n and n + 1, and the
    audit sequence (M12) holds n + 1 after the second; two concurrent changes
-   take two distinct consecutive numbers.
+   take two distinct consecutive numbers, and the one whose transaction
+   committed first holds the lower.
 7. A change whose transaction fails writes no entry and leaves the audit
    sequence as it was; the next accepted change takes the number after it.
 

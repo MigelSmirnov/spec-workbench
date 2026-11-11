@@ -327,8 +327,10 @@ secret cannot be shared between holders.
    backup made more than 30 × 24 hours before the instant this step starts,
    one cutoff for the whole step — a backup made exactly 30 × 24 hours before
    it is kept. The step reads the clock once, before it looks at any file,
-   and compares that UTC instant less 720 hours with each record's UTC
-   instant (L16) at the precision the record holds it. The 30 × 24 hours are one value of the release, the data
+   and its cutoff is that UTC instant less exactly 720 hours. The cutoff and
+   each record's UTC instant (L16) are compared as instants at the full
+   precision each holds, neither rounded nor truncated; a backup whose
+   instant is earlier than the cutoff is deleted. The 30 × 24 hours are one value of the release, the data
    provider's constant `BACKUP_RETENTION_HOURS` = 720, which the code that
    deletes imports (SPEC_STANDARD §15.3.1); no other place holds it. It also
    deletes every file under the kept
@@ -338,7 +340,11 @@ secret cannot be shared between holders.
    step did; one whose backup was kept but a deletion failed is failed, and
    its new backup stays kept.
 5. Kept and temporary names begin with two different prefixes the release
-   declares, neither beginning with the other; a kept file's record is valid
+   declares, neither beginning with the other: `registry-backup-` for a kept
+   backup and `registry-tmp-` for a temporary file, the data provider's
+   constants `BACKUP_KEPT_PREFIX` and `BACKUP_TEMPORARY_PREFIX`, which the
+   backup code imports (SPEC_STANDARD §15.3.1) — technical values the author
+   chose on 2026-11-11, not configuration (A17 rule 1); a kept file's record is valid
    when its instant, release, last sequence number and key digest can all be
    read, and only a valid one counts as a kept backup; Registry removes, renames and deletes in the backup location
    only files under them, and the location is Registry's alone (A17): a file
