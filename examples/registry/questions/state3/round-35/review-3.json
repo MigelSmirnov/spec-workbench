@@ -1,0 +1,99 @@
+{
+ "open_points": [
+  {
+   "subject": "clock",
+   "kind": "missing_owner",
+   "text": "the 60 seconds of the session pass and of the minute look are ones that `instance_lifecycle` applies",
+   "question": "Which module owns each 60-second schedule value, and are they one shared constant or two independently owned constants?",
+   "options": [
+    "`data_provider` owns one shared 60-second constant and `instance_lifecycle` applies it to both calls",
+    "`data_provider` owns two distinct 60-second constants and `instance_lifecycle` applies them",
+    "`instance_lifecycle` owns both schedule values",
+    "`owner_sessions` owns the session-pass value and `backups` owns the minute-look value"
+   ],
+   "default_guess": "`data_provider` owns two named constants, one for each independently changeable schedule, and `instance_lifecycle` applies them.",
+   "unit": "?"
+  },
+  {
+   "subject": "clock",
+   "kind": "unclear_clock_dependency",
+   "text": "the 60 seconds of the session pass and of the minute look are ones that `instance_lifecycle` applies",
+   "question": "Which `clock` capability measures the minute-look interval for backups? A13 explicitly makes the session-pass interval monotonic, but A18 does not say whether its polling cadence is driven by monotonic elapsed time or UTC wall-clock time.",
+   "options": [
+    "Both intervals are driven by `monotonic_reading`; backups uses UTC wall time only when evaluating a look",
+    "The session pass is monotonic, while the backup polling interval is scheduled from the UTC wall clock",
+    "The host scheduler supplies the backup ticks without a `clock` dependency"
+   ],
+   "default_guess": "Use `monotonic_reading` for both elapsed intervals and let `backups` read UTC wall time when each look occurs.",
+   "witness": {
+    "initial": "Registry is running and the next backup look is due in 30 seconds; the UTC wall clock is then moved backward by one hour.",
+    "events": [
+     "The host administrator moves the UTC wall clock backward.",
+     "`instance_lifecycle` continues scheduling the next call to `backups`."
+    ],
+    "outcomes": [
+     "With a monotonic interval, `backups` is called after 30 seconds of elapsed time.",
+     "With a wall-clock-derived interval, the next call may be delayed until the moved wall clock reaches the scheduled value."
+    ],
+    "observer": "The owner monitoring backup runs sees different look and backup timing."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "clock",
+   "kind": "unspecified_initial_schedule",
+   "text": "calling `owner_sessions` and `backups` at those intervals",
+   "question": "Does `instance_lifecycle` call each module immediately when the process starts, or only after its first 60-second interval, and are the two schedules phase-aligned?",
+   "options": [
+    "Call both immediately at process start and then every 60 seconds",
+    "Wait 60 seconds before both first calls",
+    "Start the two 60-second schedules independently with explicitly defined phases"
+   ],
+   "default_guess": "Call `backups` immediately so it can establish the pre-03:00 observation required by A18; run the first owner-session expiry pass after 60 seconds.",
+   "witness": {
+    "initial": "Registry starts at 02:59:30 UTC with no kept backup for that date.",
+    "events": [
+     "`instance_lifecycle` starts.",
+     "UTC reaches 03:00 before 60 seconds have elapsed.",
+     "The first scheduled backup look occurs."
+    ],
+    "outcomes": [
+     "If `backups` is called immediately at 02:59:30, it observes the date before 03:00 and the next look starts that date's run.",
+     "If its first call is delayed until 03:00:30, no earlier look of the process saw that date before 03:00, so A18 gives that date no run."
+    ],
+    "observer": "The owner sees either a kept backup for that date or no backup for it."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "clock",
+   "kind": "unclear_scheduling_isolation",
+   "text": "calling `owner_sessions` and `backups` at those intervals",
+   "question": "Are the session pass and backup look independent scheduled tasks, or are they serial calls on one 60-second loop; if serial, in which order, and may a long backup run delay later session passes or looks?",
+   "options": [
+    "Two independent non-overlapping schedulers",
+    "One loop that calls `owner_sessions` and then `backups` serially",
+    "One loop that calls `backups` and then `owner_sessions` serially",
+    "One tick dispatches both without waiting for either to finish"
+   ],
+   "default_guess": "Use independent schedulers; serialize backup runs inside `backups` as A18 requires, without allowing an unbounded backup run to delay owner-session expiry passes.",
+   "witness": {
+    "initial": "A backup run begins while an owner session is near expiry, and the backup run lasts more than 60 seconds.",
+    "events": [
+     "`instance_lifecycle` invokes the backup work.",
+     "The owner session reaches its limit.",
+     "Another 60-second session-pass deadline arrives before the backup finishes."
+    ],
+    "outcomes": [
+     "With independent scheduling, `owner_sessions` runs at the deadline and drops the expired session, its pending confirmation and its uploaded file.",
+     "With a serial loop blocked in `backups`, the expiry pass is delayed and that session state remains until the backup call returns."
+    ],
+    "observer": "The Registry process and an owner inspecting session-dependent import state observe different cleanup times."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"clock\",\"kind\":\"missing_owner\",\"text\":\"the 60 seconds of the session pass and of the minute look are ones that `instance_lifecycle` applies\",\"question\":\"Which module owns each 60-second schedule value, and are they one shared constant or two independently owned constants?\",\"options\":[\"`data_provider` owns one shared 60-second constant and `instance_lifecycle` applies it to both calls\",\"`data_provider` owns two distinct 60-second constants and `instance_lifecycle` applies them\",\"`instance_lifecycle` owns both schedule values\",\"`owner_sessions` owns the session-pass value and `backups` owns the minute-look value\"],\"default_guess\":\"`data_provider` owns two named constants, one for each independently changeable schedule, and `instance_lifecycle` applies them.\"},{\"subject\":\"clock\",\"kind\":\"unclear_clock_dependency\",\"text\":\"the 60 seconds of the session pass and of the minute look are ones that `instance_lifecycle` applies\",\"question\":\"Which `clock` capability measures the minute-look interval for backups? A13 explicitly makes the session-pass interval monotonic, but A18 does not say whether its polling cadence is driven by monotonic elapsed time or UTC wall-clock time.\",\"options\":[\"Both intervals are driven by `monotonic_reading`; backups uses UTC wall time only when evaluating a look\",\"The session pass is monotonic, while the backup polling interval is scheduled from the UTC wall clock\",\"The host scheduler supplies the backup ticks without a `clock` dependency\"],\"default_guess\":\"Use `monotonic_reading` for both elapsed intervals and let `backups` read UTC wall time when each look occurs.\",\"witness\":{\"initial\":\"Registry is running and the next backup look is due in 30 seconds; the UTC wall clock is then moved backward by one hour.\",\"events\":[\"The host administrator moves the UTC wall clock backward.\",\"`instance_lifecycle` continues scheduling the next call to `backups`.\"],\"outcomes\":[\"With a monotonic interval, `backups` is called after 30 seconds of elapsed time.\",\"With a wall-clock-derived interval, the next call may be delayed until the moved wall clock reaches the scheduled value.\"],\"observer\":\"The owner monitoring backup runs sees different look and backup timing.\"}},{\"subject\":\"clock\",\"kind\":\"unspecified_initial_schedule\",\"text\":\"calling `owner_sessions` and `backups` at those intervals\",\"question\":\"Does `instance_lifecycle` call each module immediately when the process starts, or only after its first 60-second interval, and are the two schedules phase-aligned?\",\"options\":[\"Call both immediately at process start and then every 60 seconds\",\"Wait 60 seconds before both first calls\",\"Start the two 60-second schedules independently with explicitly defined phases\"],\"default_guess\":\"Call `backups` immediately so it can establish the pre-03:00 observation required by A18; run the first owner-session expiry pass after 60 seconds.\",\"witness\":{\"initial\":\"Registry starts at 02:59:30 UTC with no kept backup for that date.\",\"events\":[\"`instance_lifecycle` starts.\",\"UTC reaches 03:00 before 60 seconds have elapsed.\",\"The first scheduled backup look occurs.\"],\"outcomes\":[\"If `backups` is called immediately at 02:59:30, it observes the date before 03:00 and the next look starts that date's run.\",\"If its first call is delayed until 03:00:30, no earlier look of the process saw that date before 03:00, so A18 gives that date no run.\"],\"observer\":\"The owner sees either a kept backup for that date or no backup for it.\"}},{\"subject\":\"clock\",\"kind\":\"unclear_scheduling_isolation\",\"text\":\"calling `owner_sessions` and `backups` at those intervals\",\"question\":\"Are the session pass and backup look independent scheduled tasks, or are they serial calls on one 60-second loop; if serial, in which order, and may a long backup run delay later session passes or looks?\",\"options\":[\"Two independent non-overlapping schedulers\",\"One loop that calls `owner_sessions` and then `backups` serially\",\"One loop that calls `backups` and then `owner_sessions` serially\",\"One tick dispatches both without waiting for either to finish\"],\"default_guess\":\"Use independent schedulers; serialize backup runs inside `backups` as A18 requires, without allowing an unbounded backup run to delay owner-session expiry passes.\",\"witness\":{\"initial\":\"A backup run begins while an owner session is near expiry, and the backup run lasts more than 60 seconds.\",\"events\":[\"`instance_lifecycle` invokes the backup work.\",\"The owner session reaches its limit.\",\"Another 60-second session-pass deadline arrives before the backup finishes.\"],\"outcomes\":[\"With independent scheduling, `owner_sessions` runs at the deadline and drops the expired session, its pending confirmation and its uploaded file.\",\"With a serial loop blocked in `backups`, the expiry pass is delayed and that session state remains until the backup call returns.\"],\"observer\":\"The Registry process and an owner inspecting session-dependent import state observe different cleanup times.\"}}]}",
+ "set_aside": []
+}

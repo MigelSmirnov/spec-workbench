@@ -1,0 +1,95 @@
+{
+ "open_points": [
+  {
+   "subject": "60-second lifecycle scheduler",
+   "kind": "missing_owner",
+   "text": "the 60 seconds of the session pass and of the minute\nlook are ones that `instance_lifecycle` applies, calling `owner_sessions` and\n`backups` at those intervals.",
+   "question": "Which module owns the mechanism that waits for or emits each 60-second tick, given that `clock` hides the host clocks and exports only readings?",
+   "options": [
+    "`clock` exports a wait/tick capability used by `instance_lifecycle`",
+    "`instance_lifecycle` uses the host timer directly",
+    "an outer runtime calls `instance_lifecycle` periodically"
+   ],
+   "default_guess": "Add a clock-owned tick/wait capability and make `instance_lifecycle` depend on it.",
+   "unit": "?"
+  },
+  {
+   "subject": "time sampling for session and backup passes",
+   "kind": "unclear_dependency",
+   "text": "the 60 seconds of the session pass and of the minute\nlook are ones that `instance_lifecycle` applies, calling `owner_sessions` and\n`backups` at those intervals.",
+   "question": "Does `instance_lifecycle` read the clock and pass sampled readings to `owner_sessions` and `backups`, or do those modules depend on `clock` and read time when they execute?",
+   "options": [
+    "`instance_lifecycle` samples both readings and passes them to the callees",
+    "`owner_sessions` reads the monotonic clock and `backups` reads the UTC wall clock",
+    "each callee receives a tick but may resample as needed"
+   ],
+   "default_guess": "Let each domain module import `clock` and sample time while holding the locks under which it decides.",
+   "witness": {
+    "initial": "A lifecycle tick is dispatched immediately before 03:00 UTC, but `backups` begins executing immediately after 03:00; an earlier look by the same process saw the date before 03:00 and no kept backup exists for it.",
+    "events": [
+     "`instance_lifecycle` dispatches the minute look just before 03:00.",
+     "`backups` begins its due-run decision just after 03:00."
+    ],
+    "outcomes": [
+     "If `instance_lifecycle` supplies the dispatch-time reading, the look is before 03:00 and no run starts.",
+     "If `backups` reads the clock when it decides, the look is at or after 03:00 and the run starts."
+    ],
+    "observer": "The owner sees whether that date's backup run occurs."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "first backup minute look after process start",
+   "kind": "unspecified_initial_schedule",
+   "text": "the 60 seconds of the session pass and of the minute\nlook are ones that `instance_lifecycle` applies, calling `owner_sessions` and\n`backups` at those intervals.",
+   "question": "Does the backup look run once immediately when the process starts and then every 60 seconds, or does its first call occur only after the first 60-second interval?",
+   "options": [
+    "look immediately at startup, then every 60 seconds",
+    "first look 60 seconds after startup",
+    "give the backup look an independently specified phase"
+   ],
+   "default_guess": "Run one backup look immediately at startup, then every 60 seconds.",
+   "witness": {
+    "initial": "Registry starts at 02:59:30 UTC, no kept backup exists for that date, and it remains running past 03:00.",
+    "events": [
+     "The process starts at 02:59:30.",
+     "The first 60-second boundary after startup occurs at 03:00:30."
+    ],
+    "outcomes": [
+     "With an immediate startup look, the process has seen the date before 03:00 and the 03:00:30 look starts the backup run.",
+     "With the first look only after 60 seconds, no earlier look of that process saw the date before 03:00, so the date gets no backup run."
+    ],
+    "observer": "The owner sees whether a backup for that date is kept."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "missed lifecycle ticks",
+   "kind": "unspecified_cadence_recovery",
+   "text": "the 60 seconds of the session pass and of the minute\nlook are ones that `instance_lifecycle` applies, calling `owner_sessions` and\n`backups` at those intervals.",
+   "question": "When suspension or a long-running call crosses one or more 60-second boundaries, are missed calls coalesced into one immediate call, replayed once per missed interval, or discarded with the cadence restarted?",
+   "options": [
+    "coalesce missed intervals and call each module once immediately",
+    "replay every missed interval",
+    "discard missed intervals and restart the 60-second cadence"
+   ],
+   "default_guess": "Coalesce missed intervals into one immediate call and retain the original monotonic phase.",
+   "witness": {
+    "initial": "The process previously made a backup look before 03:00, is suspended across 03:00, and resumes at 03:05 with no kept backup for the date.",
+    "events": [
+     "The host suspends before the next scheduled lifecycle tick.",
+     "The host resumes at 03:05."
+    ],
+    "outcomes": [
+     "If missed ticks are coalesced immediately, `backups` is called on resume and starts that date's run.",
+     "If missed ticks are discarded and the cadence restarts, no call occurs until 03:06, so no backup has started during the intervening minute."
+    ],
+    "observer": "The owner reading newest-backup status immediately after resume sees the difference."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"60-second lifecycle scheduler\",\"kind\":\"missing_owner\",\"text\":\"the 60 seconds of the session pass and of the minute\\nlook are ones that `instance_lifecycle` applies, calling `owner_sessions` and\\n`backups` at those intervals.\",\"question\":\"Which module owns the mechanism that waits for or emits each 60-second tick, given that `clock` hides the host clocks and exports only readings?\",\"options\":[\"`clock` exports a wait/tick capability used by `instance_lifecycle`\",\"`instance_lifecycle` uses the host timer directly\",\"an outer runtime calls `instance_lifecycle` periodically\"],\"default_guess\":\"Add a clock-owned tick/wait capability and make `instance_lifecycle` depend on it.\"},{\"subject\":\"time sampling for session and backup passes\",\"kind\":\"unclear_dependency\",\"text\":\"the 60 seconds of the session pass and of the minute\\nlook are ones that `instance_lifecycle` applies, calling `owner_sessions` and\\n`backups` at those intervals.\",\"question\":\"Does `instance_lifecycle` read the clock and pass sampled readings to `owner_sessions` and `backups`, or do those modules depend on `clock` and read time when they execute?\",\"options\":[\"`instance_lifecycle` samples both readings and passes them to the callees\",\"`owner_sessions` reads the monotonic clock and `backups` reads the UTC wall clock\",\"each callee receives a tick but may resample as needed\"],\"default_guess\":\"Let each domain module import `clock` and sample time while holding the locks under which it decides.\",\"witness\":{\"initial\":\"A lifecycle tick is dispatched immediately before 03:00 UTC, but `backups` begins executing immediately after 03:00; an earlier look by the same process saw the date before 03:00 and no kept backup exists for it.\",\"events\":[\"`instance_lifecycle` dispatches the minute look just before 03:00.\",\"`backups` begins its due-run decision just after 03:00.\"],\"outcomes\":[\"If `instance_lifecycle` supplies the dispatch-time reading, the look is before 03:00 and no run starts.\",\"If `backups` reads the clock when it decides, the look is at or after 03:00 and the run starts.\"],\"observer\":\"The owner sees whether that date's backup run occurs.\"}},{\"subject\":\"first backup minute look after process start\",\"kind\":\"unspecified_initial_schedule\",\"text\":\"the 60 seconds of the session pass and of the minute\\nlook are ones that `instance_lifecycle` applies, calling `owner_sessions` and\\n`backups` at those intervals.\",\"question\":\"Does the backup look run once immediately when the process starts and then every 60 seconds, or does its first call occur only after the first 60-second interval?\",\"options\":[\"look immediately at startup, then every 60 seconds\",\"first look 60 seconds after startup\",\"give the backup look an independently specified phase\"],\"default_guess\":\"Run one backup look immediately at startup, then every 60 seconds.\",\"witness\":{\"initial\":\"Registry starts at 02:59:30 UTC, no kept backup exists for that date, and it remains running past 03:00.\",\"events\":[\"The process starts at 02:59:30.\",\"The first 60-second boundary after startup occurs at 03:00:30.\"],\"outcomes\":[\"With an immediate startup look, the process has seen the date before 03:00 and the 03:00:30 look starts the backup run.\",\"With the first look only after 60 seconds, no earlier look of that process saw the date before 03:00, so the date gets no backup run.\"],\"observer\":\"The owner sees whether a backup for that date is kept.\"}},{\"subject\":\"missed lifecycle ticks\",\"kind\":\"unspecified_cadence_recovery\",\"text\":\"the 60 seconds of the session pass and of the minute\\nlook are ones that `instance_lifecycle` applies, calling `owner_sessions` and\\n`backups` at those intervals.\",\"question\":\"When suspension or a long-running call crosses one or more 60-second boundaries, are missed calls coalesced into one immediate call, replayed once per missed interval, or discarded with the cadence restarted?\",\"options\":[\"coalesce missed intervals and call each module once immediately\",\"replay every missed interval\",\"discard missed intervals and restart the 60-second cadence\"],\"default_guess\":\"Coalesce missed intervals into one immediate call and retain the original monotonic phase.\",\"witness\":{\"initial\":\"The process previously made a backup look before 03:00, is suspended across 03:00, and resumes at 03:05 with no kept backup for the date.\",\"events\":[\"The host suspends before the next scheduled lifecycle tick.\",\"The host resumes at 03:05.\"],\"outcomes\":[\"If missed ticks are coalesced immediately, `backups` is called on resume and starts that date's run.\",\"If missed ticks are discarded and the cadence restarts, no call occurs until 03:06, so no backup has started during the intervening minute.\"],\"observer\":\"The owner reading newest-backup status immediately after resume sees the difference.\"}}]}",
+ "set_aside": []
+}
