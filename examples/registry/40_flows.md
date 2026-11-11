@@ -125,9 +125,11 @@ diagnostic.
    service API's, each at its address in the loaded configuration — the
    deployment's, as R0-19 says (A17 rules 1, 2). One that cannot be opened stops
    the start with a diagnostic naming the surface: the listeners already
-   opened are closed — a close that fails adds no diagnostic: the process
-   ends, which releases the listener, and the one diagnostic names the
-   surface that could not be opened — and a store step 3 made new is removed by
+   opened are closed, then a store step 3 made new is removed, then the
+   process ends with its one diagnostic, which names the surface that could
+   not be opened and, when the new store could not be removed, that it was
+   left; a close that fails is not named — the process's end releases the
+   listener — and a store step 3 made new is removed by
    `capability:store.discard_new_store` — one it cannot remove is an empty
    store of the release's version, which the next start opens as any store
    (A17 rule 2). An existing store keeps its records as they were.

@@ -178,8 +178,14 @@ closure is the one proof of success.
    and `LISTEN_PORT_MAX`, which the checking code imports (SPEC_STANDARD
    §15.3.1). The two addresses have different ports, so that the two
    surfaces never share an endpoint, and Registry opens each listener for
-   itself alone, never with an option that lets another socket bind the
-   same endpoint. The addresses are the deployment's, as R0-19 says
+   itself alone, never with an option that lets another active socket bind
+   the same endpoint (no port sharing; rebinding a port a closed listener
+   left is not sharing). An IPv6 address is listened on for IPv6 alone, never
+   for IPv4 connections mapped onto it. Written as text, an IPv4 host is four
+   decimal numbers joined by dots and an IPv6 host the bracketed form any
+   IPv6 text form names, each read into the address it names; the port is
+   decimal digits without a leading zero. The configuration hands each
+   address on as its host and port. The addresses are the deployment's, as R0-19 says
    — the host's loopback where Registry runs on the host, its internal
    network where it runs in a container — so the configuration names them
    (owner, 2026-11-11, replacing the release-fixed addresses of 2026-11-01:

@@ -596,7 +596,8 @@ removed or changed by a failed start (A17 rule 2, test 5).
 
 ### Errors
 
-None; a failed removal is reported in the start's diagnostic.
+None; a failed removal is named in the start's one diagnostic beside the
+surface that could not be opened.
 
 ### State impact
 
