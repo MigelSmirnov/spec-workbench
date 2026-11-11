@@ -244,7 +244,8 @@ sees every change as a new version.
    sign-in clears the count. Count and lockout are runtime state, like the
    owner session, and a restart clears them. Concurrent sign-ins are counted
    one at a time, in the order they take the instance's one sign-in lock,
-   under which each reads the count, decides and updates it.
+   under which each takes its monotonic reading, compares the credential,
+   reads the count, decides and updates it, and only then releases it.
 4. A refused sign-in answers the same whatever was wrong, and never echoes
    the credential. Sign-in is the one owner request made without a session:
    it is checked for the credential and the lockout only, carries no CSRF
@@ -306,8 +307,9 @@ refused_sign_ins(last 15min) >= 5 => sign_in refused
    one exactly 30 minutes after it is refused.
 9. With the clocks replaced in the test: moving the wall clock back or
    forward by hours changes no session's validity; a suspension of 31
-   minutes, counted by the monotonic reading, ends the session at its next
-   request.
+   minutes, counted by the monotonic reading, makes its next request
+   refused; the session is ended, with its confirmation and upload, at the
+   next pass.
 
 ### Consequence
 
