@@ -66,16 +66,18 @@ location (A17 rule 2, A18 rule 5). `module:store` owns opening or making the
 store and its integrity and version checks (A17 rule 5).
 `module:data_provider` holds, as constants its readers import, the services
 a token is required for, the store version and temporary-name suffix, the
-backup prefixes and the listeners' addresses; nothing of them is read from
-the configuration. `module:service_api` and
+backup prefixes and a listen port's bounds; nothing of them is read from the
+configuration. The listeners' addresses are the configuration's (A17 rule
+1). `module:service_api` and
 `module:owner_interface` are the two surfaces; `module:owner_sessions` and
 `module:backups` own the passes the running instance makes.
 
 Crossing models: the environment's `REGISTRY_` items enter
 `module:runtime_settings` and leave as the settings, which
 `module:configuration` checks and hands on as the loaded configuration — locations,
-the owner credential, the backup key and the service tokens, or none of the
-tokens for an owner-only start — or as one diagnostic naming the failed item;
+the owner credential, the backup key, the owner interface's address and the
+service tokens with the service API's address, or none of these five for an
+owner-only start — or as one diagnostic naming the failed item;
 each secret then goes only to the module that uses it ("Secrets never leave").
 The store's location enters `module:store` and leaves as the open store or a
 diagnostic.
@@ -90,7 +92,9 @@ diagnostic.
    read (owner, 2026-11-11) — and checks them in A17 rule 2's order: the
    service tokens of all the services the imported `SERVICE_RIGHTS` constant
    lists with the service API's address, or none, which makes an owner-only start; every other item present;
-   each well formed; each secret at least the imported `SECRET_MIN_BYTES`
+   each well formed — an address within the imported `LISTEN_PORT_MIN` and
+   `LISTEN_PORT_MAX` constants; the two addresses' ports different; each
+   secret at least the imported `SECRET_MIN_BYTES`
    constant, 32 bytes (rule 3); no two secrets
    equal (rule 4); the store and the backup location apart, every link
    resolved (rule 5). The first failure stops the start with a diagnostic
@@ -121,7 +125,8 @@ diagnostic.
    service API's, each at its address in the loaded configuration — the
    deployment's, as R0-19 says (A17 rules 1, 2). One that cannot be opened stops
    the start with a diagnostic naming the surface: the listeners already
-   opened are closed, and a store step 3 made new is removed by
+   opened are closed — a close that fails is named in a diagnostic of its
+   own, and the process ends anyway, which releases the listener — and a store step 3 made new is removed by
    `capability:store.discard_new_store` — one it cannot remove is an empty
    store of the release's version, which the next start opens as any store
    (A17 rule 2). An existing store keeps its records as they were.
