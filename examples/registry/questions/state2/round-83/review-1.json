@@ -1,0 +1,132 @@
+{
+ "open_points": [
+  {
+   "subject": "A17 configuration address representation",
+   "kind": "representation_unspecified",
+   "text": "The configuration hands each address on as its host and port.",
+   "question": "After validation, what exact types and forms are handed to the listener: the original strings, canonical bracketless IP text, or parsed IP-address values, and is the port an integer or decimal text?",
+   "options": [
+    "Preserve the accepted textual host, including IPv6 brackets, and decimal port text",
+    "Pass canonical bracketless IP text and an integer port",
+    "Pass a parsed IPv4Address/IPv6Address value and an integer port"
+   ],
+   "default_guess": "Pass a parsed IP-address value and an integer port; add brackets only when formatting an address as host:port.",
+   "witness": {
+    "initial": "The owner address is configured as `[0:0:0:0:0:0:0:1]:8781`.",
+    "events": [
+     "The settings module validates and loads the address.",
+     "The listener module receives the host and port fields."
+    ],
+    "outcomes": [
+     "The listener receives the original host text `[0:0:0:0:0:0:0:1]` and port text `8781`.",
+     "The listener receives parsed IPv6 loopback `::1` and integer port 8781."
+    ],
+    "observer": "The listener implementation and settings-contract tests"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 exclusive listener binding",
+   "kind": "refusal_conditions_unspecified",
+   "text": "Registry binds each listener exclusively — it sets no option that lets a second active socket bind an overlapping endpoint",
+   "question": "What exactly counts as an overlapping endpoint, and must Registry guarantee refusal against a later socket regardless of the later socket's reuse options and the platform's default binding rules?",
+   "options": [
+    "Only an identical host-and-port pair is overlapping",
+    "Wildcard and specific-address bindings overlap when their accepted connection sets intersect",
+    "Any two bindings using the same port overlap regardless of host",
+    "The operating system's bind result alone defines overlap"
+   ],
+   "default_guess": "Treat bindings as overlapping when their accepted connection sets intersect, explicitly request exclusive binding where the platform requires it, and require a later overlapping bind to fail.",
+   "witness": {
+    "initial": "Registry is running with the service API on `127.0.0.1:8781`; another process attempts a bind involving the same reachable address and port while choosing its own reuse options.",
+    "events": [
+     "Registry opens its listener without a sharing option.",
+     "The second process requests its bind."
+    ],
+    "outcomes": [
+     "The second bind must fail because its endpoint overlaps Registry's listener.",
+     "The result is left to platform binding semantics because only Registry's own socket options were constrained."
+    ],
+    "observer": "The second process and clients connecting to the service API"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 Required test 9",
+   "kind": "test_preconditions_unspecified",
+   "text": "While Registry runs, a second socket binding the service API's endpoint fails",
+   "question": "Which address family, bind address, socket options and actor must the witness socket use so that this test has one portable required meaning?",
+   "options": [
+    "A same-family socket with no reuse or sharing options binds the identical configured host and port",
+    "A socket using every platform-supported reuse option attempts the identical endpoint",
+    "Both identical and wildcard-overlapping bind attempts are required"
+   ],
+   "default_guess": "Use the same address family and identical configured host and port with no reuse or sharing options, and add a separate wildcard-overlap case if that broader guarantee is intended.",
+   "witness": {
+    "initial": "Registry has successfully opened its configured service API listener.",
+    "events": [
+     "A test process creates a second socket.",
+     "The test process selects platform-dependent reuse options and attempts to bind."
+    ],
+    "outcomes": [
+     "The test uses an ordinary socket and the bind fails.",
+     "The test enables a platform sharing option and the bind may succeed or exercise a different guarantee."
+    ],
+    "observer": "The conformance-test runner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21 security review and R0-19",
+   "kind": "contradiction",
+   "text": "no outcome\nchanged — an address is no secret, and R0-19 keeps which network may reach\neach surface the deployment's",
+   "question": "Which current topology decision defines who may reach each surface, given that R0-19 is marked replaced and its host-only rule conflicts with R0-28, R0-39 and R0-48 permitting the service API over the protected inter-host WireGuard channel?",
+   "options": [
+    "Apply R0-19's host-only network rule",
+    "Apply R0-28/R0-39/R0-48: owner access through the owner's VPN and service API access from Client Portal over WireGuard",
+    "Use R0-19 only for local bindings and explicitly state how the later decisions narrow or replace its reachability rule"
+   ],
+   "default_guess": "Replace the R0-19 reliance with R0-28, R0-39 and R0-48, while keeping address choice and exposure enforcement the deployment's responsibility.",
+   "witness": {
+    "initial": "Production Registry runs in VM Platform on the home server and Client Portal runs on the VPS.",
+    "events": [
+     "The deployment binds the service API to an address reachable through the WireGuard channel.",
+     "Client Portal calls Registry through that channel."
+    ],
+    "outcomes": [
+     "Under R0-19's stated host-only rule, the cross-host reachability is a wrong deployment.",
+     "Under R0-28 and R0-39, the protected cross-host call is the intended production topology."
+    ],
+    "observer": "Client Portal, the deployer and the security reviewer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21 concurrency category",
+   "kind": "review_scope_unspecified",
+   "text": "with their text form, their exclusive binding and IPv6-only listening, were\nreviewed under authentication_credential_abuse and secrets",
+   "question": "Must the new exclusive-binding behavior and its competing-socket case also reopen the concurrency category and add A17 as a reference, or are authentication_credential_abuse and secrets the complete review scope?",
+   "options": [
+    "Reopen concurrency and reference A17 because the required behavior concerns two concurrent socket owners",
+    "Do not reopen concurrency because listener bind is one atomic platform operation rather than a read-check-change race"
+   ],
+   "default_guess": "Reopen concurrency and record the competing-bind conclusion explicitly.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 IPv4-mapped prefix",
+   "kind": "standard_violation",
+   "text": "with no zone identifier and not an IPv4-mapped address (`::ffff:0:0/96`);",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "The exclusion must name the imported data-provider constant that holds the IPv4-mapped prefix, rather than placing the prefix value directly in the design text read by generated validation code.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A17 configuration address representation\",\"kind\":\"representation_unspecified\",\"text\":\"The configuration hands each address on as its host and port.\",\"question\":\"After validation, what exact types and forms are handed to the listener: the original strings, canonical bracketless IP text, or parsed IP-address values, and is the port an integer or decimal text?\",\"options\":[\"Preserve the accepted textual host, including IPv6 brackets, and decimal port text\",\"Pass canonical bracketless IP text and an integer port\",\"Pass a parsed IPv4Address/IPv6Address value and an integer port\"],\"default_guess\":\"Pass a parsed IP-address value and an integer port; add brackets only when formatting an address as host:port.\",\"witness\":{\"initial\":\"The owner address is configured as `[0:0:0:0:0:0:0:1]:8781`.\",\"events\":[\"The settings module validates and loads the address.\",\"The listener module receives the host and port fields.\"],\"outcomes\":[\"The listener receives the original host text `[0:0:0:0:0:0:0:1]` and port text `8781`.\",\"The listener receives parsed IPv6 loopback `::1` and integer port 8781.\"],\"observer\":\"The listener implementation and settings-contract tests\"}},{\"subject\":\"A17 exclusive listener binding\",\"kind\":\"refusal_conditions_unspecified\",\"text\":\"Registry binds each listener exclusively — it sets no option that lets a second active socket bind an overlapping endpoint\",\"question\":\"What exactly counts as an overlapping endpoint, and must Registry guarantee refusal against a later socket regardless of the later socket's reuse options and the platform's default binding rules?\",\"options\":[\"Only an identical host-and-port pair is overlapping\",\"Wildcard and specific-address bindings overlap when their accepted connection sets intersect\",\"Any two bindings using the same port overlap regardless of host\",\"The operating system's bind result alone defines overlap\"],\"default_guess\":\"Treat bindings as overlapping when their accepted connection sets intersect, explicitly request exclusive binding where the platform requires it, and require a later overlapping bind to fail.\",\"witness\":{\"initial\":\"Registry is running with the service API on `127.0.0.1:8781`; another process attempts a bind involving the same reachable address and port while choosing its own reuse options.\",\"events\":[\"Registry opens its listener without a sharing option.\",\"The second process requests its bind.\"],\"outcomes\":[\"The second bind must fail because its endpoint overlaps Registry's listener.\",\"The result is left to platform binding semantics because only Registry's own socket options were constrained.\"],\"observer\":\"The second process and clients connecting to the service API\"}},{\"subject\":\"A17 Required test 9\",\"kind\":\"test_preconditions_unspecified\",\"text\":\"While Registry runs, a second socket binding the service API's endpoint fails\",\"question\":\"Which address family, bind address, socket options and actor must the witness socket use so that this test has one portable required meaning?\",\"options\":[\"A same-family socket with no reuse or sharing options binds the identical configured host and port\",\"A socket using every platform-supported reuse option attempts the identical endpoint\",\"Both identical and wildcard-overlapping bind attempts are required\"],\"default_guess\":\"Use the same address family and identical configured host and port with no reuse or sharing options, and add a separate wildcard-overlap case if that broader guarantee is intended.\",\"witness\":{\"initial\":\"Registry has successfully opened its configured service API listener.\",\"events\":[\"A test process creates a second socket.\",\"The test process selects platform-dependent reuse options and attempts to bind.\"],\"outcomes\":[\"The test uses an ordinary socket and the bind fails.\",\"The test enables a platform sharing option and the bind may succeed or exercise a different guarantee.\"],\"observer\":\"The conformance-test runner\"}},{\"subject\":\"A21 security review and R0-19\",\"kind\":\"contradiction\",\"text\":\"no outcome\\nchanged — an address is no secret, and R0-19 keeps which network may reach\\neach surface the deployment's\",\"question\":\"Which current topology decision defines who may reach each surface, given that R0-19 is marked replaced and its host-only rule conflicts with R0-28, R0-39 and R0-48 permitting the service API over the protected inter-host WireGuard channel?\",\"options\":[\"Apply R0-19's host-only network rule\",\"Apply R0-28/R0-39/R0-48: owner access through the owner's VPN and service API access from Client Portal over WireGuard\",\"Use R0-19 only for local bindings and explicitly state how the later decisions narrow or replace its reachability rule\"],\"default_guess\":\"Replace the R0-19 reliance with R0-28, R0-39 and R0-48, while keeping address choice and exposure enforcement the deployment's responsibility.\",\"witness\":{\"initial\":\"Production Registry runs in VM Platform on the home server and Client Portal runs on the VPS.\",\"events\":[\"The deployment binds the service API to an address reachable through the WireGuard channel.\",\"Client Portal calls Registry through that channel.\"],\"outcomes\":[\"Under R0-19's stated host-only rule, the cross-host reachability is a wrong deployment.\",\"Under R0-28 and R0-39, the protected cross-host call is the intended production topology.\"],\"observer\":\"Client Portal, the deployer and the security reviewer\"}},{\"subject\":\"A21 concurrency category\",\"kind\":\"review_scope_unspecified\",\"text\":\"with their text form, their exclusive binding and IPv6-only listening, were\\nreviewed under authentication_credential_abuse and secrets\",\"question\":\"Must the new exclusive-binding behavior and its competing-socket case also reopen the concurrency category and add A17 as a reference, or are authentication_credential_abuse and secrets the complete review scope?\",\"options\":[\"Reopen concurrency and reference A17 because the required behavior concerns two concurrent socket owners\",\"Do not reopen concurrency because listener bind is one atomic platform operation rather than a read-check-change race\"],\"default_guess\":\"Reopen concurrency and record the competing-bind conclusion explicitly.\"},{\"subject\":\"A17 IPv4-mapped prefix\",\"kind\":\"standard_violation\",\"text\":\"with no zone identifier and not an IPv4-mapped address (`::ffff:0:0/96`);\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"The exclusion must name the imported data-provider constant that holds the IPv4-mapped prefix, rather than placing the prefix value directly in the design text read by generated validation code.\"}]}",
+ "retried": [
+  "{\"open_points\":[{\"subject\":\"A17\",\"kind\":\"representation_unspecified\",\"text\":\"The configuration hands each address on as its host and port.\",\"question\":\"What exact types and representations do the settings expose: is the host the original text, unbracketed text, a canonicalized string, or a parsed IP-address value, and is the port text or an integer?\",\"options\":[\"Preserve the validated textual host and port\",\"Expose an unbracketed host string and integer port\",\"Expose parsed IPv4/IPv6 address values and an integer port\"],\"default_guess\":\"Expose a parsed IP-address value and an integer port, removing IPv6 brackets during parsing.\",\"witness\":{\"initial\":\"The configured owner address is `[0:0:0:0:0:0:0:1]:8781`.\",\"events\":[\"The settings module validates and loads the address.\",\"The listener module receives the host and port.\"],\"outcomes\":[\"The listener receives the original bracketed IPv6 text and textual port.\",\"The listener receives a parsed IPv6 value, canonicalized as `::1`, and integer 8781.\"],\"observer\":\"The settings and listener-contract implementers see different field types and values.\"}},{\"subject\":\"A17\",\"kind\":\"missing_failure_policy\",\"text\":\"Registry binds each listener exclusively — it sets no option that lets a second active socket bind an overlapping endpoint — and an IPv6 listener accepts IPv6 connections alone, never IPv4 ones mapped onto it\",\"question\":\"What must Registry do when the platform cannot set or verify exclusive binding or IPv6-only operation, and which item must the startup diagnostic name?\",\"options\":[\"Fail the start whenever either guarantee cannot be established\",\"Start after applying the available socket settings without verification\",\"Support only platforms on which both guarantees are implicit\"],\"default_guess\":\"Treat inability to establish either guarantee as failure to open that listener, stop startup, and name that listener's configured address.\",\"witness\":{\"initial\":\"Registry starts on a platform where disabling IPv4-mapped connections or guaranteeing exclusive binding is unsupported or returns an error.\",\"events\":[\"Registry validates the configuration.\",\"Registry opens the socket.\",\"Registry attempts to establish the required listener properties.\"],\"outcomes\":[\"Registry stops startup because the listener cannot satisfy its required properties.\",\"Registry starts because the socket opened, leaving one property as the platform default.\"],\"observer\":\"The deployer sees either a refused start or a serving Registry with weaker listener behaviour.\"}},{\"subject\":\"A17\",\"kind\":\"contradictory_dependency\",\"text\":\"The addresses are the deployment's, as R0-19 says\\nReplaced by R0-27 (no unauthenticated read), R0-28 (production on the home server, Portal over a protected channel) and R0-29 (the owner interface over HTTPS).\",\"question\":\"Which current State 0 decision defines the permitted listener networks and addresses, given that A17 relies on R0-19 after State 0 says R0-19 was replaced?\",\"options\":[\"Use R0-28, R0-29, R0-39 and R0-48 as the current topology rules\",\"Keep the network restrictions of R0-19 despite its replacement\",\"Let the deployment choose any address and enforce reachability entirely outside Registry\"],\"default_guess\":\"Replace the R0-19 dependency with the current R0-28, R0-29, R0-39 and R0-48 topology decisions.\",\"witness\":{\"initial\":\"Production Registry runs in VM Platform and Client Portal reaches its service API from the VPS through WireGuard.\",\"events\":[\"The deployer selects the service API's listener host.\",\"An implementer validates the selection against the cited State 0 topology.\"],\"outcomes\":[\"Following R0-19, the implementer permits only loopback or a same-host internal network and treats cross-host reachability as a wrong deployment.\",\"Following R0-28 and R0-39, the implementer permits the service API to be reached from the VPS through the protected WireGuard channel.\"],\"observer\":\"The deployer and Client Portal see whether the production service API is reachable through the required channel.\"}},{\"subject\":\"A21\",\"kind\":\"incomplete_security_review\",\"text\":\"with their text form, their exclusive binding and IPv6-only listening, were reviewed under authentication_credential_abuse and secrets: no outcome changed\",\"question\":\"Must A17's new concurrent-socket and listener-isolation rules also be reviewed under the `concurrency` category, and if not, why does that category not apply?\",\"options\":[\"Reopen concurrency and add A17 if the outcome depends on exclusive binding or simultaneous bind attempts\",\"Record an explicit NOT_AFFECTED rationale for concurrency\",\"Treat authentication_credential_abuse and secrets as the only affected categories\"],\"default_guess\":\"Reopen concurrency, because the changed rule and its required test expressly concern a second active socket attempting a concurrent overlapping bind.\"}}]}"
+ ],
+ "set_aside": []
+}

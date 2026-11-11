@@ -1,0 +1,139 @@
+{
+ "open_points": [
+  {
+   "subject": "A17",
+   "kind": "representation",
+   "text": "The configuration hands each address on as its host and port.",
+   "question": "After parsing an IPv6 address, is the handed-on host the bracketed text such as `[::1]`, the unbracketed text `::1`, or a typed IP-address value, and is the port text or an integer?",
+   "options": [
+    "Hand on a typed IP-address value and an integer port.",
+    "Hand on unbracketed normalized host text and an integer port.",
+    "Preserve the configured host and port text, including IPv6 brackets."
+   ],
+   "default_guess": "Hand on a typed IP-address value and an integer port; brackets are only delimiters in the configuration text.",
+   "witness": {
+    "initial": "A complete configuration contains owner address `[::1]:8780` and service API address `[::1]:8781`.",
+    "events": [
+     "Registry validates and splits both configured addresses.",
+     "The listener-opening code receives the resulting host and port."
+    ],
+    "outcomes": [
+     "The host is handed on as `[::1]`; a socket API that expects an unbracketed address refuses it and startup fails.",
+     "The host is handed on as `::1` or a typed IPv6 address; the listener opens and startup succeeds."
+    ],
+    "observer": "The deployer starting Registry."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17",
+   "kind": "undefined_overlap",
+   "text": "Registry binds each listener exclusively — it sets no option that lets a second active socket bind an overlapping endpoint",
+   "question": "Exactly which host-and-port combinations count as overlapping, particularly wildcard versus specific IPv4 addresses, wildcard versus specific IPv6 addresses, and IPv4 versus IPv6 addresses?",
+   "options": [
+    "A wildcard binding overlaps every specific address of the same family and port; IPv4 and IPv6 never overlap because IPv6 is forced IPv6-only.",
+    "Only identical address-family, host and port tuples overlap.",
+    "Use each supported platform's native bind-conflict rules as the definition."
+   ],
+   "default_guess": "Treat wildcard and specific addresses of the same family and port as overlapping, and treat IPv4 and IPv6 as separate because every IPv6 listener is IPv6-only.",
+   "witness": {
+    "initial": "Another process already listens on `0.0.0.0:8781`; Registry's service API is configured as `127.0.0.1:8781`.",
+    "events": [
+     "Registry starts and attempts to open its service API listener."
+    ],
+    "outcomes": [
+     "The wildcard socket overlaps the configured endpoint, so Registry must fail startup and name the service API address.",
+     "Only the exact host-and-port tuple is considered overlapping, so Registry may start on `127.0.0.1:8781`."
+    ],
+    "observer": "The deployer and callers attempting to reach the service API."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17",
+   "kind": "socket_option_precedence",
+   "text": "While Registry runs, a second socket binding the service API's endpoint fails",
+   "question": "With which options must the second socket attempt the bind, and must the test also prove failure when that socket requests every supported address- or port-sharing option?",
+   "options": [
+    "Test an ordinary second socket with no sharing options.",
+    "Test both an ordinary socket and sockets requesting each supported sharing option.",
+    "The platform's default bind behavior alone is the required result."
+   ],
+   "default_guess": "Test an ordinary socket and every supported sharing-enabled variant that could otherwise admit a concurrent bind.",
+   "witness": {
+    "initial": "Registry is running with its service API on `127.0.0.1:8781`.",
+    "events": [
+     "A test process opens a second ordinary socket and attempts the same bind.",
+     "A test process opens another socket with the platform's port-sharing option and attempts the same bind."
+    ],
+    "outcomes": [
+     "Only the ordinary attempt must fail; the sharing-enabled attempt is outside the test.",
+     "Both attempts must fail because the rule promises that a second active socket cannot bind the endpoint."
+    ],
+    "observer": "The test runner and the deployer relying on exclusive ownership of the endpoint."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17",
+   "kind": "underspecified_test",
+   "text": "an IPv4 client cannot reach an IPv6 listener.",
+   "question": "Which configured IPv6 address, destination address, client location, protocol and observed failure must the Required tests item use to demonstrate this rule?",
+   "options": [
+    "Bind `[::]:port` and attempt a TCP connection to `127.0.0.1:port`, requiring connection failure.",
+    "Bind `[::1]:port` and attempt a TCP connection to `127.0.0.1:port`, requiring connection failure.",
+    "Any platform-specific IPv4-to-IPv6 reachability attempt is sufficient."
+   ],
+   "default_guess": "Bind `[::]:port`, attempt TCP from the same host to `127.0.0.1:port`, and require that Registry accepts no connection and sends no response.",
+   "witness": {
+    "initial": "Registry has an IPv6 service listener and the host also has IPv4 networking.",
+    "events": [
+     "An IPv4 client attempts to connect to the listener's port."
+    ],
+    "outcomes": [
+     "The test uses the corresponding IPv4 loopback destination and proves that the connection fails.",
+     "The test connects through an IPv4-to-IPv6 translation facility and reaches Registry, because the text did not define the destination or exclude translation outside the listener."
+    ],
+    "observer": "The test runner and an IPv4 caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21",
+   "kind": "contradictory_authority",
+   "text": "R0-19 keeps which network may reach each surface the deployment's\n\nReplaced by R0-27 (no unauthenticated read), R0-28 (production on the home server, Portal over a protected channel) and R0-29 (the owner interface over HTTPS).",
+   "question": "May the renewed security review rely on R0-19's deployment rule, or must it instead cite and apply its current replacements R0-27, R0-28, R0-29, R0-39 and R0-48?",
+   "options": [
+    "R0-19 remains authoritative for network reachability despite being marked replaced.",
+    "R0-19 is no longer authoritative; the review must be restated against the replacement decisions.",
+    "Only an explicitly identified surviving clause of R0-19 remains authoritative."
+   ],
+   "default_guess": "Treat R0-19 as replaced and redo this reasoning using the current topology and authentication decisions.",
+   "witness": {
+    "initial": "A deployment exposes a configured Registry listener beyond the boundary allowed by R0-28, R0-39 and R0-48 but argues that its address is deployment-owned under R0-19.",
+    "events": [
+     "The A21 reviewer evaluates the changed A17 listener rules.",
+     "The deployer asks which network-boundary decision the review enforces."
+    ],
+    "outcomes": [
+     "The A21 passage treats R0-19 as current and accepts deployment ownership as the relevant guarantee.",
+     "The State 0 replacement notice makes R0-19 non-authoritative, so the review must use the replacement decisions and may reach a different finding."
+    ],
+    "observer": "The security reviewer and the production deployer."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 rule 1",
+   "kind": "standard_violation",
+   "text": "with no zone identifier and not an IPv4-mapped address (`::ffff:0:0/96`);",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The IPv4-mapped prefix must either become a named imported data-provider constant used by the generated checking code, or the passage must specify a typed/library predicate that does not deliver this literal prefix to generated code.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A17\",\"kind\":\"representation\",\"text\":\"The configuration hands each address on as its host and port.\",\"question\":\"After parsing an IPv6 address, is the handed-on host the bracketed text such as `[::1]`, the unbracketed text `::1`, or a typed IP-address value, and is the port text or an integer?\",\"options\":[\"Hand on a typed IP-address value and an integer port.\",\"Hand on unbracketed normalized host text and an integer port.\",\"Preserve the configured host and port text, including IPv6 brackets.\"],\"default_guess\":\"Hand on a typed IP-address value and an integer port; brackets are only delimiters in the configuration text.\",\"witness\":{\"initial\":\"A complete configuration contains owner address `[::1]:8780` and service API address `[::1]:8781`.\",\"events\":[\"Registry validates and splits both configured addresses.\",\"The listener-opening code receives the resulting host and port.\"],\"outcomes\":[\"The host is handed on as `[::1]`; a socket API that expects an unbracketed address refuses it and startup fails.\",\"The host is handed on as `::1` or a typed IPv6 address; the listener opens and startup succeeds.\"],\"observer\":\"The deployer starting Registry.\"}},{\"subject\":\"A17\",\"kind\":\"undefined_overlap\",\"text\":\"Registry binds each listener exclusively — it sets no option that lets a second active socket bind an overlapping endpoint\",\"question\":\"Exactly which host-and-port combinations count as overlapping, particularly wildcard versus specific IPv4 addresses, wildcard versus specific IPv6 addresses, and IPv4 versus IPv6 addresses?\",\"options\":[\"A wildcard binding overlaps every specific address of the same family and port; IPv4 and IPv6 never overlap because IPv6 is forced IPv6-only.\",\"Only identical address-family, host and port tuples overlap.\",\"Use each supported platform's native bind-conflict rules as the definition.\"],\"default_guess\":\"Treat wildcard and specific addresses of the same family and port as overlapping, and treat IPv4 and IPv6 as separate because every IPv6 listener is IPv6-only.\",\"witness\":{\"initial\":\"Another process already listens on `0.0.0.0:8781`; Registry's service API is configured as `127.0.0.1:8781`.\",\"events\":[\"Registry starts and attempts to open its service API listener.\"],\"outcomes\":[\"The wildcard socket overlaps the configured endpoint, so Registry must fail startup and name the service API address.\",\"Only the exact host-and-port tuple is considered overlapping, so Registry may start on `127.0.0.1:8781`.\"],\"observer\":\"The deployer and callers attempting to reach the service API.\"}},{\"subject\":\"A17\",\"kind\":\"socket_option_precedence\",\"text\":\"While Registry runs, a second socket binding the service API's endpoint fails\",\"question\":\"With which options must the second socket attempt the bind, and must the test also prove failure when that socket requests every supported address- or port-sharing option?\",\"options\":[\"Test an ordinary second socket with no sharing options.\",\"Test both an ordinary socket and sockets requesting each supported sharing option.\",\"The platform's default bind behavior alone is the required result.\"],\"default_guess\":\"Test an ordinary socket and every supported sharing-enabled variant that could otherwise admit a concurrent bind.\",\"witness\":{\"initial\":\"Registry is running with its service API on `127.0.0.1:8781`.\",\"events\":[\"A test process opens a second ordinary socket and attempts the same bind.\",\"A test process opens another socket with the platform's port-sharing option and attempts the same bind.\"],\"outcomes\":[\"Only the ordinary attempt must fail; the sharing-enabled attempt is outside the test.\",\"Both attempts must fail because the rule promises that a second active socket cannot bind the endpoint.\"],\"observer\":\"The test runner and the deployer relying on exclusive ownership of the endpoint.\"}},{\"subject\":\"A17\",\"kind\":\"underspecified_test\",\"text\":\"an IPv4 client cannot reach an IPv6 listener.\",\"question\":\"Which configured IPv6 address, destination address, client location, protocol and observed failure must the Required tests item use to demonstrate this rule?\",\"options\":[\"Bind `[::]:port` and attempt a TCP connection to `127.0.0.1:port`, requiring connection failure.\",\"Bind `[::1]:port` and attempt a TCP connection to `127.0.0.1:port`, requiring connection failure.\",\"Any platform-specific IPv4-to-IPv6 reachability attempt is sufficient.\"],\"default_guess\":\"Bind `[::]:port`, attempt TCP from the same host to `127.0.0.1:port`, and require that Registry accepts no connection and sends no response.\",\"witness\":{\"initial\":\"Registry has an IPv6 service listener and the host also has IPv4 networking.\",\"events\":[\"An IPv4 client attempts to connect to the listener's port.\"],\"outcomes\":[\"The test uses the corresponding IPv4 loopback destination and proves that the connection fails.\",\"The test connects through an IPv4-to-IPv6 translation facility and reaches Registry, because the text did not define the destination or exclude translation outside the listener.\"],\"observer\":\"The test runner and an IPv4 caller.\"}},{\"subject\":\"A21\",\"kind\":\"contradictory_authority\",\"text\":\"R0-19 keeps which network may reach each surface the deployment's\\n\\nReplaced by R0-27 (no unauthenticated read), R0-28 (production on the home server, Portal over a protected channel) and R0-29 (the owner interface over HTTPS).\",\"question\":\"May the renewed security review rely on R0-19's deployment rule, or must it instead cite and apply its current replacements R0-27, R0-28, R0-29, R0-39 and R0-48?\",\"options\":[\"R0-19 remains authoritative for network reachability despite being marked replaced.\",\"R0-19 is no longer authoritative; the review must be restated against the replacement decisions.\",\"Only an explicitly identified surviving clause of R0-19 remains authoritative.\"],\"default_guess\":\"Treat R0-19 as replaced and redo this reasoning using the current topology and authentication decisions.\",\"witness\":{\"initial\":\"A deployment exposes a configured Registry listener beyond the boundary allowed by R0-28, R0-39 and R0-48 but argues that its address is deployment-owned under R0-19.\",\"events\":[\"The A21 reviewer evaluates the changed A17 listener rules.\",\"The deployer asks which network-boundary decision the review enforces.\"],\"outcomes\":[\"The A21 passage treats R0-19 as current and accepts deployment ownership as the relevant guarantee.\",\"The State 0 replacement notice makes R0-19 non-authoritative, so the review must use the replacement decisions and may reach a different finding.\"],\"observer\":\"The security reviewer and the production deployer.\"}},{\"subject\":\"A17 rule 1\",\"kind\":\"standard_violation\",\"text\":\"with no zone identifier and not an IPv4-mapped address (`::ffff:0:0/96`);\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The IPv4-mapped prefix must either become a named imported data-provider constant used by the generated checking code, or the passage must specify a typed/library predicate that does not deliver this literal prefix to generated code.\"}]}",
+ "set_aside": []
+}
