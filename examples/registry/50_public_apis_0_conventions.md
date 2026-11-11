@@ -128,12 +128,12 @@ second authority beside them. The values are the data closure's.
 | `configuration` | `SERVICE_RIGHTS`, `SECRET_MIN_BYTES` |
 | `store` | `STORE_VERSION`, `STORE_TEMPORARY_SUFFIX` |
 | `audit_log` | `RELEASE_VERSION`, `CONTRACT_VERSION` |
-| `service_access` | `SERVICE_RIGHTS` |
+| `service_access` | `SERVICE_RIGHTS`, `SERVICE_HIGHEST_CLASSES` |
 | `owner_sessions` | `OWNER_SESSION_MAX_HOURS`, `OWNER_SESSION_IDLE_MINUTES`, `SIGN_IN_WINDOW_MINUTES`, `SIGN_IN_REFUSAL_LIMIT`, `SIGN_IN_LOCKOUT_MINUTES`, `CONFIRMATION_VALID_MINUTES` |
 | `artifact_pointers` | `ARTIFACT_TYPE_OWNERS` |
 | `migration_import` | `ARTIFACT_TYPE_OWNERS`, `IMPORT_FILE_MAX_BYTES` |
 | `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `RELEASE_VERSION` |
-| `instance_lifecycle` | `OWNER_INTERFACE_LISTEN_ADDRESS`, `SERVICE_API_LISTEN_ADDRESS`, `SESSION_PASS_SECONDS`, `BACKUP_LOOK_SECONDS` |
+| `instance_lifecycle` | `SESSION_PASS_SECONDS`, `BACKUP_LOOK_SECONDS` |
 
 Likewise `module_internal["configuration"]["runtime_settings"]` holds
 `load_runtime_settings`, which `configuration` calls itself, once per start;

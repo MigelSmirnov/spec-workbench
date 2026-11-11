@@ -449,8 +449,8 @@ None; it reads the process environment.
 ### Outputs
 
 The settings: the store's location, the backup location, the backup key,
-the owner credential and each of the four service tokens, each as set or
-absent.
+the owner credential, the owner interface's address, each of the four
+service tokens and the service API's address, each as set or absent.
 
 ### Observable effect
 
@@ -489,8 +489,9 @@ the settings it answers.
 ### Outputs
 
 The loaded configuration — the store's location, the backup location, the
-backup key, the owner credential, and either the four service tokens or
-none, which marks an owner-only start — or one diagnostic naming the first
+backup key, the owner credential, the owner interface's address, and either
+the four service tokens with the service API's address or none of them,
+which marks an owner-only start — or one diagnostic naming the first
 failed item and never its value.
 
 ### Observable effect
@@ -500,7 +501,9 @@ None.
 ### Enforces
 
 A17 rules 1–5: the tokens all four of the services the imported
-`SERVICE_RIGHTS` constant lists, or none; every other item present; each
+`SERVICE_RIGHTS` constant lists with the service API's address, or none;
+every other item present; each — an address as `host:port`, the host an IP
+address, the port 1 to 65535 —
 well formed; each secret at least the imported `SECRET_MIN_BYTES` constant; no two secrets equal; the
 store and the backup location apart, every link resolved; no default
 applied. Each secret is handed later only to the module that uses it.
@@ -936,7 +939,8 @@ None.
 
 An operation outside the service's row is refused whatever the request holds
 (A09 rule 3); no token but Kernel's may publish or withdraw (A08 rule 2);
-the rights are the imported `SERVICE_RIGHTS` constant's alone.
+the rights are the imported `SERVICE_RIGHTS` and `SERVICE_HIGHEST_CLASSES`
+constants' alone.
 
 ### Errors
 

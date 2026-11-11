@@ -88,8 +88,8 @@ diagnostic.
    `capability:runtime_settings.load_runtime_settings` reads from the
    `REGISTRY_` items A17 rule 1 lists — a variable that names no item is not
    read (owner, 2026-11-11) — and checks them in A17 rule 2's order: the
-   service tokens all of the services the imported `SERVICE_RIGHTS` constant
-   lists, or none, which makes an owner-only start; every other item present;
+   service tokens of all the services the imported `SERVICE_RIGHTS` constant
+   lists with the service API's address, or none, which makes an owner-only start; every other item present;
    each well formed; each secret at least the imported `SECRET_MIN_BYTES`
    constant, 32 bytes (rule 3); no two secrets
    equal (rule 4); the store and the backup location apart, every link
@@ -118,10 +118,8 @@ diagnostic.
    answer says whether the store was made new.
 4. **Open the listeners.** Last, `module:instance_lifecycle` opens the
    owner interface's listener and then, unless the start is owner-only, the
-   service API's, each at the address
-   the imported `OWNER_INTERFACE_LISTEN_ADDRESS` and
-   `SERVICE_API_LISTEN_ADDRESS` constants give — the
-   configuration names none (A17 rules 1, 2). One that cannot be opened stops
+   service API's, each at its address in the loaded configuration — the
+   deployment's, as R0-19 says (A17 rules 1, 2). One that cannot be opened stops
    the start with a diagnostic naming the surface: the listeners already
    opened are closed, and a store step 3 made new is removed by
    `capability:store.discard_new_store` — one it cannot remove is an empty

@@ -159,28 +159,37 @@ closure is the one proof of success.
    a required item that stops the start, naming the item as missing; for a
    service token it is rule 2's all-or-none — some of the four set and the
    misspelt one not makes the start fail on the missing token, and none of
-   the four set makes an owner-only start, whose service API answers nothing.
+   the four set makes an owner-only start, whose service API answers nothing;
+   the service API's address goes with the tokens in the same way.
    Registry's code receives each item as a field of the settings the one
    module that reads the environment loads; no other part of Registry reads
    a variable. The items are exactly these: the store's
    location; the backup location and the backup key (A18); the owner
-   credential; one service token for each service of A09 — PresuPro, Client
-   Portal, Cabinet, Cabinet Kernel (R0-20, R0-23) — or, for an owner-only
-   start, none of the four: Registry then serves the owner interface alone,
+   credential; the address the owner interface listens on; one service token
+   for each service of A09 — PresuPro, Client Portal, Cabinet, Cabinet Kernel
+   (R0-20, R0-23) — and the address the service API listens on, or, for an
+   owner-only start, none of these five: Registry then serves the owner
+   interface alone,
    opening no listener of the service API, so a service call reaches no
    Registry and is refused by its connection failing, with no answer (owner,
-   2026-11-01; A18 rule 9).
+   2026-11-01; A18 rule 9). An address is a host and a port, `host:port`:
+   the host an IP address — an IPv6 one in brackets — and the port a whole
+   number from 1 to 65535. The addresses are the deployment's, as R0-19 says
+   — the host's loopback where Registry runs on the host, its internal
+   network where it runs in a container — so the configuration names them
+   (owner, 2026-11-11, replacing the release-fixed addresses of 2026-11-01:
+   one release cannot hold both).
 2. Registry checks the configuration when it starts and serves nothing until
    every check passes; a failed check stops the start with a diagnostic that
    names the failed item and never its value (R0-37). The checks run in one
-   order and the first that fails stops the start: the service tokens all four
-   or none — none makes an owner-only start, and some but not all fail on the
-   first missing one in rule 1's order; every other item of rule 1 present; each well formed; each secret's length (rule 3);
+   order and the first that fails stops the start: the service tokens and the
+   service API's address all five or none — none makes an owner-only start,
+   and some but not all fail on the first missing one in rule 1's order; every other item of rule 1 present; each well formed; each secret's length (rule 3);
    their distinctness (rule 4); the store and backup location apart (rule
    5); the backup location writable, by a probe file under the temporary
    prefix (A18 rule 5); the store opening, or made new (rule 5); last, the
-   listener of each surface opened at the address the release fixes — the
-   configuration names none (rule 1) — the owner interface's first, then the
+   listener of each surface opened at its configured address (rule 1) — the
+   owner interface's first, then the
    service API's unless the start is owner-only, one that cannot be opened
    failing the start and closing the one already opened. Within one
    check, items go in the order rule 1 lists them. A failed start leaves no
@@ -261,6 +270,11 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= 32 bytes
    naming the backup key as missing; one with three tokens set and the fourth
    misspelt stops the start naming that token; one with only a misspelt
    token and no other token starts owner-only.
+8. The four tokens without the service API's address stop the start naming
+   the address; the address without the tokens stops it naming the first
+   token. An address `127.0.0.1:8781` is accepted, `[::1]:8781` too;
+   `localhost:8781`, `127.0.0.1` and `127.0.0.1:0` stop the start, naming the
+   item.
 6. A store made new holds exactly one audit sequence (M12), at 0, and no
    other record; a start interrupted before the store's rename leaves no
    store under the store's name, and the next start makes a new one with
@@ -602,8 +616,11 @@ which concurrency now names. No outcome changed. files_artifacts now names A19 t
 import size limit is counted over the bytes received, never over a declared
 length (rule 4); a new store's one audit sequence (A17 rule 5) changes no
 category's subject. A17's change of the same day — a variable that names no
-item is not read and does not stop the start — was reviewed under
-authentication_credential_abuse and secrets: no outcome changed, since such
+item is not read and does not stop the start — and its second, the
+listeners' addresses named by the configuration as the deployment's (R0-19),
+were reviewed under authentication_credential_abuse and secrets: no outcome
+changed — an address is no secret, and R0-19 keeps which network may reach
+each surface the deployment's — since such
 a variable is never a credential Registry uses, never enters a diagnostic,
 and a misspelt secret leaves its item unset, which stops the start or makes
 the start owner-only (rule 1).

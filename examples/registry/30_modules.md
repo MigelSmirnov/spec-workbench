@@ -171,7 +171,7 @@ later line, and modules on one line do not know each other.
   version and the store's temporary-name suffix (A17 rule 5), the two backup
   prefixes, the daily time, the look and the retention (A18 rules 1, 4, 5),
   the import file's size limit (A19 rule 4), the release's and contract's
-  versions, the address each surface listens on (A17 rules 1, 2), the owner
+  versions, the owner
   session's limits (A13), the lengths of A01 rule 1, A02 rule 4, A13 rule 7
   and A17 rule 3. A module that needs one imports it; nothing reads them from
   the configuration or the store (A22 rule 2, A09 rule 1), and no module
@@ -302,14 +302,13 @@ generated code reads that is neither a setting of the environment
 release_declarations module): the
 artifact types with their owner services, the first release's one row
 (`estimate`, PresuPro) (A22); A09 rule 2's table of the services, their
-operations and their highest classes; the store version and the store's
+operations, and each service's highest class; the store version and the store's
 temporary-name suffix (A17 rule 5); the kept and temporary backup prefixes,
 neither beginning with the other, the daily time, the minute look and the
 retention of 30 × 24 hours (A18 rules 1, 4, 5); the import file's size limit
 (A19 rule 4); the release's own version and its contract version, which
 every audit entry names (M09) and a backup's record names (A18 rule 1); the
-address each surface listens on, which the configuration does not name
-(A17 rules 1, 2); the owner session's limits — 8 hours, 30 minutes, the 15
+owner session's limits — 8 hours, 30 minutes, the 15
 minutes and five refusals of the sign-in, the 10 minutes of a confirmation,
 the 60 seconds of the pass (A13); the request id's 128 characters (A01 rule
 1), the alias's 40 and the characteristics' bounds (A02 rule 4), the 32 bytes of a secret value and of a
@@ -320,9 +319,10 @@ closure names each constant, and every one is exported.
 
 `models`, for exactly the row models and enumerations of its two tables:
 `ArtifactTypeOwner` (a type with its owner service) and `ServiceName` for
-`ARTIFACT_TYPE_OWNERS`; `ServiceRight` (a service, an operation, the highest
-class) with `ServiceName`, `ServiceOperation` and `DisclosureClass` for
-`SERVICE_RIGHTS`. Its other constants are scalars and import nothing.
+`ARTIFACT_TYPE_OWNERS`; `ServiceRight` (a service and an operation) with
+`ServiceName` and `ServiceOperation` for `SERVICE_RIGHTS`;
+`ServiceHighestClass` (a service and its highest class) with `ServiceName`
+and `DisclosureClass` for `SERVICE_HIGHEST_CLASSES`. Its other constants are scalars and import nothing.
 
 ### Must not own
 
@@ -342,6 +342,7 @@ value while the generator never sees it (SPEC_STANDARD §15.9).
 ```text
 ARTIFACT_TYPE_OWNERS
 SERVICE_RIGHTS
+SERVICE_HIGHEST_CLASSES
 STORE_VERSION
 STORE_TEMPORARY_SUFFIX
 BACKUP_KEPT_PREFIX
@@ -352,8 +353,6 @@ BACKUP_RETENTION_HOURS
 IMPORT_FILE_MAX_BYTES
 RELEASE_VERSION
 CONTRACT_VERSION
-OWNER_INTERFACE_LISTEN_ADDRESS
-SERVICE_API_LISTEN_ADDRESS
 OWNER_SESSION_MAX_HOURS
 OWNER_SESSION_IDLE_MINUTES
 SIGN_IN_WINDOW_MINUTES
@@ -427,7 +426,8 @@ facts_equal_for_repeat
 
 A17 rule 1's reading of the environment, and only it: the closed table of
 the `REGISTRY_` items — the store's location, the backup location, the
-backup key, the owner credential, the four service tokens — loaded at each
+backup key, the owner credential, the owner interface's address, the four
+service tokens and the service API's address — loaded at each
 call of `load_runtime_settings` into the settings. The table holds, for each
 item, its variable's name, the settings field it fills and its type, which
 is text; nothing else. Every item is optional at this level and absent when
@@ -471,7 +471,8 @@ load_runtime_settings
 
 A17: the start checks of rule 2 that need no file, in its one order, over
 the settings `runtime_settings` loads as set — the service tokens of the services
-`data_provider`'s rights table lists, all or none, the other items present,
+`data_provider`'s rights table lists with the service API's address, all or
+none, the other items present,
 each well formed, each secret at least the 32 bytes `data_provider` holds, no
 two secrets equal — with the diagnostic naming the failed item and never its
 value; that no default is applied (rule 5); an owner-only start when no token
@@ -1140,7 +1141,7 @@ serve_owner_request
 ### Owns
 
 The start and the running instance: `configuration` first, then the backup
-probe and `store`, then the listeners at the release's addresses, serving
+probe and `store`, then the listeners at the configured addresses, serving
 nothing until every check passed and having `store` remove a store this start
 made new when a listener cannot be opened (A17 rule 2); the
 owner-only start, which opens the owner interface alone (A17 rule 1, A18

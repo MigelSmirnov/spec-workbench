@@ -260,9 +260,8 @@ failed item and never its value.
 
 In order: `configuration.load_configuration`;
 `backups.probe_backup_location`; `store.open_store`; the owner interface's
-listener and then, unless the start is owner-only, the service API's, at
-the imported `OWNER_INTERFACE_LISTEN_ADDRESS` and
-`SERVICE_API_LISTEN_ADDRESS` constants; then the surfaces answer; then two
+listener and then, unless the start is owner-only, the service API's, each
+at its address in the loaded configuration (A17 rule 1); then the surfaces answer; then two
 passes: `owner_sessions.end_expired_sessions` every imported
 `SESSION_PASS_SECONDS` and, except in an owner-only start,
 `backups.run_daily_backup_if_due` every imported `BACKUP_LOOK_SECONDS`, each
