@@ -121,6 +121,16 @@ merges records because they look alike (R0-34).
 2. A value that is present is kept exactly as written; Registry trims and
    rewrites nothing (R0-68).
 3. An optional value given as an empty string or white space only is absent.
+4. A present value is refused when it is outside the form State 1 declares,
+   at stage (4) of A04 rule 6, every such value named: an alias longer than
+   40 characters, counted as Unicode code points (M01); an object kind
+   outside `apartment`, `house`, `commercial`, `other` (M02); a floor area not
+   greater than zero, a number of rooms below 1, or a floor that is not a
+   whole number (M02); a customer language outside `es`, `ru`, `en` (M04). An
+   absent kind, characteristic or language is never refused (rule 3). The
+   same checks hold for every action that gives the value — a create, a
+   correction, and the names and aliases the import's mapping gives (A16
+   rule 1).
 
 ### Formal invariants
 
@@ -135,6 +145,11 @@ stored(v) = given(v) whenever not missing(v)
 1. A project with a display name of three spaces is refused.
 2. A room name `"  Cocina "` is stored with its spaces.
 3. A Customer correction giving an e-mail of `""` clears the e-mail.
+4. An alias of 40 characters is stored; one of 41 is refused and nothing
+   changes.
+5. A project created with kind `villa`, or with a floor area of 0, is
+   refused naming both values; one created with no kind and no
+   characteristic is accepted.
 
 ### Consequence
 

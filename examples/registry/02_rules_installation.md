@@ -26,7 +26,9 @@ security review of States 0–2.
    each will link (R0-80); and every malformed record of the picks and every id that
    conflicts with one production holds. For each Customer it will make, the
    owner gives its name and kind and says whether the v1 value is its tax id;
-   confirmation is refused while any of these is missing (A02). While the
+   confirmation is refused while any of these is missing (A02), or while a
+   name or alias the owner gives breaks A02 — an alias longer than 40
+   characters included. While the
    mapping shows a malformed record, a conflict or a missing value, the
    import's confirmation step is not shown; at confirmation Registry checks
    again (rule 6). Each new
@@ -238,6 +240,10 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= 32 bytes
    fails, leaves it as an empty store of the release's version; one whose
    listener cannot be opened over an existing store leaves that store's
    records as they were. An owner-only start opens no service API listener.
+6. A store made new holds exactly one audit sequence (M12), at 0, and no
+   other record; a start interrupted before the store's rename leaves no
+   store under the store's name, and the next start makes a new one with
+   one sequence at 0.
 
 ### Consequence
 
@@ -319,7 +325,11 @@ secret cannot be shared between holders.
    removes what is left. This is the tested restore: no other instance is made
    from a backup. Third, whatever the second step did, it deletes every kept
    backup made more than 30 × 24 hours before the instant this step starts,
-   one cutoff for the whole step, and every file under the kept
+   one cutoff for the whole step — a backup made exactly 30 × 24 hours before
+   it is kept. The 30 × 24 hours are one value of the release, the data
+   provider's constant `BACKUP_RETENTION_HOURS` = 720, which the code that
+   deletes imports (SPEC_STANDARD §15.3.1); no other place holds it. It also
+   deletes every file under the kept
    prefix whose unencrypted record (rule 1) cannot be read. It takes the
    files in the order of their names; a file it cannot read or delete is
    reported, and it goes on with the next. A run succeeds only when every
@@ -377,6 +387,12 @@ every kept backup is encrypted, consistent, checked, and records
    between.
 2. After a run in which the backup failed, backups older than 30 × 24 hours
    are still deleted.
+7. With the step's cutoff fixed at its start, a kept backup made exactly
+   30 × 24 hours before it is kept and one made a second earlier is deleted.
+8. The readable record of a kept backup holds the instant, release and last
+   sequence number of the snapshot it was made from and the digest of its
+   key; a backup whose decrypted sequence differs from its record is
+   deleted.
 3. A backup cannot be read without the key it was made with.
 4. A backup whose integrity check fails is deleted and reported.
 5. A store restored from a backup holds no agent session.
@@ -407,7 +423,17 @@ request text (M08) — and the import reads a file from outside.
    backend lowers this is the backend's.
 4. The import file is read as data with a size limit of 50 MB, 50 × 1024 ×
    1024 bytes (owner, 2026-11-11); nothing in it is executed or evaluated, and
-   a file over the limit is refused before it is read.
+   a file over the limit is refused before it is read. The limit is counted
+   over the bytes Registry receives, never over a length the request
+   declares: a declared length over the limit is refused before any byte is
+   read; otherwise Registry reads the upload up to one byte more than the
+   limit and refuses it as soon as it holds more than the limit, whatever
+   length was declared or whether one was. A refused upload is kept nowhere
+   and replaces no file the session kept (A16 rule 2). The limit is one
+   value of the release, the data provider's constant
+   `IMPORT_FILE_MAX_BYTES` = 52428800, which the code that receives the
+   upload imports (SPEC_STANDARD §15.3.1); no other place holds it, and it
+   is not configuration (A17 rule 1).
 
 ### Formal invariants
 
@@ -423,6 +449,9 @@ no stored value is ever evaluated or executed
 2. An access request text with markup is shown as text.
 3. A display name with a quote and a semicolon is stored and read back
    unchanged.
+4. An import file of exactly 50 × 1024 × 1024 bytes is read; one of a byte
+   more is refused, with no mapping shown, also when its declared length is
+   smaller or absent, and the file the session kept before stays kept.
 
 ### Consequence
 
@@ -504,6 +533,11 @@ APPLICABLE c => references(c) are decisions of States 0-2
 
 1. Each APPLICABLE category's decisions have their own required tests, and
    those tests pass.
+2. The review names all nine categories of rule 1, each once, each with the
+   outcome APPLICABLE or NOT_APPLICABLE; every APPLICABLE category names at
+   least one reference, and every reference is an accepted decision of
+   States 0–2 that exists in this text; every NOT_APPLICABLE category gives
+   its rationale. `tools/design_lint.py --state 2` shows it.
 
 ### Security review
 
@@ -515,7 +549,7 @@ Security review: PERFORMED
 - injection_interpreted_input: APPLICABLE; references: A02, A16, A19; affected: M03, M08, import file, every stored text value
 - external_callbacks_webhooks: NOT_APPLICABLE; rationale: Registry calls no other service and receives no callback (R0-18, R0-54), and every request is a caller's authenticated call (R0-27)
 - browser_boundary: APPLICABLE; references: A13, A19; affected: owner interface, CSRF protection, session cookie, rendering of agent-written text
-- files_artifacts: APPLICABLE; references: A07, A08, A16, A18, A22; affected: M05, M10, import file, backups, pointers as references whose payload Registry never reads (R0-02)
+- files_artifacts: APPLICABLE; references: A07, A08, A16, A18, A19, A22; affected: M05, M10, import file, backups, pointers as references whose payload Registry never reads (R0-02)
 - concurrency: APPLICABLE; references: A01, A04, A07, A12, A13, A14, A16, A18; affected: M01, M03, M04, M05, M06, M09, M10, M11, concurrent creates, corrections, publishes, session changes, single-use confirmation values, confirmations bound to no revision, resubmitted forms on records without a revision, creates racing the erasure that removes their request id, re-uploads replacing a confirmed file, concurrent import confirmations, backup snapshots taken while transactions go on, overlapping backup runs
 - dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies
 
@@ -523,6 +557,15 @@ Performed again on 2026-11-01, after that day's changes to A01, A04, A13, A16,
 A17 and A18 reopened it (rule 2): every category naming them was reviewed, and no
 outcome changed; concurrency now names A18 too, whose one-snapshot copy and
 non-overlapping runs (rule 1) it relies on.
+
+Performed again on 2026-11-11, after that day's changes to A02, A16, A17,
+A18 and A19 reopened it (rule 2): every category naming them —
+injection_interpreted_input (A02, A16, A19), secrets, authentication and
+concurrency (A17, A18), browser_boundary (A19), files_artifacts (A16, A18) —
+was reviewed. No outcome changed. files_artifacts now names A19 too, whose
+import size limit is counted over the bytes received, never over a declared
+length (rule 4); a new store's one audit sequence (A17 rule 5) changes no
+category's subject.
 
 ### Consequence
 

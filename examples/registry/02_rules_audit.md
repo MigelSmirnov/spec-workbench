@@ -93,6 +93,11 @@ erase(d) accepted => its erasure entry e has e.instant >= start_of(d)
 4. After an erasure, the next entry's sequence number is one more than the
    erasure entry's.
 5. No operation of any service token reads the log.
+6. Two accepted changes in turn write entries numbered n and n + 1, and the
+   audit sequence (M12) holds n + 1 after the second; two concurrent changes
+   take two distinct consecutive numbers.
+7. A change whose transaction fails writes no entry and leaves the audit
+   sequence as it was; the next accepted change takes the number after it.
 
 ### Consequence
 
