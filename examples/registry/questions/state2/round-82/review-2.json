@@ -1,0 +1,179 @@
+{
+ "open_points": [
+  {
+   "subject": "A17",
+   "kind": "address_grammar",
+   "text": "Written as text, an IPv4 host is four decimal numbers joined by dots",
+   "question": "What exact IPv4 grammar is accepted, including whether octets with leading zeroes, signs, whitespace, non-ASCII digits, or values outside 0–255 are refused?",
+   "options": [
+    "Accept only four ASCII digit groups, each canonical decimal 0–255 with no leading zero except 0",
+    "Accept any notation the chosen IP-address parser treats as four decimal numbers",
+    "Allow leading zeroes but otherwise require four decimal octets from 0 through 255"
+   ],
+   "default_guess": "Require ASCII decimal octets from 0 through 255 and reject leading zeroes except for the single digit 0.",
+   "witness": {
+    "initial": "The owner address is configured as 127.000.000.001:8781 and every other item is valid.",
+    "events": [
+     "The owner starts Registry."
+    ],
+    "outcomes": [
+     "An implementation treating each component as an ordinary decimal number accepts the address and starts.",
+     "An implementation requiring canonical IPv4 text rejects the address as malformed and stops the start."
+    ],
+    "observer": "The owner sees either a serving Registry or a failed-start diagnostic."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17",
+   "kind": "address_grammar",
+   "text": "an IPv6 host the bracketed form any IPv6 text form names",
+   "question": "Which IPv6 textual grammar defines “any IPv6 text form,” particularly for scoped zone identifiers, embedded dotted-decimal tails, IPv4-mapped addresses, whitespace, and noncanonical but equivalent spellings?",
+   "options": [
+    "Accept every form accepted by the platform IP parser",
+    "Accept RFC IPv6 address text including compressed and embedded-IPv4 forms, but no zone identifier",
+    "Accept only unscoped canonical IPv6 text and normalize it before use"
+   ],
+   "default_guess": "Accept unscoped RFC IPv6 address forms, including compression and embedded dotted-decimal syntax, but reject zone identifiers and surrounding whitespace.",
+   "witness": {
+    "initial": "The owner address is configured as [fe80::1%eth0]:8781 and every other item is valid.",
+    "events": [
+     "The owner starts Registry on a host whose parser supports IPv6 scope identifiers."
+    ],
+    "outcomes": [
+     "An implementation delegates to that parser, accepts the scoped address, and opens the listener.",
+     "An implementation reads “IPv6 text form” as an address without a zone identifier, rejects the item, and stops the start."
+    ],
+    "observer": "The owner sees either a serving Registry or a failed-start diagnostic."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17",
+   "kind": "mapped_address_policy",
+   "text": "An IPv6 address is listened on for IPv6 alone, never for IPv4 connections mapped onto it.",
+   "question": "Does this also forbid configuring an IPv4-mapped IPv6 host such as `[::ffff:127.0.0.1]`, or does it only require an IPv6 listener to disable dual-stack acceptance of IPv4 connections?",
+   "options": [
+    "Reject every IPv4-mapped IPv6 configured host",
+    "Allow an IPv4-mapped IPv6 host but set the listener to IPv6-only",
+    "Allow all IPv6 literals and interpret the rule only as disabling implicit IPv4-to-IPv6 listener mapping"
+   ],
+   "default_guess": "Reject IPv4-mapped IPv6 configured hosts and also force the socket into IPv6-only mode.",
+   "witness": {
+    "initial": "The owner interface address is [::ffff:127.0.0.1]:8781 and every other item is valid.",
+    "events": [
+     "The owner starts Registry."
+    ],
+    "outcomes": [
+     "One implementation accepts it as a valid IPv6 literal and opens an IPv6-only listener.",
+     "Another treats the literal itself as the forbidden mapping and stops the start as a malformed address."
+    ],
+    "observer": "The owner sees either a serving Registry or a failed-start diagnostic."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17",
+   "kind": "representation",
+   "text": "The configuration hands each address on as its host and port.",
+   "question": "In what representation are host and port handed on: the original host and port strings, a normalized host string plus an integer, or a parsed IP-address value plus an integer; and are IPv6 brackets retained?",
+   "options": [
+    "Parsed IP-address object and integer port",
+    "Canonical unbracketed host string and integer port",
+    "Original textual host and port components"
+   ],
+   "default_guess": "Hand on a parsed IP-address value and an integer port, with brackets treated only as configuration syntax.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17",
+   "kind": "endpoint_overlap",
+   "text": "Registry opens each listener for itself alone, never with an option that lets another active socket bind the same endpoint (no port sharing; rebinding a port a closed listener left is not sharing).",
+   "question": "What counts as the same endpoint and an active socket, especially for wildcard and specific-address bindings, and which socket options are forbidden on each supported platform?",
+   "options": [
+    "Forbid only a second binding of the exact address-and-port tuple",
+    "Forbid every overlapping binding that could receive traffic for the configured address, including wildcard/specific-address overlap",
+    "Forbid named port-sharing options such as SO_REUSEPORT but permit other reuse options according to platform defaults"
+   ],
+   "default_guess": "Treat any simultaneously bound listener whose accepted traffic could overlap as sharing, forbid SO_REUSEPORT and any equivalent option, and permit only reuse needed to rebind after a listener has closed.",
+   "witness": {
+    "initial": "Another process is listening on 127.0.0.1:8781; Registry is configured for 0.0.0.0:8781 on a platform that permits the wildcard and specific bindings together when a reuse option is enabled.",
+    "events": [
+     "The owner starts Registry.",
+     "A caller connects to 127.0.0.1:8781."
+    ],
+    "outcomes": [
+     "An implementation treating endpoints as exact tuples starts Registry, and either process may receive the connection.",
+     "An implementation treating overlapping wildcard and specific bindings as sharing refuses to enable the option and the start fails."
+    ],
+    "observer": "The owner and callers see either a failed start or traffic divided between processes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17",
+   "kind": "check_order",
+   "text": "last, the listener of each surface opened at its configured address (rule 1)",
+   "question": "Are enforcing IPv6-only operation and enforcing exclusive ownership part of this final listener-opening check, and if either cannot be established, which item is named and where does that failure fall in the stated first-failure order?",
+   "options": [
+    "Treat both properties as part of opening that surface's listener and fail on that address item",
+    "Add separate checks before listener opening",
+    "Open the listener and enforce the properties while accepting connections"
+   ],
+   "default_guess": "Treat both as conditions of successfully opening the listener; fail the start on that surface's address at the final listener-opening position.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17",
+   "kind": "missing_required_test",
+   "text": "Registry opens each listener for itself alone, never with an option that lets another active socket bind the same endpoint (no port sharing; rebinding a port a closed listener left is not sharing). An IPv6 address is listened on for IPv6 alone, never for IPv4 connections mapped onto it.",
+   "question": "Which Required tests item must show that a listener cannot share an overlapping active endpoint, that rebinding after closure remains allowed, and that an IPv6 listener cannot receive mapped IPv4 connections?",
+   "options": [
+    "Add one Required tests item covering all three listener properties",
+    "Add separate Required tests items for endpoint exclusivity, closed-listener rebinding, and IPv6-only behavior"
+   ],
+   "default_guess": "Add separate Required tests for endpoint exclusivity and IPv6-only behavior, with the exclusivity test also showing that rebinding after closure succeeds.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17",
+   "kind": "missing_required_test",
+   "text": "Written as text, an IPv4 host is four decimal numbers joined by dots and an IPv6 host the bracketed form any IPv6 text form names, each read into the address it names; the port is decimal digits without a leading zero.",
+   "question": "Which Required tests item defines and demonstrates the acceptance and refusal boundary of the new textual address grammar rather than testing only one ordinary IPv4 and one ordinary IPv6 example?",
+   "options": [
+    "Add a table-driven Required tests item covering every decided lexical boundary",
+    "Declare a specific standard or parser as the grammar and test representative accepted and refused forms"
+   ],
+   "default_guess": "Declare the exact grammar and add a table-driven test covering leading zeroes, ranges, brackets, compression, mapped forms, zone identifiers, whitespace, signs, and non-ASCII digits.",
+   "unit": "?"
+  },
+  {
+   "subject": "A21",
+   "kind": "review_reopened",
+   "text": "A change to a decision a category names reopens this review.",
+   "question": "Where is the security review performed after A17's new address grammar, IPv6-only listener rule, and no-port-sharing rule, and what are the resulting outcomes for every reopened category that names A17?",
+   "options": [
+    "Review the change under authentication_credential_abuse and secrets and record that neither outcome changes",
+    "Review it under those categories and change one or more outcomes or references",
+    "Amend the category references before performing the reopened review if the listener boundary belongs to another category too"
+   ],
+   "default_guess": "Reperform and record the review under authentication_credential_abuse and secrets, explicitly covering mapped IPv4 reachability and overlapping listener bindings; add another category only if applying its stated questions requires it.",
+   "witness": {
+    "initial": "A21's last recorded review discusses A17's unknown-variable and deployment-address changes but not the later IPv6-only, textual-grammar, or port-sharing changes.",
+    "events": [
+     "A17 is changed to add the new listener and parsing rules.",
+     "A release is prepared using A21 as the completed State 2 security review."
+    ],
+    "outcomes": [
+     "One implementer treats the dated A21 review as covering every A17 change made that day and leaves A21 unchanged.",
+     "Another applies A21 rule 2, considers the review reopened, and refuses to treat State 2 as reviewed until the new rules are assessed."
+    ],
+    "observer": "The release reviewer sees either a completed security review or an outstanding reopened review."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A17\",\"kind\":\"address_grammar\",\"text\":\"Written as text, an IPv4 host is four decimal numbers joined by dots\",\"question\":\"What exact IPv4 grammar is accepted, including whether octets with leading zeroes, signs, whitespace, non-ASCII digits, or values outside 0–255 are refused?\",\"options\":[\"Accept only four ASCII digit groups, each canonical decimal 0–255 with no leading zero except 0\",\"Accept any notation the chosen IP-address parser treats as four decimal numbers\",\"Allow leading zeroes but otherwise require four decimal octets from 0 through 255\"],\"default_guess\":\"Require ASCII decimal octets from 0 through 255 and reject leading zeroes except for the single digit 0.\",\"witness\":{\"initial\":\"The owner address is configured as 127.000.000.001:8781 and every other item is valid.\",\"events\":[\"The owner starts Registry.\"],\"outcomes\":[\"An implementation treating each component as an ordinary decimal number accepts the address and starts.\",\"An implementation requiring canonical IPv4 text rejects the address as malformed and stops the start.\"],\"observer\":\"The owner sees either a serving Registry or a failed-start diagnostic.\"}},{\"subject\":\"A17\",\"kind\":\"address_grammar\",\"text\":\"an IPv6 host the bracketed form any IPv6 text form names\",\"question\":\"Which IPv6 textual grammar defines “any IPv6 text form,” particularly for scoped zone identifiers, embedded dotted-decimal tails, IPv4-mapped addresses, whitespace, and noncanonical but equivalent spellings?\",\"options\":[\"Accept every form accepted by the platform IP parser\",\"Accept RFC IPv6 address text including compressed and embedded-IPv4 forms, but no zone identifier\",\"Accept only unscoped canonical IPv6 text and normalize it before use\"],\"default_guess\":\"Accept unscoped RFC IPv6 address forms, including compression and embedded dotted-decimal syntax, but reject zone identifiers and surrounding whitespace.\",\"witness\":{\"initial\":\"The owner address is configured as [fe80::1%eth0]:8781 and every other item is valid.\",\"events\":[\"The owner starts Registry on a host whose parser supports IPv6 scope identifiers.\"],\"outcomes\":[\"An implementation delegates to that parser, accepts the scoped address, and opens the listener.\",\"An implementation reads “IPv6 text form” as an address without a zone identifier, rejects the item, and stops the start.\"],\"observer\":\"The owner sees either a serving Registry or a failed-start diagnostic.\"}},{\"subject\":\"A17\",\"kind\":\"mapped_address_policy\",\"text\":\"An IPv6 address is listened on for IPv6 alone, never for IPv4 connections mapped onto it.\",\"question\":\"Does this also forbid configuring an IPv4-mapped IPv6 host such as `[::ffff:127.0.0.1]`, or does it only require an IPv6 listener to disable dual-stack acceptance of IPv4 connections?\",\"options\":[\"Reject every IPv4-mapped IPv6 configured host\",\"Allow an IPv4-mapped IPv6 host but set the listener to IPv6-only\",\"Allow all IPv6 literals and interpret the rule only as disabling implicit IPv4-to-IPv6 listener mapping\"],\"default_guess\":\"Reject IPv4-mapped IPv6 configured hosts and also force the socket into IPv6-only mode.\",\"witness\":{\"initial\":\"The owner interface address is [::ffff:127.0.0.1]:8781 and every other item is valid.\",\"events\":[\"The owner starts Registry.\"],\"outcomes\":[\"One implementation accepts it as a valid IPv6 literal and opens an IPv6-only listener.\",\"Another treats the literal itself as the forbidden mapping and stops the start as a malformed address.\"],\"observer\":\"The owner sees either a serving Registry or a failed-start diagnostic.\"}},{\"subject\":\"A17\",\"kind\":\"representation\",\"text\":\"The configuration hands each address on as its host and port.\",\"question\":\"In what representation are host and port handed on: the original host and port strings, a normalized host string plus an integer, or a parsed IP-address value plus an integer; and are IPv6 brackets retained?\",\"options\":[\"Parsed IP-address object and integer port\",\"Canonical unbracketed host string and integer port\",\"Original textual host and port components\"],\"default_guess\":\"Hand on a parsed IP-address value and an integer port, with brackets treated only as configuration syntax.\"},{\"subject\":\"A17\",\"kind\":\"endpoint_overlap\",\"text\":\"Registry opens each listener for itself alone, never with an option that lets another active socket bind the same endpoint (no port sharing; rebinding a port a closed listener left is not sharing).\",\"question\":\"What counts as the same endpoint and an active socket, especially for wildcard and specific-address bindings, and which socket options are forbidden on each supported platform?\",\"options\":[\"Forbid only a second binding of the exact address-and-port tuple\",\"Forbid every overlapping binding that could receive traffic for the configured address, including wildcard/specific-address overlap\",\"Forbid named port-sharing options such as SO_REUSEPORT but permit other reuse options according to platform defaults\"],\"default_guess\":\"Treat any simultaneously bound listener whose accepted traffic could overlap as sharing, forbid SO_REUSEPORT and any equivalent option, and permit only reuse needed to rebind after a listener has closed.\",\"witness\":{\"initial\":\"Another process is listening on 127.0.0.1:8781; Registry is configured for 0.0.0.0:8781 on a platform that permits the wildcard and specific bindings together when a reuse option is enabled.\",\"events\":[\"The owner starts Registry.\",\"A caller connects to 127.0.0.1:8781.\"],\"outcomes\":[\"An implementation treating endpoints as exact tuples starts Registry, and either process may receive the connection.\",\"An implementation treating overlapping wildcard and specific bindings as sharing refuses to enable the option and the start fails.\"],\"observer\":\"The owner and callers see either a failed start or traffic divided between processes.\"}},{\"subject\":\"A17\",\"kind\":\"check_order\",\"text\":\"last, the listener of each surface opened at its configured address (rule 1)\",\"question\":\"Are enforcing IPv6-only operation and enforcing exclusive ownership part of this final listener-opening check, and if either cannot be established, which item is named and where does that failure fall in the stated first-failure order?\",\"options\":[\"Treat both properties as part of opening that surface's listener and fail on that address item\",\"Add separate checks before listener opening\",\"Open the listener and enforce the properties while accepting connections\"],\"default_guess\":\"Treat both as conditions of successfully opening the listener; fail the start on that surface's address at the final listener-opening position.\"},{\"subject\":\"A17\",\"kind\":\"missing_required_test\",\"text\":\"Registry opens each listener for itself alone, never with an option that lets another active socket bind the same endpoint (no port sharing; rebinding a port a closed listener left is not sharing). An IPv6 address is listened on for IPv6 alone, never for IPv4 connections mapped onto it.\",\"question\":\"Which Required tests item must show that a listener cannot share an overlapping active endpoint, that rebinding after closure remains allowed, and that an IPv6 listener cannot receive mapped IPv4 connections?\",\"options\":[\"Add one Required tests item covering all three listener properties\",\"Add separate Required tests items for endpoint exclusivity, closed-listener rebinding, and IPv6-only behavior\"],\"default_guess\":\"Add separate Required tests for endpoint exclusivity and IPv6-only behavior, with the exclusivity test also showing that rebinding after closure succeeds.\"},{\"subject\":\"A17\",\"kind\":\"missing_required_test\",\"text\":\"Written as text, an IPv4 host is four decimal numbers joined by dots and an IPv6 host the bracketed form any IPv6 text form names, each read into the address it names; the port is decimal digits without a leading zero.\",\"question\":\"Which Required tests item defines and demonstrates the acceptance and refusal boundary of the new textual address grammar rather than testing only one ordinary IPv4 and one ordinary IPv6 example?\",\"options\":[\"Add a table-driven Required tests item covering every decided lexical boundary\",\"Declare a specific standard or parser as the grammar and test representative accepted and refused forms\"],\"default_guess\":\"Declare the exact grammar and add a table-driven test covering leading zeroes, ranges, brackets, compression, mapped forms, zone identifiers, whitespace, signs, and non-ASCII digits.\"},{\"subject\":\"A21\",\"kind\":\"review_reopened\",\"text\":\"A change to a decision a category names reopens this review.\",\"question\":\"Where is the security review performed after A17's new address grammar, IPv6-only listener rule, and no-port-sharing rule, and what are the resulting outcomes for every reopened category that names A17?\",\"options\":[\"Review the change under authentication_credential_abuse and secrets and record that neither outcome changes\",\"Review it under those categories and change one or more outcomes or references\",\"Amend the category references before performing the reopened review if the listener boundary belongs to another category too\"],\"default_guess\":\"Reperform and record the review under authentication_credential_abuse and secrets, explicitly covering mapped IPv4 reachability and overlapping listener bindings; add another category only if applying its stated questions requires it.\",\"witness\":{\"initial\":\"A21's last recorded review discusses A17's unknown-variable and deployment-address changes but not the later IPv6-only, textual-grammar, or port-sharing changes.\",\"events\":[\"A17 is changed to add the new listener and parsing rules.\",\"A release is prepared using A21 as the completed State 2 security review.\"],\"outcomes\":[\"One implementer treats the dated A21 review as covering every A17 change made that day and leaves A21 unchanged.\",\"Another applies A21 rule 2, considers the review reopened, and refuses to treat State 2 as reviewed until the new rules are assessed.\"],\"observer\":\"The release reviewer sees either a completed security review or an outstanding reopened review.\"}}]}",
+ "set_aside": []
+}

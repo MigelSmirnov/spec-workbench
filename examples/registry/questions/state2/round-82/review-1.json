@@ -1,0 +1,172 @@
+{
+ "open_points": [
+  {
+   "subject": "A17 IPv4 address syntax",
+   "kind": "ambiguous_syntax",
+   "text": "Written as text, an IPv4 host is four decimal numbers joined by dots",
+   "question": "Must each number use ASCII digits and lie from 0 through 255, and are leading zeroes in an IPv4 component accepted or refused?",
+   "options": [
+    "Accept ASCII decimal components from 0 through 255, including leading zeroes",
+    "Accept ASCII decimal components from 0 through 255 only in canonical form without leading zeroes",
+    "Use the runtime IP parser's accepted syntax, even when it differs between runtimes",
+    "Allow non-ASCII decimal digits"
+   ],
+   "default_guess": "Accept only ASCII components from 0 through 255 and refuse leading zeroes.",
+   "witness": {
+    "initial": "All required configuration is valid, and the owner interface address is `127.000.000.001:8781`.",
+    "events": [
+     "The owner starts Registry."
+    ],
+    "outcomes": [
+     "Registry reads the components as decimal, accepts the address as 127.0.0.1 and starts.",
+     "Registry treats the leading-zero components as malformed, stops the start and names the owner-interface address."
+    ],
+    "observer": "The owner sees whether Registry starts."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 IPv6 address syntax",
+   "kind": "ambiguous_syntax",
+   "text": "an IPv6 host the bracketed form any IPv6 text form names",
+   "question": "Which IPv6 textual forms count as forms that name an address: scoped zone identifiers, IPv4-embedded notation and IPv4-mapped IPv6 literals included or excluded?",
+   "options": [
+    "Accept RFC IPv6 address text including IPv4-embedded and mapped literals, but not zone identifiers",
+    "Accept scoped zone identifiers as well",
+    "Refuse IPv4-mapped literals because the listener must be IPv6-only",
+    "Delegate the accepted forms to the runtime parser"
+   ],
+   "default_guess": "Accept standard IPv6 address text, including embedded and mapped forms, but reject zone identifiers and runtime-specific extensions.",
+   "witness": {
+    "initial": "All required configuration is valid, and an interface address is `[fe80::1%eth0]:8781`.",
+    "events": [
+     "The owner starts Registry."
+    ],
+    "outcomes": [
+     "Registry accepts the scoped form and binds it on `eth0`.",
+     "Registry rejects the host as not being an IPv6 address text form and stops the start."
+    ],
+    "observer": "The owner sees whether Registry starts and which interface is bound."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 address handoff",
+   "kind": "representation_unspecified",
+   "text": "The configuration hands each address on as its host and port.",
+   "question": "In what representation are host and port handed to listener code, and in particular are IPv6 brackets removed and is the host a parsed IP value, normalized text or the original text?",
+   "options": [
+    "A parsed IP-address value and an integer port",
+    "Normalized unbracketed host text and an integer port",
+    "The original host text, including IPv6 brackets, and an integer port",
+    "The original combined `host:port` string"
+   ],
+   "default_guess": "Hand on a parsed IP-address value and an integer port; brackets are syntax and are not part of the host value.",
+   "witness": {
+    "initial": "The configured address is `[::1]:8781` and has passed validation.",
+    "events": [
+     "Configuration hands the address to the listener-opening code.",
+     "The listener-opening code binds the supplied host and port."
+    ],
+    "outcomes": [
+     "The listener receives host `::1` and port 8781 and opens successfully.",
+     "The listener receives host `[::1]`; an API that expects an unbracketed host rejects it and the start fails."
+    ],
+    "observer": "The owner sees a successful start or an address diagnostic."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 listener capability failure",
+   "kind": "refusal_condition",
+   "text": "Registry opens each listener for itself alone, never with an option that lets another active socket bind the same endpoint (no port sharing; rebinding a port a closed listener left is not sharing). An IPv6 address is listened on for IPv6 alone, never for IPv4 connections mapped onto it.",
+   "question": "If the operating system or listener API cannot guarantee exclusive binding or IPv6-only operation, must Registry fail the start, and which configured item must its diagnostic name?",
+   "options": [
+    "Fail while opening the affected listener and name that surface's address",
+    "Treat the platform as unsupported before attempting either listener",
+    "Start with the platform's best available socket behaviour"
+   ],
+   "default_guess": "Fail the start while opening the affected listener, close any listener already opened, and name the affected configured address.",
+   "witness": {
+    "initial": "Registry is started on a platform whose listener API cannot disable IPv4-mapped connections for an IPv6 socket.",
+    "events": [
+     "The owner supplies an otherwise valid IPv6 address.",
+     "Registry attempts to open the listener."
+    ],
+    "outcomes": [
+     "Registry fails the start because IPv6-only service cannot be guaranteed.",
+     "Registry starts with the platform default, and an IPv4 caller reaches the IPv6 listener through a mapped connection."
+    ],
+    "observer": "The owner sees the start result, and an IPv4 caller sees whether it can connect."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 exclusive listener invariant",
+   "kind": "invariant_test_gap",
+   "text": "never with an option that lets another active socket bind the same endpoint (no port sharing; rebinding a port a closed listener left is not sharing)",
+   "question": "What Required tests item must show that a second active socket cannot bind the endpoint while Registry is serving, while the same port can be rebound after Registry's listener closes?",
+   "options": [
+    "Test both refusal during the active listener and successful rebinding after close",
+    "Test only that Registry does not explicitly request a named port-sharing option",
+    "Leave socket exclusivity untested"
+   ],
+   "default_guess": "Add a test that attempts a concurrent bind and requires its refusal, then closes Registry's listener and requires rebinding to succeed.",
+   "witness": {
+    "initial": "Registry has successfully opened a configured listener.",
+    "events": [
+     "Another process attempts to bind the same endpoint while Registry's listener remains open.",
+     "Registry's listener is closed.",
+     "The process attempts the bind again."
+    ],
+    "outcomes": [
+     "The first bind is refused and the bind after close succeeds.",
+     "Both binds succeed because the implementation enabled or inherited active port sharing."
+    ],
+    "observer": "The second process and the deployment owner see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 IPv6-only listener invariant",
+   "kind": "invariant_test_gap",
+   "text": "An IPv6 address is listened on for IPv6 alone, never for IPv4 connections mapped onto it.",
+   "question": "What Required tests item must show that an IPv6 listener accepts IPv6 connections but cannot be reached through an IPv4-mapped connection?",
+   "options": [
+    "Exercise both a native IPv6 connection and an IPv4 connection against the listener",
+    "Inspect only the listener option without attempting connections",
+    "Leave address-family isolation untested"
+   ],
+   "default_guess": "Add a test that accepts a native IPv6 connection and refuses an IPv4 connection to the corresponding mapped endpoint.",
+   "witness": {
+    "initial": "Registry is serving on an IPv6 wildcard or loopback address.",
+    "events": [
+     "An IPv6 caller connects to the configured port.",
+     "An IPv4 caller connects to the corresponding IPv4 address and port."
+    ],
+    "outcomes": [
+     "The IPv6 connection reaches Registry and the IPv4 connection does not.",
+     "Both connections reach Registry because the socket is dual-stack."
+    ],
+    "observer": "The callers and the deployment owner see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21 security review after the latest A17 change",
+   "kind": "reopened_review_undecided",
+   "text": "A change to a decision a category names reopens this review.",
+   "question": "What are the new review outcomes after the latest A17 change, including address grammar, exclusive binding, IPv6-only listening and the host-and-port handoff, for every security-review category that names A17?",
+   "options": [
+    "Repeat authentication_credential_abuse and secrets review, record the new address behaviours in its evidence, and keep their outcomes if the review supports that",
+    "Repeat those categories and change one or more outcomes or references",
+    "Leave A21's earlier review as sufficient despite A17 having changed since it"
+   ],
+   "default_guess": "Reopen authentication_credential_abuse and secrets, review all of the new A17 address and listener rules, record that review explicitly, and keep the existing outcomes only if the repeated review supports them.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A17 IPv4 address syntax\",\"kind\":\"ambiguous_syntax\",\"text\":\"Written as text, an IPv4 host is four decimal numbers joined by dots\",\"question\":\"Must each number use ASCII digits and lie from 0 through 255, and are leading zeroes in an IPv4 component accepted or refused?\",\"options\":[\"Accept ASCII decimal components from 0 through 255, including leading zeroes\",\"Accept ASCII decimal components from 0 through 255 only in canonical form without leading zeroes\",\"Use the runtime IP parser's accepted syntax, even when it differs between runtimes\",\"Allow non-ASCII decimal digits\"],\"default_guess\":\"Accept only ASCII components from 0 through 255 and refuse leading zeroes.\",\"witness\":{\"initial\":\"All required configuration is valid, and the owner interface address is `127.000.000.001:8781`.\",\"events\":[\"The owner starts Registry.\"],\"outcomes\":[\"Registry reads the components as decimal, accepts the address as 127.0.0.1 and starts.\",\"Registry treats the leading-zero components as malformed, stops the start and names the owner-interface address.\"],\"observer\":\"The owner sees whether Registry starts.\"}},{\"subject\":\"A17 IPv6 address syntax\",\"kind\":\"ambiguous_syntax\",\"text\":\"an IPv6 host the bracketed form any IPv6 text form names\",\"question\":\"Which IPv6 textual forms count as forms that name an address: scoped zone identifiers, IPv4-embedded notation and IPv4-mapped IPv6 literals included or excluded?\",\"options\":[\"Accept RFC IPv6 address text including IPv4-embedded and mapped literals, but not zone identifiers\",\"Accept scoped zone identifiers as well\",\"Refuse IPv4-mapped literals because the listener must be IPv6-only\",\"Delegate the accepted forms to the runtime parser\"],\"default_guess\":\"Accept standard IPv6 address text, including embedded and mapped forms, but reject zone identifiers and runtime-specific extensions.\",\"witness\":{\"initial\":\"All required configuration is valid, and an interface address is `[fe80::1%eth0]:8781`.\",\"events\":[\"The owner starts Registry.\"],\"outcomes\":[\"Registry accepts the scoped form and binds it on `eth0`.\",\"Registry rejects the host as not being an IPv6 address text form and stops the start.\"],\"observer\":\"The owner sees whether Registry starts and which interface is bound.\"}},{\"subject\":\"A17 address handoff\",\"kind\":\"representation_unspecified\",\"text\":\"The configuration hands each address on as its host and port.\",\"question\":\"In what representation are host and port handed to listener code, and in particular are IPv6 brackets removed and is the host a parsed IP value, normalized text or the original text?\",\"options\":[\"A parsed IP-address value and an integer port\",\"Normalized unbracketed host text and an integer port\",\"The original host text, including IPv6 brackets, and an integer port\",\"The original combined `host:port` string\"],\"default_guess\":\"Hand on a parsed IP-address value and an integer port; brackets are syntax and are not part of the host value.\",\"witness\":{\"initial\":\"The configured address is `[::1]:8781` and has passed validation.\",\"events\":[\"Configuration hands the address to the listener-opening code.\",\"The listener-opening code binds the supplied host and port.\"],\"outcomes\":[\"The listener receives host `::1` and port 8781 and opens successfully.\",\"The listener receives host `[::1]`; an API that expects an unbracketed host rejects it and the start fails.\"],\"observer\":\"The owner sees a successful start or an address diagnostic.\"}},{\"subject\":\"A17 listener capability failure\",\"kind\":\"refusal_condition\",\"text\":\"Registry opens each listener for itself alone, never with an option that lets another active socket bind the same endpoint (no port sharing; rebinding a port a closed listener left is not sharing). An IPv6 address is listened on for IPv6 alone, never for IPv4 connections mapped onto it.\",\"question\":\"If the operating system or listener API cannot guarantee exclusive binding or IPv6-only operation, must Registry fail the start, and which configured item must its diagnostic name?\",\"options\":[\"Fail while opening the affected listener and name that surface's address\",\"Treat the platform as unsupported before attempting either listener\",\"Start with the platform's best available socket behaviour\"],\"default_guess\":\"Fail the start while opening the affected listener, close any listener already opened, and name the affected configured address.\",\"witness\":{\"initial\":\"Registry is started on a platform whose listener API cannot disable IPv4-mapped connections for an IPv6 socket.\",\"events\":[\"The owner supplies an otherwise valid IPv6 address.\",\"Registry attempts to open the listener.\"],\"outcomes\":[\"Registry fails the start because IPv6-only service cannot be guaranteed.\",\"Registry starts with the platform default, and an IPv4 caller reaches the IPv6 listener through a mapped connection.\"],\"observer\":\"The owner sees the start result, and an IPv4 caller sees whether it can connect.\"}},{\"subject\":\"A17 exclusive listener invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"never with an option that lets another active socket bind the same endpoint (no port sharing; rebinding a port a closed listener left is not sharing)\",\"question\":\"What Required tests item must show that a second active socket cannot bind the endpoint while Registry is serving, while the same port can be rebound after Registry's listener closes?\",\"options\":[\"Test both refusal during the active listener and successful rebinding after close\",\"Test only that Registry does not explicitly request a named port-sharing option\",\"Leave socket exclusivity untested\"],\"default_guess\":\"Add a test that attempts a concurrent bind and requires its refusal, then closes Registry's listener and requires rebinding to succeed.\",\"witness\":{\"initial\":\"Registry has successfully opened a configured listener.\",\"events\":[\"Another process attempts to bind the same endpoint while Registry's listener remains open.\",\"Registry's listener is closed.\",\"The process attempts the bind again.\"],\"outcomes\":[\"The first bind is refused and the bind after close succeeds.\",\"Both binds succeed because the implementation enabled or inherited active port sharing.\"],\"observer\":\"The second process and the deployment owner see the difference.\"}},{\"subject\":\"A17 IPv6-only listener invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"An IPv6 address is listened on for IPv6 alone, never for IPv4 connections mapped onto it.\",\"question\":\"What Required tests item must show that an IPv6 listener accepts IPv6 connections but cannot be reached through an IPv4-mapped connection?\",\"options\":[\"Exercise both a native IPv6 connection and an IPv4 connection against the listener\",\"Inspect only the listener option without attempting connections\",\"Leave address-family isolation untested\"],\"default_guess\":\"Add a test that accepts a native IPv6 connection and refuses an IPv4 connection to the corresponding mapped endpoint.\",\"witness\":{\"initial\":\"Registry is serving on an IPv6 wildcard or loopback address.\",\"events\":[\"An IPv6 caller connects to the configured port.\",\"An IPv4 caller connects to the corresponding IPv4 address and port.\"],\"outcomes\":[\"The IPv6 connection reaches Registry and the IPv4 connection does not.\",\"Both connections reach Registry because the socket is dual-stack.\"],\"observer\":\"The callers and the deployment owner see the difference.\"}},{\"subject\":\"A21 security review after the latest A17 change\",\"kind\":\"reopened_review_undecided\",\"text\":\"A change to a decision a category names reopens this review.\",\"question\":\"What are the new review outcomes after the latest A17 change, including address grammar, exclusive binding, IPv6-only listening and the host-and-port handoff, for every security-review category that names A17?\",\"options\":[\"Repeat authentication_credential_abuse and secrets review, record the new address behaviours in its evidence, and keep their outcomes if the review supports that\",\"Repeat those categories and change one or more outcomes or references\",\"Leave A21's earlier review as sufficient despite A17 having changed since it\"],\"default_guess\":\"Reopen authentication_credential_abuse and secrets, review all of the new A17 address and listener rules, record that review explicitly, and keep the existing outcomes only if the repeated review supports them.\"}]}",
+ "set_aside": []
+}
