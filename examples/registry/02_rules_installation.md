@@ -194,7 +194,8 @@ closure is the one proof of success.
    path comparison cannot see, such as bind mounts, are the owner's to avoid
    (Explicit exclusions). When the store's
    configured file does not exist and its directory does, Registry makes a new,
-   empty store of the running release's version there at the start, under a
+   empty store of the running release's version there at the start — no
+   record but its audit sequence at 0 (M12) — under a
    temporary name — the store's name with a suffix the release declares —
    that it renames to the store's name only once the store is complete; at
    every start it first removes a file of that temporary name, left by an
@@ -283,7 +284,7 @@ secret cannot be shared between holders.
    when its own snapshot is fixed. It
    records, readable without its key, its instant, the release that made it,
    the last audit sequence number its store ever wrote — kept apart from the
-   entries (A15), 0 for a store that never wrote one, whatever the log now
+   entries (A15; M12 AuditSequence), 0 for a store that never wrote one, whatever the log now
    holds — and a digest of the key it was
    made with (never the key); its age is counted from that instant. The
    owner interface shows the instant of the newest kept backup whose record
@@ -343,7 +344,8 @@ secret cannot be shared between holders.
    host's administration).
 6. While the daily runs succeed and each ends before the next 03:00, an
    erasure reaches the backups by the first
-   run after the last backup holding the erased values is 30 days old — at
+   run after the last backup holding the erased values is more than 30 × 24
+   hours old (rule 4) — at
    most 31 days after the erasure — and a failed or missed run lengthens that
    by the days until a run succeeds. A restore loses the changes made after
    the backup it uses; Registry bounds neither how long a run takes nor how
@@ -363,7 +365,7 @@ secret cannot be shared between holders.
 ### Formal invariants
 
 ```text
-after a run whose deletions succeeded: no backup older than 30 days and no
+after a run whose deletions succeeded: no backup older than 30 × 24 hours and no
   backup that failed its check exists
 every kept backup is encrypted, consistent, checked, and records
   (instant, release, last sequence); no backup holds an agent session
@@ -373,8 +375,8 @@ every kept backup is encrypted, consistent, checked, and records
 
 1. A backup taken during a write restores either before or after it, never in
    between.
-2. After a run in which the backup failed, backups older than 30 days are
-   still deleted.
+2. After a run in which the backup failed, backups older than 30 × 24 hours
+   are still deleted.
 3. A backup cannot be read without the key it was made with.
 4. A backup whose integrity check fails is deleted and reported.
 5. A store restored from a backup holds no agent session.
@@ -403,8 +405,9 @@ request text (M08) — and the import reads a file from outside.
    operator or syntax. A value that selects among fixed alternatives — a list
    order, a type — is checked against its closed list first. How the store's
    backend lowers this is the backend's.
-4. The import file is read as data with a size limit State 6 sets; nothing in
-   it is executed or evaluated, and a file over the limit is refused.
+4. The import file is read as data with a size limit of 50 MB, 50 × 1024 ×
+   1024 bytes (owner, 2026-11-11); nothing in it is executed or evaluated, and
+   a file over the limit is refused before it is read.
 
 ### Formal invariants
 
