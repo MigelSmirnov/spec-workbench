@@ -17,6 +17,15 @@ emulated round 1 (`experiments/registry-pochemuchka/state1/round-1/`,
 closures (T05, T09) follow State 0's text over the owner's answers of the same
 day and are marked so under M04 and M01.
 
+Reopened on 2026-11-11 for the pre-contract data closure, whose placement
+found values State 1 left to "State 6" without a value and two facts without a
+home. The owner answered (2026-11-11): the object kinds and characteristics
+(M02, "Declared vocabularies"), the customer languages `es`, `ru`, `en`, and
+the alias length decided for the data's protection (M01). The last audit
+sequence number and the migration closure, both facts of one store's history
+(R0-89), are held by a new model, M12 StoreHistory; the closure stays a value
+(M10).
+
 This state names the concepts Registry needs, the facts each carries in domain
 words, its identity (`value` or `entity`, `MODEL_IDENTITY_EVIDENCE.md`), who
 creates, reads and changes it, its status vocabulary and what is written once.
@@ -142,7 +151,7 @@ Facts a Project carries, in domain words:
 - its display name, given by the owner, naming the object and the work and
   never a person (R0-82), held as `personal_data`;
 - its alias, a short neutral label the owner may give, the name the agent sees
-  (R0-82; format and uniqueness under Open questions);
+  (R0-82); at most 40 characters (owner, 2026-11-11; Open questions);
 - its object, embedded, exactly one (R0-38, M02);
 - its customer link, optional: the `customer_ref` of a Customer (R0-16); kept
   even after that Customer's contact data is erased (R0-06, R0-67);
@@ -207,9 +216,14 @@ Durable, one record per project in the instance's own store (R0-05).
 
 None. Settled by the owner on 2026-10-31:
 
-- Alias (R0-82, carried): a short label, no format rule beyond a length State 6
-  sets, and no uniqueness — two projects may share an alias, Registry refuses
-  no duplicate, and a project without one is shown to the agent by its id.
+- Alias (R0-82, carried): a short label of at most 40 characters, counted as
+  Unicode code points, with no other format rule and no uniqueness — two
+  projects may share an alias, Registry refuses no duplicate, and a project
+  without one is shown to the agent by its id. The length was decided on
+  2026-11-11 by the owner's rule "in favour of the data": the alias is what
+  the agent sees instead of the display name and the address (R0-82), so it is
+  kept as short as a label that tells projects apart needs, leaving little room
+  for a personal value; a longer one is refused, never cut.
 - What an anonymised project keeps (R0-60, R0-62, carried): exactly what R0-62
   says as R0-87 narrows it (owner, 2026-10-31, codex round-02 T5) — id,
   status, the anonymised mark and its pointers. The owner's answer
@@ -232,8 +246,17 @@ of it is `personal_data` (R0-26, R0-80).
 
 Facts: address (required at creation, R0-45); kind, one of a closed vocabulary
 the specification declares ("Declared vocabularies"), optional at creation; the
-declared characteristics (their list is the specification's and belongs to
-State 6).
+declared characteristics, each optional at creation and in every correction:
+
+- its floor area, in square metres, greater than zero;
+- its number of rooms as the object has them, a whole number of at least 1 —
+  a fact of the object, not a count of the project's Rooms (M03), which are
+  the rooms the work names;
+- its floor, a whole number, negative below ground and 0 for the ground floor.
+
+The owner decided the characteristics on 2026-11-11: they are useful, and no
+project is ever stopped for the want of one — none is required and none is
+derived from another fact.
 
 ### Identity
 
@@ -772,9 +795,11 @@ without it (R0-89).
 
 ### Persistence candidate
 
-Durable, at most one per store history (R0-89): an instance that restores a
-store from before the import may import again, and that history then holds
-its own closure.
+Embedded in the store's history (M12), at most one per store history
+(R0-89): an instance that restores a store from before the import may import
+again, and that history then holds its own closure. It has no identifier of
+its own: a value is never a record with its own identity (SPEC_STANDARD
+§15.1.1); the audit names it by the digest of the file it accepted (M09).
 
 ### Open questions
 
@@ -831,6 +856,59 @@ Temporary runtime state; never a durable record beyond its life.
 
 None for identity.
 
+## Model M12 — StoreHistory
+
+### Meaning
+
+The facts of one store's history that no other record holds (R0-89): the last
+audit sequence number that history ever wrote (M09; State 2 A15 rule 5) and,
+once the import has succeeded, its migration closure (M10). Exactly one per
+store history. Added on 2026-11-11: both facts were durable in States 1–3
+without a model that holds them.
+
+Facts:
+
+- the last audit sequence number the history ever wrote: 0 for a history
+  that wrote none, then moved to each new entry's number in that entry's
+  transaction; never lowered, also when old entries are erased (R0-66); a
+  store restored from a backup begins its history from the number that
+  backup records (R0-89; State 2 A18);
+- the migration closure (M10), absent until the one import succeeds, then
+  present for the rest of the history.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: a store holds one history; a second record with equal facts
+would be a second history of one store, which R0-89 does not have.
+Continuity: the history stays the same while its last sequence number moves
+with every entry and its migration closure appears; a restore after a loss
+begins a new history, from the backup's facts (R0-89).
+
+### Source of truth
+
+Registry's own store: the audit log's appends (M09) and the accepted import
+(M10).
+
+### Lifecycle candidate
+
+```text
+begun (store made new, or restored) -> number moves -> closure recorded (once)
+```
+
+### Persistence candidate
+
+Durable, exactly one per store, made with the store and changed only inside
+the transaction of an audit append or of the import.
+
+### Open questions
+
+None. No caller reads it as such: the audit view, the backup record (A18) and
+the import's refusal (R0-79) read its facts.
+
 ## Declared vocabularies
 
 These are closed sets the specification declares; in State 6 they become
@@ -840,10 +918,12 @@ These are closed sets the specification declares; in State 6 they become
   separate fact (M01), not a third status: `validate` answers `archived` for
   an anonymised project (R0-62).
 - Customer kind: `person`, `company` (R0-37).
-- Object kind: a closed set the specification declares (R0-38); its entries
-  are the owner's, listed in State 6 (round 1 T10).
-- Customer language: a closed set of the languages the owner writes to
-  customers in; its entries are the owner's, listed in State 6 (round 1 T10).
+- Object kind: `apartment`, `house`, `commercial` (premises for a business),
+  `other` (R0-38; owner, 2026-11-11; round 1 T10). `other` keeps the kind
+  optional in meaning as in form: an object no member describes is never
+  refused.
+- Customer language: `es`, `ru`, `en` — the languages the owner writes to
+  customers in, as ISO 639-1 codes (owner, 2026-11-11; round 1 T10).
 - Artifact pointer status: `published`, `superseded`, `withdrawn` (R0-14).
 - Principal kind: `owner`, `service`, `agent_via_kernel` (M07).
 - Artifact type vocabulary: each type with its one owner service, where its
@@ -882,7 +962,8 @@ None is a model: none has facts of its own.
 ## State 1 readiness
 
 - `tools/design_lint.py examples/registry --state 1` answers no error
-  (2026-10-31, after the owner's answers).
+  (2026-10-31, after the owner's answers; again after the reopening of
+  2026-11-11).
 - Every carried State 1 question of `00_product.md` is answered above or
   placed under a model's Open questions: fields and create requests (each
   model's facts and the facts its create request supplies; their field names
