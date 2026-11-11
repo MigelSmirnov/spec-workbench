@@ -1,0 +1,189 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:`flow:start_instance`",
+   "subject": "listener address ownership",
+   "kind": "contradiction",
+   "text": "`module:data_provider` holds, as constants its readers import, ... the listeners' addresses; nothing of them is read from the configuration. / each at its address in the loaded configuration",
+   "question": "Are listener addresses release constants owned by `module:data_provider`, or runtime configuration fields loaded from the environment?",
+   "options": [
+    "Release-fixed addresses from `module:data_provider`",
+    "Configured addresses from the loaded configuration"
+   ],
+   "default_guess": "Use the configured addresses and remove the stale release-constant statement.",
+   "witness": {
+    "initial": "The release's former listener constants differ from the two valid addresses supplied in the environment.",
+    "events": [
+     "The host starts Registry.",
+     "`module:runtime_settings` loads the configured addresses.",
+     "The listener-opening step chooses its bind addresses."
+    ],
+    "outcomes": [
+     "Registry binds the release-fixed addresses.",
+     "Registry binds the configured addresses."
+    ],
+    "observer": "The deployer and callers attempting to connect"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:start_instance`",
+   "subject": "configuration check order",
+   "kind": "contradiction",
+   "text": "checks them in A17 rule 2's order: the service tokens of all the services the imported `SERVICE_RIGHTS` constant lists with the service API's address, or none, which makes an owner-only start; every other item present; each well formed; each secret at least the imported `SECRET_MIN_BYTES` constant",
+   "question": "Must step 1 check that the two configured addresses have different ports after form validation and before secret-length checks, as A17 rule 2 requires?",
+   "options": [
+    "Perform the different-port check in step 1 at A17's stated position",
+    "Do not perform a separate different-port check",
+    "Defer the collision to listener opening"
+   ],
+   "default_guess": "Perform the different-port check in step 1 before checking secret lengths.",
+   "witness": {
+    "initial": "The owner address is `127.0.0.1:8781`, the service address is `0.0.0.0:8781`, the store does not yet exist, and every secret is valid.",
+    "events": [
+     "The host starts Registry.",
+     "Configuration form checks pass.",
+     "Registry either performs or omits the different-port check."
+    ],
+    "outcomes": [
+     "The start stops during configuration, naming the service API address, before probing or creating the store.",
+     "The start proceeds through the file steps and can fail later while opening a listener, naming a surface and possibly creating then discarding the store."
+    ],
+    "observer": "The host administrator reading the diagnostic and inspecting the store location"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:start_instance`",
+   "subject": "opening configured listeners",
+   "kind": "missing capability",
+   "text": "`module:instance_lifecycle` opens the owner interface's listener and then, unless the start is owner-only, the service API's",
+   "question": "What module capability performs each listener bind/open, and what operation calls it?",
+   "options": [
+    "Add listener-opening capabilities to `module:owner_interface` and `module:service_api`, called by `start_instance`",
+    "Add private listener-opening operations owned by `module:instance_lifecycle`",
+    "Treat listener opening as an unnamed internal part of `capability:instance_lifecycle.start_instance`"
+   ],
+   "default_guess": "Make listener opening an explicit internal operation of `module:instance_lifecycle`, parameterized by the surface and configured address."
+  },
+  {
+   "unit": "40_flows.md:`flow:start_instance`",
+   "subject": "listener rollback",
+   "kind": "unstated failure",
+   "text": "the listeners already opened are closed",
+   "question": "What happens if closing an already-opened listener during failed-start rollback itself fails?",
+   "options": [
+    "Preserve the original open failure, report the close failure additionally, and terminate the process",
+    "Replace the diagnostic with the close failure",
+    "Ignore the close failure",
+    "Retry closing"
+   ],
+   "default_guess": "Preserve the original listener-open diagnostic, report the close failure separately without values, and terminate so no listener remains intentionally served.",
+   "witness": {
+    "initial": "The owner listener opened successfully; opening the service listener fails; closing the owner listener reports an error or leaves its endpoint bound.",
+    "events": [
+     "The host starts Registry.",
+     "Registry opens the owner listener.",
+     "Registry fails to open the service listener.",
+     "Registry attempts rollback and the owner-listener close fails."
+    ],
+    "outcomes": [
+     "The start reports only the original service-listener failure and exits, relying on process teardown.",
+     "The close failure changes or augments the diagnostic and may trigger retry or another cleanup path."
+    ],
+    "observer": "The host administrator and any process trying to bind or reach the owner endpoint"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "listener address syntax",
+   "kind": "vague format",
+   "text": "An address is a host and a port, `host:port`: the host an IP address — an IPv6 one in brackets — and the port a whole number from 1 to 65535",
+   "question": "What exact textual grammar defines an accepted IP address, including IPv4 leading zeros, IPv6 zone identifiers, embedded IPv4 forms, signs, surrounding whitespace and Unicode characters?",
+   "options": [
+    "Use a named standard library parser and accept exactly its grammar",
+    "Specify a closed textual grammar independent of a library",
+    "Accept only canonical IPv4 and IPv6 spellings"
+   ],
+   "default_guess": "Specify a closed grammar and reject whitespace, IPv4 leading zeros, zone identifiers and non-ASCII characters while accepting standard compressed bracketed IPv6.",
+   "witness": {
+    "initial": "The owner-interface address is configured as `127.000.000.001:8781`; every other item is valid.",
+    "events": [
+     "The host starts Registry.",
+     "`module:configuration` parses the address using its chosen interpretation of “IP address”."
+    ],
+    "outcomes": [
+     "The address is accepted and Registry attempts to bind it.",
+     "The start stops with a diagnostic naming the owner-interface address as malformed."
+    ],
+    "observer": "The host administrator"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "deployment topology authority",
+   "kind": "obsolete reference",
+   "text": "The addresses are the deployment's, as R0-19 says — the host's loopback where Registry runs on the host, its internal network where it runs in a container",
+   "question": "Which current topology decision defines the allowed addresses, given that R0-19 says it is replaced by R0-27, R0-28 and R0-29 and R0-48 defines VM Platform, WireGuard and VPN reachability?",
+   "options": [
+    "Treat the quoted loopback/internal-network rule from replaced R0-19 as still normative",
+    "Use R0-28, R0-29, R0-39 and R0-48 as the current topology",
+    "Apply no address-scope validation and leave all topology enforcement to deployment"
+   ],
+   "default_guess": "Use the current R0-28/R0-29/R0-39/R0-48 topology, while leaving its enforcement to the deployment as those decisions state.",
+   "witness": {
+    "initial": "A syntactically valid address binds a surface beyond the intended VPN or VM Platform network.",
+    "events": [
+     "The deployer supplies that address.",
+     "Registry validates and opens the listener."
+    ],
+    "outcomes": [
+     "The start is accepted because Registry checks syntax only and deployment owns reachability.",
+     "The start is refused because the configured host is outside the topology attributed to R0-19."
+    ],
+    "observer": "The deployer and a caller on the additionally reachable network"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:`flow:start_instance`\",\"subject\":\"listener address ownership\",\"kind\":\"contradiction\",\"text\":\"`module:data_provider` holds, as constants its readers import, ... the listeners' addresses; nothing of them is read from the configuration. / each at its address in the loaded configuration\",\"question\":\"Are listener addresses release constants owned by `module:data_provider`, or runtime configuration fields loaded from the environment?\",\"options\":[\"Release-fixed addresses from `module:data_provider`\",\"Configured addresses from the loaded configuration\"],\"default_guess\":\"Use the configured addresses and remove the stale release-constant statement.\",\"witness\":{\"initial\":\"The release's former listener constants differ from the two valid addresses supplied in the environment.\",\"events\":[\"The host starts Registry.\",\"`module:runtime_settings` loads the configured addresses.\",\"The listener-opening step chooses its bind addresses.\"],\"outcomes\":[\"Registry binds the release-fixed addresses.\",\"Registry binds the configured addresses.\"],\"observer\":\"The deployer and callers attempting to connect\"}},{\"unit\":\"40_flows.md:`flow:start_instance`\",\"subject\":\"loaded configuration model\",\"kind\":\"missing field\",\"text\":\"the loaded configuration — locations, the owner credential, the backup key and the service tokens, or none of the tokens for an owner-only start\",\"question\":\"Does the loaded configuration also contain the owner-interface address and, outside owner-only mode, the service-API address, and what are their field names/types?\",\"options\":[\"Both addresses are fields of the loaded configuration\",\"Addresses travel separately from the loaded configuration\",\"Only one surface's address is in the loaded configuration\"],\"default_guess\":\"Add both parsed listener addresses to the loaded configuration, with the service-API address absent in owner-only mode.\",\"witness\":{\"initial\":\"All required settings, including both addresses, are valid.\",\"events\":[\"`capability:configuration.load_configuration` succeeds.\",\"`module:instance_lifecycle` begins step 4 and requests each address from the loaded configuration.\"],\"outcomes\":[\"The addresses are available as loaded-configuration fields.\",\"The lifecycle must reread settings, use undeclared constants, or invent another handoff.\"],\"observer\":\"The implementer and the start operation\"}},{\"unit\":\"40_flows.md:`flow:start_instance`\",\"subject\":\"configuration check order\",\"kind\":\"contradiction\",\"text\":\"checks them in A17 rule 2's order: the service tokens of all the services the imported `SERVICE_RIGHTS` constant lists with the service API's address, or none, which makes an owner-only start; every other item present; each well formed; each secret at least the imported `SECRET_MIN_BYTES` constant\",\"question\":\"Must step 1 check that the two configured addresses have different ports after form validation and before secret-length checks, as A17 rule 2 requires?\",\"options\":[\"Perform the different-port check in step 1 at A17's stated position\",\"Do not perform a separate different-port check\",\"Defer the collision to listener opening\"],\"default_guess\":\"Perform the different-port check in step 1 before checking secret lengths.\",\"witness\":{\"initial\":\"The owner address is `127.0.0.1:8781`, the service address is `0.0.0.0:8781`, the store does not yet exist, and every secret is valid.\",\"events\":[\"The host starts Registry.\",\"Configuration form checks pass.\",\"Registry either performs or omits the different-port check.\"],\"outcomes\":[\"The start stops during configuration, naming the service API address, before probing or creating the store.\",\"The start proceeds through the file steps and can fail later while opening a listener, naming a surface and possibly creating then discarding the store.\"],\"observer\":\"The host administrator reading the diagnostic and inspecting the store location\"}},{\"unit\":\"40_flows.md:`flow:start_instance`\",\"subject\":\"runtime settings call\",\"kind\":\"unnamed caller\",\"text\":\"`capability:configuration.load_configuration`, which takes the settings `capability:runtime_settings.load_runtime_settings` reads\",\"question\":\"Which operation calls `capability:runtime_settings.load_runtime_settings` and passes its result to `capability:configuration.load_configuration`?\",\"options\":[\"`capability:instance_lifecycle.start_instance` calls both operations in order\",\"`capability:configuration.load_configuration` calls `load_runtime_settings` internally\"],\"default_guess\":\"Have `capability:instance_lifecycle.start_instance` call `load_runtime_settings` and pass the returned settings to `load_configuration`.\"},{\"unit\":\"40_flows.md:`flow:start_instance`\",\"subject\":\"opening configured listeners\",\"kind\":\"missing capability\",\"text\":\"`module:instance_lifecycle` opens the owner interface's listener and then, unless the start is owner-only, the service API's\",\"question\":\"What module capability performs each listener bind/open, and what operation calls it?\",\"options\":[\"Add listener-opening capabilities to `module:owner_interface` and `module:service_api`, called by `start_instance`\",\"Add private listener-opening operations owned by `module:instance_lifecycle`\",\"Treat listener opening as an unnamed internal part of `capability:instance_lifecycle.start_instance`\"],\"default_guess\":\"Make listener opening an explicit internal operation of `module:instance_lifecycle`, parameterized by the surface and configured address.\"},{\"unit\":\"40_flows.md:`flow:start_instance`\",\"subject\":\"listener rollback\",\"kind\":\"unstated failure\",\"text\":\"the listeners already opened are closed\",\"question\":\"What happens if closing an already-opened listener during failed-start rollback itself fails?\",\"options\":[\"Preserve the original open failure, report the close failure additionally, and terminate the process\",\"Replace the diagnostic with the close failure\",\"Ignore the close failure\",\"Retry closing\"],\"default_guess\":\"Preserve the original listener-open diagnostic, report the close failure separately without values, and terminate so no listener remains intentionally served.\",\"witness\":{\"initial\":\"The owner listener opened successfully; opening the service listener fails; closing the owner listener reports an error or leaves its endpoint bound.\",\"events\":[\"The host starts Registry.\",\"Registry opens the owner listener.\",\"Registry fails to open the service listener.\",\"Registry attempts rollback and the owner-listener close fails.\"],\"outcomes\":[\"The start reports only the original service-listener failure and exits, relying on process teardown.\",\"The close failure changes or augments the diagnostic and may trigger retry or another cleanup path.\"],\"observer\":\"The host administrator and any process trying to bind or reach the owner endpoint\"}},{\"unit\":\"context\",\"subject\":\"listener address syntax\",\"kind\":\"vague format\",\"text\":\"An address is a host and a port, `host:port`: the host an IP address — an IPv6 one in brackets — and the port a whole number from 1 to 65535\",\"question\":\"What exact textual grammar defines an accepted IP address, including IPv4 leading zeros, IPv6 zone identifiers, embedded IPv4 forms, signs, surrounding whitespace and Unicode characters?\",\"options\":[\"Use a named standard library parser and accept exactly its grammar\",\"Specify a closed textual grammar independent of a library\",\"Accept only canonical IPv4 and IPv6 spellings\"],\"default_guess\":\"Specify a closed grammar and reject whitespace, IPv4 leading zeros, zone identifiers and non-ASCII characters while accepting standard compressed bracketed IPv6.\",\"witness\":{\"initial\":\"The owner-interface address is configured as `127.000.000.001:8781`; every other item is valid.\",\"events\":[\"The host starts Registry.\",\"`module:configuration` parses the address using its chosen interpretation of “IP address”.\"],\"outcomes\":[\"The address is accepted and Registry attempts to bind it.\",\"The start stops with a diagnostic naming the owner-interface address as malformed.\"],\"observer\":\"The host administrator\"}},{\"unit\":\"context\",\"subject\":\"deployment topology authority\",\"kind\":\"obsolete reference\",\"text\":\"The addresses are the deployment's, as R0-19 says — the host's loopback where Registry runs on the host, its internal network where it runs in a container\",\"question\":\"Which current topology decision defines the allowed addresses, given that R0-19 says it is replaced by R0-27, R0-28 and R0-29 and R0-48 defines VM Platform, WireGuard and VPN reachability?\",\"options\":[\"Treat the quoted loopback/internal-network rule from replaced R0-19 as still normative\",\"Use R0-28, R0-29, R0-39 and R0-48 as the current topology\",\"Apply no address-scope validation and leave all topology enforcement to deployment\"],\"default_guess\":\"Use the current R0-28/R0-29/R0-39/R0-48 topology, while leaving its enforcement to the deployment as those decisions state.\",\"witness\":{\"initial\":\"A syntactically valid address binds a surface beyond the intended VPN or VM Platform network.\",\"events\":[\"The deployer supplies that address.\",\"Registry validates and opens the listener.\"],\"outcomes\":[\"The start is accepted because Registry checks syntax only and deployment owns reachability.\",\"The start is refused because the configured host is outside the topology attributed to R0-19.\"],\"observer\":\"The deployer and a caller on the additionally reachable network\"}}]}",
+ "set_aside": [
+  {
+   "unit": "40_flows.md:`flow:start_instance`",
+   "subject": "loaded configuration model",
+   "kind": "missing field",
+   "text": "the loaded configuration — locations, the owner credential, the backup key and the service tokens, or none of the tokens for an owner-only start",
+   "question": "Does the loaded configuration also contain the owner-interface address and, outside owner-only mode, the service-API address, and what are their field names/types?",
+   "options": [
+    "Both addresses are fields of the loaded configuration",
+    "Addresses travel separately from the loaded configuration",
+    "Only one surface's address is in the loaded configuration"
+   ],
+   "default_guess": "Add both parsed listener addresses to the loaded configuration, with the service-API address absent in owner-only mode.",
+   "witness": {
+    "initial": "All required settings, including both addresses, are valid.",
+    "events": [
+     "`capability:configuration.load_configuration` succeeds.",
+     "`module:instance_lifecycle` begins step 4 and requests each address from the loaded configuration."
+    ],
+    "outcomes": [
+     "The addresses are available as loaded-configuration fields.",
+     "The lifecycle must reread settings, use undeclared constants, or invent another handoff."
+    ],
+    "observer": "The implementer and the start operation"
+   },
+   "set_aside_because": "an unchanged passage of a unit reviewed for its change"
+  },
+  {
+   "unit": "40_flows.md:`flow:start_instance`",
+   "subject": "runtime settings call",
+   "kind": "unnamed caller",
+   "text": "`capability:configuration.load_configuration`, which takes the settings `capability:runtime_settings.load_runtime_settings` reads",
+   "question": "Which operation calls `capability:runtime_settings.load_runtime_settings` and passes its result to `capability:configuration.load_configuration`?",
+   "options": [
+    "`capability:instance_lifecycle.start_instance` calls both operations in order",
+    "`capability:configuration.load_configuration` calls `load_runtime_settings` internally"
+   ],
+   "default_guess": "Have `capability:instance_lifecycle.start_instance` call `load_runtime_settings` and pass the returned settings to `load_configuration`.",
+   "set_aside_because": "an unchanged passage of a unit reviewed for its change"
+  }
+ ]
+}
