@@ -150,9 +150,15 @@ closure is the one proof of success.
    below and no other variable: a variable whose name names none of them —
    one beginning with `REGISTRY_` included — is neither read nor checked and
    does not stop the start (owner, 2026-11-11: only the one module that reads
-   the environment sees it, and it reads the items it declares; a misspelt
-   name still stops the start, as the item it was meant to set is then
-   missing). The items are exactly these: the store's
+   the environment sees it, and it reads the items it declares). A misspelt
+   name is such a variable: the item it was meant to set is then not set. For
+   a required item that stops the start, naming the item as missing; for a
+   service token it is rule 2's all-or-none — some of the four set and the
+   misspelt one not makes the start fail on the missing token, and none of
+   the four set makes an owner-only start, whose service API answers nothing.
+   Registry's code receives each item as a field of the settings the one
+   module that reads the environment loads; no other part of Registry reads
+   a variable. The items are exactly these: the store's
    location; the backup location and the backup key (A18); the owner
    credential; one service token for each service of A09 — PresuPro, Client
    Portal, Cabinet, Cabinet Kernel (R0-20, R0-23) — or, for an owner-only
@@ -244,9 +250,13 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= 32 bytes
    fails, leaves it as an empty store of the release's version; one whose
    listener cannot be opened over an existing store leaves that store's
    records as they were. An owner-only start opens no service API listener.
-7. A complete configuration with an extra `REGISTRY_EXTRA` variable starts;
-   one where the backup key is set as `REGISTRY_BACKUP_KEYY` instead of its
-   own name stops the start, naming the backup key as missing.
+7. A complete configuration with variables that name no item —
+   `REGISTRY_EXTRA`, `REGISTRY_`, and one without the prefix — starts, and
+   none of them appears in a diagnostic or a setting; one where the backup key
+   is set as `REGISTRY_BACKUP_KEYY` instead of its own name stops the start,
+   naming the backup key as missing; one with three tokens set and the fourth
+   misspelt stops the start naming that token; one with only a misspelt
+   token and no other token starts owner-only.
 6. A store made new holds exactly one audit sequence (M12), at 0, and no
    other record; a start interrupted before the store's rename leaves no
    store under the store's name, and the next start makes a new one with
@@ -584,7 +594,12 @@ A18) — was reviewed; A15's new tests of concurrent appends rest on its rule 5,
 which concurrency now names. No outcome changed. files_artifacts now names A19 too, whose
 import size limit is counted over the bytes received, never over a declared
 length (rule 4); a new store's one audit sequence (A17 rule 5) changes no
-category's subject.
+category's subject. A17's change of the same day — a variable that names no
+item is not read and does not stop the start — was reviewed under
+authentication_credential_abuse and secrets: no outcome changed, since such
+a variable is never a credential Registry uses, never enters a diagnostic,
+and a misspelt secret leaves its item unset, which stops the start or makes
+the start owner-only (rule 1).
 
 ### Consequence
 
