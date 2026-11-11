@@ -1,0 +1,184 @@
+{
+ "open_points": [
+  {
+   "subject": "A21",
+   "kind": "contradiction",
+   "text": "references: A01, A04, A07, A12, A13, A14, A15, A16, A17, A18",
+   "question": "How can A17 satisfy the Required-tests demand that every reference be an accepted decision of States 0–2 that exists in this text when no Accepted decision A17 is supplied?",
+   "options": [
+    "Supply Accepted decision A17 and its required tests in the reviewed text",
+    "Remove A17 from the references and affected behaviour",
+    "Define that a narrative mention of A17 counts as the decision"
+   ],
+   "default_guess": "Supply the complete Accepted decision A17 and its required tests before accepting A21.",
+   "witness": {
+    "initial": "The reviewed text contains A21 and the supplied State 0 and State 1 passages, but no Accepted decision A17.",
+    "events": [
+     "A reviewer evaluates A21 Required tests item 2.",
+     "The reviewer encounters A17 in the concurrency references and searches the supplied text for that accepted decision."
+    ],
+    "outcomes": [
+     "The reference fails because A17 does not exist in the supplied text.",
+     "A narrative mention of A17 is treated as sufficient evidence that the decision exists."
+    ],
+    "observer": "The reviewer or tools/design_lint.py"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21",
+   "kind": "check_order",
+   "text": "a start serving nothing until every check passed and binding each listener exclusively (A17)",
+   "question": "Are listener bindings themselves checks that must all be acquired before the start is considered passed, or are all other checks completed first and listeners bound afterward?",
+   "options": [
+    "Run non-binding checks, acquire every exclusive listener binding, then atomically enter serving state",
+    "Complete every check, declare the start passed, then bind listeners",
+    "Bind listeners first, retain them while running the remaining checks, then serve"
+   ],
+   "default_guess": "Run non-binding checks first, acquire and retain every listener binding, and begin serving only after all bindings and checks succeed.",
+   "witness": {
+    "initial": "All configured checks pass and the configured listener address is initially free.",
+    "events": [
+     "Start P checks the address and sees it free.",
+     "Before P binds it, start Q checks the same address and sees it free.",
+     "P and Q then try to bind and proceed."
+    ],
+    "outcomes": [
+     "Binding is part of the gated checks, so exactly one start succeeds and the other refuses without serving.",
+     "Address availability was already considered checked, so both starts may be treated as passed before one later fails to bind."
+    ],
+    "observer": "The owner starting Registry and clients waiting for its service"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21",
+   "kind": "atomicity",
+   "text": "binding each listener exclusively",
+   "question": "When several listeners are configured, must acquisition be all-or-nothing, and what happens to listeners already bound if a later binding fails?",
+   "options": [
+    "On any binding failure, release every binding acquired by that start and refuse the whole start",
+    "Keep successfully bound listeners but serve nothing while reporting startup failure",
+    "Serve on successfully bound listeners and omit the failed listener"
+   ],
+   "default_guess": "Treat listener acquisition as an all-or-nothing startup transaction; release every acquired binding and refuse the start on any failure.",
+   "witness": {
+    "initial": "Registry has two configured listeners; both are free when startup begins.",
+    "events": [
+     "Registry binds the first listener exclusively.",
+     "Another process acquires the second listener before Registry binds it.",
+     "Registry's second bind fails."
+    ],
+    "outcomes": [
+     "Registry releases the first listener and refuses the entire start.",
+     "Registry retains or serves the first listener despite failure of the second."
+    ],
+    "observer": "The owner, the competing process, and callers of the first listener"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21",
+   "kind": "precedence",
+   "text": "a start serving nothing until every check passed and binding each listener exclusively (A17)",
+   "question": "If several startup checks or bindings fail, which failure is reported, and is the order of checks and listener acquisition fixed?",
+   "options": [
+    "Specify a deterministic check and binding order and report the first failure in that order",
+    "Evaluate all checks and report every failure",
+    "Allow implementation order to determine the reported failure"
+   ],
+   "default_guess": "Specify a deterministic order and report the first failure while ensuring no listener serves.",
+   "witness": {
+    "initial": "A required secret is unset and one configured listener is already occupied.",
+    "events": [
+     "The owner starts Registry.",
+     "The implementation evaluates the secret check and listener acquisition in its chosen order."
+    ],
+    "outcomes": [
+     "The start refuses for the missing secret without attempting a bind.",
+     "The start attempts binding and reports the occupied listener instead."
+    ],
+    "observer": "The owner and startup diagnostics"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21",
+   "kind": "scope",
+   "text": "binding each listener exclusively",
+   "question": "What exact resource must be exclusive: the textual configured address, the resolved socket endpoint, every address produced by name resolution, or the effective network endpoint including IPv4/IPv6 overlap and socket reuse options?",
+   "options": [
+    "Exclusive ownership of every effective resolved endpoint, with reuse modes that permit another listener forbidden",
+    "Exclusivity only for the literal configured address and port",
+    "Normal operating-system bind semantics, including platform-specific reuse and IPv4/IPv6 behaviour"
+   ],
+   "default_guess": "Require exclusive ownership of every effective endpoint and disable socket reuse modes that could permit another server to accept the same traffic.",
+   "witness": {
+    "initial": "One process listens on an IPv6 wildcard address whose platform settings may also accept IPv4 traffic.",
+    "events": [
+     "Registry is configured with the corresponding IPv4 address and port.",
+     "Registry attempts its exclusive binding."
+    ],
+    "outcomes": [
+     "The endpoints are considered overlapping, so Registry refuses to start.",
+     "Only the textual addresses are compared, so Registry starts if the operating system permits the second bind."
+    ],
+    "observer": "Clients connecting over IPv4 and the owner inspecting which process receives requests"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21",
+   "kind": "refusal_conditions",
+   "text": "until every check passed",
+   "question": "Which checks are included, which failures refuse the whole start, and which failures instead permit an owner-only start?",
+   "options": [
+    "Enumerate every startup check and its exact result: full start, owner-only start, or refusal",
+    "Treat every failed check as a complete refusal",
+    "Leave the distinction to A17 without including A17 in the reviewed material"
+   ],
+   "default_guess": "Enumerate the checks and a deterministic result for each failure, with complete refusal as the default.",
+   "witness": {
+    "initial": "A configuration item needed only for a non-owner surface is unset.",
+    "events": [
+     "The owner starts Registry.",
+     "Startup detects the unset item."
+    ],
+    "outcomes": [
+     "Registry refuses to start because not every check passed.",
+     "Registry starts owner-only because the unavailable surface is disabled."
+    ],
+    "observer": "The owner and callers of the non-owner surface"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21",
+   "kind": "test_obligation",
+   "text": "Each APPLICABLE category's decisions have their own required tests, and\n   those tests pass.",
+   "question": "What test must demonstrate the newly claimed concurrency behaviour for A17, including simultaneous starts, no serving before readiness, exclusive binding, and cleanup after partial acquisition failure?",
+   "options": [
+    "Require an A17 witness test covering concurrent starts and multi-listener rollback, and name it from this Required tests item",
+    "Require only that whatever tests A17 happens to define pass",
+    "Rely on tools/design_lint.py to check references without exercising the behaviour"
+   ],
+   "default_guess": "Require and name an A17 concurrency witness that proves one winner for a contested endpoint, no premature serving, and complete rollback on any startup failure.",
+   "witness": {
+    "initial": "A17 has a passing single-process startup test but no concurrent-start test.",
+    "events": [
+     "Two Registry processes start concurrently for the same listeners.",
+     "Both pass their pre-binding checks."
+    ],
+    "outcomes": [
+     "A required witness establishes that at most one serves and the loser releases every binding.",
+     "The category is considered tested merely because A17's unrelated or single-process tests pass."
+    ],
+    "observer": "The security reviewer and clients connecting during startup"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A21\",\"kind\":\"contradiction\",\"text\":\"references: A01, A04, A07, A12, A13, A14, A15, A16, A17, A18\",\"question\":\"How can A17 satisfy the Required-tests demand that every reference be an accepted decision of States 0–2 that exists in this text when no Accepted decision A17 is supplied?\",\"options\":[\"Supply Accepted decision A17 and its required tests in the reviewed text\",\"Remove A17 from the references and affected behaviour\",\"Define that a narrative mention of A17 counts as the decision\"],\"default_guess\":\"Supply the complete Accepted decision A17 and its required tests before accepting A21.\",\"witness\":{\"initial\":\"The reviewed text contains A21 and the supplied State 0 and State 1 passages, but no Accepted decision A17.\",\"events\":[\"A reviewer evaluates A21 Required tests item 2.\",\"The reviewer encounters A17 in the concurrency references and searches the supplied text for that accepted decision.\"],\"outcomes\":[\"The reference fails because A17 does not exist in the supplied text.\",\"A narrative mention of A17 is treated as sufficient evidence that the decision exists.\"],\"observer\":\"The reviewer or tools/design_lint.py\"}},{\"subject\":\"A21\",\"kind\":\"check_order\",\"text\":\"a start serving nothing until every check passed and binding each listener exclusively (A17)\",\"question\":\"Are listener bindings themselves checks that must all be acquired before the start is considered passed, or are all other checks completed first and listeners bound afterward?\",\"options\":[\"Run non-binding checks, acquire every exclusive listener binding, then atomically enter serving state\",\"Complete every check, declare the start passed, then bind listeners\",\"Bind listeners first, retain them while running the remaining checks, then serve\"],\"default_guess\":\"Run non-binding checks first, acquire and retain every listener binding, and begin serving only after all bindings and checks succeed.\",\"witness\":{\"initial\":\"All configured checks pass and the configured listener address is initially free.\",\"events\":[\"Start P checks the address and sees it free.\",\"Before P binds it, start Q checks the same address and sees it free.\",\"P and Q then try to bind and proceed.\"],\"outcomes\":[\"Binding is part of the gated checks, so exactly one start succeeds and the other refuses without serving.\",\"Address availability was already considered checked, so both starts may be treated as passed before one later fails to bind.\"],\"observer\":\"The owner starting Registry and clients waiting for its service\"}},{\"subject\":\"A21\",\"kind\":\"atomicity\",\"text\":\"binding each listener exclusively\",\"question\":\"When several listeners are configured, must acquisition be all-or-nothing, and what happens to listeners already bound if a later binding fails?\",\"options\":[\"On any binding failure, release every binding acquired by that start and refuse the whole start\",\"Keep successfully bound listeners but serve nothing while reporting startup failure\",\"Serve on successfully bound listeners and omit the failed listener\"],\"default_guess\":\"Treat listener acquisition as an all-or-nothing startup transaction; release every acquired binding and refuse the start on any failure.\",\"witness\":{\"initial\":\"Registry has two configured listeners; both are free when startup begins.\",\"events\":[\"Registry binds the first listener exclusively.\",\"Another process acquires the second listener before Registry binds it.\",\"Registry's second bind fails.\"],\"outcomes\":[\"Registry releases the first listener and refuses the entire start.\",\"Registry retains or serves the first listener despite failure of the second.\"],\"observer\":\"The owner, the competing process, and callers of the first listener\"}},{\"subject\":\"A21\",\"kind\":\"precedence\",\"text\":\"a start serving nothing until every check passed and binding each listener exclusively (A17)\",\"question\":\"If several startup checks or bindings fail, which failure is reported, and is the order of checks and listener acquisition fixed?\",\"options\":[\"Specify a deterministic check and binding order and report the first failure in that order\",\"Evaluate all checks and report every failure\",\"Allow implementation order to determine the reported failure\"],\"default_guess\":\"Specify a deterministic order and report the first failure while ensuring no listener serves.\",\"witness\":{\"initial\":\"A required secret is unset and one configured listener is already occupied.\",\"events\":[\"The owner starts Registry.\",\"The implementation evaluates the secret check and listener acquisition in its chosen order.\"],\"outcomes\":[\"The start refuses for the missing secret without attempting a bind.\",\"The start attempts binding and reports the occupied listener instead.\"],\"observer\":\"The owner and startup diagnostics\"}},{\"subject\":\"A21\",\"kind\":\"scope\",\"text\":\"binding each listener exclusively\",\"question\":\"What exact resource must be exclusive: the textual configured address, the resolved socket endpoint, every address produced by name resolution, or the effective network endpoint including IPv4/IPv6 overlap and socket reuse options?\",\"options\":[\"Exclusive ownership of every effective resolved endpoint, with reuse modes that permit another listener forbidden\",\"Exclusivity only for the literal configured address and port\",\"Normal operating-system bind semantics, including platform-specific reuse and IPv4/IPv6 behaviour\"],\"default_guess\":\"Require exclusive ownership of every effective endpoint and disable socket reuse modes that could permit another server to accept the same traffic.\",\"witness\":{\"initial\":\"One process listens on an IPv6 wildcard address whose platform settings may also accept IPv4 traffic.\",\"events\":[\"Registry is configured with the corresponding IPv4 address and port.\",\"Registry attempts its exclusive binding.\"],\"outcomes\":[\"The endpoints are considered overlapping, so Registry refuses to start.\",\"Only the textual addresses are compared, so Registry starts if the operating system permits the second bind.\"],\"observer\":\"Clients connecting over IPv4 and the owner inspecting which process receives requests\"}},{\"subject\":\"A21\",\"kind\":\"refusal_conditions\",\"text\":\"until every check passed\",\"question\":\"Which checks are included, which failures refuse the whole start, and which failures instead permit an owner-only start?\",\"options\":[\"Enumerate every startup check and its exact result: full start, owner-only start, or refusal\",\"Treat every failed check as a complete refusal\",\"Leave the distinction to A17 without including A17 in the reviewed material\"],\"default_guess\":\"Enumerate the checks and a deterministic result for each failure, with complete refusal as the default.\",\"witness\":{\"initial\":\"A configuration item needed only for a non-owner surface is unset.\",\"events\":[\"The owner starts Registry.\",\"Startup detects the unset item.\"],\"outcomes\":[\"Registry refuses to start because not every check passed.\",\"Registry starts owner-only because the unavailable surface is disabled.\"],\"observer\":\"The owner and callers of the non-owner surface\"}},{\"subject\":\"A21\",\"kind\":\"test_obligation\",\"text\":\"Each APPLICABLE category's decisions have their own required tests, and\\n   those tests pass.\",\"question\":\"What test must demonstrate the newly claimed concurrency behaviour for A17, including simultaneous starts, no serving before readiness, exclusive binding, and cleanup after partial acquisition failure?\",\"options\":[\"Require an A17 witness test covering concurrent starts and multi-listener rollback, and name it from this Required tests item\",\"Require only that whatever tests A17 happens to define pass\",\"Rely on tools/design_lint.py to check references without exercising the behaviour\"],\"default_guess\":\"Require and name an A17 concurrency witness that proves one winner for a contested endpoint, no premature serving, and complete rollback on any startup failure.\",\"witness\":{\"initial\":\"A17 has a passing single-process startup test but no concurrent-start test.\",\"events\":[\"Two Registry processes start concurrently for the same listeners.\",\"Both pass their pre-binding checks.\"],\"outcomes\":[\"A required witness establishes that at most one serves and the loser releases every binding.\",\"The category is considered tested merely because A17's unrelated or single-process tests pass.\"],\"observer\":\"The security reviewer and clients connecting during startup\"}}]}",
+ "set_aside": []
+}

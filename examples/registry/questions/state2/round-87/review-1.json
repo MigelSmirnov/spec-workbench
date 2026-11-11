@@ -1,0 +1,58 @@
+{
+ "open_points": [
+  {
+   "subject": "A21 concurrency review of A17 startup",
+   "kind": "check_order",
+   "text": "a start serving nothing until every check passed and binding each listener exclusively (A17)",
+   "question": "When are listeners bound relative to the other startup checks: before them but kept non-serving, or only after every other check has passed?",
+   "options": [
+    "Bind every listener first, keep all of them non-serving, then run the remaining checks.",
+    "Run every non-binding check first, then bind the listeners exclusively.",
+    "Treat exclusive binding as one of the checks, with an explicitly specified position in the check order."
+   ],
+   "default_guess": "Bind every listener first without accepting traffic, then run the remaining checks, so another process cannot invalidate a preflight check by taking an address.",
+   "witness": {
+    "initial": "All configured listener addresses are free and startup has at least one other check that takes time.",
+    "events": [
+     "Registry process A begins startup.",
+     "While A is running its checks, Registry process B attempts to bind the same listeners."
+    ],
+    "outcomes": [
+     "A already holds the listeners without serving; B is refused, and A serves only after its remaining checks pass.",
+     "A has not bound yet; B acquires the listeners, and A later refuses startup when its binding step fails."
+    ],
+    "observer": "The owner starting or diagnosing the two Registry processes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21 concurrency review of multiple A17 listeners",
+   "kind": "partial_acquisition",
+   "text": "binding each listener exclusively (A17)",
+   "question": "If concurrent starts split a set of listener bindings between them, must acquisition be all-or-nothing, and must every partially acquired listener be released immediately when the start cannot acquire the rest?",
+   "options": [
+    "Serialize or otherwise acquire the complete listener set all-or-nothing so one start can own every listener.",
+    "Allow sequential acquisition, but on any failure release every listener acquired by that start and refuse it.",
+    "Allow a failed or still-checking start to retain listeners it acquired, while serving nothing."
+   ],
+   "default_guess": "Acquire sequentially under a startup lock and release the entire partial set immediately on failure.",
+   "witness": {
+    "initial": "The deployment has two configured listeners, both initially free.",
+    "events": [
+     "Process A binds listener 1.",
+     "Concurrently, process B binds listener 2.",
+     "A attempts listener 2 and B attempts listener 1."
+    ],
+    "outcomes": [
+     "Partial acquisitions are rolled back; both starts refuse and both listeners become free.",
+     "Startup acquisition is serialized or atomic; one process obtains both listeners and may serve after all checks pass."
+    ],
+    "observer": "The owner, who sees either a running Registry or two refused starts despite both listeners having initially been free."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A21 concurrency review of A17 startup\",\"kind\":\"check_order\",\"text\":\"a start serving nothing until every check passed and binding each listener exclusively (A17)\",\"question\":\"When are listeners bound relative to the other startup checks: before them but kept non-serving, or only after every other check has passed?\",\"options\":[\"Bind every listener first, keep all of them non-serving, then run the remaining checks.\",\"Run every non-binding check first, then bind the listeners exclusively.\",\"Treat exclusive binding as one of the checks, with an explicitly specified position in the check order.\"],\"default_guess\":\"Bind every listener first without accepting traffic, then run the remaining checks, so another process cannot invalidate a preflight check by taking an address.\",\"witness\":{\"initial\":\"All configured listener addresses are free and startup has at least one other check that takes time.\",\"events\":[\"Registry process A begins startup.\",\"While A is running its checks, Registry process B attempts to bind the same listeners.\"],\"outcomes\":[\"A already holds the listeners without serving; B is refused, and A serves only after its remaining checks pass.\",\"A has not bound yet; B acquires the listeners, and A later refuses startup when its binding step fails.\"],\"observer\":\"The owner starting or diagnosing the two Registry processes.\"}},{\"subject\":\"A21 concurrency review of multiple A17 listeners\",\"kind\":\"partial_acquisition\",\"text\":\"binding each listener exclusively (A17)\",\"question\":\"If concurrent starts split a set of listener bindings between them, must acquisition be all-or-nothing, and must every partially acquired listener be released immediately when the start cannot acquire the rest?\",\"options\":[\"Serialize or otherwise acquire the complete listener set all-or-nothing so one start can own every listener.\",\"Allow sequential acquisition, but on any failure release every listener acquired by that start and refuse it.\",\"Allow a failed or still-checking start to retain listeners it acquired, while serving nothing.\"],\"default_guess\":\"Acquire sequentially under a startup lock and release the entire partial set immediately on failure.\",\"witness\":{\"initial\":\"The deployment has two configured listeners, both initially free.\",\"events\":[\"Process A binds listener 1.\",\"Concurrently, process B binds listener 2.\",\"A attempts listener 2 and B attempts listener 1.\"],\"outcomes\":[\"Partial acquisitions are rolled back; both starts refuse and both listeners become free.\",\"Startup acquisition is serialized or atomic; one process obtains both listeners and may serve after all checks pass.\"],\"observer\":\"The owner, who sees either a running Registry or two refused starts despite both listeners having initially been free.\"}}]}",
+ "set_aside": []
+}
