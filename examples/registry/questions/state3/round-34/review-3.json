@@ -1,0 +1,159 @@
+{
+ "open_points": [
+  {
+   "subject": "environment-variable table",
+   "kind": "dual ownership and missing dependency",
+   "text": "The table is its own: the data closure\nwrites it once, as `config.runtime_environment_variables`, and no other\nmodule holds a name.",
+   "question": "Does `runtime_settings` own the table, or does the module that owns `config.runtime_environment_variables` own and export it; if the latter, what dependency lets `runtime_settings` read it?",
+   "options": [
+    "`runtime_settings` owns the table and the data closure merely emits that module's declaration",
+    "The data-provider/configuration data closure owns the table and `runtime_settings` imports it",
+    "The table is generated independently into both places"
+   ],
+   "default_guess": "Make the data-provider/configuration data closure the sole owner and add a direct dependency from `runtime_settings` to its exported table.",
+   "witness": {
+    "initial": "A release adds a fifth service token and updates the generated `config.runtime_environment_variables` table.",
+    "events": [
+     "The data-closure implementer updates the table it is said to write once.",
+     "The `runtime_settings` implementer treats the table as its own and leaves its local closed table unchanged.",
+     "The instance starts and `runtime_settings` does not load the new token."
+    ],
+    "outcomes": [
+     "The new token is loaded because the generated data-closure table is authoritative.",
+     "The new token is ignored because `runtime_settings`'s private table is authoritative."
+    ],
+    "observer": "The owner at startup and the service presenting the new token"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "runtime settings representation",
+   "kind": "unowned shared model",
+   "text": "loaded at each\ncall of `load_runtime_settings` into the settings.",
+   "question": "Which module owns the settings type and its field schema, and may both `runtime_settings` and `configuration` depend on that owner?",
+   "options": [
+    "`models` owns a shared settings type",
+    "`runtime_settings` owns and exports a settings type",
+    "`configuration` owns the settings type and `runtime_settings` constructs it",
+    "The value is an untyped mapping whose keys come only from the environment table"
+   ],
+   "default_guess": "Have `runtime_settings` own and export a typed immutable settings value consumed by `configuration`.",
+   "witness": {
+    "initial": "The owner starts Registry with `REGISTRY_BACKUP_KEY` set.",
+    "events": [
+     "`runtime_settings` loads the value into what it considers the `backup_key` field.",
+     "`configuration` reads the settings according to its independently chosen schema."
+    ],
+    "outcomes": [
+     "Both modules use the same typed field and the key is checked.",
+     "The modules choose different field names or absence representations and configuration reports the key missing."
+    ],
+    "observer": "The owner starting Registry"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "secret byte semantics",
+   "kind": "ownership contradiction",
+   "text": "A secret's length is counted in the bytes of its UTF-8\nencoding, and a presented credential is compared in those bytes (A17 rules\n3, 6).",
+   "question": "Does `runtime_settings` own or perform either byte-length validation or presented-credential comparison, despite its prohibition on item checks and despite those operations belonging respectively to `configuration` and the authentication module?",
+   "options": [
+    "`runtime_settings` encodes secrets and performs both operations",
+    "`runtime_settings` only preserves text; `configuration` encodes for length checks and authentication encodes for comparison",
+    "`runtime_settings` supplies a shared encoded representation but performs no checks"
+   ],
+   "default_guess": "Keep `runtime_settings` as a text-preserving loader; let `configuration` perform the UTF-8 byte-length check and the authentication owner perform constant-time comparison of UTF-8 bytes.",
+   "witness": {
+    "initial": "The configured owner credential contains a non-ASCII character and has different character and UTF-8 byte lengths.",
+    "events": [
+     "`runtime_settings` loads the credential.",
+     "Registry performs the startup length check and later compares a presented credential."
+    ],
+    "outcomes": [
+     "The loader supplies UTF-8 bytes, and both consumers use that representation.",
+     "The loader supplies text, and the two consumers independently choose character comparison, UTF-8 bytes, or another encoding."
+    ],
+    "observer": "The owner, through whether startup succeeds and sign-in is accepted"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "path checks",
+   "kind": "boundary contradiction",
+   "text": "the path checks of rule 5 that need no file — the\nstore and the backup location apart, compared with every link resolved.",
+   "question": "Are filesystem inspection and symbolic-link resolution part of `configuration`, or are these checks to be performed by `instance_lifecycle`, `store`, or `backups`; what does “need no file” mean when every link must be resolved and unresolved or broken paths fail?",
+   "options": [
+    "`configuration` performs filesystem-aware canonicalization but creates or opens no file",
+    "`instance_lifecycle` performs the cross-path check immediately before probing and opening",
+    "`store` and `backups` resolve their own paths and another module compares their results"
+   ],
+   "default_guess": "Let `configuration` resolve and compare both paths without creating files, then return the resolved paths used by the later operations.",
+   "witness": {
+    "initial": "The store path contains a symbolic link and the backup path names the link's resolved directory.",
+    "events": [
+     "The owner starts Registry.",
+     "The path-separation check is run before the backup probe and store open."
+    ],
+    "outcomes": [
+     "`configuration` resolves the link and refuses the start because one location contains the other.",
+     "`configuration` treats the check as file-free lexical validation and accepts; a later module resolves the paths and operates in overlapping locations."
+    ],
+    "observer": "The owner and the files in the store and backup locations"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "startup check order",
+   "kind": "dual ownership",
+   "text": "Path resolution and the order of the checks.",
+   "question": "Does `configuration` hide only the order of its own in-memory and path checks, or the complete A17 startup order that `instance_lifecycle` is also said to run?",
+   "options": [
+    "`configuration` owns the complete startup orchestration and calls the later modules",
+    "`instance_lifecycle` owns the complete cross-module order while `configuration` owns only its internal prefix",
+    "The order is duplicated between `configuration` and `instance_lifecycle`"
+   ],
+   "default_guess": "Make `instance_lifecycle` the sole owner of the complete cross-module order and restrict `configuration` to the ordered prefix of checks it performs.",
+   "witness": {
+    "initial": "The backup location is not writable and the existing store is invalid.",
+    "events": [
+     "`instance_lifecycle` calls `configuration`.",
+     "The backup probe and store opening are attempted according to the implementer's reading of which module owns the order."
+    ],
+    "outcomes": [
+     "The backup probe runs first and the diagnostic names the backup location, as A17's global order requires.",
+     "The store is opened first and the diagnostic names the store because `configuration`'s claimed hidden order was interpreted as ending before external checks."
+    ],
+    "observer": "The owner starting Registry"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "listener opening",
+   "kind": "unowned action",
+   "text": "and the listeners — are run in rule 2's order by\n`instance_lifecycle`, which calls this module first.",
+   "question": "Which module owns opening and closing the owner-interface and service-API listeners, and what direct dependency does `instance_lifecycle` use to invoke it?",
+   "options": [
+    "`instance_lifecycle` owns listener opening and rollback itself",
+    "Each interface module owns its listener and exports an opening operation",
+    "A dedicated network/listener module owns both listeners and their rollback"
+   ],
+   "default_guess": "Use a dedicated listener owner called by `instance_lifecycle`, with one operation that opens the owner interface first, conditionally opens the service API, and closes the first on failure.",
+   "witness": {
+    "initial": "The owner-interface address is available but the service-API address is already occupied.",
+    "events": [
+     "`instance_lifecycle` completes configuration, backup probing, and store opening.",
+     "It opens the owner-interface listener and then attempts the service-API listener."
+    ],
+    "outcomes": [
+     "One owner performs the two-listener operation and closes the owner listener when the service listener fails.",
+     "Separate implicit owners open listeners independently and the owner listener remains open after startup has failed."
+    ],
+    "observer": "The owner and a caller attempting to reach the owner interface"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"environment-variable table\",\"kind\":\"dual ownership and missing dependency\",\"text\":\"The table is its own: the data closure\\nwrites it once, as `config.runtime_environment_variables`, and no other\\nmodule holds a name.\",\"question\":\"Does `runtime_settings` own the table, or does the module that owns `config.runtime_environment_variables` own and export it; if the latter, what dependency lets `runtime_settings` read it?\",\"options\":[\"`runtime_settings` owns the table and the data closure merely emits that module's declaration\",\"The data-provider/configuration data closure owns the table and `runtime_settings` imports it\",\"The table is generated independently into both places\"],\"default_guess\":\"Make the data-provider/configuration data closure the sole owner and add a direct dependency from `runtime_settings` to its exported table.\",\"witness\":{\"initial\":\"A release adds a fifth service token and updates the generated `config.runtime_environment_variables` table.\",\"events\":[\"The data-closure implementer updates the table it is said to write once.\",\"The `runtime_settings` implementer treats the table as its own and leaves its local closed table unchanged.\",\"The instance starts and `runtime_settings` does not load the new token.\"],\"outcomes\":[\"The new token is loaded because the generated data-closure table is authoritative.\",\"The new token is ignored because `runtime_settings`'s private table is authoritative.\"],\"observer\":\"The owner at startup and the service presenting the new token\"}},{\"subject\":\"runtime settings representation\",\"kind\":\"unowned shared model\",\"text\":\"loaded at each\\ncall of `load_runtime_settings` into the settings.\",\"question\":\"Which module owns the settings type and its field schema, and may both `runtime_settings` and `configuration` depend on that owner?\",\"options\":[\"`models` owns a shared settings type\",\"`runtime_settings` owns and exports a settings type\",\"`configuration` owns the settings type and `runtime_settings` constructs it\",\"The value is an untyped mapping whose keys come only from the environment table\"],\"default_guess\":\"Have `runtime_settings` own and export a typed immutable settings value consumed by `configuration`.\",\"witness\":{\"initial\":\"The owner starts Registry with `REGISTRY_BACKUP_KEY` set.\",\"events\":[\"`runtime_settings` loads the value into what it considers the `backup_key` field.\",\"`configuration` reads the settings according to its independently chosen schema.\"],\"outcomes\":[\"Both modules use the same typed field and the key is checked.\",\"The modules choose different field names or absence representations and configuration reports the key missing.\"],\"observer\":\"The owner starting Registry\"}},{\"subject\":\"secret byte semantics\",\"kind\":\"ownership contradiction\",\"text\":\"A secret's length is counted in the bytes of its UTF-8\\nencoding, and a presented credential is compared in those bytes (A17 rules\\n3, 6).\",\"question\":\"Does `runtime_settings` own or perform either byte-length validation or presented-credential comparison, despite its prohibition on item checks and despite those operations belonging respectively to `configuration` and the authentication module?\",\"options\":[\"`runtime_settings` encodes secrets and performs both operations\",\"`runtime_settings` only preserves text; `configuration` encodes for length checks and authentication encodes for comparison\",\"`runtime_settings` supplies a shared encoded representation but performs no checks\"],\"default_guess\":\"Keep `runtime_settings` as a text-preserving loader; let `configuration` perform the UTF-8 byte-length check and the authentication owner perform constant-time comparison of UTF-8 bytes.\",\"witness\":{\"initial\":\"The configured owner credential contains a non-ASCII character and has different character and UTF-8 byte lengths.\",\"events\":[\"`runtime_settings` loads the credential.\",\"Registry performs the startup length check and later compares a presented credential.\"],\"outcomes\":[\"The loader supplies UTF-8 bytes, and both consumers use that representation.\",\"The loader supplies text, and the two consumers independently choose character comparison, UTF-8 bytes, or another encoding.\"],\"observer\":\"The owner, through whether startup succeeds and sign-in is accepted\"}},{\"subject\":\"path checks\",\"kind\":\"boundary contradiction\",\"text\":\"the path checks of rule 5 that need no file — the\\nstore and the backup location apart, compared with every link resolved.\",\"question\":\"Are filesystem inspection and symbolic-link resolution part of `configuration`, or are these checks to be performed by `instance_lifecycle`, `store`, or `backups`; what does “need no file” mean when every link must be resolved and unresolved or broken paths fail?\",\"options\":[\"`configuration` performs filesystem-aware canonicalization but creates or opens no file\",\"`instance_lifecycle` performs the cross-path check immediately before probing and opening\",\"`store` and `backups` resolve their own paths and another module compares their results\"],\"default_guess\":\"Let `configuration` resolve and compare both paths without creating files, then return the resolved paths used by the later operations.\",\"witness\":{\"initial\":\"The store path contains a symbolic link and the backup path names the link's resolved directory.\",\"events\":[\"The owner starts Registry.\",\"The path-separation check is run before the backup probe and store open.\"],\"outcomes\":[\"`configuration` resolves the link and refuses the start because one location contains the other.\",\"`configuration` treats the check as file-free lexical validation and accepts; a later module resolves the paths and operates in overlapping locations.\"],\"observer\":\"The owner and the files in the store and backup locations\"}},{\"subject\":\"startup check order\",\"kind\":\"dual ownership\",\"text\":\"Path resolution and the order of the checks.\",\"question\":\"Does `configuration` hide only the order of its own in-memory and path checks, or the complete A17 startup order that `instance_lifecycle` is also said to run?\",\"options\":[\"`configuration` owns the complete startup orchestration and calls the later modules\",\"`instance_lifecycle` owns the complete cross-module order while `configuration` owns only its internal prefix\",\"The order is duplicated between `configuration` and `instance_lifecycle`\"],\"default_guess\":\"Make `instance_lifecycle` the sole owner of the complete cross-module order and restrict `configuration` to the ordered prefix of checks it performs.\",\"witness\":{\"initial\":\"The backup location is not writable and the existing store is invalid.\",\"events\":[\"`instance_lifecycle` calls `configuration`.\",\"The backup probe and store opening are attempted according to the implementer's reading of which module owns the order.\"],\"outcomes\":[\"The backup probe runs first and the diagnostic names the backup location, as A17's global order requires.\",\"The store is opened first and the diagnostic names the store because `configuration`'s claimed hidden order was interpreted as ending before external checks.\"],\"observer\":\"The owner starting Registry\"}},{\"subject\":\"listener opening\",\"kind\":\"unowned action\",\"text\":\"and the listeners — are run in rule 2's order by\\n`instance_lifecycle`, which calls this module first.\",\"question\":\"Which module owns opening and closing the owner-interface and service-API listeners, and what direct dependency does `instance_lifecycle` use to invoke it?\",\"options\":[\"`instance_lifecycle` owns listener opening and rollback itself\",\"Each interface module owns its listener and exports an opening operation\",\"A dedicated network/listener module owns both listeners and their rollback\"],\"default_guess\":\"Use a dedicated listener owner called by `instance_lifecycle`, with one operation that opens the owner interface first, conditionally opens the service API, and closes the first on failure.\",\"witness\":{\"initial\":\"The owner-interface address is available but the service-API address is already occupied.\",\"events\":[\"`instance_lifecycle` completes configuration, backup probing, and store opening.\",\"It opens the owner-interface listener and then attempts the service-API listener.\"],\"outcomes\":[\"One owner performs the two-listener operation and closes the owner listener when the service listener fails.\",\"Separate implicit owners open listeners independently and the owner listener remains open after startup has failed.\"],\"observer\":\"The owner and a caller attempting to reach the owner interface\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,97 @@
+{
+ "open_points": [
+  {
+   "subject": "runtime settings value",
+   "kind": "missing_owner",
+   "text": "loaded at each\ncall of `load_runtime_settings` into the settings. The table holds, for each\nitem, its variable's name, the settings field it fills and its type, which\nis text; nothing else.",
+   "question": "Which module owns the settings value and its concrete absent-versus-present representation?",
+   "options": [
+    "`runtime_settings` owns a private settings type with optional text fields",
+    "`models` owns a settings model",
+    "The settings are an untyped mapping owned by the caller"
+   ],
+   "default_guess": "`runtime_settings` owns a private immutable settings type with optional text fields.",
+   "unit": "?"
+  },
+  {
+   "subject": "loading and validating configuration",
+   "kind": "unclear_dependency",
+   "text": "over\nthe settings `runtime_settings` loads as set",
+   "question": "Does `configuration.load_configuration` call `runtime_settings.load_runtime_settings`, or does `instance_lifecycle` call both and pass the loaded settings into `configuration`?",
+   "options": [
+    "`configuration` calls `runtime_settings`",
+    "`instance_lifecycle` calls `runtime_settings` and injects the result into `configuration`",
+    "Another bootstrap module loads and injects the settings"
+   ],
+   "default_guess": "`configuration` calls `runtime_settings.load_runtime_settings`.",
+   "witness": {
+    "initial": "The process environment contains one valid store location.",
+    "events": [
+     "The owner changes that environment value before `load_configuration` is invoked.",
+     "`instance_lifecycle` starts configuration validation."
+    ],
+    "outcomes": [
+     "If `configuration` calls `runtime_settings`, it validates the new location.",
+     "If `instance_lifecycle` had already loaded and retained settings, it validates the old location."
+    ],
+    "observer": "The owner sees which store Registry opens."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "secret byte representation and presented-secret comparison",
+   "kind": "missing_owner",
+   "text": "A secret's length is counted in the bytes of its UTF-8\nencoding, and a presented credential is compared in those bytes (A17 rules\n3, 6).",
+   "question": "Which module owns UTF-8 encoding and the byte representation used for comparison, given that `runtime_settings` owns only environment reading, must not own length checks, and may know only `models`?",
+   "options": [
+    "`runtime_settings` returns text and each checking/authentication module performs UTF-8 encoding",
+    "`runtime_settings` constructs and owns a shared encoded-secret value",
+    "`configuration` encodes secrets once and passes encoded values to authentication modules",
+    "A separate secret-comparison provider owns encoding and comparison"
+   ],
+   "default_guess": "`runtime_settings` returns unchanged text; `configuration` encodes it for startup checks, and each authentication owner encodes presented and configured values for constant-time comparison.",
+   "unit": "?"
+  },
+  {
+   "subject": "ordered startup checks",
+   "kind": "two_owners",
+   "text": "The\nchecks after them — the backup probe (`backups`), opening or making the store\n(`store`) and the listeners — are run in rule 2's order by\n`instance_lifecycle`, which calls this module first.",
+   "question": "Does `instance_lifecycle` own the complete A17 startup order, with `configuration` hiding only the order inside its initial group, or does `configuration` own the complete order that its Hides section calls “the order of the checks”?",
+   "options": [
+    "`instance_lifecycle` owns the global module-level order; `configuration` owns only its internal prefix",
+    "`configuration` owns the complete order and delegates later checks",
+    "The order is intentionally shared by both modules"
+   ],
+   "default_guess": "`instance_lifecycle` owns the global order, while `configuration` hides only the order of the checks it performs itself.",
+   "unit": "?"
+  },
+  {
+   "subject": "failed-start cleanup",
+   "kind": "missing_owner",
+   "text": "The\nchecks after them — the backup probe (`backups`), opening or making the store\n(`store`) and the listeners — are run in rule 2's order by\n`instance_lifecycle`, which calls this module first.",
+   "question": "Which module owns A17 rule 2's rollback after a later startup failure, including closing an already opened listener and removing a newly made store when possible?",
+   "options": [
+    "`instance_lifecycle` coordinates all rollback",
+    "Each provider (`backups`, `store`, and listener owners) cleans up its own effects",
+    "`configuration` owns the startup transaction and cleanup"
+   ],
+   "default_guess": "`instance_lifecycle` coordinates rollback, calling cleanup capabilities of the modules whose steps succeeded.",
+   "witness": {
+    "initial": "The configuration and backup probe pass, the store does not exist, and Registry makes a new store.",
+    "events": [
+     "`instance_lifecycle` proceeds to open the listeners.",
+     "A listener cannot be opened."
+    ],
+    "outcomes": [
+     "A coordinator-owned rollback removes the new store and closes any listener already opened.",
+     "Provider-local cleanup leaves the new store unless the later failure explicitly calls back into `store`."
+    ],
+    "observer": "The owner and the next start see whether the newly created empty store remains."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"runtime settings value\",\"kind\":\"missing_owner\",\"text\":\"loaded at each\\ncall of `load_runtime_settings` into the settings. The table holds, for each\\nitem, its variable's name, the settings field it fills and its type, which\\nis text; nothing else.\",\"question\":\"Which module owns the settings value and its concrete absent-versus-present representation?\",\"options\":[\"`runtime_settings` owns a private settings type with optional text fields\",\"`models` owns a settings model\",\"The settings are an untyped mapping owned by the caller\"],\"default_guess\":\"`runtime_settings` owns a private immutable settings type with optional text fields.\"},{\"subject\":\"loading and validating configuration\",\"kind\":\"unclear_dependency\",\"text\":\"over\\nthe settings `runtime_settings` loads as set\",\"question\":\"Does `configuration.load_configuration` call `runtime_settings.load_runtime_settings`, or does `instance_lifecycle` call both and pass the loaded settings into `configuration`?\",\"options\":[\"`configuration` calls `runtime_settings`\",\"`instance_lifecycle` calls `runtime_settings` and injects the result into `configuration`\",\"Another bootstrap module loads and injects the settings\"],\"default_guess\":\"`configuration` calls `runtime_settings.load_runtime_settings`.\",\"witness\":{\"initial\":\"The process environment contains one valid store location.\",\"events\":[\"The owner changes that environment value before `load_configuration` is invoked.\",\"`instance_lifecycle` starts configuration validation.\"],\"outcomes\":[\"If `configuration` calls `runtime_settings`, it validates the new location.\",\"If `instance_lifecycle` had already loaded and retained settings, it validates the old location.\"],\"observer\":\"The owner sees which store Registry opens.\"}},{\"subject\":\"secret byte representation and presented-secret comparison\",\"kind\":\"missing_owner\",\"text\":\"A secret's length is counted in the bytes of its UTF-8\\nencoding, and a presented credential is compared in those bytes (A17 rules\\n3, 6).\",\"question\":\"Which module owns UTF-8 encoding and the byte representation used for comparison, given that `runtime_settings` owns only environment reading, must not own length checks, and may know only `models`?\",\"options\":[\"`runtime_settings` returns text and each checking/authentication module performs UTF-8 encoding\",\"`runtime_settings` constructs and owns a shared encoded-secret value\",\"`configuration` encodes secrets once and passes encoded values to authentication modules\",\"A separate secret-comparison provider owns encoding and comparison\"],\"default_guess\":\"`runtime_settings` returns unchanged text; `configuration` encodes it for startup checks, and each authentication owner encodes presented and configured values for constant-time comparison.\"},{\"subject\":\"ordered startup checks\",\"kind\":\"two_owners\",\"text\":\"The\\nchecks after them — the backup probe (`backups`), opening or making the store\\n(`store`) and the listeners — are run in rule 2's order by\\n`instance_lifecycle`, which calls this module first.\",\"question\":\"Does `instance_lifecycle` own the complete A17 startup order, with `configuration` hiding only the order inside its initial group, or does `configuration` own the complete order that its Hides section calls “the order of the checks”?\",\"options\":[\"`instance_lifecycle` owns the global module-level order; `configuration` owns only its internal prefix\",\"`configuration` owns the complete order and delegates later checks\",\"The order is intentionally shared by both modules\"],\"default_guess\":\"`instance_lifecycle` owns the global order, while `configuration` hides only the order of the checks it performs itself.\"},{\"subject\":\"failed-start cleanup\",\"kind\":\"missing_owner\",\"text\":\"The\\nchecks after them — the backup probe (`backups`), opening or making the store\\n(`store`) and the listeners — are run in rule 2's order by\\n`instance_lifecycle`, which calls this module first.\",\"question\":\"Which module owns A17 rule 2's rollback after a later startup failure, including closing an already opened listener and removing a newly made store when possible?\",\"options\":[\"`instance_lifecycle` coordinates all rollback\",\"Each provider (`backups`, `store`, and listener owners) cleans up its own effects\",\"`configuration` owns the startup transaction and cleanup\"],\"default_guess\":\"`instance_lifecycle` coordinates rollback, calling cleanup capabilities of the modules whose steps succeeded.\",\"witness\":{\"initial\":\"The configuration and backup probe pass, the store does not exist, and Registry makes a new store.\",\"events\":[\"`instance_lifecycle` proceeds to open the listeners.\",\"A listener cannot be opened.\"],\"outcomes\":[\"A coordinator-owned rollback removes the new store and closes any listener already opened.\",\"Provider-local cleanup leaves the new store unless the later failure explicitly calls back into `store`.\"],\"observer\":\"The owner and the next start see whether the newly created empty store remains.\"}}]}",
+ "set_aside": []
+}
