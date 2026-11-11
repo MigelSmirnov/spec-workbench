@@ -1,0 +1,167 @@
+{
+ "open_points": [
+  {
+   "subject": "instance_lifecycle clock dependency",
+   "kind": "contradiction",
+   "text": "The exceptions are named: `owner_sessions` and\n  `instance_lifecycle`, for its passes, read `clock.monotonic_reading`",
+   "question": "Does `instance_lifecycle` directly depend on and import `clock.monotonic_reading`, despite State 3 listing no `clock` dependency in what `instance_lifecycle` knows?",
+   "options": [
+    "Add `clock` to `instance_lifecycle`'s dependencies and import `monotonic_reading` directly",
+    "Keep the State 3 boundary and give timing responsibility to another module or scheduler"
+   ],
+   "default_guess": "Add the explicit `instance_lifecycle` → `clock.monotonic_reading` dependency.",
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle.start_instance initial pass timing",
+   "kind": "unspecified timing",
+   "text": "then two\npasses: `owner_sessions.end_expired_sessions` every imported\n`SESSION_PASS_SECONDS` and, except in an owner-only start,\n`backups.run_daily_backup_if_due` every imported `BACKUP_LOOK_SECONDS`.",
+   "question": "When is the first call of each pass made: immediately after serving begins, or only after its interval has elapsed?",
+   "options": [
+    "Call each pass immediately, then wait its interval after completion",
+    "Wait one full interval before the first call"
+   ],
+   "default_guess": "Call both passes immediately after serving begins, then apply the stated after-completion intervals.",
+   "witness": {
+    "initial": "Registry starts at 02:59:50 UTC with service tokens and no kept backup for the date.",
+    "events": [
+     "The host starts Registry and all start checks pass.",
+     "The backup pass is started according to one of the two possible initial-delay readings."
+    ],
+    "outcomes": [
+     "An immediate look occurs before 03:00 and the next look after 03:00 can start that date's backup.",
+     "The first look occurs after 03:00; A18 says a start at or after 03:00 without an earlier same-process look before 03:00 makes no backup for that date."
+    ],
+    "observer": "The owner viewing the newest kept backup."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner_sessions pass cadence",
+   "kind": "contradiction",
+   "text": "its next call is that many\nseconds after its last call ended",
+   "question": "Does the session-expiry pass use the new completion-relative cadence, or the earlier requirement to run every 60 seconds from process start?",
+   "options": [
+    "Schedule the next start `SESSION_PASS_SECONDS` after the preceding call ends",
+    "Keep a start-relative 60-second cadence, skipping overlapping or missed calls"
+   ],
+   "default_guess": "Use the newly stated completion-relative cadence.",
+   "witness": {
+    "initial": "The process starts at monotonic time 0; the first expiry pass starts at 60 and ends at 70.",
+    "events": [
+     "The scheduler computes the second invocation under each passage."
+    ],
+    "outcomes": [
+     "The earlier State 4 text, “Every 60 seconds from the start,” starts it at 120.",
+     "The changed State 5 text starts it at 130, 60 seconds after the prior call ended."
+    ],
+    "observer": "The process host observing invocation times and when expired session runtime state is removed."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "backups pass cadence",
+   "kind": "contradiction",
+   "text": "`backups.run_daily_backup_if_due` every imported `BACKUP_LOOK_SECONDS`. Each\npass is timed by `clock.monotonic_reading`: its next call is that many\nseconds after its last call ended",
+   "question": "How can the backup pass both wait `BACKUP_LOOK_SECONDS` after a call ends and satisfy A18's requirement that the process look at the clock at least once a minute when a call itself takes nonzero time?",
+   "options": [
+    "Use completion-relative scheduling even though consecutive look starts may be more than a minute apart",
+    "Use a fixed start-time cadence so look starts remain at most one minute apart",
+    "Exclude time spent inside `run_daily_backup_if_due` from the meaning of “at least once a minute”"
+   ],
+   "default_guess": "Use a fixed start-time cadence and skip an invocation only when the preceding backup-pass call is still running.",
+   "witness": {
+    "initial": "A backup look starts at 02:59:30 and its call ends at 02:59:50; `BACKUP_LOOK_SECONDS` is 60.",
+    "events": [
+     "The scheduler selects the next call time."
+    ],
+    "outcomes": [
+     "Completion-relative scheduling calls next at 03:00:50, leaving 80 seconds between look starts.",
+     "A fixed one-minute cadence calls next at 03:00:30, leaving 60 seconds between look starts."
+    ],
+    "observer": "The owner through the recorded instant of the backup started by the first post-03:00 look."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle pass failure policy",
+   "kind": "unspecified error effect",
+   "text": "the two passes run apart,\nneither waiting for the other.",
+   "question": "If either scheduled call fails or raises unexpectedly, does only that invocation fail, does that pass stop permanently, or does the running instance stop; and from what time is its next call scheduled?",
+   "options": [
+    "Report the failure and keep that pass running, scheduling from the failed call's end",
+    "Terminate only the failed pass while the other pass and surfaces continue",
+    "Stop the whole instance",
+    "Retry immediately before resuming the normal interval"
+   ],
+   "default_guess": "Keep the instance and both passes running, report the failure without values, and schedule the failed pass's next call from the failed invocation's end.",
+   "unit": "?"
+  },
+  {
+   "subject": "given_values form-validation operation",
+   "kind": "missing operation contract",
+   "text": "each given one within its form through\n`given_values`",
+   "question": "Which `given_values` operation validates enumerations and numeric characteristic forms, and what inputs and structured failures does it return to `projects.create_project`, `projects.correct_project`, and `migration_import.read_import_mapping`?",
+   "options": [
+    "Add one explicit generic form-validation operation returning all field failures",
+    "Add separate operations for enumeration, alias-length, and numeric-range checks",
+    "Extend the existing text-reading operations to perform all applicable form checks"
+   ],
+   "default_guess": "Add an explicit form-validation operation that accepts the named fields and returns every field's `outside_closed_list` or `outside_form` failure.",
+   "unit": "?"
+  },
+  {
+   "subject": "migration mapping display-name form",
+   "kind": "undefined validation",
+   "text": "so does a given\ndisplay name or alias outside A02's form",
+   "question": "What nonblank display name is outside A02's form, given that the supplied texts state no length, vocabulary, or other form rule for display names?",
+   "options": [
+    "Only aliases can be `outside_form`; remove “display name” from this passage",
+    "Declare an explicit display-name form and validate it",
+    "Treat only a non-text transport value as an out-of-form display name"
+   ],
+   "default_guess": "Remove “display name” here; a display name is either missing under A02 rule 1 or accepted exactly as written.",
+   "witness": {
+    "initial": "An accepted upload contains a picked project, and the owner supplies a nonblank 10,000-character display name and no alias.",
+    "events": [
+     "The owner asks to view the mapping."
+    ],
+    "outcomes": [
+     "The name is accepted because no supplied rule limits a nonblank display name, so this fact does not dirty the mapping.",
+     "The name is reported as `outside_form` under an assumed but unstated display-name limit, so the mapping is not clean."
+    ],
+    "observer": "The owner viewing the mapping and whether the confirmation step is available."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "migration Customer kind validation",
+   "kind": "missing error path",
+   "text": "and for each Customer the import will make its\nname, its kind and whether the v1 value is its tax id",
+   "question": "What happens when the owner supplies a Customer kind outside the `person`/`company` vocabulary: is the mapping request refused with `outside_closed_list`, or does the mapping show a dirty field—and if it is shown, where is that output and cleanliness condition specified?",
+   "options": [
+    "Refuse `read_import_mapping` with `invalid_request` / `outside_closed_list`",
+    "Return the mapping with a Customer-kind `outside_closed_list` item and mark it not clean",
+    "Treat it as `outside_form` in the mapping",
+    "Accept it until confirmation"
+   ],
+   "default_guess": "Return it as a mapping validation item of kind `outside_closed_list`, mark the mapping not clean, and do not show confirmation.",
+   "witness": {
+    "initial": "The session holds an accepted import file whose picked project names one v1 Customer.",
+    "events": [
+     "The owner supplies the Customer name and kind `partnership`.",
+     "The owner requests the mapping."
+    ],
+    "outcomes": [
+     "The request is refused immediately as `invalid_request` with `outside_closed_list`.",
+     "The request succeeds with a non-clean mapping that identifies the Customer and its invalid kind."
+    ],
+    "observer": "The owner, who either receives a refusal or receives a mapping page."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"instance_lifecycle clock dependency\",\"kind\":\"contradiction\",\"text\":\"The exceptions are named: `owner_sessions` and\\n  `instance_lifecycle`, for its passes, read `clock.monotonic_reading`\",\"question\":\"Does `instance_lifecycle` directly depend on and import `clock.monotonic_reading`, despite State 3 listing no `clock` dependency in what `instance_lifecycle` knows?\",\"options\":[\"Add `clock` to `instance_lifecycle`'s dependencies and import `monotonic_reading` directly\",\"Keep the State 3 boundary and give timing responsibility to another module or scheduler\"],\"default_guess\":\"Add the explicit `instance_lifecycle` → `clock.monotonic_reading` dependency.\"},{\"subject\":\"instance_lifecycle.start_instance initial pass timing\",\"kind\":\"unspecified timing\",\"text\":\"then two\\npasses: `owner_sessions.end_expired_sessions` every imported\\n`SESSION_PASS_SECONDS` and, except in an owner-only start,\\n`backups.run_daily_backup_if_due` every imported `BACKUP_LOOK_SECONDS`.\",\"question\":\"When is the first call of each pass made: immediately after serving begins, or only after its interval has elapsed?\",\"options\":[\"Call each pass immediately, then wait its interval after completion\",\"Wait one full interval before the first call\"],\"default_guess\":\"Call both passes immediately after serving begins, then apply the stated after-completion intervals.\",\"witness\":{\"initial\":\"Registry starts at 02:59:50 UTC with service tokens and no kept backup for the date.\",\"events\":[\"The host starts Registry and all start checks pass.\",\"The backup pass is started according to one of the two possible initial-delay readings.\"],\"outcomes\":[\"An immediate look occurs before 03:00 and the next look after 03:00 can start that date's backup.\",\"The first look occurs after 03:00; A18 says a start at or after 03:00 without an earlier same-process look before 03:00 makes no backup for that date.\"],\"observer\":\"The owner viewing the newest kept backup.\"}},{\"subject\":\"owner_sessions pass cadence\",\"kind\":\"contradiction\",\"text\":\"its next call is that many\\nseconds after its last call ended\",\"question\":\"Does the session-expiry pass use the new completion-relative cadence, or the earlier requirement to run every 60 seconds from process start?\",\"options\":[\"Schedule the next start `SESSION_PASS_SECONDS` after the preceding call ends\",\"Keep a start-relative 60-second cadence, skipping overlapping or missed calls\"],\"default_guess\":\"Use the newly stated completion-relative cadence.\",\"witness\":{\"initial\":\"The process starts at monotonic time 0; the first expiry pass starts at 60 and ends at 70.\",\"events\":[\"The scheduler computes the second invocation under each passage.\"],\"outcomes\":[\"The earlier State 4 text, “Every 60 seconds from the start,” starts it at 120.\",\"The changed State 5 text starts it at 130, 60 seconds after the prior call ended.\"],\"observer\":\"The process host observing invocation times and when expired session runtime state is removed.\"}},{\"subject\":\"backups pass cadence\",\"kind\":\"contradiction\",\"text\":\"`backups.run_daily_backup_if_due` every imported `BACKUP_LOOK_SECONDS`. Each\\npass is timed by `clock.monotonic_reading`: its next call is that many\\nseconds after its last call ended\",\"question\":\"How can the backup pass both wait `BACKUP_LOOK_SECONDS` after a call ends and satisfy A18's requirement that the process look at the clock at least once a minute when a call itself takes nonzero time?\",\"options\":[\"Use completion-relative scheduling even though consecutive look starts may be more than a minute apart\",\"Use a fixed start-time cadence so look starts remain at most one minute apart\",\"Exclude time spent inside `run_daily_backup_if_due` from the meaning of “at least once a minute”\"],\"default_guess\":\"Use a fixed start-time cadence and skip an invocation only when the preceding backup-pass call is still running.\",\"witness\":{\"initial\":\"A backup look starts at 02:59:30 and its call ends at 02:59:50; `BACKUP_LOOK_SECONDS` is 60.\",\"events\":[\"The scheduler selects the next call time.\"],\"outcomes\":[\"Completion-relative scheduling calls next at 03:00:50, leaving 80 seconds between look starts.\",\"A fixed one-minute cadence calls next at 03:00:30, leaving 60 seconds between look starts.\"],\"observer\":\"The owner through the recorded instant of the backup started by the first post-03:00 look.\"}},{\"subject\":\"instance_lifecycle pass failure policy\",\"kind\":\"unspecified error effect\",\"text\":\"the two passes run apart,\\nneither waiting for the other.\",\"question\":\"If either scheduled call fails or raises unexpectedly, does only that invocation fail, does that pass stop permanently, or does the running instance stop; and from what time is its next call scheduled?\",\"options\":[\"Report the failure and keep that pass running, scheduling from the failed call's end\",\"Terminate only the failed pass while the other pass and surfaces continue\",\"Stop the whole instance\",\"Retry immediately before resuming the normal interval\"],\"default_guess\":\"Keep the instance and both passes running, report the failure without values, and schedule the failed pass's next call from the failed invocation's end.\"},{\"subject\":\"given_values form-validation operation\",\"kind\":\"missing operation contract\",\"text\":\"each given one within its form through\\n`given_values`\",\"question\":\"Which `given_values` operation validates enumerations and numeric characteristic forms, and what inputs and structured failures does it return to `projects.create_project`, `projects.correct_project`, and `migration_import.read_import_mapping`?\",\"options\":[\"Add one explicit generic form-validation operation returning all field failures\",\"Add separate operations for enumeration, alias-length, and numeric-range checks\",\"Extend the existing text-reading operations to perform all applicable form checks\"],\"default_guess\":\"Add an explicit form-validation operation that accepts the named fields and returns every field's `outside_closed_list` or `outside_form` failure.\"},{\"subject\":\"migration mapping display-name form\",\"kind\":\"undefined validation\",\"text\":\"so does a given\\ndisplay name or alias outside A02's form\",\"question\":\"What nonblank display name is outside A02's form, given that the supplied texts state no length, vocabulary, or other form rule for display names?\",\"options\":[\"Only aliases can be `outside_form`; remove “display name” from this passage\",\"Declare an explicit display-name form and validate it\",\"Treat only a non-text transport value as an out-of-form display name\"],\"default_guess\":\"Remove “display name” here; a display name is either missing under A02 rule 1 or accepted exactly as written.\",\"witness\":{\"initial\":\"An accepted upload contains a picked project, and the owner supplies a nonblank 10,000-character display name and no alias.\",\"events\":[\"The owner asks to view the mapping.\"],\"outcomes\":[\"The name is accepted because no supplied rule limits a nonblank display name, so this fact does not dirty the mapping.\",\"The name is reported as `outside_form` under an assumed but unstated display-name limit, so the mapping is not clean.\"],\"observer\":\"The owner viewing the mapping and whether the confirmation step is available.\"}},{\"subject\":\"migration Customer kind validation\",\"kind\":\"missing error path\",\"text\":\"and for each Customer the import will make its\\nname, its kind and whether the v1 value is its tax id\",\"question\":\"What happens when the owner supplies a Customer kind outside the `person`/`company` vocabulary: is the mapping request refused with `outside_closed_list`, or does the mapping show a dirty field—and if it is shown, where is that output and cleanliness condition specified?\",\"options\":[\"Refuse `read_import_mapping` with `invalid_request` / `outside_closed_list`\",\"Return the mapping with a Customer-kind `outside_closed_list` item and mark it not clean\",\"Treat it as `outside_form` in the mapping\",\"Accept it until confirmation\"],\"default_guess\":\"Return it as a mapping validation item of kind `outside_closed_list`, mark the mapping not clean, and do not show confirmation.\",\"witness\":{\"initial\":\"The session holds an accepted import file whose picked project names one v1 Customer.\",\"events\":[\"The owner supplies the Customer name and kind `partnership`.\",\"The owner requests the mapping.\"],\"outcomes\":[\"The request is refused immediately as `invalid_request` with `outside_closed_list`.\",\"The request succeeds with a non-clean mapping that identifies the Customer and its invalid kind.\"],\"observer\":\"The owner, who either receives a refusal or receives a mapping page.\"}}]}",
+ "set_aside": []
+}
