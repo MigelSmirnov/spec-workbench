@@ -288,7 +288,7 @@ def test_a_probe_offers_no_precedent(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("state,out,modules,match", [
-    (3, "probe", None, "State 7 module by module"),
+    (6, "probe", None, "State 7 module by module"),
     (7, "demo/questions/probe", None, "outside the case"),
     (7, "probe", ["models"], "not generated modules"),
 ])

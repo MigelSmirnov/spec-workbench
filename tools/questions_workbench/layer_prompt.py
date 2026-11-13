@@ -126,6 +126,11 @@ class Selection:
     received: list[tuple[int, str, str, str]] = field(default_factory=list)  # (state, document, key, text)
     whole: list[str] = field(default_factory=list)                     # reasons the earlier texts are whole
     neighbours: list[str] = field(default_factory=list)
+    # the passages an open unit names or that name what it defines, before the
+    # closure and whether or not the round falls back to the whole texts
+    direct: list[tuple[int, str, str, str]] = field(default_factory=list)
+    depth: dict[str, int] = field(default_factory=dict)                 # received key -> closure steps from an open unit (0: direct)
+    named_by: dict[str, str] = field(default_factory=dict)              # received key -> the chosen passage that named it
 
 
 def _pieces(key: str, block: str) -> list[tuple[str, str]]:
@@ -243,6 +248,14 @@ def select(texts: list[tuple[int, str, str]], state: int, current: dict[str, dic
                         and mentions(current[key]["text"], moved)):
                     selection.own.append((key, current[key]["text"]))
                     selection.neighbours.append(key)
+    order = {(s, name): i for i, (s, name, _) in enumerate(texts)}
+    position = {unit[2]: i for i, unit in enumerate(earlier)}
+
+    def in_order(keys: list[str]) -> list[tuple[int, str, str, str]]:
+        return sorted((by_key[k] for k in keys), key=lambda u: (order.get((u[0], u[1]), 0), position[u[2]]))
+
+    selection.direct = in_order(chosen)
+    selection.depth = {key: 0 for key in chosen}
     if selection.whole:
         selection.received = [(s, name, f"{name}:whole", body) for s, name, body in texts if s < state]
         return selection
@@ -257,15 +270,14 @@ def select(texts: list[tuple[int, str, str]], state: int, current: dict[str, dic
     closing = {k: names for k, names in definitions.items() if _closes(by_key[k])}
     closing_units = [u for u in earlier if u[2] in closing]
     frontier = list(chosen)
-    while frontier:
-        key = frontier.pop()
+    while frontier:  # breadth first, so a passage's depth is its fewest steps from an open unit
+        key = frontier.pop(0)
         found = [k for k in resolves(by_key[key][3], definitions[key], closing_units, closing) if k not in chosen]
         take(found)
         frontier += found
-    order = {(s, name): i for i, (s, name, _) in enumerate(texts)}
-    position = {unit[2]: i for i, unit in enumerate(earlier)}
-    selection.received = sorted((by_key[k] for k in chosen),
-                                key=lambda u: (order.get((u[0], u[1]), 0), position[u[2]]))
+        for k in found:
+            selection.depth[k], selection.named_by[k] = selection.depth[key] + 1, key
+    selection.received = in_order(chosen)
     return selection
 
 
@@ -301,3 +313,97 @@ def note(selection: Selection, state: int) -> str:
         received = "nothing: the units under review name nothing an earlier state holds"
     neighbours = ", with closed neighbours that name or speak of a change" if selection.neighbours else ""
     return NOTE.format(state=state, neighbours=neighbours, received=received)
+
+
+# ---------------------------------------------------------------- the route
+#
+# A reading measured against the selection by a probe (service.probe_round),
+# never by a round of a case. On client-portal and registry (57 rounds of
+# States 3-5 kept under the single-round rule, texts rebuilt as each round read
+# them, 2026-11-13) the closure was most of what a review read - a median of
+# 170-204k characters against 47-92k of direct links - while of 258 verified
+# topics 225 stood on the state's own text or a direct link, 13 on a passage
+# one closure step away, none on a passage further, and 20 on a passage the
+# selection never gave (a section no identifier names: "Facts several modules
+# touch, and their one owner", "Actors and trust boundaries"), which the judge
+# found by searching files. The route gives a review what the judge has:
+# inline the units under review and their direct links, the earlier states
+# whole as files, and an index of every earlier passage not inline - what it
+# defines and which given passage names it. Nothing is cut, and nothing falls
+# back to the whole texts: a unit whose links cannot be selected is searched for.
+
+SELECTION, ROUTE = "selection", "route"
+READINGS = (SELECTION, ROUTE)
+ROUTE_NAMES = 6
+
+
+def render_route(selection: Selection, texts: list[tuple[int, str, str]], state: int, files_dir: str) -> str:
+    """The round text of the route: the units under review, their direct links
+    verbatim, and the index of the other earlier passages, found in the files
+    under `files_dir`."""
+    own_doc = {name for s, name, _ in texts if s == state}
+    parts = [f"=== State {state}: {', '.join(sorted(own_doc))} — the units under review"
+             + (" and their neighbours" if selection.neighbours else "") + " ===\n\n"
+             + "\n".join(text for _, text in selection.own)]
+    by_doc: dict[tuple[int, str], list[str]] = {}
+    for s, name, _, body in selection.direct:
+        by_doc.setdefault((s, name), []).append(body)
+    for (s, name), bodies in by_doc.items():
+        parts.append(f"=== {name} (State {s}): the passages the units under review name, or that name what they "
+                     "define ===\n\n" + "\n".join(bodies))
+    inline = {unit[2] for unit in selection.direct}
+    lines = []
+    for s, name, key, body in _earlier_units(texts, state):
+        if key in inline or not body.strip():
+            continue
+        title = key.split(":", 1)[1] if key.startswith(f"{name}:") else key
+        names = sorted(defined(key, body) - {key})[:ROUTE_NAMES]
+        line = f"- {files_dir}/{name} · {title} ({len(body):,} characters)"
+        if names:
+            line += f" — defines {', '.join(names)}"
+        if key in selection.named_by:
+            line += f" — named by {selection.named_by[key]}"
+        lines.append(line)
+    if lines:
+        parts.append("=== ROUTE: the other passages of the earlier states, each in the file it is listed under ===\n\n"
+                     + "\n".join(lines))
+    return "\n\n".join(parts)
+
+
+ROUTE_NOTE = """
+
+What you read: the units of State {state} under review{neighbours}, and, of the
+earlier states, {given}. The earlier states' texts are whole in the files
+{files} of your working directory, and the ROUTE at the end of the text lists
+every passage of them not given above: what it defines, and which given passage
+names it. Before you raise a point, follow the route: read in the files the
+passages that the units under review, or the passages given, depend on —
+those named by a given passage first, then any section whose title bears on
+the unit (a rule for several modules, an actor, a trust boundary). Do not
+raise a point a passage in the files answers. Quote verbatim, from the text or
+from the files."""
+
+
+def route_note(selection: Selection, state: int, files: list[str]) -> str:
+    given = ("the passages they name and those naming what they define, verbatim" if selection.direct
+             else "no passage inline: the units under review name nothing an earlier state defines")
+    neighbours = ", with closed neighbours that name or speak of a change" if selection.neighbours else ""
+    return ROUTE_NOTE.format(state=state, neighbours=neighbours, given=given, files=", ".join(files))
+
+
+def record(selection: Selection, text: str, reading: str = SELECTION) -> dict:
+    """What a round keeps of what its reviews read: how much, which earlier
+    passages and how far each is from a unit under review, and why the earlier
+    texts were read whole when they were. Until 2026-11-13 a round kept none of
+    it (a Codex review reports no usage), so the size of a State 3-5 review was
+    seen only by measuring it again."""
+    given = selection.direct if reading == ROUTE else selection.received
+    return {"reading": reading,
+            "text_characters": len(text),
+            "own": [key for key, _ in selection.own],
+            "neighbours": list(selection.neighbours),
+            "whole": list(selection.whole),
+            "received_characters": sum(len(body) for _, _, _, body in given),
+            "received": [{"state": s, "key": key, "characters": len(body),
+                          **({"depth": selection.depth[key]} if key in selection.depth else {})}
+                         for s, _, key, body in given]}
