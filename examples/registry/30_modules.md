@@ -60,7 +60,10 @@ The modules are the parts of that one program, not services. Only `store`
 opens a SQLite database — the store's, and the decrypted copy of a backup that
 `backups` hands it by path to check — and only `backups` names, renames or
 deletes a file in the backup location; `store` writes and opens one there only
-at the temporary path `backups` names for it. The dependency direction is fixed, from the bottom up:
+at the temporary path `backups` names for it. `store` holds the connection and
+the transaction and decides which record goes into which row; the row
+statements themselves are executed by `store_persistence`, its companion,
+which only `store` calls, over that connection (below). The dependency direction is fixed, from the bottom up:
 
 ```text
 models
@@ -68,6 +71,7 @@ data_provider
 clock, random_values, given_values
 runtime_settings
 configuration
+store_persistence
 store
 audit_log, service_access, owner_sessions
 customers
@@ -574,7 +578,7 @@ deciding nothing about it — so the reading needs no call upward to
 
 ### Knows
 
-`models`, `clock`, `data_provider`, `configuration`.
+`models`, `clock`, `data_provider`, `configuration`, `store_persistence`.
 
 ### Must not own
 
@@ -584,7 +588,8 @@ sequence rule (A15 rule 5 is `audit_log`'s, which keeps its counter through
 
 ### Hides
 
-SQL, which record goes into which row, the transaction and lock mechanics,
+Which record goes into which row and which rows a list reads, the
+transaction and lock mechanics,
 the temporary-name dance of a new store, the integrity pragmas.
 
 ### Candidate public capabilities
@@ -603,6 +608,47 @@ copy_store_snapshot
 - kind: deep
 - hidden mechanism: the one SQLite database, its transactions and its one write lock
 
+
+## `store_persistence`
+
+### Owns
+
+Only the deterministic SQLite repository class and schema function lowered
+from `persistence_backend/v3` for the store's closed tables: one table per
+durable model — Project, Room, Customer, ArtifactPointer, AgentSession,
+AuditEntry, MigrationClosure, AuditSequence (`60_data_closure.json`,
+`persistence`). A row is the store's envelope of one record: the columns a
+lookup, a list's order or a deletion compares, and the record itself, whole.
+
+### Knows
+
+`models`.
+
+### Must not own
+
+The connection or its transaction, minted identities, which rows a list reads
+and in which order a module receives them, which records an erasure removes,
+any file, or any rule of another module — all of these are `store`'s or the
+record module's. It is part of the store of A17 and A18: only `store` calls
+it, inside the transaction `store` opened, so no other module touches the
+database through it.
+
+### Hides
+
+SQLite table creation, row codecs and the typed insert, load, list, update
+and delete statements, including which column each lookup compares.
+
+### Candidate public capabilities
+
+```text
+SqliteStoreRepository
+create_store_schema
+```
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: version-bound SQLite lowering from persistence_backend/v3
 ## `audit_log`
 
 ### Owns

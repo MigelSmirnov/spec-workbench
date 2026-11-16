@@ -94,6 +94,29 @@ readings, so an action's today is `operations`' (`_today_of`).
   unreadable (A18 rule 4). This needs the `cryptography`
   package, pinned by digest as every dependency (A20).
 
+## The store's rows (`70_persistence_closure.json`)
+
+`store_persistence`, the store's companion (State 3), is lowered from
+`persistence_backend/v3` (`sqlite_sync_v2`, transaction external: `store`
+opens and ends every transaction). One table per durable model; a row is the
+envelope of one record — the columns a lookup, a list's order or a deletion
+compares, and the record itself as `json_model` — so the repository holds no
+rule: which record goes into which row, which rows a list reads and how two
+lists merge into A06's order, and which rows an erasure removes are
+`store`'s, behind `StoreTransaction`.
+
+- A list A06 orders by keys of one table is one `list_by` (`order_by` on its
+  columns); the project list with its archived projects is two reads, one per
+  status, merged by `store` on the same keys (A06 rule 1).
+- A read of every row — the sessions, the audit log, the migration closure —
+  is `list_selected` with no case, so both selector arguments are none.
+- Erasing audit entries before a date reads the log and deletes the selected
+  entries one by one, by sequence number: the backend compares by equality
+  only. A session holding an erased project is found the same way (A12
+  rule 1, R0-61).
+- Deletion is the `delete_by` query kind (owner, 2026-11-16: added to the
+  Factory's v3 for this case), so the store's erasures stay deterministic.
+
 ## Carried to State 6, and how it is closed
 
 | from | topic | closed by |
