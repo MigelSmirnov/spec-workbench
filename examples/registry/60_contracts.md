@@ -193,6 +193,15 @@ surface is State 6's (State 5 round-34 T1, T8).
   writes M12 AuditSequence at 0 through `upsert_audit_sequence_row`, before the
   rename (A17 rule 5); a failure there is the start's diagnostic. An existing
   store is opened and checked, never given its schema again.
+- **The journal** (State 5, `open_store`: "the engine setting that lets a
+  backup's reader and the writer go on together is set here, as State 6
+  fixes it"). The store keeps SQLite's write-ahead log: `open_store` sets it
+  on the actions' connection of every store it opens, made new or not. A
+  reader on its own connection then sees one snapshot while the writer goes
+  on, and neither waits for the other (A18 rule 1). The actions' one
+  connection serves every thread under `store`'s lock: a write transaction
+  takes the write lock when it begins; a read transaction takes the same
+  lock, since it runs on the same connection.
 - **A backup's copy** (T9). `copy_store_snapshot` opens its own read
   connection with its own repository and fixes the snapshot by its first
   read, `load_audit_sequence_row`; in that read transaction it copies the
