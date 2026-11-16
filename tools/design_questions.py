@@ -23,7 +23,11 @@ change and may set aside topics about passages the change did not touch.
 `--module`) on its current prompt, closed or not, and keeps the round in OUT,
 outside the case: no round, closure or disposition is recorded and no
 precedent is offered. It measures a change of the round's own instruction and
-logs the input size of every request.
+logs the input size of every request. For States 0-5 it asks every unit of the
+state (or each `--unit`), whole, and `--reading route` gives the reviews the
+direct links inline and the earlier states as files to search with an index,
+instead of the selection every round of a case reads: two probes of the same
+units compare the two readings.
 
 `dispose` records the author's disposition of a judged topic beside its round.
 `rejudge` checks the kept judge answers of one unchanged State 7 module's
@@ -100,9 +104,15 @@ def main(argv: list[str] | None = None) -> int:
     ask.add_argument("--since", help="git ref at which a reopened state was closed")
     ask.add_argument("--factory-root", type=Path, help="the Factory that builds the State 7 prompts")
     ask.add_argument("--probe", metavar="OUT", type=Path,
-                     help="State 7 only: ask every generated module (or --module) on its current prompt, closed or "
-                          "not, and keep the round in OUT outside the case; it records no round and closes nothing")
+                     help="ask every generated module of State 7 (or --module), or every unit of States 0-5 (or "
+                          "--unit), on its current text, closed or not, and keep the round in OUT outside the "
+                          "case; it records no round and closes nothing")
     ask.add_argument("--module", action="append", help="with --probe: a module to ask (repeatable; default: all)")
+    ask.add_argument("--unit", action="append",
+                     help="with --probe of States 0-5: a unit to ask, as status names it (repeatable; default: all)")
+    ask.add_argument("--reading", choices=("selection", "route"), default="selection",
+                     help="with --probe of States 0-5: how the earlier states reach the reviews — the selection a "
+                          "round of a case reads, or the route (direct links inline, the earlier states as files)")
     ask.add_argument("--json", action="store_true")
     checks = sub.add_parser("judge-checks", help="judge each bound check once, kept by digest (witness_judgement)")
     checks.add_argument("case", type=Path)
@@ -192,17 +202,26 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "ask" and args.probe is not None:
             summary = service.probe_round(args.case, args.state, _provider(args), args.probe, args.runs,
-                                          args.factory_root, args.module)
+                                          args.factory_root, (args.module or []) + (args.unit or []) or None,
+                                          args.reading)
             if args.json:
                 print(json.dumps(summary, ensure_ascii=False, indent=2))
-            else:
+            elif "modules" in summary:
                 for module, row in summary["modules"].items():
                     print(f"{module}: topics={row['topics']} blocking={row['blocking']} kinds={row['kinds']} "
                           f"prompt_chars={row['prompt_chars']}")
                 print(f"probe kept in {args.probe}: blocking={summary['blocking_topics']}")
+            else:
+                read = summary["reviews_read"]
+                for unit, row in summary["per_unit"].items():
+                    print(f"{unit}: topics={row['topics']} blocking={row['blocking']} kinds={row['kinds']}")
+                print(f"probe kept in {args.probe}: reading={summary['reading']} "
+                      f"review_text_chars={read['text_characters']} "
+                      f"received_chars={read.get('received_characters')} "
+                      f"whole={len(read.get('whole') or [])} blocking={summary['blocking_topics']}")
             return 0
-        if args.command == "ask" and args.module:
-            parser.error("--module needs --probe")
+        if args.command == "ask" and (args.module or args.unit or args.reading != "selection"):
+            parser.error("--module, --unit and --reading need --probe")
         if args.command == "ask":
             summary = service.ask_round(args.case, args.state, _provider(args), args.runs, args.since,
                                         args.factory_root)

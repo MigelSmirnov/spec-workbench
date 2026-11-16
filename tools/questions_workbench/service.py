@@ -84,14 +84,17 @@ class ReviewFailed(QuestionRoundError):
 REVIEW_ATTEMPTS = 2
 
 
-def _review(provider: Provider, instruction: str, text: str) -> dict[str, Any]:
+def _review(provider: Provider, instruction: str, text: str, files: dict[str, str] | None = None) -> dict[str, Any]:
     """One review. An answer that is not a JSON object with open_points is
     asked again once: one malformed answer must not lose a round whose other
     reviews answered (#147). A second failure raises ReviewFailed, which keeps
     both answers; a provider error is not retried here."""
     answers = []
     for _ in range(REVIEW_ATTEMPTS):
-        answer, usage = provider.complete(instruction, text)
+        if files:
+            answer, usage = provider.complete_with_files(instruction, text, files)  # type: ignore[attr-defined]
+        else:
+            answer, usage = provider.complete(instruction, text)
         answers.append(answer)
         try:
             points = _json_object(answer).get("open_points")
@@ -119,9 +122,10 @@ def _valid_reviews(reviews: list[dict[str, Any]], what: str) -> None:
                                  f"and a round needs {REPEATED} ({reasons})")
 
 
-def _review_or_failed(provider: Provider, instruction: str, text: str) -> dict[str, Any]:
+def _review_or_failed(provider: Provider, instruction: str, text: str,
+                      files: dict[str, str] | None = None) -> dict[str, Any]:
     try:
-        return _review(provider, instruction, text)
+        return _review(provider, instruction, text, files)
     except ReviewFailed as exc:
         return _failed_review(exc)
 
@@ -650,29 +654,48 @@ def _old_texts(case: Path, state: int, names: list[str], since: str | None,
 def _document_round(provider: Provider, state: int, runs: int, read: StateTexts, scope: list[str],
                     changed: dict[str, tuple[str, list[str]]], old: dict[str, str] | None,
                     case: Path, referencing: dict[str, list[str]] | None = None,
-                    layer: dict[str, Any] | None = None
+                    layer: dict[str, Any] | None = None, probe: bool = False,
+                    reading: str = layer_prompt.SELECTION, read_record: dict[str, Any] | None = None
                     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
-    """States 0-6: every review reads the texts of States 0..N, asked about the open units,
-    with the transition of the state (TRANSITION_PROTOCOL.md): what it owns, receives and
-    carries, and the deterministic results of its gate and checks."""
+    """States 0-5: every review reads the prompt of the layer (layer_prompt.py), asked about
+    the open units, with the transition of the state (TRANSITION_PROTOCOL.md): what it owns,
+    receives and carries, and the deterministic results of its gate and checks.
+
+    `read_record`, when given, is filled with what the reviews read (layer_prompt.record)
+    and the size of their instruction. A `probe` offers no precedent and no hypothesis of
+    an earlier round. `reading` is how the earlier states reach a review: the selection
+    (every round of a case), or the route, which only a probe asks (layer_prompt.py)."""
     sections = documents.standard_sections(state)
     base = prompts.ask_instruction(state, documents.question_scope(state), sections)
     base += prompts.unit_scope(state, [(key, read.units[key]["title"]) for key in scope],
                                {key: diff for key, (diff, _) in changed.items()}, referencing)
-    base += prompts.hypotheses_note(_previous_hypotheses(case, state))
+    if not probe:
+        base += prompts.hypotheses_note(_previous_hypotheses(case, state))
+    files: dict[str, str] = {}
     if state <= layer_prompt.LAST_STATE:
         # the prompt of the layer, not the texts of States 0..N (owner decision 2026-11-08)
         selection = layer_prompt.select(read.texts, state, read.units, scope, changed, referencing)
-        text = layer_prompt.render(selection, read.texts, state)
-        base += layer_prompt.note(selection, state)
+        if reading == layer_prompt.ROUTE:
+            files = {f"{judge_context.STATES_DIR}/{name}": body for s, name, body in read.texts if s < state}
+            text = layer_prompt.render_route(selection, read.texts, state, judge_context.STATES_DIR)
+            base += layer_prompt.route_note(selection, state, sorted(files))
+        else:
+            text = layer_prompt.render(selection, read.texts, state)
+            base += layer_prompt.note(selection, state)
     else:
-        text = prompts.ask_input(read.texts)
+        selection, text = None, prompts.ask_input(read.texts)
     later = {p.name: p.read_text(encoding="utf-8") for _, p in documents.later_documents(case, state)}
     evidence = (layer or {}).get("unit_evidence") or {}
-    precedents = [p for p in _precedents(case, state) if _evidence_holds(p, evidence, scope)]
+    precedents = [] if probe else [p for p in _precedents(case, state) if _evidence_holds(p, evidence, scope)]
     instruction = base + prompts.layer_scope(layer, scope)
+    if read_record is not None:
+        read_record.update(layer_prompt.record(selection, text, reading) if selection is not None
+                           else {"reading": "texts", "text_characters": len(text)})
+        read_record["instruction_characters"] = len(instruction)
+        if files:
+            read_record["files"] = {name: len(body) for name, body in sorted(files.items())}
     with ThreadPoolExecutor(max_workers=runs) as pool:
-        reviews = list(pool.map(lambda _: _review_or_failed(provider, instruction, text), range(runs)))
+        reviews = list(pool.map(lambda _: _review_or_failed(provider, instruction, text, files), range(runs)))
     _valid_reviews(reviews, f"State {state}")
     for review in reviews:
         _set_aside(review, scope, changed, read.units)
@@ -820,8 +843,11 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     layer = layer_context(case, state)
     layer["evidence_reopened"] = evidence_reopened
     layer["unit_evidence"] = evidence or {}
+    # what the reviews of a document round read (layer_prompt.record); State 7 keeps its prompts
+    reviews_read: dict[str, Any] = {}
+    extra = {} if state == documents.MODULE_STATE else {"read_record": reviews_read}
     reviews, topics, repeated, judged = asked(provider, state, runs, read, scope, changed, old, case, referencing,
-                                              layer)
+                                              layer, **extra)
     for topic in topics:
         topic.pop("points", None)
         topic.pop("quoted", None)
@@ -851,6 +877,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         "failed_reviews": [{"review": name, "reason": r["failed"]} for name, r in zip(names, reviews)
                            if "failed" in r],
         "since": since,
+        **({"reviews_read": reviews_read} if reviews_read else {}),
         "judge": judged,
         # the rules its verdicts were checked under (judge.RULES_VERSION, the sections' digest)
         "judge_rules": judge.rules_record(prompts.standard_text(documents.standard_sections(state)) or None),
@@ -1401,23 +1428,34 @@ PROBE_SCHEMA = "spec_workbench_question_probe.v1"
 
 
 def probe_round(case: Path, state: int, provider: Provider, out: Path, runs: int = DEFAULT_RUNS,
-                factory_root: Path | None = None, modules: list[str] | None = None) -> dict[str, Any]:
-    """A State 7 round over the named generated modules, or all of them, on
-    their current prompts whether they are closed or not, kept in `out`, never
-    in the case: it records no round, no closure and no disposition, offers no
-    precedent and judges no bound check. It measures what a round would raise
-    now, after a change of the round's own instruction, and logs the input
-    size of every request."""
+                factory_root: Path | None = None, modules: list[str] | None = None,
+                reading: str = layer_prompt.SELECTION) -> dict[str, Any]:
+    """A round kept in `out`, never in the case: it records no round, no
+    closure and no disposition, offers no precedent and judges no bound check.
+    It measures what a round would raise now, after a change of the round's own
+    instruction or of what its reviews read, and logs the input size of every
+    request.
+
+    State 7: over the named generated modules, or all of them, on their
+    current prompts whether they are closed or not.
+
+    States 0-5: over the named units (`modules`), or every unit of the state,
+    each reviewed whole on its current text; `context` is not asked, a probe
+    has no change to read it by. `reading` is how the earlier states reach the
+    reviews: "selection", as every round of a case reads them, or "route" —
+    the direct links inline, the earlier states as files to search and an index
+    of their other passages (layer_prompt.py) — which needs a provider that
+    reads files. Two probes of the same units, one of each reading, compare
+    what the two find."""
+    if reading not in layer_prompt.READINGS:
+        raise QuestionRoundError(f"unknown reading {reading!r}; one of {', '.join(layer_prompt.READINGS)}")
     if state != documents.MODULE_STATE:
-        raise QuestionRoundError(f"a probe asks State {documents.MODULE_STATE} module by module; "
-                                 f"State {state} is asked by `ask`")
+        return _probe_documents(case, state, provider, Path(out), runs, modules, reading)
+    if reading != layer_prompt.SELECTION:
+        raise QuestionRoundError(f"State {documents.MODULE_STATE} reads one module's prompt: it has no other reading")
     if runs < REPEATED:
         raise QuestionRoundError(f"a round needs at least {REPEATED} reviews to tell a repeated topic")
-    out = Path(out)
-    if out.exists() and any(out.iterdir()):
-        raise QuestionRoundError(f"{out} is not empty: a probe writes into a directory of its own")
-    if out.resolve().is_relative_to(case.resolve()):
-        raise QuestionRoundError("a probe is kept outside the case: it must not read as a round")
+    out = _probe_directory(case, Path(out))
     read = state_texts(case, state, factory_root)
     unknown = sorted(set(modules or []) - set(read.units))
     if unknown:
@@ -1461,6 +1499,82 @@ def probe_round(case: Path, state: int, provider: Provider, out: Path, runs: int
         "topics": topics,
         "requests": logged.requests,
         "failed_reviews": [{"unit": r.get("unit"), "reason": r["failed"]} for r in reviews if "failed" in r],
+    }
+    (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return summary
+
+
+def _probe_directory(case: Path, out: Path) -> Path:
+    if out.exists() and any(out.iterdir()):
+        raise QuestionRoundError(f"{out} is not empty: a probe writes into a directory of its own")
+    if out.resolve().is_relative_to(case.resolve()):
+        raise QuestionRoundError("a probe is kept outside the case: it must not read as a round")
+    return out
+
+
+def _probe_documents(case: Path, state: int, provider: Provider, out: Path, runs: int,
+                     named: list[str] | None, reading: str) -> dict[str, Any]:
+    """The probe of a document state (probe_round)."""
+    if state > layer_prompt.LAST_STATE:
+        raise QuestionRoundError(f"a probe asks State {documents.MODULE_STATE} module by module or a document state "
+                                 f"up to State {layer_prompt.LAST_STATE}; State {state} has no round")
+    if runs < REPEATED:
+        raise QuestionRoundError(f"a round needs at least {REPEATED} reviews to tell a repeated topic")
+    if reading == layer_prompt.ROUTE and not getattr(provider, "reads_files", False):
+        raise QuestionRoundError("the route gives the earlier states as files to search: it needs a provider that "
+                                 "reads files (--provider codex)")
+    out = _probe_directory(case, out)
+    read = state_texts(case, state)
+    asked_units = [key for key in read.units if key != units.CONTEXT]
+    unknown = sorted(set(named or []) - set(asked_units))
+    if unknown:
+        raise QuestionRoundError(f"not units of State {state} a probe asks: {', '.join(unknown)}")
+    scope = [key for key in asked_units if not named or key in named]
+    logged = _SizeLog(provider)
+    layer = layer_context(case, state)
+    reviews_read: dict[str, Any] = {}
+    reviews, topics, repeated, judged = _document_round(logged, state, runs, read, scope, {}, None, case, None,
+                                                        layer, probe=True, reading=reading,
+                                                        read_record=reviews_read)
+    for topic in topics:
+        topic.pop("points", None)
+        topic.pop("quoted", None)
+    out.mkdir(parents=True, exist_ok=True)
+    for index, review in enumerate(reviews, 1):
+        (out / f"review-{index}.json").write_text(json.dumps(review, ensure_ascii=False, indent=1) + "\n",
+                                                  encoding="utf-8")
+    blocking = [t for t in repeated if t["judgement"]["blocking"]]
+    per_unit = {}
+    for key in [*scope, units.UNKNOWN]:
+        mine = [t for t in topics if key in (t.get("units") or [units.UNKNOWN])]
+        if key == units.UNKNOWN and not mine:
+            continue
+        kinds: dict[str, int] = {}
+        for topic in mine:
+            kind = (topic.get("judgement") or {}).get("kind") or "not judged"
+            kinds[kind] = kinds.get(kind, 0) + 1
+        per_unit[key] = {"topics": len(mine), "blocking": sum(1 for t in mine if t in blocking), "kinds": kinds}
+    summary = {
+        "schema_version": PROBE_SCHEMA,
+        "state": state,
+        "provider": provider.name,
+        "reviews": runs,
+        "reading": reading,
+        "scope": scope,
+        "units": {key: read.units[key]["digest"] for key in scope},
+        "documents": read.digests,
+        "standard_sections": [s["section"] for s in documents.standard_sections(state)],
+        "reviews_read": reviews_read,
+        "points": [len(r["open_points"]) for r in reviews],
+        "set_aside": [len(r["set_aside"]) for r in reviews],
+        "judge": judged,
+        "per_unit": per_unit,
+        "repeated_topics": len(repeated),
+        "blocking_topics": len(blocking),
+        "topics": topics,
+        "requests": logged.requests,
+        "failed_reviews": [{"review": f"review-{i}.json", "reason": r["failed"]}
+                           for i, r in enumerate(reviews, 1) if "failed" in r],
     }
     (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return summary

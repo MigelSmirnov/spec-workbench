@@ -38,7 +38,7 @@ units name (a decision, a model, an operation, an INV-* or R-* id) or that name
 what they define — the earlier texts whole only when that cannot be decided,
 and the round says why (`questions_workbench/layer_prompt.py`). It gives it
 (for State 7: one generated module's
-prompt, below; for State 6: still the texts of States 0..6) to several
+prompt, below; State 6 has no round of its own) to several
 independent reviews (three by default) with the
 state's `question_scope` from `authoring_sequence.json`, then
 groups their open points into topics, and has every topic raised by two or more
@@ -617,6 +617,41 @@ is not prose: a case that declares a builder writes each field's source in
 (`tools/design_record_construction.py`, RC001–RC015) refuses an unknown or
 unsourced field before any round. A note then names the builder, not the
 fields, so a round still has nothing to ask about them.
+
+### What the reviews read is kept, and measured
+
+A Codex review reports no usage, so until 2026-11-13 a document round kept
+nothing of what its reviews were given: the judge's `inline_characters` were
+on record, the reviews' were not. Every round of States 0–5 now keeps
+`reviews_read` in its summary (`layer_prompt.record`): the size of the
+instruction and of the text, the units under review and their neighbours,
+every earlier passage received with its size and its `depth` — 0 when a unit
+under review names it or it names what the unit defines, n when the closure
+reached it in n steps — and, when the earlier texts were read whole, why.
+
+Measured on the kept rounds of client-portal and registry (57 rounds of States
+3–5 under the single-round rule, texts rebuilt as each round read them): the
+closure is most of what a review of States 3–5 reads — a median of 170–204k
+characters, of which 47–92k are direct links — while of 258 verified topics
+225 stand on the state's own text or a direct link, 13 on a passage one
+closure step away (8 of them blocking), none on a passage further away, and
+20 on a passage the selection never gave: a section no identifier names
+("Facts several modules touch, and their one owner", "Actors and trust
+boundaries", a document's preamble), found by the judge in its files. A verdict
+shows what the judge quoted, not what a review had to read to see the
+question, so this decides nothing by itself.
+
+`ask --probe <dir> --state <0..5> [--unit <u>] [--reading selection|route]`
+measures it: a round over the named units (default: all; never `context`),
+each whole on its current text, kept outside the case, with no precedent, no
+earlier hypothesis and the input size of every request. `--reading route`
+gives the reviews what the judge has (`layer_prompt.render_route`): inline the
+units under review and their direct links, the earlier states whole as files
+to search, and an index of every earlier passage not inline — what it defines
+and which given passage names it. Nothing is cut and nothing falls back to the
+whole texts. Two probes of the same units, one of each reading, compare what
+the two find; a round of a case reads the selection until the owner decides
+otherwise.
 
 To measure a change of the round's own instruction on a case whose units are
 closed, `ask --probe <dir> [--module <m>]` asks State 7 over every generated

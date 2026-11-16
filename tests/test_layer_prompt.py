@@ -323,3 +323,135 @@ def test_the_closure_runs_through_models_and_decisions_not_through_modules():
     assert "A01" in received and "A03" in received                  # named by the module: one step
     assert "01_models.md:Model M01 — Entry" in received             # A01 -> Entry: the closure goes on
     assert "30_modules.md:`reports`" not in received                # never reached through a module
+
+
+# ---------------------------------------------------------------------------
+# What the reviews read is recorded; the route is a reading a probe measures
+# ---------------------------------------------------------------------------
+
+def _closure_texts():
+    models = MODELS.replace("- `created_at` datetime\n\n## Model M02",
+                            "- `created_at` datetime\n- `amount` Money\n\n## Model M02")
+    models += "\n## Model M04 — Money\n\n- currency EUR, rounded half-even\n"
+    return [(0, "00_product.md", PRODUCT), (1, "01_models.md", models), (2, "02_rules.md", RULES)]
+
+
+def test_the_selection_says_how_far_each_passage_is_from_an_open_unit():
+    t = _closure_texts()
+    selection = lp.select(t, 2, units.units(t, 2), ["A01"], {}, None)
+    assert selection.depth["01_models.md:Model M01 — Entry"] == 0          # A01 names Entry
+    assert selection.depth["01_models.md:Model M04 — Money"] == 1          # Entry -> Money
+    assert selection.named_by["01_models.md:Model M04 — Money"] == "01_models.md:Model M01 — Entry"
+    assert [u[2] for u in selection.direct] == [k for k, d in selection.depth.items() if d == 0]
+    kept = lp.record(selection, lp.render(selection, t, 2))
+    assert kept["reading"] == "selection" and kept["whole"] == [] and kept["own"] == ["A01"]
+    assert {"state": 1, "key": "01_models.md:Model M04 — Money", "characters": len(
+        "## Model M04 — Money\n\n- currency EUR, rounded half-even\n"), "depth": 1} in kept["received"]
+    assert kept["received_characters"] == sum(r["characters"] for r in kept["received"])
+
+
+def test_the_route_gives_the_direct_links_inline_and_indexes_every_other_earlier_passage():
+    t = _closure_texts()
+    selection = lp.select(t, 2, units.units(t, 2), ["A01"], {}, None)
+    text = lp.render_route(selection, t, 2, "states")
+    inline, route = text.split("=== ROUTE:")
+    assert "## Model M01 — Entry" in inline and "## Model M04 — Money" not in inline
+    # one step away: listed with the given passage that names it
+    assert ("- states/01_models.md · Model M04 — Money" in route
+            and "named by 01_models.md:Model M01 — Entry" in route)
+    # a section no identifier names is never selected; the route still lists it
+    assert "- states/00_product.md · Currency policy" in route
+    assert "rounded half-even" not in text and "Amounts are kept in euros" not in text
+    kept = lp.record(selection, text, lp.ROUTE)
+    assert [r["key"] for r in kept["received"]] == [u[2] for u in selection.direct]
+
+
+def test_the_route_never_falls_back_to_the_whole_texts():
+    t = texts()
+    selection = lp.select(t, 2, units.units(t, 2), ["A03"], {}, None)   # A03 names nothing
+    assert selection.whole
+    text = lp.render_route(selection, t, 2, "states")
+    assert "Amounts are kept in euros" not in text and "- states/00_product.md · Currency policy" in text
+    assert "no passage inline" in lp.route_note(selection, 2, ["states/00_product.md"])
+
+
+class _Reviews:
+    name = "fake"
+
+    def __init__(self):
+        self.asked: list[tuple[str, str, dict]] = []
+
+    def complete(self, instruction, text):
+        if instruction.startswith("You judge the topics"):
+            return json.dumps({"judgements": []}), {}
+        if instruction.startswith("You receive the open points"):
+            return json.dumps({"groups": []}), {}
+        self.asked.append((instruction, text, {}))
+        return json.dumps({"open_points": []}), {}
+
+
+class _FileReviews(_Reviews):
+    reads_files = True
+
+    def complete_with_files(self, instruction, text, files):
+        self.asked.append((instruction, text, files))
+        return json.dumps({"open_points": []}), {}
+
+
+def _demo(tmp_path, monkeypatch):
+    case = tmp_path / "demo"
+    case.mkdir()
+    for _, name, body in texts():
+        (case / name).write_text(body, encoding="utf-8")
+    monkeypatch.setattr(service, "layer_context", lambda case, state: {
+        "state": state, "owns": [], "carries": [], "gate_findings": [], "materials": [], "ready": True,
+        "receives": [], "results": []})
+    return case
+
+
+def test_a_round_keeps_what_its_reviews_read(tmp_path, monkeypatch):
+    case = _demo(tmp_path, monkeypatch)
+    provider = _Reviews()
+    summary = service.ask_round(case, 2, provider)
+    kept = summary["reviews_read"]
+    instruction, text, _ = provider.asked[0]
+    assert kept["reading"] == "selection"
+    assert kept["text_characters"] == len(text) and kept["instruction_characters"] == len(instruction)
+    assert any("A03 names nothing" in reason for reason in kept["whole"])   # the fallback is on record
+    assert json.loads((case / "questions/state2/round-01/summary.json").read_text())["reviews_read"] == kept
+
+
+def test_a_document_probe_asks_named_units_and_records_nothing_in_the_case(tmp_path, monkeypatch):
+    case = _demo(tmp_path, monkeypatch)
+    provider = _Reviews()
+    summary = service.probe_round(case, 2, provider, tmp_path / "probe", modules=["A01"])
+    assert summary["scope"] == ["A01"] and summary["reading"] == "selection"
+    assert not (case / "questions").exists()
+    assert summary["reviews_read"]["whole"] == [] and (tmp_path / "probe" / "summary.json").is_file()
+    assert [r["kind"] for r in summary["requests"]] == ["review"] * 3
+    assert "Model M01 — Entry" in provider.asked[0][1] and "Currency policy" not in provider.asked[0][1]
+
+
+def test_a_route_probe_gives_the_earlier_states_as_files(tmp_path, monkeypatch):
+    case = _demo(tmp_path, monkeypatch)
+    provider = _FileReviews()
+    summary = service.probe_round(case, 2, provider, tmp_path / "probe", modules=["A03"], reading="route")
+    instruction, text, files = provider.asked[0]
+    assert sorted(files) == ["states/00_product.md", "states/01_models.md"]      # the earlier states, whole
+    assert files["states/00_product.md"] == PRODUCT
+    assert "=== ROUTE:" in text and "Amounts are kept in euros" not in text
+    assert "follow the route" in instruction and "their texts whole, because" not in instruction
+    assert summary["reviews_read"]["files"] == {name: len(body) for name, body in files.items()}
+    assert summary["requests"][0]["file_chars"] == len(PRODUCT) + len(texts()[1][2])
+
+
+def test_a_document_probe_refuses(tmp_path, monkeypatch):
+    import pytest
+
+    case = _demo(tmp_path, monkeypatch)
+    for kwargs, match in (({"reading": "route"}, "needs a provider that reads files"),
+                          ({"modules": ["context"]}, "not units of State 2 a probe asks"),
+                          ({"reading": "all"}, "unknown reading")):
+        with pytest.raises(service.QuestionRoundError, match=match):
+            service.probe_round(case, 2, _Reviews(), tmp_path / "probe", **kwargs)
+    assert not (tmp_path / "probe").exists()
