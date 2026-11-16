@@ -1192,7 +1192,7 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
   хранение и порядок остаются обязательством дизайна.
 - Полномочие на длительность может принадлежать тому же модулю, что и
   настенные часы: тогда он единственный читатель обоих часов хоста и обязан
-  принадлежать backend-у §6.9 версии 3, а потребители получают длительность
+  принадлежать backend-у §6.9 версии 3, 5 или 6, а потребители получают длительность
   через его операцию (`wiring.elapsed_clock_function`). Разность двух таких
   показаний — законная длительность, а не
   `wall_clock_used_for_elapsed_duration`.
@@ -1210,9 +1210,9 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
   `false` над одним полномочным модулем модуль часов в LLM-генерацию не
   выпускает.
 - `representation` описывает целочисленное мгновение. Мгновение — naive UTC
-  `datetime` — закрепляет версия 4 backend-а §6.9: такая политика
-  `representation` не объявляет, а её единственный полномочный модуль
-  читает `datetime.datetime.now`.
+  `datetime` — закрепляют версии 4 и 5 backend-а §6.9, timezone-aware UTC
+  `datetime` — версия 6: такая политика `representation` не объявляет, а её
+  единственный полномочный модуль читает `datetime.datetime.now`.
 - `conversion` — из закрытого набора `identity_ns`, `floor_ns_to_us`,
   `floor_ns_to_ms`, `floor_ns_to_s`; `unit` обязан совпадать с тем, что даёт
   конверсия, единица примитива — с её входом, а `models.<type>.fields.<field>`
@@ -1243,7 +1243,7 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
 детерминированных backend-ов проверяется против политики уже в
 `validate_spec`, до Route B.
 
-### 6.9 `system_clock_backend/v1`, `/v2`, `/v3`, `/v4`, `/v5`
+### 6.9 `system_clock_backend/v1`, `/v2`, `/v3`, `/v4`, `/v5`, `/v6`
 
 Значение, которое возвращают часы, — внешнее наблюдение и от вызова к вызову
 различно; код адаптера часов полностью определён спекой. Поэтому модуль
@@ -1402,6 +1402,51 @@ naive UTC мгновениями, который ещё и измеряет дл
 того же примитива проверяющим. Потребитель, которому выдана операция
 длительности, измеряет время только через неё; прямое чтение примитива —
 `undeclared_elapsed_clock_access` (§6.8).
+
+Версия 6 (`python_host_utc_and_elapsed_clock_v1`) — форма версии 5 для
+дизайна, чьи мгновения — timezone-aware UTC `datetime`: один модуль,
+единственный читатель обоих часов хоста, ровно две операции — настенные часы
+и длительность:
+
+```json
+{
+  "kind": "system_clock_backend",
+  "schema_version": 6,
+  "backend": {"emitter": "python_host_utc_and_elapsed_clock_v1"},
+  "wiring": {"module": "<module>", "wall_clock_function": "<function>",
+             "elapsed_clock_function": "<function>"},
+  "time": {"policy": "rules.time_source_policy", "read": "per_call",
+           "representation": "aware_utc_datetime"}
+}
+```
+
+Требования к `rules.time_source_policy` — те же, что у версии 5:
+`wall_clock.single_host_source: true` с `wiring.module` как единственным
+полномочным модулем, примитив `datetime.datetime.now`, `samples_per_read: 1`;
+представление закреплено версией, поэтому политика его не объявляет
+(объявленное — дефект валидации); `elapsed_time.authority_modules ==
+["<module>"]`, ровно один примитив — `time.monotonic` или
+`time.monotonic_ns`, `samples_per_read: 1`, `persisted: false`.
+`module_functions[<module>]` — ровно две операции (порядок не значим);
+контракты `<wall_clock_function>: "() -> datetime"` и
+`<elapsed_clock_function>: "() -> float"` для `time.monotonic` или
+`"() -> int"` для `time.monotonic_ns`. Имена обеих операций различны, не
+ключевые слова Python и не связываемые модулем имена (`annotations`,
+`datetime`, `timezone`, `time`). Lowering: операция настенных часов — одно
+чтение `datetime.now(timezone.utc)` за вызов, возвращённое как есть
+(timezone-aware, `tzinfo` — UTC): ни `.replace`, ни кеша, ни локального
+времени, ни арифметики; операция длительности побайтно та же, что в версии 5.
+Иных функций и классов модуль не содержит; обе операции принадлежат эмиттеру
+и нот не требуют. Фокусная проверка доказывает, что показания настенных
+часов — timezone-aware `datetime` со смещением UTC, равным нулю, и лежат между
+двумя timezone-aware UTC чтениями проверяющего; для длительности — то же, что
+в версии 5. Как и в версии 5, потребитель, которому выданы часы, читает время
+только через них: прямое чтение настенных часов — `clock_dependency_bypassed`,
+прямое чтение примитива длительности — `undeclared_elapsed_clock_access`
+(§6.8).
+
+Версия 5 не расширяется: её мгновение остаётся naive UTC; дизайну с
+timezone-aware UTC мгновениями служит версия 6, а не флаг в версии 5.
 
 ### 6.10 `data_provider_backend/v1`
 
