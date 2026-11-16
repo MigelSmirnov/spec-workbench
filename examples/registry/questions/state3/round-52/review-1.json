@@ -1,0 +1,69 @@
+{
+ "open_points": [
+  {
+   "subject": "backup SQLite snapshot ownership and dependency",
+   "kind": "unclear dependency direction",
+   "text": "and any file — the store's file is `store`'s, a file in the backup location `backups`' (above). It is part of the store of A17 and A18: only `store` calls it, inside the transaction `store` opened, so no other module touches the database through it.",
+   "question": "Which module opens, sanitises and integrity-checks the SQLite copy used by A18, and what is the permitted dependency direction between `backups`, `store` and `store_persistence`?",
+   "options": [
+    "`backups` owns the files but calls a `store` operation that creates, removes AgentSession rows from and checks the copy",
+    "`store` produces a sanitised checked snapshot which `backups` only encrypts and manages",
+    "`backups` opens the copy and calls `store_persistence`, as an explicit exception to the rule that only `store` calls it",
+    "`backups` independently implements the SQLite removal and checks"
+   ],
+   "default_guess": "`backups` owns backup-file orchestration and calls a `store` snapshot/check operation; `backups` never imports `store_persistence` directly.",
+   "witness": {
+    "initial": "The live store contains an AgentSession and a daily backup is due.",
+    "events": [
+     "The backup scheduler asks `backups` to make a backup.",
+     "`backups` creates a SQLite copy in the backup location.",
+     "The copy must have its AgentSession rows removed and must pass SQLite integrity and sequence checks before encryption."
+    ],
+    "outcomes": [
+     "`backups` calls `store`, so `backups` depends on `store` and `store` operates on a file owned by `backups`.",
+     "`backups` opens or modifies the SQLite copy itself, so it depends on SQLite schema knowledge or `store_persistence` despite the statement that only `store` calls it."
+    ],
+    "observer": "The dependency projector and an owner restoring the backup see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ownership scope of files outside the two named locations",
+   "kind": "incomplete ownership partition",
+   "text": "and any file — the store's file is `store`'s, a file in the backup location `backups`' (above).",
+   "question": "Does “any file” include the in-memory uploaded import file, the temporary store file, SQLite journal/WAL/SHM files and other engine files; if so, which module owns each one?",
+   "options": [
+    "“file” means only filesystem files, with store temporary and SQLite sidecar files included in `store`'s ownership",
+    "“file” means every object called a file, so the upload must also be assigned to `store` or `backups`",
+    "The upload belongs to the import/owner-session module, store construction files belong to `store`, and backup-location files belong to `backups`",
+    "Engine-created sidecars belong to `store_persistence` even though the configured store file belongs to `store`"
+   ],
+   "default_guess": "Treat the clause as filesystem ownership: `store` owns the configured store, its construction temporary file and SQLite sidecars; `backups` owns every filesystem file in the backup location; the in-memory upload belongs to the import/owner-session module.",
+   "witness": {
+    "initial": "Registry has a live owner session, no uploaded import, and a configured store path.",
+    "events": [
+     "The owner uploads an import file, which A16 keeps only in process memory.",
+     "A later start creates a new store under its temporary name and SQLite may create engine sidecar files."
+    ],
+    "outcomes": [
+     "A broad reading of “any file” requires all of these to be owned by either `store` or `backups`, but the text supplies no classification for the upload or non-final store files.",
+     "A filesystem-only reading leaves the upload with the import/owner-session module and treats temporary and sidecar files as parts of `store`'s file."
+    ],
+    "observer": "The import, startup and persistence module implementers see different ownership and dependency boundaries."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "`store_persistence` model imports",
+   "kind": "standard_violation",
+   "text": "`models`.",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой runtime import surface consumer-модуля, а не копия публичного API provider-а: ровно те символы, которые код consumer-а называет напрямую — вызывает, конструирует, проверяет (членство в enum, тип), пишет в аннотации.",
+   "section": "7",
+   "question": "Replace the provider-wide `models` dependency with the complete minimal list of model, enum and interface symbols that `store_persistence` directly names in its repository, schema and row-codec runtime code.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"backup SQLite snapshot ownership and dependency\",\"kind\":\"unclear dependency direction\",\"text\":\"and any file — the store's file is `store`'s, a file in the backup location `backups`' (above). It is part of the store of A17 and A18: only `store` calls it, inside the transaction `store` opened, so no other module touches the database through it.\",\"question\":\"Which module opens, sanitises and integrity-checks the SQLite copy used by A18, and what is the permitted dependency direction between `backups`, `store` and `store_persistence`?\",\"options\":[\"`backups` owns the files but calls a `store` operation that creates, removes AgentSession rows from and checks the copy\",\"`store` produces a sanitised checked snapshot which `backups` only encrypts and manages\",\"`backups` opens the copy and calls `store_persistence`, as an explicit exception to the rule that only `store` calls it\",\"`backups` independently implements the SQLite removal and checks\"],\"default_guess\":\"`backups` owns backup-file orchestration and calls a `store` snapshot/check operation; `backups` never imports `store_persistence` directly.\",\"witness\":{\"initial\":\"The live store contains an AgentSession and a daily backup is due.\",\"events\":[\"The backup scheduler asks `backups` to make a backup.\",\"`backups` creates a SQLite copy in the backup location.\",\"The copy must have its AgentSession rows removed and must pass SQLite integrity and sequence checks before encryption.\"],\"outcomes\":[\"`backups` calls `store`, so `backups` depends on `store` and `store` operates on a file owned by `backups`.\",\"`backups` opens or modifies the SQLite copy itself, so it depends on SQLite schema knowledge or `store_persistence` despite the statement that only `store` calls it.\"],\"observer\":\"The dependency projector and an owner restoring the backup see the difference.\"}},{\"subject\":\"ownership scope of files outside the two named locations\",\"kind\":\"incomplete ownership partition\",\"text\":\"and any file — the store's file is `store`'s, a file in the backup location `backups`' (above).\",\"question\":\"Does “any file” include the in-memory uploaded import file, the temporary store file, SQLite journal/WAL/SHM files and other engine files; if so, which module owns each one?\",\"options\":[\"“file” means only filesystem files, with store temporary and SQLite sidecar files included in `store`'s ownership\",\"“file” means every object called a file, so the upload must also be assigned to `store` or `backups`\",\"The upload belongs to the import/owner-session module, store construction files belong to `store`, and backup-location files belong to `backups`\",\"Engine-created sidecars belong to `store_persistence` even though the configured store file belongs to `store`\"],\"default_guess\":\"Treat the clause as filesystem ownership: `store` owns the configured store, its construction temporary file and SQLite sidecars; `backups` owns every filesystem file in the backup location; the in-memory upload belongs to the import/owner-session module.\",\"witness\":{\"initial\":\"Registry has a live owner session, no uploaded import, and a configured store path.\",\"events\":[\"The owner uploads an import file, which A16 keeps only in process memory.\",\"A later start creates a new store under its temporary name and SQLite may create engine sidecar files.\"],\"outcomes\":[\"A broad reading of “any file” requires all of these to be owned by either `store` or `backups`, but the text supplies no classification for the upload or non-final store files.\",\"A filesystem-only reading leaves the upload with the import/owner-session module and treats temporary and sidecar files as parts of `store`'s file.\"],\"observer\":\"The import, startup and persistence module implementers see different ownership and dependency boundaries.\"}},{\"subject\":\"`store_persistence` model imports\",\"kind\":\"standard_violation\",\"text\":\"`models`.\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой runtime import surface consumer-модуля, а не копия публичного API provider-а: ровно те символы, которые код consumer-а называет напрямую — вызывает, конструирует, проверяет (членство в enum, тип), пишет в аннотации.\",\"section\":\"7\",\"question\":\"Replace the provider-wide `models` dependency with the complete minimal list of model, enum and interface symbols that `store_persistence` directly names in its repository, schema and row-codec runtime code.\"}]}",
+ "set_aside": []
+}
