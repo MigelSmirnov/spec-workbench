@@ -1,0 +1,158 @@
+{
+ "open_points": [
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "contradictory secret-answer scope",
+   "text": "No module puts a secret, a confirmation value, a\n  CSRF value or an owner session's identity into a record, a log line, a diagnostic,\n  an audit entry, a URL or the data of an answer Registry gives a service or\n  the owner (A13 rule 7, A17 rule 6).",
+   "question": "Does A17 rule 6 prohibit secrets only in answers exposed to a service or the owner, as this passage says, or in every operation answer, as A17's unqualified \"no secret enters ... an answer\" says, including the three configuration giver operations?",
+   "options": [
+    "Only externally exposed answers are prohibited; internal configuration operations may return secrets.",
+    "Every operation answer is prohibited from carrying a secret; configuration must expose comparison or use capabilities instead of returning secrets."
+   ],
+   "default_guess": "Treat the prohibition as external-only so the three explicitly specified giver operations can exist.",
+   "witness": {
+    "initial": "A start has passed configuration checks and configuration holds the service tokens.",
+    "events": [
+     "A service request arrives and service_access needs to identify its token.",
+     "service_access invokes configuration.give_service_tokens."
+    ],
+    "outcomes": [
+     "The giver returns the configured tokens as its operation answer, as its Outputs section requires.",
+     "No secret is returned; configuration must compare the presented token itself or provide an opaque comparison capability, as the unqualified A17 rule requires."
+    ],
+    "observer": "service_access and any contract or security test at the configuration boundary"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.give_service_tokens`",
+   "kind": "unspecified output representation",
+   "text": "Each service the imported `SERVICE_RIGHTS` constant lists with its token, as\n`load_configuration` checked it; none in an owner-only start, which opens no\nservice API (A17 rule 1).",
+   "question": "What exact return type, ordering and ownership semantics carry the service-to-token association?",
+   "options": [
+    "An immutable mapping from ServiceName to token, or none.",
+    "An ordered sequence of service-token pairs in SERVICE_RIGHTS order, or none.",
+    "A mutable mapping or sequence that aliases configuration's held collection."
+   ],
+   "default_guess": "Return an immutable mapping keyed by ServiceName, with none for an owner-only start.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.give_backup_key`",
+   "kind": "unspecified key representation",
+   "text": "The backup key, as `load_configuration` checked it.",
+   "question": "Does this operation return the environment text, its UTF-8 bytes, or already derived cryptographic key material, and which representation is used for encryption and the recorded key digest?",
+   "options": [
+    "Return the exact text and require backups to encode it as UTF-8 before derivation and digesting.",
+    "Return the UTF-8 bytes whose length configuration checked.",
+    "Return derived key material, with configuration owning the derivation."
+   ],
+   "default_guess": "Return UTF-8 bytes and let backups perform the specified derivation and digest operations.",
+   "witness": {
+    "initial": "The configured backup key is sixteen occurrences of `é`, which is 16 Unicode code points and 32 UTF-8 bytes, so it passes A17's minimum.",
+    "events": [
+     "A daily backup starts.",
+     "backups asks configuration.give_backup_key for the key.",
+     "backups derives encryption material and records the key digest."
+    ],
+    "outcomes": [
+     "The returned value is UTF-8 bytes, producing one deterministic derivation and digest.",
+     "The returned value is text or is encoded by an implementation-selected convention, producing different key material, a different digest, or a runtime failure."
+    ],
+    "observer": "the backup checker and the owner attempting to decrypt the backup"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:backups.run_daily_backup_if_due`",
+   "kind": "contradictory call timing",
+   "text": "The configured backup location and the open store; the backup key it asks\n`configuration.give_backup_key` for at each run it starts.",
+   "question": "Must the backup key be requested immediately whenever a due run is marked started, or only if temporary-file cleanup succeeds and the run reaches encryption?",
+   "options": [
+    "Request the key when the run starts, before step 2 cleanup.",
+    "Request the key only immediately before encryption in step 3."
+   ],
+   "default_guess": "Request it only immediately before encryption, minimizing the time another module holds the secret.",
+   "witness": {
+    "initial": "A run is due and the backup location contains a temporary-prefix file that cannot be removed.",
+    "events": [
+     "instance_lifecycle calls run_daily_backup_if_due.",
+     "backups marks the date as run and attempts step 2 cleanup.",
+     "The cleanup fails and the run stops before copying or encrypting."
+    ],
+    "outcomes": [
+     "configuration.give_backup_key was called because every started run asks for it.",
+     "configuration.give_backup_key was not called because the flow asks for the key only in step 3, which was never reached."
+    ],
+    "observer": "a configuration capability spy or a unit test of the backup run"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "undefined cryptographic constants",
+   "text": "a backup record's version,\nthe key digest's domain and the key derivation's info (A18 rules 1, 3);",
+   "question": "What are the types and values of these three constants, and exactly how does the backup format use the record version, digest domain and derivation info, including the digest, KDF and encryption algorithms and their serialization?",
+   "options": [
+    "Specify a versioned backup format and exact domain-separated digest and KDF constructions using these constants.",
+    "Leave the algorithms and serialization implementation-private, allowing releases or implementations to interpret the constants differently."
+   ],
+   "default_guess": "Define a versioned format using byte-string domain and info constants with an explicitly selected digest, KDF and authenticated-encryption algorithm.",
+   "witness": {
+    "initial": "Two implementations receive the same store, backup key and three named constants.",
+    "events": [
+     "Each implementation makes a backup at the same recorded instant.",
+     "Each writes the readable record, derives an encryption key and computes the key digest."
+    ],
+    "outcomes": [
+     "One uses a domain-prefixed SHA-256 digest and HKDF info bytes.",
+     "The other uses an HMAC digest and a different KDF or serialization while still claiming to use the named domain and info constants."
+    ],
+    "observer": "a restore tool or a later release attempting to read the backup"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "contradictory export surface",
+   "text": "the backup key through\n`capability:configuration.give_backup_key` to `module:backups`",
+   "question": "Must give_backup_key be added to configuration's exported internal surface and module_functions ownership, or is the capability mention descriptive only?",
+   "options": [
+    "Export give_backup_key from configuration, assign it there exactly once, and import it directly into backups.",
+    "Do not add it to the structural surfaces and rely on textual inference or another secret-transfer mechanism."
+   ],
+   "default_guess": "Export and assign give_backup_key to configuration and declare backups' direct import explicitly.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.give_service_tokens`",
+   "kind": "standard_violation",
+   "text": "It is asked by `service_access.identify_service` at each identification;",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "Declare `module_internal[\"service_access\"][\"configuration\"]` with `give_service_tokens` instead of leaving this direct call only in prose.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.give_owner_credential`",
+   "kind": "standard_violation",
+   "text": "It is asked by `owner_sessions.sign_in_owner` at each comparison of a presented credential, outside a lockout;",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "Declare `module_internal[\"owner_sessions\"][\"configuration\"]` with `give_owner_credential` instead of leaving this direct call only in prose.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:backups.run_daily_backup_if_due`",
+   "kind": "standard_violation",
+   "text": "The configured backup location and the open store; the backup key it asks\n`configuration.give_backup_key` for at each run it starts.",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "Declare `module_internal[\"backups\"][\"configuration\"]` with `give_backup_key` instead of leaving this direct call only in prose.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"contradictory secret-answer scope\",\"text\":\"No module puts a secret, a confirmation value, a\\n  CSRF value or an owner session's identity into a record, a log line, a diagnostic,\\n  an audit entry, a URL or the data of an answer Registry gives a service or\\n  the owner (A13 rule 7, A17 rule 6).\",\"question\":\"Does A17 rule 6 prohibit secrets only in answers exposed to a service or the owner, as this passage says, or in every operation answer, as A17's unqualified \\\"no secret enters ... an answer\\\" says, including the three configuration giver operations?\",\"options\":[\"Only externally exposed answers are prohibited; internal configuration operations may return secrets.\",\"Every operation answer is prohibited from carrying a secret; configuration must expose comparison or use capabilities instead of returning secrets.\"],\"default_guess\":\"Treat the prohibition as external-only so the three explicitly specified giver operations can exist.\",\"witness\":{\"initial\":\"A start has passed configuration checks and configuration holds the service tokens.\",\"events\":[\"A service request arrives and service_access needs to identify its token.\",\"service_access invokes configuration.give_service_tokens.\"],\"outcomes\":[\"The giver returns the configured tokens as its operation answer, as its Outputs section requires.\",\"No secret is returned; configuration must compare the presented token itself or provide an opaque comparison capability, as the unqualified A17 rule requires.\"],\"observer\":\"service_access and any contract or security test at the configuration boundary\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.give_service_tokens`\",\"kind\":\"unspecified output representation\",\"text\":\"Each service the imported `SERVICE_RIGHTS` constant lists with its token, as\\n`load_configuration` checked it; none in an owner-only start, which opens no\\nservice API (A17 rule 1).\",\"question\":\"What exact return type, ordering and ownership semantics carry the service-to-token association?\",\"options\":[\"An immutable mapping from ServiceName to token, or none.\",\"An ordered sequence of service-token pairs in SERVICE_RIGHTS order, or none.\",\"A mutable mapping or sequence that aliases configuration's held collection.\"],\"default_guess\":\"Return an immutable mapping keyed by ServiceName, with none for an owner-only start.\"},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.give_backup_key`\",\"kind\":\"unspecified key representation\",\"text\":\"The backup key, as `load_configuration` checked it.\",\"question\":\"Does this operation return the environment text, its UTF-8 bytes, or already derived cryptographic key material, and which representation is used for encryption and the recorded key digest?\",\"options\":[\"Return the exact text and require backups to encode it as UTF-8 before derivation and digesting.\",\"Return the UTF-8 bytes whose length configuration checked.\",\"Return derived key material, with configuration owning the derivation.\"],\"default_guess\":\"Return UTF-8 bytes and let backups perform the specified derivation and digest operations.\",\"witness\":{\"initial\":\"The configured backup key is sixteen occurrences of `é`, which is 16 Unicode code points and 32 UTF-8 bytes, so it passes A17's minimum.\",\"events\":[\"A daily backup starts.\",\"backups asks configuration.give_backup_key for the key.\",\"backups derives encryption material and records the key digest.\"],\"outcomes\":[\"The returned value is UTF-8 bytes, producing one deterministic derivation and digest.\",\"The returned value is text or is encoded by an implementation-selected convention, producing different key material, a different digest, or a runtime failure.\"],\"observer\":\"the backup checker and the owner attempting to decrypt the backup\"}},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:backups.run_daily_backup_if_due`\",\"kind\":\"contradictory call timing\",\"text\":\"The configured backup location and the open store; the backup key it asks\\n`configuration.give_backup_key` for at each run it starts.\",\"question\":\"Must the backup key be requested immediately whenever a due run is marked started, or only if temporary-file cleanup succeeds and the run reaches encryption?\",\"options\":[\"Request the key when the run starts, before step 2 cleanup.\",\"Request the key only immediately before encryption in step 3.\"],\"default_guess\":\"Request it only immediately before encryption, minimizing the time another module holds the secret.\",\"witness\":{\"initial\":\"A run is due and the backup location contains a temporary-prefix file that cannot be removed.\",\"events\":[\"instance_lifecycle calls run_daily_backup_if_due.\",\"backups marks the date as run and attempts step 2 cleanup.\",\"The cleanup fails and the run stops before copying or encrypting.\"],\"outcomes\":[\"configuration.give_backup_key was called because every started run asks for it.\",\"configuration.give_backup_key was not called because the flow asks for the key only in step 3, which was never reached.\"],\"observer\":\"a configuration capability spy or a unit test of the backup run\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"undefined cryptographic constants\",\"text\":\"a backup record's version,\\nthe key digest's domain and the key derivation's info (A18 rules 1, 3);\",\"question\":\"What are the types and values of these three constants, and exactly how does the backup format use the record version, digest domain and derivation info, including the digest, KDF and encryption algorithms and their serialization?\",\"options\":[\"Specify a versioned backup format and exact domain-separated digest and KDF constructions using these constants.\",\"Leave the algorithms and serialization implementation-private, allowing releases or implementations to interpret the constants differently.\"],\"default_guess\":\"Define a versioned format using byte-string domain and info constants with an explicitly selected digest, KDF and authenticated-encryption algorithm.\",\"witness\":{\"initial\":\"Two implementations receive the same store, backup key and three named constants.\",\"events\":[\"Each implementation makes a backup at the same recorded instant.\",\"Each writes the readable record, derives an encryption key and computes the key digest.\"],\"outcomes\":[\"One uses a domain-prefixed SHA-256 digest and HKDF info bytes.\",\"The other uses an HMAC digest and a different KDF or serialization while still claiming to use the named domain and info constants.\"],\"observer\":\"a restore tool or a later release attempting to read the backup\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"contradictory export surface\",\"text\":\"the backup key through\\n`capability:configuration.give_backup_key` to `module:backups`\",\"question\":\"Must give_backup_key be added to configuration's exported internal surface and module_functions ownership, or is the capability mention descriptive only?\",\"options\":[\"Export give_backup_key from configuration, assign it there exactly once, and import it directly into backups.\",\"Do not add it to the structural surfaces and rely on textual inference or another secret-transfer mechanism.\"],\"default_guess\":\"Export and assign give_backup_key to configuration and declare backups' direct import explicitly.\"},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.give_service_tokens`\",\"kind\":\"standard_violation\",\"text\":\"It is asked by `service_access.identify_service` at each identification;\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"Declare `module_internal[\\\"service_access\\\"][\\\"configuration\\\"]` with `give_service_tokens` instead of leaving this direct call only in prose.\"},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.give_owner_credential`\",\"kind\":\"standard_violation\",\"text\":\"It is asked by `owner_sessions.sign_in_owner` at each comparison of a presented credential, outside a lockout;\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"Declare `module_internal[\\\"owner_sessions\\\"][\\\"configuration\\\"]` with `give_owner_credential` instead of leaving this direct call only in prose.\"},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:backups.run_daily_backup_if_due`\",\"kind\":\"standard_violation\",\"text\":\"The configured backup location and the open store; the backup key it asks\\n`configuration.give_backup_key` for at each run it starts.\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"Declare `module_internal[\\\"backups\\\"][\\\"configuration\\\"]` with `give_backup_key` instead of leaving this direct call only in prose.\"}]}",
+ "set_aside": []
+}

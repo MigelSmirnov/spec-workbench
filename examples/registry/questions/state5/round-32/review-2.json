@@ -1,0 +1,153 @@
+{
+ "open_points": [
+  {
+   "subject": "configuration.give_backup_key",
+   "kind": "contradictory secret output",
+   "text": "The backup key, as `load_configuration` checked it.",
+   "question": "May an internal operation answer with the raw backup key, despite A17 rule 6 saying that no secret enters an answer, or must this operation expose a non-answering mechanism such as an opaque handle or callback?",
+   "options": [
+    "Internal module-to-module answers are exempt from A17 rule 6",
+    "No operation may return the key; configuration must perform or mediate key use",
+    "A17 rule 6 must be narrowed explicitly to answers sent through a product surface"
+   ],
+   "default_guess": "Treat A17 rule 6 as applying only to answers sent to service or owner callers, and allow the raw key only across the declared internal edge.",
+   "witness": {
+    "initial": "A start has passed configuration checks and configuration holds the backup key.",
+    "events": [
+     "instance_lifecycle starts a due backup run",
+     "backups calls configuration.give_backup_key"
+    ],
+    "outcomes": [
+     "give_backup_key answers the checked key, as its Outputs section requires",
+     "give_backup_key cannot answer the key because A17 rule 6 says no secret enters an answer"
+    ],
+    "observer": "the backups implementation and any contract test of the operation"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "configuration.give_backup_key output",
+   "kind": "unspecified representation",
+   "text": "The backup key, as `load_configuration` checked it.",
+   "question": "What concrete type and byte representation does give_backup_key return, particularly for non-ASCII environment text?",
+   "options": [
+    "The original text string",
+    "Its UTF-8 bytes, the same bytes used for the length check",
+    "A dedicated secret or key object"
+   ],
+   "default_guess": "Return immutable UTF-8 bytes, because A17 measures configured-secret length in that encoding.",
+   "witness": {
+    "initial": "REGISTRY_BACKUP_KEY contains non-ASCII characters and passes the minimum length when UTF-8 encoded.",
+    "events": [
+     "configuration loads and checks the value",
+     "backups obtains it and derives an encryption key or digest"
+    ],
+    "outcomes": [
+     "The cryptography consumes the UTF-8 bytes checked by configuration",
+     "The cryptography consumes a language-specific string or a different encoding and produces a different key, digest and ciphertext"
+    ],
+    "observer": "the backup reader or restore tooling"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "configuration secret-giver operations",
+   "kind": "undefined retention boundary",
+   "text": "no other module keeps it.",
+   "question": "What counts as keeping a secret: durable/module state only, retention across calls, or even a local value held for the duration of one comparison or backup run?",
+   "options": [
+    "Transient local receipt during the consuming operation is allowed; retention afterward is forbidden",
+    "A consumer may cache the secret for the process lifetime",
+    "No consumer may receive raw secret material; it must use an opaque comparison or encryption facility"
+   ],
+   "default_guess": "Allow a consumer to hold the value only for the duration of the operation that needs it, then release every reference; forbid module-level or cross-call caching.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration.give_service_tokens",
+   "kind": "undefined retention boundary",
+   "text": "no other module keeps them.",
+   "question": "May service_access retain the returned token collection during one identification, make copies while comparing it, or cache it between identifications?",
+   "options": [
+    "It may retain the collection and transient copies only until that identification finishes",
+    "It may cache the collection for the process lifetime",
+    "It may not receive the tokens; configuration must perform token identification"
+   ],
+   "default_guess": "Permit transient receipt for one identification and prohibit retention between identifications.",
+   "unit": "?"
+  },
+  {
+   "subject": "backups.run_daily_backup_if_due inputs",
+   "kind": "underspecified input contract",
+   "text": "The configured backup location and the open store; the backup key it asks `configuration.give_backup_key` for at each run it starts.",
+   "question": "Is the open store an explicit parameter or module-owned singleton state, and what exact handle/type represents it and the backup location?",
+   "options": [
+    "The caller passes a typed open-store handle and a resolved path",
+    "backups and store use process-global initialized state, so no store handle is passed",
+    "The caller passes only the backup location and backups obtains the current store through store"
+   ],
+   "default_guess": "Pass a typed open-store handle and a resolved backup-location path explicitly.",
+   "unit": "?"
+  },
+  {
+   "subject": "backup key digest",
+   "kind": "unspecified cryptographic construction",
+   "text": "the key digest's domain",
+   "question": "Which digest algorithm, domain-separation construction, input encoding and output encoding define the key digest stored in a backup record?",
+   "options": [
+    "A named hash over domain bytes followed by the UTF-8 key bytes",
+    "An HMAC whose key or message role is explicitly fixed",
+    "A KDF-derived key identifier rather than a direct digest"
+   ],
+   "default_guess": "Use a versioned, explicitly length-delimited domain-separated SHA-256 construction and store fixed-length binary digest bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "backup encryption key derivation",
+   "kind": "unspecified cryptographic construction",
+   "text": "the key derivation's info",
+   "question": "Which KDF, salt source, parameters, input-key encoding and use of BACKUP_KEY_DERIVATION_INFO derive the backup encryption key?",
+   "options": [
+    "HKDF with a per-backup random salt and the declared info",
+    "A password KDF with fixed cost parameters and a per-backup salt",
+    "No derivation; use the configured key bytes directly"
+   ],
+   "default_guess": "Use HKDF-SHA-256 over the UTF-8 configured-key bytes with a fresh recorded salt and the declared info.",
+   "unit": "?"
+  },
+  {
+   "subject": "backup record version",
+   "kind": "undefined format version",
+   "text": "a backup record's version",
+   "question": "What is the initial BACKUP_RECORD_VERSION value, where is it encoded, and what must readers do with an unsupported version?",
+   "options": [
+    "Integer version 1 in the readable record; unsupported versions are unreadable",
+    "A release-version string doubles as the record version",
+    "The version exists only inside the encrypted payload"
+   ],
+   "default_guess": "Use integer version 1 in the unencrypted readable record and treat an unsupported version as an unreadable kept-prefix file.",
+   "unit": "?"
+  },
+  {
+   "subject": "backups direct configuration dependency",
+   "kind": "standard_violation",
+   "text": "The configured backup location and the open store; the backup key it asks\n`configuration.give_backup_key` for at each run it starts.",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "The passage must be accompanied by an authoritative `module_internal[\"backups\"][\"configuration\"]` entry containing `give_backup_key`, together with any other directly used configuration exports and no unused ones.",
+   "unit": "?"
+  },
+  {
+   "subject": "new data_provider constants",
+   "kind": "standard_violation",
+   "text": "`BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`",
+   "rule": "Константы (UPPER_CASE) тоже включай",
+   "section": "8",
+   "question": "These constants must become explicit members of exactly one `module_functions` owner, `data_provider`, rather than existing only in prose and the proposed consumer-import row.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"configuration.give_backup_key\",\"kind\":\"contradictory secret output\",\"text\":\"The backup key, as `load_configuration` checked it.\",\"question\":\"May an internal operation answer with the raw backup key, despite A17 rule 6 saying that no secret enters an answer, or must this operation expose a non-answering mechanism such as an opaque handle or callback?\",\"options\":[\"Internal module-to-module answers are exempt from A17 rule 6\",\"No operation may return the key; configuration must perform or mediate key use\",\"A17 rule 6 must be narrowed explicitly to answers sent through a product surface\"],\"default_guess\":\"Treat A17 rule 6 as applying only to answers sent to service or owner callers, and allow the raw key only across the declared internal edge.\",\"witness\":{\"initial\":\"A start has passed configuration checks and configuration holds the backup key.\",\"events\":[\"instance_lifecycle starts a due backup run\",\"backups calls configuration.give_backup_key\"],\"outcomes\":[\"give_backup_key answers the checked key, as its Outputs section requires\",\"give_backup_key cannot answer the key because A17 rule 6 says no secret enters an answer\"],\"observer\":\"the backups implementation and any contract test of the operation\"}},{\"subject\":\"configuration.give_backup_key output\",\"kind\":\"unspecified representation\",\"text\":\"The backup key, as `load_configuration` checked it.\",\"question\":\"What concrete type and byte representation does give_backup_key return, particularly for non-ASCII environment text?\",\"options\":[\"The original text string\",\"Its UTF-8 bytes, the same bytes used for the length check\",\"A dedicated secret or key object\"],\"default_guess\":\"Return immutable UTF-8 bytes, because A17 measures configured-secret length in that encoding.\",\"witness\":{\"initial\":\"REGISTRY_BACKUP_KEY contains non-ASCII characters and passes the minimum length when UTF-8 encoded.\",\"events\":[\"configuration loads and checks the value\",\"backups obtains it and derives an encryption key or digest\"],\"outcomes\":[\"The cryptography consumes the UTF-8 bytes checked by configuration\",\"The cryptography consumes a language-specific string or a different encoding and produces a different key, digest and ciphertext\"],\"observer\":\"the backup reader or restore tooling\"}},{\"subject\":\"configuration secret-giver operations\",\"kind\":\"undefined retention boundary\",\"text\":\"no other module keeps it.\",\"question\":\"What counts as keeping a secret: durable/module state only, retention across calls, or even a local value held for the duration of one comparison or backup run?\",\"options\":[\"Transient local receipt during the consuming operation is allowed; retention afterward is forbidden\",\"A consumer may cache the secret for the process lifetime\",\"No consumer may receive raw secret material; it must use an opaque comparison or encryption facility\"],\"default_guess\":\"Allow a consumer to hold the value only for the duration of the operation that needs it, then release every reference; forbid module-level or cross-call caching.\"},{\"subject\":\"configuration.give_service_tokens\",\"kind\":\"undefined retention boundary\",\"text\":\"no other module keeps them.\",\"question\":\"May service_access retain the returned token collection during one identification, make copies while comparing it, or cache it between identifications?\",\"options\":[\"It may retain the collection and transient copies only until that identification finishes\",\"It may cache the collection for the process lifetime\",\"It may not receive the tokens; configuration must perform token identification\"],\"default_guess\":\"Permit transient receipt for one identification and prohibit retention between identifications.\"},{\"subject\":\"backups.run_daily_backup_if_due inputs\",\"kind\":\"underspecified input contract\",\"text\":\"The configured backup location and the open store; the backup key it asks `configuration.give_backup_key` for at each run it starts.\",\"question\":\"Is the open store an explicit parameter or module-owned singleton state, and what exact handle/type represents it and the backup location?\",\"options\":[\"The caller passes a typed open-store handle and a resolved path\",\"backups and store use process-global initialized state, so no store handle is passed\",\"The caller passes only the backup location and backups obtains the current store through store\"],\"default_guess\":\"Pass a typed open-store handle and a resolved backup-location path explicitly.\"},{\"subject\":\"backup key digest\",\"kind\":\"unspecified cryptographic construction\",\"text\":\"the key digest's domain\",\"question\":\"Which digest algorithm, domain-separation construction, input encoding and output encoding define the key digest stored in a backup record?\",\"options\":[\"A named hash over domain bytes followed by the UTF-8 key bytes\",\"An HMAC whose key or message role is explicitly fixed\",\"A KDF-derived key identifier rather than a direct digest\"],\"default_guess\":\"Use a versioned, explicitly length-delimited domain-separated SHA-256 construction and store fixed-length binary digest bytes.\"},{\"subject\":\"backup encryption key derivation\",\"kind\":\"unspecified cryptographic construction\",\"text\":\"the key derivation's info\",\"question\":\"Which KDF, salt source, parameters, input-key encoding and use of BACKUP_KEY_DERIVATION_INFO derive the backup encryption key?\",\"options\":[\"HKDF with a per-backup random salt and the declared info\",\"A password KDF with fixed cost parameters and a per-backup salt\",\"No derivation; use the configured key bytes directly\"],\"default_guess\":\"Use HKDF-SHA-256 over the UTF-8 configured-key bytes with a fresh recorded salt and the declared info.\"},{\"subject\":\"backup record version\",\"kind\":\"undefined format version\",\"text\":\"a backup record's version\",\"question\":\"What is the initial BACKUP_RECORD_VERSION value, where is it encoded, and what must readers do with an unsupported version?\",\"options\":[\"Integer version 1 in the readable record; unsupported versions are unreadable\",\"A release-version string doubles as the record version\",\"The version exists only inside the encrypted payload\"],\"default_guess\":\"Use integer version 1 in the unencrypted readable record and treat an unsupported version as an unreadable kept-prefix file.\"},{\"subject\":\"backups direct configuration dependency\",\"kind\":\"standard_violation\",\"text\":\"The configured backup location and the open store; the backup key it asks\\n`configuration.give_backup_key` for at each run it starts.\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"The passage must be accompanied by an authoritative `module_internal[\\\"backups\\\"][\\\"configuration\\\"]` entry containing `give_backup_key`, together with any other directly used configuration exports and no unused ones.\"},{\"subject\":\"new data_provider constants\",\"kind\":\"standard_violation\",\"text\":\"`BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`\",\"rule\":\"Константы (UPPER_CASE) тоже включай\",\"section\":\"8\",\"question\":\"These constants must become explicit members of exactly one `module_functions` owner, `data_provider`, rather than existing only in prose and the proposed consumer-import row.\"}]}",
+ "set_aside": []
+}

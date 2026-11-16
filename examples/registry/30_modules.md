@@ -174,6 +174,8 @@ later line, and modules on one line do not know each other.
   type's owner service (A22), the services' rights (A09 rule 2), the store
   version and the store's temporary-name suffix (A17 rule 5), the two backup
   prefixes, the daily time, the look and the retention (A18 rules 1, 4, 5),
+  a backup record's version, the key digest's domain and the key
+  derivation's info (A18 rules 1, 3),
   the import file's size limit (A19 rule 4), the release's and contract's
   versions, the owner
   session's limits (A13), the lengths of A01 rule 1, A02 rule 4, A13 rule 7
@@ -187,7 +189,13 @@ later line, and modules on one line do not know each other.
 - **Secrets never leave.** No module puts a secret, a confirmation value, a
   CSRF value or an owner session's identity into a record, a log line, a diagnostic,
   an audit entry, a URL or the data of an answer Registry gives a service or
-  the owner (A13 rule 7, A17 rule 6).
+  the owner (A13 rule 7, A17 rule 6) — but for the forms `owner_interface`
+  serves, which carry their session's own CSRF value and the pending
+  confirmation value, and the cookie, which carries the session's identity,
+  as below. An answer in A13 rule 7 and A17 rule 6 is what Registry gives a
+  caller outside it (R0-23, R0-37); a value one module returns to another
+  inside the process is not one, and so `configuration` gives a secret to
+  the module that uses it.
   An agent session's identity, which Kernel names (R0-53), is not one of them:
   M06, M07 and M09 record it. The owner session's identity travels only in its
   cookie, the CSRF and confirmation
@@ -358,6 +366,9 @@ BACKUP_TEMPORARY_PREFIX
 BACKUP_DAILY_TIME_UTC
 BACKUP_LOOK_SECONDS
 BACKUP_RETENTION_HOURS
+BACKUP_RECORD_VERSION
+BACKUP_KEY_DIGEST_DOMAIN
+BACKUP_KEY_DERIVATION_INFO
 IMPORT_FILE_MAX_BYTES
 RELEASE_VERSION
 CONTRACT_VERSION

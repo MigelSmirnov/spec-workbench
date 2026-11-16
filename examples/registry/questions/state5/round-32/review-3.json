@@ -1,0 +1,202 @@
+{
+ "open_points": [
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.load_configuration`",
+   "kind": "failure_state",
+   "text": "Resolves paths; keeps the checked secrets in the process's memory; touches no file and no record.",
+   "question": "If a later configuration check fails, are secrets checked before that failure retained in configuration state, or is loading atomic so no secret is retained unless every check passes?",
+   "options": [
+    "Retain no configuration state unless every check passes",
+    "Retain each secret as soon as its individual check passes until the failed start exits"
+   ],
+   "default_guess": "Make loading atomic and publish or retain the checked secrets only after all configuration checks pass.",
+   "witness": {
+    "initial": "A fresh process has valid service tokens, owner credential and backup key, but a later path check fails.",
+    "events": [
+     "instance_lifecycle calls configuration.load_configuration",
+     "configuration checks the secrets successfully",
+     "configuration then finds the store and backup locations invalid"
+    ],
+    "outcomes": [
+     "The operation answers the diagnostic and configuration retains no secrets",
+     "The operation answers the same diagnostic but configuration retains the secrets checked before the failure"
+    ],
+    "observer": "A test double or memory inspection performed before the stopped process exits"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "secret_lifetime",
+   "text": "`configuration` holds the secrets and hands each only to the module that\nuses it, which asks for it: the service tokens to `service_access`, the\nowner credential to `owner_sessions`, the backup key to `backups`.\n`random_values` compares a presented secret with a held one when asked and\nkeeps neither.",
+   "question": "What exactly counts as a module “keeping” a secret: may the recipient hold it for the duration of one identification, comparison or backup run, must it use a callback or borrowed view without copying, and must temporary copies be erased afterward?",
+   "options": [
+    "The recipient may retain the secret only for the duration of the single operation that requested it",
+    "The recipient may retain it in runtime state but must ask again at the stated call boundary",
+    "The secret may only be passed directly into the comparison or encryption primitive and may never be stored by the recipient"
+   ],
+   "default_guess": "Allow an ephemeral local value for one identification, comparison or backup run, prohibit caching between such operations, and promise no stronger zeroisation than the implementation platform supports.",
+   "witness": {
+    "initial": "Registry has started with all three kinds of secret loaded.",
+    "events": [
+     "service_access identifies a caller, owner_sessions compares a credential, and backups completes a run",
+     "The three recipient modules become idle"
+    ],
+    "outcomes": [
+     "Each recipient has discarded every reference after its operation",
+     "One or more recipients still holds a cached or runtime reference while continuing to ask configuration on later operations"
+    ],
+    "observer": "A memory-lifetime security test or heap inspection"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.give_service_tokens`",
+   "kind": "output_shape",
+   "text": "Each service the imported `SERVICE_RIGHTS` constant lists with its token, as\n`load_configuration` checked it; none in an owner-only start, which opens no\nservice API (A17 rule 1).",
+   "question": "What exact return type, ordering and mutability represent the service-to-token association, and is it a detached immutable snapshot or a live object backed by configuration state?",
+   "options": [
+    "An immutable mapping from service enum to immutable token bytes or text",
+    "An ordered sequence of service-token pairs in SERVICE_RIGHTS order",
+    "A mutable mapping, either copied or shared with configuration"
+   ],
+   "default_guess": "Return a detached immutable mapping keyed by the service enumeration, with no meaningful iteration-order contract.",
+   "witness": {
+    "initial": "A normal start has four valid service tokens.",
+    "events": [
+     "service_access calls give_service_tokens",
+     "Code receiving the result attempts to replace or remove one entry",
+     "service_access performs another identification"
+    ],
+    "outcomes": [
+     "Mutation is impossible or affects only a detached copy, so identification still uses the configured token",
+     "The returned object is live and mutation changes later identification"
+    ],
+    "observer": "A later service caller presenting the affected token"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "cryptographic_format",
+   "text": "a backup record's version,\nthe key digest's domain and the key derivation's info (A18 rules 1, 3)",
+   "question": "Which algorithms, encodings and constructions use these values: the authenticated-encryption scheme, nonce generation and placement, key-derivation function and parameters, meaning and encoding of its info, key-digest algorithm and domain separation, and authenticated backup-record layout?",
+   "options": [
+    "Specify one versioned authenticated-encryption and KDF format that every implementation must produce and read",
+    "Treat the constants as opaque inputs while allowing implementations to choose incompatible algorithms and encodings",
+    "Delegate the complete versioned format to a named deterministic backend contract"
+   ],
+   "default_guess": "Define a versioned authenticated-encryption format with an explicit KDF, random nonce, authenticated metadata, digest construction and canonical byte encoding.",
+   "witness": {
+    "initial": "Two implementations receive the same configured backup key and store snapshot.",
+    "events": [
+     "Each implementation follows the stated backup operation and uses the named domain and info constants",
+     "One implementation writes a backup",
+     "The other implementation or a restore tool attempts to read it"
+    ],
+    "outcomes": [
+     "The backup is interoperable because one algorithm and byte format were fixed",
+     "The backup cannot be decrypted or its key digest does not match because each implementation chose a different permitted construction"
+    ],
+    "observer": "The owner performing disaster recovery or a later release checking the backup"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "record_version_semantics",
+   "text": "a backup record's version,\nthe key digest's domain and the key derivation's info (A18 rules 1, 3)",
+   "question": "Where is the backup-record version stored, whether it is authenticated, which operations validate it, and what happens when a file has an unknown or malformed version?",
+   "options": [
+    "Store and authenticate it in every backup record and treat an unknown version as unreadable",
+    "Use it only to select the writer format while readers infer the format otherwise",
+    "Remove the constant because the record has no version field"
+   ],
+   "default_guess": "Store the version in the readable record, authenticate it with the encrypted payload, and treat an unsupported version as an unreadable kept-prefix file.",
+   "witness": {
+    "initial": "The backup location contains a kept-prefix file whose record has a version unknown to the running release.",
+    "events": [
+     "run_daily_backup_if_due performs its due check or rotation",
+     "newest_backup_instant lists readable kept backups"
+    ],
+    "outcomes": [
+     "The file is unreadable, does not suppress a run, and is deleted during rotation",
+     "The version is ignored, so the file counts as a kept backup and may be shown as newest"
+    ],
+    "observer": "The owner interface and the daily-backup scheduler"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "export_surface_contradiction",
+   "text": "The list names groups; the data\nclosure names each constant, and every one is exported.",
+   "question": "Are `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN` and `BACKUP_KEY_DERIVATION_INFO` exported public constants of `data_provider`, despite being absent from its Candidate public capabilities list, or should their ownership and the backups import row be removed?",
+   "options": [
+    "Add all three constants to data_provider's public capability/export list",
+    "Remove the three constants and their backups imports",
+    "Keep them private, contradicting the stated backups import surface"
+   ],
+   "default_guess": "Add all three to data_provider's public capability and export lists.",
+   "witness": {
+    "initial": "The generator builds the data_provider and backups modules from their stated capability and import surfaces.",
+    "events": [
+     "backups imports BACKUP_RECORD_VERSION, BACKUP_KEY_DIGEST_DOMAIN and BACKUP_KEY_DERIVATION_INFO",
+     "data_provider is generated from the displayed Candidate public capabilities list"
+    ],
+    "outcomes": [
+     "Generation includes the three exports and backups imports successfully",
+     "The exports are absent and backups fails import validation or at runtime"
+    ],
+    "observer": "The strict import validator or generated application startup"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:backups.run_daily_backup_if_due`",
+   "kind": "key_acquisition_order",
+   "text": "The configured backup location and the open store; the backup key it asks\n`configuration.give_backup_key` for at each run it starts.",
+   "question": "At what precise point is a run considered started and the key requested: before remembering the date, before temporary-file cleanup, immediately before encryption, or only after the snapshot succeeds?",
+   "options": [
+    "Request the key when the due decision atomically marks the date as run",
+    "Request it after temporary cleanup but before making the snapshot",
+    "Request it only after the snapshot exists and immediately before encryption"
+   ],
+   "default_guess": "Mark the date and run as started at the due decision, then request the key once before any file step begins.",
+   "witness": {
+    "initial": "A date is due and no run is active.",
+    "events": [
+     "run_daily_backup_if_due decides the date is due",
+     "Temporary cleanup or snapshot creation fails before encryption would occur"
+    ],
+    "outcomes": [
+     "give_backup_key was called because the run had already started",
+     "give_backup_key was not called because the implementation treats encryption, rather than the due decision, as the start"
+    ],
+    "observer": "A configuration test double recording secret handoffs"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "standard_violation",
+   "text": "The secrets are not in it: `module:configuration` keeps them, checked, and\ngives each only to the module that uses it — the credential through\n`capability:configuration.give_owner_credential` to `module:owner_sessions`,\nthe tokens through `capability:configuration.give_service_tokens` to\n`module:service_access`, the backup key through\n`capability:configuration.give_backup_key` to `module:backups` — which asks\nfor it when it compares a presented value or makes a backup;",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Replace the prose-only dependency authority with explicit authoritative rows for `owner_sessions -> configuration -> give_owner_credential`, `service_access -> configuration -> give_service_tokens`, and `backups -> configuration -> give_backup_key`.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_4_import_backups.md:`public_op:backups.run_daily_backup_if_due`",
+   "kind": "standard_violation",
+   "text": "The configured backup location and the open store; the backup key it asks\n`configuration.give_backup_key` for at each run it starts.",
+   "rule": "**Вывод импортов из текста — подсказка, а не источник.** Проектор локальной\n  спеки находит кандидатов в импорт по тексту: имя чужого экспорта,\n  встреченное **целым словом** в позитивном тексте notes или в тексте\n  contracts consumer-а, и модели context closure. Каждый такой символ, не\n  объявленный в `module_internal`, отчёт проектора\n  (`python -m tools.slicer report --spec <base spec>`) называет находкой\n  `SLICE_IMPORT_UNDECLARED` (repair_class `spec`): его объявляют в\n  `module_internal` или убирают потребность в нём",
+   "section": "7",
+   "question": "Make `give_backup_key` an explicit `module_internal[\"backups\"][\"configuration\"]` import, rather than leaving the dependency to be inferred from this operation text.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.load_configuration`\",\"kind\":\"failure_state\",\"text\":\"Resolves paths; keeps the checked secrets in the process's memory; touches no file and no record.\",\"question\":\"If a later configuration check fails, are secrets checked before that failure retained in configuration state, or is loading atomic so no secret is retained unless every check passes?\",\"options\":[\"Retain no configuration state unless every check passes\",\"Retain each secret as soon as its individual check passes until the failed start exits\"],\"default_guess\":\"Make loading atomic and publish or retain the checked secrets only after all configuration checks pass.\",\"witness\":{\"initial\":\"A fresh process has valid service tokens, owner credential and backup key, but a later path check fails.\",\"events\":[\"instance_lifecycle calls configuration.load_configuration\",\"configuration checks the secrets successfully\",\"configuration then finds the store and backup locations invalid\"],\"outcomes\":[\"The operation answers the diagnostic and configuration retains no secrets\",\"The operation answers the same diagnostic but configuration retains the secrets checked before the failure\"],\"observer\":\"A test double or memory inspection performed before the stopped process exits\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"secret_lifetime\",\"text\":\"`configuration` holds the secrets and hands each only to the module that\\nuses it, which asks for it: the service tokens to `service_access`, the\\nowner credential to `owner_sessions`, the backup key to `backups`.\\n`random_values` compares a presented secret with a held one when asked and\\nkeeps neither.\",\"question\":\"What exactly counts as a module “keeping” a secret: may the recipient hold it for the duration of one identification, comparison or backup run, must it use a callback or borrowed view without copying, and must temporary copies be erased afterward?\",\"options\":[\"The recipient may retain the secret only for the duration of the single operation that requested it\",\"The recipient may retain it in runtime state but must ask again at the stated call boundary\",\"The secret may only be passed directly into the comparison or encryption primitive and may never be stored by the recipient\"],\"default_guess\":\"Allow an ephemeral local value for one identification, comparison or backup run, prohibit caching between such operations, and promise no stronger zeroisation than the implementation platform supports.\",\"witness\":{\"initial\":\"Registry has started with all three kinds of secret loaded.\",\"events\":[\"service_access identifies a caller, owner_sessions compares a credential, and backups completes a run\",\"The three recipient modules become idle\"],\"outcomes\":[\"Each recipient has discarded every reference after its operation\",\"One or more recipients still holds a cached or runtime reference while continuing to ask configuration on later operations\"],\"observer\":\"A memory-lifetime security test or heap inspection\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.give_service_tokens`\",\"kind\":\"output_shape\",\"text\":\"Each service the imported `SERVICE_RIGHTS` constant lists with its token, as\\n`load_configuration` checked it; none in an owner-only start, which opens no\\nservice API (A17 rule 1).\",\"question\":\"What exact return type, ordering and mutability represent the service-to-token association, and is it a detached immutable snapshot or a live object backed by configuration state?\",\"options\":[\"An immutable mapping from service enum to immutable token bytes or text\",\"An ordered sequence of service-token pairs in SERVICE_RIGHTS order\",\"A mutable mapping, either copied or shared with configuration\"],\"default_guess\":\"Return a detached immutable mapping keyed by the service enumeration, with no meaningful iteration-order contract.\",\"witness\":{\"initial\":\"A normal start has four valid service tokens.\",\"events\":[\"service_access calls give_service_tokens\",\"Code receiving the result attempts to replace or remove one entry\",\"service_access performs another identification\"],\"outcomes\":[\"Mutation is impossible or affects only a detached copy, so identification still uses the configured token\",\"The returned object is live and mutation changes later identification\"],\"observer\":\"A later service caller presenting the affected token\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"cryptographic_format\",\"text\":\"a backup record's version,\\nthe key digest's domain and the key derivation's info (A18 rules 1, 3)\",\"question\":\"Which algorithms, encodings and constructions use these values: the authenticated-encryption scheme, nonce generation and placement, key-derivation function and parameters, meaning and encoding of its info, key-digest algorithm and domain separation, and authenticated backup-record layout?\",\"options\":[\"Specify one versioned authenticated-encryption and KDF format that every implementation must produce and read\",\"Treat the constants as opaque inputs while allowing implementations to choose incompatible algorithms and encodings\",\"Delegate the complete versioned format to a named deterministic backend contract\"],\"default_guess\":\"Define a versioned authenticated-encryption format with an explicit KDF, random nonce, authenticated metadata, digest construction and canonical byte encoding.\",\"witness\":{\"initial\":\"Two implementations receive the same configured backup key and store snapshot.\",\"events\":[\"Each implementation follows the stated backup operation and uses the named domain and info constants\",\"One implementation writes a backup\",\"The other implementation or a restore tool attempts to read it\"],\"outcomes\":[\"The backup is interoperable because one algorithm and byte format were fixed\",\"The backup cannot be decrypted or its key digest does not match because each implementation chose a different permitted construction\"],\"observer\":\"The owner performing disaster recovery or a later release checking the backup\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"record_version_semantics\",\"text\":\"a backup record's version,\\nthe key digest's domain and the key derivation's info (A18 rules 1, 3)\",\"question\":\"Where is the backup-record version stored, whether it is authenticated, which operations validate it, and what happens when a file has an unknown or malformed version?\",\"options\":[\"Store and authenticate it in every backup record and treat an unknown version as unreadable\",\"Use it only to select the writer format while readers infer the format otherwise\",\"Remove the constant because the record has no version field\"],\"default_guess\":\"Store the version in the readable record, authenticate it with the encrypted payload, and treat an unsupported version as an unreadable kept-prefix file.\",\"witness\":{\"initial\":\"The backup location contains a kept-prefix file whose record has a version unknown to the running release.\",\"events\":[\"run_daily_backup_if_due performs its due check or rotation\",\"newest_backup_instant lists readable kept backups\"],\"outcomes\":[\"The file is unreadable, does not suppress a run, and is deleted during rotation\",\"The version is ignored, so the file counts as a kept backup and may be shown as newest\"],\"observer\":\"The owner interface and the daily-backup scheduler\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"export_surface_contradiction\",\"text\":\"The list names groups; the data\\nclosure names each constant, and every one is exported.\",\"question\":\"Are `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN` and `BACKUP_KEY_DERIVATION_INFO` exported public constants of `data_provider`, despite being absent from its Candidate public capabilities list, or should their ownership and the backups import row be removed?\",\"options\":[\"Add all three constants to data_provider's public capability/export list\",\"Remove the three constants and their backups imports\",\"Keep them private, contradicting the stated backups import surface\"],\"default_guess\":\"Add all three to data_provider's public capability and export lists.\",\"witness\":{\"initial\":\"The generator builds the data_provider and backups modules from their stated capability and import surfaces.\",\"events\":[\"backups imports BACKUP_RECORD_VERSION, BACKUP_KEY_DIGEST_DOMAIN and BACKUP_KEY_DERIVATION_INFO\",\"data_provider is generated from the displayed Candidate public capabilities list\"],\"outcomes\":[\"Generation includes the three exports and backups imports successfully\",\"The exports are absent and backups fails import validation or at runtime\"],\"observer\":\"The strict import validator or generated application startup\"}},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:backups.run_daily_backup_if_due`\",\"kind\":\"key_acquisition_order\",\"text\":\"The configured backup location and the open store; the backup key it asks\\n`configuration.give_backup_key` for at each run it starts.\",\"question\":\"At what precise point is a run considered started and the key requested: before remembering the date, before temporary-file cleanup, immediately before encryption, or only after the snapshot succeeds?\",\"options\":[\"Request the key when the due decision atomically marks the date as run\",\"Request it after temporary cleanup but before making the snapshot\",\"Request it only after the snapshot exists and immediately before encryption\"],\"default_guess\":\"Mark the date and run as started at the due decision, then request the key once before any file step begins.\",\"witness\":{\"initial\":\"A date is due and no run is active.\",\"events\":[\"run_daily_backup_if_due decides the date is due\",\"Temporary cleanup or snapshot creation fails before encryption would occur\"],\"outcomes\":[\"give_backup_key was called because the run had already started\",\"give_backup_key was not called because the implementation treats encryption, rather than the due decision, as the start\"],\"observer\":\"A configuration test double recording secret handoffs\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"standard_violation\",\"text\":\"The secrets are not in it: `module:configuration` keeps them, checked, and\\ngives each only to the module that uses it — the credential through\\n`capability:configuration.give_owner_credential` to `module:owner_sessions`,\\nthe tokens through `capability:configuration.give_service_tokens` to\\n`module:service_access`, the backup key through\\n`capability:configuration.give_backup_key` to `module:backups` — which asks\\nfor it when it compares a presented value or makes a backup;\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Replace the prose-only dependency authority with explicit authoritative rows for `owner_sessions -> configuration -> give_owner_credential`, `service_access -> configuration -> give_service_tokens`, and `backups -> configuration -> give_backup_key`.\"},{\"subject\":\"50_public_apis_4_import_backups.md:`public_op:backups.run_daily_backup_if_due`\",\"kind\":\"standard_violation\",\"text\":\"The configured backup location and the open store; the backup key it asks\\n`configuration.give_backup_key` for at each run it starts.\",\"rule\":\"**Вывод импортов из текста — подсказка, а не источник.** Проектор локальной\\n  спеки находит кандидатов в импорт по тексту: имя чужого экспорта,\\n  встреченное **целым словом** в позитивном тексте notes или в тексте\\n  contracts consumer-а, и модели context closure. Каждый такой символ, не\\n  объявленный в `module_internal`, отчёт проектора\\n  (`python -m tools.slicer report --spec <base spec>`) называет находкой\\n  `SLICE_IMPORT_UNDECLARED` (repair_class `spec`): его объявляют в\\n  `module_internal` или убирают потребность в нём\",\"section\":\"7\",\"question\":\"Make `give_backup_key` an explicit `module_internal[\\\"backups\\\"][\\\"configuration\\\"]` import, rather than leaving the dependency to be inferred from this operation text.\"}]}",
+ "set_aside": []
+}
