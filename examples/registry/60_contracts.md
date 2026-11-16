@@ -92,6 +92,21 @@ readings, so an action's today is `operations`' (`_today_of`).
 - **The store is a class.** A model field may not hold a connection, so the
   store this start opens is the `RegistryStore` class `store` owns; every
   store operation takes it.
+- **The project list's choice** (owner, 2026-11-17; State 7 structure
+  request of `projects`). `list_projects` takes `list_choice` as text, so a
+  value outside its closed list is refused (`outside_closed_list`, A19 rule
+  3) rather than unreadable; the list is `ProjectListChoice`: `active`, the
+  active projects alone, and `with_archived`, the active ones with the
+  archived ones. None is `active`: State 5 includes the archived ones only
+  "when asked". There is no member for the archived alone ("never the
+  archived alone"). A v1 client's `include_archived` flag is not read; such
+  a client sends `list_choice` instead (R0-04 fixes only `context` and
+  `validate`).
+- **First ordinals** (State 7 structure requests of `customers` and
+  `agent_sessions`). The revision a Project or a Customer is made or
+  imported with is the data provider's `REVISION_FIRST`, an agent session's
+  access version at registration its `ACCESS_VERSION_FIRST`; each change
+  makes the next one more.
 - **Given values arrive as text.** A create or a correction carries its
   values as given (`GivenCustomerFacts`, `GivenProjectFacts`,
   `GivenPointer`); the record's module reads and checks them through
@@ -113,7 +128,9 @@ readings, so an action's today is `operations`' (`_today_of`).
   object, `{"operation": <name>, "inputs": {...}}`, the session Kernel names
   in the `Registry-Agent-Session` header beside the bearer token, never among
   the inputs (R0-53); an answer is one JSON object, the answer's fields or,
-  for a refusal, `{"code", "stage", "failures": [{"kind", "path"}]}`.
+  for a refusal, `{"code", "stage", "failures": [{"kind", "path"}]}`, its
+  `stage` JSON `null` for `internal_error`, the one refusal without a stage
+  (State 5, "Closed set of refusal codes"; round-36 T2).
 - **The import file** (R0-72): one UTF-8 JSON object with the arrays
   `projects` (`project_id`, `name`, `address`, `status`, `customer_ref`,
   `created_at`, `updated_at`, `archived_at`), `rooms` (`room_id`,

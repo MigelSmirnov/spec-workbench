@@ -130,10 +130,10 @@ second authority beside them. The values are the data closure's.
 | `audit_log` | `RELEASE_VERSION`, `CONTRACT_VERSION`, `REFUSAL_STAGE_VALUES` |
 | `service_access` | `SERVICE_RIGHTS`, `SERVICE_HIGHEST_CLASSES`, `REFUSAL_STAGE_AUTHENTICATION` |
 | `owner_sessions` | `OWNER_SESSION_MAX_HOURS`, `OWNER_SESSION_IDLE_MINUTES`, `SIGN_IN_WINDOW_MINUTES`, `SIGN_IN_REFUSAL_LIMIT`, `SIGN_IN_LOCKOUT_MINUTES`, `CONFIRMATION_VALID_MINUTES`, `REFUSAL_STAGE_AUTHENTICATION`, `REFUSAL_STAGE_LIFECYCLE` |
-| `customers` | `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_VERSION`, `REFUSAL_STAGE_LIFECYCLE` |
-| `projects` | `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_VERSION`, `REFUSAL_STAGE_LIFECYCLE` |
+| `customers` | `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_VERSION`, `REFUSAL_STAGE_LIFECYCLE`, `REVISION_FIRST` |
+| `projects` | `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_VERSION`, `REFUSAL_STAGE_LIFECYCLE`, `REVISION_FIRST` |
 | `artifact_pointers` | `ARTIFACT_TYPE_OWNERS`, `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_LIFECYCLE` |
-| `agent_sessions` | `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_VERSION`, `REFUSAL_STAGE_LIFECYCLE` |
+| `agent_sessions` | `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_VERSION`, `REFUSAL_STAGE_LIFECYCLE`, `ACCESS_VERSION_FIRST` |
 | `migration_import` | `ARTIFACT_TYPE_OWNERS`, `IMPORT_FILE_MAX_BYTES`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_LIFECYCLE` |
 | `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION` |
 | `operations` | `REFUSAL_STAGE_AUTHENTICATION`, `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_VALUES` |
@@ -163,9 +163,12 @@ module names by the imported constant of that stage,
 as a number of its own (owner, 2026-11-17). The table's stage column is
 that number, with two exceptions: `internal_error` is no check's refusal
 and carries no stage; and `agent_call_refused` is one answer, so it always
-carries stage (2), also for the unknown pointer of a Kernel withdrawal that
-no session check reached (A08 rule 7, A10 rule 3) — its stage tells nothing
-the answer must not. The codes are
+carries stage (2). For Kernel, resolving a withdrawal's pointer to its
+project belongs to stage (2), not (3): the set can be checked only on the
+pointer's project, so an unknown pointer is a refusal of that stage, as a
+project that does not exist is (A08 rule 7, A10 rule 3; A04 rule 6 stage
+(2) hides every later failure) — and its stage tells nothing the answer
+must not. The codes are
 distinct where a caller acts on the difference; the kinds are a closed set
 the owner interface renders and State 6 declares as `models`' vocabulary.
 
