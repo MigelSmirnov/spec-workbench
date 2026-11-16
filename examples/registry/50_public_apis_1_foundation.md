@@ -9,7 +9,9 @@ and which have no operation (SPEC_STANDARD §6.10, §15.3.1) — and
 found no operation by which `configuration` hands a secret to the module
 that uses it, State 3 "Secrets never leave"; owner, 2026-11-16: the
 recipient asks): `configuration.give_service_tokens` and
-`configuration.give_owner_credential`; and `clock.today_in_utc` removed —
+`configuration.give_owner_credential`, then `configuration.give_backup_key`
+(State 5 round-31 T1: the backup key had stayed in the loaded configuration);
+and `clock.today_in_utc` removed —
 the clock is emitted from `system_clock_backend` v6, which owns exactly the
 two readings, and `operations` takes an action's today as the UTC date of
 its instant (owner, 2026-11-16). The operations of `clock`,
@@ -460,12 +462,13 @@ the settings it answers.
 ### Outputs
 
 The loaded configuration — the store's location, the backup location, the
-backup key, the owner interface's address, and either the service API's
+owner interface's address, and either the service API's
 address or none, which marks an owner-only start — or one diagnostic naming
-the first failed item and never its value. The owner credential and the
-service tokens are not answered: `configuration` keeps them, checked, and
-gives each only to the module that uses it (State 3), through
-`give_owner_credential` and `give_service_tokens`.
+the first failed item and never its value. The secrets — the owner
+credential, the service tokens, the backup key — are not answered:
+`configuration` keeps them, checked, and gives each only to the module that
+uses it (State 3), through `give_owner_credential`, `give_service_tokens`
+and `give_backup_key`.
 
 ### Observable effect
 
@@ -480,10 +483,9 @@ address, the port from the imported `LISTEN_PORT_MIN` to `LISTEN_PORT_MAX`
 constant, the two ports different —
 well formed; each secret at least the imported `SECRET_MIN_BYTES` constant; no two secrets equal; the
 store and the backup location apart, every link resolved; no default
-applied. Each secret is handed later only to the module that uses it: the
-backup key as an input of `backups.run_daily_backup_if_due`, the owner
-credential and the service tokens through `give_owner_credential` and
-`give_service_tokens`.
+applied. Each secret is handed later only to the module that uses it,
+which asks for it: through `give_owner_credential`, `give_service_tokens`
+and `give_backup_key`.
 
 ### Errors
 
@@ -491,8 +493,7 @@ The diagnostic is the answer for a failed check; the start stops on it.
 
 ### State impact
 
-Resolves paths; keeps the checked owner credential and service tokens in
-the process's memory; touches no file and no record.
+Resolves paths; keeps the checked secrets in the process's memory; touches no file and no record.
 
 ## `public_op:configuration.give_service_tokens`
 
@@ -523,7 +524,7 @@ None.
 ### Enforces
 
 The tokens are those of the one `load_configuration` of this start, never
-read again from the environment; no other module receives them.
+read again from the environment; no other module keeps them.
 
 ### Errors
 
@@ -564,7 +565,7 @@ None.
 ### Enforces
 
 The credential is the one of this start's `load_configuration`, never read
-again from the environment; no other module receives it.
+again from the environment; no other module keeps it.
 
 ### Errors
 
@@ -573,6 +574,47 @@ It is asked by `owner_sessions.sign_in_owner` at each comparison of a presented 
 which load and check the value, are the only other modules that keep it;
 `random_values.equal_in_constant_time` receives it only as an argument of
 one comparison and keeps nothing.
+
+### State impact
+
+Reads the process's memory; touches no record.
+
+## `public_op:configuration.give_backup_key`
+
+### Owner
+
+`module:configuration`. Give the checked backup key to `backups`, the one
+module that encrypts and checks a backup with it (State 3, "Secrets never
+leave"; A18 rule 3).
+
+### Callers
+
+`module:backups`.
+
+### Inputs
+
+None.
+
+### Outputs
+
+The backup key, as `load_configuration` checked it.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+The key is the one of this start's `load_configuration`, never read again
+from the environment, so a changed key takes effect at the next start (A17
+rule 7); no other module keeps it.
+
+### Errors
+
+None: after a start whose `load_configuration` passed, it always answers.
+It is asked by `backups.run_daily_backup_if_due` at each run it starts;
+`runtime_settings` and `configuration`, which load and check the value, are
+the only other modules that keep it.
 
 ### State impact
 

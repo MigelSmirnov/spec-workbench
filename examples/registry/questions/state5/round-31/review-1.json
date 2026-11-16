@@ -1,0 +1,297 @@
+{
+ "open_points": [
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.load_configuration`",
+   "kind": "secret_handoff_contradiction",
+   "text": "The loaded configuration — the store's location, the backup location, the\nbackup key, the owner interface's address, and either the service API's\naddress or none, which marks an owner-only start",
+   "question": "Does `instance_lifecycle` receive and retain the backup key, or must `configuration` deliver it directly to `backups` so that each secret reaches only the module that uses it?",
+   "options": [
+    "Return the key to `instance_lifecycle`, which transiently passes it into every backup look",
+    "Add a configuration operation called by `backups` to obtain the key",
+    "Initialize `backups` once with the key without exposing it to `instance_lifecycle`"
+   ],
+   "default_guess": "Let `instance_lifecycle` pass the key without retaining or inspecting it.",
+   "witness": {
+    "initial": "A valid non-owner-only configuration has backup key K and the instance is starting.",
+    "events": [
+     "`instance_lifecycle` calls `configuration.load_configuration`.",
+     "A minute look calls `backups.run_daily_backup_if_due`."
+    ],
+    "outcomes": [
+     "Following the Outputs literally, `instance_lifecycle` receives K and supplies it to `backups`.",
+     "Following “configuration holds the secrets and hands each only to the module that uses it”, `instance_lifecycle` never receives K, but no operation tells `backups` how to obtain it."
+    ],
+    "observer": "The backup run and a module-boundary security test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.load_configuration`",
+   "kind": "secret_in_operation_answer",
+   "text": "The loaded configuration — the store's location, the backup location, the\nbackup key, the owner interface's address, and either the service API's\naddress or none, which marks an owner-only start",
+   "question": "Are internal public-operation outputs exempt from the rule that no secret enters the data of an answer, or must the backup key be removed from this output?",
+   "options": [
+    "Internal operation returns may contain secrets; only surface answers are forbidden",
+    "No operation answer may contain a secret; replace the key with an opaque handle or direct handoff"
+   ],
+   "default_guess": "Treat the prohibition as applying to external surface answers only, while documenting that distinction.",
+   "witness": {
+    "initial": "The configuration has passed and contains backup key K.",
+    "events": [
+     "`configuration.load_configuration` returns its successful output to `instance_lifecycle`."
+    ],
+    "outcomes": [
+     "The successful operation answer contains K, as its Outputs require.",
+     "The successful operation answer cannot contain K because “No module puts a secret ... into ... the data of an answer”."
+    ],
+    "observer": "The generated operation contract and `instance_lifecycle`"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.give_service_tokens`",
+   "kind": "secret_in_operation_answer",
+   "text": "Each service the imported `SERVICE_RIGHTS` constant lists with its token, as\n`load_configuration` checked it; none in an owner-only start, which opens no\nservice API (A17 rule 1).",
+   "question": "May an internal public operation answer contain service tokens, or must token matching be exposed as an operation that never returns the tokens?",
+   "options": [
+    "Return the complete token table to `service_access`",
+    "Expose an identify/compare operation on `configuration` and never return tokens",
+    "Return opaque token handles usable by the constant-time comparator"
+   ],
+   "default_guess": "Allow this internal return and explicitly limit the no-secret-answer rule to surface answers.",
+   "witness": {
+    "initial": "The service API is open with four configured tokens.",
+    "events": [
+     "`service_access.identify_service` calls `configuration.give_service_tokens`."
+    ],
+    "outcomes": [
+     "`service_access` receives all four secret values.",
+     "No operation answer can contain a secret, so the call cannot return the specified output."
+    ],
+    "observer": "`service_access` and a secret-flow test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.give_service_tokens`",
+   "kind": "recipient_contradiction",
+   "text": "The tokens are those of the one `load_configuration` of this start, never\nread again from the environment; no other module receives them.",
+   "question": "Does “receives” mean receives at all, or only retains, given that the same contract says `random_values.equal_in_constant_time` receives each token as an argument?",
+   "options": [
+    "Only `service_access` may ever receive token bytes, so it must perform the comparison itself",
+    "`random_values` may receive token bytes transiently but must not retain them",
+    "`random_values` receives opaque handles rather than token bytes"
+   ],
+   "default_guess": "Read “receives” as “retains” and allow transient arguments to `random_values`.",
+   "witness": {
+    "initial": "Configured token T belongs to PresuPro and a request presents T.",
+    "events": [
+     "`service_access` obtains T from `configuration`.",
+     "`service_access` calls `random_values.equal_in_constant_time` with the presented token and T."
+    ],
+    "outcomes": [
+     "The Enforces passage forbids `random_values` from receiving T.",
+     "The Errors passage requires `random_values` to receive T as a comparison argument."
+    ],
+    "observer": "Instrumentation at the `random_values` module boundary"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.give_owner_credential`",
+   "kind": "secret_in_operation_answer",
+   "text": "The owner credential, as `load_configuration` checked it.",
+   "question": "May an internal public operation answer contain the owner credential, or must the credential remain behind a comparison operation or opaque handle?",
+   "options": [
+    "Return the credential to `owner_sessions`",
+    "Expose a credential-comparison operation without returning it",
+    "Return an opaque handle usable by the constant-time comparator"
+   ],
+   "default_guess": "Allow this internal return and explicitly limit the no-secret-answer rule to surface answers.",
+   "witness": {
+    "initial": "Configuration has passed with owner credential C.",
+    "events": [
+     "Outside lockout, `owner_sessions.sign_in_owner` calls `configuration.give_owner_credential`."
+    ],
+    "outcomes": [
+     "`owner_sessions` receives C as the operation output.",
+     "No operation answer can contain a secret, so C cannot be returned."
+    ],
+    "observer": "`owner_sessions` and a secret-flow test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.give_owner_credential`",
+   "kind": "recipient_contradiction",
+   "text": "The credential is the one of this start's `load_configuration`, never read\nagain from the environment; no other module receives it.",
+   "question": "Does “receives” mean receives at all, or only retains, given that `random_values.equal_in_constant_time` is also said to receive the credential as an argument?",
+   "options": [
+    "Only `owner_sessions` may receive credential bytes and must compare them itself",
+    "`random_values` may receive credential bytes transiently but must not retain them",
+    "`random_values` receives an opaque handle rather than credential bytes"
+   ],
+   "default_guess": "Read “receives” as “retains” and allow the transient comparison argument.",
+   "witness": {
+    "initial": "The configured owner credential is C and the owner presents C.",
+    "events": [
+     "`owner_sessions` obtains C from `configuration`.",
+     "`owner_sessions` calls `random_values.equal_in_constant_time` with the presented credential and C."
+    ],
+    "outcomes": [
+     "The Enforces passage forbids `random_values` from receiving C.",
+     "The Errors passage requires `random_values` to receive C as a comparison argument."
+    ],
+    "observer": "Instrumentation at the `random_values` module boundary"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "time_source_contradiction",
+   "text": "The transaction through\n`store.run_in_transaction` with one instant and today from `clock`.",
+   "question": "Must `perform_owner_operation` derive today from its one `clock.recorded_now` instant, or obtain today separately from `clock` as this passage says?",
+   "options": [
+    "Derive the UTC date from the single recorded instant",
+    "Perform a second clock read for today",
+    "Pass only the instant and let each domain module derive its date"
+   ],
+   "default_guess": "Derive today once in `operations` from the single recorded UTC instant.",
+   "witness": {
+    "initial": "An owner action begins immediately before 00:00 UTC and its clock would be read again immediately after midnight.",
+    "events": [
+     "`operations` begins the transaction and reads `clock.recorded_now` before midnight.",
+     "The action checks an owner-supplied date against today."
+    ],
+    "outcomes": [
+     "Under the changed convention, today is the pre-midnight instant's UTC date.",
+     "Under “today from `clock`”, a separate reading can produce the next date."
+    ],
+    "observer": "The owner, through acceptance or refusal of the dated action"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Constants each module imports",
+   "kind": "undefined_constant_contract",
+   "text": "`BACKUP_RECORD_VERSION`",
+   "question": "What is the type and value of `BACKUP_RECORD_VERSION`, where is it stored in a backup, and exactly how do writers and readers handle another version?",
+   "options": [
+    "Store an integer version in the authenticated readable backup header and reject unsupported versions",
+    "Use the release version as the record version and remove this separate constant",
+    "Use the constant only internally without a stored version field"
+   ],
+   "default_guess": "Store an integer record-format version in the authenticated readable header and reject unsupported values.",
+   "witness": {
+    "initial": "A kept backup was written by one implementation and is later inspected by another implementation of the same release.",
+    "events": [
+     "The first implementation writes its interpretation of the backup record.",
+     "The second reads the kept file to decide whether it is valid."
+    ],
+    "outcomes": [
+     "One implementation stores and validates an explicit record-version field.",
+     "Another treats the constant as an internal codec selector and writes no such field."
+    ],
+    "observer": "The owner interface's newest-backup result and the restore tooling"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Constants each module imports",
+   "kind": "undefined_cryptographic_domain",
+   "text": "`BACKUP_KEY_DIGEST_DOMAIN`",
+   "question": "Which digest construction, byte encoding and concatenation or framing rule uses `BACKUP_KEY_DIGEST_DOMAIN` to produce the recorded key digest?",
+   "options": [
+    "Hash a length-framed domain and key with SHA-256",
+    "Use HMAC-SHA-256 with the key and domain",
+    "Use the domain only as KDF context and record a digest of the derived key"
+   ],
+   "default_guess": "Use SHA-256 over an unambiguous length-framed UTF-8 domain followed by the raw key bytes.",
+   "witness": {
+    "initial": "Two implementations receive the same backup key K and the same domain constant.",
+    "events": [
+     "Each creates a backup and writes the required key digest into its readable record."
+    ],
+    "outcomes": [
+     "One records SHA-256 over framed domain and K.",
+     "The other records HMAC-SHA-256 keyed by K over the domain."
+    ],
+    "observer": "The owner or restore tooling comparing which key a backup requires"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Constants each module imports",
+   "kind": "undefined_key_derivation",
+   "text": "`BACKUP_KEY_DERIVATION_INFO`",
+   "question": "Which KDF, salt, output length and encoding consume `BACKUP_KEY_DERIVATION_INFO`, and which encryption key or keys are derived from it?",
+   "options": [
+    "HKDF-SHA-256 derives one AEAD key using the constant as UTF-8 info",
+    "The configured backup key is used directly and the constant is AEAD associated data",
+    "A password-based KDF uses the constant as a fixed salt or label"
+   ],
+   "default_guess": "Use HKDF-SHA-256 with explicit salt rules and the constant's UTF-8 bytes as `info` to derive the AEAD key.",
+   "witness": {
+    "initial": "Two implementations have the same configured backup key and snapshot.",
+    "events": [
+     "Each derives encryption material and writes a backup.",
+     "Each later attempts to check the other's backup."
+    ],
+    "outcomes": [
+     "An HKDF-based implementation derives one key using the constant as `info`.",
+     "A direct-key implementation uses the constant only as associated data."
+    ],
+    "observer": "The backup checker, which succeeds on one file and fails on the other"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Constants each module imports",
+   "kind": "standard_violation",
+   "text": "State 6 writes each row below as the\nentry `module_internal[<consumer>][\"data_provider\"]`, the listed symbols and\nno other.",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Replace the deferred prose authority with the actual authoritative `module_internal` declarations, including the changed `backups` row.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Constants each module imports",
+   "kind": "standard_violation",
+   "text": "| `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION` |",
+   "rule": "- Константы (UPPER_CASE) тоже включай",
+   "section": "8",
+   "question": "Add `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN` and `BACKUP_KEY_DERIVATION_INFO` to `data_provider`'s explicit `module_functions` ownership mapping.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.give_service_tokens`",
+   "kind": "standard_violation",
+   "text": "It is asked by `service_access.identify_service` at each identification;",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "Make this dependency an explicit `module_internal[\"service_access\"][\"configuration\"]` entry containing `give_service_tokens`.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.give_owner_credential`",
+   "kind": "standard_violation",
+   "text": "It is asked by `owner_sessions.sign_in_owner` at each comparison of a presented credential, outside a lockout;",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "Make this dependency an explicit `module_internal[\"owner_sessions\"][\"configuration\"]` entry containing `give_owner_credential`.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:Status",
+   "kind": "standard_violation",
+   "text": "`configuration.give_service_tokens` and\n`configuration.give_owner_credential`;",
+   "rule": "- `internal` — модуль → список экспортируемых символов (функции, классы, константы)",
+   "section": "7",
+   "question": "Declare both new operations in `imports.internal[\"configuration\"]` as part of the provider's export surface.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.load_configuration`\",\"kind\":\"secret_handoff_contradiction\",\"text\":\"The loaded configuration — the store's location, the backup location, the\\nbackup key, the owner interface's address, and either the service API's\\naddress or none, which marks an owner-only start\",\"question\":\"Does `instance_lifecycle` receive and retain the backup key, or must `configuration` deliver it directly to `backups` so that each secret reaches only the module that uses it?\",\"options\":[\"Return the key to `instance_lifecycle`, which transiently passes it into every backup look\",\"Add a configuration operation called by `backups` to obtain the key\",\"Initialize `backups` once with the key without exposing it to `instance_lifecycle`\"],\"default_guess\":\"Let `instance_lifecycle` pass the key without retaining or inspecting it.\",\"witness\":{\"initial\":\"A valid non-owner-only configuration has backup key K and the instance is starting.\",\"events\":[\"`instance_lifecycle` calls `configuration.load_configuration`.\",\"A minute look calls `backups.run_daily_backup_if_due`.\"],\"outcomes\":[\"Following the Outputs literally, `instance_lifecycle` receives K and supplies it to `backups`.\",\"Following “configuration holds the secrets and hands each only to the module that uses it”, `instance_lifecycle` never receives K, but no operation tells `backups` how to obtain it.\"],\"observer\":\"The backup run and a module-boundary security test\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.load_configuration`\",\"kind\":\"secret_in_operation_answer\",\"text\":\"The loaded configuration — the store's location, the backup location, the\\nbackup key, the owner interface's address, and either the service API's\\naddress or none, which marks an owner-only start\",\"question\":\"Are internal public-operation outputs exempt from the rule that no secret enters the data of an answer, or must the backup key be removed from this output?\",\"options\":[\"Internal operation returns may contain secrets; only surface answers are forbidden\",\"No operation answer may contain a secret; replace the key with an opaque handle or direct handoff\"],\"default_guess\":\"Treat the prohibition as applying to external surface answers only, while documenting that distinction.\",\"witness\":{\"initial\":\"The configuration has passed and contains backup key K.\",\"events\":[\"`configuration.load_configuration` returns its successful output to `instance_lifecycle`.\"],\"outcomes\":[\"The successful operation answer contains K, as its Outputs require.\",\"The successful operation answer cannot contain K because “No module puts a secret ... into ... the data of an answer”.\"],\"observer\":\"The generated operation contract and `instance_lifecycle`\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.give_service_tokens`\",\"kind\":\"secret_in_operation_answer\",\"text\":\"Each service the imported `SERVICE_RIGHTS` constant lists with its token, as\\n`load_configuration` checked it; none in an owner-only start, which opens no\\nservice API (A17 rule 1).\",\"question\":\"May an internal public operation answer contain service tokens, or must token matching be exposed as an operation that never returns the tokens?\",\"options\":[\"Return the complete token table to `service_access`\",\"Expose an identify/compare operation on `configuration` and never return tokens\",\"Return opaque token handles usable by the constant-time comparator\"],\"default_guess\":\"Allow this internal return and explicitly limit the no-secret-answer rule to surface answers.\",\"witness\":{\"initial\":\"The service API is open with four configured tokens.\",\"events\":[\"`service_access.identify_service` calls `configuration.give_service_tokens`.\"],\"outcomes\":[\"`service_access` receives all four secret values.\",\"No operation answer can contain a secret, so the call cannot return the specified output.\"],\"observer\":\"`service_access` and a secret-flow test\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.give_service_tokens`\",\"kind\":\"recipient_contradiction\",\"text\":\"The tokens are those of the one `load_configuration` of this start, never\\nread again from the environment; no other module receives them.\",\"question\":\"Does “receives” mean receives at all, or only retains, given that the same contract says `random_values.equal_in_constant_time` receives each token as an argument?\",\"options\":[\"Only `service_access` may ever receive token bytes, so it must perform the comparison itself\",\"`random_values` may receive token bytes transiently but must not retain them\",\"`random_values` receives opaque handles rather than token bytes\"],\"default_guess\":\"Read “receives” as “retains” and allow transient arguments to `random_values`.\",\"witness\":{\"initial\":\"Configured token T belongs to PresuPro and a request presents T.\",\"events\":[\"`service_access` obtains T from `configuration`.\",\"`service_access` calls `random_values.equal_in_constant_time` with the presented token and T.\"],\"outcomes\":[\"The Enforces passage forbids `random_values` from receiving T.\",\"The Errors passage requires `random_values` to receive T as a comparison argument.\"],\"observer\":\"Instrumentation at the `random_values` module boundary\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.give_owner_credential`\",\"kind\":\"secret_in_operation_answer\",\"text\":\"The owner credential, as `load_configuration` checked it.\",\"question\":\"May an internal public operation answer contain the owner credential, or must the credential remain behind a comparison operation or opaque handle?\",\"options\":[\"Return the credential to `owner_sessions`\",\"Expose a credential-comparison operation without returning it\",\"Return an opaque handle usable by the constant-time comparator\"],\"default_guess\":\"Allow this internal return and explicitly limit the no-secret-answer rule to surface answers.\",\"witness\":{\"initial\":\"Configuration has passed with owner credential C.\",\"events\":[\"Outside lockout, `owner_sessions.sign_in_owner` calls `configuration.give_owner_credential`.\"],\"outcomes\":[\"`owner_sessions` receives C as the operation output.\",\"No operation answer can contain a secret, so C cannot be returned.\"],\"observer\":\"`owner_sessions` and a secret-flow test\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.give_owner_credential`\",\"kind\":\"recipient_contradiction\",\"text\":\"The credential is the one of this start's `load_configuration`, never read\\nagain from the environment; no other module receives it.\",\"question\":\"Does “receives” mean receives at all, or only retains, given that `random_values.equal_in_constant_time` is also said to receive the credential as an argument?\",\"options\":[\"Only `owner_sessions` may receive credential bytes and must compare them itself\",\"`random_values` may receive credential bytes transiently but must not retain them\",\"`random_values` receives an opaque handle rather than credential bytes\"],\"default_guess\":\"Read “receives” as “retains” and allow the transient comparison argument.\",\"witness\":{\"initial\":\"The configured owner credential is C and the owner presents C.\",\"events\":[\"`owner_sessions` obtains C from `configuration`.\",\"`owner_sessions` calls `random_values.equal_in_constant_time` with the presented credential and C.\"],\"outcomes\":[\"The Enforces passage forbids `random_values` from receiving C.\",\"The Errors passage requires `random_values` to receive C as a comparison argument.\"],\"observer\":\"Instrumentation at the `random_values` module boundary\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"time_source_contradiction\",\"text\":\"The transaction through\\n`store.run_in_transaction` with one instant and today from `clock`.\",\"question\":\"Must `perform_owner_operation` derive today from its one `clock.recorded_now` instant, or obtain today separately from `clock` as this passage says?\",\"options\":[\"Derive the UTC date from the single recorded instant\",\"Perform a second clock read for today\",\"Pass only the instant and let each domain module derive its date\"],\"default_guess\":\"Derive today once in `operations` from the single recorded UTC instant.\",\"witness\":{\"initial\":\"An owner action begins immediately before 00:00 UTC and its clock would be read again immediately after midnight.\",\"events\":[\"`operations` begins the transaction and reads `clock.recorded_now` before midnight.\",\"The action checks an owner-supplied date against today.\"],\"outcomes\":[\"Under the changed convention, today is the pre-midnight instant's UTC date.\",\"Under “today from `clock`”, a separate reading can produce the next date.\"],\"observer\":\"The owner, through acceptance or refusal of the dated action\"}},{\"subject\":\"50_public_apis_0_conventions.md:Constants each module imports\",\"kind\":\"undefined_constant_contract\",\"text\":\"`BACKUP_RECORD_VERSION`\",\"question\":\"What is the type and value of `BACKUP_RECORD_VERSION`, where is it stored in a backup, and exactly how do writers and readers handle another version?\",\"options\":[\"Store an integer version in the authenticated readable backup header and reject unsupported versions\",\"Use the release version as the record version and remove this separate constant\",\"Use the constant only internally without a stored version field\"],\"default_guess\":\"Store an integer record-format version in the authenticated readable header and reject unsupported values.\",\"witness\":{\"initial\":\"A kept backup was written by one implementation and is later inspected by another implementation of the same release.\",\"events\":[\"The first implementation writes its interpretation of the backup record.\",\"The second reads the kept file to decide whether it is valid.\"],\"outcomes\":[\"One implementation stores and validates an explicit record-version field.\",\"Another treats the constant as an internal codec selector and writes no such field.\"],\"observer\":\"The owner interface's newest-backup result and the restore tooling\"}},{\"subject\":\"50_public_apis_0_conventions.md:Constants each module imports\",\"kind\":\"undefined_cryptographic_domain\",\"text\":\"`BACKUP_KEY_DIGEST_DOMAIN`\",\"question\":\"Which digest construction, byte encoding and concatenation or framing rule uses `BACKUP_KEY_DIGEST_DOMAIN` to produce the recorded key digest?\",\"options\":[\"Hash a length-framed domain and key with SHA-256\",\"Use HMAC-SHA-256 with the key and domain\",\"Use the domain only as KDF context and record a digest of the derived key\"],\"default_guess\":\"Use SHA-256 over an unambiguous length-framed UTF-8 domain followed by the raw key bytes.\",\"witness\":{\"initial\":\"Two implementations receive the same backup key K and the same domain constant.\",\"events\":[\"Each creates a backup and writes the required key digest into its readable record.\"],\"outcomes\":[\"One records SHA-256 over framed domain and K.\",\"The other records HMAC-SHA-256 keyed by K over the domain.\"],\"observer\":\"The owner or restore tooling comparing which key a backup requires\"}},{\"subject\":\"50_public_apis_0_conventions.md:Constants each module imports\",\"kind\":\"undefined_key_derivation\",\"text\":\"`BACKUP_KEY_DERIVATION_INFO`\",\"question\":\"Which KDF, salt, output length and encoding consume `BACKUP_KEY_DERIVATION_INFO`, and which encryption key or keys are derived from it?\",\"options\":[\"HKDF-SHA-256 derives one AEAD key using the constant as UTF-8 info\",\"The configured backup key is used directly and the constant is AEAD associated data\",\"A password-based KDF uses the constant as a fixed salt or label\"],\"default_guess\":\"Use HKDF-SHA-256 with explicit salt rules and the constant's UTF-8 bytes as `info` to derive the AEAD key.\",\"witness\":{\"initial\":\"Two implementations have the same configured backup key and snapshot.\",\"events\":[\"Each derives encryption material and writes a backup.\",\"Each later attempts to check the other's backup.\"],\"outcomes\":[\"An HKDF-based implementation derives one key using the constant as `info`.\",\"A direct-key implementation uses the constant only as associated data.\"],\"observer\":\"The backup checker, which succeeds on one file and fails on the other\"}},{\"subject\":\"50_public_apis_0_conventions.md:Constants each module imports\",\"kind\":\"standard_violation\",\"text\":\"State 6 writes each row below as the\\nentry `module_internal[<consumer>][\\\"data_provider\\\"]`, the listed symbols and\\nno other.\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Replace the deferred prose authority with the actual authoritative `module_internal` declarations, including the changed `backups` row.\"},{\"subject\":\"50_public_apis_0_conventions.md:Constants each module imports\",\"kind\":\"standard_violation\",\"text\":\"| `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION` |\",\"rule\":\"- Константы (UPPER_CASE) тоже включай\",\"section\":\"8\",\"question\":\"Add `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN` and `BACKUP_KEY_DERIVATION_INFO` to `data_provider`'s explicit `module_functions` ownership mapping.\"},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.give_service_tokens`\",\"kind\":\"standard_violation\",\"text\":\"It is asked by `service_access.identify_service` at each identification;\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"Make this dependency an explicit `module_internal[\\\"service_access\\\"][\\\"configuration\\\"]` entry containing `give_service_tokens`.\"},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.give_owner_credential`\",\"kind\":\"standard_violation\",\"text\":\"It is asked by `owner_sessions.sign_in_owner` at each comparison of a presented credential, outside a lockout;\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"Make this dependency an explicit `module_internal[\\\"owner_sessions\\\"][\\\"configuration\\\"]` entry containing `give_owner_credential`.\"},{\"subject\":\"50_public_apis_1_foundation.md:Status\",\"kind\":\"standard_violation\",\"text\":\"`configuration.give_service_tokens` and\\n`configuration.give_owner_credential`;\",\"rule\":\"- `internal` — модуль → список экспортируемых символов (функции, классы, константы)\",\"section\":\"7\",\"question\":\"Declare both new operations in `imports.internal[\\\"configuration\\\"]` as part of the provider's export surface.\"}]}",
+ "set_aside": []
+}

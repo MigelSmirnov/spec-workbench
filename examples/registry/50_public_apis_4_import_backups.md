@@ -248,7 +248,8 @@ goes on starts none (A18 rules 1, 4, 5; Conventions, "Passes").
 
 ### Inputs
 
-The configured backup location and key.
+The configured backup location and the open store; the backup key it asks
+`configuration.give_backup_key` for at each run it starts.
 
 ### Outputs
 

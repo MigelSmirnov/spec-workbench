@@ -75,18 +75,18 @@ configuration. The listeners' addresses are the configuration's (A17 rule
 Crossing models: the environment's `REGISTRY_` items enter
 `module:runtime_settings` and leave as the settings, which
 `module:configuration` checks and hands on as the loaded configuration — locations,
-the backup key, the owner interface's address and the service API's address,
+the owner interface's address and the service API's address,
 or none for an owner-only start — or as one diagnostic naming the failed item.
-The owner credential and the service tokens are not in it: `module:configuration`
-keeps them, checked, and gives each only to the module that uses it — the
-credential through `capability:configuration.give_owner_credential` to
-`module:owner_sessions`, the tokens through
-`capability:configuration.give_service_tokens` to `module:service_access` —
-which asks for it when it compares a presented value; `module:runtime_settings`
+The secrets are not in it: `module:configuration` keeps them, checked, and
+gives each only to the module that uses it — the credential through
+`capability:configuration.give_owner_credential` to `module:owner_sessions`,
+the tokens through `capability:configuration.give_service_tokens` to
+`module:service_access`, the backup key through
+`capability:configuration.give_backup_key` to `module:backups` — which asks
+for it when it compares a presented value or makes a backup; `module:runtime_settings`
 and `module:configuration`, which load and check them, are the only other
 modules that keep them; `module:random_values` compares a presented value
-with the kept one when asked and keeps neither. The backup key goes to `module:backups` as an input
-of each look ("Secrets never leave").
+with the kept one when asked and keeps neither ("Secrets never leave").
 The store's location enters `module:store` and leaves as the open store or a
 diagnostic.
 
@@ -1018,7 +1018,8 @@ UTC of a date it saw before 03:00 (A18 rule 1).
 `module:backups` owns whether a run is due, its three steps, the encryption,
 the backup's record, the names and the rotation (A18). `module:store` writes
 the consistent copy without agent sessions at the path `module:backups` names
-and checks a decrypted copy (A18 rules 2, 4). `module:clock` gives the look's
+and checks a decrypted copy (A18 rules 2, 4). `module:configuration` gives
+`module:backups` alone the checked backup key. `module:clock` gives the look's
 instant. `module:data_provider` holds the prefixes, the daily time, the retention and
 the release as constants `module:backups` imports.
 `module:instance_lifecycle` runs the look at the interval of the imported
@@ -1051,7 +1052,8 @@ key; the kept name made from the instant.
    read from the clock at it (A18 rules 1, 2, A15 rule 5); the actions'
    writes go on meanwhile, and neither is refused or fails for the other
    (A18 rule 1). `module:backups` encrypts it into the backup, a second file
-   under the temporary prefix, with the configured key, and removes the
+   under the temporary prefix, with the backup key
+   `capability:configuration.give_backup_key` gives it, and removes the
    unencrypted copy before going on — a copy it cannot remove fails the run
    and is left, under the temporary prefix, for the next run's step 2; the
    backup records the instant, the release from

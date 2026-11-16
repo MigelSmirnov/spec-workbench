@@ -1,0 +1,119 @@
+{
+ "open_points": [
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.load_configuration`",
+   "kind": "contradictory_secret_handoff",
+   "text": "The loaded configuration — the store's location, the backup location, the\nbackup key, the owner interface's address, and either the service API's\naddress or none, which marks an owner-only start",
+   "question": "Must `load_configuration` answer the backup key to `instance_lifecycle`, despite the earlier rules that no secret enters an answer and that `configuration` hands each secret only to the module that uses it, or must `backups` obtain and retain the key through a dedicated handoff?",
+   "options": [
+    "Return the backup key in the loaded configuration, allowing `instance_lifecycle` to receive and pass it",
+    "Add a `configuration.give_backup_key` operation that `backups` calls",
+    "Initialize `backups` directly during start with the key and never expose it through the loaded-configuration answer",
+    "Return an opaque key handle rather than the secret"
+   ],
+   "default_guess": "Add `configuration.give_backup_key`, called by `backups`, matching the recipient-asks design used for the other secrets.",
+   "witness": {
+    "initial": "A start has successfully loaded and checked a backup key, and the first backup look becomes due.",
+    "events": [
+     "`instance_lifecycle` calls `configuration.load_configuration`.",
+     "`instance_lifecycle` later calls `backups.run_daily_backup_if_due`, whose input is the configured backup key."
+    ],
+    "outcomes": [
+     "Following the State 5 contracts, `load_configuration` answers the key to `instance_lifecycle`, which retains or relays it to `backups`.",
+     "Following “Secrets never leave”, `configuration` hands the key only to `backups`; no specified operation or initialization path can perform that handoff."
+    ],
+    "observer": "A dependency or secret-flow test, and the implementer of `instance_lifecycle`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.give_service_tokens`",
+   "kind": "contradictory_recipient",
+   "text": "no other module receives them.",
+   "question": "Does `random_values.equal_in_constant_time` receive each configured token as an argument, as the Errors passage says, or must the comparison be implemented so that no module other than `service_access` receives it?",
+   "options": [
+    "Pass the presented and configured tokens to `random_values.equal_in_constant_time`",
+    "Perform the comparison inside `service_access`",
+    "Change the restriction from “receives” to “keeps”, permitting transient comparison arguments"
+   ],
+   "default_guess": "Change the restriction to “no other module keeps them”; permit `random_values` to receive them transiently for comparison.",
+   "witness": {
+    "initial": "Configuration has retained four checked service tokens and the service API receives a request with a presented token.",
+    "events": [
+     "`service_access.identify_service` asks `configuration.give_service_tokens` for the tokens.",
+     "`service_access` compares the presented token with every configured token."
+    ],
+    "outcomes": [
+     "The configured tokens are passed to `random_values.equal_in_constant_time`, so `random_values` receives them transiently.",
+     "To satisfy “no other module receives them,” `service_access` performs or owns the comparison and does not pass the configured tokens to `random_values`."
+    ],
+    "observer": "A module-call trace, dependency test, or secret-flow audit."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:configuration.give_owner_credential`",
+   "kind": "contradictory_recipient",
+   "text": "no other module receives it.",
+   "question": "Does `random_values.equal_in_constant_time` receive the configured owner credential as an argument, as the Errors passage says, or must the comparison be implemented so that no module other than `owner_sessions` receives it?",
+   "options": [
+    "Pass the presented and configured credentials to `random_values.equal_in_constant_time`",
+    "Perform the comparison inside `owner_sessions`",
+    "Change the restriction from “receives” to “keeps”, permitting transient comparison arguments"
+   ],
+   "default_guess": "Change the restriction to “no other module keeps it”; permit `random_values` to receive it transiently for comparison.",
+   "witness": {
+    "initial": "Configuration has retained the checked owner credential and there is no sign-in lockout.",
+    "events": [
+     "The owner submits a credential.",
+     "`owner_sessions.sign_in_owner` asks `configuration.give_owner_credential` for the configured credential.",
+     "The presented and configured values are compared."
+    ],
+    "outcomes": [
+     "Both values are passed to `random_values.equal_in_constant_time`, so `random_values` receives the configured credential transiently.",
+     "To satisfy “no other module receives it,” `owner_sessions` performs or owns the comparison without passing the configured credential to `random_values`."
+    ],
+    "observer": "A module-call trace, dependency test, or secret-flow audit."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Constants each module imports",
+   "kind": "undefined_constants",
+   "text": "| `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION` |",
+   "question": "What are the types, values, and exact runtime meanings of `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, and `BACKUP_KEY_DERIVATION_INFO`, and which backup-format, digest, or key-derivation steps consume each one?",
+   "options": [
+    "Define a numeric backup-envelope version and byte-string domain-separation/KDF-info constants",
+    "Define all three as text serialized into the backup record",
+    "Remove constants that no backup runtime code directly names",
+    "Carry an explicit backup cryptographic-format contract defining their types and uses"
+   ],
+   "default_guess": "Define an explicit backup-format contract, with a numeric record version and immutable byte strings for digest-domain separation and key-derivation info, then export them from `data_provider`.",
+   "witness": {
+    "initial": "A backup key and one store snapshot are fixed, and two implementations are generated from the supplied texts.",
+    "events": [
+     "Each implementation imports the three newly listed constants.",
+     "Each chooses types, encodings, and where to apply the domain and derivation-info values because the texts do not say."
+    ],
+    "outcomes": [
+     "One implementation treats the domain and derivation info as UTF-8 text used by its KDF and records an integer envelope version.",
+     "Another treats them as raw bytes, applies the domain to the key digest rather than the KDF, and serializes the record version as text; its backup bytes and compatibility checks differ."
+    ],
+    "observer": "The backup checker, a later release reading the backup record, or the owner performing disaster recovery."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Constants each module imports",
+   "kind": "standard_violation",
+   "text": "| `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION` |",
+   "rule": "Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider.",
+   "section": "7",
+   "question": "Make `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, and `BACKUP_KEY_DERIVATION_INFO` declared exports owned by `data_provider` before listing them in this `module_internal` row, or remove them from the row.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.load_configuration`\",\"kind\":\"contradictory_secret_handoff\",\"text\":\"The loaded configuration — the store's location, the backup location, the\\nbackup key, the owner interface's address, and either the service API's\\naddress or none, which marks an owner-only start\",\"question\":\"Must `load_configuration` answer the backup key to `instance_lifecycle`, despite the earlier rules that no secret enters an answer and that `configuration` hands each secret only to the module that uses it, or must `backups` obtain and retain the key through a dedicated handoff?\",\"options\":[\"Return the backup key in the loaded configuration, allowing `instance_lifecycle` to receive and pass it\",\"Add a `configuration.give_backup_key` operation that `backups` calls\",\"Initialize `backups` directly during start with the key and never expose it through the loaded-configuration answer\",\"Return an opaque key handle rather than the secret\"],\"default_guess\":\"Add `configuration.give_backup_key`, called by `backups`, matching the recipient-asks design used for the other secrets.\",\"witness\":{\"initial\":\"A start has successfully loaded and checked a backup key, and the first backup look becomes due.\",\"events\":[\"`instance_lifecycle` calls `configuration.load_configuration`.\",\"`instance_lifecycle` later calls `backups.run_daily_backup_if_due`, whose input is the configured backup key.\"],\"outcomes\":[\"Following the State 5 contracts, `load_configuration` answers the key to `instance_lifecycle`, which retains or relays it to `backups`.\",\"Following “Secrets never leave”, `configuration` hands the key only to `backups`; no specified operation or initialization path can perform that handoff.\"],\"observer\":\"A dependency or secret-flow test, and the implementer of `instance_lifecycle`.\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.give_service_tokens`\",\"kind\":\"contradictory_recipient\",\"text\":\"no other module receives them.\",\"question\":\"Does `random_values.equal_in_constant_time` receive each configured token as an argument, as the Errors passage says, or must the comparison be implemented so that no module other than `service_access` receives it?\",\"options\":[\"Pass the presented and configured tokens to `random_values.equal_in_constant_time`\",\"Perform the comparison inside `service_access`\",\"Change the restriction from “receives” to “keeps”, permitting transient comparison arguments\"],\"default_guess\":\"Change the restriction to “no other module keeps them”; permit `random_values` to receive them transiently for comparison.\",\"witness\":{\"initial\":\"Configuration has retained four checked service tokens and the service API receives a request with a presented token.\",\"events\":[\"`service_access.identify_service` asks `configuration.give_service_tokens` for the tokens.\",\"`service_access` compares the presented token with every configured token.\"],\"outcomes\":[\"The configured tokens are passed to `random_values.equal_in_constant_time`, so `random_values` receives them transiently.\",\"To satisfy “no other module receives them,” `service_access` performs or owns the comparison and does not pass the configured tokens to `random_values`.\"],\"observer\":\"A module-call trace, dependency test, or secret-flow audit.\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:configuration.give_owner_credential`\",\"kind\":\"contradictory_recipient\",\"text\":\"no other module receives it.\",\"question\":\"Does `random_values.equal_in_constant_time` receive the configured owner credential as an argument, as the Errors passage says, or must the comparison be implemented so that no module other than `owner_sessions` receives it?\",\"options\":[\"Pass the presented and configured credentials to `random_values.equal_in_constant_time`\",\"Perform the comparison inside `owner_sessions`\",\"Change the restriction from “receives” to “keeps”, permitting transient comparison arguments\"],\"default_guess\":\"Change the restriction to “no other module keeps it”; permit `random_values` to receive it transiently for comparison.\",\"witness\":{\"initial\":\"Configuration has retained the checked owner credential and there is no sign-in lockout.\",\"events\":[\"The owner submits a credential.\",\"`owner_sessions.sign_in_owner` asks `configuration.give_owner_credential` for the configured credential.\",\"The presented and configured values are compared.\"],\"outcomes\":[\"Both values are passed to `random_values.equal_in_constant_time`, so `random_values` receives the configured credential transiently.\",\"To satisfy “no other module receives it,” `owner_sessions` performs or owns the comparison without passing the configured credential to `random_values`.\"],\"observer\":\"A module-call trace, dependency test, or secret-flow audit.\"}},{\"subject\":\"50_public_apis_0_conventions.md:Constants each module imports\",\"kind\":\"undefined_constants\",\"text\":\"| `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION` |\",\"question\":\"What are the types, values, and exact runtime meanings of `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, and `BACKUP_KEY_DERIVATION_INFO`, and which backup-format, digest, or key-derivation steps consume each one?\",\"options\":[\"Define a numeric backup-envelope version and byte-string domain-separation/KDF-info constants\",\"Define all three as text serialized into the backup record\",\"Remove constants that no backup runtime code directly names\",\"Carry an explicit backup cryptographic-format contract defining their types and uses\"],\"default_guess\":\"Define an explicit backup-format contract, with a numeric record version and immutable byte strings for digest-domain separation and key-derivation info, then export them from `data_provider`.\",\"witness\":{\"initial\":\"A backup key and one store snapshot are fixed, and two implementations are generated from the supplied texts.\",\"events\":[\"Each implementation imports the three newly listed constants.\",\"Each chooses types, encodings, and where to apply the domain and derivation-info values because the texts do not say.\"],\"outcomes\":[\"One implementation treats the domain and derivation info as UTF-8 text used by its KDF and records an integer envelope version.\",\"Another treats them as raw bytes, applies the domain to the key digest rather than the KDF, and serializes the record version as text; its backup bytes and compatibility checks differ.\"],\"observer\":\"The backup checker, a later release reading the backup record, or the owner performing disaster recovery.\"}},{\"subject\":\"50_public_apis_0_conventions.md:Constants each module imports\",\"kind\":\"standard_violation\",\"text\":\"| `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION` |\",\"rule\":\"Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider.\",\"section\":\"7\",\"question\":\"Make `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, and `BACKUP_KEY_DERIVATION_INFO` declared exports owned by `data_provider` before listing them in this `module_internal` row, or remove them from the row.\"}]}",
+ "set_aside": []
+}

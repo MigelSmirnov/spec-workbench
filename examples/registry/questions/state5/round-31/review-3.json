@@ -1,0 +1,246 @@
+{
+ "open_points": [
+  {
+   "subject": "BACKUP_RECORD_VERSION",
+   "kind": "undefined constant",
+   "text": "`BACKUP_RECORD_VERSION`",
+   "question": "What is this constant's type, value, meaning, and exact use in the backup record?",
+   "options": [
+    "An integer schema version stored in every backup record",
+    "A textual backup-format identifier stored in every backup record",
+    "Remove it because the release version already identifies the format"
+   ],
+   "default_guess": "Use an integer schema version starting at 1 and store it in every backup record.",
+   "unit": "?"
+  },
+  {
+   "subject": "BACKUP_KEY_DIGEST_DOMAIN",
+   "kind": "undefined constant",
+   "text": "`BACKUP_KEY_DIGEST_DOMAIN`",
+   "question": "What bytes does this constant contain, and how exactly does it participate in computing the backup key's readable digest?",
+   "options": [
+    "A byte prefix prepended to the key before hashing",
+    "A UTF-8 domain label supplied to a domain-separated hash or KDF",
+    "Remove it and hash the key directly"
+   ],
+   "default_guess": "Use a fixed UTF-8 domain-separation label supplied to the specified digest construction.",
+   "unit": "?"
+  },
+  {
+   "subject": "BACKUP_KEY_DERIVATION_INFO",
+   "kind": "undefined constant",
+   "text": "`BACKUP_KEY_DERIVATION_INFO`",
+   "question": "Which key-derivation operation consumes this value, in what encoding, and what derived key or keys does it produce?",
+   "options": [
+    "HKDF info bytes used to derive one encryption key",
+    "Context text used to derive separate encryption and authentication keys",
+    "Remove it and use the configured backup key directly"
+   ],
+   "default_guess": "Use fixed UTF-8 HKDF info bytes to derive a backup-encryption key, after the KDF and hash are explicitly fixed.",
+   "unit": "?"
+  },
+  {
+   "subject": "data_provider export surface",
+   "kind": "contradiction",
+   "text": "| `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION` |",
+   "question": "Are `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN` and `BACKUP_KEY_DERIVATION_INFO` exports owned by `data_provider`, despite their absence from its exhaustive Candidate public capabilities list, or must they be removed from this import row?",
+   "options": [
+    "Add all three to data_provider's owned and exported constants",
+    "Remove all three from the backups import surface",
+    "Assign them to a different provider and change the import edge"
+   ],
+   "default_guess": "Add all three to data_provider after defining their types and values.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration.load_configuration effect",
+   "kind": "contradictory effect",
+   "text": "### Observable effect\n\nNone.",
+   "question": "Does a successful call mutate configuration's process-memory state by installing the credential and tokens for the two give operations, or is it effect-free?",
+   "options": [
+    "Declare installation of the checked secrets as its observable process-memory effect",
+    "Treat process-memory mutation as State impact only and define Observable effect as externally observable effects",
+    "Return a separate initialized configuration object and keep no module-global state"
+   ],
+   "default_guess": "Declare that a successful call atomically installs the checked credential and tokens in configuration's process-memory state.",
+   "witness": {
+    "initial": "The process has started but configuration has not yet completed successfully.",
+    "events": [
+     "instance_lifecycle calls configuration.load_configuration",
+     "owner_sessions later calls configuration.give_owner_credential"
+    ],
+    "outcomes": [
+     "If load_configuration has no effect, give_owner_credential has no stored credential to answer",
+     "If load_configuration installs process-memory state, give_owner_credential answers the checked credential"
+    ],
+    "observer": "An operation-contract test or owner_sessions"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "configuration.give_owner_credential output secrecy",
+   "kind": "contradiction",
+   "text": "The owner credential, as `load_configuration` checked it.",
+   "question": "Does the prohibition that no secret enters the data of an answer apply to internal public-operation outputs such as this one, or only to answers leaving Registry through a surface?",
+   "options": [
+    "Internal operation outputs may carry secrets, while external answers may not",
+    "No operation output may carry a secret; use an opaque handle or comparison operation instead",
+    "Move the credential comparison into configuration so the credential is never returned"
+   ],
+   "default_guess": "Restrict the prohibition explicitly to external answers and allow this internal return only to owner_sessions.",
+   "witness": {
+    "initial": "A start has passed configuration checks and retained the owner credential.",
+    "events": [
+     "The owner submits a credential",
+     "owner_sessions asks configuration.give_owner_credential"
+    ],
+    "outcomes": [
+     "One implementation returns the raw configured credential to owner_sessions",
+     "Another treats every operation output as answer data and exposes only a comparison operation or opaque handle"
+    ],
+    "observer": "A module-boundary contract test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "configuration.give_service_tokens output secrecy",
+   "kind": "contradiction",
+   "text": "Each service the imported `SERVICE_RIGHTS` constant lists with its token, as `load_configuration` checked it; none in an owner-only start, which opens no service API (A17 rule 1).",
+   "question": "Does the prohibition that no secret enters the data of an answer permit this internal operation to return all service tokens?",
+   "options": [
+    "Internal operation outputs may carry secrets to service_access",
+    "Return opaque token handles instead of token values",
+    "Move token identification into configuration and return only the identified service"
+   ],
+   "default_guess": "Restrict the prohibition explicitly to external answers and allow this internal return only to service_access.",
+   "witness": {
+    "initial": "A normal start has loaded four service tokens.",
+    "events": [
+     "A service request presents a token",
+     "service_access asks configuration.give_service_tokens"
+    ],
+    "outcomes": [
+     "One implementation returns all four raw tokens to service_access",
+     "Another treats operation outputs as answer data and asks configuration to identify the token without returning any configured token"
+    ],
+    "observer": "A module-boundary contract test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "configuration.give_owner_credential recipients",
+   "kind": "internal contradiction",
+   "text": "The credential is the one of this start's `load_configuration`, never read again from the environment; no other module receives it.",
+   "question": "Does `random_values.equal_in_constant_time` receive the configured credential as an argument, as the Errors passage says, or must the credential remain exclusively inside configuration and owner_sessions?",
+   "options": [
+    "Permit random_values to receive it transiently and change “no other module receives it” to “no other module keeps it”",
+    "Keep the credential out of random_values by moving comparison into owner_sessions",
+    "Keep the credential inside configuration and expose a credential-comparison operation"
+   ],
+   "default_guess": "Permit random_values to receive it transiently and state that no other module keeps it.",
+   "witness": {
+    "initial": "Configuration has retained a valid owner credential and no lockout is active.",
+    "events": [
+     "The owner presents a credential",
+     "owner_sessions obtains the configured credential",
+     "owner_sessions performs the required constant-time comparison"
+    ],
+    "outcomes": [
+     "Following “no other module receives it”, owner_sessions must compare without passing it to random_values",
+     "Following the Errors passage, owner_sessions passes it to random_values.equal_in_constant_time"
+    ],
+    "observer": "A random_values spy or dependency-boundary test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "configuration.give_service_tokens recipients",
+   "kind": "internal contradiction",
+   "text": "The tokens are those of the one `load_configuration` of this start, never read again from the environment; no other module receives them.",
+   "question": "Does `random_values.equal_in_constant_time` receive each configured token as an argument, as the Errors passage says, or may only service_access receive the tokens?",
+   "options": [
+    "Permit random_values to receive tokens transiently and change “no other module receives them” to “no other module keeps them”",
+    "Keep configured tokens out of random_values by implementing comparison inside service_access",
+    "Keep tokens inside configuration and expose a token-identification operation"
+   ],
+   "default_guess": "Permit random_values to receive each token transiently and state that no other module keeps them.",
+   "witness": {
+    "initial": "Configuration has retained the four checked service tokens.",
+    "events": [
+     "A request presents a service token",
+     "service_access obtains the configured tokens",
+     "service_access performs the required constant-time comparisons"
+    ],
+    "outcomes": [
+     "Following “no other module receives them”, service_access must compare without passing them to random_values",
+     "Following the Errors passage, service_access passes each configured token to random_values.equal_in_constant_time"
+    ],
+    "observer": "A random_values spy or dependency-boundary test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "configured secret representation",
+   "kind": "output type unspecified",
+   "text": "The owner credential, as `load_configuration` checked it.",
+   "question": "Does give_owner_credential return the setting as text, its UTF-8 bytes used by the required comparison, or an opaque secret value? The same representation question applies to each token returned by give_service_tokens.",
+   "options": [
+    "Return the exact text loaded from the environment",
+    "Return its UTF-8 byte encoding",
+    "Return an opaque secret type usable only by the constant-time comparator"
+   ],
+   "default_guess": "Return an opaque secret-byte value whose bytes are exactly the setting's UTF-8 encoding.",
+   "unit": "?"
+  },
+  {
+   "subject": "backup key handoff",
+   "kind": "contradictory secret boundary",
+   "text": "The loaded configuration — the store's location, the backup location, the\nbackup key, the owner interface's address, and either the service API's\naddress or none, which marks an owner-only start — or one diagnostic naming\nthe first failed item and never its value.",
+   "question": "May instance_lifecycle, the caller of load_configuration, receive and retain the backup key, or must configuration hand it only to backups as the Secrets never leave rule says?",
+   "options": [
+    "Allow instance_lifecycle to carry the key into every backup look",
+    "Add configuration.give_backup_key, called only by backups",
+    "Return an opaque backup configuration that backups can consume without exposing the key to instance_lifecycle"
+   ],
+   "default_guess": "Add configuration.give_backup_key for backups and remove the raw key from load_configuration's output.",
+   "witness": {
+    "initial": "Configuration passes and the instance is about to start its backup pass.",
+    "events": [
+     "instance_lifecycle calls configuration.load_configuration",
+     "instance_lifecycle schedules backups.run_daily_backup_if_due"
+    ],
+    "outcomes": [
+     "Following the declared output, instance_lifecycle receives the raw backup key and passes it to backups",
+     "Following “hands each only to the module that uses it”, backups retrieves or receives the key without instance_lifecycle holding it"
+    ],
+    "observer": "A secret-flow or module-memory test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "operations.perform_owner_operation time source",
+   "kind": "contradiction",
+   "text": "The transaction through\n`store.run_in_transaction` with one instant and today from `clock`.",
+   "question": "Is today derived by operations from the UTC date of clock.recorded_now, or is it separately obtained from clock even though clock.today_in_utc was removed and clock owns exactly two readings?",
+   "options": [
+    "Derive today in operations from the one recorded instant",
+    "Restore a separate clock.today_in_utc operation",
+    "Pass only the instant and let each domain module derive its UTC date"
+   ],
+   "default_guess": "Derive today once in operations from the UTC date of the recorded instant.",
+   "unit": "?"
+  },
+  {
+   "subject": "Constants each module imports",
+   "kind": "standard_violation",
+   "text": "| `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION` |",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider.",
+   "section": "7",
+   "question": "Make every listed symbol belong to and be exported by `data_provider`, including the three newly listed backup constants, or remove or reassign symbols that do not belong to that provider.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"BACKUP_RECORD_VERSION\",\"kind\":\"undefined constant\",\"text\":\"`BACKUP_RECORD_VERSION`\",\"question\":\"What is this constant's type, value, meaning, and exact use in the backup record?\",\"options\":[\"An integer schema version stored in every backup record\",\"A textual backup-format identifier stored in every backup record\",\"Remove it because the release version already identifies the format\"],\"default_guess\":\"Use an integer schema version starting at 1 and store it in every backup record.\"},{\"subject\":\"BACKUP_KEY_DIGEST_DOMAIN\",\"kind\":\"undefined constant\",\"text\":\"`BACKUP_KEY_DIGEST_DOMAIN`\",\"question\":\"What bytes does this constant contain, and how exactly does it participate in computing the backup key's readable digest?\",\"options\":[\"A byte prefix prepended to the key before hashing\",\"A UTF-8 domain label supplied to a domain-separated hash or KDF\",\"Remove it and hash the key directly\"],\"default_guess\":\"Use a fixed UTF-8 domain-separation label supplied to the specified digest construction.\"},{\"subject\":\"BACKUP_KEY_DERIVATION_INFO\",\"kind\":\"undefined constant\",\"text\":\"`BACKUP_KEY_DERIVATION_INFO`\",\"question\":\"Which key-derivation operation consumes this value, in what encoding, and what derived key or keys does it produce?\",\"options\":[\"HKDF info bytes used to derive one encryption key\",\"Context text used to derive separate encryption and authentication keys\",\"Remove it and use the configured backup key directly\"],\"default_guess\":\"Use fixed UTF-8 HKDF info bytes to derive a backup-encryption key, after the KDF and hash are explicitly fixed.\"},{\"subject\":\"data_provider export surface\",\"kind\":\"contradiction\",\"text\":\"| `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION` |\",\"question\":\"Are `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN` and `BACKUP_KEY_DERIVATION_INFO` exports owned by `data_provider`, despite their absence from its exhaustive Candidate public capabilities list, or must they be removed from this import row?\",\"options\":[\"Add all three to data_provider's owned and exported constants\",\"Remove all three from the backups import surface\",\"Assign them to a different provider and change the import edge\"],\"default_guess\":\"Add all three to data_provider after defining their types and values.\"},{\"subject\":\"configuration.load_configuration effect\",\"kind\":\"contradictory effect\",\"text\":\"### Observable effect\\n\\nNone.\",\"question\":\"Does a successful call mutate configuration's process-memory state by installing the credential and tokens for the two give operations, or is it effect-free?\",\"options\":[\"Declare installation of the checked secrets as its observable process-memory effect\",\"Treat process-memory mutation as State impact only and define Observable effect as externally observable effects\",\"Return a separate initialized configuration object and keep no module-global state\"],\"default_guess\":\"Declare that a successful call atomically installs the checked credential and tokens in configuration's process-memory state.\",\"witness\":{\"initial\":\"The process has started but configuration has not yet completed successfully.\",\"events\":[\"instance_lifecycle calls configuration.load_configuration\",\"owner_sessions later calls configuration.give_owner_credential\"],\"outcomes\":[\"If load_configuration has no effect, give_owner_credential has no stored credential to answer\",\"If load_configuration installs process-memory state, give_owner_credential answers the checked credential\"],\"observer\":\"An operation-contract test or owner_sessions\"}},{\"subject\":\"configuration.give_owner_credential output secrecy\",\"kind\":\"contradiction\",\"text\":\"The owner credential, as `load_configuration` checked it.\",\"question\":\"Does the prohibition that no secret enters the data of an answer apply to internal public-operation outputs such as this one, or only to answers leaving Registry through a surface?\",\"options\":[\"Internal operation outputs may carry secrets, while external answers may not\",\"No operation output may carry a secret; use an opaque handle or comparison operation instead\",\"Move the credential comparison into configuration so the credential is never returned\"],\"default_guess\":\"Restrict the prohibition explicitly to external answers and allow this internal return only to owner_sessions.\",\"witness\":{\"initial\":\"A start has passed configuration checks and retained the owner credential.\",\"events\":[\"The owner submits a credential\",\"owner_sessions asks configuration.give_owner_credential\"],\"outcomes\":[\"One implementation returns the raw configured credential to owner_sessions\",\"Another treats every operation output as answer data and exposes only a comparison operation or opaque handle\"],\"observer\":\"A module-boundary contract test\"}},{\"subject\":\"configuration.give_service_tokens output secrecy\",\"kind\":\"contradiction\",\"text\":\"Each service the imported `SERVICE_RIGHTS` constant lists with its token, as `load_configuration` checked it; none in an owner-only start, which opens no service API (A17 rule 1).\",\"question\":\"Does the prohibition that no secret enters the data of an answer permit this internal operation to return all service tokens?\",\"options\":[\"Internal operation outputs may carry secrets to service_access\",\"Return opaque token handles instead of token values\",\"Move token identification into configuration and return only the identified service\"],\"default_guess\":\"Restrict the prohibition explicitly to external answers and allow this internal return only to service_access.\",\"witness\":{\"initial\":\"A normal start has loaded four service tokens.\",\"events\":[\"A service request presents a token\",\"service_access asks configuration.give_service_tokens\"],\"outcomes\":[\"One implementation returns all four raw tokens to service_access\",\"Another treats operation outputs as answer data and asks configuration to identify the token without returning any configured token\"],\"observer\":\"A module-boundary contract test\"}},{\"subject\":\"configuration.give_owner_credential recipients\",\"kind\":\"internal contradiction\",\"text\":\"The credential is the one of this start's `load_configuration`, never read again from the environment; no other module receives it.\",\"question\":\"Does `random_values.equal_in_constant_time` receive the configured credential as an argument, as the Errors passage says, or must the credential remain exclusively inside configuration and owner_sessions?\",\"options\":[\"Permit random_values to receive it transiently and change “no other module receives it” to “no other module keeps it”\",\"Keep the credential out of random_values by moving comparison into owner_sessions\",\"Keep the credential inside configuration and expose a credential-comparison operation\"],\"default_guess\":\"Permit random_values to receive it transiently and state that no other module keeps it.\",\"witness\":{\"initial\":\"Configuration has retained a valid owner credential and no lockout is active.\",\"events\":[\"The owner presents a credential\",\"owner_sessions obtains the configured credential\",\"owner_sessions performs the required constant-time comparison\"],\"outcomes\":[\"Following “no other module receives it”, owner_sessions must compare without passing it to random_values\",\"Following the Errors passage, owner_sessions passes it to random_values.equal_in_constant_time\"],\"observer\":\"A random_values spy or dependency-boundary test\"}},{\"subject\":\"configuration.give_service_tokens recipients\",\"kind\":\"internal contradiction\",\"text\":\"The tokens are those of the one `load_configuration` of this start, never read again from the environment; no other module receives them.\",\"question\":\"Does `random_values.equal_in_constant_time` receive each configured token as an argument, as the Errors passage says, or may only service_access receive the tokens?\",\"options\":[\"Permit random_values to receive tokens transiently and change “no other module receives them” to “no other module keeps them”\",\"Keep configured tokens out of random_values by implementing comparison inside service_access\",\"Keep tokens inside configuration and expose a token-identification operation\"],\"default_guess\":\"Permit random_values to receive each token transiently and state that no other module keeps them.\",\"witness\":{\"initial\":\"Configuration has retained the four checked service tokens.\",\"events\":[\"A request presents a service token\",\"service_access obtains the configured tokens\",\"service_access performs the required constant-time comparisons\"],\"outcomes\":[\"Following “no other module receives them”, service_access must compare without passing them to random_values\",\"Following the Errors passage, service_access passes each configured token to random_values.equal_in_constant_time\"],\"observer\":\"A random_values spy or dependency-boundary test\"}},{\"subject\":\"configured secret representation\",\"kind\":\"output type unspecified\",\"text\":\"The owner credential, as `load_configuration` checked it.\",\"question\":\"Does give_owner_credential return the setting as text, its UTF-8 bytes used by the required comparison, or an opaque secret value? The same representation question applies to each token returned by give_service_tokens.\",\"options\":[\"Return the exact text loaded from the environment\",\"Return its UTF-8 byte encoding\",\"Return an opaque secret type usable only by the constant-time comparator\"],\"default_guess\":\"Return an opaque secret-byte value whose bytes are exactly the setting's UTF-8 encoding.\"},{\"subject\":\"backup key handoff\",\"kind\":\"contradictory secret boundary\",\"text\":\"The loaded configuration — the store's location, the backup location, the\\nbackup key, the owner interface's address, and either the service API's\\naddress or none, which marks an owner-only start — or one diagnostic naming\\nthe first failed item and never its value.\",\"question\":\"May instance_lifecycle, the caller of load_configuration, receive and retain the backup key, or must configuration hand it only to backups as the Secrets never leave rule says?\",\"options\":[\"Allow instance_lifecycle to carry the key into every backup look\",\"Add configuration.give_backup_key, called only by backups\",\"Return an opaque backup configuration that backups can consume without exposing the key to instance_lifecycle\"],\"default_guess\":\"Add configuration.give_backup_key for backups and remove the raw key from load_configuration's output.\",\"witness\":{\"initial\":\"Configuration passes and the instance is about to start its backup pass.\",\"events\":[\"instance_lifecycle calls configuration.load_configuration\",\"instance_lifecycle schedules backups.run_daily_backup_if_due\"],\"outcomes\":[\"Following the declared output, instance_lifecycle receives the raw backup key and passes it to backups\",\"Following “hands each only to the module that uses it”, backups retrieves or receives the key without instance_lifecycle holding it\"],\"observer\":\"A secret-flow or module-memory test\"}},{\"subject\":\"operations.perform_owner_operation time source\",\"kind\":\"contradiction\",\"text\":\"The transaction through\\n`store.run_in_transaction` with one instant and today from `clock`.\",\"question\":\"Is today derived by operations from the UTC date of clock.recorded_now, or is it separately obtained from clock even though clock.today_in_utc was removed and clock owns exactly two readings?\",\"options\":[\"Derive today in operations from the one recorded instant\",\"Restore a separate clock.today_in_utc operation\",\"Pass only the instant and let each domain module derive its UTC date\"],\"default_guess\":\"Derive today once in operations from the UTC date of the recorded instant.\"},{\"subject\":\"Constants each module imports\",\"kind\":\"standard_violation\",\"text\":\"| `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION` |\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider.\",\"section\":\"7\",\"question\":\"Make every listed symbol belong to and be exported by `data_provider`, including the three newly listed backup constants, or remove or reassign symbols that do not belong to that provider.\"}]}",
+ "set_aside": []
+}

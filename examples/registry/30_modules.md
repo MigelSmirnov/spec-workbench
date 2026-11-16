@@ -186,14 +186,17 @@ later line, and modules on one line do not know each other.
   `configuration`, which checks them.
 - **Secrets never leave.** No module puts a secret, a confirmation value, a
   CSRF value or an owner session's identity into a record, a log line, a diagnostic,
-  an audit entry, a URL or the data of an answer (A13 rule 7, A17 rule 6).
+  an audit entry, a URL or the data of an answer Registry gives a service or
+  the owner (A13 rule 7, A17 rule 6).
   An agent session's identity, which Kernel names (R0-53), is not one of them:
   M06, M07 and M09 record it. The owner session's identity travels only in its
   cookie, the CSRF and confirmation
   values only in the forms `owner_interface` serves (A13 rule 7).
   `configuration` holds the secrets and hands each only to the module that
-  uses it: the service tokens to `service_access`, the owner credential to
-  `owner_sessions`, the backup key to `backups`.
+  uses it, which asks for it: the service tokens to `service_access`, the
+  owner credential to `owner_sessions`, the backup key to `backups`.
+  `random_values` compares a presented secret with a held one when asked and
+  keeps neither.
 
 ## `models`
 
@@ -309,7 +312,8 @@ artifact types with their owner services, the first release's one row
 operations, and each service's highest class; the store version and the store's
 temporary-name suffix (A17 rule 5); the kept and temporary backup prefixes,
 neither beginning with the other, the daily time, the minute look and the
-retention of 30 × 24 hours (A18 rules 1, 4, 5); the import file's size limit
+retention of 30 × 24 hours (A18 rules 1, 4, 5); a backup record's version,
+the key digest's domain and the key derivation's info (A18 rules 1, 3); the import file's size limit
 (A19 rule 4); the release's own version and its contract version, which
 every audit entry names (M09) and a backup's record names (A18 rule 1); the
 owner session's limits — 8 hours, 30 minutes, the 15
@@ -508,6 +512,7 @@ Path resolution and the order of the checks.
 load_configuration
 give_service_tokens
 give_owner_credential
+give_backup_key
 ```
 
 ### Depth assessment
