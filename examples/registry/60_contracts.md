@@ -84,7 +84,14 @@ readings, so an action's today is `operations`' (`_today_of`).
   a random 96-bit nonce before the ciphertext, the record line as associated
   data. The key digest is `sha256:` and the lowercase hex SHA-256 of
   `BACKUP_KEY_DIGEST_DOMAIN`'s bytes, a zero byte and the key's UTF-8 bytes. A
-  later algorithm is a later record version. This needs the `cryptography`
+  later algorithm is a later record version. The record's five fields are the
+  same in every version, so the record of any version is read: a backup made
+  by an earlier or a later release is kept and counted by its instant like
+  any other until its 30 × 24 hours have passed (A18 rules 1, 4), never
+  deleted as unreadable for its version; only a run's own check, which
+  decrypts the backup it just made, needs the release's version. A record
+  line that is not a JSON object of these five fields, each of its type, is
+  unreadable (A18 rule 4). This needs the `cryptography`
   package, pinned by digest as every dependency (A20).
 
 ## Carried to State 6, and how it is closed
