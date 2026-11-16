@@ -127,12 +127,16 @@ second authority beside them. The values are the data closure's.
 | `given_values` | `REQUEST_ID_MAX_CHARACTERS`, `ALIAS_MAX_CHARACTERS`, `OBJECT_FLOOR_AREA_MIN_EXCLUSIVE`, `OBJECT_ROOMS_MIN` |
 | `configuration` | `SERVICE_RIGHTS`, `SECRET_MIN_BYTES`, `LISTEN_PORT_MIN`, `LISTEN_PORT_MAX` |
 | `store` | `STORE_VERSION`, `STORE_TEMPORARY_SUFFIX` |
-| `audit_log` | `RELEASE_VERSION`, `CONTRACT_VERSION` |
-| `service_access` | `SERVICE_RIGHTS`, `SERVICE_HIGHEST_CLASSES` |
-| `owner_sessions` | `OWNER_SESSION_MAX_HOURS`, `OWNER_SESSION_IDLE_MINUTES`, `SIGN_IN_WINDOW_MINUTES`, `SIGN_IN_REFUSAL_LIMIT`, `SIGN_IN_LOCKOUT_MINUTES`, `CONFIRMATION_VALID_MINUTES` |
-| `artifact_pointers` | `ARTIFACT_TYPE_OWNERS` |
-| `migration_import` | `ARTIFACT_TYPE_OWNERS`, `IMPORT_FILE_MAX_BYTES` |
+| `audit_log` | `RELEASE_VERSION`, `CONTRACT_VERSION`, `REFUSAL_STAGE_VALUES` |
+| `service_access` | `SERVICE_RIGHTS`, `SERVICE_HIGHEST_CLASSES`, `REFUSAL_STAGE_AUTHENTICATION` |
+| `owner_sessions` | `OWNER_SESSION_MAX_HOURS`, `OWNER_SESSION_IDLE_MINUTES`, `SIGN_IN_WINDOW_MINUTES`, `SIGN_IN_REFUSAL_LIMIT`, `SIGN_IN_LOCKOUT_MINUTES`, `CONFIRMATION_VALID_MINUTES`, `REFUSAL_STAGE_AUTHENTICATION`, `REFUSAL_STAGE_LIFECYCLE` |
+| `customers` | `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_VERSION`, `REFUSAL_STAGE_LIFECYCLE` |
+| `projects` | `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_VERSION`, `REFUSAL_STAGE_LIFECYCLE` |
+| `artifact_pointers` | `ARTIFACT_TYPE_OWNERS`, `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_LIFECYCLE` |
+| `agent_sessions` | `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_VERSION`, `REFUSAL_STAGE_LIFECYCLE` |
+| `migration_import` | `ARTIFACT_TYPE_OWNERS`, `IMPORT_FILE_MAX_BYTES`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_LIFECYCLE` |
 | `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION` |
+| `operations` | `REFUSAL_STAGE_AUTHENTICATION`, `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_VALUES` |
 | `instance_lifecycle` | `SESSION_PASS_SECONDS`, `BACKUP_LOOK_SECONDS` |
 
 Likewise `module_internal["configuration"]["runtime_settings"]` holds
@@ -152,7 +156,11 @@ rule 6's sense, which is what Registry gives a service or the owner
 ## Closed set of refusal codes
 
 A refusal is a code, the stage of A04 rule 6 it belongs to (`models`, State
-3), and the list of the kinds that failed in that stage. The codes are
+3), and the list of the kinds that failed in that stage. The stage is the
+number of A04 rule 6's check, which the refusing module names by the
+imported constant of that stage, `REFUSAL_STAGE_AUTHENTICATION` (1) to
+`REFUSAL_STAGE_LIFECYCLE` (6), never as a number of its own (owner,
+2026-11-17). The codes are
 distinct where a caller acts on the difference; the kinds are a closed set
 the owner interface renders and State 6 declares as `models`' vocabulary.
 

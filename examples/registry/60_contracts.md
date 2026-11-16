@@ -26,6 +26,13 @@ readings, so an action's today is `operations`' (`_today_of`).
   refusal raised would lose the kinds and paths every caller renders; a
   failure of the store's own transaction is the one refusal no module
   decides, `internal_error` (`transaction_failed`), answered by `store`.
+  `Refusal.stage` is an `int`, the number the wire format carries; its six
+  values have one home each, the data provider's constants
+  `REFUSAL_STAGE_AUTHENTICATION` to `REFUSAL_STAGE_LIFECYCLE` (owner,
+  2026-11-17), which a refusing module imports as State 5's table lists.
+  The stage is not a function of the code (`not_found` is stage 2 or 3),
+  so it is neither derived nor a table; an enumeration would have changed
+  the wire format every client reads. `internal_error` has no stage.
 - **One answer type for the surfaces.** `operations` answers
   `OperationAnswer`, one union over every answer a service or the owner
   reads and `RefusedAnswer`; `service_api` writes it in its wire format and
