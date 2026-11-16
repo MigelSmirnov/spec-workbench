@@ -212,7 +212,7 @@ rule 7).
    (A13 rule 4). During a lockout every sign-in is refused, the right
    credential included, and is not counted. Otherwise the credential is
    compared with the configured one, which
-   `capability:configuration.owner_credential` gives `module:owner_sessions`
+   `capability:configuration.give_owner_credential` gives `module:owner_sessions`
    alone, through `capability:random_values.equal_in_constant_time`. A wrong or missing one
    is refused and counted at the reading of `capability:clock.monotonic_reading`;
    the fifth refusal less than 15 minutes old starts a lockout lasting 15
@@ -616,7 +616,7 @@ pointers.
    token and request to `capability:operations.perform_service_operation`.
    `capability:service_access.identify_service` compares the token in
    constant time with each configured one, the tokens
-   `capability:configuration.service_tokens` gives `module:service_access`
+   `capability:configuration.give_service_tokens` gives `module:service_access`
    alone; an unknown token is refused like
    a wrong one, without a limit (A17 rule 7); an owner-only start has no
    service API listener, so no call gets here (A17 rule 1). `capability:service_access.service_may_call`

@@ -8,8 +8,8 @@ and which have no operation (SPEC_STANDARD §6.10, §15.3.1) — and
 `runtime_settings` reads the environment. Reopened on 2026-11-16 (State 6
 found no operation by which `configuration` hands a secret to the module
 that uses it, State 3 "Secrets never leave"; owner, 2026-11-16: the
-recipient asks): `configuration.service_tokens` and
-`configuration.owner_credential`. The operations of `clock`,
+recipient asks): `configuration.give_service_tokens` and
+`configuration.give_owner_credential`. The operations of `clock`,
 `random_values`, `given_values`, `runtime_settings`, `configuration`,
 `store`, `audit_log` and `service_access`. Every one follows `50_public_apis_0_conventions.md`.
 
@@ -498,7 +498,7 @@ address or none, which marks an owner-only start — or one diagnostic naming
 the first failed item and never its value. The owner credential and the
 service tokens are not answered: `configuration` keeps them, checked, and
 gives each only to the module that uses it (State 3), through
-`owner_credential` and `service_tokens`.
+`give_owner_credential` and `give_service_tokens`.
 
 ### Observable effect
 
@@ -515,8 +515,8 @@ well formed; each secret at least the imported `SECRET_MIN_BYTES` constant; no t
 store and the backup location apart, every link resolved; no default
 applied. Each secret is handed later only to the module that uses it: the
 backup key as an input of `backups.run_daily_backup_if_due`, the owner
-credential and the service tokens through `owner_credential` and
-`service_tokens`.
+credential and the service tokens through `give_owner_credential` and
+`give_service_tokens`.
 
 ### Errors
 
@@ -527,7 +527,7 @@ The diagnostic is the answer for a failed check; the start stops on it.
 Resolves paths; keeps the checked owner credential and service tokens in
 the process's memory; touches no file and no record.
 
-## `public_op:configuration.service_tokens`
+## `public_op:configuration.give_service_tokens`
 
 ### Owner
 
@@ -566,7 +566,7 @@ None.
 
 Reads the process's memory; touches no record.
 
-## `public_op:configuration.owner_credential`
+## `public_op:configuration.give_owner_credential`
 
 ### Owner
 
