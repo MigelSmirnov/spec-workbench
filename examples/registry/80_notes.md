@@ -128,3 +128,18 @@ StoreTransaction.insert_migration_closure: [FIELD_PROJECTION] MUST write through
 StoreTransaction.held_project_ids: [BEHAVIOR] MUST answer, in the order given and each once, the ids among project_ids for which load_project_row finds a row of this store.
 StoreTransaction.held_room_ids: [BEHAVIOR] MUST answer, in the order given and each once, the ids among room_ids for which load_room_row finds a row of this store.
 StoreTransaction.held_pointer_ids: [BEHAVIOR] MUST answer, in the order given and each once, the ids among pointer_ids for which load_pointer_row finds a row of this store.
+
+## audit_log
+
+append_audit_entry: [BEHAVIOR] MUST read the counter with read_audit_sequence, take one more than its last_sequence_number as the entry's sequence number, write the raised counter with write_audit_sequence and the entry with insert_audit_entry, both on transaction, so that no number is reused after any erasure; it MUST NOT commit or roll back.
+append_audit_entry: [FIELD_ASSIGNMENT] MUST answer and write an AuditEntry whose recorded_at is instant, whose action, subject, principal, confirmation_id and erased_before are the given ones, whose outcome is the accepted member of = models.AuditOutcome, whose release_version is the imported RELEASE_VERSION constant and whose contract_version is the imported CONTRACT_VERSION constant.
+erase_audit_entries_before: [VALIDATION_ERROR] MUST answer a Refusal with the invalid_request member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_VALUES constant names and one failure of the date_after_today member of = models.RefusalKind when before is later than today, removing nothing.
+erase_audit_entries_before: [BEHAVIOR] MUST otherwise remove through delete_audit_entries_before on transaction every entry recorded before the start of before in UTC, answer ErasedEntries with the number it removed, and leave the counter untouched.
+read_audit_entries: [DETERMINISM_OR_ORDERING] MUST answer every entry list_audit_entries gives on transaction, in ascending sequence number, and change nothing.
+
+## service_access
+
+identify_service: [SECURITY_BOUNDARY] MUST compare the UTF-8 bytes of presented_token through equal_in_constant_time with the bytes of every token give_service_tokens answers, asking for them at this call and keeping none, and answer an IdentifiedService of the service whose token is equal.
+identify_service: [VALIDATION_ERROR] MUST answer a Refusal with the unauthenticated member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the no_valid_token member of = models.RefusalKind when presented_token is None or equals no token, an unknown token answered as a wrong one, without any count or limit.
+service_may_call: [BEHAVIOR] MUST answer a ServicePermission whose may_call is true exactly when the imported SERVICE_RIGHTS constant holds a row of service and operation, and whose agent_authority is true exactly when may_call is true and service is the cabinet_kernel member of = models.ServiceName.
+highest_class_of_service: [BEHAVIOR] MUST answer the highest_class of the row of service in the imported SERVICE_HIGHEST_CLASSES constant.
