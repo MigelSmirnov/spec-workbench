@@ -25,8 +25,8 @@ before the session's check (A08 rule 7, `flow:publish_and_withdraw_pointer`).
 Every action that changes the store is one transaction `operations` opens
 through `store` (A04 rule 4), taking the one write lock when it begins; every
 agent-authority call takes it too, a read included (A10 rule 6). Inside it
-`operations` reads the action's one instant and today's date from `clock` and
-hands them on ("Time"), the record's module writes, and `operations` appends
+`operations` reads the action's one instant from `clock`, takes today's date
+as that instant's UTC date, and hands both on ("Time"), the record's module writes, and `operations` appends
 the one audit entry when the action changed state and M09 lists it (A14
 rule 1), naming the release and contract versions, and commits once. A
 transaction that fails changes nothing (A04 rule 4) and writes no entry; the
@@ -207,7 +207,8 @@ decide the limits. `module:configuration` gives the checked owner credential
 to `module:owner_sessions` alone (State 3, "Secrets never leave").
 
 Crossing models: the presented credential enters `module:owner_sessions` and
-never leaves it; the session (M11) leaves as its identity, which travels only
+is kept by no other module: it leaves only as an argument of
+`module:random_values`' one comparison, which keeps nothing; the session (M11) leaves as its identity, which travels only
 in the cookie, and its CSRF value, which travels only in the forms (A13
 rule 7).
 
