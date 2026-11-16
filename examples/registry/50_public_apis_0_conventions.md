@@ -163,12 +163,16 @@ module names by the imported constant of that stage,
 as a number of its own (owner, 2026-11-17). The table's stage column is
 that number, with two exceptions: `internal_error` is no check's refusal
 and carries no stage; and `agent_call_refused` is one answer, so it always
-carries stage (2). For Kernel, resolving a withdrawal's pointer to its
-project belongs to stage (2), not (3): the set can be checked only on the
-pointer's project, so an unknown pointer is a refusal of that stage, as a
-project that does not exist is (A08 rule 7, A10 rule 3; A04 rule 6 stage
-(2) hides every later failure) — and its stage tells nothing the answer
-must not. The codes are
+carries stage (2). Here State 2 itself departs from A04's numbering: for
+agent authority, a refusal of the set check and a record that does not
+exist are one answer (A10 rule 3: "the same answer as for a project that
+does not exist"; A08 rule 7: a withdrawal's pointer that does not exist,
+or whose project is outside the set, "is answered as not found"). One
+answer has one stage, and it is the earlier, (2), whose refusal hides
+every later failure (A04 rule 6) — so a Kernel call naming a project or
+a pointer that does not exist carries stage (2), not (3), and the stage
+tells nothing the answer must not. It is the only refusal whose stage is
+not its own check's. The codes are
 distinct where a caller acts on the difference; the kinds are a closed set
 the owner interface renders and State 6 declares as `models`' vocabulary.
 

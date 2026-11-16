@@ -332,8 +332,12 @@ owner session's limits — 8 hours, 30 minutes, the 15
 minutes and five refusals of the sign-in, the 10 minutes of a confirmation,
 the 60 seconds of the pass (A13); a listen port's bounds (A17 rule 1); the request id's 128 characters (A01 rule
 1), the alias's 40 and the characteristics' bounds (A02 rule 4), the 32 bytes of a secret value and of a
-configured secret (A13 rule 7, A17 rule 3). The list names groups; the data
-closure names each constant, and every one is exported.
+configured secret (A13 rule 7, A17 rule 3); the number of each of A04 rule
+6's six stages, which every refusal of a check carries (A04, owner,
+2026-11-17); the first revision of a Project and of a Customer (State 1,
+"an ordinal starting at 1") and an agent session's first access version
+(A12 rule 1). The list names groups; the data closure names each constant,
+and every one is exported.
 
 ### Knows
 
@@ -390,6 +394,14 @@ OBJECT_ROOMS_MIN
 SECRET_MIN_BYTES
 LISTEN_PORT_MIN
 LISTEN_PORT_MAX
+REFUSAL_STAGE_AUTHENTICATION
+REFUSAL_STAGE_AGENT_SESSION
+REFUSAL_STAGE_EXISTENCE
+REFUSAL_STAGE_VALUES
+REFUSAL_STAGE_VERSION
+REFUSAL_STAGE_LIFECYCLE
+REVISION_FIRST
+ACCESS_VERSION_FIRST
 ```
 
 ### Depth assessment
