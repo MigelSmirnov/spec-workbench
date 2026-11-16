@@ -27,7 +27,7 @@ Two fuses close it from opposite sides:
                                  datetime fields while its inputs carry none
                                  and its module declares no clock port
 
-A module-level clock (system_clock_backend v2-v5, SPEC_STANDARD 6.9) is a
+A module-level clock (system_clock_backend v2-v6, SPEC_STANDARD 6.9) is a
 source for the modules that really depend on it: those importing its function
 (the decided imports: 65_imports.json, else an assembled imports.module_internal,
 an empty one included), or, before imports are decided, those whose State 3
@@ -312,8 +312,9 @@ def declared_clock_function(case: Path, spec: dict[str, Any] | None = None) -> t
 
     Read from the assembled ``rules.system_clock_backend`` when there is one,
     else from the closed ``70_system_clock_closure.json`` (SPEC_STANDARD 6.9:
-    v2 ``function``, v3 ``wall_clock_function``, v4 ``function``). A class
-    form (v1) hands out time through a port in ``__init__`` instead.
+    v2 ``function``, v3 ``wall_clock_function``, v4 ``function``, v5 and v6
+    ``wall_clock_function``). A class form (v1) hands out time through a port
+    in ``__init__`` instead.
     """
     backend = ((spec or {}).get("rules") or {}).get("system_clock_backend")
     if not isinstance(backend, dict):

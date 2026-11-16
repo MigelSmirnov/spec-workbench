@@ -1481,3 +1481,20 @@ def test_a_v5_clock_is_read_by_its_wall_operation_and_handed_to_its_dependants(t
     assert design_closure_gaps.declared_clock_function(case) == ("clock", "utc_now")
     assert design_closure_gaps.clock_consumers(case) == {"things"}
     assert [f["contract"] for f in transition.run_check(case, "time_source")["findings"]] == ["record_other"]
+
+
+def test_a_v6_clock_is_read_by_its_wall_operation_and_handed_to_its_dependants(tmp_path):
+    # system_clock_backend/v6 (2026-11-16, Registry): v5's wiring, timezone-aware UTC wall clock
+    import design_closure_gaps
+
+    case = _clock_case(tmp_path)
+    v6 = {**V4_CLOCK, "backend_ir": {**V4_CLOCK["backend_ir"], "schema_version": 6,
+                                     "backend": {"emitter": "python_host_utc_and_elapsed_clock_v1"},
+                                     "wiring": {"module": "clock", "wall_clock_function": "utc_now",
+                                                "elapsed_clock_function": "monotonic_seconds"},
+                                     "time": {"policy": "rules.time_source_policy", "read": "per_call",
+                                              "representation": "aware_utc_datetime"}}}
+    _write(case / "70_system_clock_closure.json", v6)
+    assert design_closure_gaps.declared_clock_function(case) == ("clock", "utc_now")
+    assert design_closure_gaps.clock_consumers(case) == {"things"}
+    assert [f["contract"] for f in transition.run_check(case, "time_source")["findings"]] == ["record_other"]
