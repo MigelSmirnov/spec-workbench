@@ -1,0 +1,176 @@
+{
+ "open_points": [
+  {
+   "subject": "configuration — public capability status",
+   "kind": "undecided export surface",
+   "text": "### Candidate public capabilities",
+   "question": "Are `give_service_tokens` and `give_owner_credential` required exported capabilities of `configuration`, or merely names still under consideration?",
+   "options": [
+    "Export both as the module's required public API",
+    "Keep one or both module-internal",
+    "Replace them with access through `load_configuration`"
+   ],
+   "default_guess": "Export both because they were added to the reviewed capability list.",
+   "witness": {
+    "initial": "The configuration module is implemented and authentication modules are generated later.",
+    "events": [
+     "One implementer treats the candidate list as the public API and imports `give_owner_credential`.",
+     "Another implementer treats it as non-normative and exposes only `load_configuration`."
+    ],
+    "outcomes": [
+     "The authentication module imports and uses `give_owner_credential`.",
+     "The authentication module cannot import it and instead reads a returned settings object."
+    ],
+    "observer": "The integrator or generated-module import check"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "configuration — ownership of loaded secrets",
+   "kind": "unclear ownership",
+   "text": "give_service_tokens\ngive_owner_credential",
+   "question": "Which module owns the validated in-memory service-token and owner-credential values after `runtime_settings` reads them: `runtime_settings`, `configuration`, or an immutable configuration object returned by `load_configuration`?",
+   "options": [
+    "`runtime_settings` owns the values and `configuration` only validates them",
+    "`configuration` owns a validated snapshot",
+    "A returned immutable configuration object owns them"
+   ],
+   "default_guess": "Have `load_configuration` return an immutable validated configuration object and keep `configuration` otherwise stateless.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration — relationship among capabilities",
+   "kind": "missing contract",
+   "text": "load_configuration\ngive_service_tokens\ngive_owner_credential",
+   "question": "How do the two new capabilities obtain the configuration: do they take the validated result of `load_configuration`, read module-held state established by it, or invoke it themselves?",
+   "options": [
+    "Accept the validated configuration as an argument",
+    "Read module state initialized by `load_configuration`",
+    "Call `load_configuration` internally on every use"
+   ],
+   "default_guess": "Accept the validated configuration as an argument so the module has no hidden initialization state.",
+   "witness": {
+    "initial": "Registry has started far enough for an authentication component to request a credential.",
+    "events": [
+     "The component calls `give_owner_credential` without separately calling `load_configuration`.",
+     "One implementation expects module state; another reloads and revalidates configuration."
+    ],
+    "outcomes": [
+     "The call fails because configuration state was never initialized.",
+     "The call succeeds after reading the environment again."
+    ],
+    "observer": "The owner attempting to sign in"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "configuration — service-token capability",
+   "kind": "missing contract",
+   "text": "give_service_tokens",
+   "question": "What are the inputs, return type, ordering, and failure behavior of `give_service_tokens`, and does it return tokens alone or a service-name-to-token association?",
+   "options": [
+    "Return a mapping from each A09 service identity to its token",
+    "Return tokens in A17 rule 1 order",
+    "Return opaque token records that include their service identities",
+    "Return a lookup operation for one named service"
+   ],
+   "default_guess": "Return an immutable mapping from service identity to opaque token bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration — owner-only start",
+   "kind": "undefined empty case",
+   "text": "give_service_tokens",
+   "question": "What does `give_service_tokens` do in the permitted owner-only start where all service tokens and the service API address are absent?",
+   "options": [
+    "Return an empty mapping",
+    "Return an explicit owner-only result",
+    "Refuse because service tokens are unavailable",
+    "The capability must never be called in owner-only mode"
+   ],
+   "default_guess": "Return an empty mapping.",
+   "witness": {
+    "initial": "Registry starts with no service tokens and no service API address, which A17 permits as owner-only mode.",
+    "events": [
+     "Startup code initializes authentication and calls `give_service_tokens`.",
+     "One implementation returns an empty collection; another raises an unavailable-configuration error."
+    ],
+    "outcomes": [
+     "The owner interface starts and serves normally.",
+     "Startup aborts or the authentication component fails even though owner-only start is allowed."
+    ],
+    "observer": "The owner starting Registry"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "configuration — owner-credential capability",
+   "kind": "missing contract",
+   "text": "give_owner_credential",
+   "question": "What are the inputs, return type, and failure behavior of `give_owner_credential`, and does it expose the credential value or an opaque secret representation for `owner_sessions` to compare?",
+   "options": [
+    "Return the raw environment text",
+    "Return decoded bytes",
+    "Return an opaque secret value whose equality is performed by `owner_sessions`",
+    "Return a credential-verification operation"
+   ],
+   "default_guess": "Return an opaque secret value and leave the sign-in credential check to `owner_sessions`, as `configuration` must not own that check.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration — secret representation",
+   "kind": "unclear representation",
+   "text": "each secret at least the 32 bytes `data_provider` holds",
+   "question": "What byte representation and encoding are used both to enforce the minimum length and to return the tokens and owner credential from the new capabilities?",
+   "options": [
+    "Treat the environment value as UTF-8 and measure/return its encoded bytes",
+    "Require an ASCII secret and measure characters as bytes",
+    "Keep text and define a separate byte-length calculation",
+    "Decode a specified encoded form such as base64 before measuring"
+   ],
+   "default_guess": "Encode the environment text as UTF-8 once, validate its byte length, and expose that byte value.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration — validated-access boundary",
+   "kind": "unclear lifecycle",
+   "text": "give_service_tokens\ngive_owner_credential",
+   "question": "May either capability produce a secret before every configuration check has passed, or are both callable only on the successfully validated configuration handed off by `load_configuration`?",
+   "options": [
+    "They are unavailable until all A17 checks pass",
+    "They are available after secret-specific checks but before path, store, and listener checks",
+    "They always expose the loaded values, even when startup later fails"
+   ],
+   "default_guess": "Make them available only from the successfully validated configuration result.",
+   "witness": {
+    "initial": "All secret checks pass, but the backup path check later fails.",
+    "events": [
+     "A startup collaborator asks for the owner credential before the path check completes.",
+     "One implementation returns it immediately; another withholds it until `load_configuration` succeeds."
+    ],
+    "outcomes": [
+     "A downstream authentication component can initialize with secrets during a failed start.",
+     "No downstream component can obtain secrets from a configuration whose startup validation failed."
+    ],
+    "observer": "The startup orchestrator and diagnostic tests"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "configuration — dependency direction",
+   "kind": "unclear dependency direction",
+   "text": "`models`, `data_provider`, `runtime_settings`.",
+   "question": "Which modules consume `give_service_tokens` and `give_owner_credential`, and must those consumers depend on `configuration`, or must `configuration` call into the authentication modules despite not listing them under `Knows`?",
+   "options": [
+    "Service authentication and `owner_sessions` import `configuration`",
+    "`instance_lifecycle` obtains the values and injects them into authentication modules",
+    "`configuration` calls authentication modules during loading"
+   ],
+   "default_guess": "Have `instance_lifecycle` obtain one validated configuration object and inject the relevant opaque secrets into service authentication and `owner_sessions`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"configuration — public capability status\",\"kind\":\"undecided export surface\",\"text\":\"### Candidate public capabilities\",\"question\":\"Are `give_service_tokens` and `give_owner_credential` required exported capabilities of `configuration`, or merely names still under consideration?\",\"options\":[\"Export both as the module's required public API\",\"Keep one or both module-internal\",\"Replace them with access through `load_configuration`\"],\"default_guess\":\"Export both because they were added to the reviewed capability list.\",\"witness\":{\"initial\":\"The configuration module is implemented and authentication modules are generated later.\",\"events\":[\"One implementer treats the candidate list as the public API and imports `give_owner_credential`.\",\"Another implementer treats it as non-normative and exposes only `load_configuration`.\"],\"outcomes\":[\"The authentication module imports and uses `give_owner_credential`.\",\"The authentication module cannot import it and instead reads a returned settings object.\"],\"observer\":\"The integrator or generated-module import check\"}},{\"subject\":\"configuration — ownership of loaded secrets\",\"kind\":\"unclear ownership\",\"text\":\"give_service_tokens\\ngive_owner_credential\",\"question\":\"Which module owns the validated in-memory service-token and owner-credential values after `runtime_settings` reads them: `runtime_settings`, `configuration`, or an immutable configuration object returned by `load_configuration`?\",\"options\":[\"`runtime_settings` owns the values and `configuration` only validates them\",\"`configuration` owns a validated snapshot\",\"A returned immutable configuration object owns them\"],\"default_guess\":\"Have `load_configuration` return an immutable validated configuration object and keep `configuration` otherwise stateless.\"},{\"subject\":\"configuration — relationship among capabilities\",\"kind\":\"missing contract\",\"text\":\"load_configuration\\ngive_service_tokens\\ngive_owner_credential\",\"question\":\"How do the two new capabilities obtain the configuration: do they take the validated result of `load_configuration`, read module-held state established by it, or invoke it themselves?\",\"options\":[\"Accept the validated configuration as an argument\",\"Read module state initialized by `load_configuration`\",\"Call `load_configuration` internally on every use\"],\"default_guess\":\"Accept the validated configuration as an argument so the module has no hidden initialization state.\",\"witness\":{\"initial\":\"Registry has started far enough for an authentication component to request a credential.\",\"events\":[\"The component calls `give_owner_credential` without separately calling `load_configuration`.\",\"One implementation expects module state; another reloads and revalidates configuration.\"],\"outcomes\":[\"The call fails because configuration state was never initialized.\",\"The call succeeds after reading the environment again.\"],\"observer\":\"The owner attempting to sign in\"}},{\"subject\":\"configuration — service-token capability\",\"kind\":\"missing contract\",\"text\":\"give_service_tokens\",\"question\":\"What are the inputs, return type, ordering, and failure behavior of `give_service_tokens`, and does it return tokens alone or a service-name-to-token association?\",\"options\":[\"Return a mapping from each A09 service identity to its token\",\"Return tokens in A17 rule 1 order\",\"Return opaque token records that include their service identities\",\"Return a lookup operation for one named service\"],\"default_guess\":\"Return an immutable mapping from service identity to opaque token bytes.\"},{\"subject\":\"configuration — owner-only start\",\"kind\":\"undefined empty case\",\"text\":\"give_service_tokens\",\"question\":\"What does `give_service_tokens` do in the permitted owner-only start where all service tokens and the service API address are absent?\",\"options\":[\"Return an empty mapping\",\"Return an explicit owner-only result\",\"Refuse because service tokens are unavailable\",\"The capability must never be called in owner-only mode\"],\"default_guess\":\"Return an empty mapping.\",\"witness\":{\"initial\":\"Registry starts with no service tokens and no service API address, which A17 permits as owner-only mode.\",\"events\":[\"Startup code initializes authentication and calls `give_service_tokens`.\",\"One implementation returns an empty collection; another raises an unavailable-configuration error.\"],\"outcomes\":[\"The owner interface starts and serves normally.\",\"Startup aborts or the authentication component fails even though owner-only start is allowed.\"],\"observer\":\"The owner starting Registry\"}},{\"subject\":\"configuration — owner-credential capability\",\"kind\":\"missing contract\",\"text\":\"give_owner_credential\",\"question\":\"What are the inputs, return type, and failure behavior of `give_owner_credential`, and does it expose the credential value or an opaque secret representation for `owner_sessions` to compare?\",\"options\":[\"Return the raw environment text\",\"Return decoded bytes\",\"Return an opaque secret value whose equality is performed by `owner_sessions`\",\"Return a credential-verification operation\"],\"default_guess\":\"Return an opaque secret value and leave the sign-in credential check to `owner_sessions`, as `configuration` must not own that check.\"},{\"subject\":\"configuration — secret representation\",\"kind\":\"unclear representation\",\"text\":\"each secret at least the 32 bytes `data_provider` holds\",\"question\":\"What byte representation and encoding are used both to enforce the minimum length and to return the tokens and owner credential from the new capabilities?\",\"options\":[\"Treat the environment value as UTF-8 and measure/return its encoded bytes\",\"Require an ASCII secret and measure characters as bytes\",\"Keep text and define a separate byte-length calculation\",\"Decode a specified encoded form such as base64 before measuring\"],\"default_guess\":\"Encode the environment text as UTF-8 once, validate its byte length, and expose that byte value.\"},{\"subject\":\"configuration — validated-access boundary\",\"kind\":\"unclear lifecycle\",\"text\":\"give_service_tokens\\ngive_owner_credential\",\"question\":\"May either capability produce a secret before every configuration check has passed, or are both callable only on the successfully validated configuration handed off by `load_configuration`?\",\"options\":[\"They are unavailable until all A17 checks pass\",\"They are available after secret-specific checks but before path, store, and listener checks\",\"They always expose the loaded values, even when startup later fails\"],\"default_guess\":\"Make them available only from the successfully validated configuration result.\",\"witness\":{\"initial\":\"All secret checks pass, but the backup path check later fails.\",\"events\":[\"A startup collaborator asks for the owner credential before the path check completes.\",\"One implementation returns it immediately; another withholds it until `load_configuration` succeeds.\"],\"outcomes\":[\"A downstream authentication component can initialize with secrets during a failed start.\",\"No downstream component can obtain secrets from a configuration whose startup validation failed.\"],\"observer\":\"The startup orchestrator and diagnostic tests\"}},{\"subject\":\"configuration — dependency direction\",\"kind\":\"unclear dependency direction\",\"text\":\"`models`, `data_provider`, `runtime_settings`.\",\"question\":\"Which modules consume `give_service_tokens` and `give_owner_credential`, and must those consumers depend on `configuration`, or must `configuration` call into the authentication modules despite not listing them under `Knows`?\",\"options\":[\"Service authentication and `owner_sessions` import `configuration`\",\"`instance_lifecycle` obtains the values and injects them into authentication modules\",\"`configuration` calls authentication modules during loading\"],\"default_guess\":\"Have `instance_lifecycle` obtain one validated configuration object and inject the relevant opaque secrets into service authentication and `owner_sessions`.\"}]}",
+ "set_aside": []
+}
