@@ -9,7 +9,10 @@ and which have no operation (SPEC_STANDARD §6.10, §15.3.1) — and
 found no operation by which `configuration` hands a secret to the module
 that uses it, State 3 "Secrets never leave"; owner, 2026-11-16: the
 recipient asks): `configuration.give_service_tokens` and
-`configuration.give_owner_credential`. The operations of `clock`,
+`configuration.give_owner_credential`; and `clock.today_in_utc` removed —
+the clock is emitted from `system_clock_backend` v6, which owns exactly the
+two readings, and `operations` takes an action's today as the UTC date of
+its instant (owner, 2026-11-16). The operations of `clock`,
 `random_values`, `given_values`, `runtime_settings`, `configuration`,
 `store`, `audit_log` and `service_access`. Every one follows `50_public_apis_0_conventions.md`.
 
@@ -50,42 +53,6 @@ None.
 ### State impact
 
 Reads the host's wall clock; touches no record.
-
-## `public_op:clock.today_in_utc`
-
-### Owner
-
-`module:clock`. The UTC date of a given instant: an action's today (A15
-rule 3, R0-84).
-
-### Callers
-
-`module:operations`.
-
-### Inputs
-
-One instant — the action's, read once with `recorded_now`.
-
-### Outputs
-
-Its calendar date in UTC.
-
-### Observable effect
-
-None.
-
-### Enforces
-
-An action's today is the date of its own instant, never a second reading of
-the clock, so the two cannot fall on different dates at midnight.
-
-### Errors
-
-None.
-
-### State impact
-
-Pure; touches no record.
 
 ## `public_op:clock.monotonic_reading`
 
@@ -562,7 +529,9 @@ read again from the environment; no other module receives them.
 
 None: after a start whose `load_configuration` passed, it always answers.
 It is asked by `service_access.identify_service` at each identification; `runtime_settings` and `configuration`,
-which load and check the value, are the only other modules that hold it.
+which load and check the value, are the only other modules that keep it;
+`random_values.equal_in_constant_time` receives it only as an argument of
+one comparison and keeps nothing.
 
 ### State impact
 
@@ -601,7 +570,9 @@ again from the environment; no other module receives it.
 
 None: after a start whose `load_configuration` passed, it always answers.
 It is asked by `owner_sessions.sign_in_owner` at each comparison of a presented credential, outside a lockout; `runtime_settings` and `configuration`,
-which load and check the value, are the only other modules that hold it.
+which load and check the value, are the only other modules that keep it;
+`random_values.equal_in_constant_time` receives it only as an argument of
+one comparison and keeps nothing.
 
 ### State impact
 

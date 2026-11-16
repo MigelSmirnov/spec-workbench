@@ -25,8 +25,8 @@ types and Python signatures are State 6's.
 - **The action's instant and today.** An operation that records an instant
   or compares a date takes the action's instant and today's date as inputs:
   `operations` reads the instant once with `clock.recorded_now` when the
-  transaction begins and derives today from it with `clock.today_in_utc`
-  ("Time"); the operation reads no clock. The exceptions are named: `owner_sessions` and
+  transaction begins and takes today as that instant's UTC date ("Time");
+  the operation reads no clock. The exceptions are named: `owner_sessions` and
   `instance_lifecycle`, for its passes, read `clock.monotonic_reading`, `backups` reads `clock.recorded_now` for its
   look, and `store` reads it at a backup copy's first read.
 - **The acting principal.** An operation that records who acted — a

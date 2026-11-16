@@ -84,7 +84,8 @@ credential through `capability:configuration.give_owner_credential` to
 `capability:configuration.give_service_tokens` to `module:service_access` —
 which asks for it when it compares a presented value; `module:runtime_settings`
 and `module:configuration`, which load and check them, are the only other
-modules that hold them. The backup key goes to `module:backups` as an input
+modules that keep them; `module:random_values` compares a presented value
+with the kept one when asked and keeps neither. The backup key goes to `module:backups` as an input
 of each look ("Secrets never leave").
 The store's location enters `module:store` and leaves as the open store or a
 diagnostic.
@@ -220,7 +221,9 @@ rule 7).
    credential included, and is not counted. Otherwise the credential is
    compared with the configured one, which `module:owner_sessions` asks
    `capability:configuration.give_owner_credential` for at that comparison —
-   no other operational module receives it, and after a start that passed
+   no other module keeps it, `capability:random_values.equal_in_constant_time`
+   receiving it only as an argument of the one comparison and keeping
+   nothing, and after a start that passed
    it always answers — through
    `capability:random_values.equal_in_constant_time`. A wrong or missing one
    is refused and counted at the reading of `capability:clock.monotonic_reading`;
@@ -444,8 +447,8 @@ confirmation id, written into the entry only.
    action, target, revision or inputs refuses it; an expired one refuses the
    submission and clears it; another value while the pending one is valid
    refuses it and leaves it (A13 rule 6). Then `capability:store.run_in_transaction`
-   opens the transaction with the action's instant and today's date from
-   `capability:clock.recorded_now` and `capability:clock.today_in_utc`.
+   opens the transaction with the action's instant from
+   `capability:clock.recorded_now` and today's date, that instant's UTC date.
 3. **Archive.** `capability:projects.archive_project`: (3) the project exists;
    (5) the stated revision is current; an archived project is answered
    unchanged — no revision move, no entry, no confirmation id (A05 rules 1,
@@ -546,7 +549,7 @@ recorded or absent, never contact data (R0-83).
    revision and the entry "correcting a customer".
 3. **Mark.** `capability:customers.mark_customer` restricts or lifts, ends or
    resumes, with the stated revision: (3) exists; (4) an end date later than
-   today, `capability:clock.today_in_utc`, refused, none given meaning today
+   today, the UTC date of the action's instant, refused, none given meaning today
    (R0-84); (5) the revision; (6) an erased Customer refused. A transition to
    the state it is in is answered unchanged, and ending an ended relationship
    with another date does not move it (A05 rules 1, 3). An accepted mark
@@ -609,8 +612,9 @@ projects, list rooms, list artifacts, read the latest artifact of a type.
 `module:service_api` carries the token and the request.
 `module:service_access` tells the service by its token and answers its rights
 and highest class from the release (A09); `module:configuration` gives it the
-checked tokens, and no other module receives them (State 3, "Secrets never
-leave"). `module:operations` decides the
+checked tokens, and no other module keeps them (State 3, "Secrets never
+leave"); `module:random_values` compares a presented token with each and keeps
+neither. `module:operations` decides the
 answer's class. `module:projects` builds the project answers;
 `module:artifact_pointers` the pointer answers. Nothing is written.
 
@@ -626,7 +630,9 @@ pointers.
    `capability:service_access.identify_service` compares the token in
    constant time with each configured one, the tokens `module:service_access`
    asks `capability:configuration.give_service_tokens` for at each
-   identification — no other operational module receives them, and after a
+   identification — no other module keeps them,
+   `capability:random_values.equal_in_constant_time` receiving each only as
+   an argument of one comparison and keeping nothing, and after a
    start that opened the service API it always answers; an unknown token is refused like
    a wrong one, without a limit (A17 rule 7); an owner-only start has no
    service API listener, so no call gets here (A17 rule 1). `capability:service_access.service_may_call`
@@ -1117,8 +1123,8 @@ subject.
 3. **Erase.** The submission is admitted and
    `capability:owner_sessions.take_confirmation` uses the value up;
    `capability:store.run_in_transaction` opens the transaction with the
-   instant and today's date from `capability:clock.recorded_now` and
-   `capability:clock.today_in_utc`. `capability:audit_log.erase_audit_entries_before`
+   instant from `capability:clock.recorded_now` and today's date, that
+   instant's UTC date. `capability:audit_log.erase_audit_entries_before`
    refuses a date later than today and otherwise removes every entry whose
    instant is before 00:00 UTC of it (A15 rule 3).
 4. **Record.** The erasure is accepted whatever it removed: `module:operations`

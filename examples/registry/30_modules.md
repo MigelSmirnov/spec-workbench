@@ -150,8 +150,9 @@ later line, and modules on one line do not know each other.
   no owner answer is refused for its class (Actors and trust boundaries,
   "Personal data").
 - **Time.** An action has one instant: `operations` reads it from
-  `clock.recorded_now` once, when the action's transaction begins, with
-  today's date (`clock.today_in_utc`), and hands both to every module the
+  `clock.recorded_now` once, when the action's transaction begins, takes
+  today's date as that instant's UTC date itself, so the two cannot fall on
+  different dates at midnight, and hands both to every module the
   action records a new instant or compares a date in. The import's records
   keep the instants their source holds ("Revisions and times"); the Customers
   it makes, its closure and its entry carry the action's one instant. The
@@ -225,8 +226,9 @@ Any rule about when a record changes, any check, any persistence.
 
 A13 rule 2's two readings: the UTC wall-clock instant every recorded time is
 (L16), and the process's monotonic reading, which a change of the wall clock
-does not move and which counts a suspension of the host. Today, the current
-date in UTC (A15 rule 3, R0-84).
+does not move and which counts a suspension of the host. Nothing else: the
+module is emitted from the `system_clock_backend` IR (A13 rule 2), which
+owns exactly these two readings; an action's today is `operations`'.
 
 ### Knows
 
@@ -248,7 +250,6 @@ The host's clocks, and their replacement by fixed readings in tests.
 
 ```text
 recorded_now
-today_in_utc
 monotonic_reading
 ```
 
