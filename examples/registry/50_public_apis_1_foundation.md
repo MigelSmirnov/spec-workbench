@@ -5,7 +5,11 @@
 Draft of 2026-11-01, reopened on 2026-11-11: `release_declarations` is
 gone — its values are constants of `data_provider`, which a reader imports
 and which have no operation (SPEC_STANDARD §6.10, §15.3.1) — and
-`runtime_settings` reads the environment. The operations of `clock`,
+`runtime_settings` reads the environment. Reopened on 2026-11-16 (State 6
+found no operation by which `configuration` hands a secret to the module
+that uses it, State 3 "Secrets never leave"; owner, 2026-11-16: the
+recipient asks): `configuration.service_tokens` and
+`configuration.owner_credential`. The operations of `clock`,
 `random_values`, `given_values`, `runtime_settings`, `configuration`,
 `store`, `audit_log` and `service_access`. Every one follows `50_public_apis_0_conventions.md`.
 
@@ -489,10 +493,12 @@ the settings it answers.
 ### Outputs
 
 The loaded configuration — the store's location, the backup location, the
-backup key, the owner credential, the owner interface's address, and either
-the four service tokens with the service API's address or none of them,
-which marks an owner-only start — or one diagnostic naming the first
-failed item and never its value.
+backup key, the owner interface's address, and either the service API's
+address or none, which marks an owner-only start — or one diagnostic naming
+the first failed item and never its value. The owner credential and the
+service tokens are not answered: `configuration` keeps them, checked, and
+gives each only to the module that uses it (State 3), through
+`owner_credential` and `service_tokens`.
 
 ### Observable effect
 
@@ -507,7 +513,10 @@ address, the port from the imported `LISTEN_PORT_MIN` to `LISTEN_PORT_MAX`
 constant, the two ports different —
 well formed; each secret at least the imported `SECRET_MIN_BYTES` constant; no two secrets equal; the
 store and the backup location apart, every link resolved; no default
-applied. Each secret is handed later only to the module that uses it.
+applied. Each secret is handed later only to the module that uses it: the
+backup key as an input of `backups.run_daily_backup_if_due`, the owner
+credential and the service tokens through `owner_credential` and
+`service_tokens`.
 
 ### Errors
 
@@ -515,7 +524,84 @@ The diagnostic is the answer for a failed check; the start stops on it.
 
 ### State impact
 
-Resolves paths; touches no file and no record.
+Resolves paths; keeps the checked owner credential and service tokens in
+the process's memory; touches no file and no record.
+
+## `public_op:configuration.service_tokens`
+
+### Owner
+
+`module:configuration`. Give the checked service tokens to `service_access`,
+the one module that compares them (State 3, "Secrets never leave"; A09 rule
+1, A17 rule 7).
+
+### Callers
+
+`module:service_access`.
+
+### Inputs
+
+None.
+
+### Outputs
+
+Each service the imported `SERVICE_RIGHTS` constant lists with its token, as
+`load_configuration` checked it; none in an owner-only start, which opens no
+service API (A17 rule 1).
+
+### Observable effect
+
+None.
+
+### Enforces
+
+The tokens are those of the one `load_configuration` of this start, never
+read again from the environment; no other module receives them.
+
+### Errors
+
+None.
+
+### State impact
+
+Reads the process's memory; touches no record.
+
+## `public_op:configuration.owner_credential`
+
+### Owner
+
+`module:configuration`. Give the checked owner credential to
+`owner_sessions`, the one module that compares it (State 3, "Secrets never
+leave"; A13 rule 4).
+
+### Callers
+
+`module:owner_sessions`.
+
+### Inputs
+
+None.
+
+### Outputs
+
+The owner credential, as `load_configuration` checked it.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+The credential is the one of this start's `load_configuration`, never read
+again from the environment; no other module receives it.
+
+### Errors
+
+None.
+
+### State impact
+
+Reads the process's memory; touches no record.
 
 ## `public_op:store.open_store`
 

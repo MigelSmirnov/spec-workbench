@@ -195,7 +195,8 @@ its pending confirmation. None of it is stored: a sign-in, a sign-out and the
 pass open no store transaction and write no audit entry (A14 rule 2, M09).
 `module:random_values` makes every secret value and compares every presented
 one in constant time; `module:clock` gives the monotonic readings that alone
-decide the limits.
+decide the limits. `module:configuration` gives the checked owner credential
+to `module:owner_sessions` alone (State 3, "Secrets never leave").
 
 Crossing models: the presented credential enters `module:owner_sessions` and
 never leaves it; the session (M11) leaves as its identity, which travels only
@@ -210,8 +211,9 @@ rule 7).
    made without a session and checks only the lockout and the credential
    (A13 rule 4). During a lockout every sign-in is refused, the right
    credential included, and is not counted. Otherwise the credential is
-   compared with the configured one through
-   `capability:random_values.equal_in_constant_time`. A wrong or missing one
+   compared with the configured one, which
+   `capability:configuration.owner_credential` gives `module:owner_sessions`
+   alone, through `capability:random_values.equal_in_constant_time`. A wrong or missing one
    is refused and counted at the reading of `capability:clock.monotonic_reading`;
    the fifth refusal less than 15 minutes old starts a lockout lasting 15
    minutes from it (A13 rule 3). Concurrent sign-ins are counted one at a
@@ -597,7 +599,9 @@ projects, list rooms, list artifacts, read the latest artifact of a type.
 
 `module:service_api` carries the token and the request.
 `module:service_access` tells the service by its token and answers its rights
-and highest class from the release (A09). `module:operations` decides the
+and highest class from the release (A09); `module:configuration` gives it the
+checked tokens, and no other module receives them (State 3, "Secrets never
+leave"). `module:operations` decides the
 answer's class. `module:projects` builds the project answers;
 `module:artifact_pointers` the pointer answers. Nothing is written.
 
@@ -611,7 +615,9 @@ pointers.
 1. **Identify.** `capability:service_api.serve_service_request` hands the
    token and request to `capability:operations.perform_service_operation`.
    `capability:service_access.identify_service` compares the token in
-   constant time with each configured one; an unknown token is refused like
+   constant time with each configured one, the tokens
+   `capability:configuration.service_tokens` gives `module:service_access`
+   alone; an unknown token is refused like
    a wrong one, without a limit (A17 rule 7); an owner-only start has no
    service API listener, so no call gets here (A17 rule 1). `capability:service_access.service_may_call`
    refuses an operation outside the service's row, whatever the request

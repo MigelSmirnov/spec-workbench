@@ -505,6 +505,8 @@ Path resolution and the order of the checks.
 
 ```text
 load_configuration
+service_tokens
+owner_credential
 ```
 
 ### Depth assessment
