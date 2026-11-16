@@ -1,0 +1,160 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "store_persistence public surface",
+   "kind": "missing_contracts",
+   "text": "SqliteStoreRepository\ncreate_store_schema",
+   "question": "What are the exact constructor, methods or function signatures, inputs, outputs, errors, state effects and callers of these two public capabilities?",
+   "options": [
+    "Define record-specific repository methods for every durable model and a schema function taking the store connection",
+    "Define generic typed CRUD/query methods and a schema function taking the store connection",
+    "Make them private implementation details of store rather than public capabilities"
+   ],
+   "default_guess": "Define a connection-independent SqliteStoreRepository whose methods receive the transaction or connection explicitly, plus create_store_schema(connection), and document every method as called only by store."
+  },
+  {
+   "unit": "context",
+   "subject": "store imports from store_persistence",
+   "kind": "import_surface",
+   "text": "`models`, `clock`, `data_provider`, `configuration`, `store_persistence`.",
+   "question": "Which exact exported symbols must State 6 place in module_internal[\"store\"][\"store_persistence\"]?",
+   "options": [
+    "SqliteStoreRepository and create_store_schema",
+    "SqliteStoreRepository only",
+    "create_store_schema only",
+    "A different set of repository functions or types"
+   ],
+   "default_guess": "Import exactly SqliteStoreRepository and create_store_schema."
+  },
+  {
+   "unit": "context",
+   "subject": "SqliteStoreRepository connection lifecycle",
+   "kind": "lifecycle_unspecified",
+   "text": "which only `store` calls, over that connection",
+   "question": "Does store construct one repository bound to its long-lived connection, construct one per transaction or backup connection, or pass the connection into every repository method?",
+   "options": [
+    "One repository per connection",
+    "One repository per transaction",
+    "One stateless repository with the connection passed to every call"
+   ],
+   "default_guess": "Use a stateless repository and pass the active connection or transaction explicitly to every method."
+  },
+  {
+   "unit": "context",
+   "subject": "transaction object handed to domain modules",
+   "kind": "call_boundary",
+   "text": "The step to run inside the transaction, which receives the transaction.",
+   "question": "What operations does the transaction value expose to customers, projects, artifact_pointers, agent_sessions, migration_import and audit_log now that only store may call store_persistence?",
+   "options": [
+    "The transaction is a store-owned facade exposing typed record operations and internally calling the repository",
+    "Domain steps return persistence commands for store to execute",
+    "Domain modules call repository methods indirectly through a repository carried by the transaction",
+    "Domain modules continue issuing SQL themselves"
+   ],
+   "default_guess": "Make the transaction a store-owned typed facade whose methods delegate internally to store_persistence; domain modules never receive or import the repository."
+  },
+  {
+   "unit": "context",
+   "subject": "new-store schema creation",
+   "kind": "invocation_unspecified",
+   "text": "Only the deterministic SQLite repository class and schema function lowered\nfrom `persistence_backend/v3` for the store's closed tables",
+   "question": "When and how does open_store call create_store_schema, and must it ever call it for an existing store?",
+   "options": [
+    "Call it only while creating the temporary new store",
+    "Call it on every open using idempotent creation statements",
+    "Call it for new stores and use it to validate existing schemas",
+    "Have SqliteStoreRepository create the schema during construction"
+   ],
+   "default_guess": "Call create_store_schema only on the new temporary database before its rename; never repair an existing versioned store silently.",
+   "witness": {
+    "initial": "An existing database has the expected store version and passes SQLite integrity checks but is missing the ArtifactPointer table.",
+    "events": [
+     "The host starts Registry and store.open_store opens the existing database."
+    ],
+    "outcomes": [
+     "If create_store_schema runs on every open, the missing table is silently created and the start succeeds.",
+     "If schema creation is only for new stores, the existing store is not repaired; it either fails an explicit schema check or starts and fails on the first pointer operation."
+    ],
+    "observer": "The host administrator and the first caller of a pointer operation"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "repository failure protocol",
+   "kind": "error_semantics",
+   "text": "the typed insert, load, list, update\nand delete statements",
+   "question": "How does each repository operation report no matching row, constraint failure, codec failure, SQLite failure or an unexpected row shape, and which of these become transaction_failed rather than a domain answer?",
+   "options": [
+    "Return typed result variants for expected absence and raise for persistence failures",
+    "Return optional records or counts and raise for every SQLite or codec failure",
+    "Raise for every non-success and let store translate exceptions",
+    "Return one generic success-or-error result"
+   ],
+   "default_guess": "Return optional records or affected-row counts for expected absence and raise a store-owned persistence exception for SQLite, constraint and codec failures; store maps that exception to transaction_failed."
+  },
+  {
+   "unit": "context",
+   "subject": "store copy and backup-file checks",
+   "kind": "operation_coverage",
+   "text": "SQLite table creation, row codecs and the typed insert, load, list, update\nand delete statements, including which column each lookup compares.",
+   "question": "Which repository operations let store.copy_store_snapshot remove every AgentSession and let store.copy_store_snapshot and store.check_store_file read AuditSequence, without store executing row statements itself?",
+   "options": [
+    "Add explicit delete_all_agent_sessions and load_audit_sequence repository methods",
+    "Express bulk deletion and singleton loading through generic typed query methods",
+    "Permit store to execute these exceptional SQL statements directly"
+   ],
+   "default_guess": "Add explicit repository methods for loading the singleton AuditSequence and deleting all AgentSession rows.",
+   "witness": {
+    "initial": "The live store contains an AgentSession and AuditSequence 12 when a daily backup starts.",
+    "events": [
+     "store.copy_store_snapshot creates the copy.",
+     "The copy must remove agent sessions and report sequence 12.",
+     "Later store.check_store_file checks the decrypted copy."
+    ],
+    "outcomes": [
+     "A repository surface supporting the bulk delete and singleton load produces a backup with no AgentSession and verifies sequence 12.",
+     "An implementation limited to per-record CRUD must either leave the AgentSession in the backup or make store execute undeclared SQL directly."
+    ],
+    "observer": "The owner after restoring the backup, and the backup run's diagnostic path"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ownership of record-to-row mapping",
+   "kind": "contradiction",
+   "text": "`store` holds the connection and\nthe transaction and decides which record goes into which row; the row\nstatements themselves are executed by `store_persistence`, its companion,\nwhich only `store` calls, over that connection (below).",
+   "question": "Does store or store_persistence own the decision that maps each durable record to its table and row representation? This passage assigns the decision to store, while store's Hides passage says store hides “Which record goes into which row” and store_persistence owns table rows and row codecs.",
+   "options": [
+    "store chooses the model/table operation while store_persistence alone defines the row codec and columns",
+    "store_persistence owns the complete record-to-row mapping",
+    "store owns the complete mapping and store_persistence merely executes already-lowered statements"
+   ],
+   "default_guess": "Let store choose the record-level operation and let store_persistence exclusively own table selection, columns and codecs.",
+   "witness": {
+    "initial": "A Project with an embedded Object must be inserted into the new store.",
+    "events": [
+     "store receives the Project through a transaction.",
+     "The companion lowers and executes the insert."
+    ],
+    "outcomes": [
+     "Under the first passage, store selects the Project row and supplies its mapping to the companion.",
+     "Under store's Hides text and the companion's row-codec ownership, store supplies a Project value and store_persistence chooses and encodes the row."
+    ],
+    "observer": "The implementers of store and store_persistence, whose independently generated interfaces will not agree"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "store and store_persistence class ownership",
+   "kind": "standard_violation",
+   "text": "`store` holds the connection and\nthe transaction and decides which record goes into which row; the row\nstatements themselves are executed by `store_persistence`, its companion,\nwhich only `store` calls, over that connection (below).",
+   "rule": "Частичное смешивание и companion-делегирование для членов типа запрещены.",
+   "section": "8",
+   "question": "Replace the companion delegation with an indivisible class ownership in one persistence module, with all methods of the owning class following that class."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"store_persistence public surface\",\"kind\":\"missing_contracts\",\"text\":\"SqliteStoreRepository\\ncreate_store_schema\",\"question\":\"What are the exact constructor, methods or function signatures, inputs, outputs, errors, state effects and callers of these two public capabilities?\",\"options\":[\"Define record-specific repository methods for every durable model and a schema function taking the store connection\",\"Define generic typed CRUD/query methods and a schema function taking the store connection\",\"Make them private implementation details of store rather than public capabilities\"],\"default_guess\":\"Define a connection-independent SqliteStoreRepository whose methods receive the transaction or connection explicitly, plus create_store_schema(connection), and document every method as called only by store.\"},{\"unit\":\"context\",\"subject\":\"store imports from store_persistence\",\"kind\":\"import_surface\",\"text\":\"`models`, `clock`, `data_provider`, `configuration`, `store_persistence`.\",\"question\":\"Which exact exported symbols must State 6 place in module_internal[\\\"store\\\"][\\\"store_persistence\\\"]?\",\"options\":[\"SqliteStoreRepository and create_store_schema\",\"SqliteStoreRepository only\",\"create_store_schema only\",\"A different set of repository functions or types\"],\"default_guess\":\"Import exactly SqliteStoreRepository and create_store_schema.\"},{\"unit\":\"context\",\"subject\":\"SqliteStoreRepository connection lifecycle\",\"kind\":\"lifecycle_unspecified\",\"text\":\"which only `store` calls, over that connection\",\"question\":\"Does store construct one repository bound to its long-lived connection, construct one per transaction or backup connection, or pass the connection into every repository method?\",\"options\":[\"One repository per connection\",\"One repository per transaction\",\"One stateless repository with the connection passed to every call\"],\"default_guess\":\"Use a stateless repository and pass the active connection or transaction explicitly to every method.\"},{\"unit\":\"context\",\"subject\":\"transaction object handed to domain modules\",\"kind\":\"call_boundary\",\"text\":\"The step to run inside the transaction, which receives the transaction.\",\"question\":\"What operations does the transaction value expose to customers, projects, artifact_pointers, agent_sessions, migration_import and audit_log now that only store may call store_persistence?\",\"options\":[\"The transaction is a store-owned facade exposing typed record operations and internally calling the repository\",\"Domain steps return persistence commands for store to execute\",\"Domain modules call repository methods indirectly through a repository carried by the transaction\",\"Domain modules continue issuing SQL themselves\"],\"default_guess\":\"Make the transaction a store-owned typed facade whose methods delegate internally to store_persistence; domain modules never receive or import the repository.\"},{\"unit\":\"context\",\"subject\":\"new-store schema creation\",\"kind\":\"invocation_unspecified\",\"text\":\"Only the deterministic SQLite repository class and schema function lowered\\nfrom `persistence_backend/v3` for the store's closed tables\",\"question\":\"When and how does open_store call create_store_schema, and must it ever call it for an existing store?\",\"options\":[\"Call it only while creating the temporary new store\",\"Call it on every open using idempotent creation statements\",\"Call it for new stores and use it to validate existing schemas\",\"Have SqliteStoreRepository create the schema during construction\"],\"default_guess\":\"Call create_store_schema only on the new temporary database before its rename; never repair an existing versioned store silently.\",\"witness\":{\"initial\":\"An existing database has the expected store version and passes SQLite integrity checks but is missing the ArtifactPointer table.\",\"events\":[\"The host starts Registry and store.open_store opens the existing database.\"],\"outcomes\":[\"If create_store_schema runs on every open, the missing table is silently created and the start succeeds.\",\"If schema creation is only for new stores, the existing store is not repaired; it either fails an explicit schema check or starts and fails on the first pointer operation.\"],\"observer\":\"The host administrator and the first caller of a pointer operation\"}},{\"unit\":\"context\",\"subject\":\"repository failure protocol\",\"kind\":\"error_semantics\",\"text\":\"the typed insert, load, list, update\\nand delete statements\",\"question\":\"How does each repository operation report no matching row, constraint failure, codec failure, SQLite failure or an unexpected row shape, and which of these become transaction_failed rather than a domain answer?\",\"options\":[\"Return typed result variants for expected absence and raise for persistence failures\",\"Return optional records or counts and raise for every SQLite or codec failure\",\"Raise for every non-success and let store translate exceptions\",\"Return one generic success-or-error result\"],\"default_guess\":\"Return optional records or affected-row counts for expected absence and raise a store-owned persistence exception for SQLite, constraint and codec failures; store maps that exception to transaction_failed.\"},{\"unit\":\"context\",\"subject\":\"store copy and backup-file checks\",\"kind\":\"operation_coverage\",\"text\":\"SQLite table creation, row codecs and the typed insert, load, list, update\\nand delete statements, including which column each lookup compares.\",\"question\":\"Which repository operations let store.copy_store_snapshot remove every AgentSession and let store.copy_store_snapshot and store.check_store_file read AuditSequence, without store executing row statements itself?\",\"options\":[\"Add explicit delete_all_agent_sessions and load_audit_sequence repository methods\",\"Express bulk deletion and singleton loading through generic typed query methods\",\"Permit store to execute these exceptional SQL statements directly\"],\"default_guess\":\"Add explicit repository methods for loading the singleton AuditSequence and deleting all AgentSession rows.\",\"witness\":{\"initial\":\"The live store contains an AgentSession and AuditSequence 12 when a daily backup starts.\",\"events\":[\"store.copy_store_snapshot creates the copy.\",\"The copy must remove agent sessions and report sequence 12.\",\"Later store.check_store_file checks the decrypted copy.\"],\"outcomes\":[\"A repository surface supporting the bulk delete and singleton load produces a backup with no AgentSession and verifies sequence 12.\",\"An implementation limited to per-record CRUD must either leave the AgentSession in the backup or make store execute undeclared SQL directly.\"],\"observer\":\"The owner after restoring the backup, and the backup run's diagnostic path\"}},{\"unit\":\"context\",\"subject\":\"ownership of record-to-row mapping\",\"kind\":\"contradiction\",\"text\":\"`store` holds the connection and\\nthe transaction and decides which record goes into which row; the row\\nstatements themselves are executed by `store_persistence`, its companion,\\nwhich only `store` calls, over that connection (below).\",\"question\":\"Does store or store_persistence own the decision that maps each durable record to its table and row representation? This passage assigns the decision to store, while store's Hides passage says store hides “Which record goes into which row” and store_persistence owns table rows and row codecs.\",\"options\":[\"store chooses the model/table operation while store_persistence alone defines the row codec and columns\",\"store_persistence owns the complete record-to-row mapping\",\"store owns the complete mapping and store_persistence merely executes already-lowered statements\"],\"default_guess\":\"Let store choose the record-level operation and let store_persistence exclusively own table selection, columns and codecs.\",\"witness\":{\"initial\":\"A Project with an embedded Object must be inserted into the new store.\",\"events\":[\"store receives the Project through a transaction.\",\"The companion lowers and executes the insert.\"],\"outcomes\":[\"Under the first passage, store selects the Project row and supplies its mapping to the companion.\",\"Under store's Hides text and the companion's row-codec ownership, store supplies a Project value and store_persistence chooses and encodes the row.\"],\"observer\":\"The implementers of store and store_persistence, whose independently generated interfaces will not agree\"}},{\"unit\":\"context\",\"subject\":\"store and store_persistence class ownership\",\"kind\":\"standard_violation\",\"text\":\"`store` holds the connection and\\nthe transaction and decides which record goes into which row; the row\\nstatements themselves are executed by `store_persistence`, its companion,\\nwhich only `store` calls, over that connection (below).\",\"rule\":\"Частичное смешивание и companion-делегирование для членов типа запрещены.\",\"section\":\"8\",\"question\":\"Replace the companion delegation with an indivisible class ownership in one persistence module, with all methods of the owning class following that class.\"}]}",
+ "set_aside": []
+}

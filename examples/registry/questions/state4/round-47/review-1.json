@@ -1,0 +1,85 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "durable-record persistence boundary between record modules, store, and store_persistence",
+   "kind": "missing operation",
+   "text": "“the record's module writes”; “the row statements themselves are executed by `store_persistence`, its companion, which only `store` calls”; `store` offers only `open_store`, `discard_new_store`, `run_in_transaction`, `read_in_transaction`, `check_store_file`, and `copy_store_snapshot`",
+   "question": "How does a record module request an insert, load, update, or delete while `store_persistence` may be called only by `store`, and which named capability carries that request?",
+   "options": [
+    "Add typed record CRUD capabilities to `store`, called by record modules and delegated to `store_persistence`",
+    "Have record modules return mutation and lookup descriptions that `store` applies",
+    "Pass a store-owned persistence gateway into record-module operations during the transaction"
+   ],
+   "default_guess": "Add typed CRUD capabilities to `store`; record modules call them inside the current transaction and `store` delegates every statement to `store_persistence`.",
+   "witness": {
+    "initial": "A running instance has an open store and no project with the submitted request id.",
+    "events": [
+     "The owner submits create-project.",
+     "`operations` opens `store.run_in_transaction` and calls `projects.create_project`.",
+     "`projects` decides the complete Project record that must be written."
+    ],
+    "outcomes": [
+     "`projects` calls a typed `store` insert capability, which delegates to `store_persistence`.",
+     "`projects` returns a mutation description and `store` persists it after the module returns."
+    ],
+    "observer": "The State 5 contract author and the implementer of transaction failure and repeat handling"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "selection and ordering of repository reads",
+   "kind": "vague ownership split",
+   "text": "`store` “decides which rows a list reads” and hides “which rows a list reads”; `store_persistence` must not own “which rows a list reads and in which order a module receives them” but hides “the typed insert, load, list, update and delete statements, including which column each lookup compares”",
+   "question": "What exact instruction does `store` give `store_persistence` for predicates, lookup columns, and ordering, and which layer defines each list or lookup operation?",
+   "options": [
+    "`store` supplies a typed query specification containing predicates and order",
+    "`store` calls dedicated repository methods whose contracts encode the selection and order",
+    "`store` supplies predicates and order keys while `store_persistence` only lowers them to fixed SQL"
+   ],
+   "default_guess": "Use dedicated typed repository methods, with their selection and ordering contracts owned and invoked by `store` and their SQL lowering owned by `store_persistence`.",
+   "witness": {
+    "initial": "The store contains active, archived, and anonymised projects with equal last-changed instants.",
+    "events": [
+     "A caller asks to list active projects.",
+     "`projects.list_projects` runs inside `store.read_in_transaction`.",
+     "The repository must select the eligible rows and apply the State 2 ordering."
+    ],
+    "outcomes": [
+     "`store` constructs and passes the eligibility and ordering specification to a generic repository list statement.",
+     "`store` invokes a dedicated repository query whose implementation embeds those predicates and `ORDER BY` clauses."
+    ],
+    "observer": "The contract and persistence implementers, who otherwise assign ownership of the same query differently"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "creation of a new store and its AuditSequence singleton",
+   "kind": "unnamed initialization step",
+   "text": "`store_persistence` owns `create_store_schema` and “one table per durable model”; a new store must hold “no record but its audit sequence at 0”; `flow:start_instance` says only that `capability:store.open_store` “makes a new, empty store”",
+   "question": "Who creates the required AuditSequence row at 0, by which operation and transaction, and is `create_store_schema` DDL-only or also responsible for inserting that singleton?",
+   "options": [
+    "`create_store_schema` creates the tables and inserts AuditSequence(0) atomically",
+    "`store.open_store` calls `create_store_schema` and then a repository insert for AuditSequence(0) in the same creation transaction",
+    "Constructing `SqliteStoreRepository` ensures the singleton after schema creation"
+   ],
+   "default_guess": "`store.open_store` calls a DDL-only `create_store_schema`, then explicitly inserts AuditSequence(0) through the repository in the same transaction before renaming the temporary store.",
+   "witness": {
+    "initial": "The configured store file is absent and its directory exists.",
+    "events": [
+     "`store.open_store` creates the temporary SQLite file.",
+     "`store` calls `store_persistence.create_store_schema`.",
+     "The store is renamed and the first audited change or backup reads AuditSequence."
+    ],
+    "outcomes": [
+     "Schema creation already inserted the singleton, so the first sequence read returns 0.",
+     "Schema creation made only its table, so a separate initialization insert is required before the store is complete."
+    ],
+    "observer": "The startup, audit-log, and backup implementations"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"durable-record persistence boundary between record modules, store, and store_persistence\",\"kind\":\"missing operation\",\"text\":\"“the record's module writes”; “the row statements themselves are executed by `store_persistence`, its companion, which only `store` calls”; `store` offers only `open_store`, `discard_new_store`, `run_in_transaction`, `read_in_transaction`, `check_store_file`, and `copy_store_snapshot`\",\"question\":\"How does a record module request an insert, load, update, or delete while `store_persistence` may be called only by `store`, and which named capability carries that request?\",\"options\":[\"Add typed record CRUD capabilities to `store`, called by record modules and delegated to `store_persistence`\",\"Have record modules return mutation and lookup descriptions that `store` applies\",\"Pass a store-owned persistence gateway into record-module operations during the transaction\"],\"default_guess\":\"Add typed CRUD capabilities to `store`; record modules call them inside the current transaction and `store` delegates every statement to `store_persistence`.\",\"witness\":{\"initial\":\"A running instance has an open store and no project with the submitted request id.\",\"events\":[\"The owner submits create-project.\",\"`operations` opens `store.run_in_transaction` and calls `projects.create_project`.\",\"`projects` decides the complete Project record that must be written.\"],\"outcomes\":[\"`projects` calls a typed `store` insert capability, which delegates to `store_persistence`.\",\"`projects` returns a mutation description and `store` persists it after the module returns.\"],\"observer\":\"The State 5 contract author and the implementer of transaction failure and repeat handling\"}},{\"unit\":\"context\",\"subject\":\"selection and ordering of repository reads\",\"kind\":\"vague ownership split\",\"text\":\"`store` “decides which rows a list reads” and hides “which rows a list reads”; `store_persistence` must not own “which rows a list reads and in which order a module receives them” but hides “the typed insert, load, list, update and delete statements, including which column each lookup compares”\",\"question\":\"What exact instruction does `store` give `store_persistence` for predicates, lookup columns, and ordering, and which layer defines each list or lookup operation?\",\"options\":[\"`store` supplies a typed query specification containing predicates and order\",\"`store` calls dedicated repository methods whose contracts encode the selection and order\",\"`store` supplies predicates and order keys while `store_persistence` only lowers them to fixed SQL\"],\"default_guess\":\"Use dedicated typed repository methods, with their selection and ordering contracts owned and invoked by `store` and their SQL lowering owned by `store_persistence`.\",\"witness\":{\"initial\":\"The store contains active, archived, and anonymised projects with equal last-changed instants.\",\"events\":[\"A caller asks to list active projects.\",\"`projects.list_projects` runs inside `store.read_in_transaction`.\",\"The repository must select the eligible rows and apply the State 2 ordering.\"],\"outcomes\":[\"`store` constructs and passes the eligibility and ordering specification to a generic repository list statement.\",\"`store` invokes a dedicated repository query whose implementation embeds those predicates and `ORDER BY` clauses.\"],\"observer\":\"The contract and persistence implementers, who otherwise assign ownership of the same query differently\"}},{\"unit\":\"context\",\"subject\":\"creation of a new store and its AuditSequence singleton\",\"kind\":\"unnamed initialization step\",\"text\":\"`store_persistence` owns `create_store_schema` and “one table per durable model”; a new store must hold “no record but its audit sequence at 0”; `flow:start_instance` says only that `capability:store.open_store` “makes a new, empty store”\",\"question\":\"Who creates the required AuditSequence row at 0, by which operation and transaction, and is `create_store_schema` DDL-only or also responsible for inserting that singleton?\",\"options\":[\"`create_store_schema` creates the tables and inserts AuditSequence(0) atomically\",\"`store.open_store` calls `create_store_schema` and then a repository insert for AuditSequence(0) in the same creation transaction\",\"Constructing `SqliteStoreRepository` ensures the singleton after schema creation\"],\"default_guess\":\"`store.open_store` calls a DDL-only `create_store_schema`, then explicitly inserts AuditSequence(0) through the repository in the same transaction before renaming the temporary store.\",\"witness\":{\"initial\":\"The configured store file is absent and its directory exists.\",\"events\":[\"`store.open_store` creates the temporary SQLite file.\",\"`store` calls `store_persistence.create_store_schema`.\",\"The store is renamed and the first audited change or backup reads AuditSequence.\"],\"outcomes\":[\"Schema creation already inserted the singleton, so the first sequence read returns 0.\",\"Schema creation made only its table, so a separate initialization insert is required before the store is complete.\"],\"observer\":\"The startup, audit-log, and backup implementations\"}}]}",
+ "set_aside": []
+}

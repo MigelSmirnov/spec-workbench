@@ -1,0 +1,84 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "durable record reads and writes in every store-backed flow",
+   "kind": "missing operation path",
+   "text": "“the record's module writes” / “the row statements themselves are executed by `store_persistence`, its companion, which only `store` calls”",
+   "question": "By what named operation does a record module ask `store` to load, list, insert, update or delete records so that only `store` calls `store_persistence` inside the transaction?",
+   "options": [
+    "`store` exposes a transaction-scoped CRUD gateway and internally calls `SqliteStoreRepository`",
+    "record modules call `SqliteStoreRepository` directly",
+    "record modules return intended record changes and `store` applies them"
+   ],
+   "default_guess": "Give record modules a transaction-scoped `store` CRUD gateway; `store` alone invokes `store_persistence`.",
+   "witness": {
+    "initial": "A running instance has an empty store.",
+    "events": [
+     "The owner submits a valid project create.",
+     "`operations` opens the transaction and calls `projects.create_project`.",
+     "`projects` constructs the new Project and must persist it."
+    ],
+    "outcomes": [
+     "`projects` passes the Project to a `store` operation, and `store` invokes the repository insert.",
+     "`projects` invokes the repository insert itself, despite the statement that only `store` calls `store_persistence`."
+    ],
+    "observer": "The implementer and any module-dependency or call-trace test"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ownership of list filtering and row selection",
+   "kind": "ownership contradiction",
+   "text": "“Which record goes into which row and which rows a list reads” / “Which record a module writes or when; any domain check” / “which rows a list reads and in which order a module receives them ... are `store`'s or the record module's”",
+   "question": "Does the record module decide the eligible records and give a predicate to `store`, or does `store` own domain-specific row selection such as excluding anonymised projects and optionally including archived ones?",
+   "options": [
+    "The record module owns eligibility and filtering; `store` owns only query execution and deterministic ordering",
+    "`store` owns both filtering and ordering for every declared list",
+    "Each list divides filtering between its record module and `store`"
+   ],
+   "default_guess": "Keep lifecycle and projection filtering in the record module, with `store` executing the supplied selection and owning deterministic ordering.",
+   "witness": {
+    "initial": "The store contains an active project, an archived project and an anonymised project.",
+    "events": [
+     "A caller invokes `projects.list_projects` with archived projects requested.",
+     "The implementation must select rows and order the answer."
+    ],
+    "outcomes": [
+     "`projects` determines which statuses are eligible and asks `store` for those rows in A06 order.",
+     "`store` embeds the project lifecycle filter as part of deciding which rows the list reads."
+    ],
+    "observer": "The implementer and a module-ownership review"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "`flow:start_instance` step 3 and `create_store_schema`",
+   "kind": "unnamed step",
+   "text": "“it makes a new, empty store” / “Only the deterministic SQLite repository class and schema function” / “`create_store_schema`”",
+   "question": "When `store.open_store` makes a new database, is `store` required to call `store_persistence.create_store_schema` as a named substep, and which module converts a failure of that call into the stated `store` diagnostic?",
+   "options": [
+    "`store.open_store` calls `create_store_schema` internally and owns error translation and cleanup",
+    "`instance_lifecycle` calls `create_store_schema` separately after opening the temporary database",
+    "Schema creation is implicit in constructing `SqliteStoreRepository`"
+   ],
+   "default_guess": "Make schema creation an internal named call from `store.open_store` to `store_persistence.create_store_schema`; `store` translates failure and performs the existing temporary-file cleanup.",
+   "witness": {
+    "initial": "The configured store file is absent and its directory exists.",
+    "events": [
+     "`instance_lifecycle` calls `store.open_store`.",
+     "The temporary SQLite file is created.",
+     "The durable-model tables and AuditSequence row must be created before the file is renamed."
+    ],
+    "outcomes": [
+     "`open_store` explicitly calls `create_store_schema`, handles its failure and removes the temporary file.",
+     "Repository construction implicitly creates the schema, so `create_store_schema` is not a flow call."
+    ],
+    "observer": "A startup call-trace test and the State 5 contract author"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"durable record reads and writes in every store-backed flow\",\"kind\":\"missing operation path\",\"text\":\"“the record's module writes” / “the row statements themselves are executed by `store_persistence`, its companion, which only `store` calls”\",\"question\":\"By what named operation does a record module ask `store` to load, list, insert, update or delete records so that only `store` calls `store_persistence` inside the transaction?\",\"options\":[\"`store` exposes a transaction-scoped CRUD gateway and internally calls `SqliteStoreRepository`\",\"record modules call `SqliteStoreRepository` directly\",\"record modules return intended record changes and `store` applies them\"],\"default_guess\":\"Give record modules a transaction-scoped `store` CRUD gateway; `store` alone invokes `store_persistence`.\",\"witness\":{\"initial\":\"A running instance has an empty store.\",\"events\":[\"The owner submits a valid project create.\",\"`operations` opens the transaction and calls `projects.create_project`.\",\"`projects` constructs the new Project and must persist it.\"],\"outcomes\":[\"`projects` passes the Project to a `store` operation, and `store` invokes the repository insert.\",\"`projects` invokes the repository insert itself, despite the statement that only `store` calls `store_persistence`.\"],\"observer\":\"The implementer and any module-dependency or call-trace test\"}},{\"unit\":\"context\",\"subject\":\"ownership of list filtering and row selection\",\"kind\":\"ownership contradiction\",\"text\":\"“Which record goes into which row and which rows a list reads” / “Which record a module writes or when; any domain check” / “which rows a list reads and in which order a module receives them ... are `store`'s or the record module's”\",\"question\":\"Does the record module decide the eligible records and give a predicate to `store`, or does `store` own domain-specific row selection such as excluding anonymised projects and optionally including archived ones?\",\"options\":[\"The record module owns eligibility and filtering; `store` owns only query execution and deterministic ordering\",\"`store` owns both filtering and ordering for every declared list\",\"Each list divides filtering between its record module and `store`\"],\"default_guess\":\"Keep lifecycle and projection filtering in the record module, with `store` executing the supplied selection and owning deterministic ordering.\",\"witness\":{\"initial\":\"The store contains an active project, an archived project and an anonymised project.\",\"events\":[\"A caller invokes `projects.list_projects` with archived projects requested.\",\"The implementation must select rows and order the answer.\"],\"outcomes\":[\"`projects` determines which statuses are eligible and asks `store` for those rows in A06 order.\",\"`store` embeds the project lifecycle filter as part of deciding which rows the list reads.\"],\"observer\":\"The implementer and a module-ownership review\"}},{\"unit\":\"context\",\"subject\":\"`flow:start_instance` step 3 and `create_store_schema`\",\"kind\":\"unnamed step\",\"text\":\"“it makes a new, empty store” / “Only the deterministic SQLite repository class and schema function” / “`create_store_schema`”\",\"question\":\"When `store.open_store` makes a new database, is `store` required to call `store_persistence.create_store_schema` as a named substep, and which module converts a failure of that call into the stated `store` diagnostic?\",\"options\":[\"`store.open_store` calls `create_store_schema` internally and owns error translation and cleanup\",\"`instance_lifecycle` calls `create_store_schema` separately after opening the temporary database\",\"Schema creation is implicit in constructing `SqliteStoreRepository`\"],\"default_guess\":\"Make schema creation an internal named call from `store.open_store` to `store_persistence.create_store_schema`; `store` translates failure and performs the existing temporary-file cleanup.\",\"witness\":{\"initial\":\"The configured store file is absent and its directory exists.\",\"events\":[\"`instance_lifecycle` calls `store.open_store`.\",\"The temporary SQLite file is created.\",\"The durable-model tables and AuditSequence row must be created before the file is renamed.\"],\"outcomes\":[\"`open_store` explicitly calls `create_store_schema`, handles its failure and removes the temporary file.\",\"Repository construction implicitly creates the schema, so `create_store_schema` is not a flow call.\"],\"observer\":\"A startup call-trace test and the State 5 contract author\"}}]}",
+ "set_aside": []
+}

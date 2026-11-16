@@ -117,6 +117,49 @@ lists merge into A06's order, and which rows an erasure removes are
 - Deletion is the `delete_by` query kind (owner, 2026-11-16: added to the
   Factory's v3 for this case), so the store's erasures stay deterministic.
 
+The companion has no State 5 operation: only `store` calls it, and its whole
+surface is State 6's (State 5 round-34 T1, T8).
+
+- **Surface.** `create_store_schema(connection: object) -> None` and the
+  class `SqliteStoreRepository(connection: object)` with exactly the 37
+  methods of `70_persistence_closure.json`, each typed in `60_contracts.json`
+  under `StoreRepository.*`: insert, load by key, find by request id, update,
+  list in A06's order, delete — per table, with the selector and order fixed
+  in the method, never passed by `store`.
+- **Construction and lifetime** (T4). `store` makes one repository for each
+  connection it opens and only for it: the actions' connection, opened by
+  `open_store` and kept for the process; the snapshot's own read connection
+  and the copy's connection of `copy_store_snapshot`; the read-only connection
+  of `check_store_file`. A repository lives as long as its connection; `store`
+  closes the connection and drops the repository with it, and never hands one
+  to another module (`StoreTransaction` is the only surface the record modules
+  see).
+- **Failures** (T5). A row that is not there is an answer: `None` from a load
+  or a find, an empty tuple from a list, `0` from a delete. Every other
+  failure — a constraint the row breaks, a record that does not decode, an
+  error of the driver — is raised unchanged to `store` (the constructor takes
+  no context, so the methods run without a guard, §6.3), which rolls the
+  transaction back and answers `internal_error` (`transaction_failed`), nothing
+  changed (A04 rule 4). No domain answer comes from a constraint: a record
+  module looks a request id or an identity up before it writes (A01 rules 4,
+  5; "Minted identities"), so a unique key that is broken is a failure.
+- **The schema** (T7). `create_store_schema` creates the eight tables, and
+  nothing else, idempotently. `open_store` calls it only for a store it
+  makes new, on the temporary file's connection, in the one transaction that
+  also sets the store's version (`PRAGMA user_version = STORE_VERSION`) and
+  writes M12 AuditSequence at 0 through `upsert_audit_sequence_row`, before the
+  rename (A17 rule 5); a failure there is the start's diagnostic. An existing
+  store is opened and checked, never given its schema again.
+- **A backup's copy** (T9). `copy_store_snapshot` opens its own read
+  connection with its own repository and fixes the snapshot by its first
+  read, `load_audit_sequence_row`; in that read transaction it copies the
+  database to the temporary path with SQLite's online backup of that
+  connection; then, on the copy's own connection and repository, it removes
+  every session — `list_agent_session_rows`, then `delete_agent_session_row`
+  for each — and commits (A18 rule 2). `check_store_file` reads the copy's
+  `load_audit_sequence_row` on its read-only connection, after the version and
+  integrity checks (A18 rule 4).
+
 ## Carried to State 6, and how it is closed
 
 | from | topic | closed by |

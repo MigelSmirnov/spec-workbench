@@ -1,0 +1,123 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "store_persistence public surface",
+   "kind": "missing operations",
+   "text": "### Candidate public capabilities\n\n```text\nSqliteStoreRepository\ncreate_store_schema\n```",
+   "question": "What complete State 5 contracts define these two public capabilities, including their callers, inputs, outputs, effects, errors and state impact?",
+   "options": [
+    "Add separate State 5 contracts for `SqliteStoreRepository` and `create_store_schema`.",
+    "Make them private implementation details of `store` and remove them from the candidate public capabilities.",
+    "Replace them with store-owned repository operations whose contracts are exposed to the domain modules."
+   ],
+   "default_guess": "Add contracts owned by `store_persistence`, callable only by `store`."
+  },
+  {
+   "unit": "context",
+   "subject": "SqliteStoreRepository",
+   "kind": "undefined class interface",
+   "text": "Only the deterministic SQLite repository class and schema function lowered\nfrom `persistence_backend/v3` for the store's closed tables",
+   "question": "What constructor and methods does `SqliteStoreRepository` provide, and what are the exact inputs and outputs of its typed insert, load, list, update and delete operations?",
+   "options": [
+    "Construct it with a connection and provide one typed method per durable model and required query.",
+    "Construct it with a transaction and provide generic typed CRUD and query-descriptor methods.",
+    "Expose generated table-specific repository objects beneath one repository class."
+   ],
+   "default_guess": "Construct it over the connection and expose explicit typed methods for every lookup, ordered list, insert, update and deletion that `store` requires."
+  },
+  {
+   "unit": "context",
+   "subject": "create_store_schema",
+   "kind": "undefined operation",
+   "text": "create_store_schema",
+   "question": "What does `create_store_schema` take and return, who calls it, whether it also writes store-version metadata and the initial AuditSequence at 0, and how its failures reach `store.open_store`?",
+   "options": [
+    "It takes the new-store connection, creates all tables and metadata, inserts AuditSequence 0, and raises persistence failures.",
+    "It creates only tables and indexes; `store` separately writes version metadata and AuditSequence 0 through the repository.",
+    "It is invoked implicitly by `SqliteStoreRepository`, so `store` never calls it directly."
+   ],
+   "default_guess": "Have `store.open_store` call it with the new-store connection; it creates the complete initialized schema, including version metadata and AuditSequence 0, and reports failures through the store's normal diagnostic path."
+  },
+  {
+   "unit": "context",
+   "subject": "transaction passed to domain operations",
+   "kind": "caller contradiction",
+   "text": "only `store` calls\nit, inside the transaction `store` opened, so no other module touches the\ndatabase through it",
+   "question": "How can domain modules that receive the transaction read and write records without calling `store_persistence`, and does “only `store` calls it” prohibit them from invoking repository methods carried by that transaction?",
+   "options": [
+    "The transaction is a store-owned unit-of-work façade; domain modules call its typed methods and only that façade invokes `store_persistence`.",
+    "The transaction is or contains `SqliteStoreRepository`; domain modules invoke its methods, and “only `store` calls it” means only `store` constructs or imports it.",
+    "Domain modules return declarative record commands to `store`, which executes all repository calls after or during the step."
+   ],
+   "default_guess": "Pass a store-owned unit-of-work façade that exposes typed persistence operations while keeping all direct repository invocation inside `store`.",
+   "witness": {
+    "initial": "An open store contains Project P and a caller asks to read P inside `store.read_in_transaction`.",
+    "events": [
+     "`operations` opens the read transaction and calls `projects.read_project_card` with the transaction.",
+     "`projects` must obtain Project P from durable storage."
+    ],
+    "outcomes": [
+     "One implementation treats the transaction as a repository and has `projects` invoke `SqliteStoreRepository.load_project`, so a module other than `store` calls the companion.",
+     "Another implementation treats the transaction as a store façade and has that façade invoke the repository, so only `store` calls the companion."
+    ],
+    "observer": "The State 6 contract and import generator sees different transaction types, method ownership and dependency edges."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "store and store_persistence responsibility boundary",
+   "kind": "vague ownership",
+   "text": "`store` holds the connection and\nthe transaction and decides which record goes into which row; the row\nstatements themselves are executed by `store_persistence`, its companion",
+   "question": "Which decisions are encoded by `store` and which by `store_persistence`: model-to-table selection, column values, lookup predicates, ordered-list predicates, update masks and deletion sets?",
+   "options": [
+    "`store` selects the exact repository operation and supplies all predicates and ordering; `store_persistence` only lowers that request to fixed SQL and codecs.",
+    "`store_persistence` owns model-to-table mappings, predicates and ordering for named repository methods; `store` only chooses which method to call.",
+    "`store` owns query specifications while `store_persistence` owns model-to-table and field-to-column mappings."
+   ],
+   "default_guess": "Let `store` choose the named operation, filter and ordering, while `store_persistence` owns table and column mappings, codecs and fixed SQL lowering."
+  },
+  {
+   "unit": "context",
+   "subject": "store_persistence failure protocol",
+   "kind": "unspecified errors",
+   "text": "SQLite table creation, row codecs and the typed insert, load, list, update\nand delete statements, including which column each lookup compares.",
+   "question": "How do missing rows, constraint conflicts, codec failures and SQLite execution failures propagate from the repository to `store` and then to the domain operation?",
+   "options": [
+    "Missing rows are typed absence; every persistence or codec failure raises and becomes `internal_error` through the enclosing store transaction.",
+    "Repository methods return a closed result union distinguishing absence, conflicts and infrastructure failures.",
+    "Repository methods raise backend exceptions and each caller translates them independently."
+   ],
+   "default_guess": "Return typed absence for a successful lookup with no row, and raise one store-owned persistence failure for every execution, constraint or codec failure so the enclosing transaction answers `internal_error`."
+  },
+  {
+   "unit": "context",
+   "subject": "store import surface",
+   "kind": "missing import decision",
+   "text": "which only `store` calls, over that connection",
+   "question": "Which `store_persistence` symbols must State 6 place in `module_internal[\"store\"][\"store_persistence\"]`, and are both candidate capabilities directly named by `store`?",
+   "options": [
+    "Import both `SqliteStoreRepository` and `create_store_schema`.",
+    "Import only `SqliteStoreRepository`; schema creation is a class operation or constructor behavior.",
+    "Import only `create_store_schema`; the schema function returns the repository interface used by `store`."
+   ],
+   "default_guess": "Import both `SqliteStoreRepository` and `create_store_schema`, because `store` constructs the repository and explicitly initializes a new store."
+  },
+  {
+   "unit": "context",
+   "subject": "repository lifetime and connections",
+   "kind": "unspecified lifecycle",
+   "text": "which only `store` calls, over that connection",
+   "question": "Is one repository instance bound to the running store connection, one made per transaction, and a separate one made for the backup-copy and read-only check connections; who closes or invalidates each instance?",
+   "options": [
+    "Create one repository per connection and let `store` own its lifetime with that connection.",
+    "Create one repository per transaction over the transaction's connection.",
+    "Use stateless repository methods that receive a connection on every call."
+   ],
+   "default_guess": "Create one repository per connection, owned and discarded by `store` together with that connection."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"store_persistence public surface\",\"kind\":\"missing operations\",\"text\":\"### Candidate public capabilities\\n\\n```text\\nSqliteStoreRepository\\ncreate_store_schema\\n```\",\"question\":\"What complete State 5 contracts define these two public capabilities, including their callers, inputs, outputs, effects, errors and state impact?\",\"options\":[\"Add separate State 5 contracts for `SqliteStoreRepository` and `create_store_schema`.\",\"Make them private implementation details of `store` and remove them from the candidate public capabilities.\",\"Replace them with store-owned repository operations whose contracts are exposed to the domain modules.\"],\"default_guess\":\"Add contracts owned by `store_persistence`, callable only by `store`.\"},{\"unit\":\"context\",\"subject\":\"SqliteStoreRepository\",\"kind\":\"undefined class interface\",\"text\":\"Only the deterministic SQLite repository class and schema function lowered\\nfrom `persistence_backend/v3` for the store's closed tables\",\"question\":\"What constructor and methods does `SqliteStoreRepository` provide, and what are the exact inputs and outputs of its typed insert, load, list, update and delete operations?\",\"options\":[\"Construct it with a connection and provide one typed method per durable model and required query.\",\"Construct it with a transaction and provide generic typed CRUD and query-descriptor methods.\",\"Expose generated table-specific repository objects beneath one repository class.\"],\"default_guess\":\"Construct it over the connection and expose explicit typed methods for every lookup, ordered list, insert, update and deletion that `store` requires.\"},{\"unit\":\"context\",\"subject\":\"create_store_schema\",\"kind\":\"undefined operation\",\"text\":\"create_store_schema\",\"question\":\"What does `create_store_schema` take and return, who calls it, whether it also writes store-version metadata and the initial AuditSequence at 0, and how its failures reach `store.open_store`?\",\"options\":[\"It takes the new-store connection, creates all tables and metadata, inserts AuditSequence 0, and raises persistence failures.\",\"It creates only tables and indexes; `store` separately writes version metadata and AuditSequence 0 through the repository.\",\"It is invoked implicitly by `SqliteStoreRepository`, so `store` never calls it directly.\"],\"default_guess\":\"Have `store.open_store` call it with the new-store connection; it creates the complete initialized schema, including version metadata and AuditSequence 0, and reports failures through the store's normal diagnostic path.\"},{\"unit\":\"context\",\"subject\":\"transaction passed to domain operations\",\"kind\":\"caller contradiction\",\"text\":\"only `store` calls\\nit, inside the transaction `store` opened, so no other module touches the\\ndatabase through it\",\"question\":\"How can domain modules that receive the transaction read and write records without calling `store_persistence`, and does “only `store` calls it” prohibit them from invoking repository methods carried by that transaction?\",\"options\":[\"The transaction is a store-owned unit-of-work façade; domain modules call its typed methods and only that façade invokes `store_persistence`.\",\"The transaction is or contains `SqliteStoreRepository`; domain modules invoke its methods, and “only `store` calls it” means only `store` constructs or imports it.\",\"Domain modules return declarative record commands to `store`, which executes all repository calls after or during the step.\"],\"default_guess\":\"Pass a store-owned unit-of-work façade that exposes typed persistence operations while keeping all direct repository invocation inside `store`.\",\"witness\":{\"initial\":\"An open store contains Project P and a caller asks to read P inside `store.read_in_transaction`.\",\"events\":[\"`operations` opens the read transaction and calls `projects.read_project_card` with the transaction.\",\"`projects` must obtain Project P from durable storage.\"],\"outcomes\":[\"One implementation treats the transaction as a repository and has `projects` invoke `SqliteStoreRepository.load_project`, so a module other than `store` calls the companion.\",\"Another implementation treats the transaction as a store façade and has that façade invoke the repository, so only `store` calls the companion.\"],\"observer\":\"The State 6 contract and import generator sees different transaction types, method ownership and dependency edges.\"}},{\"unit\":\"context\",\"subject\":\"store and store_persistence responsibility boundary\",\"kind\":\"vague ownership\",\"text\":\"`store` holds the connection and\\nthe transaction and decides which record goes into which row; the row\\nstatements themselves are executed by `store_persistence`, its companion\",\"question\":\"Which decisions are encoded by `store` and which by `store_persistence`: model-to-table selection, column values, lookup predicates, ordered-list predicates, update masks and deletion sets?\",\"options\":[\"`store` selects the exact repository operation and supplies all predicates and ordering; `store_persistence` only lowers that request to fixed SQL and codecs.\",\"`store_persistence` owns model-to-table mappings, predicates and ordering for named repository methods; `store` only chooses which method to call.\",\"`store` owns query specifications while `store_persistence` owns model-to-table and field-to-column mappings.\"],\"default_guess\":\"Let `store` choose the named operation, filter and ordering, while `store_persistence` owns table and column mappings, codecs and fixed SQL lowering.\"},{\"unit\":\"context\",\"subject\":\"store_persistence failure protocol\",\"kind\":\"unspecified errors\",\"text\":\"SQLite table creation, row codecs and the typed insert, load, list, update\\nand delete statements, including which column each lookup compares.\",\"question\":\"How do missing rows, constraint conflicts, codec failures and SQLite execution failures propagate from the repository to `store` and then to the domain operation?\",\"options\":[\"Missing rows are typed absence; every persistence or codec failure raises and becomes `internal_error` through the enclosing store transaction.\",\"Repository methods return a closed result union distinguishing absence, conflicts and infrastructure failures.\",\"Repository methods raise backend exceptions and each caller translates them independently.\"],\"default_guess\":\"Return typed absence for a successful lookup with no row, and raise one store-owned persistence failure for every execution, constraint or codec failure so the enclosing transaction answers `internal_error`.\"},{\"unit\":\"context\",\"subject\":\"store import surface\",\"kind\":\"missing import decision\",\"text\":\"which only `store` calls, over that connection\",\"question\":\"Which `store_persistence` symbols must State 6 place in `module_internal[\\\"store\\\"][\\\"store_persistence\\\"]`, and are both candidate capabilities directly named by `store`?\",\"options\":[\"Import both `SqliteStoreRepository` and `create_store_schema`.\",\"Import only `SqliteStoreRepository`; schema creation is a class operation or constructor behavior.\",\"Import only `create_store_schema`; the schema function returns the repository interface used by `store`.\"],\"default_guess\":\"Import both `SqliteStoreRepository` and `create_store_schema`, because `store` constructs the repository and explicitly initializes a new store.\"},{\"unit\":\"context\",\"subject\":\"repository lifetime and connections\",\"kind\":\"unspecified lifecycle\",\"text\":\"which only `store` calls, over that connection\",\"question\":\"Is one repository instance bound to the running store connection, one made per transaction, and a separate one made for the backup-copy and read-only check connections; who closes or invalidates each instance?\",\"options\":[\"Create one repository per connection and let `store` own its lifetime with that connection.\",\"Create one repository per transaction over the transaction's connection.\",\"Use stateless repository methods that receive a connection on every call.\"],\"default_guess\":\"Create one repository per connection, owned and discarded by `store` together with that connection.\"}]}",
+ "set_aside": []
+}

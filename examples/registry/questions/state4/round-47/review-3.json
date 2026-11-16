@@ -1,0 +1,86 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "store-to-store_persistence record access",
+   "kind": "missing capability",
+   "text": "“the row statements themselves are executed by `store_persistence`, its companion, which only `store` calls” / “Candidate public capabilities: `SqliteStoreRepository`, `create_store_schema`”",
+   "question": "Which named `store_persistence` operations does `store` call to insert, load, list, update and delete records, and how do record modules ask `store` to perform those operations inside its transaction?",
+   "options": [
+    "Give `store` typed record-access capabilities; record modules call them and `store` invokes named repository methods.",
+    "Pass a store-owned repository handle into transaction callbacks, allowing record modules to request typed operations without calling `store_persistence` directly.",
+    "Let record modules call `store_persistence` directly, contradicting “only `store` calls it” and the dependency list."
+   ],
+   "default_guess": "Give `store` typed load, list, insert, update and delete operations, with `store` alone invoking correspondingly named repository methods.",
+   "witness": {
+    "initial": "An existing Project is at revision 1.",
+    "events": [
+     "The owner submits a correction.",
+     "`operations` opens a transaction through `store`.",
+     "`projects` decides the replacement Project record.",
+     "The implementation must persist that record through `store_persistence`."
+    ],
+    "outcomes": [
+     "`projects` calls a typed `store` update capability, and `store` calls the repository.",
+     "The transaction exposes the repository to `projects`, which invokes its update method directly."
+    ],
+    "observer": "The State 5/6 contract generators, module dependency tests and implementers"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "new-store metadata and AuditSequence initialization",
+   "kind": "missing operation",
+   "text": "“making a new, empty store of the release's version — holding no record but M12 AuditSequence at 0, which the release's statements make with the store” / “Only the deterministic SQLite repository class and schema function ... one table per durable model”",
+   "question": "Does `create_store_schema` also persist the store version and create the single AuditSequence record at 0, or does `store` perform those writes afterward through other, presently unnamed operations?",
+   "options": [
+    "`create_store_schema` atomically creates all tables, persists the supplied store version and seeds AuditSequence at 0.",
+    "`create_store_schema` creates tables only; `store` then writes the version and AuditSequence through named repository operations.",
+    "`store` writes the version directly using SQLite metadata while `store_persistence` seeds AuditSequence."
+   ],
+   "default_guess": "Have `store` call `create_store_schema(connection, store_version)` and make that operation atomically create the schema, store the version and seed exactly one AuditSequence at 0.",
+   "witness": {
+    "initial": "The configured store file is absent and its directory exists.",
+    "events": [
+     "`store.open_store` creates the temporary database.",
+     "`store` calls `create_store_schema`.",
+     "The start completes and later checks the store version and appends the first audit entry."
+    ],
+    "outcomes": [
+     "Schema creation already left the version and AuditSequence 0, so the first entry receives sequence 1.",
+     "Schema creation left only empty tables, so separate initialization is required; without an invented operation the version check or first append fails."
+    ],
+    "observer": "Startup, integrity and first-audit-entry tests"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ownership of row placement and query lowering",
+   "kind": "overlapping ownership",
+   "text": "“`store` holds the connection and the transaction and decides which record goes into which row” / “`store` ... Hides Which record goes into which row and which rows a list reads” / “`store_persistence` ... Owns ... one table per durable model” / “Hides SQLite table creation, row codecs and the typed insert, load, list, update and delete statements, including which column each lookup compares.”",
+   "question": "Where is the authoritative record-to-table, identity-to-row and list-order mapping decided: in `store` as stated, or in the generated repository whose schema, codecs and SQL statements necessarily encode those mappings?",
+   "options": [
+    "`store` owns a declarative persistence plan and passes it to a generic generated repository.",
+    "`store_persistence` owns the fixed model-to-table, key-column and ORDER BY lowering, while `store` owns only which typed operation and filter to request.",
+    "Split it explicitly: `store` owns selection and ordering semantics; `store_persistence` owns only their deterministic SQL encoding."
+   ],
+   "default_guess": "Use the explicit split: `store` owns selection and ordering semantics, while `store_persistence` owns the fixed schema, codecs and SQL lowering supplied by the persistence closure.",
+   "witness": {
+    "initial": "Several Rooms exist with names and identities requiring A06 ordering.",
+    "events": [
+     "A caller requests the project's rooms.",
+     "`projects` asks `store` for the list.",
+     "The repository must select the project rows and execute an ordered SQLite statement."
+    ],
+    "outcomes": [
+     "`store` supplies the project filter and A06 order specification, and `store_persistence` only lowers them.",
+     "`store_persistence` has a fixed `list_rooms` query that itself selects the rows and defines `ORDER BY name, room_id`."
+    ],
+    "observer": "Repository generation, persistence tests and maintainers changing list rules"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"store-to-store_persistence record access\",\"kind\":\"missing capability\",\"text\":\"“the row statements themselves are executed by `store_persistence`, its companion, which only `store` calls” / “Candidate public capabilities: `SqliteStoreRepository`, `create_store_schema`”\",\"question\":\"Which named `store_persistence` operations does `store` call to insert, load, list, update and delete records, and how do record modules ask `store` to perform those operations inside its transaction?\",\"options\":[\"Give `store` typed record-access capabilities; record modules call them and `store` invokes named repository methods.\",\"Pass a store-owned repository handle into transaction callbacks, allowing record modules to request typed operations without calling `store_persistence` directly.\",\"Let record modules call `store_persistence` directly, contradicting “only `store` calls it” and the dependency list.\"],\"default_guess\":\"Give `store` typed load, list, insert, update and delete operations, with `store` alone invoking correspondingly named repository methods.\",\"witness\":{\"initial\":\"An existing Project is at revision 1.\",\"events\":[\"The owner submits a correction.\",\"`operations` opens a transaction through `store`.\",\"`projects` decides the replacement Project record.\",\"The implementation must persist that record through `store_persistence`.\"],\"outcomes\":[\"`projects` calls a typed `store` update capability, and `store` calls the repository.\",\"The transaction exposes the repository to `projects`, which invokes its update method directly.\"],\"observer\":\"The State 5/6 contract generators, module dependency tests and implementers\"}},{\"unit\":\"context\",\"subject\":\"new-store metadata and AuditSequence initialization\",\"kind\":\"missing operation\",\"text\":\"“making a new, empty store of the release's version — holding no record but M12 AuditSequence at 0, which the release's statements make with the store” / “Only the deterministic SQLite repository class and schema function ... one table per durable model”\",\"question\":\"Does `create_store_schema` also persist the store version and create the single AuditSequence record at 0, or does `store` perform those writes afterward through other, presently unnamed operations?\",\"options\":[\"`create_store_schema` atomically creates all tables, persists the supplied store version and seeds AuditSequence at 0.\",\"`create_store_schema` creates tables only; `store` then writes the version and AuditSequence through named repository operations.\",\"`store` writes the version directly using SQLite metadata while `store_persistence` seeds AuditSequence.\"],\"default_guess\":\"Have `store` call `create_store_schema(connection, store_version)` and make that operation atomically create the schema, store the version and seed exactly one AuditSequence at 0.\",\"witness\":{\"initial\":\"The configured store file is absent and its directory exists.\",\"events\":[\"`store.open_store` creates the temporary database.\",\"`store` calls `create_store_schema`.\",\"The start completes and later checks the store version and appends the first audit entry.\"],\"outcomes\":[\"Schema creation already left the version and AuditSequence 0, so the first entry receives sequence 1.\",\"Schema creation left only empty tables, so separate initialization is required; without an invented operation the version check or first append fails.\"],\"observer\":\"Startup, integrity and first-audit-entry tests\"}},{\"unit\":\"context\",\"subject\":\"ownership of row placement and query lowering\",\"kind\":\"overlapping ownership\",\"text\":\"“`store` holds the connection and the transaction and decides which record goes into which row” / “`store` ... Hides Which record goes into which row and which rows a list reads” / “`store_persistence` ... Owns ... one table per durable model” / “Hides SQLite table creation, row codecs and the typed insert, load, list, update and delete statements, including which column each lookup compares.”\",\"question\":\"Where is the authoritative record-to-table, identity-to-row and list-order mapping decided: in `store` as stated, or in the generated repository whose schema, codecs and SQL statements necessarily encode those mappings?\",\"options\":[\"`store` owns a declarative persistence plan and passes it to a generic generated repository.\",\"`store_persistence` owns the fixed model-to-table, key-column and ORDER BY lowering, while `store` owns only which typed operation and filter to request.\",\"Split it explicitly: `store` owns selection and ordering semantics; `store_persistence` owns only their deterministic SQL encoding.\"],\"default_guess\":\"Use the explicit split: `store` owns selection and ordering semantics, while `store_persistence` owns the fixed schema, codecs and SQL lowering supplied by the persistence closure.\",\"witness\":{\"initial\":\"Several Rooms exist with names and identities requiring A06 ordering.\",\"events\":[\"A caller requests the project's rooms.\",\"`projects` asks `store` for the list.\",\"The repository must select the project rows and execute an ordered SQLite statement.\"],\"outcomes\":[\"`store` supplies the project filter and A06 order specification, and `store_persistence` only lowers them.\",\"`store_persistence` has a fixed `list_rooms` query that itself selects the rows and defines `ORDER BY name, room_id`.\"],\"observer\":\"Repository generation, persistence tests and maintainers changing list rules\"}}]}",
+ "set_aside": []
+}
