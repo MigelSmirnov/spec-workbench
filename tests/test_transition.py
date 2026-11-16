@@ -140,6 +140,21 @@ def test_a_contract_only_model_must_be_introduced_by_a_contract(tmp_path):
         ("contract_only_model_unintroduced", "Orphan"), ("state1_model_marked_contract_only", "Thing")}
 
 
+def test_a_union_introduces_its_variants(tmp_path):
+    case = _case(tmp_path)
+    _contracts(case, {"record_thing": ("things", "(name: str) -> RecordOutcome")})
+    _closure(case, {"Thing": {"identity": "entity", "fields": {"name": "str"}}})
+    _write(case / "60_model_closure_contract_types.json", {
+        "schema_version": "spec_workbench_model_closure.v1", "status": "closed", "identity_scope": "contract_only",
+        "models": {"RecordOutcome": {"kind": "discriminated_union", "discriminator": "outcome",
+                                     "variants": ["Recorded", "Refused"]},
+                   "Recorded": {"identity": "value", "fields": {"outcome": "Literal['recorded']",
+                                                                 "detail": "RecordDetail"}},
+                   "RecordDetail": {"identity": "value", "fields": {"name": "str"}},
+                   "Refused": {"identity": "value", "fields": {"outcome": "Literal['refused']"}}}})
+    assert transition.run_check(case, "model_closure")["findings"] == []
+
+
 def test_flow_reachability_without_readable_routes_is_not_checked(tmp_path):
     case = _flow_case(tmp_path, router=False)
     _write(case / "70_router_closure.json", {"schema_version": "x", "items": []})  # authored, not assemblable

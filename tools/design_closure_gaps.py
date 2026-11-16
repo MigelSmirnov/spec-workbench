@@ -214,6 +214,20 @@ AMBIENT_TIME_RE = re.compile(
 DATETIME_PARAM_RE = re.compile(r":\s*datetime\b")
 PUBLIC_OP_HEADING_RE = re.compile(r"^## `public_op:([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)`")
 READ_ONLY_IMPACT_RE = re.compile(r"^\s*(?:read[- ]only|none)\b", re.IGNORECASE)
+# A State impact that only reads: it opens with a read ("Reads one Customer.",
+# "Lists the backup location; writes nothing.", "Pure; touches no record.") and
+# names no write after it but a denied one ("writes nothing", "writes no record").
+READ_IMPACT_RE = re.compile(r"^\s*(?:reads?|lists?|pure)\b", re.IGNORECASE)
+WRITE_IMPACT_RE = re.compile(
+    r"\b(?:writes?|removes?|deletes?|creates?|renames?|opens?|moves?)\b(?!\s+(?:nothing|no)\b)",
+    re.IGNORECASE)
+
+
+def impact_is_read_only(impact: str) -> bool:
+    """Whether a State impact line states an operation that changes nothing."""
+    if READ_ONLY_IMPACT_RE.match(impact):
+        return True
+    return bool(READ_IMPACT_RE.match(impact)) and not WRITE_IMPACT_RE.search(impact)
 
 
 def _type_closure_has_datetime(type_str: object, models: dict[str, Any], seen: set[str] | None = None) -> bool:
@@ -288,7 +302,7 @@ def parse_state_impacts(case: Path) -> dict[str, dict[str, Any]]:
                 continue
             if in_impact and current and line.strip() and not impacts[current]["impact"]:
                 impacts[current]["impact"] = line.strip()
-                impacts[current]["read_only"] = bool(READ_ONLY_IMPACT_RE.match(line.strip()))
+                impacts[current]["read_only"] = impact_is_read_only(line.strip())
     return impacts
 
 
