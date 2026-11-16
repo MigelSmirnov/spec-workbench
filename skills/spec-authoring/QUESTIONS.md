@@ -672,7 +672,11 @@ at assembly. Each layer now does its share and hands the rest on explicitly.
   and checked mechanically, blocking wherever its passages are. So does a
   verified `standard_violation` (above). It takes no
   disposition. It closes when the text changes and the one round on that
-  change no longer raises it. A contradiction whose quotes failed is not
+  change no longer raises it — on every unit it names: a unit whose own text
+  did not change closes once one of the contradiction's quotes no longer
+  stands in the texts and a round of the state followed (registry State 4,
+  2026-11-16: round 43 named one contradiction on four units, its passages
+  stood in two). A contradiction whose quotes failed is not
   downgraded: it blocks too, and may be asked again on the same text.
 - **Every other judged topic** — a consequential gap (quoted, deferred or
   recorded at State 7), a hypothesis, a judgement whose evidence failed — gets

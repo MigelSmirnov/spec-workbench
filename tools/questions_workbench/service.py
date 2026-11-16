@@ -585,6 +585,13 @@ def state_texts(case: Path, state: int, factory_root: Path | None = None) -> Sta
     return StateTexts(texts, current, {key: unit["digest"] for key, unit in current.items()})
 
 
+def _stands(read: StateTexts):
+    """Whether a quoted passage stands verbatim in the texts a round of the
+    state reads now, matched as the judge matches its quotes."""
+    corpus = judge._norm("\n".join(body for _, _, body in read.texts))
+    return lambda quote: judge._found(quote, corpus)
+
+
 def unit_summaries(case: Path, state: int) -> list[dict[str, Any]]:
     """The summaries a state's units close by: its rounds, after the carried
     closure of a state closed as one text before units existed."""
@@ -811,7 +818,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     read = state_texts(case, state, factory_root)
     previous_summaries = unit_summaries(case, state)
     evidence = unit_evidence(case, state)
-    before = units.states(previous_summaries, read.units, evidence)
+    before = units.states(previous_summaries, read.units, evidence, _stands(read))
     # One round per change: a round reviews only the units that need one —
     # never reviewed, changed since their latest review, or with evidence that
     # changed. A unit waiting for dispositions or for the fix of a
@@ -903,7 +910,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     if previous_summaries and str(previous_summaries[0].get("round")).startswith(CARRIED):
         first = previous_summaries[0]
         summary["carried"] = {"from": first["carried_from"], "ref": first["ref"], "units": first["units"]}
-    after = units.states(previous_summaries + [summary], read.units, evidence)
+    after = units.states(previous_summaries + [summary], read.units, evidence, _stands(read))
     summary["closed"] = all(value["closed"] for value in after.values())
     summary["open_units"] = [key for key, value in after.items() if not value["closed"]]
     # what this round asks of the author: topics to dispose, units whose contradiction needs a fix
@@ -1191,7 +1198,7 @@ def _status(case: Path, state: int, factory_root: Path | None = None) -> dict[st
                 "reason": ("the design texts changed after the latest round" if stale else _open_reason(latest))
                           + "; the state never closed, so every unit is open"}
     evidence = unit_evidence(case, state)
-    per_unit = units.states(summaries, read.units, evidence)
+    per_unit = units.states(summaries, read.units, evidence, _stands(read))
     open_units = [key for key, value in per_unit.items() if not value["closed"]]
     changed = [key for key in open_units if per_unit[key]["needs_round"] == units.CHANGED]
     rejudge = _rejudgeable(state, summaries, per_unit)

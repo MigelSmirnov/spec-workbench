@@ -171,6 +171,30 @@ def test_an_open_contradiction_blocks_and_takes_no_disposition(tmp_path):
     assert summary["scope"] == ["A01"] and summary["closed"] is True
 
 
+# registry State 4, 2026-11-16: round 43 named one contradiction on four units
+# while its passages stood in two; the two were changed and round 44 raised
+# nothing, but the two unchanged units stayed open with no round able to reach them.
+
+def test_a_contradiction_closes_on_its_unchanged_units_once_a_quote_is_gone_and_a_round_followed(tmp_path):
+    case = make_case(tmp_path)
+    summary = service.ask_round(case, 2, Provider([point("contradiction", "A01"), point("contradiction", "A02")]))
+    assert summary["contradiction_units"] == ["A01", "A02"]
+    (case / "02_rules.md").write_text(RULES.replace("Rule one keeps every thing.", "Rule one, as rule two allows."), encoding="utf-8")
+    assert service.status(case, 2)["contradictions"] == {"A02": ["T1"]}   # no round on the change yet
+    summary = ask(case)
+    assert summary["scope"] == ["A01"] and summary["closed"] is True
+    assert service.status(case, 2)["contradictions"] == {}
+
+
+def test_a_contradiction_whose_quotes_still_stand_keeps_its_unchanged_units_open(tmp_path):
+    case = make_case(tmp_path)
+    service.ask_round(case, 2, Provider([point("contradiction", "A01"), point("contradiction", "A02")]))
+    (case / "02_rules.md").write_text(RULES.replace("Rule one keeps every thing.", "Rule one keeps every thing. Rule one again."), encoding="utf-8")
+    summary = ask(case)
+    assert summary["scope"] == ["A01"]
+    assert service.status(case, 2)["contradictions"] == {"A02": ["T1"]}
+
+
 def test_a_fix_is_reviewed_by_one_round_on_its_change_whose_topics_get_dispositions_in_turn(tmp_path):
     case = make_case(tmp_path, with_git=True)
     summary = ask(case, "gap")
