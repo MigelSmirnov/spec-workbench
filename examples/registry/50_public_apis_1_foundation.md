@@ -560,7 +560,9 @@ read again from the environment; no other module receives them.
 
 ### Errors
 
-None.
+None: after a start whose `load_configuration` passed, it always answers.
+It is asked by `service_access.identify_service` at each identification; `runtime_settings` and `configuration`,
+which load and check the value, are the only other modules that hold it.
 
 ### State impact
 
@@ -597,7 +599,9 @@ again from the environment; no other module receives it.
 
 ### Errors
 
-None.
+None: after a start whose `load_configuration` passed, it always answers.
+It is asked by `owner_sessions.sign_in_owner` at each comparison of a presented credential, outside a lockout; `runtime_settings` and `configuration`,
+which load and check the value, are the only other modules that hold it.
 
 ### State impact
 

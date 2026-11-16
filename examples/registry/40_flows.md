@@ -75,10 +75,17 @@ configuration. The listeners' addresses are the configuration's (A17 rule
 Crossing models: the environment's `REGISTRY_` items enter
 `module:runtime_settings` and leave as the settings, which
 `module:configuration` checks and hands on as the loaded configuration — locations,
-the owner credential, the backup key, the owner interface's address and the
-service tokens with the service API's address, or none of these five for an
-owner-only start — or as one diagnostic naming the failed item;
-each secret then goes only to the module that uses it ("Secrets never leave").
+the backup key, the owner interface's address and the service API's address,
+or none for an owner-only start — or as one diagnostic naming the failed item.
+The owner credential and the service tokens are not in it: `module:configuration`
+keeps them, checked, and gives each only to the module that uses it — the
+credential through `capability:configuration.give_owner_credential` to
+`module:owner_sessions`, the tokens through
+`capability:configuration.give_service_tokens` to `module:service_access` —
+which asks for it when it compares a presented value; `module:runtime_settings`
+and `module:configuration`, which load and check them, are the only other
+modules that hold them. The backup key goes to `module:backups` as an input
+of each look ("Secrets never leave").
 The store's location enters `module:store` and leaves as the open store or a
 diagnostic.
 
@@ -211,9 +218,11 @@ rule 7).
    made without a session and checks only the lockout and the credential
    (A13 rule 4). During a lockout every sign-in is refused, the right
    credential included, and is not counted. Otherwise the credential is
-   compared with the configured one, which
-   `capability:configuration.give_owner_credential` gives `module:owner_sessions`
-   alone, through `capability:random_values.equal_in_constant_time`. A wrong or missing one
+   compared with the configured one, which `module:owner_sessions` asks
+   `capability:configuration.give_owner_credential` for at that comparison —
+   no other operational module receives it, and after a start that passed
+   it always answers — through
+   `capability:random_values.equal_in_constant_time`. A wrong or missing one
    is refused and counted at the reading of `capability:clock.monotonic_reading`;
    the fifth refusal less than 15 minutes old starts a lockout lasting 15
    minutes from it (A13 rule 3). Concurrent sign-ins are counted one at a
@@ -615,9 +624,10 @@ pointers.
 1. **Identify.** `capability:service_api.serve_service_request` hands the
    token and request to `capability:operations.perform_service_operation`.
    `capability:service_access.identify_service` compares the token in
-   constant time with each configured one, the tokens
-   `capability:configuration.give_service_tokens` gives `module:service_access`
-   alone; an unknown token is refused like
+   constant time with each configured one, the tokens `module:service_access`
+   asks `capability:configuration.give_service_tokens` for at each
+   identification — no other operational module receives them, and after a
+   start that opened the service API it always answers; an unknown token is refused like
    a wrong one, without a limit (A17 rule 7); an owner-only start has no
    service API listener, so no call gets here (A17 rule 1). `capability:service_access.service_may_call`
    refuses an operation outside the service's row, whatever the request
