@@ -515,3 +515,54 @@ def test_v3_list_selected_refuses_malformed_cases() -> None:
     payload = _selected_backend()
     _selector(payload)["value_argument"] = "field"
     assert "invalid_selector_field" in {item.code for item in validate(payload)}
+
+
+def _delete_backend() -> dict:
+    payload = _v3_backend()
+    payload["backend"] = {"engine": "sqlite", "emitter": "sqlite_sync_v2"}
+    payload["repositories"][0]["transaction"] = "external"
+    payload["repositories"][0]["methods"] = [
+        method for method in payload["repositories"][0]["methods"] if method["query"] != "lock"
+    ]
+    payload["repositories"][0]["methods"].append({
+        "method": "delete_invoice", "query": "delete_by", "table": "invoices",
+        "filter": [{"column": "invoice_id", "bind": "argument", "argument": "invoice_id"}],
+    })
+    return payload
+
+
+def _delete(payload: dict) -> dict:
+    return payload["repositories"][0]["methods"][-1]
+
+
+def test_v3_delete_by_is_valid_on_both_engines_and_version_keyed() -> None:
+    payload = _delete_backend()
+    assert validate(payload) == []
+    owned = _v3_backend()
+    owned["repositories"][0]["methods"].append(_delete(_delete_backend()))
+    assert validate(owned) == []
+    payload["schema_version"] = 2
+    del payload["repositories"][0]["transaction"]
+    assert "unsupported_query" in {item.code for item in validate(payload)}
+
+
+def test_v3_delete_by_takes_exactly_table_and_filter() -> None:
+    payload = _delete_backend()
+    _delete(payload)["select"] = ["invoice_id"]
+    _delete(payload)["require_existing"] = True
+    assert "unknown_method_field" in {item.code for item in validate(payload)}
+
+    payload = _delete_backend()
+    _delete(payload)["table"] = "receipts"
+    assert "unknown_method_table" in {item.code for item in validate(payload)}
+
+
+def test_v3_delete_by_refuses_a_whole_table_delete() -> None:
+    payload = _delete_backend()
+    _delete(payload)["filter"] = []
+    assert "invalid_delete_filter" in {item.code for item in validate(payload)}
+
+    payload = _delete_backend()
+    del _delete(payload)["filter"]
+    codes = {item.code for item in validate(payload)}
+    assert "missing_method_field" in codes and "invalid_delete_filter" not in codes
