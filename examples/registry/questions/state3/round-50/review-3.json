@@ -1,0 +1,166 @@
+{
+ "open_points": [
+  {
+   "subject": "30_modules.md:`data_provider`",
+   "kind": "undefined constant",
+   "text": "a backup record's version",
+   "question": "What is BACKUP_RECORD_VERSION's type and value, which record field carries it, and what must a reader do with an unsupported version?",
+   "options": [
+    "An integer format version starting at 1, with unsupported versions refused",
+    "A textual schema identifier, with compatibility decided by the release version",
+    "Metadata written but not checked"
+   ],
+   "default_guess": "Use integer 1, store it in every backup's readable record, and refuse an unsupported value.",
+   "witness": {
+    "initial": "A backup made by one release is inspected by a later release.",
+    "events": [
+     "The earlier `backups` implementation writes its interpretation of BACKUP_RECORD_VERSION.",
+     "The later `backups` implementation reads the backup's unencrypted record."
+    ],
+    "outcomes": [
+     "The later release rejects the backup because its record version is unsupported.",
+     "The later release ignores the record version and accepts it based on the recorded release or field readability."
+    ],
+    "observer": "The owner viewing backups or attempting disaster recovery"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`data_provider`",
+   "kind": "undefined constant",
+   "text": "the key digest's domain",
+   "question": "What is BACKUP_KEY_DIGEST_DOMAIN's type and exact value, and exactly how is it combined with the backup key when producing the recorded key digest?",
+   "options": [
+    "A byte-string prefix concatenated with the key before hashing",
+    "A domain parameter to a keyed or domain-separated hash",
+    "A text label encoded by a specified encoding before hashing"
+   ],
+   "default_guess": "Define a fixed byte string and hash a length-delimited domain followed by the raw key.",
+   "witness": {
+    "initial": "A backup is made with a configured backup key.",
+    "events": [
+     "The backup writer records the key digest using its reading of the domain constant.",
+     "A later tool or release computes a digest for the same key to identify the required restore key."
+    ],
+    "outcomes": [
+     "The two computations produce the same digest because both use the domain as a prefix.",
+     "They produce different digests because one treats the domain as a keyed-hash domain or encodes it differently."
+    ],
+    "observer": "The owner selecting the key needed to restore the backup"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`data_provider`",
+   "kind": "undefined constant",
+   "text": "the key derivation's info",
+   "question": "What is BACKUP_KEY_DERIVATION_INFO's type and exact value, which derivation algorithm consumes it, and what derived key is it intended to produce?",
+   "options": [
+    "HKDF info used to derive the backup-encryption key from the configured backup key",
+    "Context supplied to another specified KDF",
+    "Associated data for encryption rather than KDF input"
+   ],
+   "default_guess": "Use a fixed byte string as HKDF info to derive the backup-encryption key, with the hash, salt and output length specified alongside it.",
+   "witness": {
+    "initial": "Registry has one valid configured backup key and begins a backup run.",
+    "events": [
+     "The backup implementation derives or selects the encryption key.",
+     "It encrypts the snapshot and later decrypts it for the required check."
+    ],
+    "outcomes": [
+     "The implementation derives an encryption key with HKDF using BACKUP_KEY_DERIVATION_INFO.",
+     "The implementation uses the configured key directly or places the value in authenticated data, producing an incompatible backup format."
+    ],
+    "observer": "Registry during backup verification and the owner during restore"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Facts several modules touch, and their one owner",
+   "kind": "missing dependency surface",
+   "text": "A module that needs one imports it; nothing reads them from\n  the configuration or the store (A22 rule 2, A09 rule 1), and no module\n  restates one.",
+   "question": "Which consumers directly import BACKUP_RECORD_VERSION, BACKUP_KEY_DIGEST_DOMAIN and BACKUP_KEY_DERIVATION_INFO from `data_provider`, and what is each consumer's exact minimal import surface?",
+   "options": [
+    "`backups` imports all three constants",
+    "The backup-format or cryptography providers import some constants and `backups` imports only their capabilities",
+    "The constants are exported but unused"
+   ],
+   "default_guess": "Declare `backups` as the direct consumer of all three constants unless separate backup-format or cryptography modules are explicitly assigned the corresponding work.",
+   "witness": {
+    "initial": "Strict import mode is enabled and the backup code names the three new constants.",
+    "events": [
+     "One implementer adds all three symbols to `module_internal[backups][data_provider]`.",
+     "Another implementer relies on prose inference or assigns one or more constants to a cryptography module."
+    ],
+    "outcomes": [
+     "The generated `backups` module receives all required imports and builds.",
+     "The module is rejected for undeclared imports, or the dependency graph differs because another module owns their use."
+    ],
+    "observer": "The slicer, generator or build"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Facts several modules touch, and their one owner",
+   "kind": "unclear module boundary",
+   "text": "but for the forms `owner_interface`\n  serves, which carry their session's own CSRF value and the pending\n  confirmation value, and the cookie, which carries the session's identity,\n  as below.",
+   "question": "Which module constructs the secret-bearing form and cookie data, and through which allowed dependency does `owner_interface` obtain values owned by `owner_sessions`?",
+   "options": [
+    "`operations` obtains the values from `owner_sessions` and returns a dedicated internal view result to `owner_interface`",
+    "`owner_interface` directly imports and calls `owner_sessions`",
+    "`owner_sessions` constructs the HTTP forms and cookies itself"
+   ],
+   "default_guess": "Keep HTTP rendering in `owner_interface`; have `operations` mediate calls to `owner_sessions` and return a narrowly typed internal result containing only the values required for that response.",
+   "witness": {
+    "initial": "A valid owner session has a pending confirmation value.",
+    "events": [
+     "The owner requests the confirmation form.",
+     "Registry must move the CSRF and confirmation values from session state into the rendered form."
+    ],
+    "outcomes": [
+     "`owner_interface` receives a secret-bearing internal result from `operations` and has no direct dependency on `owner_sessions`.",
+     "`owner_interface` calls `owner_sessions` directly, adding a different dependency edge and bypassing the operations boundary."
+    ],
+    "observer": "The module dependency checker and maintainers changing session handling"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Facts several modules touch, and their one owner",
+   "kind": "unclear dependency direction",
+   "text": "`configuration` holds the secrets and hands each only to the module that\n  uses it, which asks for it: the service tokens to `service_access`, the\n  owner credential to `owner_sessions`, the backup key to `backups`.",
+   "question": "Does each consumer depend on and request a per-secret capability from `configuration`, or does a composition module obtain each secret and inject it into the consumer?",
+   "options": [
+    "`service_access`, `owner_sessions` and `backups` directly depend on narrow `configuration` accessors",
+    "A startup composition module reads checked values from `configuration` and injects only the appropriate secret into each consumer",
+    "`configuration` calls consumer initialization functions and supplies the secrets"
+   ],
+   "default_guess": "Use startup injection from a composition root so each consumer receives only its own secret and domain modules do not depend directly on configuration mechanics.",
+   "witness": {
+    "initial": "Startup configuration has passed all checks and contains the three kinds of secrets.",
+    "events": [
+     "Registry initializes `service_access`, `owner_sessions` and `backups`.",
+     "Each module receives the secret it needs."
+    ],
+    "outcomes": [
+     "Each consumer imports `configuration` and asks it for its secret.",
+     "A composition module imports both sides and injects secrets, leaving the consumers independent of `configuration`."
+    ],
+    "observer": "The dependency graph, generated module specifications and unit-test setup"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Facts several modules touch, and their one owner",
+   "kind": "standard_violation",
+   "text": "A module that needs one imports it; nothing reads them from\n  the configuration or the store (A22 rule 2, A09 rule 1), and no module\n  restates one.",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Replace the need-based prose with explicit `module_internal` consumer-to-`data_provider` entries listing the exact new constants each consumer directly names.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"30_modules.md:`data_provider`\",\"kind\":\"undefined constant\",\"text\":\"a backup record's version\",\"question\":\"What is BACKUP_RECORD_VERSION's type and value, which record field carries it, and what must a reader do with an unsupported version?\",\"options\":[\"An integer format version starting at 1, with unsupported versions refused\",\"A textual schema identifier, with compatibility decided by the release version\",\"Metadata written but not checked\"],\"default_guess\":\"Use integer 1, store it in every backup's readable record, and refuse an unsupported value.\",\"witness\":{\"initial\":\"A backup made by one release is inspected by a later release.\",\"events\":[\"The earlier `backups` implementation writes its interpretation of BACKUP_RECORD_VERSION.\",\"The later `backups` implementation reads the backup's unencrypted record.\"],\"outcomes\":[\"The later release rejects the backup because its record version is unsupported.\",\"The later release ignores the record version and accepts it based on the recorded release or field readability.\"],\"observer\":\"The owner viewing backups or attempting disaster recovery\"}},{\"subject\":\"30_modules.md:`data_provider`\",\"kind\":\"undefined constant\",\"text\":\"the key digest's domain\",\"question\":\"What is BACKUP_KEY_DIGEST_DOMAIN's type and exact value, and exactly how is it combined with the backup key when producing the recorded key digest?\",\"options\":[\"A byte-string prefix concatenated with the key before hashing\",\"A domain parameter to a keyed or domain-separated hash\",\"A text label encoded by a specified encoding before hashing\"],\"default_guess\":\"Define a fixed byte string and hash a length-delimited domain followed by the raw key.\",\"witness\":{\"initial\":\"A backup is made with a configured backup key.\",\"events\":[\"The backup writer records the key digest using its reading of the domain constant.\",\"A later tool or release computes a digest for the same key to identify the required restore key.\"],\"outcomes\":[\"The two computations produce the same digest because both use the domain as a prefix.\",\"They produce different digests because one treats the domain as a keyed-hash domain or encodes it differently.\"],\"observer\":\"The owner selecting the key needed to restore the backup\"}},{\"subject\":\"30_modules.md:`data_provider`\",\"kind\":\"undefined constant\",\"text\":\"the key derivation's info\",\"question\":\"What is BACKUP_KEY_DERIVATION_INFO's type and exact value, which derivation algorithm consumes it, and what derived key is it intended to produce?\",\"options\":[\"HKDF info used to derive the backup-encryption key from the configured backup key\",\"Context supplied to another specified KDF\",\"Associated data for encryption rather than KDF input\"],\"default_guess\":\"Use a fixed byte string as HKDF info to derive the backup-encryption key, with the hash, salt and output length specified alongside it.\",\"witness\":{\"initial\":\"Registry has one valid configured backup key and begins a backup run.\",\"events\":[\"The backup implementation derives or selects the encryption key.\",\"It encrypts the snapshot and later decrypts it for the required check.\"],\"outcomes\":[\"The implementation derives an encryption key with HKDF using BACKUP_KEY_DERIVATION_INFO.\",\"The implementation uses the configured key directly or places the value in authenticated data, producing an incompatible backup format.\"],\"observer\":\"Registry during backup verification and the owner during restore\"}},{\"subject\":\"30_modules.md:Facts several modules touch, and their one owner\",\"kind\":\"missing dependency surface\",\"text\":\"A module that needs one imports it; nothing reads them from\\n  the configuration or the store (A22 rule 2, A09 rule 1), and no module\\n  restates one.\",\"question\":\"Which consumers directly import BACKUP_RECORD_VERSION, BACKUP_KEY_DIGEST_DOMAIN and BACKUP_KEY_DERIVATION_INFO from `data_provider`, and what is each consumer's exact minimal import surface?\",\"options\":[\"`backups` imports all three constants\",\"The backup-format or cryptography providers import some constants and `backups` imports only their capabilities\",\"The constants are exported but unused\"],\"default_guess\":\"Declare `backups` as the direct consumer of all three constants unless separate backup-format or cryptography modules are explicitly assigned the corresponding work.\",\"witness\":{\"initial\":\"Strict import mode is enabled and the backup code names the three new constants.\",\"events\":[\"One implementer adds all three symbols to `module_internal[backups][data_provider]`.\",\"Another implementer relies on prose inference or assigns one or more constants to a cryptography module.\"],\"outcomes\":[\"The generated `backups` module receives all required imports and builds.\",\"The module is rejected for undeclared imports, or the dependency graph differs because another module owns their use.\"],\"observer\":\"The slicer, generator or build\"}},{\"subject\":\"30_modules.md:Facts several modules touch, and their one owner\",\"kind\":\"unclear module boundary\",\"text\":\"but for the forms `owner_interface`\\n  serves, which carry their session's own CSRF value and the pending\\n  confirmation value, and the cookie, which carries the session's identity,\\n  as below.\",\"question\":\"Which module constructs the secret-bearing form and cookie data, and through which allowed dependency does `owner_interface` obtain values owned by `owner_sessions`?\",\"options\":[\"`operations` obtains the values from `owner_sessions` and returns a dedicated internal view result to `owner_interface`\",\"`owner_interface` directly imports and calls `owner_sessions`\",\"`owner_sessions` constructs the HTTP forms and cookies itself\"],\"default_guess\":\"Keep HTTP rendering in `owner_interface`; have `operations` mediate calls to `owner_sessions` and return a narrowly typed internal result containing only the values required for that response.\",\"witness\":{\"initial\":\"A valid owner session has a pending confirmation value.\",\"events\":[\"The owner requests the confirmation form.\",\"Registry must move the CSRF and confirmation values from session state into the rendered form.\"],\"outcomes\":[\"`owner_interface` receives a secret-bearing internal result from `operations` and has no direct dependency on `owner_sessions`.\",\"`owner_interface` calls `owner_sessions` directly, adding a different dependency edge and bypassing the operations boundary.\"],\"observer\":\"The module dependency checker and maintainers changing session handling\"}},{\"subject\":\"30_modules.md:Facts several modules touch, and their one owner\",\"kind\":\"unclear dependency direction\",\"text\":\"`configuration` holds the secrets and hands each only to the module that\\n  uses it, which asks for it: the service tokens to `service_access`, the\\n  owner credential to `owner_sessions`, the backup key to `backups`.\",\"question\":\"Does each consumer depend on and request a per-secret capability from `configuration`, or does a composition module obtain each secret and inject it into the consumer?\",\"options\":[\"`service_access`, `owner_sessions` and `backups` directly depend on narrow `configuration` accessors\",\"A startup composition module reads checked values from `configuration` and injects only the appropriate secret into each consumer\",\"`configuration` calls consumer initialization functions and supplies the secrets\"],\"default_guess\":\"Use startup injection from a composition root so each consumer receives only its own secret and domain modules do not depend directly on configuration mechanics.\",\"witness\":{\"initial\":\"Startup configuration has passed all checks and contains the three kinds of secrets.\",\"events\":[\"Registry initializes `service_access`, `owner_sessions` and `backups`.\",\"Each module receives the secret it needs.\"],\"outcomes\":[\"Each consumer imports `configuration` and asks it for its secret.\",\"A composition module imports both sides and injects secrets, leaving the consumers independent of `configuration`.\"],\"observer\":\"The dependency graph, generated module specifications and unit-test setup\"}},{\"subject\":\"30_modules.md:Facts several modules touch, and their one owner\",\"kind\":\"standard_violation\",\"text\":\"A module that needs one imports it; nothing reads them from\\n  the configuration or the store (A22 rule 2, A09 rule 1), and no module\\n  restates one.\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Replace the need-based prose with explicit `module_internal` consumer-to-`data_provider` entries listing the exact new constants each consumer directly names.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,133 @@
+{
+ "open_points": [
+  {
+   "subject": "50_public_apis_0_conventions.md:Constants each module imports — configuration.give_service_tokens",
+   "kind": "operation_contract",
+   "text": "`module_internal[\"service_access\"][\"configuration\"]` holds\n`give_service_tokens`",
+   "question": "What is the exact contract of `give_service_tokens`: its input and call precondition, output type and ownership, behavior in an owner-only start, possible errors, and whether it returns all configured tokens at once or one selected token?",
+   "options": [
+    "Return an immutable service-name-to-token mapping after configuration validation, and an empty mapping in an owner-only start",
+    "Return one token selected by a service-name input",
+    "Refuse when the configuration has no service tokens"
+   ],
+   "default_guess": "Return an immutable mapping of every configured service name to its UTF-8 token bytes after validation, with an empty mapping for an owner-only start and no mutation or error after a successful start.",
+   "witness": {
+    "initial": "A valid owner-only configuration contains an owner credential and backup key but no service tokens or service API address.",
+    "events": [
+     "The owner starts Registry.",
+     "During startup, service_access obtains its configured token material through give_service_tokens."
+    ],
+    "outcomes": [
+     "give_service_tokens returns an empty mapping and the required owner-only start succeeds.",
+     "give_service_tokens treats absent tokens as an error and startup fails."
+    ],
+    "observer": "The owner starting Registry"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Constants each module imports — configuration.give_owner_credential",
+   "kind": "operation_contract",
+   "text": "`module_internal[\"owner_sessions\"][\"configuration\"]`\n`give_owner_credential`",
+   "question": "What is the exact contract of `give_owner_credential`: whether it takes an argument, whether it returns text, UTF-8 bytes or an opaque comparison handle, whether the result is copied or transferred, when it may be called, and what it does before configuration has successfully loaded?",
+   "options": [
+    "Return immutable UTF-8 bytes after successful configuration validation",
+    "Return the environment text and require owner_sessions to encode it",
+    "Return an opaque handle that can only be used for constant-time comparison"
+   ],
+   "default_guess": "Take no argument and return immutable UTF-8 bytes only after successful configuration validation, without consuming or altering the held credential.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Constants each module imports — configuration.give_backup_key",
+   "kind": "operation_contract",
+   "text": "`module_internal[\"backups\"][\"configuration\"]`\n`give_backup_key`",
+   "question": "What is the exact contract of `give_backup_key`: whether its output is the configured UTF-8 bytes, a decoded key, or an already-derived encryption key; who performs derivation; when it may be called; and what errors or effects it has?",
+   "options": [
+    "Return the configured secret's UTF-8 bytes and let backups derive encryption keys",
+    "Return a decoded binary key in a prescribed configuration encoding",
+    "Return an encryption-ready derived key"
+   ],
+   "default_guess": "Take no argument and return immutable UTF-8 bytes of the validated configured secret; backups performs the specified derivation and the operation has no side effect.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state — BACKUP_RECORD_VERSION",
+   "kind": "contradictory_record_format",
+   "text": "a backup record's version, the key digest's domain and the key\nderivation's info (A18 rules 1, 3)",
+   "question": "What is `BACKUP_RECORD_VERSION`'s type and value, where is it serialized, which versions are readable, and how does it alter A18 rule 5's statement that a kept record is valid when its instant, release, last sequence number and key digest can be read, which does not include a record version?",
+   "options": [
+    "Make an integer version a mandatory fifth metadata field and accept only the current value",
+    "Write the version on new records but accept legacy records with no version",
+    "Keep the constant internal and do not serialize it"
+   ],
+   "default_guess": "Define integer version 1 as a mandatory metadata field, require it when reading a kept record, and reject unknown or absent versions.",
+   "witness": {
+    "initial": "The backup location contains an otherwise valid kept backup whose readable record has the four fields A18 rule 5 names but no record-version field.",
+    "events": [
+     "The owner starts Registry.",
+     "Registry lists kept backups or performs the retention step."
+    ],
+    "outcomes": [
+     "The file is valid under A18 rule 5 and counts as a kept backup.",
+     "The file is invalid because BACKUP_RECORD_VERSION is mandatory, so it does not count and the retention step deletes it as unreadable."
+    ],
+    "observer": "The owner viewing the newest kept backup"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state — BACKUP_KEY_DIGEST_DOMAIN",
+   "kind": "undefined_cryptographic_encoding",
+   "text": "BACKUP_KEY_DIGEST_DOMAIN",
+   "question": "What are this constant's type and exact bytes, and what algorithm, framing, key encoding and output encoding use it to produce the backup record's key digest?",
+   "options": [
+    "Hash domain bytes, a delimiter and the configured key's UTF-8 bytes with SHA-256",
+    "Use the domain as an HMAC message with the backup key as the HMAC key",
+    "Use the domain as an HKDF label and record derived output"
+   ],
+   "default_guess": "Use a fixed UTF-8 domain label and record SHA-256(domain || NUL || configured-key UTF-8 bytes) in a fixed lowercase hexadecimal encoding.",
+   "witness": {
+    "initial": "Registry has one configured backup key and makes a backup.",
+    "events": [
+     "backups computes the readable key digest.",
+     "The owner later compares that recorded digest while identifying the key needed for restore."
+    ],
+    "outcomes": [
+     "An implementation hashes the domain-framed key and records digest D1.",
+     "An implementation uses HMAC or different framing and records digest D2 for the same key."
+    ],
+    "observer": "The owner or restore tooling reading the backup record"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state — BACKUP_KEY_DERIVATION_INFO",
+   "kind": "undefined_key_derivation",
+   "text": "BACKUP_KEY_DERIVATION_INFO",
+   "question": "What are this constant's type and exact bytes, and which KDF, hash, salt, output length and key encoding consume it before backup encryption?",
+   "options": [
+    "Use HKDF-SHA-256 with stored random salt, the constant as info and a 32-byte output",
+    "Use HKDF-SHA-256 without a salt",
+    "Use the configured secret directly as the encryption key and leave the info unused"
+   ],
+   "default_guess": "Use HKDF-SHA-256 over the configured key's UTF-8 bytes, with a fresh stored random salt, the constant's UTF-8 bytes as `info`, and a 32-byte derived key.",
+   "witness": {
+    "initial": "Registry makes an encrypted backup using a configured backup key.",
+    "events": [
+     "backups derives or selects the encryption key and writes the backup.",
+     "After a store loss, the owner attempts to decrypt it with an independently written restore tool following the design text."
+    ],
+    "outcomes": [
+     "The implementation uses HKDF with the info constant and the restore succeeds only with the same derivation.",
+     "The implementation uses the configured bytes directly or uses different salt/info framing, so the same restore procedure cannot decrypt the backup."
+    ],
+    "observer": "The owner performing disaster recovery"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"50_public_apis_0_conventions.md:Constants each module imports — configuration.give_service_tokens\",\"kind\":\"operation_contract\",\"text\":\"`module_internal[\\\"service_access\\\"][\\\"configuration\\\"]` holds\\n`give_service_tokens`\",\"question\":\"What is the exact contract of `give_service_tokens`: its input and call precondition, output type and ownership, behavior in an owner-only start, possible errors, and whether it returns all configured tokens at once or one selected token?\",\"options\":[\"Return an immutable service-name-to-token mapping after configuration validation, and an empty mapping in an owner-only start\",\"Return one token selected by a service-name input\",\"Refuse when the configuration has no service tokens\"],\"default_guess\":\"Return an immutable mapping of every configured service name to its UTF-8 token bytes after validation, with an empty mapping for an owner-only start and no mutation or error after a successful start.\",\"witness\":{\"initial\":\"A valid owner-only configuration contains an owner credential and backup key but no service tokens or service API address.\",\"events\":[\"The owner starts Registry.\",\"During startup, service_access obtains its configured token material through give_service_tokens.\"],\"outcomes\":[\"give_service_tokens returns an empty mapping and the required owner-only start succeeds.\",\"give_service_tokens treats absent tokens as an error and startup fails.\"],\"observer\":\"The owner starting Registry\"}},{\"subject\":\"50_public_apis_0_conventions.md:Constants each module imports — configuration.give_owner_credential\",\"kind\":\"operation_contract\",\"text\":\"`module_internal[\\\"owner_sessions\\\"][\\\"configuration\\\"]`\\n`give_owner_credential`\",\"question\":\"What is the exact contract of `give_owner_credential`: whether it takes an argument, whether it returns text, UTF-8 bytes or an opaque comparison handle, whether the result is copied or transferred, when it may be called, and what it does before configuration has successfully loaded?\",\"options\":[\"Return immutable UTF-8 bytes after successful configuration validation\",\"Return the environment text and require owner_sessions to encode it\",\"Return an opaque handle that can only be used for constant-time comparison\"],\"default_guess\":\"Take no argument and return immutable UTF-8 bytes only after successful configuration validation, without consuming or altering the held credential.\"},{\"subject\":\"50_public_apis_0_conventions.md:Constants each module imports — configuration.give_backup_key\",\"kind\":\"operation_contract\",\"text\":\"`module_internal[\\\"backups\\\"][\\\"configuration\\\"]`\\n`give_backup_key`\",\"question\":\"What is the exact contract of `give_backup_key`: whether its output is the configured UTF-8 bytes, a decoded key, or an already-derived encryption key; who performs derivation; when it may be called; and what errors or effects it has?\",\"options\":[\"Return the configured secret's UTF-8 bytes and let backups derive encryption keys\",\"Return a decoded binary key in a prescribed configuration encoding\",\"Return an encryption-ready derived key\"],\"default_guess\":\"Take no argument and return immutable UTF-8 bytes of the validated configured secret; backups performs the specified derivation and the operation has no side effect.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state — BACKUP_RECORD_VERSION\",\"kind\":\"contradictory_record_format\",\"text\":\"a backup record's version, the key digest's domain and the key\\nderivation's info (A18 rules 1, 3)\",\"question\":\"What is `BACKUP_RECORD_VERSION`'s type and value, where is it serialized, which versions are readable, and how does it alter A18 rule 5's statement that a kept record is valid when its instant, release, last sequence number and key digest can be read, which does not include a record version?\",\"options\":[\"Make an integer version a mandatory fifth metadata field and accept only the current value\",\"Write the version on new records but accept legacy records with no version\",\"Keep the constant internal and do not serialize it\"],\"default_guess\":\"Define integer version 1 as a mandatory metadata field, require it when reading a kept record, and reject unknown or absent versions.\",\"witness\":{\"initial\":\"The backup location contains an otherwise valid kept backup whose readable record has the four fields A18 rule 5 names but no record-version field.\",\"events\":[\"The owner starts Registry.\",\"Registry lists kept backups or performs the retention step.\"],\"outcomes\":[\"The file is valid under A18 rule 5 and counts as a kept backup.\",\"The file is invalid because BACKUP_RECORD_VERSION is mandatory, so it does not count and the retention step deletes it as unreadable.\"],\"observer\":\"The owner viewing the newest kept backup\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state — BACKUP_KEY_DIGEST_DOMAIN\",\"kind\":\"undefined_cryptographic_encoding\",\"text\":\"BACKUP_KEY_DIGEST_DOMAIN\",\"question\":\"What are this constant's type and exact bytes, and what algorithm, framing, key encoding and output encoding use it to produce the backup record's key digest?\",\"options\":[\"Hash domain bytes, a delimiter and the configured key's UTF-8 bytes with SHA-256\",\"Use the domain as an HMAC message with the backup key as the HMAC key\",\"Use the domain as an HKDF label and record derived output\"],\"default_guess\":\"Use a fixed UTF-8 domain label and record SHA-256(domain || NUL || configured-key UTF-8 bytes) in a fixed lowercase hexadecimal encoding.\",\"witness\":{\"initial\":\"Registry has one configured backup key and makes a backup.\",\"events\":[\"backups computes the readable key digest.\",\"The owner later compares that recorded digest while identifying the key needed for restore.\"],\"outcomes\":[\"An implementation hashes the domain-framed key and records digest D1.\",\"An implementation uses HMAC or different framing and records digest D2 for the same key.\"],\"observer\":\"The owner or restore tooling reading the backup record\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state — BACKUP_KEY_DERIVATION_INFO\",\"kind\":\"undefined_key_derivation\",\"text\":\"BACKUP_KEY_DERIVATION_INFO\",\"question\":\"What are this constant's type and exact bytes, and which KDF, hash, salt, output length and key encoding consume it before backup encryption?\",\"options\":[\"Use HKDF-SHA-256 with stored random salt, the constant as info and a 32-byte output\",\"Use HKDF-SHA-256 without a salt\",\"Use the configured secret directly as the encryption key and leave the info unused\"],\"default_guess\":\"Use HKDF-SHA-256 over the configured key's UTF-8 bytes, with a fresh stored random salt, the constant's UTF-8 bytes as `info`, and a 32-byte derived key.\",\"witness\":{\"initial\":\"Registry makes an encrypted backup using a configured backup key.\",\"events\":[\"backups derives or selects the encryption key and writes the backup.\",\"After a store loss, the owner attempts to decrypt it with an independently written restore tool following the design text.\"],\"outcomes\":[\"The implementation uses HKDF with the info constant and the restore succeeds only with the same derivation.\",\"The implementation uses the configured bytes directly or uses different salt/info framing, so the same restore procedure cannot decrypt the backup.\"],\"observer\":\"The owner performing disaster recovery\"}}]}",
+ "set_aside": []
+}
