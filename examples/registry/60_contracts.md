@@ -36,9 +36,52 @@ readings, so an action's today is `operations`' (`_today_of`).
   (State 5) is the `TransactionStep` interface, "the request's step, which
   receives the admitted session" the `OwnerStep` interface;
   `operations` implements them (`ServiceCallStep`, `OwnerRequestStep`,
-  `OwnerActionStep`). The transaction is the `StoreTransaction` interface,
-  whose methods are the rows each record module reads and writes, in the
-  orders A06 declares.
+  `OwnerActionStep`). Both ports are `models`' (SPEC_STANDARD §5): their
+  `run` contracts belong to `models`, as `StoreRepository`'s do. Their
+  implementations are `policy` (§5.1): `operations` holds no connection, file
+  or socket, and every argument of their constructors is a model or a port.
+  `implementation_obligations`: `TransactionStep` → `policy`
+  [`ServiceCallStep`, `OwnerActionStep`]; `OwnerStep` → `policy`
+  [`OwnerRequestStep`]; `StoreRepository` → `local`
+  [`SqliteStoreRepository`]; `UploadBody` → `external` (below).
+- **`StoreTransaction` is a class** (owner, 2026-11-16, replacing the
+  interface of the first draft). The transaction is the `StoreTransaction`
+  class `store` owns, whose methods are the rows each record module reads and
+  writes, in the orders A06 declares; only `store` constructs it, over the
+  repository of the connection it opened, and hands it to the step. As an
+  interface it had no legal implementation: `local` needs a deterministic
+  backend to own the class, and `policy` forbids the connection the
+  transaction holds (§5.1); a deterministic unit of work (§6.12) would be
+  wanted only to generate the transaction's lifecycle itself, which is not a
+  goal here. The narrow access to the store is kept by the class's explicit
+  methods: record modules see those and nothing of the repository.
+  The one place the exact type is lost is `run` of `TransactionStep`
+  and its two implementations, typed `transaction: object`: a port of
+  `models` naming a class of `store` makes `models` import `store`, which
+  imports `models` — a cycle no start survives, and the Factory emits no
+  `TYPE_CHECKING` import. Every other contract keeps `StoreTransaction`
+  (§12, source 4). The guarantee is not left to a note:
+  `run_in_transaction` and `read_in_transaction` hand the step the
+  `StoreTransaction` they created, and `ServiceCallStep.run` and
+  `OwnerActionStep.run` check on entry that they hold one and work with it
+  from there; any other object is a wiring fault, raised before anything is
+  read or written, so the transaction commits nothing and `store` answers
+  `internal_error` (`transaction_failed`) as State 5 declares for a step
+  that fails.
+- **The upload body is a port** (owner, 2026-11-16). An upload's stream
+  reaches the step unread: `OwnerRequestStep`, `perform_owner_operation`,
+  `read_import_mapping` and `_read_bounded` take it as `UploadBody`, a port
+  of `models` with one method, `read(size)` — positional, the next bytes of
+  the stream, at most `size`, empty at its end. It is `external`: the HTTP
+  server makes the stream, `owner_interface` takes it as `BinaryIO` and
+  passes it on unread, and the step can only read it in portions. This
+  keeps `OwnerRequestStep` a legal `policy` class (a `BinaryIO` argument is
+  neither a model, a port nor a scalar) and keeps the moment and the limit
+  of the reading where State 5 put them: after admission, under the locks
+  the request needs, inside the read transaction, by `_read_bounded` at most
+  one byte past the imported `IMPORT_FILE_MAX_BYTES` constant, a declared
+  length over it refused before the first read. A request refused at
+  admission never reads its stream.
 - **The store is a class.** A model field may not hold a connection, so the
   store this start opens is the `RegistryStore` class `store` owns; every
   store operation takes it.
@@ -103,7 +146,7 @@ envelope of one record — the columns a lookup, a list's order or a deletion
 compares, and the record itself as `json_model` — so the repository holds no
 rule: which record goes into which row, which rows a list reads and how two
 lists merge into A06's order, and which rows an erasure removes are
-`store`'s, behind `StoreTransaction`.
+`store`'s, inside the `StoreTransaction` class.
 
 - A list A06 orders by keys of one table is one `list_by` (`order_by` on its
   columns); the project list with its archived projects is two reads, one per
