@@ -156,11 +156,16 @@ rule 6's sense, which is what Registry gives a service or the owner
 ## Closed set of refusal codes
 
 A refusal is a code, the stage of A04 rule 6 it belongs to (`models`, State
-3), and the list of the kinds that failed in that stage. The stage is the
-number of A04 rule 6's check, which the refusing module names by the
-imported constant of that stage, `REFUSAL_STAGE_AUTHENTICATION` (1) to
-`REFUSAL_STAGE_LIFECYCLE` (6), never as a number of its own (owner,
-2026-11-17). The codes are
+3), and the list of the kinds that failed in that stage. The stage of a
+refusal of a check is the number of A04 rule 6's check, which the refusing
+module names by the imported constant of that stage,
+`REFUSAL_STAGE_AUTHENTICATION` (1) to `REFUSAL_STAGE_LIFECYCLE` (6), never
+as a number of its own (owner, 2026-11-17). The table's stage column is
+that number, with two exceptions: `internal_error` is no check's refusal
+and carries no stage; and `agent_call_refused` is one answer, so it always
+carries stage (2), also for the unknown pointer of a Kernel withdrawal that
+no session check reached (A08 rule 7, A10 rule 3) — its stage tells nothing
+the answer must not. The codes are
 distinct where a caller acts on the difference; the kinds are a closed set
 the owner interface renders and State 6 declares as `models`' vocabulary.
 
@@ -169,7 +174,7 @@ the owner interface renders and State 6 declares as `models`' vocabulary.
 | `unauthenticated` | (1) | `no_valid_token` — missing, unknown or wrong, one answer (A17 rule 7); `no_owner_session` — none, ended or expired (A13 rule 2); `sign_in_refused` — wrong or missing credential or a lockout, one answer (A13 rule 4) | the service fixes its token; the owner signs in |
 | `not_permitted` | (1) | `outside_service_rights` (A09 rule 3); `csrf_refused` (A13 rule 5); `answer_above_class` (A09 rule 4) | the caller is not allowed this call |
 | `confirmation_refused` | (1) | `confirmation_not_pending` — the session holds no pending value: never shown, used up or cleared; `confirmation_other_value` — another value while the pending one is valid, which stays; `confirmation_bound_elsewhere` — the pending value given for another action, target, revision or inputs, now used up; `confirmation_expired` — cleared (A13 rule 6) | the owner submits the pending step again, or has it shown again |
-| `not_found` | (2), (3) | `agent_call_refused` — an unregistered session, a project outside the set, none active, an unknown pointer for Kernel: one answer (A10 rule 3, A08 rule 7); `unknown_project`, `unknown_customer`, `unknown_room`, `unknown_pointer`, `unknown_session` (State 0) | the caller re-reads |
+| `not_found` | (2) for `agent_call_refused`, (3) for the others | `agent_call_refused` — an unregistered session, a project outside the set, none active, an unknown pointer for Kernel: one answer, always of stage (2) (A10 rule 3, A08 rule 7); `unknown_project`, `unknown_customer`, `unknown_room`, `unknown_pointer`, `unknown_session` (State 0) | the caller re-reads |
 | `invalid_request` | (4) | `missing_value` (A02 rule 1); `malformed_request_id` (A01 rule 1); `outside_closed_list` (A19 rule 3) — a value outside its enumeration, an
 object kind or a customer language included (A02 rule 4); `outside_form` — a
 present value outside the form State 1 declares: an alias over the imported
