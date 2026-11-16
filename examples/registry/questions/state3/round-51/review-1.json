@@ -1,0 +1,132 @@
+{
+ "open_points": [
+  {
+   "subject": "store_persistence decision ownership and trace membership",
+   "kind": "contradiction",
+   "text": "It is part of the store of A17 and A18: only `store` calls it, inside the transaction `store` opened, so no other module touches the database through it.",
+   "question": "Is `store_persistence` merely an implementation mechanism owning no part of A17 or A18, or is it a consumer that must appear in the decision table and `30_trace.json`? The preamble says a consumer owns the parts its section names and that the table is the one mapping, but neither A17 nor A18 lists `store_persistence`.",
+   "options": [
+    "It is implementation-only; it owns no rule and the reference to A17 and A18 must say so explicitly",
+    "It consumes specified parts of A17 and A18 and must be added to the decision table and trace"
+   ],
+   "default_guess": "Treat it as implementation-only and leave all A17/A18 rule ownership with the modules already listed.",
+   "witness": {
+    "initial": "A release creates a new store and later makes a backup from it.",
+    "events": [
+     "The release trace assigns A17 and A18 using the decision table.",
+     "A maintainer changes the schema creation or backup-copy persistence code."
+    ],
+    "outcomes": [
+     "The table makes `store` or `backups` the responsible consumer because `store_persistence` owns no decision rule.",
+     "The `store_persistence` section makes it a consumer of A17 and A18 and therefore the responsible module for part of those decisions."
+    ],
+    "observer": "The trace checker and the maintainer deciding which module specification must change"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "record-to-row mapping",
+   "kind": "ownership_conflict",
+   "text": "`store` holds the connection and the transaction and decides which record goes into which row; the row statements themselves are executed by `store_persistence`, its companion, which only `store` calls, over that connection (below).",
+   "question": "Which module owns the durable mapping from each model to its table and row shape? `store` is said to decide the row, while `store_persistence` owns one table per durable model, the schema, and row codecs.",
+   "options": [
+    "`store` selects the table and row representation; `store_persistence` only executes supplied statements",
+    "`store_persistence` maps typed records to its tables and rows; `store` only chooses the record and operation",
+    "Split the mapping by an explicitly defined boundary, such as store-owned logical repositories and persistence-owned physical tables/codecs"
+   ],
+   "default_guess": "Let `store_persistence` own model-to-table and record-to-row lowering, while `store` owns which domain record is passed to which repository operation.",
+   "witness": {
+    "initial": "An empty store exists and an accepted project creation must persist one Project containing its embedded Object.",
+    "events": [
+     "The projects module supplies the Project record to `store`.",
+     "`store` invokes `store_persistence` inside its transaction."
+    ],
+    "outcomes": [
+     "`store` chooses the Project table and constructs its row before asking `store_persistence` to execute it.",
+     "`store_persistence` receives a typed Project and chooses the table and encoded row itself."
+    ],
+    "observer": "A maintainer adding or changing a persisted model field"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "list row selection and ordering",
+   "kind": "ownership_conflict",
+   "text": "Which record goes into which row and which rows a list reads, the transaction and lock mechanics,",
+   "question": "How can `store` own which rows a list reads and their A06 order while `store_persistence` hides typed list statements and the columns each lookup compares? Which module defines predicates, joins, and ORDER BY keys?",
+   "options": [
+    "`store` supplies a structured predicate and ordering to a generic persistence operation",
+    "`store_persistence` exposes one typed method per declared list and embeds its predicates and order",
+    "`store` reads a broader typed set and performs selection and ordering itself"
+   ],
+   "default_guess": "Expose typed persistence methods whose logical selection and order are specified by `store`, with `store_persistence` owning only their SQL lowering.",
+   "unit": "?"
+  },
+  {
+   "subject": "persistence lowering source",
+   "kind": "dependency_gap",
+   "text": "Only the deterministic SQLite repository class and schema function lowered from `persistence_backend/v3` for the store's closed tables: one table per durable model — Project, Room, Customer, ArtifactPointer, AgentSession, AuditEntry, MigrationClosure, AuditSequence (`60_data_closure.json`, `persistence`).",
+   "question": "What owns and defines `persistence_backend/v3`, and is the not-yet-written `60_data_closure.json` authoritative over State 3 or generated from it? The direction must be fixed so later states do not independently invent the schema and repository.",
+   "options": [
+    "State 3 fully defines the logical persistence contract and State 6 only lowers it",
+    "State 6's data closure defines the backend and State 3 merely declares a module that will consume it",
+    "A separately owned backend specification is an earlier input to both states"
+   ],
+   "default_guess": "Make State 3 authoritative for the logical repository and table set, with State 6 deterministically lowering that decision.",
+   "unit": "?"
+  },
+  {
+   "subject": "database constraints and indexes",
+   "kind": "missing_owner",
+   "text": "SQLite table creation, row codecs and the typed insert, load, list, update and delete statements, including which column each lookup compares.",
+   "question": "Who decides the schema's keys, uniqueness constraints, foreign keys, cascade behavior, checks, and indexes: `store_persistence`, `store`, the owning record module, or the backend input? Table creation and lookup columns require those decisions, but `store_persistence` is also forbidden to own another module's rules.",
+   "options": [
+    "Record modules own logical constraints and `store_persistence` only lowers them",
+    "`store` owns all store-level constraints and passes them to `store_persistence`",
+    "`store_persistence` chooses physical constraints and indexes so long as observable domain behavior is unchanged"
+   ],
+   "default_guess": "Have record modules and `store` own logical integrity rules, while `store_persistence` deterministically chooses only behavior-preserving physical indexes and lowers declared constraints.",
+   "unit": "?"
+  },
+  {
+   "subject": "erasure deletion set",
+   "kind": "ambiguous_owner",
+   "text": "which records an erasure removes, any file, or any rule of another module — all of these are `store`'s or the record module's.",
+   "question": "For each erasure, does the record-owning module enumerate the records to remove, or does `store` derive and own the deletion set? The phrase assigns it to either module without choosing one.",
+   "options": [
+    "The record-owning module decides the complete deletion set and asks `store` to apply it atomically",
+    "`store` derives the deletion set from the erasure operation",
+    "The record module owns the logical set while `store` owns a separately specified persistence cascade"
+   ],
+   "default_guess": "The record-owning module owns the logical deletion set; `store` applies that set atomically, and `store_persistence` only lowers the deletes.",
+   "unit": "?"
+  },
+  {
+   "subject": "file ownership excluded from store_persistence",
+   "kind": "contradiction",
+   "text": "which records an erasure removes, any file, or any rule of another module — all of these are `store`'s or the record module's.",
+   "question": "What must this passage say about file ownership? Its exhaustive attribution to `store` or a record module conflicts with the preamble's rule that only `backups` names, renames, or deletes files in the backup location.",
+   "options": [
+    "Say files belong to `store` or `backups` according to location and operation",
+    "Use a non-exhaustive statement that `store_persistence` owns no file and leave ownership to the named modules",
+    "Treat `backups` as the intended 'record module' and define that term"
+   ],
+   "default_guess": "State only that `store_persistence` owns and touches no file, then preserve the explicit split: `store` owns the store file operations and `backups` owns backup-location naming, renaming, and deletion.",
+   "witness": {
+    "initial": "A backup run has left a temporary encrypted file in the backup location.",
+    "events": [
+     "The next run begins and must remove files under the temporary prefix."
+    ],
+    "outcomes": [
+     "The preamble assigns the removal exclusively to `backups`.",
+     "The `store_persistence` exclusion attributes every file responsibility to `store` or a record module, leaving a careful implementer to assign the removal outside `backups` or reinterpret 'record module'."
+    ],
+    "observer": "The owner through whether backup cleanup succeeds, and the maintainer locating the cleanup code"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"store_persistence decision ownership and trace membership\",\"kind\":\"contradiction\",\"text\":\"It is part of the store of A17 and A18: only `store` calls it, inside the transaction `store` opened, so no other module touches the database through it.\",\"question\":\"Is `store_persistence` merely an implementation mechanism owning no part of A17 or A18, or is it a consumer that must appear in the decision table and `30_trace.json`? The preamble says a consumer owns the parts its section names and that the table is the one mapping, but neither A17 nor A18 lists `store_persistence`.\",\"options\":[\"It is implementation-only; it owns no rule and the reference to A17 and A18 must say so explicitly\",\"It consumes specified parts of A17 and A18 and must be added to the decision table and trace\"],\"default_guess\":\"Treat it as implementation-only and leave all A17/A18 rule ownership with the modules already listed.\",\"witness\":{\"initial\":\"A release creates a new store and later makes a backup from it.\",\"events\":[\"The release trace assigns A17 and A18 using the decision table.\",\"A maintainer changes the schema creation or backup-copy persistence code.\"],\"outcomes\":[\"The table makes `store` or `backups` the responsible consumer because `store_persistence` owns no decision rule.\",\"The `store_persistence` section makes it a consumer of A17 and A18 and therefore the responsible module for part of those decisions.\"],\"observer\":\"The trace checker and the maintainer deciding which module specification must change\"}},{\"subject\":\"record-to-row mapping\",\"kind\":\"ownership_conflict\",\"text\":\"`store` holds the connection and the transaction and decides which record goes into which row; the row statements themselves are executed by `store_persistence`, its companion, which only `store` calls, over that connection (below).\",\"question\":\"Which module owns the durable mapping from each model to its table and row shape? `store` is said to decide the row, while `store_persistence` owns one table per durable model, the schema, and row codecs.\",\"options\":[\"`store` selects the table and row representation; `store_persistence` only executes supplied statements\",\"`store_persistence` maps typed records to its tables and rows; `store` only chooses the record and operation\",\"Split the mapping by an explicitly defined boundary, such as store-owned logical repositories and persistence-owned physical tables/codecs\"],\"default_guess\":\"Let `store_persistence` own model-to-table and record-to-row lowering, while `store` owns which domain record is passed to which repository operation.\",\"witness\":{\"initial\":\"An empty store exists and an accepted project creation must persist one Project containing its embedded Object.\",\"events\":[\"The projects module supplies the Project record to `store`.\",\"`store` invokes `store_persistence` inside its transaction.\"],\"outcomes\":[\"`store` chooses the Project table and constructs its row before asking `store_persistence` to execute it.\",\"`store_persistence` receives a typed Project and chooses the table and encoded row itself.\"],\"observer\":\"A maintainer adding or changing a persisted model field\"}},{\"subject\":\"list row selection and ordering\",\"kind\":\"ownership_conflict\",\"text\":\"Which record goes into which row and which rows a list reads, the transaction and lock mechanics,\",\"question\":\"How can `store` own which rows a list reads and their A06 order while `store_persistence` hides typed list statements and the columns each lookup compares? Which module defines predicates, joins, and ORDER BY keys?\",\"options\":[\"`store` supplies a structured predicate and ordering to a generic persistence operation\",\"`store_persistence` exposes one typed method per declared list and embeds its predicates and order\",\"`store` reads a broader typed set and performs selection and ordering itself\"],\"default_guess\":\"Expose typed persistence methods whose logical selection and order are specified by `store`, with `store_persistence` owning only their SQL lowering.\"},{\"subject\":\"persistence lowering source\",\"kind\":\"dependency_gap\",\"text\":\"Only the deterministic SQLite repository class and schema function lowered from `persistence_backend/v3` for the store's closed tables: one table per durable model — Project, Room, Customer, ArtifactPointer, AgentSession, AuditEntry, MigrationClosure, AuditSequence (`60_data_closure.json`, `persistence`).\",\"question\":\"What owns and defines `persistence_backend/v3`, and is the not-yet-written `60_data_closure.json` authoritative over State 3 or generated from it? The direction must be fixed so later states do not independently invent the schema and repository.\",\"options\":[\"State 3 fully defines the logical persistence contract and State 6 only lowers it\",\"State 6's data closure defines the backend and State 3 merely declares a module that will consume it\",\"A separately owned backend specification is an earlier input to both states\"],\"default_guess\":\"Make State 3 authoritative for the logical repository and table set, with State 6 deterministically lowering that decision.\"},{\"subject\":\"database constraints and indexes\",\"kind\":\"missing_owner\",\"text\":\"SQLite table creation, row codecs and the typed insert, load, list, update and delete statements, including which column each lookup compares.\",\"question\":\"Who decides the schema's keys, uniqueness constraints, foreign keys, cascade behavior, checks, and indexes: `store_persistence`, `store`, the owning record module, or the backend input? Table creation and lookup columns require those decisions, but `store_persistence` is also forbidden to own another module's rules.\",\"options\":[\"Record modules own logical constraints and `store_persistence` only lowers them\",\"`store` owns all store-level constraints and passes them to `store_persistence`\",\"`store_persistence` chooses physical constraints and indexes so long as observable domain behavior is unchanged\"],\"default_guess\":\"Have record modules and `store` own logical integrity rules, while `store_persistence` deterministically chooses only behavior-preserving physical indexes and lowers declared constraints.\"},{\"subject\":\"erasure deletion set\",\"kind\":\"ambiguous_owner\",\"text\":\"which records an erasure removes, any file, or any rule of another module — all of these are `store`'s or the record module's.\",\"question\":\"For each erasure, does the record-owning module enumerate the records to remove, or does `store` derive and own the deletion set? The phrase assigns it to either module without choosing one.\",\"options\":[\"The record-owning module decides the complete deletion set and asks `store` to apply it atomically\",\"`store` derives the deletion set from the erasure operation\",\"The record module owns the logical set while `store` owns a separately specified persistence cascade\"],\"default_guess\":\"The record-owning module owns the logical deletion set; `store` applies that set atomically, and `store_persistence` only lowers the deletes.\"},{\"subject\":\"file ownership excluded from store_persistence\",\"kind\":\"contradiction\",\"text\":\"which records an erasure removes, any file, or any rule of another module — all of these are `store`'s or the record module's.\",\"question\":\"What must this passage say about file ownership? Its exhaustive attribution to `store` or a record module conflicts with the preamble's rule that only `backups` names, renames, or deletes files in the backup location.\",\"options\":[\"Say files belong to `store` or `backups` according to location and operation\",\"Use a non-exhaustive statement that `store_persistence` owns no file and leave ownership to the named modules\",\"Treat `backups` as the intended 'record module' and define that term\"],\"default_guess\":\"State only that `store_persistence` owns and touches no file, then preserve the explicit split: `store` owns the store file operations and `backups` owns backup-location naming, renaming, and deletion.\",\"witness\":{\"initial\":\"A backup run has left a temporary encrypted file in the backup location.\",\"events\":[\"The next run begins and must remove files under the temporary prefix.\"],\"outcomes\":[\"The preamble assigns the removal exclusively to `backups`.\",\"The `store_persistence` exclusion attributes every file responsibility to `store` or a record module, leaving a careful implementer to assign the removal outside `backups` or reinterpret 'record module'.\"],\"observer\":\"The owner through whether backup cleanup succeeds, and the maintainer locating the cleanup code\"}}]}",
+ "set_aside": []
+}

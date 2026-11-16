@@ -1,0 +1,88 @@
+{
+ "open_points": [
+  {
+   "subject": "record-to-row mapping",
+   "kind": "contradictory_ownership",
+   "text": "`store` holds the connection and\nthe transaction and decides which record goes into which row; the row\nstatements themselves are executed by `store_persistence`, its companion,\nwhich only `store` calls, over that connection (below).",
+   "question": "Does `store` own only the logical choice of record and operation, while `store_persistence` exclusively owns its table, columns and encoding, or does `store` also own the physical record-to-row mapping?",
+   "options": [
+    "`store` chooses the logical record and operation; `store_persistence` owns all physical table, column and codec mapping",
+    "`store` chooses the table and row representation, and `store_persistence` merely executes supplied statements",
+    "The mapping is jointly owned, with an explicitly divided specification"
+   ],
+   "default_guess": "`store` owns the logical choice; `store_persistence` exclusively owns the physical mapping and executes it.",
+   "unit": "?"
+  },
+  {
+   "subject": "list selection and ordering",
+   "kind": "unclear_dependency_boundary",
+   "text": "The connection or its transaction, minted identities, which rows a list reads\nand in which order a module receives them, which records an erasure removes,\nany file, or any rule of another module — all of these are `store`'s or the\nrecord module's.",
+   "question": "How can `store_persistence` implement its typed list statements and comparison columns without owning or independently knowing the predicates and A06 ordering rules that belong to `store` or record modules?",
+   "options": [
+    "`store` passes a closed typed query and ordering specification to generic repository methods",
+    "`store_persistence` provides fixed list methods that encode A06, making it a consumer of those rules",
+    "`store` receives unordered candidate rows and performs filtering and ordering itself",
+    "Generated repository methods receive predicates and sort keys already lowered by another owned specification"
+   ],
+   "default_guess": "Define a typed transaction-scoped repository API in which `store` selects a closed query variant and `store_persistence` only lowers that variant to SQL.",
+   "unit": "?"
+  },
+  {
+   "subject": "stored-record access by domain modules",
+   "kind": "missing_module_boundary",
+   "text": "It is part of the store of A17 and A18: only `store` calls\nit, inside the transaction `store` opened, so no other module touches the\ndatabase through it.",
+   "question": "Through what `store`-owned interface do `projects`, `customers`, `artifact_pointers`, `agent_sessions`, `audit_log` and `migration_import` read and change typed records while only `store` may call `store_persistence`?",
+   "options": [
+    "`run_in_transaction` and `read_in_transaction` pass a `store`-owned typed unit-of-work facade to domain callbacks",
+    "`store` exports generic typed load, list, insert, update and delete capabilities",
+    "`store` exports domain-specific persistence operations",
+    "Domain callbacks receive `SqliteStoreRepository` directly, despite the statement that only `store` calls it"
+   ],
+   "default_guess": "Have the transaction functions pass a `store`-owned typed unit-of-work facade whose methods delegate to `SqliteStoreRepository`; domain modules never receive the connection or repository.",
+   "unit": "?"
+  },
+  {
+   "subject": "row envelope consistency",
+   "kind": "undefined_source_of_truth",
+   "text": "A row is the store's envelope of one record: the columns a\nlookup, a list's order or a deletion compares, and the record itself, whole.",
+   "question": "When indexed/comparison columns duplicate facts inside the whole encoded record, which representation is authoritative, how must writes keep them equal, and does opening or decoding a store reject a mismatch that SQLite integrity and foreign-key checks do not detect?",
+   "options": [
+    "The whole record is authoritative; comparison columns are derived and validated against it on every decode",
+    "The columns are authoritative and the record is reconstructed from them",
+    "Both are authoritative and any mismatch makes the store or row invalid",
+    "The representation guarantees equality only for repository-produced rows and performs no validation when reading"
+   ],
+   "default_guess": "Treat the whole record as authoritative, derive every comparison column in `store_persistence`, and reject any decoded row whose duplicate values disagree.",
+   "witness": {
+    "initial": "A store file has a structurally valid Project row whose whole encoded record contains project_id `P1`, while its lookup column contains `P2`; SQLite integrity and foreign-key checks pass.",
+    "events": [
+     "The owner places the store at the configured location and starts Registry.",
+     "`store` performs the specified integrity and version checks.",
+     "A caller reads project `P2` or lists projects."
+    ],
+    "outcomes": [
+     "The repository trusts the lookup column, finds the row, and returns a record identifying itself as `P1`.",
+     "The repository treats the whole record as authoritative and either refuses the inconsistent row/store or does not find `P2`."
+    ],
+    "observer": "The caller reading or listing projects, and the owner observing whether Registry starts or reports a storage failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "new-store schema and AuditSequence initialization",
+   "kind": "unclear_action_owner",
+   "text": "Only the deterministic SQLite repository class and schema function lowered\nfrom `persistence_backend/v3` for the store's closed tables: one table per\ndurable model — Project, Room, Customer, ArtifactPointer, AgentSession,\nAuditEntry, MigrationClosure, AuditSequence (`60_data_closure.json`,\n`persistence`).",
+   "question": "Is `create_store_schema` DDL-only, or does it also create the required AuditSequence record at 0; which module supplies and writes the store version; and what transaction makes schema creation, version recording and AuditSequence initialization one complete new store?",
+   "options": [
+    "`store_persistence` creates tables only; `store` writes the version and inserts AuditSequence through the repository in one transaction",
+    "`create_store_schema` creates the schema, records the version and seeds AuditSequence at 0 from values passed by `store`",
+    "`store_persistence` owns the version and initialization values and performs the entire initialization"
+   ],
+   "default_guess": "Let `store` own one initialization transaction and supply the release version; `store_persistence` creates the schema and performs a requested AuditSequence insert without owning either value.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"record-to-row mapping\",\"kind\":\"contradictory_ownership\",\"text\":\"`store` holds the connection and\\nthe transaction and decides which record goes into which row; the row\\nstatements themselves are executed by `store_persistence`, its companion,\\nwhich only `store` calls, over that connection (below).\",\"question\":\"Does `store` own only the logical choice of record and operation, while `store_persistence` exclusively owns its table, columns and encoding, or does `store` also own the physical record-to-row mapping?\",\"options\":[\"`store` chooses the logical record and operation; `store_persistence` owns all physical table, column and codec mapping\",\"`store` chooses the table and row representation, and `store_persistence` merely executes supplied statements\",\"The mapping is jointly owned, with an explicitly divided specification\"],\"default_guess\":\"`store` owns the logical choice; `store_persistence` exclusively owns the physical mapping and executes it.\"},{\"subject\":\"list selection and ordering\",\"kind\":\"unclear_dependency_boundary\",\"text\":\"The connection or its transaction, minted identities, which rows a list reads\\nand in which order a module receives them, which records an erasure removes,\\nany file, or any rule of another module — all of these are `store`'s or the\\nrecord module's.\",\"question\":\"How can `store_persistence` implement its typed list statements and comparison columns without owning or independently knowing the predicates and A06 ordering rules that belong to `store` or record modules?\",\"options\":[\"`store` passes a closed typed query and ordering specification to generic repository methods\",\"`store_persistence` provides fixed list methods that encode A06, making it a consumer of those rules\",\"`store` receives unordered candidate rows and performs filtering and ordering itself\",\"Generated repository methods receive predicates and sort keys already lowered by another owned specification\"],\"default_guess\":\"Define a typed transaction-scoped repository API in which `store` selects a closed query variant and `store_persistence` only lowers that variant to SQL.\"},{\"subject\":\"stored-record access by domain modules\",\"kind\":\"missing_module_boundary\",\"text\":\"It is part of the store of A17 and A18: only `store` calls\\nit, inside the transaction `store` opened, so no other module touches the\\ndatabase through it.\",\"question\":\"Through what `store`-owned interface do `projects`, `customers`, `artifact_pointers`, `agent_sessions`, `audit_log` and `migration_import` read and change typed records while only `store` may call `store_persistence`?\",\"options\":[\"`run_in_transaction` and `read_in_transaction` pass a `store`-owned typed unit-of-work facade to domain callbacks\",\"`store` exports generic typed load, list, insert, update and delete capabilities\",\"`store` exports domain-specific persistence operations\",\"Domain callbacks receive `SqliteStoreRepository` directly, despite the statement that only `store` calls it\"],\"default_guess\":\"Have the transaction functions pass a `store`-owned typed unit-of-work facade whose methods delegate to `SqliteStoreRepository`; domain modules never receive the connection or repository.\"},{\"subject\":\"row envelope consistency\",\"kind\":\"undefined_source_of_truth\",\"text\":\"A row is the store's envelope of one record: the columns a\\nlookup, a list's order or a deletion compares, and the record itself, whole.\",\"question\":\"When indexed/comparison columns duplicate facts inside the whole encoded record, which representation is authoritative, how must writes keep them equal, and does opening or decoding a store reject a mismatch that SQLite integrity and foreign-key checks do not detect?\",\"options\":[\"The whole record is authoritative; comparison columns are derived and validated against it on every decode\",\"The columns are authoritative and the record is reconstructed from them\",\"Both are authoritative and any mismatch makes the store or row invalid\",\"The representation guarantees equality only for repository-produced rows and performs no validation when reading\"],\"default_guess\":\"Treat the whole record as authoritative, derive every comparison column in `store_persistence`, and reject any decoded row whose duplicate values disagree.\",\"witness\":{\"initial\":\"A store file has a structurally valid Project row whose whole encoded record contains project_id `P1`, while its lookup column contains `P2`; SQLite integrity and foreign-key checks pass.\",\"events\":[\"The owner places the store at the configured location and starts Registry.\",\"`store` performs the specified integrity and version checks.\",\"A caller reads project `P2` or lists projects.\"],\"outcomes\":[\"The repository trusts the lookup column, finds the row, and returns a record identifying itself as `P1`.\",\"The repository treats the whole record as authoritative and either refuses the inconsistent row/store or does not find `P2`.\"],\"observer\":\"The caller reading or listing projects, and the owner observing whether Registry starts or reports a storage failure.\"}},{\"subject\":\"new-store schema and AuditSequence initialization\",\"kind\":\"unclear_action_owner\",\"text\":\"Only the deterministic SQLite repository class and schema function lowered\\nfrom `persistence_backend/v3` for the store's closed tables: one table per\\ndurable model — Project, Room, Customer, ArtifactPointer, AgentSession,\\nAuditEntry, MigrationClosure, AuditSequence (`60_data_closure.json`,\\n`persistence`).\",\"question\":\"Is `create_store_schema` DDL-only, or does it also create the required AuditSequence record at 0; which module supplies and writes the store version; and what transaction makes schema creation, version recording and AuditSequence initialization one complete new store?\",\"options\":[\"`store_persistence` creates tables only; `store` writes the version and inserts AuditSequence through the repository in one transaction\",\"`create_store_schema` creates the schema, records the version and seeds AuditSequence at 0 from values passed by `store`\",\"`store_persistence` owns the version and initialization values and performs the entire initialization\"],\"default_guess\":\"Let `store` own one initialization transaction and supply the release version; `store_persistence` creates the schema and performs a requested AuditSequence insert without owning either value.\"}]}",
+ "set_aside": []
+}

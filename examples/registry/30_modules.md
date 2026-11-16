@@ -628,8 +628,9 @@ lookup, a list's order or a deletion compares, and the record itself, whole.
 
 The connection or its transaction, minted identities, which rows a list reads
 and in which order a module receives them, which records an erasure removes,
-any file, or any rule of another module — all of these are `store`'s or the
-record module's. It is part of the store of A17 and A18: only `store` calls
+or any rule of another module — these are `store`'s or the record module's;
+and any file — the store's file is `store`'s, a file in the backup location
+`backups`' (above). It is part of the store of A17 and A18: only `store` calls
 it, inside the transaction `store` opened, so no other module touches the
 database through it.
 
