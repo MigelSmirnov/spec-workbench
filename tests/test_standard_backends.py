@@ -214,6 +214,33 @@ def test_host_clock_owns_both_module_operations(tmp_path: Path) -> None:
     }
 
 
+_AWARE_UTC_CLOCK = {
+    "kind": "system_clock_backend",
+    "schema_version": 6,
+    "backend": {"emitter": "python_host_utc_and_elapsed_clock_v1"},
+    "wiring": {"module": "clock", "wall_clock_function": "utc_now", "elapsed_clock_function": "monotonic_seconds"},
+    "time": {"policy": "rules.time_source_policy", "read": "per_call", "representation": "aware_utc_datetime"},
+}
+
+
+def test_aware_utc_clock_owns_both_module_operations(tmp_path: Path) -> None:
+    # system_clock_backend/v6: v5's wiring, so the same two scopes are deterministic
+    project = tmp_path / "clock"
+    _write_clock(project, _AWARE_UTC_CLOCK)
+    (project / "global_spec.json").write_text(
+        json.dumps({"rules": {"system_clock_backend": _AWARE_UTC_CLOCK}}), encoding="utf-8"
+    )
+
+    backend = _clock(project)
+    assert backend.structured_addresses(project) == {"rules.system_clock_backend"}
+    assert backend.deterministic_method_scopes(project) == {"utc_now", "monotonic_seconds"}
+    assert backend.module_slice(project, "clock") == {
+        "enabled": True,
+        "backend_ir": _AWARE_UTC_CLOCK,
+        "deterministic_method_scopes": ["monotonic_seconds", "utc_now"],
+    }
+
+
 def test_class_clock_owns_its_concrete_methods(tmp_path: Path) -> None:
     project = tmp_path / "clock"
     backend_ir = {
