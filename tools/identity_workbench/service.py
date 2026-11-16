@@ -102,7 +102,8 @@ def _closure_models(project: Path) -> dict[str, dict[str, Any]]:
 
 
 def _introduced(contracts: dict[str, Any], models: dict[str, dict[str, Any]]) -> set[str]:
-    """Closure models a contract introduces: named in a signature, or a field type of one that is."""
+    """Closure models a contract introduces: named in a signature, or a field type or a
+    variant (SPEC_STANDARD 5, kind: discriminated_union) of one that is."""
     frontier = [name for signature in contracts.values() for name in TYPE_NAME.findall(str(signature))
                 if name in models]
     found: set[str] = set()
@@ -113,6 +114,9 @@ def _introduced(contracts: dict[str, Any], models: dict[str, dict[str, Any]]) ->
         found.add(name)
         for field_type in (models[name].get("fields") or {}).values():
             frontier += [n for n in TYPE_NAME.findall(str(field_type)) if n in models and n not in found]
+        variants = models[name].get("variants")
+        if isinstance(variants, list):
+            frontier += [str(n) for n in variants if str(n) in models and str(n) not in found]
     # an interface model is introduced by its own method contracts too
     found |= {key.split(".", 1)[0] for key in contracts if "." in key and key.split(".", 1)[0] in models}
     return found
