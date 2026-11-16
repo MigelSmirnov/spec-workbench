@@ -54,6 +54,8 @@ TABLE_QUERY_FIELDS_V3_EXTRA: dict[str, frozenset[str]] = {
     "list_all": frozenset({"table", "select", "order_by"}),
     # §6.3: a paged read whose equality column a declared enum argument selects.
     "list_selected": frozenset({"table", "selector", "select", "order_by"}),
+    # §6.3: rows of one table removed by a non-empty filter; returns the count.
+    "delete_by": frozenset({"table", "filter"}),
 }
 SELECTOR_FIELDS = frozenset({"enum", "field_argument", "value_argument", "cases"})
 SELECTOR_CASE_FIELDS = frozenset({"member", "column"})
@@ -362,6 +364,10 @@ def _validate_method(
                         findings.append(Finding("error", "unknown_method_column", f"unknown column {name!r} for table {table!r}", repository, location + ".columns"))
         if query == "list_selected":
             findings.extend(_validate_selector(row.get("selector"), repository=repository, location=location + ".selector", table=table, table_columns=table_columns))
+        if query == "delete_by" and "filter" in row and not (isinstance(row["filter"], list) and row["filter"]):
+            # The terms are the factory's (tools/persistence_ir.py); an absent
+            # or empty filter is a whole-table delete, which is no storage shape.
+            findings.append(Finding("error", "invalid_delete_filter", "delete_by filter must be a non-empty list of terms; a whole-table delete is not a storage shape", repository, location + ".filter"))
     else:
         aggregate = row.get("aggregate")
         if not _text(aggregate):
