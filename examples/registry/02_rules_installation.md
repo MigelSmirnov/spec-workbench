@@ -503,9 +503,10 @@ request text (M08) — and the import reads a file from outside.
    field that carries the CSRF value (A13 rules 5, 7; owner, 2026-11-17): the
    limit and every byte this rule counts are the file part's, never the
    form's framing. Its declared length is the request's declared length less
-   the head read before the file — at most the data provider's
-   `UPLOAD_FORM_HEAD_MAX_BYTES` — and the closing delimiter; "before any byte
-   is read" is before any byte of the file. A refused upload is kept nowhere
+   the head read before the file — at most the imported
+   `UPLOAD_FORM_HEAD_MAX_BYTES` constant, which the code that reads the head
+   imports from the data provider (SPEC_STANDARD §15.3.1) — and the closing
+   delimiter; "before any byte is read" is before any byte of the file. A refused upload is kept nowhere
    and replaces no file the session kept (A16 rule 2). The limit is one
    value of the release, the data provider's constant
    `IMPORT_FILE_MAX_BYTES` = 52428800, which the code that receives the

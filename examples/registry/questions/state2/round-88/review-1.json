@@ -1,0 +1,187 @@
+{
+ "open_points": [
+  {
+   "subject": "A19 rule 4 — multipart head limit",
+   "kind": "missing_refusal_condition",
+   "text": "the head read before the file — at most the data provider's `UPLOAD_FORM_HEAD_MAX_BYTES` —",
+   "question": "What exactly happens when the file part has not begun after `UPLOAD_FORM_HEAD_MAX_BYTES`: is the upload refused, at which byte, with which refusal, and does Registry stop reading the request body?",
+   "options": [
+    "Refuse immediately when the next head byte would exceed the constant.",
+    "Refuse only after multipart parsing eventually finds the file or fails.",
+    "Treat requests exceeding the bound as unreadable uploads under A16."
+   ],
+   "default_guess": "Refuse immediately when the next head byte would exceed the constant, keep the prior session upload, and read no file byte.",
+   "witness": {
+    "initial": "An owner session already keeps upload F.",
+    "events": [
+     "The owner sends a multipart request whose CSRF field and multipart headers exceed `UPLOAD_FORM_HEAD_MAX_BYTES` before any file byte."
+    ],
+    "outcomes": [
+     "Registry refuses as soon as the head exceeds the bound and keeps F.",
+     "Registry continues reading until it finds the file or the multipart parser rejects the body, and keeps F only after that."
+    ],
+    "observer": "The owner and an operator observing request duration and resource use."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19 rule 4 — UPLOAD_FORM_HEAD_MAX_BYTES",
+   "kind": "undecided_policy_value",
+   "text": "at most the data provider's `UPLOAD_FORM_HEAD_MAX_BYTES`",
+   "question": "What numeric byte limit does `UPLOAD_FORM_HEAD_MAX_BYTES` have, and does it count the initial boundary, part headers, CSRF field contents, separators, and the file part's headers?",
+   "options": [
+    "Define one numeric limit and count every byte preceding the file payload.",
+    "Give separate limits to the CSRF field and multipart headers.",
+    "Leave the provider to choose a release-specific value."
+   ],
+   "default_guess": "Use one release constant and count every body byte before the first file-payload byte.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 rule 4 — accepted multipart shape",
+   "kind": "unspecified_input_handling",
+   "text": "The upload is the file the owner interface's form sends as the second part of a multipart body, after the field that carries the CSRF value",
+   "question": "Must Registry refuse multipart requests in which the file is first, the CSRF field is repeated, another field occurs between them, or additional parts follow the file, and which occurrence is authoritative?",
+   "options": [
+    "Accept only exactly one CSRF part followed by exactly one file part and then the closing delimiter.",
+    "Accept parts in any order but require exactly one CSRF field and one file.",
+    "Use the first recognized CSRF and file parts and ignore other parts."
+   ],
+   "default_guess": "Accept only the stated two-part order, with exactly one CSRF part and one file part, and refuse every other shape.",
+   "witness": {
+    "initial": "An authenticated owner session keeps no upload.",
+    "events": [
+     "The caller submits valid multipart data containing a file part first and a valid CSRF field second."
+    ],
+    "outcomes": [
+     "Registry refuses because the required order is not present.",
+     "Registry accepts after locating both named parts irrespective of order."
+    ],
+    "observer": "The caller sees whether a mapping is shown."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19 rule 4 — derived declared length",
+   "kind": "ambiguous_byte_accounting",
+   "text": "Its declared length is the request's declared length less the head read before the file — at most the data provider's `UPLOAD_FORM_HEAD_MAX_BYTES` — and the closing delimiter;",
+   "question": "Which exact bytes constitute the subtracted closing delimiter and tail, including the CRLF before the boundary, boundary markers, optional epilogue, and any parts after the file; and what happens when the subtraction is negative or cannot be computed?",
+   "options": [
+    "Subtract the complete syntactic tail from the byte after the file payload through the end of the body and refuse noncanonical tails.",
+    "Subtract only the final boundary line and count every other trailing byte as file data.",
+    "Do not derive a file length from request length; enforce the limit only while streaming the decoded file part."
+   ],
+   "default_guess": "Require the canonical two-part body, subtract its complete framing tail, and refuse if the derived length is negative or indeterminate.",
+   "witness": {
+    "initial": "An owner session already keeps upload F.",
+    "events": [
+     "The owner sends a multipart body with a maximum-size file followed by an epilogue or an additional form part."
+    ],
+    "outcomes": [
+     "Registry excludes all valid trailing multipart bytes and accepts the maximum-size file.",
+     "Registry subtracts only the closing boundary, counts the other trailing bytes toward the file, and refuses it as oversized."
+    ],
+    "observer": "The owner sees acceptance and a mapping in one implementation but a refusal in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19 rule 4 and Required test 4 — request Content-Length",
+   "kind": "contradictory_framing",
+   "text": "one of a byte more is refused, with no mapping shown, also when its declared length is smaller or absent",
+   "question": "How can a request whose declared length is defined as request length minus multipart framing deliver a complete file larger than that declared length, given that an HTTP server normally frames the request body by `Content-Length`; is the intended smaller declaration a file-part length field, a conflicting HTTP length, or a test below the HTTP framing layer?",
+   "options": [
+    "The test injects decoded multipart bytes below HTTP framing while separately supplying the claimed request length.",
+    "The request uses chunked transfer and a separate file-part declared length.",
+    "A conflicting or undersized HTTP `Content-Length` is itself refused as malformed before applying the file-size rule."
+   ],
+   "default_guess": "Treat an inconsistent HTTP `Content-Length` as malformed and rewrite the test to identify a realizable transport and length field.",
+   "witness": {
+    "initial": "An owner session already keeps upload F.",
+    "events": [
+     "A client declares a request length corresponding to a file below the limit but transmits multipart bytes containing a file one byte above it."
+    ],
+    "outcomes": [
+     "The HTTP stack stops at the declared request boundary, so Registry receives an incomplete multipart body and refuses it as unreadable.",
+     "A lower-level test or server passes bytes beyond the declared boundary, so Registry reads the extra file byte and refuses it as oversized."
+    ],
+    "observer": "The owner sees different refusal behavior, and an operator sees different parsing and connection handling."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19 rule 4 — validation precedence",
+   "kind": "unspecified_check_order",
+   "text": "The upload is the file the owner interface's form sends as the second part of a multipart body, after the field that carries the CSRF value",
+   "question": "After reading the first part, in what order must Registry check CSRF validity, the head bound, multipart validity, the derived declared file length, and the streamed file limit, and which refusal takes precedence when several fail?",
+   "options": [
+    "Enforce the head bound while reading, validate CSRF, validate the multipart transition, reject an oversized derived file length, then stream the file.",
+    "Compute and enforce size before validating CSRF.",
+    "Parse and stream the entire multipart body before applying CSRF and size checks."
+   ],
+   "default_guess": "Enforce the head bound during reading, validate CSRF before reading file bytes, then apply declared-length and streaming size checks.",
+   "witness": {
+    "initial": "An owner session keeps upload F.",
+    "events": [
+     "A caller sends an invalid CSRF value followed by a file whose derived declared length exceeds the file limit."
+    ],
+    "outcomes": [
+     "Registry refuses for invalid CSRF without reading a file byte.",
+     "Registry refuses for excessive file size after using the multipart head to derive its length."
+    ],
+    "observer": "The caller sees a different refusal and an operator sees different file-processing work."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19 Required test 4",
+   "kind": "incomplete_required_test",
+   "text": "An import file of exactly 50 × 1024 × 1024 bytes, sent by the upload form with its CSRF field first, is read; one of a byte more is refused, with no mapping shown, also when its declared length is smaller or absent, and the file the session kept before stays kept.",
+   "question": "Which Required tests must demonstrate the newly introduced head bound, refusal when that bound is exceeded, exclusion of all multipart framing from the file count, and handling of malformed or noncanonical part order?",
+   "options": [
+    "Extend this item with witnesses for the head boundary, framing boundary, malformed multipart, and part order.",
+    "Add separate Required tests for each new multipart invariant.",
+    "Remove those requirements from the normative rule if they are not intended to be verified."
+   ],
+   "default_guess": "Add separate boundary tests for the head limit, exact framing exclusion, required part order, and malformed multipart.",
+   "unit": "?"
+  },
+  {
+   "subject": "A21 security review — retained multipart head",
+   "kind": "unsupported_or_vague_review_claim",
+   "text": "the head before it is bounded by a constant and never kept",
+   "question": "Does “never kept” mean never persisted, discarded immediately after CSRF validation, or never buffered in memory at all, and which A19 rule and Required test establish that guarantee?",
+   "options": [
+    "The head may be buffered up to the constant but is discarded after parsing and never stored in session or durable storage.",
+    "Only the CSRF value may remain in the owner session; all other head bytes are discarded.",
+    "No complete head may be buffered; parsing must be streaming."
+   ],
+   "default_guess": "Allow bounded temporary buffering, then discard it; never attach the head to the session or persist it.",
+   "witness": {
+    "initial": "An authenticated owner begins an upload with a valid bounded multipart head.",
+    "events": [
+     "Registry reads the head and validates its CSRF field.",
+     "The upload later fails because the file is oversized."
+    ],
+    "outcomes": [
+     "The parser's temporary head buffer is discarded and nothing from it remains in session state.",
+     "The implementation retains the parsed head or CSRF-related multipart data for retry or diagnostics because A19 only says the refused upload is kept nowhere."
+    ],
+    "observer": "An operator inspecting memory, diagnostics, or session state sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19 rule 4 — UPLOAD_FORM_HEAD_MAX_BYTES delivery",
+   "kind": "standard_violation",
+   "text": "Its declared length is the request's declared length less\n   the head read before the file — at most the data provider's\n   `UPLOAD_FORM_HEAD_MAX_BYTES` — and the closing delimiter;",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "The passage must name `UPLOAD_FORM_HEAD_MAX_BYTES` as the imported data-provider constant used by the receiving code, with one value home and a path that delivers its symbol and type to generated code.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A19 rule 4 — multipart head limit\",\"kind\":\"missing_refusal_condition\",\"text\":\"the head read before the file — at most the data provider's `UPLOAD_FORM_HEAD_MAX_BYTES` —\",\"question\":\"What exactly happens when the file part has not begun after `UPLOAD_FORM_HEAD_MAX_BYTES`: is the upload refused, at which byte, with which refusal, and does Registry stop reading the request body?\",\"options\":[\"Refuse immediately when the next head byte would exceed the constant.\",\"Refuse only after multipart parsing eventually finds the file or fails.\",\"Treat requests exceeding the bound as unreadable uploads under A16.\"],\"default_guess\":\"Refuse immediately when the next head byte would exceed the constant, keep the prior session upload, and read no file byte.\",\"witness\":{\"initial\":\"An owner session already keeps upload F.\",\"events\":[\"The owner sends a multipart request whose CSRF field and multipart headers exceed `UPLOAD_FORM_HEAD_MAX_BYTES` before any file byte.\"],\"outcomes\":[\"Registry refuses as soon as the head exceeds the bound and keeps F.\",\"Registry continues reading until it finds the file or the multipart parser rejects the body, and keeps F only after that.\"],\"observer\":\"The owner and an operator observing request duration and resource use.\"}},{\"subject\":\"A19 rule 4 — UPLOAD_FORM_HEAD_MAX_BYTES\",\"kind\":\"undecided_policy_value\",\"text\":\"at most the data provider's `UPLOAD_FORM_HEAD_MAX_BYTES`\",\"question\":\"What numeric byte limit does `UPLOAD_FORM_HEAD_MAX_BYTES` have, and does it count the initial boundary, part headers, CSRF field contents, separators, and the file part's headers?\",\"options\":[\"Define one numeric limit and count every byte preceding the file payload.\",\"Give separate limits to the CSRF field and multipart headers.\",\"Leave the provider to choose a release-specific value.\"],\"default_guess\":\"Use one release constant and count every body byte before the first file-payload byte.\"},{\"subject\":\"A19 rule 4 — accepted multipart shape\",\"kind\":\"unspecified_input_handling\",\"text\":\"The upload is the file the owner interface's form sends as the second part of a multipart body, after the field that carries the CSRF value\",\"question\":\"Must Registry refuse multipart requests in which the file is first, the CSRF field is repeated, another field occurs between them, or additional parts follow the file, and which occurrence is authoritative?\",\"options\":[\"Accept only exactly one CSRF part followed by exactly one file part and then the closing delimiter.\",\"Accept parts in any order but require exactly one CSRF field and one file.\",\"Use the first recognized CSRF and file parts and ignore other parts.\"],\"default_guess\":\"Accept only the stated two-part order, with exactly one CSRF part and one file part, and refuse every other shape.\",\"witness\":{\"initial\":\"An authenticated owner session keeps no upload.\",\"events\":[\"The caller submits valid multipart data containing a file part first and a valid CSRF field second.\"],\"outcomes\":[\"Registry refuses because the required order is not present.\",\"Registry accepts after locating both named parts irrespective of order.\"],\"observer\":\"The caller sees whether a mapping is shown.\"}},{\"subject\":\"A19 rule 4 — derived declared length\",\"kind\":\"ambiguous_byte_accounting\",\"text\":\"Its declared length is the request's declared length less the head read before the file — at most the data provider's `UPLOAD_FORM_HEAD_MAX_BYTES` — and the closing delimiter;\",\"question\":\"Which exact bytes constitute the subtracted closing delimiter and tail, including the CRLF before the boundary, boundary markers, optional epilogue, and any parts after the file; and what happens when the subtraction is negative or cannot be computed?\",\"options\":[\"Subtract the complete syntactic tail from the byte after the file payload through the end of the body and refuse noncanonical tails.\",\"Subtract only the final boundary line and count every other trailing byte as file data.\",\"Do not derive a file length from request length; enforce the limit only while streaming the decoded file part.\"],\"default_guess\":\"Require the canonical two-part body, subtract its complete framing tail, and refuse if the derived length is negative or indeterminate.\",\"witness\":{\"initial\":\"An owner session already keeps upload F.\",\"events\":[\"The owner sends a multipart body with a maximum-size file followed by an epilogue or an additional form part.\"],\"outcomes\":[\"Registry excludes all valid trailing multipart bytes and accepts the maximum-size file.\",\"Registry subtracts only the closing boundary, counts the other trailing bytes toward the file, and refuses it as oversized.\"],\"observer\":\"The owner sees acceptance and a mapping in one implementation but a refusal in the other.\"}},{\"subject\":\"A19 rule 4 and Required test 4 — request Content-Length\",\"kind\":\"contradictory_framing\",\"text\":\"one of a byte more is refused, with no mapping shown, also when its declared length is smaller or absent\",\"question\":\"How can a request whose declared length is defined as request length minus multipart framing deliver a complete file larger than that declared length, given that an HTTP server normally frames the request body by `Content-Length`; is the intended smaller declaration a file-part length field, a conflicting HTTP length, or a test below the HTTP framing layer?\",\"options\":[\"The test injects decoded multipart bytes below HTTP framing while separately supplying the claimed request length.\",\"The request uses chunked transfer and a separate file-part declared length.\",\"A conflicting or undersized HTTP `Content-Length` is itself refused as malformed before applying the file-size rule.\"],\"default_guess\":\"Treat an inconsistent HTTP `Content-Length` as malformed and rewrite the test to identify a realizable transport and length field.\",\"witness\":{\"initial\":\"An owner session already keeps upload F.\",\"events\":[\"A client declares a request length corresponding to a file below the limit but transmits multipart bytes containing a file one byte above it.\"],\"outcomes\":[\"The HTTP stack stops at the declared request boundary, so Registry receives an incomplete multipart body and refuses it as unreadable.\",\"A lower-level test or server passes bytes beyond the declared boundary, so Registry reads the extra file byte and refuses it as oversized.\"],\"observer\":\"The owner sees different refusal behavior, and an operator sees different parsing and connection handling.\"}},{\"subject\":\"A19 rule 4 — validation precedence\",\"kind\":\"unspecified_check_order\",\"text\":\"The upload is the file the owner interface's form sends as the second part of a multipart body, after the field that carries the CSRF value\",\"question\":\"After reading the first part, in what order must Registry check CSRF validity, the head bound, multipart validity, the derived declared file length, and the streamed file limit, and which refusal takes precedence when several fail?\",\"options\":[\"Enforce the head bound while reading, validate CSRF, validate the multipart transition, reject an oversized derived file length, then stream the file.\",\"Compute and enforce size before validating CSRF.\",\"Parse and stream the entire multipart body before applying CSRF and size checks.\"],\"default_guess\":\"Enforce the head bound during reading, validate CSRF before reading file bytes, then apply declared-length and streaming size checks.\",\"witness\":{\"initial\":\"An owner session keeps upload F.\",\"events\":[\"A caller sends an invalid CSRF value followed by a file whose derived declared length exceeds the file limit.\"],\"outcomes\":[\"Registry refuses for invalid CSRF without reading a file byte.\",\"Registry refuses for excessive file size after using the multipart head to derive its length.\"],\"observer\":\"The caller sees a different refusal and an operator sees different file-processing work.\"}},{\"subject\":\"A19 Required test 4\",\"kind\":\"incomplete_required_test\",\"text\":\"An import file of exactly 50 × 1024 × 1024 bytes, sent by the upload form with its CSRF field first, is read; one of a byte more is refused, with no mapping shown, also when its declared length is smaller or absent, and the file the session kept before stays kept.\",\"question\":\"Which Required tests must demonstrate the newly introduced head bound, refusal when that bound is exceeded, exclusion of all multipart framing from the file count, and handling of malformed or noncanonical part order?\",\"options\":[\"Extend this item with witnesses for the head boundary, framing boundary, malformed multipart, and part order.\",\"Add separate Required tests for each new multipart invariant.\",\"Remove those requirements from the normative rule if they are not intended to be verified.\"],\"default_guess\":\"Add separate boundary tests for the head limit, exact framing exclusion, required part order, and malformed multipart.\"},{\"subject\":\"A21 security review — retained multipart head\",\"kind\":\"unsupported_or_vague_review_claim\",\"text\":\"the head before it is bounded by a constant and never kept\",\"question\":\"Does “never kept” mean never persisted, discarded immediately after CSRF validation, or never buffered in memory at all, and which A19 rule and Required test establish that guarantee?\",\"options\":[\"The head may be buffered up to the constant but is discarded after parsing and never stored in session or durable storage.\",\"Only the CSRF value may remain in the owner session; all other head bytes are discarded.\",\"No complete head may be buffered; parsing must be streaming.\"],\"default_guess\":\"Allow bounded temporary buffering, then discard it; never attach the head to the session or persist it.\",\"witness\":{\"initial\":\"An authenticated owner begins an upload with a valid bounded multipart head.\",\"events\":[\"Registry reads the head and validates its CSRF field.\",\"The upload later fails because the file is oversized.\"],\"outcomes\":[\"The parser's temporary head buffer is discarded and nothing from it remains in session state.\",\"The implementation retains the parsed head or CSRF-related multipart data for retry or diagnostics because A19 only says the refused upload is kept nowhere.\"],\"observer\":\"An operator inspecting memory, diagnostics, or session state sees the difference.\"}},{\"subject\":\"A19 rule 4 — UPLOAD_FORM_HEAD_MAX_BYTES delivery\",\"kind\":\"standard_violation\",\"text\":\"Its declared length is the request's declared length less\\n   the head read before the file — at most the data provider's\\n   `UPLOAD_FORM_HEAD_MAX_BYTES` — and the closing delimiter;\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"The passage must name `UPLOAD_FORM_HEAD_MAX_BYTES` as the imported data-provider constant used by the receiving code, with one value home and a path that delivers its symbol and type to generated code.\"}]}",
+ "set_aside": []
+}
