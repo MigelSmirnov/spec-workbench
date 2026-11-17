@@ -1,0 +1,121 @@
+{
+ "open_points": [
+  {
+   "subject": "Conventions every operation follows",
+   "kind": "lock_ownership",
+   "text": "`owner_sessions` also keeps one session-table lock, which guards every session's entry with its signed-out mark and its last-request reading: each read or write of them is made under it and only there",
+   "question": "Does the table lock guard the entire OwnerSession entry, including its CSRF value, pending confirmation and uploaded file, or only membership, the signed-out mark and the last-request reading; and must operations already holding the session lock also take the table lock to access those other fields?",
+   "options": [
+    "The table lock guards every field of every session entry; session-state operations take session then table.",
+    "The table lock guards only table membership, signed-out and last-request fields; the session lock alone guards confirmation, upload and other mutable session state.",
+    "The table stores only lifecycle fields, while a separate session object guarded by the session lock holds the remaining fields."
+   ],
+   "default_guess": "Use the table lock for membership, signed-out and last-request fields only, and the session lock for the remaining per-session state.",
+   "witness": {
+    "initial": "A valid owner session has a pending confirmation and an uploaded import file.",
+    "events": [
+     "One owner request, holding the session lock, replaces the pending confirmation.",
+     "At the same time another request acquires the table lock to perform its arrival check."
+    ],
+    "outcomes": [
+     "If the entire entry is table-guarded, replacing the confirmation must wait for and acquire the table lock.",
+     "If only lifecycle fields are table-guarded, replacing the confirmation proceeds under the session lock without taking the table lock."
+    ],
+    "observer": "Concurrent owner requests observe different completion and lock-acquisition orders."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner session sign-out",
+   "kind": "contradictory_lifetime",
+   "text": "a sign-out marks and removes it",
+   "question": "At what exact point does sign-out remove the session-table entry, and does a removed entry or retained session object remain usable by requests admitted before the sign-out?",
+   "options": [
+    "Mark and remove the table entry during admission, while admitted requests retain a separate session object until they finish.",
+    "Mark it during admission but remove it only when the sign-out reaches its turn on the session lock.",
+    "Keep a signed-out tombstone in the table until all admitted requests finish, then remove it."
+   ],
+   "default_guess": "Mark the session signed out during admission so later arrivals fail, retain the session object for already-admitted requests, and remove the table entry when sign-out reaches its session-lock turn.",
+   "witness": {
+    "initial": "A valid session has request R admitted and still rendering a page that needs its CSRF value.",
+    "events": [
+     "A sign-out S is admitted while R is running.",
+     "S marks the session signed out.",
+     "R calls `give_session_csrf` before completing."
+    ],
+    "outcomes": [
+     "If S immediately removes and destroys the entry, R cannot read the CSRF value and fails despite having been admitted.",
+     "If the entry or a referenced session object survives for admitted requests, R receives the CSRF value and completes before sign-out finishes."
+    ],
+    "observer": "The owner sees either the completed page or a failed request."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner session sign-out",
+   "kind": "contradiction",
+   "text": "A second sign-out arriving after the first was admitted finds the session marked signed out and is refused.",
+   "question": "How can the second sign-out find a signed-out mark if the first sign-out \"marks and removes\" the session; is the mark retained as a tombstone, is removal delayed, or should the second sign-out instead find no session?",
+   "options": [
+    "Retain a signed-out tombstone until removal at the first sign-out's session-lock turn.",
+    "Delay both logical removal and physical removal until the first sign-out's turn.",
+    "Remove immediately; the second sign-out finds no session rather than a signed-out mark, though it receives the same refusal."
+   ],
+   "default_guess": "Retain a signed-out tombstone or session entry until the first sign-out reaches its session-lock turn.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner session expiry pass",
+   "kind": "concurrent_iteration",
+   "text": "the pass reads every session's readings by its one clock reading and removes those past a limit",
+   "question": "What set of sessions does one pass examine when sessions are added, signed out or removed concurrently, and how does it enumerate that set without taking the table lock before a session lock and violating the stated lock order?",
+   "options": [
+    "Snapshot session identities under the table lock, release it, then visit each snapshot member under session then table locks.",
+    "Hold the import and table locks while enumerating, taking no session locks during the scan.",
+    "Iterate incrementally, taking session then table for each entry, with sessions added or removed during the pass included or skipped according to encounter order."
+   ],
+   "default_guess": "Snapshot the session identities briefly under the table lock, then release it and process each identity under import, session and table locks; sessions absent from the snapshot wait for the next pass.",
+   "witness": {
+    "initial": "The expiry pass is due while session A exists and another sign-in is about to add session B.",
+    "events": [
+     "The pass takes its single monotonic reading.",
+     "The sign-in adds B while the pass is traversing the table."
+    ],
+    "outcomes": [
+     "With a fixed snapshot, this pass examines only A.",
+     "With a live traversal, this pass may also examine B."
+    ],
+    "observer": "The process and tests observe a different set of sessions processed by that pass."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:owner_sessions.admit_owner_request",
+   "kind": "thread_contract",
+   "text": "The step runs synchronously, in the request's own thread",
+   "question": "What precisely is the request's own thread when the transport or application framework dispatches requests asynchronously or through a worker pool, and is `admit_owner_request` required to invoke the step on the calling thread rather than merely wait synchronously for its completion?",
+   "options": [
+    "The step must execute on the exact OS thread that called `admit_owner_request`.",
+    "The step may execute on another worker, but `admit_owner_request` blocks until it finishes.",
+    "The service surfaces must use a synchronous per-request worker model, so the calling thread and request worker are always the same."
+   ],
+   "default_guess": "Require the step to execute directly on the calling request-worker thread and require the transport adapter to provide that synchronous worker context.",
+   "witness": {
+    "initial": "A request is handled by an asynchronous transport loop and its admitted step performs blocking store work.",
+    "events": [
+     "The transport calls `admit_owner_request`.",
+     "The operation invokes the step."
+    ],
+    "outcomes": [
+     "One implementation runs the step directly on the event-loop thread.",
+     "Another dispatches it to a worker thread and awaits it synchronously from the request's perspective."
+    ],
+    "observer": "Concurrent requests and thread-affine resources observe different execution and blocking behavior."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Conventions every operation follows\",\"kind\":\"lock_ownership\",\"text\":\"`owner_sessions` also keeps one session-table lock, which guards every session's entry with its signed-out mark and its last-request reading: each read or write of them is made under it and only there\",\"question\":\"Does the table lock guard the entire OwnerSession entry, including its CSRF value, pending confirmation and uploaded file, or only membership, the signed-out mark and the last-request reading; and must operations already holding the session lock also take the table lock to access those other fields?\",\"options\":[\"The table lock guards every field of every session entry; session-state operations take session then table.\",\"The table lock guards only table membership, signed-out and last-request fields; the session lock alone guards confirmation, upload and other mutable session state.\",\"The table stores only lifecycle fields, while a separate session object guarded by the session lock holds the remaining fields.\"],\"default_guess\":\"Use the table lock for membership, signed-out and last-request fields only, and the session lock for the remaining per-session state.\",\"witness\":{\"initial\":\"A valid owner session has a pending confirmation and an uploaded import file.\",\"events\":[\"One owner request, holding the session lock, replaces the pending confirmation.\",\"At the same time another request acquires the table lock to perform its arrival check.\"],\"outcomes\":[\"If the entire entry is table-guarded, replacing the confirmation must wait for and acquire the table lock.\",\"If only lifecycle fields are table-guarded, replacing the confirmation proceeds under the session lock without taking the table lock.\"],\"observer\":\"Concurrent owner requests observe different completion and lock-acquisition orders.\"}},{\"subject\":\"owner session sign-out\",\"kind\":\"contradictory_lifetime\",\"text\":\"a sign-out marks and removes it\",\"question\":\"At what exact point does sign-out remove the session-table entry, and does a removed entry or retained session object remain usable by requests admitted before the sign-out?\",\"options\":[\"Mark and remove the table entry during admission, while admitted requests retain a separate session object until they finish.\",\"Mark it during admission but remove it only when the sign-out reaches its turn on the session lock.\",\"Keep a signed-out tombstone in the table until all admitted requests finish, then remove it.\"],\"default_guess\":\"Mark the session signed out during admission so later arrivals fail, retain the session object for already-admitted requests, and remove the table entry when sign-out reaches its session-lock turn.\",\"witness\":{\"initial\":\"A valid session has request R admitted and still rendering a page that needs its CSRF value.\",\"events\":[\"A sign-out S is admitted while R is running.\",\"S marks the session signed out.\",\"R calls `give_session_csrf` before completing.\"],\"outcomes\":[\"If S immediately removes and destroys the entry, R cannot read the CSRF value and fails despite having been admitted.\",\"If the entry or a referenced session object survives for admitted requests, R receives the CSRF value and completes before sign-out finishes.\"],\"observer\":\"The owner sees either the completed page or a failed request.\"}},{\"subject\":\"owner session sign-out\",\"kind\":\"contradiction\",\"text\":\"A second sign-out arriving after the first was admitted finds the session marked signed out and is refused.\",\"question\":\"How can the second sign-out find a signed-out mark if the first sign-out \\\"marks and removes\\\" the session; is the mark retained as a tombstone, is removal delayed, or should the second sign-out instead find no session?\",\"options\":[\"Retain a signed-out tombstone until removal at the first sign-out's session-lock turn.\",\"Delay both logical removal and physical removal until the first sign-out's turn.\",\"Remove immediately; the second sign-out finds no session rather than a signed-out mark, though it receives the same refusal.\"],\"default_guess\":\"Retain a signed-out tombstone or session entry until the first sign-out reaches its session-lock turn.\"},{\"subject\":\"owner session expiry pass\",\"kind\":\"concurrent_iteration\",\"text\":\"the pass reads every session's readings by its one clock reading and removes those past a limit\",\"question\":\"What set of sessions does one pass examine when sessions are added, signed out or removed concurrently, and how does it enumerate that set without taking the table lock before a session lock and violating the stated lock order?\",\"options\":[\"Snapshot session identities under the table lock, release it, then visit each snapshot member under session then table locks.\",\"Hold the import and table locks while enumerating, taking no session locks during the scan.\",\"Iterate incrementally, taking session then table for each entry, with sessions added or removed during the pass included or skipped according to encounter order.\"],\"default_guess\":\"Snapshot the session identities briefly under the table lock, then release it and process each identity under import, session and table locks; sessions absent from the snapshot wait for the next pass.\",\"witness\":{\"initial\":\"The expiry pass is due while session A exists and another sign-in is about to add session B.\",\"events\":[\"The pass takes its single monotonic reading.\",\"The sign-in adds B while the pass is traversing the table.\"],\"outcomes\":[\"With a fixed snapshot, this pass examines only A.\",\"With a live traversal, this pass may also examine B.\"],\"observer\":\"The process and tests observe a different set of sessions processed by that pass.\"}},{\"subject\":\"public_op:owner_sessions.admit_owner_request\",\"kind\":\"thread_contract\",\"text\":\"The step runs synchronously, in the request's own thread\",\"question\":\"What precisely is the request's own thread when the transport or application framework dispatches requests asynchronously or through a worker pool, and is `admit_owner_request` required to invoke the step on the calling thread rather than merely wait synchronously for its completion?\",\"options\":[\"The step must execute on the exact OS thread that called `admit_owner_request`.\",\"The step may execute on another worker, but `admit_owner_request` blocks until it finishes.\",\"The service surfaces must use a synchronous per-request worker model, so the calling thread and request worker are always the same.\"],\"default_guess\":\"Require the step to execute directly on the calling request-worker thread and require the transport adapter to provide that synchronous worker context.\",\"witness\":{\"initial\":\"A request is handled by an asynchronous transport loop and its admitted step performs blocking store work.\",\"events\":[\"The transport calls `admit_owner_request`.\",\"The operation invokes the step.\"],\"outcomes\":[\"One implementation runs the step directly on the event-loop thread.\",\"Another dispatches it to a worker thread and awaits it synchronously from the request's perspective.\"],\"observer\":\"Concurrent requests and thread-affine resources observe different execution and blocking behavior.\"}}]}",
+ "set_aside": []
+}

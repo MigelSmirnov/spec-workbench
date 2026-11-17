@@ -1,0 +1,138 @@
+{
+ "open_points": [
+  {
+   "subject": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "kind": "lock_scope",
+   "text": "`owner_sessions` also keeps one session-table lock, which guards every session's entry with its signed-out mark and its last-request reading: each read or write of them is made under it and only there",
+   "question": "Does the table lock guard only the table mapping, signed-out mark and last-request reading, or every field of M11 including CSRF, pending confirmation and uploaded file; and which lock must each field's read or write hold?",
+   "options": [
+    "The table lock guards only membership, signed-out and last-request; the session lock guards confirmation and upload state.",
+    "The table lock guards the whole OwnerSession entry, so code holding a session lock must also take the table lock to access any field.",
+    "The table lock guards membership and immutable session credentials plus the two named runtime fields; the session lock guards the remaining mutable fields."
+   ],
+   "default_guess": "Use the table lock for membership, signed-out and last-request only, and the session lock for pending confirmation and uploaded-file state.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "kind": "removal_lifetime",
+   "text": "a sign-out marks and removes it",
+   "question": "What exactly is removed at sign-out admission, and how long are the detached session object, its lock, pending confirmation and uploaded file retained for requests admitted before that sign-out?",
+   "options": [
+    "Remove only the table mapping at admission, retain the detached session and all state until earlier admitted requests and the sign-out's queued turn finish.",
+    "Mark at admission but remove the table mapping and destroy the state only when the sign-out reaches its session-lock turn.",
+    "Remove and destroy the session immediately at admission, requiring earlier admitted requests to proceed without its state."
+   ],
+   "default_guess": "Remove the table mapping at admission but retain the detached session object and state until all earlier admitted requests complete and sign-out takes its turn.",
+   "witness": {
+    "initial": "A valid owner session has an uploaded import file; a change using that file has passed the arrival check and is waiting for the session lock behind another request.",
+    "events": [
+     "The owner submits sign-out while the admitted change is still waiting.",
+     "The sign-out admission marks the session signed out and executes the stated removal.",
+     "The earlier admitted change reaches its turn and tries to read the uploaded file."
+    ],
+    "outcomes": [
+     "If removal detaches only the table mapping, the earlier admitted change finds the retained file and completes as required.",
+     "If removal destroys the session state, the earlier admitted change cannot find its file and is refused or fails despite having been admitted."
+    ],
+    "observer": "The owner and the store observe whether the admitted change completes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "kind": "pass_snapshot",
+   "text": "the pass reads every session's readings by its one clock reading and removes those past a limit",
+   "question": "Which set of sessions does one pass examine, and how does it safely obtain session references while sign-ins and sign-outs add or remove table entries without holding the table lock while waiting for a session lock?",
+   "options": [
+    "Take a snapshot of session references under the table lock, release it, then process each reference under session and table locks with a membership recheck.",
+    "Discover one session at a time under the table lock, retain it, release the table lock, then acquire its session lock and recheck it.",
+    "Iterate the live table while repeatedly releasing and reacquiring the table lock, with an explicit cursor and inclusion rule for concurrent additions.",
+    "Hold the table lock for the scan and while acquiring session locks."
+   ],
+   "default_guess": "Snapshot retained session references under the table lock, then process them with membership and state rechecks; exclude sessions added after the snapshot.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "kind": "identity_collision",
+   "text": "a sign-in adds its session",
+   "question": "If the newly generated owner-session identity already names a live session in the table, must sign-in mint again, refuse, or replace the existing entry?",
+   "options": [
+    "Mint again until the identity is absent.",
+    "Refuse the sign-in without changing the existing session.",
+    "Replace the existing session entry.",
+    "Treat collision as an internal failure."
+   ],
+   "default_guess": "Mint again until the identity is absent.",
+   "witness": {
+    "initial": "One live owner session has identity S and state that must remain valid; the random source is allowed to return the same bytes again.",
+    "events": [
+     "A second successful sign-in generates S as its proposed session identity.",
+     "The sign-in attempts to add the new session under the table lock."
+    ],
+    "outcomes": [
+     "A retry policy preserves the first session and gives the second a different identity.",
+     "An overwrite policy silently ends or changes the first session; a refusal policy gives the second owner no session."
+    ],
+    "observer": "The holders of the first and second browser sessions see different authentication results."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`",
+   "kind": "callback_contract",
+   "text": "the request's step, which receives the admitted session",
+   "question": "What is the step's complete callable contract: the exact admitted-session value or handle it receives, whether it is invoked exactly once, and the type family of answers, refusals and raised exceptions it may produce?",
+   "options": [
+    "Declare a generic callback `Step[T]` invoked exactly once with a retained session handle and returning or raising `T` unchanged.",
+    "Use one fixed response/refusal envelope shared by every owner operation.",
+    "Give `admit_owner_request` a closed union containing every possible downstream operation result and error."
+   ],
+   "default_guess": "Declare an exactly-once generic callback invoked with a retained session handle, with its result or exception passed through unchanged.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`",
+   "kind": "errors_contradiction",
+   "text": "its answer, a refusal among them, is this operation's answer unchanged",
+   "question": "How can arbitrary refusals returned by the step be part of this operation's contract when its Errors section lists only `unauthenticated` (`no_owner_session`) and `not_permitted` (`csrf_refused`); must Errors include propagated step errors or explicitly distinguish direct errors from generic passthrough errors?",
+   "options": [
+    "Make the operation generic over the step's declared errors and list the two admission errors in addition to that type parameter.",
+    "Expand Errors to the union of every refusal any owner-operation step can return.",
+    "State that Errors lists only errors created by admission, while the step result is an opaque passthrough envelope.",
+    "Map every step refusal to one of the two listed errors."
+   ],
+   "default_guess": "Make the operation generic over the step result and errors, with the two listed errors identified as admission's own errors.",
+   "witness": {
+    "initial": "A valid owner session submits a project correction whose step detects a stale revision.",
+    "events": [
+     "`admit_owner_request` admits the request and invokes the correction step.",
+     "The step returns its stale-revision refusal."
+    ],
+    "outcomes": [
+     "Following Outputs, the stale-revision refusal is returned unchanged.",
+     "Following the closed Errors list, the wrapper cannot return that refusal and must reject, wrap or map it without a specified rule."
+    ],
+    "observer": "The owner client sees either the domain refusal or a different wrapper-level result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`",
+   "kind": "execution_model",
+   "text": "The step runs synchronously, in the request's own thread",
+   "question": "Does “the request's own thread” require execution on the same operating-system thread that called `admit_owner_request`, or does it only prohibit detached/background execution while allowing an async task or worker-thread handoff that is awaited synchronously?",
+   "options": [
+    "Require same operating-system thread and same call stack until completion.",
+    "Require only structured synchronous completion before the request handler returns; an awaited worker or async task is allowed.",
+    "Require one dedicated thread per admitted request, even if the transport began on an event-loop thread."
+   ],
+   "default_guess": "Require the same operating-system thread that invoked `admit_owner_request`, because the text explicitly adds thread affinity rather than merely saying the call is awaited.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"kind\":\"lock_scope\",\"text\":\"`owner_sessions` also keeps one session-table lock, which guards every session's entry with its signed-out mark and its last-request reading: each read or write of them is made under it and only there\",\"question\":\"Does the table lock guard only the table mapping, signed-out mark and last-request reading, or every field of M11 including CSRF, pending confirmation and uploaded file; and which lock must each field's read or write hold?\",\"options\":[\"The table lock guards only membership, signed-out and last-request; the session lock guards confirmation and upload state.\",\"The table lock guards the whole OwnerSession entry, so code holding a session lock must also take the table lock to access any field.\",\"The table lock guards membership and immutable session credentials plus the two named runtime fields; the session lock guards the remaining mutable fields.\"],\"default_guess\":\"Use the table lock for membership, signed-out and last-request only, and the session lock for pending confirmation and uploaded-file state.\"},{\"subject\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"kind\":\"removal_lifetime\",\"text\":\"a sign-out marks and removes it\",\"question\":\"What exactly is removed at sign-out admission, and how long are the detached session object, its lock, pending confirmation and uploaded file retained for requests admitted before that sign-out?\",\"options\":[\"Remove only the table mapping at admission, retain the detached session and all state until earlier admitted requests and the sign-out's queued turn finish.\",\"Mark at admission but remove the table mapping and destroy the state only when the sign-out reaches its session-lock turn.\",\"Remove and destroy the session immediately at admission, requiring earlier admitted requests to proceed without its state.\"],\"default_guess\":\"Remove the table mapping at admission but retain the detached session object and state until all earlier admitted requests complete and sign-out takes its turn.\",\"witness\":{\"initial\":\"A valid owner session has an uploaded import file; a change using that file has passed the arrival check and is waiting for the session lock behind another request.\",\"events\":[\"The owner submits sign-out while the admitted change is still waiting.\",\"The sign-out admission marks the session signed out and executes the stated removal.\",\"The earlier admitted change reaches its turn and tries to read the uploaded file.\"],\"outcomes\":[\"If removal detaches only the table mapping, the earlier admitted change finds the retained file and completes as required.\",\"If removal destroys the session state, the earlier admitted change cannot find its file and is refused or fails despite having been admitted.\"],\"observer\":\"The owner and the store observe whether the admitted change completes.\"}},{\"subject\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"kind\":\"pass_snapshot\",\"text\":\"the pass reads every session's readings by its one clock reading and removes those past a limit\",\"question\":\"Which set of sessions does one pass examine, and how does it safely obtain session references while sign-ins and sign-outs add or remove table entries without holding the table lock while waiting for a session lock?\",\"options\":[\"Take a snapshot of session references under the table lock, release it, then process each reference under session and table locks with a membership recheck.\",\"Discover one session at a time under the table lock, retain it, release the table lock, then acquire its session lock and recheck it.\",\"Iterate the live table while repeatedly releasing and reacquiring the table lock, with an explicit cursor and inclusion rule for concurrent additions.\",\"Hold the table lock for the scan and while acquiring session locks.\"],\"default_guess\":\"Snapshot retained session references under the table lock, then process them with membership and state rechecks; exclude sessions added after the snapshot.\"},{\"subject\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"kind\":\"identity_collision\",\"text\":\"a sign-in adds its session\",\"question\":\"If the newly generated owner-session identity already names a live session in the table, must sign-in mint again, refuse, or replace the existing entry?\",\"options\":[\"Mint again until the identity is absent.\",\"Refuse the sign-in without changing the existing session.\",\"Replace the existing session entry.\",\"Treat collision as an internal failure.\"],\"default_guess\":\"Mint again until the identity is absent.\",\"witness\":{\"initial\":\"One live owner session has identity S and state that must remain valid; the random source is allowed to return the same bytes again.\",\"events\":[\"A second successful sign-in generates S as its proposed session identity.\",\"The sign-in attempts to add the new session under the table lock.\"],\"outcomes\":[\"A retry policy preserves the first session and gives the second a different identity.\",\"An overwrite policy silently ends or changes the first session; a refusal policy gives the second owner no session.\"],\"observer\":\"The holders of the first and second browser sessions see different authentication results.\"}},{\"subject\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`\",\"kind\":\"callback_contract\",\"text\":\"the request's step, which receives the admitted session\",\"question\":\"What is the step's complete callable contract: the exact admitted-session value or handle it receives, whether it is invoked exactly once, and the type family of answers, refusals and raised exceptions it may produce?\",\"options\":[\"Declare a generic callback `Step[T]` invoked exactly once with a retained session handle and returning or raising `T` unchanged.\",\"Use one fixed response/refusal envelope shared by every owner operation.\",\"Give `admit_owner_request` a closed union containing every possible downstream operation result and error.\"],\"default_guess\":\"Declare an exactly-once generic callback invoked with a retained session handle, with its result or exception passed through unchanged.\"},{\"subject\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`\",\"kind\":\"errors_contradiction\",\"text\":\"its answer, a refusal among them, is this operation's answer unchanged\",\"question\":\"How can arbitrary refusals returned by the step be part of this operation's contract when its Errors section lists only `unauthenticated` (`no_owner_session`) and `not_permitted` (`csrf_refused`); must Errors include propagated step errors or explicitly distinguish direct errors from generic passthrough errors?\",\"options\":[\"Make the operation generic over the step's declared errors and list the two admission errors in addition to that type parameter.\",\"Expand Errors to the union of every refusal any owner-operation step can return.\",\"State that Errors lists only errors created by admission, while the step result is an opaque passthrough envelope.\",\"Map every step refusal to one of the two listed errors.\"],\"default_guess\":\"Make the operation generic over the step result and errors, with the two listed errors identified as admission's own errors.\",\"witness\":{\"initial\":\"A valid owner session submits a project correction whose step detects a stale revision.\",\"events\":[\"`admit_owner_request` admits the request and invokes the correction step.\",\"The step returns its stale-revision refusal.\"],\"outcomes\":[\"Following Outputs, the stale-revision refusal is returned unchanged.\",\"Following the closed Errors list, the wrapper cannot return that refusal and must reject, wrap or map it without a specified rule.\"],\"observer\":\"The owner client sees either the domain refusal or a different wrapper-level result.\"}},{\"subject\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`\",\"kind\":\"execution_model\",\"text\":\"The step runs synchronously, in the request's own thread\",\"question\":\"Does “the request's own thread” require execution on the same operating-system thread that called `admit_owner_request`, or does it only prohibit detached/background execution while allowing an async task or worker-thread handoff that is awaited synchronously?\",\"options\":[\"Require same operating-system thread and same call stack until completion.\",\"Require only structured synchronous completion before the request handler returns; an awaited worker or async task is allowed.\",\"Require one dedicated thread per admitted request, even if the transport began on an event-loop thread.\"],\"default_guess\":\"Require the same operating-system thread that invoked `admit_owner_request`, because the text explicitly adds thread affinity rather than merely saying the call is awaited.\"}]}",
+ "set_aside": []
+}
