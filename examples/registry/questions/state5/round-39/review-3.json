@@ -1,0 +1,262 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:upload_framing.read_upload_head",
+   "kind": "output_shape",
+   "text": "The CSRF value the first part carries, the delimiter that ends the file part, and the file part's declared length",
+   "question": "Does the operation also return the `MultipartFileBody` instance, and what is the exact ordered or named shape of every success and failure result?",
+   "options": [
+    "Return CSRF value, `MultipartFileBody`, and declared file length; keep its delimiter internal",
+    "Return CSRF value, delimiter, declared file length, and `MultipartFileBody`",
+    "Return only the three listed values and require `owner_interface` to construct the stream"
+   ],
+   "default_guess": "Return CSRF value, `MultipartFileBody`, and declared file length, with the delimiter encapsulated by the body object.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:upload_framing.read_upload_head",
+   "kind": "multipart_acceptance",
+   "text": "no multipart content type or boundary, a first part that is not the CSRF field, no second part that is the file",
+   "question": "What exact multipart forms are accepted: the required field names, permitted part headers, whether the file must be the final part, and whether extra parts, preambles or epilogues are rejected?",
+   "options": [
+    "Accept exactly two parts, CSRF then file, with the file final and no non-empty preamble, epilogue or extra part",
+    "Accept CSRF then file and ignore later parts or an epilogue",
+    "Accept any multipart headers and extensions that an HTTP multipart parser recognizes"
+   ],
+   "default_guess": "Accept exactly two parts in the stated order, require the second part to be final, and reject extra parts and non-empty preambles or epilogues.",
+   "witness": {
+    "initial": "A valid owner session submits a multipart upload containing the CSRF part, a file part, and a third metadata part.",
+    "events": [
+     "The owner browser sends the multipart request.",
+     "`upload_framing.read_upload_head` parses the first two parts."
+    ],
+    "outcomes": [
+     "The head is accepted and the third part is ignored or discarded after the answer.",
+     "The head is rejected because the file is not the final part."
+    ],
+    "observer": "The owner sees either the upload mapping or a stage-(1) refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:upload_framing.read_upload_head",
+   "kind": "byte_accounting",
+   "text": "the request's declared length less the head it read and the closing delimiter with its final `--` and line end",
+   "question": "Which exact bytes belong to the head, file content and closing delimiter, including the CRLF before a boundary, optional final line ending and any epilogue, and how is the declared file length computed for each accepted form?",
+   "options": [
+    "Count the CRLF introducing the final boundary as framing and require one exact closing-delimiter spelling",
+    "Count that CRLF as file data",
+    "Allow optional multipart epilogues and subtract them too"
+   ],
+   "default_guess": "Use one canonical multipart form, count the CRLF preceding the final boundary as framing, require the final line ending, and allow no epilogue.",
+   "witness": {
+    "initial": "The request has `Content-Length` and a file whose content ends immediately before the CRLF that introduces the final multipart boundary.",
+    "events": [
+     "`read_upload_head` subtracts its parsed head and closing framing from the request length.",
+     "`migration_import.read_import_mapping` compares the resulting declared length with the bytes yielded by `MultipartFileBody`."
+    ],
+    "outcomes": [
+     "The CRLF is framing, so the declared length equals the yielded file bytes and the upload is readable.",
+     "The CRLF is file content or is subtracted twice, so the declared length differs and the upload is refused as `file_unreadable`."
+    ],
+    "observer": "The owner sees either the mapping or a file-unreadable refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:upload_framing.read_upload_head",
+   "kind": "csrf_decoding",
+   "text": "The CSRF value the first part carries",
+   "question": "How are the first part's bytes converted to the CSRF value: which charset is allowed, whether transfer encodings are allowed, and whether line endings or surrounding whitespace are part of the value?",
+   "options": [
+    "Require the canonical text encoding used by generated CSRF values and compare its decoded value exactly",
+    "Treat the part body as opaque bytes",
+    "Honor a declared multipart charset or content-transfer encoding"
+   ],
+   "default_guess": "Treat the part body as opaque bytes in the canonical textual representation, with no trimming, normalization or transfer decoding.",
+   "witness": {
+    "initial": "A valid session's CSRF bytes are sent in a first part whose headers declare a non-default charset or transfer encoding.",
+    "events": [
+     "The owner browser submits the upload.",
+     "`read_upload_head` extracts the first part and `owner_sessions` compares the result."
+    ],
+    "outcomes": [
+     "The representation is decoded and matches the session's CSRF value, so the request is admitted.",
+     "The representation is treated literally or rejected, so the request receives `csrf_refused`."
+    ],
+    "observer": "The owner sees whether the upload is admitted."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:owner_sessions.give_session_csrf",
+   "kind": "concurrent_linearization",
+   "text": "a session ended since answers none",
+   "question": "At what instant is an overlapping end considered to have happened relative to `give_session_csrf`, and what lock or atomic rule makes a concurrent call return deterministically either the value or none?",
+   "options": [
+    "Linearize the lookup under the session lock and return according to lock order",
+    "Test ended state when the call begins",
+    "Test ended state immediately before returning"
+   ],
+   "default_guess": "Linearize the lookup under the session lock and return the value exactly when the lookup precedes the end.",
+   "witness": {
+    "initial": "A request has passed admission and is rendering a page while the session is still live.",
+    "events": [
+     "`owner_interface` calls `give_session_csrf`.",
+     "Concurrently, a sign-out or expiry pass ends the session."
+    ],
+    "outcomes": [
+     "The CSRF value is returned and the page contains forms.",
+     "None is returned and the page contains no forms."
+    ],
+    "observer": "The owner sees whether the completed page contains actionable forms."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "module:instance_lifecycle HTTP listener",
+   "kind": "framing_grammar",
+   "text": "a request whose `Content-Length` or `Transfer-Encoding` header is malformed is refused by the listener from its headers alone",
+   "question": "What exact framing-header grammar and conflict rules apply to duplicate `Content-Length`, simultaneous `Content-Length` and `Transfer-Encoding`, transfer-coding chains, chunk extensions and trailers?",
+   "options": [
+    "Reject every `Content-Length`/`Transfer-Encoding` combination and every duplicate length, allowing only one canonical length or canonical chunked coding",
+    "Accept repeated identical lengths but reject differing values and every length-plus-transfer-encoding combination",
+    "Follow the selected HTTP library's parsing and precedence rules"
+   ],
+   "default_guess": "Reject ambiguous combinations, all simultaneous length and transfer encoding, differing or non-canonical duplicate lengths, and unsupported transfer codings.",
+   "witness": {
+    "initial": "A client sends one request with both `Content-Length` and `Transfer-Encoding: chunked`, followed by bytes that describe different body boundaries under the two headers.",
+    "events": [
+     "The listener parses the headers.",
+     "The client waits for Registry's response."
+    ],
+    "outcomes": [
+     "The listener rejects the request from its headers, closes the connection and reaches no surface.",
+     "The listener gives transfer encoding precedence, decodes a body and invokes a surface."
+    ],
+    "observer": "The client and any following request on the connection observe whether an operation ran."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "module:instance_lifecycle HTTP listener",
+   "kind": "framing_refusal_output",
+   "text": "is refused by the listener from its headers alone, its connection closed, and reaches no surface",
+   "question": "What response, if any, does the listener send for a framing-header refusal, including its HTTP status, body and headers?",
+   "options": [
+    "Send a fixed HTTP error response and then close",
+    "Close without sending a response",
+    "Use the HTTP implementation's default error response"
+   ],
+   "default_guess": "Send a fixed minimal HTTP 400 response containing no request value, then close.",
+   "witness": {
+    "initial": "A client sends a malformed `Content-Length` header.",
+    "events": [
+     "The listener detects the malformed header before accepting a body.",
+     "The client reads from the connection."
+    ],
+    "outcomes": [
+     "The client receives a defined HTTP error response before EOF.",
+     "The client receives EOF without an HTTP response."
+    ],
+    "observer": "The client sees a response or only a closed connection."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner_interface and instance_lifecycle",
+   "kind": "ownership_contradiction",
+   "text": "`owner_interface` discards the unread remainder of the body without reading it into anything and closes the connection its listener accepted",
+   "question": "How can `owner_interface` close a connection when `instance_lifecycle` owns the listener and its connections, and what value or control signal crosses their boundary to request that close?",
+   "options": [
+    "`serve_owner_request` returns the page plus a mandatory close-connection disposition to `instance_lifecycle`",
+    "The request object exposes a connection-close capability that `owner_interface` invokes",
+    "`instance_lifecycle` recognizes upload requests independently and always closes them after the surface returns"
+   ],
+   "default_guess": "Have `serve_owner_request` return a response disposition requiring `instance_lifecycle` to close the connection after writing the page.",
+   "witness": {
+    "initial": "An upload is refused after only part of its body has been consumed.",
+    "events": [
+     "`owner_interface` produces the refusal page with unread request bytes remaining.",
+     "The listener handles the returned result."
+    ],
+    "outcomes": [
+     "`owner_interface` directly closes a transport owned by `instance_lifecycle`.",
+     "`owner_interface` returns only the documented HTML page, so the listener has no specified instruction to close and may keep the connection reusable."
+    ],
+    "observer": "The browser or proxy sees whether the connection is closed after the upload."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "module:instance_lifecycle HTTP listener",
+   "kind": "connection_lifecycle",
+   "text": "a connection that carried an upload is never reused",
+   "question": "Are non-upload connections persistent, and if so, how are keep-alive, pipelining, request ordering and connection-close headers handled?",
+   "options": [
+    "Support sequential HTTP keep-alive but no pipelining; uploads force close",
+    "Close every connection after one response",
+    "Support both keep-alive and pipelining in request order"
+   ],
+   "default_guess": "Support sequential keep-alive without pipelining and force closure after every upload.",
+   "witness": {
+    "initial": "A service client has received one successful response on a connection that did not carry an upload.",
+    "events": [
+     "The client sends a second request on the same connection."
+    ],
+    "outcomes": [
+     "The listener parses and serves the second request.",
+     "The listener has closed the connection, so the client must reconnect."
+    ],
+    "observer": "The service client observes whether the connection can be reused."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "module:instance_lifecycle HTTP listener and upload_framing.read_upload_head",
+   "kind": "resource_limits",
+   "text": "the body itself is never read ahead by the listener",
+   "question": "What header-size, header-count, request-line and multipart-head read timeouts or connection timeouts apply, and what observable result occurs when a client exceeds or stalls at one?",
+   "options": [
+    "Define fixed release limits and timeouts with a fixed error response or close behavior",
+    "Wait indefinitely while enforcing only the multipart byte bound",
+    "Use implementation-library defaults"
+   ],
+   "default_guess": "Define release-fixed header limits and monotonic read timeouts; reject or close deterministically without reaching a surface.",
+   "witness": {
+    "initial": "A client opens a connection and sends a syntactically valid multipart head one byte at a time without exceeding `UPLOAD_FORM_HEAD_MAX_BYTES`.",
+    "events": [
+     "The listener and `read_upload_head` wait for the rest of the head.",
+     "The wait exceeds a duration one implementation treats as its timeout."
+    ],
+    "outcomes": [
+     "The connection remains occupied indefinitely because only a byte bound exists.",
+     "The implementation times out and closes or answers an error."
+    ],
+    "observer": "The client and other clients competing for listener capacity observe the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Constants each module imports",
+   "kind": "standard_violation",
+   "text": "The other new calls of that day are declared the same way: `module_internal[\"operations\"][\"store\"]` holds `opened_store` beside `run_in_transaction` and `read_in_transaction`; `module_internal[\"owner_interface\"][\"owner_sessions\"]` holds `give_session_csrf`; and `module_internal[\"owner_interface\"][\"upload_framing\"]` holds `read_upload_head` and the class `MultipartFileBody`.",
+   "rule": "`internal` — модуль → список экспортируемых символов (функции, классы, константы)",
+   "section": "7",
+   "question": "Declare every named symbol in the corresponding provider's `imports.internal` export surface, or remove it from the consumer's `module_internal` entry.",
+   "unit": "?"
+  },
+  {
+   "subject": "MultipartFileBody",
+   "kind": "standard_violation",
+   "text": "`module_internal[\"owner_interface\"][\"upload_framing\"]` holds `read_upload_head` and the class `MultipartFileBody`.",
+   "rule": "Для классов — указывай имя класса, методы подтянутся автоматически",
+   "section": "8",
+   "question": "List `MultipartFileBody` under exactly one owning module in `module_functions`—`upload_framing`—or stop declaring it as an imported class.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:upload_framing.read_upload_head\",\"kind\":\"output_shape\",\"text\":\"The CSRF value the first part carries, the delimiter that ends the file part, and the file part's declared length\",\"question\":\"Does the operation also return the `MultipartFileBody` instance, and what is the exact ordered or named shape of every success and failure result?\",\"options\":[\"Return CSRF value, `MultipartFileBody`, and declared file length; keep its delimiter internal\",\"Return CSRF value, delimiter, declared file length, and `MultipartFileBody`\",\"Return only the three listed values and require `owner_interface` to construct the stream\"],\"default_guess\":\"Return CSRF value, `MultipartFileBody`, and declared file length, with the delimiter encapsulated by the body object.\"},{\"subject\":\"public_op:upload_framing.read_upload_head\",\"kind\":\"multipart_acceptance\",\"text\":\"no multipart content type or boundary, a first part that is not the CSRF field, no second part that is the file\",\"question\":\"What exact multipart forms are accepted: the required field names, permitted part headers, whether the file must be the final part, and whether extra parts, preambles or epilogues are rejected?\",\"options\":[\"Accept exactly two parts, CSRF then file, with the file final and no non-empty preamble, epilogue or extra part\",\"Accept CSRF then file and ignore later parts or an epilogue\",\"Accept any multipart headers and extensions that an HTTP multipart parser recognizes\"],\"default_guess\":\"Accept exactly two parts in the stated order, require the second part to be final, and reject extra parts and non-empty preambles or epilogues.\",\"witness\":{\"initial\":\"A valid owner session submits a multipart upload containing the CSRF part, a file part, and a third metadata part.\",\"events\":[\"The owner browser sends the multipart request.\",\"`upload_framing.read_upload_head` parses the first two parts.\"],\"outcomes\":[\"The head is accepted and the third part is ignored or discarded after the answer.\",\"The head is rejected because the file is not the final part.\"],\"observer\":\"The owner sees either the upload mapping or a stage-(1) refusal.\"}},{\"subject\":\"public_op:upload_framing.read_upload_head\",\"kind\":\"byte_accounting\",\"text\":\"the request's declared length less the head it read and the closing delimiter with its final `--` and line end\",\"question\":\"Which exact bytes belong to the head, file content and closing delimiter, including the CRLF before a boundary, optional final line ending and any epilogue, and how is the declared file length computed for each accepted form?\",\"options\":[\"Count the CRLF introducing the final boundary as framing and require one exact closing-delimiter spelling\",\"Count that CRLF as file data\",\"Allow optional multipart epilogues and subtract them too\"],\"default_guess\":\"Use one canonical multipart form, count the CRLF preceding the final boundary as framing, require the final line ending, and allow no epilogue.\",\"witness\":{\"initial\":\"The request has `Content-Length` and a file whose content ends immediately before the CRLF that introduces the final multipart boundary.\",\"events\":[\"`read_upload_head` subtracts its parsed head and closing framing from the request length.\",\"`migration_import.read_import_mapping` compares the resulting declared length with the bytes yielded by `MultipartFileBody`.\"],\"outcomes\":[\"The CRLF is framing, so the declared length equals the yielded file bytes and the upload is readable.\",\"The CRLF is file content or is subtracted twice, so the declared length differs and the upload is refused as `file_unreadable`.\"],\"observer\":\"The owner sees either the mapping or a file-unreadable refusal.\"}},{\"subject\":\"public_op:upload_framing.read_upload_head\",\"kind\":\"csrf_decoding\",\"text\":\"The CSRF value the first part carries\",\"question\":\"How are the first part's bytes converted to the CSRF value: which charset is allowed, whether transfer encodings are allowed, and whether line endings or surrounding whitespace are part of the value?\",\"options\":[\"Require the canonical text encoding used by generated CSRF values and compare its decoded value exactly\",\"Treat the part body as opaque bytes\",\"Honor a declared multipart charset or content-transfer encoding\"],\"default_guess\":\"Treat the part body as opaque bytes in the canonical textual representation, with no trimming, normalization or transfer decoding.\",\"witness\":{\"initial\":\"A valid session's CSRF bytes are sent in a first part whose headers declare a non-default charset or transfer encoding.\",\"events\":[\"The owner browser submits the upload.\",\"`read_upload_head` extracts the first part and `owner_sessions` compares the result.\"],\"outcomes\":[\"The representation is decoded and matches the session's CSRF value, so the request is admitted.\",\"The representation is treated literally or rejected, so the request receives `csrf_refused`.\"],\"observer\":\"The owner sees whether the upload is admitted.\"}},{\"subject\":\"public_op:owner_sessions.give_session_csrf\",\"kind\":\"concurrent_linearization\",\"text\":\"a session ended since answers none\",\"question\":\"At what instant is an overlapping end considered to have happened relative to `give_session_csrf`, and what lock or atomic rule makes a concurrent call return deterministically either the value or none?\",\"options\":[\"Linearize the lookup under the session lock and return according to lock order\",\"Test ended state when the call begins\",\"Test ended state immediately before returning\"],\"default_guess\":\"Linearize the lookup under the session lock and return the value exactly when the lookup precedes the end.\",\"witness\":{\"initial\":\"A request has passed admission and is rendering a page while the session is still live.\",\"events\":[\"`owner_interface` calls `give_session_csrf`.\",\"Concurrently, a sign-out or expiry pass ends the session.\"],\"outcomes\":[\"The CSRF value is returned and the page contains forms.\",\"None is returned and the page contains no forms.\"],\"observer\":\"The owner sees whether the completed page contains actionable forms.\"}},{\"subject\":\"module:instance_lifecycle HTTP listener\",\"kind\":\"framing_grammar\",\"text\":\"a request whose `Content-Length` or `Transfer-Encoding` header is malformed is refused by the listener from its headers alone\",\"question\":\"What exact framing-header grammar and conflict rules apply to duplicate `Content-Length`, simultaneous `Content-Length` and `Transfer-Encoding`, transfer-coding chains, chunk extensions and trailers?\",\"options\":[\"Reject every `Content-Length`/`Transfer-Encoding` combination and every duplicate length, allowing only one canonical length or canonical chunked coding\",\"Accept repeated identical lengths but reject differing values and every length-plus-transfer-encoding combination\",\"Follow the selected HTTP library's parsing and precedence rules\"],\"default_guess\":\"Reject ambiguous combinations, all simultaneous length and transfer encoding, differing or non-canonical duplicate lengths, and unsupported transfer codings.\",\"witness\":{\"initial\":\"A client sends one request with both `Content-Length` and `Transfer-Encoding: chunked`, followed by bytes that describe different body boundaries under the two headers.\",\"events\":[\"The listener parses the headers.\",\"The client waits for Registry's response.\"],\"outcomes\":[\"The listener rejects the request from its headers, closes the connection and reaches no surface.\",\"The listener gives transfer encoding precedence, decodes a body and invokes a surface.\"],\"observer\":\"The client and any following request on the connection observe whether an operation ran.\"}},{\"subject\":\"module:instance_lifecycle HTTP listener\",\"kind\":\"framing_refusal_output\",\"text\":\"is refused by the listener from its headers alone, its connection closed, and reaches no surface\",\"question\":\"What response, if any, does the listener send for a framing-header refusal, including its HTTP status, body and headers?\",\"options\":[\"Send a fixed HTTP error response and then close\",\"Close without sending a response\",\"Use the HTTP implementation's default error response\"],\"default_guess\":\"Send a fixed minimal HTTP 400 response containing no request value, then close.\",\"witness\":{\"initial\":\"A client sends a malformed `Content-Length` header.\",\"events\":[\"The listener detects the malformed header before accepting a body.\",\"The client reads from the connection.\"],\"outcomes\":[\"The client receives a defined HTTP error response before EOF.\",\"The client receives EOF without an HTTP response.\"],\"observer\":\"The client sees a response or only a closed connection.\"}},{\"subject\":\"owner_interface and instance_lifecycle\",\"kind\":\"ownership_contradiction\",\"text\":\"`owner_interface` discards the unread remainder of the body without reading it into anything and closes the connection its listener accepted\",\"question\":\"How can `owner_interface` close a connection when `instance_lifecycle` owns the listener and its connections, and what value or control signal crosses their boundary to request that close?\",\"options\":[\"`serve_owner_request` returns the page plus a mandatory close-connection disposition to `instance_lifecycle`\",\"The request object exposes a connection-close capability that `owner_interface` invokes\",\"`instance_lifecycle` recognizes upload requests independently and always closes them after the surface returns\"],\"default_guess\":\"Have `serve_owner_request` return a response disposition requiring `instance_lifecycle` to close the connection after writing the page.\",\"witness\":{\"initial\":\"An upload is refused after only part of its body has been consumed.\",\"events\":[\"`owner_interface` produces the refusal page with unread request bytes remaining.\",\"The listener handles the returned result.\"],\"outcomes\":[\"`owner_interface` directly closes a transport owned by `instance_lifecycle`.\",\"`owner_interface` returns only the documented HTML page, so the listener has no specified instruction to close and may keep the connection reusable.\"],\"observer\":\"The browser or proxy sees whether the connection is closed after the upload.\"}},{\"subject\":\"module:instance_lifecycle HTTP listener\",\"kind\":\"connection_lifecycle\",\"text\":\"a connection that carried an upload is never reused\",\"question\":\"Are non-upload connections persistent, and if so, how are keep-alive, pipelining, request ordering and connection-close headers handled?\",\"options\":[\"Support sequential HTTP keep-alive but no pipelining; uploads force close\",\"Close every connection after one response\",\"Support both keep-alive and pipelining in request order\"],\"default_guess\":\"Support sequential keep-alive without pipelining and force closure after every upload.\",\"witness\":{\"initial\":\"A service client has received one successful response on a connection that did not carry an upload.\",\"events\":[\"The client sends a second request on the same connection.\"],\"outcomes\":[\"The listener parses and serves the second request.\",\"The listener has closed the connection, so the client must reconnect.\"],\"observer\":\"The service client observes whether the connection can be reused.\"}},{\"subject\":\"module:instance_lifecycle HTTP listener and upload_framing.read_upload_head\",\"kind\":\"resource_limits\",\"text\":\"the body itself is never read ahead by the listener\",\"question\":\"What header-size, header-count, request-line and multipart-head read timeouts or connection timeouts apply, and what observable result occurs when a client exceeds or stalls at one?\",\"options\":[\"Define fixed release limits and timeouts with a fixed error response or close behavior\",\"Wait indefinitely while enforcing only the multipart byte bound\",\"Use implementation-library defaults\"],\"default_guess\":\"Define release-fixed header limits and monotonic read timeouts; reject or close deterministically without reaching a surface.\",\"witness\":{\"initial\":\"A client opens a connection and sends a syntactically valid multipart head one byte at a time without exceeding `UPLOAD_FORM_HEAD_MAX_BYTES`.\",\"events\":[\"The listener and `read_upload_head` wait for the rest of the head.\",\"The wait exceeds a duration one implementation treats as its timeout.\"],\"outcomes\":[\"The connection remains occupied indefinitely because only a byte bound exists.\",\"The implementation times out and closes or answers an error.\"],\"observer\":\"The client and other clients competing for listener capacity observe the difference.\"}},{\"subject\":\"Constants each module imports\",\"kind\":\"standard_violation\",\"text\":\"The other new calls of that day are declared the same way: `module_internal[\\\"operations\\\"][\\\"store\\\"]` holds `opened_store` beside `run_in_transaction` and `read_in_transaction`; `module_internal[\\\"owner_interface\\\"][\\\"owner_sessions\\\"]` holds `give_session_csrf`; and `module_internal[\\\"owner_interface\\\"][\\\"upload_framing\\\"]` holds `read_upload_head` and the class `MultipartFileBody`.\",\"rule\":\"`internal` — модуль → список экспортируемых символов (функции, классы, константы)\",\"section\":\"7\",\"question\":\"Declare every named symbol in the corresponding provider's `imports.internal` export surface, or remove it from the consumer's `module_internal` entry.\"},{\"subject\":\"MultipartFileBody\",\"kind\":\"standard_violation\",\"text\":\"`module_internal[\\\"owner_interface\\\"][\\\"upload_framing\\\"]` holds `read_upload_head` and the class `MultipartFileBody`.\",\"rule\":\"Для классов — указывай имя класса, методы подтянутся автоматически\",\"section\":\"8\",\"question\":\"List `MultipartFileBody` under exactly one owning module in `module_functions`—`upload_framing`—or stop declaring it as an imported class.\"}]}",
+ "set_aside": []
+}

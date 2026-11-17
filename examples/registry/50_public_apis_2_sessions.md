@@ -289,7 +289,10 @@ changes no session.
 A13 rule 7: the value is the one made at sign-in and kept by this module;
 `owner_interface` puts it only in the forms of the page it renders for that
 session and keeps nothing. The identity is looked up as the session check
-looks it up, compared in constant time. It is asked after the request was
+looks it up, compared in constant time, under the session table's lock that
+a sign-out, the pass and a sign-in take to end or make a session, so it
+answers the value or none as the session stands before or after such an
+end, never in between. It is asked after the request was
 admitted, so a session that reached a limit while the request ran still
 answers its value, and the page of a request that passed completes (A13
 rule 2); a session ended since answers none, and the page is rendered

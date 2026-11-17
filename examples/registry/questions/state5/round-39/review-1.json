@@ -1,0 +1,222 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:upload_framing.read_upload_head",
+   "kind": "multipart_grammar",
+   "text": "a first part that is not the CSRF field, no second part that is the file",
+   "question": "What exact multipart syntax identifies the CSRF field and file part, including field names, required disposition parameters, filename rules, header casing and duplication, quoted boundaries, line endings, extra parts and epilogues?",
+   "options": [
+    "Accept every RFC-valid multipart body whose first two parts have the required field names.",
+    "Accept only one release-defined canonical header and boundary form.",
+    "Accept the first CSRF part and file part while ignoring later parts and an epilogue."
+   ],
+   "default_guess": "Define and accept a narrow canonical form: exact field names, case-insensitive header names, one Content-Disposition per part, CRLF framing, and no third part or epilogue.",
+   "witness": {
+    "initial": "A valid owner session submits an upload whose Content-Type uses a quoted boundary and whose Content-Disposition header uses different casing.",
+    "events": [
+     "owner_interface passes the content type and unread body to read_upload_head.",
+     "upload_framing parses the multipart head."
+    ],
+    "outcomes": [
+     "The parser accepts the MIME-valid variants and admits the upload.",
+     "The parser treats the head as another form, returns no CSRF value and the upload is refused as csrf_refused."
+    ],
+    "observer": "The owner submitting the upload"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:upload_framing.read_upload_head",
+   "kind": "delimiter_matching",
+   "text": "a `MultipartFileBody` over the same stream and that delimiter, gives the file's bytes only as its reader asks",
+   "question": "What byte sequence counts as the closing delimiter, and how must delimiter-like bytes inside the file be handled?",
+   "options": [
+    "Recognise only a complete multipart delimiter line with the required prefix, suffix and line ending.",
+    "Stop at any occurrence of the boundary token.",
+    "Treat an invalid delimiter candidate as file data and continue searching."
+   ],
+   "default_guess": "Recognise only a complete delimiter line and return every false or partial delimiter candidate as file bytes.",
+   "witness": {
+    "initial": "The uploaded file contains CRLF, two hyphens and the boundary token followed by a byte that cannot terminate a multipart delimiter.",
+    "events": [
+     "migration_import reads the MultipartFileBody in chunks.",
+     "The delimiter candidate is split across two underlying stream reads."
+    ],
+    "outcomes": [
+     "The candidate is returned as file data and the complete file is parsed and digested.",
+     "The stream ends the file at the boundary-token prefix, producing truncated bytes and a different mapping or file_unreadable refusal."
+    ],
+    "observer": "The owner viewing the upload result"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:upload_framing.read_upload_head",
+   "kind": "stream_liveness",
+   "text": "the request's stream fails or ends while the head is read",
+   "question": "Does reading the bounded head have a time or progress deadline, and how are cancellation and a client that never supplies the rest of the head reported?",
+   "options": [
+    "Wait without a Registry-defined deadline until bytes, EOF or an underlying failure arrive.",
+    "Apply a fixed listener read deadline and surface expiry as stream failure.",
+    "Apply a per-byte or whole-head deadline supplied by the listener."
+   ],
+   "default_guess": "Use a release-defined whole-head deadline enforced by the listener and report expiry as stream failure.",
+   "witness": {
+    "initial": "A valid session is one minute from its idle limit and the client has sent only part of the bounded multipart head.",
+    "events": [
+     "The client stops sending bytes without closing the connection.",
+     "read_upload_head waits for the remainder."
+    ],
+    "outcomes": [
+     "The listener times out and closes the request before a session check occurs.",
+     "The reader waits indefinitely; if the client later completes the head, admission occurs then and the now-expired session is refused."
+    ],
+    "observer": "The owner and the process holding the connection"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:store.opened_store",
+   "kind": "contradictory_error_contract",
+   "text": "None: it is asked only by a surface's request, and a surface serves nothing until `open_store` succeeded (A17 rule 2). Asked before that, it is a wiring fault that raises, so nothing is read or written.",
+   "question": "Does opened_store have no error path, or does a call before successful opening raise a specified error, and what exact error is it?",
+   "options": [
+    "The precondition is part of the contract and violation raises a named programming exception.",
+    "The operation returns internal_error when no store is open.",
+    "The state is unrepresentable to callers, so the operation has no runtime failure branch."
+   ],
+   "default_guess": "Make the precondition explicit and raise a named invariant/wiring exception outside the refusal vocabulary.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:owner_sessions.admit_owner_request",
+   "kind": "request_classification",
+   "text": "whether it reads or changes an uploaded file — an upload, the mapping, the import's confirmation step, a confirmation, a sign-out, change or not",
+   "question": "Does “a confirmation” mean only confirmation of the import, or every confirmed owner action, and what exact operation-to-lock-class mapping must operations use?",
+   "options": [
+    "Only import confirmation touches the uploaded file and takes the import lock.",
+    "Every confirmed action takes the import lock.",
+    "The caller supplies a free Boolean classification for each request."
+   ],
+   "default_guess": "Define a closed operation table in which upload, mapping, the import confirmation step, import confirmation and sign-out take the import lock; unrelated confirmed actions do not.",
+   "witness": {
+    "initial": "One session has an uploaded file, and two concurrent requests submit an archive confirmation and an import mapping.",
+    "events": [
+     "operations classifies both requests for admit_owner_request.",
+     "The mapping waits for or holds the import lock while the archive request is admitted."
+    ],
+    "outcomes": [
+     "Only the mapping takes the import lock, so the archive proceeds independently under the session lock order.",
+     "The archive confirmation is treated as “a confirmation,” takes the import lock and is ordered behind the mapping."
+    ],
+    "observer": "The owner waiting for the two responses"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "http_framing_validation",
+   "text": "a request whose `Content-Length` or `Transfer-Encoding` header is malformed is refused by the listener from its headers alone, its connection closed, and reaches no surface",
+   "question": "Exactly which Content-Length and Transfer-Encoding combinations are malformed, including both headers together, duplicate Content-Length fields, comma-joined values and unsupported transfer codings?",
+   "options": [
+    "Reject every request containing both headers and reject all duplicate Content-Length fields.",
+    "Permit identical duplicate Content-Length values but reject conflicts and every Content-Length plus Transfer-Encoding combination.",
+    "Apply the HTTP library's framing decision without an additional Registry rule."
+   ],
+   "default_guess": "Reject both headers together, reject duplicate or comma-joined Content-Length fields, and accept only a single supported chunked Transfer-Encoding.",
+   "witness": {
+    "initial": "A connected client sends one request with both Content-Length and Transfer-Encoding: chunked, followed by bytes that can also be parsed as another request.",
+    "events": [
+     "instance_lifecycle's listener parses the headers.",
+     "The connection contains a valid chunked terminator followed by a second request line."
+    ],
+    "outcomes": [
+     "The listener rejects the first request and closes the connection before any surface sees it.",
+     "The listener gives Transfer-Encoding precedence, routes the first request and later treats the remaining bytes as a second request."
+    ],
+    "observer": "The client and any surface that receives the second request"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "transport_refusal_response",
+   "text": "is refused by the listener from its headers alone, its connection closed, and reaches no surface",
+   "question": "What observable HTTP response, if any, is sent for a framing-header refusal before the connection is closed?",
+   "options": [
+    "Send a fixed HTTP 400 response and close.",
+    "Close without sending any response.",
+    "Send a fixed status selected by the underlying HTTP server."
+   ],
+   "default_guess": "Send a minimal fixed HTTP 400 response with Connection: close, then close.",
+   "witness": {
+    "initial": "A client sends a request with a non-numeric Content-Length.",
+    "events": [
+     "The listener detects the malformed header before accepting a body.",
+     "The request reaches no surface."
+    ],
+    "outcomes": [
+     "The client receives a deterministic HTTP 400 response before EOF.",
+     "The client receives only EOF or a connection reset."
+    ],
+    "observer": "The client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "unread_body_disposition",
+   "text": "each request's body handed on as a stream that ends where HTTP's own framing ends the body",
+   "question": "When a service request or non-upload owner request is answered before its body has been consumed, must the listener drain the framed remainder, close the connection, or allow reuse by another mechanism?",
+   "options": [
+    "Drain the framed remainder within a fixed bound, then permit reuse.",
+    "Close the connection whenever a response is produced with unread body bytes.",
+    "Require every surface to consume or discard its complete framed stream before returning."
+   ],
+   "default_guess": "Require each surface to discard its framed remainder before return, closing the connection if draining fails or exceeds a fixed bound.",
+   "witness": {
+    "initial": "An authenticated client sends an operation that is refused at stage (1), with a large framed body followed by a pipelined valid request.",
+    "events": [
+     "operations returns the stage (1) refusal without needing the first body.",
+     "The listener prepares to handle the connection after sending the refusal."
+    ],
+    "outcomes": [
+     "The listener drains exactly the first framed body and processes the pipelined request normally.",
+     "The listener closes immediately, so the pipelined request is never processed; or it reuses the connection without draining and misreads body bytes as a request."
+    ],
+    "observer": "The client sending both requests"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:upload_framing.read_upload_head",
+   "kind": "standard_violation",
+   "text": "The file part's stream is a `MultipartFileBody`, the class\n`upload_framing` owns that implements `UploadBody` (State 6);",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой runtime import surface consumer-модуля, а не копия публичного API provider-а: ровно те символы, которые код consumer-а называет напрямую — вызывает, конструирует, проверяет (членство в enum, тип), пишет в аннотации.",
+   "section": "7",
+   "question": "The passage must become an explicit module_internal declaration importing UploadBody from its provider into upload_framing, because the class directly names that interface.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:upload_framing.read_upload_head",
+   "kind": "standard_violation",
+   "text": "The file part's stream is a `MultipartFileBody`, the class\n`upload_framing` owns that implements `UploadBody` (State 6);",
+   "rule": "Для классов — указывай имя класса, методы подтянутся автоматически",
+   "section": "8",
+   "question": "The passage must become an explicit module_functions ownership entry that lists MultipartFileBody under upload_framing.",
+   "unit": "?"
+  },
+  {
+   "subject": "Constants each module imports",
+   "kind": "standard_violation",
+   "text": "`module_internal[\"owner_interface\"][\"upload_framing\"]`\nholds `read_upload_head` and the class `MultipartFileBody`.",
+   "rule": "`internal` — модуль → список экспортируемых символов (функции, классы, константы)",
+   "section": "7",
+   "question": "The passage must also declare MultipartFileBody in upload_framing's imports.internal export surface so the provider exports the class that owner_interface imports.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:upload_framing.read_upload_head\",\"kind\":\"multipart_grammar\",\"text\":\"a first part that is not the CSRF field, no second part that is the file\",\"question\":\"What exact multipart syntax identifies the CSRF field and file part, including field names, required disposition parameters, filename rules, header casing and duplication, quoted boundaries, line endings, extra parts and epilogues?\",\"options\":[\"Accept every RFC-valid multipart body whose first two parts have the required field names.\",\"Accept only one release-defined canonical header and boundary form.\",\"Accept the first CSRF part and file part while ignoring later parts and an epilogue.\"],\"default_guess\":\"Define and accept a narrow canonical form: exact field names, case-insensitive header names, one Content-Disposition per part, CRLF framing, and no third part or epilogue.\",\"witness\":{\"initial\":\"A valid owner session submits an upload whose Content-Type uses a quoted boundary and whose Content-Disposition header uses different casing.\",\"events\":[\"owner_interface passes the content type and unread body to read_upload_head.\",\"upload_framing parses the multipart head.\"],\"outcomes\":[\"The parser accepts the MIME-valid variants and admits the upload.\",\"The parser treats the head as another form, returns no CSRF value and the upload is refused as csrf_refused.\"],\"observer\":\"The owner submitting the upload\"}},{\"subject\":\"public_op:upload_framing.read_upload_head\",\"kind\":\"delimiter_matching\",\"text\":\"a `MultipartFileBody` over the same stream and that delimiter, gives the file's bytes only as its reader asks\",\"question\":\"What byte sequence counts as the closing delimiter, and how must delimiter-like bytes inside the file be handled?\",\"options\":[\"Recognise only a complete multipart delimiter line with the required prefix, suffix and line ending.\",\"Stop at any occurrence of the boundary token.\",\"Treat an invalid delimiter candidate as file data and continue searching.\"],\"default_guess\":\"Recognise only a complete delimiter line and return every false or partial delimiter candidate as file bytes.\",\"witness\":{\"initial\":\"The uploaded file contains CRLF, two hyphens and the boundary token followed by a byte that cannot terminate a multipart delimiter.\",\"events\":[\"migration_import reads the MultipartFileBody in chunks.\",\"The delimiter candidate is split across two underlying stream reads.\"],\"outcomes\":[\"The candidate is returned as file data and the complete file is parsed and digested.\",\"The stream ends the file at the boundary-token prefix, producing truncated bytes and a different mapping or file_unreadable refusal.\"],\"observer\":\"The owner viewing the upload result\"}},{\"subject\":\"public_op:upload_framing.read_upload_head\",\"kind\":\"stream_liveness\",\"text\":\"the request's stream fails or ends while the head is read\",\"question\":\"Does reading the bounded head have a time or progress deadline, and how are cancellation and a client that never supplies the rest of the head reported?\",\"options\":[\"Wait without a Registry-defined deadline until bytes, EOF or an underlying failure arrive.\",\"Apply a fixed listener read deadline and surface expiry as stream failure.\",\"Apply a per-byte or whole-head deadline supplied by the listener.\"],\"default_guess\":\"Use a release-defined whole-head deadline enforced by the listener and report expiry as stream failure.\",\"witness\":{\"initial\":\"A valid session is one minute from its idle limit and the client has sent only part of the bounded multipart head.\",\"events\":[\"The client stops sending bytes without closing the connection.\",\"read_upload_head waits for the remainder.\"],\"outcomes\":[\"The listener times out and closes the request before a session check occurs.\",\"The reader waits indefinitely; if the client later completes the head, admission occurs then and the now-expired session is refused.\"],\"observer\":\"The owner and the process holding the connection\"}},{\"subject\":\"public_op:store.opened_store\",\"kind\":\"contradictory_error_contract\",\"text\":\"None: it is asked only by a surface's request, and a surface serves nothing until `open_store` succeeded (A17 rule 2). Asked before that, it is a wiring fault that raises, so nothing is read or written.\",\"question\":\"Does opened_store have no error path, or does a call before successful opening raise a specified error, and what exact error is it?\",\"options\":[\"The precondition is part of the contract and violation raises a named programming exception.\",\"The operation returns internal_error when no store is open.\",\"The state is unrepresentable to callers, so the operation has no runtime failure branch.\"],\"default_guess\":\"Make the precondition explicit and raise a named invariant/wiring exception outside the refusal vocabulary.\"},{\"subject\":\"public_op:owner_sessions.admit_owner_request\",\"kind\":\"request_classification\",\"text\":\"whether it reads or changes an uploaded file — an upload, the mapping, the import's confirmation step, a confirmation, a sign-out, change or not\",\"question\":\"Does “a confirmation” mean only confirmation of the import, or every confirmed owner action, and what exact operation-to-lock-class mapping must operations use?\",\"options\":[\"Only import confirmation touches the uploaded file and takes the import lock.\",\"Every confirmed action takes the import lock.\",\"The caller supplies a free Boolean classification for each request.\"],\"default_guess\":\"Define a closed operation table in which upload, mapping, the import confirmation step, import confirmation and sign-out take the import lock; unrelated confirmed actions do not.\",\"witness\":{\"initial\":\"One session has an uploaded file, and two concurrent requests submit an archive confirmation and an import mapping.\",\"events\":[\"operations classifies both requests for admit_owner_request.\",\"The mapping waits for or holds the import lock while the archive request is admitted.\"],\"outcomes\":[\"Only the mapping takes the import lock, so the archive proceeds independently under the session lock order.\",\"The archive confirmation is treated as “a confirmation,” takes the import lock and is ordered behind the mapping.\"],\"observer\":\"The owner waiting for the two responses\"}},{\"subject\":\"context\",\"kind\":\"http_framing_validation\",\"text\":\"a request whose `Content-Length` or `Transfer-Encoding` header is malformed is refused by the listener from its headers alone, its connection closed, and reaches no surface\",\"question\":\"Exactly which Content-Length and Transfer-Encoding combinations are malformed, including both headers together, duplicate Content-Length fields, comma-joined values and unsupported transfer codings?\",\"options\":[\"Reject every request containing both headers and reject all duplicate Content-Length fields.\",\"Permit identical duplicate Content-Length values but reject conflicts and every Content-Length plus Transfer-Encoding combination.\",\"Apply the HTTP library's framing decision without an additional Registry rule.\"],\"default_guess\":\"Reject both headers together, reject duplicate or comma-joined Content-Length fields, and accept only a single supported chunked Transfer-Encoding.\",\"witness\":{\"initial\":\"A connected client sends one request with both Content-Length and Transfer-Encoding: chunked, followed by bytes that can also be parsed as another request.\",\"events\":[\"instance_lifecycle's listener parses the headers.\",\"The connection contains a valid chunked terminator followed by a second request line.\"],\"outcomes\":[\"The listener rejects the first request and closes the connection before any surface sees it.\",\"The listener gives Transfer-Encoding precedence, routes the first request and later treats the remaining bytes as a second request.\"],\"observer\":\"The client and any surface that receives the second request\"}},{\"subject\":\"context\",\"kind\":\"transport_refusal_response\",\"text\":\"is refused by the listener from its headers alone, its connection closed, and reaches no surface\",\"question\":\"What observable HTTP response, if any, is sent for a framing-header refusal before the connection is closed?\",\"options\":[\"Send a fixed HTTP 400 response and close.\",\"Close without sending any response.\",\"Send a fixed status selected by the underlying HTTP server.\"],\"default_guess\":\"Send a minimal fixed HTTP 400 response with Connection: close, then close.\",\"witness\":{\"initial\":\"A client sends a request with a non-numeric Content-Length.\",\"events\":[\"The listener detects the malformed header before accepting a body.\",\"The request reaches no surface.\"],\"outcomes\":[\"The client receives a deterministic HTTP 400 response before EOF.\",\"The client receives only EOF or a connection reset.\"],\"observer\":\"The client\"}},{\"subject\":\"context\",\"kind\":\"unread_body_disposition\",\"text\":\"each request's body handed on as a stream that ends where HTTP's own framing ends the body\",\"question\":\"When a service request or non-upload owner request is answered before its body has been consumed, must the listener drain the framed remainder, close the connection, or allow reuse by another mechanism?\",\"options\":[\"Drain the framed remainder within a fixed bound, then permit reuse.\",\"Close the connection whenever a response is produced with unread body bytes.\",\"Require every surface to consume or discard its complete framed stream before returning.\"],\"default_guess\":\"Require each surface to discard its framed remainder before return, closing the connection if draining fails or exceeds a fixed bound.\",\"witness\":{\"initial\":\"An authenticated client sends an operation that is refused at stage (1), with a large framed body followed by a pipelined valid request.\",\"events\":[\"operations returns the stage (1) refusal without needing the first body.\",\"The listener prepares to handle the connection after sending the refusal.\"],\"outcomes\":[\"The listener drains exactly the first framed body and processes the pipelined request normally.\",\"The listener closes immediately, so the pipelined request is never processed; or it reuses the connection without draining and misreads body bytes as a request.\"],\"observer\":\"The client sending both requests\"}},{\"subject\":\"public_op:upload_framing.read_upload_head\",\"kind\":\"standard_violation\",\"text\":\"The file part's stream is a `MultipartFileBody`, the class\\n`upload_framing` owns that implements `UploadBody` (State 6);\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой runtime import surface consumer-модуля, а не копия публичного API provider-а: ровно те символы, которые код consumer-а называет напрямую — вызывает, конструирует, проверяет (членство в enum, тип), пишет в аннотации.\",\"section\":\"7\",\"question\":\"The passage must become an explicit module_internal declaration importing UploadBody from its provider into upload_framing, because the class directly names that interface.\"},{\"subject\":\"public_op:upload_framing.read_upload_head\",\"kind\":\"standard_violation\",\"text\":\"The file part's stream is a `MultipartFileBody`, the class\\n`upload_framing` owns that implements `UploadBody` (State 6);\",\"rule\":\"Для классов — указывай имя класса, методы подтянутся автоматически\",\"section\":\"8\",\"question\":\"The passage must become an explicit module_functions ownership entry that lists MultipartFileBody under upload_framing.\"},{\"subject\":\"Constants each module imports\",\"kind\":\"standard_violation\",\"text\":\"`module_internal[\\\"owner_interface\\\"][\\\"upload_framing\\\"]`\\nholds `read_upload_head` and the class `MultipartFileBody`.\",\"rule\":\"`internal` — модуль → список экспортируемых символов (функции, классы, константы)\",\"section\":\"7\",\"question\":\"The passage must also declare MultipartFileBody in upload_framing's imports.internal export surface so the provider exports the class that owner_interface imports.\"}]}",
+ "set_aside": []
+}

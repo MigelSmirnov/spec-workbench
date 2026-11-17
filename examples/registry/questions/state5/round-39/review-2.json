@@ -1,0 +1,194 @@
+{
+ "open_points": [
+  {
+   "subject": "upload_framing.read_upload_head",
+   "kind": "output_shape",
+   "text": "The CSRF value the first part carries, the delimiter that ends the file part, and the file part's declared length",
+   "question": "Does read_upload_head return only these three values so owner_interface constructs MultipartFileBody from the delimiter, or does it return a constructed MultipartFileBody as an additional output; and what is the exact success and failure result shape?",
+   "options": [
+    "Return CSRF value, delimiter and derived length; owner_interface constructs MultipartFileBody.",
+    "Return CSRF value, derived length and a constructed MultipartFileBody.",
+    "Return CSRF value, delimiter, derived length and a constructed MultipartFileBody."
+   ],
+   "default_guess": "Return the CSRF value, derived length and a constructed MultipartFileBody, keeping multipart construction inside upload_framing.",
+   "witness": {
+    "initial": "A valid owner session sends a well-formed multipart upload.",
+    "events": [
+     "owner_interface calls read_upload_head.",
+     "The upload_framing implementer follows the listed outputs and returns a delimiter, while the owner_interface implementer reads “The file part's stream is a MultipartFileBody” as meaning the operation returns the stream."
+    ],
+    "outcomes": [
+     "owner_interface constructs MultipartFileBody from the returned delimiter and the upload proceeds.",
+     "owner_interface expects a returned MultipartFileBody and cannot call operations with the three-value result."
+    ],
+    "observer": "The generated owner_interface/upload_framing integration and ultimately the owner uploading the file."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "MultipartFileBody and UploadBody",
+   "kind": "later_undefined_interface",
+   "text": "the class `upload_framing` owns that implements `UploadBody` (State 6)",
+   "question": "What exact UploadBody protocol must MultipartFileBody implement, including read operations, EOF semantics, underlying-stream failures, premature HTTP-body end, closing or cancellation, and ownership of the underlying stream?",
+   "options": [
+    "A file-like read API that raises a specified stream exception on premature end or transport failure.",
+    "An iterator of byte chunks that raises a specified stream exception.",
+    "A result-returning read API that distinguishes clean file-part EOF from stream failure without exceptions."
+   ],
+   "default_guess": "Use a binary file-like read API whose clean EOF occurs only after a valid closing delimiter and which raises one specified unreadable-stream exception otherwise.",
+   "witness": {
+    "initial": "The multipart head is valid, but the HTTP body ends midway through the file part.",
+    "events": [
+     "migration_import reads MultipartFileBody until it reports EOF or failure."
+    ],
+    "outcomes": [
+     "MultipartFileBody raises a stream failure, so migration_import answers file_unreadable.",
+     "MultipartFileBody returns ordinary EOF because UploadBody's failure signaling was not fixed, so migration_import treats the truncated bytes as a complete file and proceeds to parsing."
+    ],
+    "observer": "The owner, who receives file_unreadable in one implementation and a parse-dependent result in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "upload_framing.read_upload_head",
+   "kind": "multipart_grammar",
+   "text": "no multipart content type or boundary, a first part that is not the CSRF field, no second part that is the file",
+   "question": "What exact multipart grammar is accepted: permitted Content-Type parameters, boundary syntax, header names and casing, Content-Disposition and field names, filename requirements, line endings, preamble or epilogue, duplicate headers, and whether any part may follow the file part?",
+   "options": [
+    "Accept exactly two parts with a strict canonical header and CRLF form and require the file boundary to be the final boundary.",
+    "Accept standards-compliant multipart variations but still require exactly the CSRF part followed by one file part.",
+    "Accept the first CSRF part and second file part while ignoring later parts and an epilogue."
+   ],
+   "default_guess": "Accept standards-compliant header casing and parameters, require exactly the named CSRF part followed by exactly one file part, and require its next boundary to be the final boundary.",
+   "witness": {
+    "initial": "A valid session sends a multipart body containing the CSRF part, a file part, and a third ordinary form part.",
+    "events": [
+     "upload_framing parses the head and MultipartFileBody reaches the boundary after the file."
+    ],
+    "outcomes": [
+     "The upload is accepted using the second part as the file and the third part is discarded with the remaining body.",
+     "The upload is refused because the file part was not followed by the final closing delimiter."
+    ],
+    "observer": "The owner submitting the upload."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "upload head reading",
+   "kind": "timeout_and_cancellation",
+   "text": "the request's stream fails or ends while the head is read",
+   "question": "What happens when the stream neither fails nor ends but stalls before the bounded head is complete: is there a timeout or cancellation limit, what value fixes it, and what response and connection action follow?",
+   "options": [
+    "No Registry timeout; the read waits until the client, listener, or host terminates it.",
+    "A release-fixed header/body-read timeout closes the connection without reaching the surface.",
+    "A listener-configured timeout turns the read into a stream failure and the upload into the stage-(1) refusal."
+   ],
+   "default_guess": "Use a release-fixed listener timeout and close the connection without admitting the owner request.",
+   "witness": {
+    "initial": "A client sends valid HTTP and multipart headers one byte short of a complete upload head, then keeps the connection open indefinitely.",
+    "events": [
+     "instance_lifecycle supplies the body stream.",
+     "read_upload_head waits for the remaining byte."
+    ],
+    "outcomes": [
+     "The request occupies its handler indefinitely and never reaches the session check.",
+     "The listener times it out and closes the connection after a fixed interval."
+    ],
+    "observer": "The host monitoring the stuck connection and the owner waiting for an answer."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "store.opened_store",
+   "kind": "contradictory_error_contract",
+   "text": "None: it is asked only by a surface's request, and a surface serves nothing until `open_store` succeeded (A17 rule 2). Asked before that, it is a wiring fault that raises, so nothing is read or written.",
+   "question": "Is the pre-open call an error of opened_store, and if so what exception or fault contract does it expose, or is such a call outside the operation's callable domain so the Errors section must say only that?",
+   "options": [
+    "It has no runtime error because calling it before successful opening is outside its preconditions.",
+    "It raises a specified wiring exception.",
+    "It returns an internal_error result."
+   ],
+   "default_guess": "Make successful store opening an explicit precondition and specify a single assertion-style wiring exception for violations, separate from public refusal results.",
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle HTTP listener",
+   "kind": "framing_acceptance",
+   "text": "a request whose `Content-Length` or `Transfer-Encoding` header is malformed is refused by the listener from its headers alone",
+   "question": "Which framing-header combinations and forms are malformed, including simultaneous Content-Length and Transfer-Encoding, repeated or comma-joined Content-Length values, unsupported transfer codings, a missing framing header, and Transfer-Encoding chains?",
+   "options": [
+    "Reject every request containing both Content-Length and Transfer-Encoding, reject unequal or non-canonical repeated lengths, and accept only a final chunked transfer coding.",
+    "Let Transfer-Encoding take precedence over Content-Length as some HTTP implementations do.",
+    "Delegate all acceptance rules to the selected HTTP library."
+   ],
+   "default_guess": "Reject Content-Length together with Transfer-Encoding, reject ambiguous repeated lengths, and accept only explicitly supported HTTP framing forms.",
+   "witness": {
+    "initial": "A client sends one request with both `Content-Length: 4` and `Transfer-Encoding: chunked`, followed by bytes that can be framed differently under the two headers.",
+    "events": [
+     "instance_lifecycle parses the headers and decides whether to create a body stream.",
+     "If admitted, the surface reads one request and the connection contains further bytes."
+    ],
+    "outcomes": [
+     "The listener rejects the request from its headers and closes the connection.",
+     "The listener gives Transfer-Encoding precedence, admits the request, and may interpret bytes beyond the declared length as part of the chunked body."
+    ],
+    "observer": "The client, the selected surface, and any next request parser on the connection."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle HTTP listener",
+   "kind": "framing_rejection_output",
+   "text": "is refused by the listener from its headers alone, its connection closed, and reaches no surface",
+   "question": "Does a listener-level framing refusal send an HTTP response before closing, and if so what status, headers and body does it send; or is the connection closed without a response?",
+   "options": [
+    "Send a fixed HTTP 400 response and then close.",
+    "Close without sending any response.",
+    "Use the HTTP library's rejection response, whatever it is."
+   ],
+   "default_guess": "Send a minimal fixed 400 response with connection close, containing no reflected request value.",
+   "witness": {
+    "initial": "A client sends `Content-Length: not-a-number` to either listener.",
+    "events": [
+     "The listener detects the malformed header before accepting a body or invoking a surface."
+    ],
+    "outcomes": [
+     "The client receives a fixed HTTP 400 response and then EOF.",
+     "The client receives EOF or a connection reset without any HTTP response."
+    ],
+    "observer": "The requesting client."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "upload_framing.read_upload_head",
+   "kind": "standard_violation",
+   "text": "which `migration_import.read_import_mapping` refuses as `file_unreadable`, as any\nstream that fails.",
+   "rule": "**Вывод импортов из текста — подсказка, а не источник.** Проектор локальной\n  спеки находит кандидатов в импорт по тексту: имя чужого экспорта,\n  встреченное **целым словом** в позитивном тексте notes или в тексте\n  contracts consumer-а, и модели context closure. Каждый такой символ, не\n  объявленный в `module_internal`, отчёт проектора\n  (`python -m tools.slicer report --spec <base spec>`) называет находкой\n  `SLICE_IMPORT_UNDECLARED` (repair_class `spec`): его объявляют в\n  `module_internal` или убирают потребность в нём",
+   "section": "7",
+   "question": "Rewrite the passage without naming the foreign export read_import_mapping, for example by saying that the consumer of the stream maps its failure to file_unreadable, unless upload_framing truly imports that operation and the dependency is declared.",
+   "unit": "?"
+  },
+  {
+   "subject": "operations.perform_owner_operation",
+   "kind": "standard_violation",
+   "text": "the\nfile part's declared length, which `upload_framing.read_upload_head`\nderived, or none",
+   "rule": "**Вывод импортов из текста — подсказка, а не источник.** Проектор локальной\n  спеки находит кандидатов в импорт по тексту: имя чужого экспорта,\n  встреченное **целым словом** в позитивном тексте notes или в тексте\n  contracts consumer-а, и модели context closure. Каждый такой символ, не\n  объявленный в `module_internal`, отчёт проектора\n  (`python -m tools.slicer report --spec <base spec>`) называет находкой\n  `SLICE_IMPORT_UNDECLARED` (repair_class `spec`): его объявляют в\n  `module_internal` или убирают потребность в нём",
+   "section": "7",
+   "question": "Rewrite the input as a derived file-part length supplied by the caller without naming read_upload_head, because operations does not call that foreign export, or declare the dependency if it really does.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner_interface.serve_owner_request",
+   "kind": "standard_violation",
+   "text": "this\noperation passes, unread, to `migration_import.read_import_mapping`, which\nalone consumes it within the request.",
+   "rule": "**Вывод импортов из текста — подсказка, а не источник.** Проектор локальной\n  спеки находит кандидатов в импорт по тексту: имя чужого экспорта,\n  встреченное **целым словом** в позитивном тексте notes или в тексте\n  contracts consumer-а, и модели context closure. Каждый такой символ, не\n  объявленный в `module_internal`, отчёт проектора\n  (`python -m tools.slicer report --spec <base spec>`) называет находкой\n  `SLICE_IMPORT_UNDECLARED` (repair_class `spec`): его объявляют в\n  `module_internal` или убирают потребность в нём",
+   "section": "7",
+   "question": "Rewrite the passage to say that owner_interface passes the unread file-part stream to operations and does not consume it; do not name read_import_mapping unless owner_interface directly imports and calls it.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"upload_framing.read_upload_head\",\"kind\":\"output_shape\",\"text\":\"The CSRF value the first part carries, the delimiter that ends the file part, and the file part's declared length\",\"question\":\"Does read_upload_head return only these three values so owner_interface constructs MultipartFileBody from the delimiter, or does it return a constructed MultipartFileBody as an additional output; and what is the exact success and failure result shape?\",\"options\":[\"Return CSRF value, delimiter and derived length; owner_interface constructs MultipartFileBody.\",\"Return CSRF value, derived length and a constructed MultipartFileBody.\",\"Return CSRF value, delimiter, derived length and a constructed MultipartFileBody.\"],\"default_guess\":\"Return the CSRF value, derived length and a constructed MultipartFileBody, keeping multipart construction inside upload_framing.\",\"witness\":{\"initial\":\"A valid owner session sends a well-formed multipart upload.\",\"events\":[\"owner_interface calls read_upload_head.\",\"The upload_framing implementer follows the listed outputs and returns a delimiter, while the owner_interface implementer reads “The file part's stream is a MultipartFileBody” as meaning the operation returns the stream.\"],\"outcomes\":[\"owner_interface constructs MultipartFileBody from the returned delimiter and the upload proceeds.\",\"owner_interface expects a returned MultipartFileBody and cannot call operations with the three-value result.\"],\"observer\":\"The generated owner_interface/upload_framing integration and ultimately the owner uploading the file.\"}},{\"subject\":\"MultipartFileBody and UploadBody\",\"kind\":\"later_undefined_interface\",\"text\":\"the class `upload_framing` owns that implements `UploadBody` (State 6)\",\"question\":\"What exact UploadBody protocol must MultipartFileBody implement, including read operations, EOF semantics, underlying-stream failures, premature HTTP-body end, closing or cancellation, and ownership of the underlying stream?\",\"options\":[\"A file-like read API that raises a specified stream exception on premature end or transport failure.\",\"An iterator of byte chunks that raises a specified stream exception.\",\"A result-returning read API that distinguishes clean file-part EOF from stream failure without exceptions.\"],\"default_guess\":\"Use a binary file-like read API whose clean EOF occurs only after a valid closing delimiter and which raises one specified unreadable-stream exception otherwise.\",\"witness\":{\"initial\":\"The multipart head is valid, but the HTTP body ends midway through the file part.\",\"events\":[\"migration_import reads MultipartFileBody until it reports EOF or failure.\"],\"outcomes\":[\"MultipartFileBody raises a stream failure, so migration_import answers file_unreadable.\",\"MultipartFileBody returns ordinary EOF because UploadBody's failure signaling was not fixed, so migration_import treats the truncated bytes as a complete file and proceeds to parsing.\"],\"observer\":\"The owner, who receives file_unreadable in one implementation and a parse-dependent result in the other.\"}},{\"subject\":\"upload_framing.read_upload_head\",\"kind\":\"multipart_grammar\",\"text\":\"no multipart content type or boundary, a first part that is not the CSRF field, no second part that is the file\",\"question\":\"What exact multipart grammar is accepted: permitted Content-Type parameters, boundary syntax, header names and casing, Content-Disposition and field names, filename requirements, line endings, preamble or epilogue, duplicate headers, and whether any part may follow the file part?\",\"options\":[\"Accept exactly two parts with a strict canonical header and CRLF form and require the file boundary to be the final boundary.\",\"Accept standards-compliant multipart variations but still require exactly the CSRF part followed by one file part.\",\"Accept the first CSRF part and second file part while ignoring later parts and an epilogue.\"],\"default_guess\":\"Accept standards-compliant header casing and parameters, require exactly the named CSRF part followed by exactly one file part, and require its next boundary to be the final boundary.\",\"witness\":{\"initial\":\"A valid session sends a multipart body containing the CSRF part, a file part, and a third ordinary form part.\",\"events\":[\"upload_framing parses the head and MultipartFileBody reaches the boundary after the file.\"],\"outcomes\":[\"The upload is accepted using the second part as the file and the third part is discarded with the remaining body.\",\"The upload is refused because the file part was not followed by the final closing delimiter.\"],\"observer\":\"The owner submitting the upload.\"}},{\"subject\":\"upload head reading\",\"kind\":\"timeout_and_cancellation\",\"text\":\"the request's stream fails or ends while the head is read\",\"question\":\"What happens when the stream neither fails nor ends but stalls before the bounded head is complete: is there a timeout or cancellation limit, what value fixes it, and what response and connection action follow?\",\"options\":[\"No Registry timeout; the read waits until the client, listener, or host terminates it.\",\"A release-fixed header/body-read timeout closes the connection without reaching the surface.\",\"A listener-configured timeout turns the read into a stream failure and the upload into the stage-(1) refusal.\"],\"default_guess\":\"Use a release-fixed listener timeout and close the connection without admitting the owner request.\",\"witness\":{\"initial\":\"A client sends valid HTTP and multipart headers one byte short of a complete upload head, then keeps the connection open indefinitely.\",\"events\":[\"instance_lifecycle supplies the body stream.\",\"read_upload_head waits for the remaining byte.\"],\"outcomes\":[\"The request occupies its handler indefinitely and never reaches the session check.\",\"The listener times it out and closes the connection after a fixed interval.\"],\"observer\":\"The host monitoring the stuck connection and the owner waiting for an answer.\"}},{\"subject\":\"store.opened_store\",\"kind\":\"contradictory_error_contract\",\"text\":\"None: it is asked only by a surface's request, and a surface serves nothing until `open_store` succeeded (A17 rule 2). Asked before that, it is a wiring fault that raises, so nothing is read or written.\",\"question\":\"Is the pre-open call an error of opened_store, and if so what exception or fault contract does it expose, or is such a call outside the operation's callable domain so the Errors section must say only that?\",\"options\":[\"It has no runtime error because calling it before successful opening is outside its preconditions.\",\"It raises a specified wiring exception.\",\"It returns an internal_error result.\"],\"default_guess\":\"Make successful store opening an explicit precondition and specify a single assertion-style wiring exception for violations, separate from public refusal results.\"},{\"subject\":\"instance_lifecycle HTTP listener\",\"kind\":\"framing_acceptance\",\"text\":\"a request whose `Content-Length` or `Transfer-Encoding` header is malformed is refused by the listener from its headers alone\",\"question\":\"Which framing-header combinations and forms are malformed, including simultaneous Content-Length and Transfer-Encoding, repeated or comma-joined Content-Length values, unsupported transfer codings, a missing framing header, and Transfer-Encoding chains?\",\"options\":[\"Reject every request containing both Content-Length and Transfer-Encoding, reject unequal or non-canonical repeated lengths, and accept only a final chunked transfer coding.\",\"Let Transfer-Encoding take precedence over Content-Length as some HTTP implementations do.\",\"Delegate all acceptance rules to the selected HTTP library.\"],\"default_guess\":\"Reject Content-Length together with Transfer-Encoding, reject ambiguous repeated lengths, and accept only explicitly supported HTTP framing forms.\",\"witness\":{\"initial\":\"A client sends one request with both `Content-Length: 4` and `Transfer-Encoding: chunked`, followed by bytes that can be framed differently under the two headers.\",\"events\":[\"instance_lifecycle parses the headers and decides whether to create a body stream.\",\"If admitted, the surface reads one request and the connection contains further bytes.\"],\"outcomes\":[\"The listener rejects the request from its headers and closes the connection.\",\"The listener gives Transfer-Encoding precedence, admits the request, and may interpret bytes beyond the declared length as part of the chunked body.\"],\"observer\":\"The client, the selected surface, and any next request parser on the connection.\"}},{\"subject\":\"instance_lifecycle HTTP listener\",\"kind\":\"framing_rejection_output\",\"text\":\"is refused by the listener from its headers alone, its connection closed, and reaches no surface\",\"question\":\"Does a listener-level framing refusal send an HTTP response before closing, and if so what status, headers and body does it send; or is the connection closed without a response?\",\"options\":[\"Send a fixed HTTP 400 response and then close.\",\"Close without sending any response.\",\"Use the HTTP library's rejection response, whatever it is.\"],\"default_guess\":\"Send a minimal fixed 400 response with connection close, containing no reflected request value.\",\"witness\":{\"initial\":\"A client sends `Content-Length: not-a-number` to either listener.\",\"events\":[\"The listener detects the malformed header before accepting a body or invoking a surface.\"],\"outcomes\":[\"The client receives a fixed HTTP 400 response and then EOF.\",\"The client receives EOF or a connection reset without any HTTP response.\"],\"observer\":\"The requesting client.\"}},{\"subject\":\"upload_framing.read_upload_head\",\"kind\":\"standard_violation\",\"text\":\"which `migration_import.read_import_mapping` refuses as `file_unreadable`, as any\\nstream that fails.\",\"rule\":\"**Вывод импортов из текста — подсказка, а не источник.** Проектор локальной\\n  спеки находит кандидатов в импорт по тексту: имя чужого экспорта,\\n  встреченное **целым словом** в позитивном тексте notes или в тексте\\n  contracts consumer-а, и модели context closure. Каждый такой символ, не\\n  объявленный в `module_internal`, отчёт проектора\\n  (`python -m tools.slicer report --spec <base spec>`) называет находкой\\n  `SLICE_IMPORT_UNDECLARED` (repair_class `spec`): его объявляют в\\n  `module_internal` или убирают потребность в нём\",\"section\":\"7\",\"question\":\"Rewrite the passage without naming the foreign export read_import_mapping, for example by saying that the consumer of the stream maps its failure to file_unreadable, unless upload_framing truly imports that operation and the dependency is declared.\"},{\"subject\":\"operations.perform_owner_operation\",\"kind\":\"standard_violation\",\"text\":\"the\\nfile part's declared length, which `upload_framing.read_upload_head`\\nderived, or none\",\"rule\":\"**Вывод импортов из текста — подсказка, а не источник.** Проектор локальной\\n  спеки находит кандидатов в импорт по тексту: имя чужого экспорта,\\n  встреченное **целым словом** в позитивном тексте notes или в тексте\\n  contracts consumer-а, и модели context closure. Каждый такой символ, не\\n  объявленный в `module_internal`, отчёт проектора\\n  (`python -m tools.slicer report --spec <base spec>`) называет находкой\\n  `SLICE_IMPORT_UNDECLARED` (repair_class `spec`): его объявляют в\\n  `module_internal` или убирают потребность в нём\",\"section\":\"7\",\"question\":\"Rewrite the input as a derived file-part length supplied by the caller without naming read_upload_head, because operations does not call that foreign export, or declare the dependency if it really does.\"},{\"subject\":\"owner_interface.serve_owner_request\",\"kind\":\"standard_violation\",\"text\":\"this\\noperation passes, unread, to `migration_import.read_import_mapping`, which\\nalone consumes it within the request.\",\"rule\":\"**Вывод импортов из текста — подсказка, а не источник.** Проектор локальной\\n  спеки находит кандидатов в импорт по тексту: имя чужого экспорта,\\n  встреченное **целым словом** в позитивном тексте notes или в тексте\\n  contracts consumer-а, и модели context closure. Каждый такой символ, не\\n  объявленный в `module_internal`, отчёт проектора\\n  (`python -m tools.slicer report --spec <base spec>`) называет находкой\\n  `SLICE_IMPORT_UNDECLARED` (repair_class `spec`): его объявляют в\\n  `module_internal` или убирают потребность в нём\",\"section\":\"7\",\"question\":\"Rewrite the passage to say that owner_interface passes the unread file-part stream to operations and does not consume it; do not name read_import_mapping unless owner_interface directly imports and calls it.\"}]}",
+ "set_aside": []
+}

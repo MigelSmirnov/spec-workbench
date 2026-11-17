@@ -158,7 +158,10 @@ same way: `module_internal["operations"]["store"]` holds `opened_store`
 beside `run_in_transaction` and `read_in_transaction`;
 `module_internal["owner_interface"]["owner_sessions"]` holds
 `give_session_csrf`; and `module_internal["owner_interface"]["upload_framing"]`
-holds `read_upload_head` and the class `MultipartFileBody`. A secret such an operation returns
+holds `read_upload_head` and the class `MultipartFileBody`; the provider's
+side matches: `imports.internal["upload_framing"]` exports both, and
+`module_functions["upload_framing"]` lists `read_upload_head` and the class
+`MultipartFileBody`, whose methods follow from it (State 6). A secret such an operation returns
 to its caller inside the process is not an answer in A13 rule 7's and A17
 rule 6's sense, which is what Registry gives a service or the owner
 (R0-23, R0-37); it never reaches one.
