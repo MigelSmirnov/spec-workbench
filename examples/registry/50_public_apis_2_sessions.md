@@ -65,8 +65,9 @@ needs (A13 rules 2, 5; A16 rule 2).
 
 ### Inputs
 
-The session identity from the cookie, or none; whether the request is a
-change; the CSRF value it carries, for a change; whether it reads or
+The session identity from the cookie, or none; the request's arrival, the
+monotonic reading `owner_interface` took when its headers were read, before
+any of its body; whether the request is a change; the CSRF value it carries, for a change; whether it reads or
 changes an uploaded file — an upload, the mapping, the import's
 confirmation step, a confirmation, a sign-out, change or not; whether it is
 a sign-out; the request's step, which receives the admitted session.
@@ -87,7 +88,8 @@ session signed out at once.
 
 ### Enforces
 
-Every request is checked at its arrival, and only then: a session that has
+Every request is checked at its arrival, and only then — at the arrival
+reading it carries, however long its upload's head took to read after it: a session that has
 reached 8 hours from sign-in or 30 minutes without a request, or is marked
 signed out, serves no request; a change carries the CSRF value of its
 session, compared in constant time (A13 rule 5). A request that passed

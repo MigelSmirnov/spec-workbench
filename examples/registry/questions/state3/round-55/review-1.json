@@ -1,0 +1,111 @@
+{
+ "open_points": [
+  {
+   "subject": "import upload size check",
+   "kind": "contradiction",
+   "text": "A declared length over the limit is refused before any byte is read; otherwise Registry reads the upload up to one byte more than the limit\n\nand the file part's declared length — the request's declared length less\nthe head it read and the closing delimiter with its final `--` and line end,\nor none when the request declares none — so that a file of exactly the\nimport limit is not refused for its framing (A19 rule 4).",
+   "question": "Is the early refusal based on the whole request's declared length before reading any body byte, or on the derived file-part length after `upload_framing` has read the multipart head?",
+   "options": [
+    "Refuse from the whole request length before reading the head",
+    "Read the head, derive the file-part length, and apply the early refusal to that value",
+    "Never use a multipart request length for early refusal; enforce only while reading file bytes"
+   ],
+   "default_guess": "Read the bounded head, derive the file-part length, and let `migration_import` compare that derived value while still enforcing the limit over bytes actually received.",
+   "witness": {
+    "initial": "No import has succeeded; a valid owner session uploads a file of exactly 52,428,800 bytes in a multipart request whose declared total length is larger because it includes framing.",
+    "events": [
+     "The owner's browser sends the multipart upload with its total Content-Length.",
+     "The owner interface receives the request.",
+     "Registry applies the upload-size rule."
+    ],
+    "outcomes": [
+     "Registry refuses before reading any body byte because the request's declared total length exceeds 52,428,800.",
+     "Registry reads the bounded multipart head, derives a file-part length of exactly 52,428,800, reads the file, and accepts the upload."
+    ],
+    "observer": "The owner uploading the migration file"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner request admission boundary",
+   "kind": "forbidden dependency direction",
+   "text": "the arrival of an\nowner request, which is the moment `operations` hands it to the session\ncheck — after its headers and, for an upload, the head `upload_framing`\nread, at most `UPLOAD_FORM_HEAD_MAX_BYTES` — where `owner_sessions` takes the\nmonotonic reading its validity is checked at (rule 2);",
+   "question": "Which module owns the definition and sequencing of request arrival, multipart-head reading, and the call to the session check, given that `owner_sessions` does not list `operations` or `upload_framing` under Knows and may not know later module `operations`?",
+   "options": [
+    "`owner_interface` reads the head and `operations` orchestrates admission; `owner_sessions` only checks at a supplied/current reading",
+    "`owner_sessions` directly knows and invokes `upload_framing`, while `operations` invokes `owner_sessions`",
+    "Move the entire admission pipeline into `owner_sessions` and change the dependency order"
+   ],
+   "default_guess": "Put the pipeline sequencing in `owner_interface` and `operations`; keep `owner_sessions` independent of both and define its input as the monotonic reading taken when its admission capability is invoked.",
+   "unit": "?"
+  },
+  {
+   "subject": "session cookie",
+   "kind": "two owners",
+   "text": "the session, its cookie rules and its limits\n\nThe session cookie and the CSRF value in its\nforms (A13 rules 1, 5, 7), no personal value or secret in a URL (R0-29).",
+   "question": "Which module owns each cookie decision: creation and invalidation, attributes such as Secure/HttpOnly/SameSite/path, origin scoping, and serialization into HTTP responses?",
+   "options": [
+    "`owner_sessions` owns all cookie policy and returns a cookie instruction that `owner_interface` serializes",
+    "`owner_interface` owns HTTP cookie attributes and serialization while `owner_sessions` owns only the session identity and lifecycle",
+    "`operations` owns the cookie policy and both modules merely execute it"
+   ],
+   "default_guess": "`owner_sessions` owns session identity, lifecycle, and issuance/invalidation intent; `owner_interface` owns only HTTP serialization and must apply attributes specified by an owner-session policy.",
+   "unit": "?"
+  },
+  {
+   "subject": "session cookie transport",
+   "kind": "contradiction",
+   "text": "The session cookie\nis always HTTPS-only (A13 rule 1, owner, 2026-11-17): a browser on Registry's\nown machine accepts it from a loopback address over plain HTTP, and from any\nother machine the interface is reached only through HTTPS (R0-29).",
+   "question": "Does “always HTTPS-only” mean the cookie is never accepted or sent over plain HTTP, or does it mean a Secure cookie with an explicitly supported loopback-HTTP exception; and which configured loopback addresses and browsers must support that exception?",
+   "options": [
+    "Require HTTPS for every owner-interface connection, loopback included",
+    "Set the Secure attribute and require supported browsers to honor it on HTTP loopback origins",
+    "Use a non-Secure cookie only for a loopback listener and a Secure cookie otherwise"
+   ],
+   "default_guess": "Set the Secure attribute unconditionally and explicitly constrain supported local HTTP access to loopback origins on browsers known to implement the exception; otherwise require HTTPS.",
+   "witness": {
+    "initial": "Registry is configured to listen on `127.0.0.1`, and the owner opens the interface locally over plain HTTP.",
+    "events": [
+     "The owner submits valid credentials.",
+     "Registry returns the session cookie marked according to the design.",
+     "The browser decides whether to store and send it on the next HTTP request."
+    ],
+    "outcomes": [
+     "Because the cookie is literally HTTPS-only, the browser does not send it and the owner cannot establish a session.",
+     "Because loopback HTTP is an allowed exception to the Secure-cookie rule, the browser sends it and the session works."
+    ],
+    "observer": "The owner using the interface locally"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "multipart file-part declared length",
+   "kind": "underspecified framing calculation",
+   "text": "the file part's declared length — the request's declared length less\nthe head it read and the closing delimiter with its final `--` and line end,\nor none when the request declares none",
+   "question": "When may this subtraction be trusted, and what is returned when the body has an epilogue, another part, a missing or non-final delimiter, a different permitted line ending, a mismatched declared request length, or a result that is negative?",
+   "options": [
+    "Accept only the exact two-part framing generated by `owner_interface`; otherwise return no upload result",
+    "Return a declared file length only after proving the remaining framing has exactly the assumed fixed shape",
+    "Compute the arithmetic claim immediately from Content-Length and the boundary, then let stream reading detect malformed trailing framing"
+   ],
+   "default_guess": "Define one exact accepted two-part grammar with no epilogue or additional part; expose a declared file length only when the arithmetic is non-negative, and have the bounded stream report malformed closing framing while actual-byte enforcement remains authoritative.",
+   "witness": {
+    "initial": "A valid owner session sends a multipart body containing a file of exactly the import limit followed by a legal-looking epilogue or an additional part, with a total Content-Length.",
+    "events": [
+     "`upload_framing` reads through the second part's headers.",
+     "It derives or declines to derive the file-part length.",
+     "`migration_import` applies the declared-length check before consuming the file stream."
+    ],
+    "outcomes": [
+     "The epilogue or later part is included by subtraction in the alleged file length, so the exactly-at-limit file is refused as too large.",
+     "The framing is rejected as malformed or the declared file length is reported as absent, and the actual file bytes are judged separately."
+    ],
+    "observer": "The owner and the import endpoint's caller"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"import upload size check\",\"kind\":\"contradiction\",\"text\":\"A declared length over the limit is refused before any byte is read; otherwise Registry reads the upload up to one byte more than the limit\\n\\nand the file part's declared length — the request's declared length less\\nthe head it read and the closing delimiter with its final `--` and line end,\\nor none when the request declares none — so that a file of exactly the\\nimport limit is not refused for its framing (A19 rule 4).\",\"question\":\"Is the early refusal based on the whole request's declared length before reading any body byte, or on the derived file-part length after `upload_framing` has read the multipart head?\",\"options\":[\"Refuse from the whole request length before reading the head\",\"Read the head, derive the file-part length, and apply the early refusal to that value\",\"Never use a multipart request length for early refusal; enforce only while reading file bytes\"],\"default_guess\":\"Read the bounded head, derive the file-part length, and let `migration_import` compare that derived value while still enforcing the limit over bytes actually received.\",\"witness\":{\"initial\":\"No import has succeeded; a valid owner session uploads a file of exactly 52,428,800 bytes in a multipart request whose declared total length is larger because it includes framing.\",\"events\":[\"The owner's browser sends the multipart upload with its total Content-Length.\",\"The owner interface receives the request.\",\"Registry applies the upload-size rule.\"],\"outcomes\":[\"Registry refuses before reading any body byte because the request's declared total length exceeds 52,428,800.\",\"Registry reads the bounded multipart head, derives a file-part length of exactly 52,428,800, reads the file, and accepts the upload.\"],\"observer\":\"The owner uploading the migration file\"}},{\"subject\":\"owner request admission boundary\",\"kind\":\"forbidden dependency direction\",\"text\":\"the arrival of an\\nowner request, which is the moment `operations` hands it to the session\\ncheck — after its headers and, for an upload, the head `upload_framing`\\nread, at most `UPLOAD_FORM_HEAD_MAX_BYTES` — where `owner_sessions` takes the\\nmonotonic reading its validity is checked at (rule 2);\",\"question\":\"Which module owns the definition and sequencing of request arrival, multipart-head reading, and the call to the session check, given that `owner_sessions` does not list `operations` or `upload_framing` under Knows and may not know later module `operations`?\",\"options\":[\"`owner_interface` reads the head and `operations` orchestrates admission; `owner_sessions` only checks at a supplied/current reading\",\"`owner_sessions` directly knows and invokes `upload_framing`, while `operations` invokes `owner_sessions`\",\"Move the entire admission pipeline into `owner_sessions` and change the dependency order\"],\"default_guess\":\"Put the pipeline sequencing in `owner_interface` and `operations`; keep `owner_sessions` independent of both and define its input as the monotonic reading taken when its admission capability is invoked.\"},{\"subject\":\"session cookie\",\"kind\":\"two owners\",\"text\":\"the session, its cookie rules and its limits\\n\\nThe session cookie and the CSRF value in its\\nforms (A13 rules 1, 5, 7), no personal value or secret in a URL (R0-29).\",\"question\":\"Which module owns each cookie decision: creation and invalidation, attributes such as Secure/HttpOnly/SameSite/path, origin scoping, and serialization into HTTP responses?\",\"options\":[\"`owner_sessions` owns all cookie policy and returns a cookie instruction that `owner_interface` serializes\",\"`owner_interface` owns HTTP cookie attributes and serialization while `owner_sessions` owns only the session identity and lifecycle\",\"`operations` owns the cookie policy and both modules merely execute it\"],\"default_guess\":\"`owner_sessions` owns session identity, lifecycle, and issuance/invalidation intent; `owner_interface` owns only HTTP serialization and must apply attributes specified by an owner-session policy.\"},{\"subject\":\"session cookie transport\",\"kind\":\"contradiction\",\"text\":\"The session cookie\\nis always HTTPS-only (A13 rule 1, owner, 2026-11-17): a browser on Registry's\\nown machine accepts it from a loopback address over plain HTTP, and from any\\nother machine the interface is reached only through HTTPS (R0-29).\",\"question\":\"Does “always HTTPS-only” mean the cookie is never accepted or sent over plain HTTP, or does it mean a Secure cookie with an explicitly supported loopback-HTTP exception; and which configured loopback addresses and browsers must support that exception?\",\"options\":[\"Require HTTPS for every owner-interface connection, loopback included\",\"Set the Secure attribute and require supported browsers to honor it on HTTP loopback origins\",\"Use a non-Secure cookie only for a loopback listener and a Secure cookie otherwise\"],\"default_guess\":\"Set the Secure attribute unconditionally and explicitly constrain supported local HTTP access to loopback origins on browsers known to implement the exception; otherwise require HTTPS.\",\"witness\":{\"initial\":\"Registry is configured to listen on `127.0.0.1`, and the owner opens the interface locally over plain HTTP.\",\"events\":[\"The owner submits valid credentials.\",\"Registry returns the session cookie marked according to the design.\",\"The browser decides whether to store and send it on the next HTTP request.\"],\"outcomes\":[\"Because the cookie is literally HTTPS-only, the browser does not send it and the owner cannot establish a session.\",\"Because loopback HTTP is an allowed exception to the Secure-cookie rule, the browser sends it and the session works.\"],\"observer\":\"The owner using the interface locally\"}},{\"subject\":\"multipart file-part declared length\",\"kind\":\"underspecified framing calculation\",\"text\":\"the file part's declared length — the request's declared length less\\nthe head it read and the closing delimiter with its final `--` and line end,\\nor none when the request declares none\",\"question\":\"When may this subtraction be trusted, and what is returned when the body has an epilogue, another part, a missing or non-final delimiter, a different permitted line ending, a mismatched declared request length, or a result that is negative?\",\"options\":[\"Accept only the exact two-part framing generated by `owner_interface`; otherwise return no upload result\",\"Return a declared file length only after proving the remaining framing has exactly the assumed fixed shape\",\"Compute the arithmetic claim immediately from Content-Length and the boundary, then let stream reading detect malformed trailing framing\"],\"default_guess\":\"Define one exact accepted two-part grammar with no epilogue or additional part; expose a declared file length only when the arithmetic is non-negative, and have the bounded stream report malformed closing framing while actual-byte enforcement remains authoritative.\",\"witness\":{\"initial\":\"A valid owner session sends a multipart body containing a file of exactly the import limit followed by a legal-looking epilogue or an additional part, with a total Content-Length.\",\"events\":[\"`upload_framing` reads through the second part's headers.\",\"It derives or declines to derive the file-part length.\",\"`migration_import` applies the declared-length check before consuming the file stream.\"],\"outcomes\":[\"The epilogue or later part is included by subtraction in the alleged file length, so the exactly-at-limit file is refused as too large.\",\"The framing is rejected as malformed or the declared file length is reported as absent, and the actual file bytes are judged separately.\"],\"observer\":\"The owner and the import endpoint's caller\"}}]}",
+ "set_aside": []
+}

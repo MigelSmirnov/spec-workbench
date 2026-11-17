@@ -498,7 +498,14 @@ request text (M08) — and the import reads a file from outside.
    declares: a declared length over the limit is refused before any byte is
    read; otherwise Registry reads the upload up to one byte more than the
    limit and refuses it as soon as it holds more than the limit, whatever
-   length was declared or whether one was. A refused upload is kept nowhere
+   length was declared or whether one was. The upload is the file the owner
+   interface's form sends as the second part of a multipart body, after the
+   field that carries the CSRF value (A13 rules 5, 7; owner, 2026-11-17): the
+   limit and every byte this rule counts are the file part's, never the
+   form's framing. Its declared length is the request's declared length less
+   the head read before the file — at most the data provider's
+   `UPLOAD_FORM_HEAD_MAX_BYTES` — and the closing delimiter; "before any byte
+   is read" is before any byte of the file. A refused upload is kept nowhere
    and replaces no file the session kept (A16 rule 2). The limit is one
    value of the release, the data provider's constant
    `IMPORT_FILE_MAX_BYTES` = 52428800, which the code that receives the
@@ -519,9 +526,10 @@ no stored value is ever evaluated or executed
 2. An access request text with markup is shown as text.
 3. A display name with a quote and a semicolon is stored and read back
    unchanged.
-4. An import file of exactly 50 × 1024 × 1024 bytes is read; one of a byte
-   more is refused, with no mapping shown, also when its declared length is
-   smaller or absent, and the file the session kept before stays kept.
+4. An import file of exactly 50 × 1024 × 1024 bytes, sent by the upload form
+   with its CSRF field first, is read; one of a byte more is refused, with
+   no mapping shown, also when its declared length is smaller or absent, and
+   the file the session kept before stays kept.
 
 ### Consequence
 
@@ -650,6 +658,16 @@ each surface the deployment's — since such
 a variable is never a credential Registry uses, never enters a diagnostic,
 and a misspelt secret leaves its item unset, which stops the start or makes
 the start owner-only (rule 1).
+
+Performed again on 2026-11-17, after that day's change to A19 reopened it
+(rule 2): the owner interface's upload form sends its CSRF field first and
+the file second, as multipart, and A19 rule 4's limit, counting and
+declared length are the file part's. Reviewed under files_artifacts and
+injection_interpreted_input (A19), and browser_boundary (A13, A19): the
+size limit still holds over the bytes of the file Registry receives, the
+head before it is bounded by a constant and never kept, the CSRF value
+still travels only in a form (A13 rule 7), and the session cookie is always
+HTTPS-only, which is stricter than A13 rule 1. No outcome changed.
 
 ### Consequence
 

@@ -123,6 +123,12 @@ readings, so an action's today is `operations`' (`_today_of`).
   answer is `personal_data` when one of the listed (answer model, field)
   pairs holds a value in it, nested views included, and
   `business_confidential` otherwise; `open` is never answered.
+- **An owner request's arrival** (State 3 round-55 T3). `OwnerAdmission`
+  carries `arrived_at`, the `clock.monotonic_reading` `owner_interface` takes
+  when the request's headers are read, before any of its body;
+  `owner_sessions` checks the session's limits and restarts its 30 minutes
+  at that reading, so the bounded head of an upload, read afterwards, never
+  moves the arrival (A13 rule 2).
 - **The owner's pages** (owner, 2026-11-17; State 7 structure requests of
   `owner_interface`). `_render_owner_page` receives the session's CSRF value,
   which `owner_sessions.give_session_csrf` gives for the cookie's session, or

@@ -163,7 +163,11 @@ later line, and modules on one line do not know each other.
   action records a new instant or compares a date in. The import's records
   keep the instants their source holds ("Revisions and times"); the Customers
   it makes, its closure and its entry carry the action's one instant. The
-  limits of A13 are read by `owner_sessions` from `clock.monotonic_reading`;
+  limits of A13 are read by `owner_sessions` from `clock.monotonic_reading`,
+  but for an owner request's arrival, which `owner_interface` reads from
+  `clock.monotonic_reading` when the request's headers are read, before any
+  of its body, and hands on with it, so that `owner_sessions` checks the
+  session at that reading (A13 rule 2; owner, 2026-11-17);
   the minute look of A18 rule 1 by `backups` from `clock.recorded_now`; a
   backup's instant is the one `store` reads at the read that fixes the
   copy's snapshot (A18 rule 1), which `backups` records and never reads
@@ -826,11 +830,11 @@ was wrong (rules 3, 4); the session, its cookie rules and its limits — 8 hours
 30 minutes without a request, sign-out, restart — held as monotonic readings
 (rule 2); the pass every 60 seconds that ends sessions by their limits, taking
 the import lock and then each session's lock; each session's one lock, under
-which its state-changing requests apply one at a time; the arrival of an
-owner request, which is the moment `operations` hands it to the session
-check — after its headers and, for an upload, the head `upload_framing`
-read, at most `UPLOAD_FORM_HEAD_MAX_BYTES` — where `owner_sessions` takes the
-monotonic reading its validity is checked at (rule 2); the CSRF value (rule 5),
+which its state-changing requests apply one at a time; the session's
+validity at a request's arrival, judged at the monotonic reading
+`owner_interface` took when the request's headers were read, before any of
+its body — so an upload's head, read afterwards, never delays it (rule 2);
+the CSRF value (rule 5),
 given for a valid session to the interface that renders its forms (owner,
 2026-11-17);
 the pending confirmation — made when a step is shown, bound to the action, its
@@ -1284,14 +1288,16 @@ ends where the part ends, never read or buffered here, so that
 `migration_import` alone applies A19 rule 4 to the file. The session cookie
 is always HTTPS-only (A13 rule 1, owner, 2026-11-17): a browser on Registry's
 own machine accepts it from a loopback address over plain HTTP, and from any
-other machine the interface is reached only through HTTPS (R0-29). Every
+other machine the interface is reached only through HTTPS (R0-29). A
+request's arrival is the monotonic reading taken when its headers are read,
+before any of its body, handed on for the session check (A13 rule 2). Every
 form of a page rendered for a valid session carries the CSRF value
 `owner_sessions` gives for the session; the sign-in form, made without a
 session, carries none (A13 rule 4).
 
 ### Knows
 
-`models`, `random_values`, `upload_framing`, `owner_sessions`,
+`models`, `clock`, `random_values`, `upload_framing`, `owner_sessions`,
 `operations`.
 
 ### Must not own

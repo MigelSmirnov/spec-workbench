@@ -82,7 +82,8 @@ its one transaction with its entry and confirmation id (A04, A13, A14, A16).
 
 ### Inputs
 
-The session identity from the cookie; the CSRF value; the request — which
+The session identity from the cookie; the request's arrival reading; the
+CSRF value; the request — which
 action or page, its target, its stated revision or access version, its
 values, a confirmation value; for sign-in the credential; for an upload the
 request's declared length, or that it declared none, and its unread byte
@@ -214,9 +215,11 @@ is the file (owner, 2026-11-17). `upload_framing.read_upload_head` reads
 the body's head alone and answers the CSRF value and the file part's
 declared length; `owner_interface` hands that length and the file part, as
 an unread stream that ends where the part ends, to
-`operations.perform_owner_operation`, without reading or buffering it. The
-upload arrives, for the session check, when it is handed on (A13 rule 2). A head of another form gives no CSRF value, and the
-upload is refused at stage (1) before any byte of the file is read.
+`operations.perform_owner_operation`, without reading or buffering it. A
+head of another form gives no CSRF value, and the upload is refused at stage
+(1) before any byte of the file is read. Every request's arrival is the
+`clock.monotonic_reading` taken when its headers are read, before any of its
+body, and the session is checked at it (A13 rule 2).
 
 ### Outputs
 
