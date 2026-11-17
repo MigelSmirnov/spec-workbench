@@ -1,0 +1,149 @@
+{
+ "open_points": [
+  {
+   "subject": "HTTP header framing validation",
+   "kind": "vague_decision",
+   "text": "a request whose `Content-Length` or `Transfer-Encoding` header is malformed",
+   "question": "Which exact header forms are malformed, including duplicate `Content-Length` fields, comma-separated values, simultaneous `Content-Length` and `Transfer-Encoding`, transfer codings other than `chunked`, and `chunked` not being the final coding?",
+   "options": [
+    "Reject every ambiguous combination, require one valid decimal `Content-Length` or a supported final `chunked` coding, and reject `Content-Length` together with `Transfer-Encoding`",
+    "Apply HTTP precedence rules, allowing some combinations such as `Transfer-Encoding` together with an ignored `Content-Length`",
+    "Leave each listener library's accepted grammar in force"
+   ],
+   "default_guess": "Reject every ambiguous combination and support only a single valid `Content-Length` or supported chunked framing.",
+   "witness": {
+    "initial": "A client has one authenticated request with both `Content-Length: 5` and `Transfer-Encoding: chunked`, followed on the connection by bytes that the two framings divide differently.",
+    "events": [
+     "The client sends the headers and body to the service API listener.",
+     "The listener validates the headers before dispatch."
+    ],
+    "outcomes": [
+     "The listener treats the combination as malformed, closes the connection, and the request reaches no surface.",
+     "The listener gives `Transfer-Encoding` precedence, accepts the headers, and dispatches a chunked body stream to the surface."
+    ],
+    "observer": "The caller and any component receiving the differently framed request"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ownership of body-framing stream failures",
+   "kind": "unowned_contract",
+   "text": "whose chunks are malformed, is a failure of the stream its reader sees while reading it",
+   "question": "Which module owns the stream failure's type and contract, and which module must translate it into request failure: `instance_lifecycle`, `service_api`, or `owner_interface`?",
+   "options": [
+    "`instance_lifecycle` owns a framing stream and a declared failure contract; both surfaces handle that contract",
+    "`instance_lifecycle` catches and translates every framing failure centrally",
+    "Each surface defines and handles its own stream failure"
+   ],
+   "default_guess": "`instance_lifecycle` owns one declared framing-stream failure contract and centrally ensures that either surface handles it identically.",
+   "unit": "?"
+  },
+  {
+   "subject": "dependency for the framing-stream contract",
+   "kind": "unclear_dependency",
+   "text": "### Knows\n\n`models`, `clock`, `data_provider`, `configuration`, `store`,\n`owner_sessions`, `backups`, `service_api`, `owner_interface`.",
+   "question": "Where can the shared body-stream and framing-failure contract live without making `service_api` and `owner_interface` depend back on their facade, which already depends on and delegates to them?",
+   "options": [
+    "Put the transport stream contract in a separate provider module known by the lifecycle and both surfaces",
+    "Make both surfaces depend on `instance_lifecycle`, creating dependencies in both directions",
+    "Use an externally owned standard stream contract and state its required failure semantics explicitly"
+   ],
+   "default_guess": "Introduce a separate transport-contract provider used by `instance_lifecycle`, `service_api`, and `owner_interface`.",
+   "unit": "?"
+  },
+  {
+   "subject": "effect of a body-framing failure",
+   "kind": "missing_failure_policy",
+   "text": "a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it",
+   "question": "When that failure occurs, is an HTTP error response sent or is the connection closed without an answer, and must the connection always become unusable?",
+   "options": [
+    "Abort the request and close the connection without attempting an HTTP response",
+    "Send one fixed client-error response when possible and then close the connection",
+    "Let each surface decide whether to answer and whether to keep the connection open"
+   ],
+   "default_guess": "Abort the request, send a fixed bad-request response only if no response has begun, and always close the connection.",
+   "witness": {
+    "initial": "An owner upload has valid headers, but its chunk stream becomes malformed while the owner interface reads the multipart body; no response has begun.",
+    "events": [
+     "The owner sends the upload.",
+     "The listener dispatches the request and the owner interface reads its body stream.",
+     "The stream reports malformed chunk framing."
+    ],
+    "outcomes": [
+     "Registry returns a fixed client-error response and closes the connection.",
+     "Registry closes or resets the connection without an HTTP response."
+    ],
+    "observer": "The owner and the owner interface client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "state changes before complete framing validation",
+   "kind": "missing_atomicity_boundary",
+   "text": "the body itself is never read ahead by the listener, so a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it",
+   "question": "Must a surface consume and successfully reach the framed end of every request body before committing an operation, or may it act after parsing the values it needs even though unread framing can later fail?",
+   "options": [
+    "No operation may commit until the body stream reaches its valid framed end",
+    "A surface may commit as soon as it has parsed its required value, and a later framing failure affects only the connection",
+    "Only writing operations must reach the valid framed end; reads may ignore an unread remainder"
+   ],
+   "default_guess": "Require every operation to reach and validate the framed end before committing or answering.",
+   "witness": {
+    "initial": "A valid authenticated publish request uses chunked framing; one complete JSON object appears in early chunks, followed by an invalid chunk before the terminating chunk.",
+    "events": [
+     "Cabinet Kernel sends the request.",
+     "The service API parses the complete JSON object.",
+     "The surface either commits immediately or continues reading to the framed end."
+    ],
+    "outcomes": [
+     "The pointer is published before the unread malformed chunk is discovered.",
+     "The malformed framing aborts the request and no pointer is published."
+    ],
+    "observer": "Cabinet Kernel and later readers of the project's artifacts"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "unread request bodies and connection reuse",
+   "kind": "missing_lifecycle_rule",
+   "text": "the body itself is never read ahead by the listener",
+   "question": "If a surface does not read all of a request body, what happens to the unread bytes and the connection before another request can be accepted on it?",
+   "options": [
+    "Close the connection after the response whenever the body was not fully consumed",
+    "Drain and validate the remaining framed body before reusing the connection",
+    "Require every surface to consume every body to its framed end"
+   ],
+   "default_guess": "Require every surface to consume to the framed end; on early abandonment, close the connection without reading another request.",
+   "witness": {
+    "initial": "A client sends a read operation with a chunked body the operation does not need, then pipelines another request on the same connection.",
+    "events": [
+     "The first request reaches its surface.",
+     "The surface produces its read answer without consuming the body.",
+     "The listener considers whether it may parse another request."
+    ],
+    "outcomes": [
+     "Registry closes the connection after the first answer, so the pipelined request is not processed.",
+     "Registry drains the first body and then processes the pipelined request."
+    ],
+    "observer": "The client sending both requests"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "meaning and boundary of read-ahead",
+   "kind": "vague_decision",
+   "text": "the body itself is never read ahead by the listener",
+   "question": "Does “never read ahead” forbid all body reads until the surface pulls, permit bounded buffering within the current framed body, or only forbid reading beyond that body's boundary into the next request?",
+   "options": [
+    "The listener performs no body read until the consumer requests bytes",
+    "The listener may buffer bytes belonging to the current body but never bytes beyond its framed end",
+    "The restriction only means that bytes of the next request are never delivered as the current body"
+   ],
+   "default_guess": "Allow bounded buffering of the current body on consumer demand, while never consuming bytes belonging to the next request.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"HTTP header framing validation\",\"kind\":\"vague_decision\",\"text\":\"a request whose `Content-Length` or `Transfer-Encoding` header is malformed\",\"question\":\"Which exact header forms are malformed, including duplicate `Content-Length` fields, comma-separated values, simultaneous `Content-Length` and `Transfer-Encoding`, transfer codings other than `chunked`, and `chunked` not being the final coding?\",\"options\":[\"Reject every ambiguous combination, require one valid decimal `Content-Length` or a supported final `chunked` coding, and reject `Content-Length` together with `Transfer-Encoding`\",\"Apply HTTP precedence rules, allowing some combinations such as `Transfer-Encoding` together with an ignored `Content-Length`\",\"Leave each listener library's accepted grammar in force\"],\"default_guess\":\"Reject every ambiguous combination and support only a single valid `Content-Length` or supported chunked framing.\",\"witness\":{\"initial\":\"A client has one authenticated request with both `Content-Length: 5` and `Transfer-Encoding: chunked`, followed on the connection by bytes that the two framings divide differently.\",\"events\":[\"The client sends the headers and body to the service API listener.\",\"The listener validates the headers before dispatch.\"],\"outcomes\":[\"The listener treats the combination as malformed, closes the connection, and the request reaches no surface.\",\"The listener gives `Transfer-Encoding` precedence, accepts the headers, and dispatches a chunked body stream to the surface.\"],\"observer\":\"The caller and any component receiving the differently framed request\"}},{\"subject\":\"ownership of body-framing stream failures\",\"kind\":\"unowned_contract\",\"text\":\"whose chunks are malformed, is a failure of the stream its reader sees while reading it\",\"question\":\"Which module owns the stream failure's type and contract, and which module must translate it into request failure: `instance_lifecycle`, `service_api`, or `owner_interface`?\",\"options\":[\"`instance_lifecycle` owns a framing stream and a declared failure contract; both surfaces handle that contract\",\"`instance_lifecycle` catches and translates every framing failure centrally\",\"Each surface defines and handles its own stream failure\"],\"default_guess\":\"`instance_lifecycle` owns one declared framing-stream failure contract and centrally ensures that either surface handles it identically.\"},{\"subject\":\"dependency for the framing-stream contract\",\"kind\":\"unclear_dependency\",\"text\":\"### Knows\\n\\n`models`, `clock`, `data_provider`, `configuration`, `store`,\\n`owner_sessions`, `backups`, `service_api`, `owner_interface`.\",\"question\":\"Where can the shared body-stream and framing-failure contract live without making `service_api` and `owner_interface` depend back on their facade, which already depends on and delegates to them?\",\"options\":[\"Put the transport stream contract in a separate provider module known by the lifecycle and both surfaces\",\"Make both surfaces depend on `instance_lifecycle`, creating dependencies in both directions\",\"Use an externally owned standard stream contract and state its required failure semantics explicitly\"],\"default_guess\":\"Introduce a separate transport-contract provider used by `instance_lifecycle`, `service_api`, and `owner_interface`.\"},{\"subject\":\"effect of a body-framing failure\",\"kind\":\"missing_failure_policy\",\"text\":\"a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it\",\"question\":\"When that failure occurs, is an HTTP error response sent or is the connection closed without an answer, and must the connection always become unusable?\",\"options\":[\"Abort the request and close the connection without attempting an HTTP response\",\"Send one fixed client-error response when possible and then close the connection\",\"Let each surface decide whether to answer and whether to keep the connection open\"],\"default_guess\":\"Abort the request, send a fixed bad-request response only if no response has begun, and always close the connection.\",\"witness\":{\"initial\":\"An owner upload has valid headers, but its chunk stream becomes malformed while the owner interface reads the multipart body; no response has begun.\",\"events\":[\"The owner sends the upload.\",\"The listener dispatches the request and the owner interface reads its body stream.\",\"The stream reports malformed chunk framing.\"],\"outcomes\":[\"Registry returns a fixed client-error response and closes the connection.\",\"Registry closes or resets the connection without an HTTP response.\"],\"observer\":\"The owner and the owner interface client\"}},{\"subject\":\"state changes before complete framing validation\",\"kind\":\"missing_atomicity_boundary\",\"text\":\"the body itself is never read ahead by the listener, so a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it\",\"question\":\"Must a surface consume and successfully reach the framed end of every request body before committing an operation, or may it act after parsing the values it needs even though unread framing can later fail?\",\"options\":[\"No operation may commit until the body stream reaches its valid framed end\",\"A surface may commit as soon as it has parsed its required value, and a later framing failure affects only the connection\",\"Only writing operations must reach the valid framed end; reads may ignore an unread remainder\"],\"default_guess\":\"Require every operation to reach and validate the framed end before committing or answering.\",\"witness\":{\"initial\":\"A valid authenticated publish request uses chunked framing; one complete JSON object appears in early chunks, followed by an invalid chunk before the terminating chunk.\",\"events\":[\"Cabinet Kernel sends the request.\",\"The service API parses the complete JSON object.\",\"The surface either commits immediately or continues reading to the framed end.\"],\"outcomes\":[\"The pointer is published before the unread malformed chunk is discovered.\",\"The malformed framing aborts the request and no pointer is published.\"],\"observer\":\"Cabinet Kernel and later readers of the project's artifacts\"}},{\"subject\":\"unread request bodies and connection reuse\",\"kind\":\"missing_lifecycle_rule\",\"text\":\"the body itself is never read ahead by the listener\",\"question\":\"If a surface does not read all of a request body, what happens to the unread bytes and the connection before another request can be accepted on it?\",\"options\":[\"Close the connection after the response whenever the body was not fully consumed\",\"Drain and validate the remaining framed body before reusing the connection\",\"Require every surface to consume every body to its framed end\"],\"default_guess\":\"Require every surface to consume to the framed end; on early abandonment, close the connection without reading another request.\",\"witness\":{\"initial\":\"A client sends a read operation with a chunked body the operation does not need, then pipelines another request on the same connection.\",\"events\":[\"The first request reaches its surface.\",\"The surface produces its read answer without consuming the body.\",\"The listener considers whether it may parse another request.\"],\"outcomes\":[\"Registry closes the connection after the first answer, so the pipelined request is not processed.\",\"Registry drains the first body and then processes the pipelined request.\"],\"observer\":\"The client sending both requests\"}},{\"subject\":\"meaning and boundary of read-ahead\",\"kind\":\"vague_decision\",\"text\":\"the body itself is never read ahead by the listener\",\"question\":\"Does “never read ahead” forbid all body reads until the surface pulls, permit bounded buffering within the current framed body, or only forbid reading beyond that body's boundary into the next request?\",\"options\":[\"The listener performs no body read until the consumer requests bytes\",\"The listener may buffer bytes belonging to the current body but never bytes beyond its framed end\",\"The restriction only means that bytes of the next request are never delivered as the current body\"],\"default_guess\":\"Allow bounded buffering of the current body on consumer demand, while never consuming bytes belonging to the next request.\"}]}",
+ "set_aside": []
+}

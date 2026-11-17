@@ -1,0 +1,171 @@
+{
+ "open_points": [
+  {
+   "subject": "HTTP header framing validation",
+   "kind": "undefined validity rules",
+   "text": "a request whose `Content-Length` or `Transfer-Encoding` header is malformed",
+   "question": "Exactly which header forms are malformed, including repeated or conflicting `Content-Length`, simultaneous `Content-Length` and `Transfer-Encoding`, unsupported transfer codings, coding lists, overflow and non-canonical numeric forms?",
+   "options": [
+    "Accept only one canonical `Content-Length` or exactly `Transfer-Encoding: chunked`, and reject every conflict or unsupported coding",
+    "Delegate all validity decisions to the HTTP library",
+    "Accept every form the applicable HTTP version permits"
+   ],
+   "default_guess": "Accept one valid `Content-Length` or exactly chunked transfer encoding, reject both together, reject conflicting duplicates and unsupported codings.",
+   "unit": "?"
+  },
+  {
+   "subject": "malformed-header refusal",
+   "kind": "undefined wire outcome",
+   "text": "is refused by the listener from its headers alone, its connection closed, and reaches no surface",
+   "question": "Before closing the connection, does the listener send an HTTP error response, and if so which status and response shape, or does it close without an answer?",
+   "options": [
+    "Send a fixed HTTP error and then close",
+    "Close without sending an HTTP response",
+    "Use whatever response the HTTP library produces"
+   ],
+   "default_guess": "Send a minimal 400 response when safely possible, then close.",
+   "witness": {
+    "initial": "A client has connected and sends a syntactically invalid `Content-Length` header.",
+    "events": [
+     "The client completes the header block.",
+     "The listener detects the malformed header."
+    ],
+    "outcomes": [
+     "The client receives an HTTP 400 response and then EOF.",
+     "The client receives EOF or a reset without any HTTP response."
+    ],
+    "observer": "The calling client and any monitor classifying HTTP responses"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "body-framing stream failure",
+   "kind": "unclear ownership and dependency",
+   "text": "whose chunks are malformed, is a failure of the stream its reader sees while reading it",
+   "question": "Which module owns the stream-failure type and its handling: `instance_lifecycle`, the reading `service_api` or `owner_interface` module, or another transport abstraction, and in which direction does that dependency run?",
+   "options": [
+    "`instance_lifecycle` owns the framed stream and catches its failure around each surface invocation",
+    "Each surface imports and handles a transport failure exported by `instance_lifecycle`",
+    "A separate HTTP transport module owns the stream contract and is known by lifecycle and both surfaces"
+   ],
+   "default_guess": "Keep the transport failure private to `instance_lifecycle`; invoke a surface under a wrapper that catches the failure and terminates the request and connection.",
+   "unit": "?"
+  },
+  {
+   "subject": "operation outcome after a body-framing failure",
+   "kind": "undefined failure semantics",
+   "text": "a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it",
+   "question": "What is the operation-level outcome when this failure occurs after the request has reached a surface: must the operation be treated as refused with no state change, may already completed checks or session changes remain, and may an HTTP answer be sent?",
+   "options": [
+    "The domain operation never begins until the complete required body is read; body failure changes no domain state and yields a fixed transport error",
+    "Checks and temporary session effects performed before the read failure remain, but no durable domain transaction commits",
+    "A streaming operation may retain effects committed before the failure"
+   ],
+   "default_guess": "Allow effects explicitly attached to request admission by earlier rules, but do not start or commit the domain operation until its complete inputs have been read; then send 400 if possible and close.",
+   "witness": {
+    "initial": "An authenticated owner request has a valid header block and begins a body whose declared framing is incomplete.",
+    "events": [
+     "`owner_interface` accepts the session and starts reading form fields.",
+     "The body stream fails before all action inputs are available."
+    ],
+    "outcomes": [
+     "The request is a transport failure; no operation runs, though admission effects required by the session rules remain.",
+     "The surface treats the partial request as an ordinary refused operation and applies a different set of session or confirmation effects."
+    ],
+    "observer": "The owner on the next request, and the store or audit-log reader"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "connection disposition after body-stream failure",
+   "kind": "missing lifecycle decision",
+   "text": "a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it",
+   "question": "Must every body-stream framing failure close the connection, or may the listener attempt to recover and serve another request on it?",
+   "options": [
+    "Always close the connection",
+    "Recover after a malformed chunk when a boundary can be found",
+    "Leave connection handling to the HTTP library"
+   ],
+   "default_guess": "Always close the connection because the next request boundary is no longer trustworthy.",
+   "witness": {
+    "initial": "A persistent connection carries a request with malformed chunk syntax followed by bytes intended as another request.",
+    "events": [
+     "The surface reads until the framed stream reports failure.",
+     "The client waits to see whether the connection remains usable."
+    ],
+    "outcomes": [
+     "The listener closes the connection and the client reconnects.",
+     "The listener attempts recovery and may accept another request on the same connection."
+    ],
+    "observer": "The client and the second requested surface"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "unread request bodies",
+   "kind": "undefined connection policy",
+   "text": "the body itself is never read ahead by the listener",
+   "question": "When a surface answers without consuming the entire body, who disposes of the unread bytes, and is the connection drained, closed, or eligible for another request?",
+   "options": [
+    "Close the connection whenever the surface leaves body bytes unread",
+    "Drain exactly the remaining framed body before reusing the connection",
+    "Require every surface to consume its stream fully before returning"
+   ],
+   "default_guess": "Close the connection when a surface returns with an unread body; do not drain it after the answer.",
+   "witness": {
+    "initial": "A request has valid framing and a large body, but authentication can be refused before the surface needs the body.",
+    "events": [
+     "The surface returns the refusal without consuming the stream.",
+     "The client sends the remaining body bytes and then attempts another request on the same connection."
+    ],
+    "outcomes": [
+     "The listener closes after the refusal, so the client must reconnect.",
+     "The listener drains the old body and reuses the connection for the next request."
+    ],
+    "observer": "The calling client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "meaning of listener read-ahead",
+   "kind": "vague boundary",
+   "text": "the body itself is never read ahead by the listener",
+   "question": "Does “never read ahead” forbid only eager consumption before handing the stream to a surface, or also socket/library buffering and draining performed on demand after the surface returns?",
+   "options": [
+    "It forbids only eager semantic consumption; ordinary bounded buffering is allowed",
+    "It forbids the listener from reading any body byte unless the surface requests it",
+    "It also forbids draining or buffering unread body bytes after the surface returns"
+   ],
+   "default_guess": "Treat it as forbidding eager semantic consumption while permitting bounded implementation buffering that is never exposed across the framed-body boundary.",
+   "unit": "?"
+  },
+  {
+   "subject": "stalled framed bodies",
+   "kind": "missing timeout decision",
+   "text": "while reading it",
+   "question": "What ends a request whose headers are valid but whose client neither completes nor terminates the body, and which module owns that timeout or cancellation?",
+   "options": [
+    "No Registry body-read timeout; the request may remain blocked until the peer or host closes it",
+    "A release-fixed body-read timeout owned by `instance_lifecycle`",
+    "A timeout owned separately by each surface or its reader"
+   ],
+   "default_guess": "Use a release-fixed transport read timeout owned by `instance_lifecycle`, close the connection on expiry, and expose a stream failure to the reader.",
+   "witness": {
+    "initial": "A client declares a nonzero body or starts a chunk and keeps the connection open without sending the remaining bytes.",
+    "events": [
+     "A surface waits on the handed-on body stream.",
+     "Minutes pass while the client sends nothing and does not disconnect."
+    ],
+    "outcomes": [
+     "The request and its resources remain live indefinitely.",
+     "A transport timeout fails the stream and closes the connection."
+    ],
+    "observer": "The client and the operator observing occupied connections and request workers"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"HTTP header framing validation\",\"kind\":\"undefined validity rules\",\"text\":\"a request whose `Content-Length` or `Transfer-Encoding` header is malformed\",\"question\":\"Exactly which header forms are malformed, including repeated or conflicting `Content-Length`, simultaneous `Content-Length` and `Transfer-Encoding`, unsupported transfer codings, coding lists, overflow and non-canonical numeric forms?\",\"options\":[\"Accept only one canonical `Content-Length` or exactly `Transfer-Encoding: chunked`, and reject every conflict or unsupported coding\",\"Delegate all validity decisions to the HTTP library\",\"Accept every form the applicable HTTP version permits\"],\"default_guess\":\"Accept one valid `Content-Length` or exactly chunked transfer encoding, reject both together, reject conflicting duplicates and unsupported codings.\"},{\"subject\":\"malformed-header refusal\",\"kind\":\"undefined wire outcome\",\"text\":\"is refused by the listener from its headers alone, its connection closed, and reaches no surface\",\"question\":\"Before closing the connection, does the listener send an HTTP error response, and if so which status and response shape, or does it close without an answer?\",\"options\":[\"Send a fixed HTTP error and then close\",\"Close without sending an HTTP response\",\"Use whatever response the HTTP library produces\"],\"default_guess\":\"Send a minimal 400 response when safely possible, then close.\",\"witness\":{\"initial\":\"A client has connected and sends a syntactically invalid `Content-Length` header.\",\"events\":[\"The client completes the header block.\",\"The listener detects the malformed header.\"],\"outcomes\":[\"The client receives an HTTP 400 response and then EOF.\",\"The client receives EOF or a reset without any HTTP response.\"],\"observer\":\"The calling client and any monitor classifying HTTP responses\"}},{\"subject\":\"body-framing stream failure\",\"kind\":\"unclear ownership and dependency\",\"text\":\"whose chunks are malformed, is a failure of the stream its reader sees while reading it\",\"question\":\"Which module owns the stream-failure type and its handling: `instance_lifecycle`, the reading `service_api` or `owner_interface` module, or another transport abstraction, and in which direction does that dependency run?\",\"options\":[\"`instance_lifecycle` owns the framed stream and catches its failure around each surface invocation\",\"Each surface imports and handles a transport failure exported by `instance_lifecycle`\",\"A separate HTTP transport module owns the stream contract and is known by lifecycle and both surfaces\"],\"default_guess\":\"Keep the transport failure private to `instance_lifecycle`; invoke a surface under a wrapper that catches the failure and terminates the request and connection.\"},{\"subject\":\"operation outcome after a body-framing failure\",\"kind\":\"undefined failure semantics\",\"text\":\"a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it\",\"question\":\"What is the operation-level outcome when this failure occurs after the request has reached a surface: must the operation be treated as refused with no state change, may already completed checks or session changes remain, and may an HTTP answer be sent?\",\"options\":[\"The domain operation never begins until the complete required body is read; body failure changes no domain state and yields a fixed transport error\",\"Checks and temporary session effects performed before the read failure remain, but no durable domain transaction commits\",\"A streaming operation may retain effects committed before the failure\"],\"default_guess\":\"Allow effects explicitly attached to request admission by earlier rules, but do not start or commit the domain operation until its complete inputs have been read; then send 400 if possible and close.\",\"witness\":{\"initial\":\"An authenticated owner request has a valid header block and begins a body whose declared framing is incomplete.\",\"events\":[\"`owner_interface` accepts the session and starts reading form fields.\",\"The body stream fails before all action inputs are available.\"],\"outcomes\":[\"The request is a transport failure; no operation runs, though admission effects required by the session rules remain.\",\"The surface treats the partial request as an ordinary refused operation and applies a different set of session or confirmation effects.\"],\"observer\":\"The owner on the next request, and the store or audit-log reader\"}},{\"subject\":\"connection disposition after body-stream failure\",\"kind\":\"missing lifecycle decision\",\"text\":\"a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it\",\"question\":\"Must every body-stream framing failure close the connection, or may the listener attempt to recover and serve another request on it?\",\"options\":[\"Always close the connection\",\"Recover after a malformed chunk when a boundary can be found\",\"Leave connection handling to the HTTP library\"],\"default_guess\":\"Always close the connection because the next request boundary is no longer trustworthy.\",\"witness\":{\"initial\":\"A persistent connection carries a request with malformed chunk syntax followed by bytes intended as another request.\",\"events\":[\"The surface reads until the framed stream reports failure.\",\"The client waits to see whether the connection remains usable.\"],\"outcomes\":[\"The listener closes the connection and the client reconnects.\",\"The listener attempts recovery and may accept another request on the same connection.\"],\"observer\":\"The client and the second requested surface\"}},{\"subject\":\"unread request bodies\",\"kind\":\"undefined connection policy\",\"text\":\"the body itself is never read ahead by the listener\",\"question\":\"When a surface answers without consuming the entire body, who disposes of the unread bytes, and is the connection drained, closed, or eligible for another request?\",\"options\":[\"Close the connection whenever the surface leaves body bytes unread\",\"Drain exactly the remaining framed body before reusing the connection\",\"Require every surface to consume its stream fully before returning\"],\"default_guess\":\"Close the connection when a surface returns with an unread body; do not drain it after the answer.\",\"witness\":{\"initial\":\"A request has valid framing and a large body, but authentication can be refused before the surface needs the body.\",\"events\":[\"The surface returns the refusal without consuming the stream.\",\"The client sends the remaining body bytes and then attempts another request on the same connection.\"],\"outcomes\":[\"The listener closes after the refusal, so the client must reconnect.\",\"The listener drains the old body and reuses the connection for the next request.\"],\"observer\":\"The calling client\"}},{\"subject\":\"meaning of listener read-ahead\",\"kind\":\"vague boundary\",\"text\":\"the body itself is never read ahead by the listener\",\"question\":\"Does “never read ahead” forbid only eager consumption before handing the stream to a surface, or also socket/library buffering and draining performed on demand after the surface returns?\",\"options\":[\"It forbids only eager semantic consumption; ordinary bounded buffering is allowed\",\"It forbids the listener from reading any body byte unless the surface requests it\",\"It also forbids draining or buffering unread body bytes after the surface returns\"],\"default_guess\":\"Treat it as forbidding eager semantic consumption while permitting bounded implementation buffering that is never exposed across the framed-body boundary.\"},{\"subject\":\"stalled framed bodies\",\"kind\":\"missing timeout decision\",\"text\":\"while reading it\",\"question\":\"What ends a request whose headers are valid but whose client neither completes nor terminates the body, and which module owns that timeout or cancellation?\",\"options\":[\"No Registry body-read timeout; the request may remain blocked until the peer or host closes it\",\"A release-fixed body-read timeout owned by `instance_lifecycle`\",\"A timeout owned separately by each surface or its reader\"],\"default_guess\":\"Use a release-fixed transport read timeout owned by `instance_lifecycle`, close the connection on expiry, and expose a stream failure to the reader.\",\"witness\":{\"initial\":\"A client declares a nonzero body or starts a chunk and keeps the connection open without sending the remaining bytes.\",\"events\":[\"A surface waits on the handed-on body stream.\",\"Minutes pass while the client sends nothing and does not disconnect.\"],\"outcomes\":[\"The request and its resources remain live indefinitely.\",\"A transport timeout fails the stream and closes the connection.\"],\"observer\":\"The client and the operator observing occupied connections and request workers\"}}]}",
+ "set_aside": []
+}

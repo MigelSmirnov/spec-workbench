@@ -1,0 +1,195 @@
+{
+ "open_points": [
+  {
+   "subject": "request framing headers",
+   "kind": "undefined malformedness",
+   "text": "a request whose `Content-Length` or `Transfer-Encoding` header is malformed",
+   "question": "Exactly which header combinations and values are malformed, including duplicate `Content-Length`, both headers together, repeated `Transfer-Encoding`, transfer codings other than `chunked`, and a missing framing header?",
+   "options": [
+    "Refuse every request containing both headers, every unequal or repeated Content-Length, and every transfer coding other than a single final chunked coding",
+    "Apply HTTP precedence rules, allowing Transfer-Encoding to override Content-Length and allowing supported coding lists",
+    "Delegate all validity rules to the HTTP library"
+   ],
+   "default_guess": "Refuse both headers together, refuse duplicate or non-canonical Content-Length, and accept only a single `chunked` Transfer-Encoding.",
+   "unit": "?"
+  },
+  {
+   "subject": "chunked body framing",
+   "kind": "undefined validity rules",
+   "text": "whose chunks are malformed",
+   "question": "Which chunk-size syntax, extensions, delimiters, trailers and termination forms count as malformed?",
+   "options": [
+    "Use the selected HTTP protocol version's complete normative chunked-coding grammar",
+    "Accept only a deliberately restricted canonical subset",
+    "Use whatever the chosen HTTP library accepts"
+   ],
+   "default_guess": "Use the complete normative grammar of the supported HTTP version and reject everything else.",
+   "unit": "?"
+  },
+  {
+   "subject": "body stream failure",
+   "kind": "undefined error contract",
+   "text": "is a failure of the stream its reader sees while reading it",
+   "question": "What concrete failure does the stream expose, and which module owns the failure type and translates it into request handling?",
+   "options": [
+    "`instance_lifecycle` owns a framing-error type which `service_api` and `owner_interface` must handle",
+    "The stream reports ordinary premature EOF or parse errors with no Registry-specific type",
+    "The HTTP adapter consumes and translates the failure before either surface sees it"
+   ],
+   "default_guess": "`instance_lifecycle` owns one framing-error result exposed by the stream, and both surfaces translate it consistently.",
+   "unit": "?"
+  },
+  {
+   "subject": "malformed body request outcome",
+   "kind": "missing failure policy",
+   "text": "a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it",
+   "question": "After that failure, does Registry send an HTTP error response or close without an answer, and must it close the connection?",
+   "options": [
+    "Close the connection without an HTTP answer",
+    "Send a fixed client-error response and then close",
+    "Send a fixed client-error response and keep the connection only when framing boundaries remain trustworthy"
+   ],
+   "default_guess": "Send a fixed bad-request response when possible and always close the connection.",
+   "unit": "?"
+  },
+  {
+   "subject": "surface reachability",
+   "kind": "unclear dispatch boundary",
+   "text": "the body itself is never read ahead by the listener, so a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it",
+   "question": "Has a request with malformed body framing already reached `service_api` or `owner_interface`, and which authentication, session-arrival, rate-limit or other request effects may occur before the failure is discovered?",
+   "options": [
+    "The surface is entered immediately after valid headers, so pre-body checks may occur",
+    "Dispatch is deferred until enough of the body has been read to establish its framing validity",
+    "The surface is entered, but every request-level effect is provisional and discarded on stream failure"
+   ],
+   "default_guess": "The surface is entered after valid headers; authentication may run, but no durable action occurs until the complete required body has been read successfully.",
+   "witness": {
+    "initial": "An owner session is valid and carries an upload request whose headers are valid but whose chunk stream is malformed after the CSRF field.",
+    "events": [
+     "The listener hands the body stream to `owner_interface`.",
+     "The interface reads the CSRF field and then encounters malformed chunk framing."
+    ],
+    "outcomes": [
+     "The request reached the surface and its arrival refreshes the session's idle time before the stream fails.",
+     "The malformed request is treated as never admitted, so the session's idle time is unchanged."
+    ],
+    "observer": "The owner, whose session expires at a different time."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "state changes while consuming a body",
+   "kind": "missing atomicity boundary",
+   "text": "a failure of the stream its reader sees while reading it",
+   "question": "Must every handler finish reading and validating all body bytes it needs before making any runtime or durable change, or can effects performed before a later framing failure remain?",
+   "options": [
+    "No request effect survives unless the required body reaches a valid framed end",
+    "Runtime effects such as session last-request updates may remain, while durable business changes may not",
+    "Any effect completed before the read failure remains"
+   ],
+   "default_guess": "Runtime admission effects may remain as defined by A13, but no durable business change is committed until body consumption and parsing succeed.",
+   "witness": {
+    "initial": "A body contains enough valid fields to describe a change, followed by a malformed final chunk.",
+    "events": [
+     "A surface parses the change fields.",
+     "The surface either applies immediately or waits for the framed end.",
+     "Reading the final chunk fails."
+    ],
+    "outcomes": [
+     "The change remains stored although the request body was malformed.",
+     "Nothing is stored because completion of the framed body was a prerequisite to commit."
+    ],
+    "observer": "The owner or service reading the changed record afterward."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "unconsumed request bodies",
+   "kind": "missing connection policy",
+   "text": "each request's body handed on as a stream that ends where HTTP's own framing ends the body",
+   "question": "If a handler answers or refuses without consuming the stream to its end, does the listener drain the remaining framed body, close the connection, or permit reuse only after the reader explicitly discards it?",
+   "options": [
+    "Always close the connection when the body was not fully consumed",
+    "The listener drains and validates the remainder before accepting another request",
+    "The stream exposes an explicit discard operation that handlers must complete before reuse"
+   ],
+   "default_guess": "Close the connection whenever the handler does not consume the body to its valid end.",
+   "witness": {
+    "initial": "One persistent connection sends an unauthorized request with a large valid body followed by a second request.",
+    "events": [
+     "The surface refuses the first request after its headers and does not need its body.",
+     "The client has already sent both framed requests."
+    ],
+    "outcomes": [
+     "Registry closes the connection, so the second request is not served.",
+     "Registry drains the first body and serves the second request on the same connection."
+    ],
+    "observer": "The client sending the two requests."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "incomplete body wait",
+   "kind": "missing timeout policy",
+   "text": "a body that ends before its framing says",
+   "question": "What ends a read when the client neither sends the promised bytes nor closes the connection, and which module owns that timeout or cancellation policy?",
+   "options": [
+    "A release-fixed body-read timeout aborts the stream and closes the connection",
+    "There is no Registry timeout; the read may remain pending until transport EOF or process shutdown",
+    "The owner and service surfaces define separate read timeouts"
+   ],
+   "default_guess": "Use one release-fixed transport read timeout owned by `instance_lifecycle`, then fail the stream and close the connection.",
+   "witness": {
+    "initial": "A client declares a 1 MB body, sends one byte and leaves the connection open.",
+    "events": [
+     "The listener dispatches the request.",
+     "The surface waits for the rest of the stream."
+    ],
+    "outcomes": [
+     "The request remains pending indefinitely.",
+     "A timeout fails the stream and releases the connection and handler resources."
+    ],
+    "observer": "The client and the operator observing resource use."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "listener read-ahead boundary",
+   "kind": "vague buffering boundary",
+   "text": "the body itself is never read ahead by the listener",
+   "question": "Does this prohibit only application-level consumption before a surface reads, or also socket, TLS and HTTP-library buffering of body bytes, and how much data may be buffered?",
+   "options": [
+    "Only logical consumption is prohibited; lower layers may buffer arbitrary transport data while preserving boundaries",
+    "No body byte may be read from the socket until the surface requests it",
+    "A bounded amount may be buffered, with the bound fixed by the release"
+   ],
+   "default_guess": "Treat it as a logical-stream rule: lower layers may buffer bytes, but `instance_lifecycle` must not consume or expose them outside the framed stream.",
+   "unit": "?"
+  },
+  {
+   "subject": "direct internal dependencies of instance_lifecycle",
+   "kind": "undefined import surface",
+   "text": "`models`, `clock`, `data_provider`, `configuration`, `store`,\n`owner_sessions`, `backups`, `service_api`, `owner_interface`.",
+   "question": "Which exact exported symbols does `instance_lifecycle` directly name from each provider, and does either surface need a reverse dependency on a stream or framing-error symbol owned here?",
+   "options": [
+    "Declare a one-way `instance_lifecycle` dependency on the exact constructors, functions, constants and types it calls",
+    "Move the stream and framing-error contract to a neutral provider known by lifecycle and both surfaces",
+    "Let each surface depend back on `instance_lifecycle` for its stream and error types"
+   ],
+   "default_guess": "Put the stream and framing-error contract in a neutral HTTP transport provider and declare only the exact direct symbols for every edge.",
+   "unit": "?"
+  },
+  {
+   "subject": "`instance_lifecycle` Knows",
+   "kind": "standard_violation",
+   "text": "### Knows\n\n`models`, `clock`, `data_provider`, `configuration`, `store`,\n`owner_sessions`, `backups`, `service_api`, `owner_interface`.",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Replace this module-name-only dependency list with an explicit `module_internal` entry for consumer `instance_lifecycle`, naming each provider and the complete minimal list of symbols it directly imports.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"request framing headers\",\"kind\":\"undefined malformedness\",\"text\":\"a request whose `Content-Length` or `Transfer-Encoding` header is malformed\",\"question\":\"Exactly which header combinations and values are malformed, including duplicate `Content-Length`, both headers together, repeated `Transfer-Encoding`, transfer codings other than `chunked`, and a missing framing header?\",\"options\":[\"Refuse every request containing both headers, every unequal or repeated Content-Length, and every transfer coding other than a single final chunked coding\",\"Apply HTTP precedence rules, allowing Transfer-Encoding to override Content-Length and allowing supported coding lists\",\"Delegate all validity rules to the HTTP library\"],\"default_guess\":\"Refuse both headers together, refuse duplicate or non-canonical Content-Length, and accept only a single `chunked` Transfer-Encoding.\"},{\"subject\":\"chunked body framing\",\"kind\":\"undefined validity rules\",\"text\":\"whose chunks are malformed\",\"question\":\"Which chunk-size syntax, extensions, delimiters, trailers and termination forms count as malformed?\",\"options\":[\"Use the selected HTTP protocol version's complete normative chunked-coding grammar\",\"Accept only a deliberately restricted canonical subset\",\"Use whatever the chosen HTTP library accepts\"],\"default_guess\":\"Use the complete normative grammar of the supported HTTP version and reject everything else.\"},{\"subject\":\"body stream failure\",\"kind\":\"undefined error contract\",\"text\":\"is a failure of the stream its reader sees while reading it\",\"question\":\"What concrete failure does the stream expose, and which module owns the failure type and translates it into request handling?\",\"options\":[\"`instance_lifecycle` owns a framing-error type which `service_api` and `owner_interface` must handle\",\"The stream reports ordinary premature EOF or parse errors with no Registry-specific type\",\"The HTTP adapter consumes and translates the failure before either surface sees it\"],\"default_guess\":\"`instance_lifecycle` owns one framing-error result exposed by the stream, and both surfaces translate it consistently.\"},{\"subject\":\"malformed body request outcome\",\"kind\":\"missing failure policy\",\"text\":\"a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it\",\"question\":\"After that failure, does Registry send an HTTP error response or close without an answer, and must it close the connection?\",\"options\":[\"Close the connection without an HTTP answer\",\"Send a fixed client-error response and then close\",\"Send a fixed client-error response and keep the connection only when framing boundaries remain trustworthy\"],\"default_guess\":\"Send a fixed bad-request response when possible and always close the connection.\"},{\"subject\":\"surface reachability\",\"kind\":\"unclear dispatch boundary\",\"text\":\"the body itself is never read ahead by the listener, so a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it\",\"question\":\"Has a request with malformed body framing already reached `service_api` or `owner_interface`, and which authentication, session-arrival, rate-limit or other request effects may occur before the failure is discovered?\",\"options\":[\"The surface is entered immediately after valid headers, so pre-body checks may occur\",\"Dispatch is deferred until enough of the body has been read to establish its framing validity\",\"The surface is entered, but every request-level effect is provisional and discarded on stream failure\"],\"default_guess\":\"The surface is entered after valid headers; authentication may run, but no durable action occurs until the complete required body has been read successfully.\",\"witness\":{\"initial\":\"An owner session is valid and carries an upload request whose headers are valid but whose chunk stream is malformed after the CSRF field.\",\"events\":[\"The listener hands the body stream to `owner_interface`.\",\"The interface reads the CSRF field and then encounters malformed chunk framing.\"],\"outcomes\":[\"The request reached the surface and its arrival refreshes the session's idle time before the stream fails.\",\"The malformed request is treated as never admitted, so the session's idle time is unchanged.\"],\"observer\":\"The owner, whose session expires at a different time.\"}},{\"subject\":\"state changes while consuming a body\",\"kind\":\"missing atomicity boundary\",\"text\":\"a failure of the stream its reader sees while reading it\",\"question\":\"Must every handler finish reading and validating all body bytes it needs before making any runtime or durable change, or can effects performed before a later framing failure remain?\",\"options\":[\"No request effect survives unless the required body reaches a valid framed end\",\"Runtime effects such as session last-request updates may remain, while durable business changes may not\",\"Any effect completed before the read failure remains\"],\"default_guess\":\"Runtime admission effects may remain as defined by A13, but no durable business change is committed until body consumption and parsing succeed.\",\"witness\":{\"initial\":\"A body contains enough valid fields to describe a change, followed by a malformed final chunk.\",\"events\":[\"A surface parses the change fields.\",\"The surface either applies immediately or waits for the framed end.\",\"Reading the final chunk fails.\"],\"outcomes\":[\"The change remains stored although the request body was malformed.\",\"Nothing is stored because completion of the framed body was a prerequisite to commit.\"],\"observer\":\"The owner or service reading the changed record afterward.\"}},{\"subject\":\"unconsumed request bodies\",\"kind\":\"missing connection policy\",\"text\":\"each request's body handed on as a stream that ends where HTTP's own framing ends the body\",\"question\":\"If a handler answers or refuses without consuming the stream to its end, does the listener drain the remaining framed body, close the connection, or permit reuse only after the reader explicitly discards it?\",\"options\":[\"Always close the connection when the body was not fully consumed\",\"The listener drains and validates the remainder before accepting another request\",\"The stream exposes an explicit discard operation that handlers must complete before reuse\"],\"default_guess\":\"Close the connection whenever the handler does not consume the body to its valid end.\",\"witness\":{\"initial\":\"One persistent connection sends an unauthorized request with a large valid body followed by a second request.\",\"events\":[\"The surface refuses the first request after its headers and does not need its body.\",\"The client has already sent both framed requests.\"],\"outcomes\":[\"Registry closes the connection, so the second request is not served.\",\"Registry drains the first body and serves the second request on the same connection.\"],\"observer\":\"The client sending the two requests.\"}},{\"subject\":\"incomplete body wait\",\"kind\":\"missing timeout policy\",\"text\":\"a body that ends before its framing says\",\"question\":\"What ends a read when the client neither sends the promised bytes nor closes the connection, and which module owns that timeout or cancellation policy?\",\"options\":[\"A release-fixed body-read timeout aborts the stream and closes the connection\",\"There is no Registry timeout; the read may remain pending until transport EOF or process shutdown\",\"The owner and service surfaces define separate read timeouts\"],\"default_guess\":\"Use one release-fixed transport read timeout owned by `instance_lifecycle`, then fail the stream and close the connection.\",\"witness\":{\"initial\":\"A client declares a 1 MB body, sends one byte and leaves the connection open.\",\"events\":[\"The listener dispatches the request.\",\"The surface waits for the rest of the stream.\"],\"outcomes\":[\"The request remains pending indefinitely.\",\"A timeout fails the stream and releases the connection and handler resources.\"],\"observer\":\"The client and the operator observing resource use.\"}},{\"subject\":\"listener read-ahead boundary\",\"kind\":\"vague buffering boundary\",\"text\":\"the body itself is never read ahead by the listener\",\"question\":\"Does this prohibit only application-level consumption before a surface reads, or also socket, TLS and HTTP-library buffering of body bytes, and how much data may be buffered?\",\"options\":[\"Only logical consumption is prohibited; lower layers may buffer arbitrary transport data while preserving boundaries\",\"No body byte may be read from the socket until the surface requests it\",\"A bounded amount may be buffered, with the bound fixed by the release\"],\"default_guess\":\"Treat it as a logical-stream rule: lower layers may buffer bytes, but `instance_lifecycle` must not consume or expose them outside the framed stream.\"},{\"subject\":\"direct internal dependencies of instance_lifecycle\",\"kind\":\"undefined import surface\",\"text\":\"`models`, `clock`, `data_provider`, `configuration`, `store`,\\n`owner_sessions`, `backups`, `service_api`, `owner_interface`.\",\"question\":\"Which exact exported symbols does `instance_lifecycle` directly name from each provider, and does either surface need a reverse dependency on a stream or framing-error symbol owned here?\",\"options\":[\"Declare a one-way `instance_lifecycle` dependency on the exact constructors, functions, constants and types it calls\",\"Move the stream and framing-error contract to a neutral provider known by lifecycle and both surfaces\",\"Let each surface depend back on `instance_lifecycle` for its stream and error types\"],\"default_guess\":\"Put the stream and framing-error contract in a neutral HTTP transport provider and declare only the exact direct symbols for every edge.\"},{\"subject\":\"`instance_lifecycle` Knows\",\"kind\":\"standard_violation\",\"text\":\"### Knows\\n\\n`models`, `clock`, `data_provider`, `configuration`, `store`,\\n`owner_sessions`, `backups`, `service_api`, `owner_interface`.\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Replace this module-name-only dependency list with an explicit `module_internal` entry for consumer `instance_lifecycle`, naming each provider and the complete minimal list of symbols it directly imports.\"}]}",
+ "set_aside": []
+}
