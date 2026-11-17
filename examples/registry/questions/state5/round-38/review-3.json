@@ -1,0 +1,378 @@
+{
+ "open_points": [
+  {
+   "subject": "owner_sessions.admit_owner_request",
+   "kind": "concurrency_contradiction",
+   "text": "Every request is checked at its arrival, and only then — at the arrival reading it carries, however long its upload's head took to read after it: a session that has reached 8 hours from sign-in or 30 minutes without a request, or is marked signed out, serves no request;",
+   "question": "How is an upload admitted when its session was valid at the carried arrival reading but is ended by the expiry pass or a concurrent sign-out while read_upload_head is still reading the multipart head?",
+   "options": [
+    "Preserve enough ended-session state to admit every request that was valid at arrival",
+    "Reserve/admit the session before reading the upload head",
+    "Refuse if the session has been ended before admit_owner_request is finally called"
+   ],
+   "default_guess": "Reserve the session at header arrival, then read the upload head and complete the already-admitted request.",
+   "witness": {
+    "initial": "Session S is valid but one second from its idle limit; no request has yet reserved or locked S.",
+    "events": [
+     "The browser's upload headers arrive and owner_interface records an arrival reading at which S is valid.",
+     "owner_interface spends longer than one second reading the multipart head.",
+     "instance_lifecycle runs end_expired_sessions, which ends S and drops its pending confirmation and upload.",
+     "owner_interface calls admit_owner_request with S and the earlier arrival reading."
+    ],
+    "outcomes": [
+     "The upload is admitted because S was valid at its arrival, as the carried reading says.",
+     "The upload is refused because S no longer exists or is marked ended when admission is attempted."
+    ],
+    "observer": "The owner sees either the upload result or the sign-in page."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner_sessions.give_session_csrf",
+   "kind": "time_of_validity",
+   "text": "The session's CSRF value, or none when no session of that identity exists or it has reached a limit.",
+   "question": "When a request passed admission at arrival but the session reaches a limit before its response page is rendered, must give_session_csrf return the value for that admitted response or none based on a later reading?",
+   "options": [
+    "Use the request's admitted-session snapshot and include its CSRF value",
+    "Recheck at rendering time and return none",
+    "Pass the original arrival reading to give_session_csrf"
+   ],
+   "default_guess": "Use the admitted session supplied by admit_owner_request, without a second validity decision.",
+   "witness": {
+    "initial": "A valid session has one second left before its eight-hour limit.",
+    "events": [
+     "An owner request arrives and passes admit_owner_request.",
+     "The operation takes two seconds.",
+     "owner_interface calls give_session_csrf while rendering a form in the successful answer."
+    ],
+    "outcomes": [
+     "The rendered form carries the session's CSRF value because the admitted request completes despite the limit.",
+     "give_session_csrf returns none because the session has now reached its limit, leaving the form without CSRF or requiring a different page."
+    ],
+    "observer": "The owner sees a usable form or a form that cannot be submitted."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "upload_framing.read_upload_head",
+   "kind": "missing_output",
+   "text": "The CSRF value the first part carries, the delimiter that ends the file part, and the file part's declared length — the request's declared length less the head it read and the closing delimiter with its final `--` and line end, or none when the request declared none; or that the head is not of that form",
+   "question": "How does owner_interface obtain the MultipartFileBody/file-part stream it is required to hand to operations, since the operation's Outputs list returns the delimiter but not that stream?",
+   "options": [
+    "Return a MultipartFileBody together with the CSRF value and declared length",
+    "Return the delimiter and require owner_interface to construct MultipartFileBody",
+    "Mutate or replace the input stream so it itself becomes the file-part stream"
+   ],
+   "default_guess": "Return a MultipartFileBody explicitly and hide the delimiter inside it.",
+   "unit": "?"
+  },
+  {
+   "subject": "MultipartFileBody",
+   "kind": "undefined_interface",
+   "text": "The file part's stream, a `MultipartFileBody`, fails when the request's stream ends before the closing delimiter, which `migration_import.read_import_mapping` refuses as `file_unreadable`, as any stream that fails.",
+   "question": "What is MultipartFileBody's owner, read interface, EOF behavior, failure representation, close behavior, and rule for look-ahead bytes after the file delimiter?",
+   "options": [
+    "A models interface with explicit read/close methods and a typed read failure",
+    "A private upload_framing class implementing the standard binary-stream protocol",
+    "An ordinary stream whose premature delimiter failure is raised as an implementation-selected exception"
+   ],
+   "default_guess": "Make it a private upload_framing stream adapter with specified read, EOF, close and typed-failure behavior.",
+   "unit": "?"
+  },
+  {
+   "subject": "upload_framing.read_upload_head",
+   "kind": "multipart_grammar",
+   "text": "or that the head is not of that form — no multipart content type or boundary, a first part that is not the CSRF field, no second part that is the file — or is longer than the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant",
+   "question": "What exact multipart syntax is accepted, including the CSRF field name, file field name, header names and encodings, quoted boundaries, CRLF requirements, duplicate fields or headers, preamble, transfer encoding, filename parameters, and extra parts?",
+   "options": [
+    "Accept precisely one fully specified canonical two-part multipart form",
+    "Accept every RFC-conforming multipart form whose first logical field is CSRF and second is a file",
+    "Accept a documented subset but ignore harmless additional headers and parameters"
+   ],
+   "default_guess": "Define and accept one canonical two-part multipart/form-data subset, rejecting every other shape.",
+   "unit": "?"
+  },
+  {
+   "subject": "upload_framing.read_upload_head",
+   "kind": "bound_semantics",
+   "text": "Reads the stream up to the start of the file part's content and no further, at most the bound; a head it refuses leaves the rest of the stream unread.",
+   "question": "Exactly which bytes count toward UPLOAD_FORM_HEAD_MAX_BYTES, and may the parser read one byte past the bound to establish that the head is too long?",
+   "options": [
+    "Count every body byte through the final header terminator and never request byte bound+1",
+    "Count the same bytes but permit a one-byte look-ahead",
+    "Count only parsed multipart syntax and exclude preamble or header values"
+   ],
+   "default_guess": "Count every body byte before file content and permit no read beyond the bound.",
+   "unit": "?"
+  },
+  {
+   "subject": "upload_framing.read_upload_head",
+   "kind": "multipart_tail",
+   "text": "the request's declared length less the head it read and the closing delimiter with its final `--` and line end",
+   "question": "How is the file-part declared length computed when the multipart body has an epilogue, an additional part, a non-final boundary after the file, or a legal final delimiter spelling whose length differs from the assumed form?",
+   "options": [
+    "Reject every body that is not exactly two parts followed immediately by one canonical final delimiter",
+    "Support additional parts and subtract their complete framing too",
+    "Treat all bytes after the file's first boundary as a fixed closing delimiter regardless of their contents"
+   ],
+   "default_guess": "Require exactly two parts and one canonical final delimiter with no epilogue.",
+   "unit": "?"
+  },
+  {
+   "subject": "operations.perform_owner_operation",
+   "kind": "input_contradiction",
+   "text": "for an upload the request's declared length, or that it declared none, and its unread byte stream, which `owner_interface` hands on without reading and this operation passes, unread, to `migration_import.read_import_mapping`, which alone consumes it within the request.",
+   "question": "Does perform_owner_operation receive the HTTP request's declared length and unread request body, or the derived file-part length and MultipartFileBody after upload_framing has already read the request head?",
+   "options": [
+    "Receive only the derived file-part length and MultipartFileBody",
+    "Receive the original request length and body and perform framing itself",
+    "Receive both original and derived values with distinct names"
+   ],
+   "default_guess": "Receive only the derived file-part length and MultipartFileBody.",
+   "witness": {
+    "initial": "An upload has 1 KiB of multipart framing and a 50 MiB file.",
+    "events": [
+     "owner_interface calls read_upload_head, consuming the 1 KiB head and deriving the file-part length.",
+     "owner_interface calls perform_owner_operation."
+    ],
+    "outcomes": [
+     "perform_owner_operation receives 50 MiB and a stream positioned at file content.",
+     "perform_owner_operation receives the original multipart Content-Length and a request stream that is no longer unread."
+    ],
+    "observer": "A file exactly at the size limit is either accepted or incorrectly refused."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "store.opened_store and transaction operations",
+   "kind": "signature_contradiction",
+   "text": "The transaction through `store.run_in_transaction`, on the store `store.opened_store` gives, with one instant and today from `clock`.",
+   "question": "Do run_in_transaction and read_in_transaction take the opened store as an explicit argument, despite their Inputs sections saying they take only the step, or do they use store's retained process store internally?",
+   "options": [
+    "Add the opened store as an explicit first input to both transaction operations",
+    "Keep their existing signatures and remove opened_store from operations",
+    "Have opened_store select implicit module state before the transaction call"
+   ],
+   "default_guess": "Remove opened_store from action calls and let store's transaction operations use the retained process store internally.",
+   "witness": {
+    "initial": "The process has successfully opened one RegistryStore.",
+    "events": [
+     "operations calls opened_store.",
+     "operations starts a read or write transaction."
+    ],
+    "outcomes": [
+     "operations passes the returned store to a transaction function whose contract must gain a store parameter.",
+     "operations calls the documented one-parameter transaction function and the returned store is unused."
+    ],
+    "observer": "The generated operations and store modules disagree at their call boundary."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "store.opened_store",
+   "kind": "failure_contract",
+   "text": "None: it is asked only by a surface's request, and a surface serves nothing until `open_store` succeeded (A17 rule 2). Asked before that, it is a wiring fault that raises, so nothing is read or written.",
+   "question": "What exception or failure type is raised for the stated wiring fault, and how do either surface and instance lifecycle handle it if the invariant is broken?",
+   "options": [
+    "Define a specific internal wiring exception that terminates the process",
+    "Return internal_error to the caller",
+    "Make pre-open invocation unrepresentable and remove the runtime branch"
+   ],
+   "default_guess": "Make pre-open invocation unrepresentable in normal construction and use a specific fatal assertion error.",
+   "unit": "?"
+  },
+  {
+   "subject": "backups.newest_backup_instant composition",
+   "kind": "unmapped_failure",
+   "text": "The instant of the newest kept backup whose record can be read; that there is none; or that the location could not be listed, which is never shown as \"none\".",
+   "question": "What owner response results when the backup location cannot be listed, since perform_owner_operation promises an answer or a refusal from the closed set but no refusal kind covers this non-transactional listing failure?",
+   "options": [
+    "Map it to internal_error with a new non-transaction failure kind",
+    "Add a dedicated refusal code or kind",
+    "Render a page-level unavailable state that is an ordinary answer"
+   ],
+   "default_guess": "Add an internal_error kind specifically for backup listing failure.",
+   "witness": {
+    "initial": "Registry is serving, but the backup directory becomes unreadable.",
+    "events": [
+     "The owner opens the backup page.",
+     "operations obtains the location and calls newest_backup_instant.",
+     "The directory listing fails."
+    ],
+    "outcomes": [
+     "The owner receives an internal_error refusal.",
+     "The owner receives an ordinary page saying the backup status is unavailable."
+    ],
+    "observer": "The owner and any HTTP-level monitoring see different status and body semantics."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "operations.perform_service_operation and service_api.serve_service_request",
+   "kind": "transport_contradiction",
+   "text": "for Kernel, the agent session the request's envelope names beside the token, never among the operation's inputs (R0-53).",
+   "question": "Is Kernel's agent session read from the SERVICE_AGENT_SESSION_HEADER HTTP header or from a request envelope beside the token?",
+   "options": [
+    "Read it only from the named HTTP header",
+    "Read it from the request envelope",
+    "Allow both with a precedence and conflict rule"
+   ],
+   "default_guess": "Read it only from SERVICE_AGENT_SESSION_HEADER.",
+   "unit": "?"
+  },
+  {
+   "subject": "service_api.serve_service_request",
+   "kind": "wire_schema_missing",
+   "text": "One response in that wire format, v1's (owner, 2026-11-17): the answer, or the refusal's code, stage and kinds. An answer is written as its fields with no `answer_kind` or `view_kind` on the wire; `validate` and `context` are their v1 bodies, field for field (R0-04).",
+   "question": "What are the exact request and response JSON schemas for every operation, including route and method, operation encoding, token placement, top-level envelope, collection field names, null versus omitted fields, erased forms, accepted-change results, and refusal-kind paths?",
+   "options": [
+    "Specify one route and complete schema per operation in State 5",
+    "Specify a single dispatch route with a fully defined tagged request and operation-specific untagged response",
+    "Delegate these schemas explicitly to a named later-state artifact with fixed obligations"
+   ],
+   "default_guess": "Specify one HTTP route and complete request/response schema per operation in State 5.",
+   "unit": "?"
+  },
+  {
+   "subject": "service_api scalar encoding",
+   "kind": "noncanonical_encoding",
+   "text": "Instants are ISO 8601 text in UTC ending in `Z`, dates ISO 8601 dates, decimals JSON strings in the stored form (`\"45.00\"`).",
+   "question": "What exact canonical instant precision and fractional-second form are emitted and accepted, and what exact decimal lexical forms count as the stored form?",
+   "options": [
+    "Fix one canonical grammar and reject every other input spelling",
+    "Accept all equivalent ISO/decimal spellings but emit one canonical form",
+    "Preserve the caller's original spelling in storage and responses"
+   ],
+   "default_guess": "Accept a documented bounded grammar and emit UTC instants at fixed microsecond precision and decimals with their stored scale.",
+   "unit": "?"
+  },
+  {
+   "subject": "service_api malformed requests",
+   "kind": "check_order_ambiguity",
+   "text": "inputs that are not of the wire format — a body that cannot be read as it, a field it does not declare, a value of another shape than its field's — are answered stage (1) first and then `invalid_request` (`outside_closed_list`) at stage (4).",
+   "question": "What does “answered stage (1) first and then” mean for a single response, and how can authentication and rights be checked when an unreadable body does not yield an operation name?",
+   "options": [
+    "Authenticate first, parse enough to identify the operation, then return only the stage-(4) refusal",
+    "Return only a stage-(1) refusal when the operation cannot be identified",
+    "Use a transport-level 400 response outside the refusal model for unreadable bodies"
+   ],
+   "default_guess": "Authenticate first; if the operation cannot be decoded, return invalid_request at stage (4) without claiming an operation-specific rights check.",
+   "unit": "?"
+  },
+  {
+   "subject": "PERSONAL_DATA_FIELDS",
+   "kind": "classification_algorithm",
+   "text": "An answer's class is `personal_data` when one of the fields the imported `PERSONAL_DATA_FIELDS` constant lists holds a value in it, nested views included, and `business_confidential` otherwise, never `open` (owner, 2026-11-17);",
+   "question": "How are PERSONAL_DATA_FIELDS entries matched to operation-specific answers and nested or repeated views, and precisely what counts as a field “holding a value” for absent, null, empty, false, zero, and erased-form fields?",
+   "options": [
+    "Use fully qualified answer-schema paths and treat only non-null optional values as present",
+    "Use domain-model field names recursively across every nested model",
+    "Classify statically by answer type regardless of whether optional personal fields are absent"
+   ],
+   "default_guess": "Use fully qualified answer-schema paths, recurse through collections, and count a personal field only when its value is not absent/null.",
+   "witness": {
+    "initial": "A Customer has a kind but no tax id or legal name.",
+    "events": [
+     "PresuPro calls read_billing_data.",
+     "The answer marks both fiscal fields absent."
+    ],
+    "outcomes": [
+     "The answer is business_confidential because no listed personal-data field holds a value.",
+     "The answer is personal_data because its schema contains personal-data fields or their explicit absent markers."
+    ],
+    "observer": "A service with only business_confidential clearance would receive or be refused the same logical answer."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Closed set of refusal codes",
+   "kind": "earlier_state_contradiction",
+   "text": "It is the only refusal whose stage is not its own check's.",
+   "question": "Must agent_call_refused for a nonexistent pointer carry stage (2), as State 5 says, or stage (3), where A04 rule 6 places record-existence checks?",
+   "options": [
+    "Keep stage (2) as a deliberate exception and amend A04",
+    "Use stage (3) for an unknown pointer while keeping the same not-found code and kind",
+    "Move pointer resolution into the agent-authority check so it genuinely belongs to stage (2)"
+   ],
+   "default_guess": "Amend A04 explicitly and keep the stage-(2) indistinguishable answer required for Kernel.",
+   "witness": {
+    "initial": "Kernel presents a valid token and registered session, then asks to withdraw a pointer id that does not exist.",
+    "events": [
+     "operations looks up the pointer before it can check the pointer's project against the session set.",
+     "The lookup returns no pointer."
+    ],
+    "outcomes": [
+     "State 5 returns not_found/agent_call_refused at stage (2).",
+     "A04's existence-stage rule returns the unknown-record failure at stage (3)."
+    ],
+    "observer": "Kernel sees a different stage in the refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner_interface.serve_owner_request",
+   "kind": "ownership_contradiction",
+   "text": "Every check is `operations`'.",
+   "question": "Does upload_framing own and perform the multipart-form and head-length checks described for read_upload_head, or must operations decide those checks for the statement “Every check is operations'” to remain true?",
+   "options": [
+    "Treat framing recognition as transport parsing, not a check, and say so",
+    "Move the framing validity decision into operations",
+    "Remove the claim that every check is operations'"
+   ],
+   "default_guess": "Qualify the claim so transport parsing and framing validation remain upload_framing's.",
+   "unit": "?"
+  },
+  {
+   "subject": "clock.monotonic_reading callers",
+   "kind": "contract_contradiction",
+   "text": "`module:owner_sessions`, `module:instance_lifecycle`.",
+   "question": "Must owner_interface be added as a caller now that it takes every request's arrival reading directly from clock.monotonic_reading?",
+   "options": [
+    "Add module:owner_interface",
+    "Move the arrival reading back into owner_sessions",
+    "Have instance_lifecycle attach arrival readings to requests"
+   ],
+   "default_guess": "Add module:owner_interface.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner_interface → clock import",
+   "kind": "standard_violation",
+   "text": "Every request's arrival is the `clock.monotonic_reading` taken when its headers are read, before any of its body, and the session is checked at it (A13 rule 2).",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой runtime import surface consumer-модуля, а не копия публичного API provider-а: ровно те символы, которые код consumer-а называет напрямую — вызывает, конструирует, проверяет (членство в enum, тип), пишет в аннотации.",
+   "section": "7",
+   "question": "The passage must be accompanied by module_internal[\"owner_interface\"][\"clock\"] containing exactly monotonic_reading, or the direct call must be removed.",
+   "unit": "?"
+  },
+  {
+   "subject": "operations → store import",
+   "kind": "standard_violation",
+   "text": "each on the store `store.opened_store` gives, with the instant of `clock.recorded_now`.",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой runtime import surface consumer-модуля, а не копия публичного API provider-а: ровно те символы, которые код consumer-а называет напрямую — вызывает, конструирует, проверяет (членство в enum, тип), пишет в аннотации.",
+   "section": "7",
+   "question": "The operations-to-store module_internal row must add opened_store if this direct call remains, while retaining only the other store symbols operations actually names.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner_interface → upload_framing import",
+   "kind": "standard_violation",
+   "text": "`upload_framing.read_upload_head` reads the body's head alone and answers the CSRF value and the file part's declared length;",
+   "rule": "Это **единственный авторитетный источник** внутренних импортов consumer-а: объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "The passage must become an explicit module_internal[\"owner_interface\"][\"upload_framing\"] declaration of read_upload_head together with the call text, or the dependency must be removed.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner_interface → owner_sessions import",
+   "kind": "standard_violation",
+   "text": "every form of a page rendered for a valid session carries the CSRF value `owner_sessions.give_session_csrf` gives for it, and the sign-in form none (A13 rules 4, 5, 7);",
+   "rule": "Недостающий символ — такая же ошибка спеки, как лишний: в строгом режиме импортов (ниже) сгенерированный модуль без него отвергается",
+   "section": "7",
+   "question": "The owner_interface-to-owner_sessions module_internal row must include give_session_csrf if this direct call remains.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner_sessions.admit_owner_request\",\"kind\":\"concurrency_contradiction\",\"text\":\"Every request is checked at its arrival, and only then — at the arrival reading it carries, however long its upload's head took to read after it: a session that has reached 8 hours from sign-in or 30 minutes without a request, or is marked signed out, serves no request;\",\"question\":\"How is an upload admitted when its session was valid at the carried arrival reading but is ended by the expiry pass or a concurrent sign-out while read_upload_head is still reading the multipart head?\",\"options\":[\"Preserve enough ended-session state to admit every request that was valid at arrival\",\"Reserve/admit the session before reading the upload head\",\"Refuse if the session has been ended before admit_owner_request is finally called\"],\"default_guess\":\"Reserve the session at header arrival, then read the upload head and complete the already-admitted request.\",\"witness\":{\"initial\":\"Session S is valid but one second from its idle limit; no request has yet reserved or locked S.\",\"events\":[\"The browser's upload headers arrive and owner_interface records an arrival reading at which S is valid.\",\"owner_interface spends longer than one second reading the multipart head.\",\"instance_lifecycle runs end_expired_sessions, which ends S and drops its pending confirmation and upload.\",\"owner_interface calls admit_owner_request with S and the earlier arrival reading.\"],\"outcomes\":[\"The upload is admitted because S was valid at its arrival, as the carried reading says.\",\"The upload is refused because S no longer exists or is marked ended when admission is attempted.\"],\"observer\":\"The owner sees either the upload result or the sign-in page.\"}},{\"subject\":\"owner_sessions.give_session_csrf\",\"kind\":\"time_of_validity\",\"text\":\"The session's CSRF value, or none when no session of that identity exists or it has reached a limit.\",\"question\":\"When a request passed admission at arrival but the session reaches a limit before its response page is rendered, must give_session_csrf return the value for that admitted response or none based on a later reading?\",\"options\":[\"Use the request's admitted-session snapshot and include its CSRF value\",\"Recheck at rendering time and return none\",\"Pass the original arrival reading to give_session_csrf\"],\"default_guess\":\"Use the admitted session supplied by admit_owner_request, without a second validity decision.\",\"witness\":{\"initial\":\"A valid session has one second left before its eight-hour limit.\",\"events\":[\"An owner request arrives and passes admit_owner_request.\",\"The operation takes two seconds.\",\"owner_interface calls give_session_csrf while rendering a form in the successful answer.\"],\"outcomes\":[\"The rendered form carries the session's CSRF value because the admitted request completes despite the limit.\",\"give_session_csrf returns none because the session has now reached its limit, leaving the form without CSRF or requiring a different page.\"],\"observer\":\"The owner sees a usable form or a form that cannot be submitted.\"}},{\"subject\":\"upload_framing.read_upload_head\",\"kind\":\"missing_output\",\"text\":\"The CSRF value the first part carries, the delimiter that ends the file part, and the file part's declared length — the request's declared length less the head it read and the closing delimiter with its final `--` and line end, or none when the request declared none; or that the head is not of that form\",\"question\":\"How does owner_interface obtain the MultipartFileBody/file-part stream it is required to hand to operations, since the operation's Outputs list returns the delimiter but not that stream?\",\"options\":[\"Return a MultipartFileBody together with the CSRF value and declared length\",\"Return the delimiter and require owner_interface to construct MultipartFileBody\",\"Mutate or replace the input stream so it itself becomes the file-part stream\"],\"default_guess\":\"Return a MultipartFileBody explicitly and hide the delimiter inside it.\"},{\"subject\":\"MultipartFileBody\",\"kind\":\"undefined_interface\",\"text\":\"The file part's stream, a `MultipartFileBody`, fails when the request's stream ends before the closing delimiter, which `migration_import.read_import_mapping` refuses as `file_unreadable`, as any stream that fails.\",\"question\":\"What is MultipartFileBody's owner, read interface, EOF behavior, failure representation, close behavior, and rule for look-ahead bytes after the file delimiter?\",\"options\":[\"A models interface with explicit read/close methods and a typed read failure\",\"A private upload_framing class implementing the standard binary-stream protocol\",\"An ordinary stream whose premature delimiter failure is raised as an implementation-selected exception\"],\"default_guess\":\"Make it a private upload_framing stream adapter with specified read, EOF, close and typed-failure behavior.\"},{\"subject\":\"upload_framing.read_upload_head\",\"kind\":\"multipart_grammar\",\"text\":\"or that the head is not of that form — no multipart content type or boundary, a first part that is not the CSRF field, no second part that is the file — or is longer than the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant\",\"question\":\"What exact multipart syntax is accepted, including the CSRF field name, file field name, header names and encodings, quoted boundaries, CRLF requirements, duplicate fields or headers, preamble, transfer encoding, filename parameters, and extra parts?\",\"options\":[\"Accept precisely one fully specified canonical two-part multipart form\",\"Accept every RFC-conforming multipart form whose first logical field is CSRF and second is a file\",\"Accept a documented subset but ignore harmless additional headers and parameters\"],\"default_guess\":\"Define and accept one canonical two-part multipart/form-data subset, rejecting every other shape.\"},{\"subject\":\"upload_framing.read_upload_head\",\"kind\":\"bound_semantics\",\"text\":\"Reads the stream up to the start of the file part's content and no further, at most the bound; a head it refuses leaves the rest of the stream unread.\",\"question\":\"Exactly which bytes count toward UPLOAD_FORM_HEAD_MAX_BYTES, and may the parser read one byte past the bound to establish that the head is too long?\",\"options\":[\"Count every body byte through the final header terminator and never request byte bound+1\",\"Count the same bytes but permit a one-byte look-ahead\",\"Count only parsed multipart syntax and exclude preamble or header values\"],\"default_guess\":\"Count every body byte before file content and permit no read beyond the bound.\"},{\"subject\":\"upload_framing.read_upload_head\",\"kind\":\"multipart_tail\",\"text\":\"the request's declared length less the head it read and the closing delimiter with its final `--` and line end\",\"question\":\"How is the file-part declared length computed when the multipart body has an epilogue, an additional part, a non-final boundary after the file, or a legal final delimiter spelling whose length differs from the assumed form?\",\"options\":[\"Reject every body that is not exactly two parts followed immediately by one canonical final delimiter\",\"Support additional parts and subtract their complete framing too\",\"Treat all bytes after the file's first boundary as a fixed closing delimiter regardless of their contents\"],\"default_guess\":\"Require exactly two parts and one canonical final delimiter with no epilogue.\"},{\"subject\":\"operations.perform_owner_operation\",\"kind\":\"input_contradiction\",\"text\":\"for an upload the request's declared length, or that it declared none, and its unread byte stream, which `owner_interface` hands on without reading and this operation passes, unread, to `migration_import.read_import_mapping`, which alone consumes it within the request.\",\"question\":\"Does perform_owner_operation receive the HTTP request's declared length and unread request body, or the derived file-part length and MultipartFileBody after upload_framing has already read the request head?\",\"options\":[\"Receive only the derived file-part length and MultipartFileBody\",\"Receive the original request length and body and perform framing itself\",\"Receive both original and derived values with distinct names\"],\"default_guess\":\"Receive only the derived file-part length and MultipartFileBody.\",\"witness\":{\"initial\":\"An upload has 1 KiB of multipart framing and a 50 MiB file.\",\"events\":[\"owner_interface calls read_upload_head, consuming the 1 KiB head and deriving the file-part length.\",\"owner_interface calls perform_owner_operation.\"],\"outcomes\":[\"perform_owner_operation receives 50 MiB and a stream positioned at file content.\",\"perform_owner_operation receives the original multipart Content-Length and a request stream that is no longer unread.\"],\"observer\":\"A file exactly at the size limit is either accepted or incorrectly refused.\"}},{\"subject\":\"store.opened_store and transaction operations\",\"kind\":\"signature_contradiction\",\"text\":\"The transaction through `store.run_in_transaction`, on the store `store.opened_store` gives, with one instant and today from `clock`.\",\"question\":\"Do run_in_transaction and read_in_transaction take the opened store as an explicit argument, despite their Inputs sections saying they take only the step, or do they use store's retained process store internally?\",\"options\":[\"Add the opened store as an explicit first input to both transaction operations\",\"Keep their existing signatures and remove opened_store from operations\",\"Have opened_store select implicit module state before the transaction call\"],\"default_guess\":\"Remove opened_store from action calls and let store's transaction operations use the retained process store internally.\",\"witness\":{\"initial\":\"The process has successfully opened one RegistryStore.\",\"events\":[\"operations calls opened_store.\",\"operations starts a read or write transaction.\"],\"outcomes\":[\"operations passes the returned store to a transaction function whose contract must gain a store parameter.\",\"operations calls the documented one-parameter transaction function and the returned store is unused.\"],\"observer\":\"The generated operations and store modules disagree at their call boundary.\"}},{\"subject\":\"store.opened_store\",\"kind\":\"failure_contract\",\"text\":\"None: it is asked only by a surface's request, and a surface serves nothing until `open_store` succeeded (A17 rule 2). Asked before that, it is a wiring fault that raises, so nothing is read or written.\",\"question\":\"What exception or failure type is raised for the stated wiring fault, and how do either surface and instance lifecycle handle it if the invariant is broken?\",\"options\":[\"Define a specific internal wiring exception that terminates the process\",\"Return internal_error to the caller\",\"Make pre-open invocation unrepresentable and remove the runtime branch\"],\"default_guess\":\"Make pre-open invocation unrepresentable in normal construction and use a specific fatal assertion error.\"},{\"subject\":\"backups.newest_backup_instant composition\",\"kind\":\"unmapped_failure\",\"text\":\"The instant of the newest kept backup whose record can be read; that there is none; or that the location could not be listed, which is never shown as \\\"none\\\".\",\"question\":\"What owner response results when the backup location cannot be listed, since perform_owner_operation promises an answer or a refusal from the closed set but no refusal kind covers this non-transactional listing failure?\",\"options\":[\"Map it to internal_error with a new non-transaction failure kind\",\"Add a dedicated refusal code or kind\",\"Render a page-level unavailable state that is an ordinary answer\"],\"default_guess\":\"Add an internal_error kind specifically for backup listing failure.\",\"witness\":{\"initial\":\"Registry is serving, but the backup directory becomes unreadable.\",\"events\":[\"The owner opens the backup page.\",\"operations obtains the location and calls newest_backup_instant.\",\"The directory listing fails.\"],\"outcomes\":[\"The owner receives an internal_error refusal.\",\"The owner receives an ordinary page saying the backup status is unavailable.\"],\"observer\":\"The owner and any HTTP-level monitoring see different status and body semantics.\"}},{\"subject\":\"operations.perform_service_operation and service_api.serve_service_request\",\"kind\":\"transport_contradiction\",\"text\":\"for Kernel, the agent session the request's envelope names beside the token, never among the operation's inputs (R0-53).\",\"question\":\"Is Kernel's agent session read from the SERVICE_AGENT_SESSION_HEADER HTTP header or from a request envelope beside the token?\",\"options\":[\"Read it only from the named HTTP header\",\"Read it from the request envelope\",\"Allow both with a precedence and conflict rule\"],\"default_guess\":\"Read it only from SERVICE_AGENT_SESSION_HEADER.\"},{\"subject\":\"service_api.serve_service_request\",\"kind\":\"wire_schema_missing\",\"text\":\"One response in that wire format, v1's (owner, 2026-11-17): the answer, or the refusal's code, stage and kinds. An answer is written as its fields with no `answer_kind` or `view_kind` on the wire; `validate` and `context` are their v1 bodies, field for field (R0-04).\",\"question\":\"What are the exact request and response JSON schemas for every operation, including route and method, operation encoding, token placement, top-level envelope, collection field names, null versus omitted fields, erased forms, accepted-change results, and refusal-kind paths?\",\"options\":[\"Specify one route and complete schema per operation in State 5\",\"Specify a single dispatch route with a fully defined tagged request and operation-specific untagged response\",\"Delegate these schemas explicitly to a named later-state artifact with fixed obligations\"],\"default_guess\":\"Specify one HTTP route and complete request/response schema per operation in State 5.\"},{\"subject\":\"service_api scalar encoding\",\"kind\":\"noncanonical_encoding\",\"text\":\"Instants are ISO 8601 text in UTC ending in `Z`, dates ISO 8601 dates, decimals JSON strings in the stored form (`\\\"45.00\\\"`).\",\"question\":\"What exact canonical instant precision and fractional-second form are emitted and accepted, and what exact decimal lexical forms count as the stored form?\",\"options\":[\"Fix one canonical grammar and reject every other input spelling\",\"Accept all equivalent ISO/decimal spellings but emit one canonical form\",\"Preserve the caller's original spelling in storage and responses\"],\"default_guess\":\"Accept a documented bounded grammar and emit UTC instants at fixed microsecond precision and decimals with their stored scale.\"},{\"subject\":\"service_api malformed requests\",\"kind\":\"check_order_ambiguity\",\"text\":\"inputs that are not of the wire format — a body that cannot be read as it, a field it does not declare, a value of another shape than its field's — are answered stage (1) first and then `invalid_request` (`outside_closed_list`) at stage (4).\",\"question\":\"What does “answered stage (1) first and then” mean for a single response, and how can authentication and rights be checked when an unreadable body does not yield an operation name?\",\"options\":[\"Authenticate first, parse enough to identify the operation, then return only the stage-(4) refusal\",\"Return only a stage-(1) refusal when the operation cannot be identified\",\"Use a transport-level 400 response outside the refusal model for unreadable bodies\"],\"default_guess\":\"Authenticate first; if the operation cannot be decoded, return invalid_request at stage (4) without claiming an operation-specific rights check.\"},{\"subject\":\"PERSONAL_DATA_FIELDS\",\"kind\":\"classification_algorithm\",\"text\":\"An answer's class is `personal_data` when one of the fields the imported `PERSONAL_DATA_FIELDS` constant lists holds a value in it, nested views included, and `business_confidential` otherwise, never `open` (owner, 2026-11-17);\",\"question\":\"How are PERSONAL_DATA_FIELDS entries matched to operation-specific answers and nested or repeated views, and precisely what counts as a field “holding a value” for absent, null, empty, false, zero, and erased-form fields?\",\"options\":[\"Use fully qualified answer-schema paths and treat only non-null optional values as present\",\"Use domain-model field names recursively across every nested model\",\"Classify statically by answer type regardless of whether optional personal fields are absent\"],\"default_guess\":\"Use fully qualified answer-schema paths, recurse through collections, and count a personal field only when its value is not absent/null.\",\"witness\":{\"initial\":\"A Customer has a kind but no tax id or legal name.\",\"events\":[\"PresuPro calls read_billing_data.\",\"The answer marks both fiscal fields absent.\"],\"outcomes\":[\"The answer is business_confidential because no listed personal-data field holds a value.\",\"The answer is personal_data because its schema contains personal-data fields or their explicit absent markers.\"],\"observer\":\"A service with only business_confidential clearance would receive or be refused the same logical answer.\"}},{\"subject\":\"Closed set of refusal codes\",\"kind\":\"earlier_state_contradiction\",\"text\":\"It is the only refusal whose stage is not its own check's.\",\"question\":\"Must agent_call_refused for a nonexistent pointer carry stage (2), as State 5 says, or stage (3), where A04 rule 6 places record-existence checks?\",\"options\":[\"Keep stage (2) as a deliberate exception and amend A04\",\"Use stage (3) for an unknown pointer while keeping the same not-found code and kind\",\"Move pointer resolution into the agent-authority check so it genuinely belongs to stage (2)\"],\"default_guess\":\"Amend A04 explicitly and keep the stage-(2) indistinguishable answer required for Kernel.\",\"witness\":{\"initial\":\"Kernel presents a valid token and registered session, then asks to withdraw a pointer id that does not exist.\",\"events\":[\"operations looks up the pointer before it can check the pointer's project against the session set.\",\"The lookup returns no pointer.\"],\"outcomes\":[\"State 5 returns not_found/agent_call_refused at stage (2).\",\"A04's existence-stage rule returns the unknown-record failure at stage (3).\"],\"observer\":\"Kernel sees a different stage in the refusal.\"}},{\"subject\":\"owner_interface.serve_owner_request\",\"kind\":\"ownership_contradiction\",\"text\":\"Every check is `operations`'.\",\"question\":\"Does upload_framing own and perform the multipart-form and head-length checks described for read_upload_head, or must operations decide those checks for the statement “Every check is operations'” to remain true?\",\"options\":[\"Treat framing recognition as transport parsing, not a check, and say so\",\"Move the framing validity decision into operations\",\"Remove the claim that every check is operations'\"],\"default_guess\":\"Qualify the claim so transport parsing and framing validation remain upload_framing's.\"},{\"subject\":\"clock.monotonic_reading callers\",\"kind\":\"contract_contradiction\",\"text\":\"`module:owner_sessions`, `module:instance_lifecycle`.\",\"question\":\"Must owner_interface be added as a caller now that it takes every request's arrival reading directly from clock.monotonic_reading?\",\"options\":[\"Add module:owner_interface\",\"Move the arrival reading back into owner_sessions\",\"Have instance_lifecycle attach arrival readings to requests\"],\"default_guess\":\"Add module:owner_interface.\"},{\"subject\":\"owner_interface → clock import\",\"kind\":\"standard_violation\",\"text\":\"Every request's arrival is the `clock.monotonic_reading` taken when its headers are read, before any of its body, and the session is checked at it (A13 rule 2).\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой runtime import surface consumer-модуля, а не копия публичного API provider-а: ровно те символы, которые код consumer-а называет напрямую — вызывает, конструирует, проверяет (членство в enum, тип), пишет в аннотации.\",\"section\":\"7\",\"question\":\"The passage must be accompanied by module_internal[\\\"owner_interface\\\"][\\\"clock\\\"] containing exactly monotonic_reading, or the direct call must be removed.\"},{\"subject\":\"operations → store import\",\"kind\":\"standard_violation\",\"text\":\"each on the store `store.opened_store` gives, with the instant of `clock.recorded_now`.\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой runtime import surface consumer-модуля, а не копия публичного API provider-а: ровно те символы, которые код consumer-а называет напрямую — вызывает, конструирует, проверяет (членство в enum, тип), пишет в аннотации.\",\"section\":\"7\",\"question\":\"The operations-to-store module_internal row must add opened_store if this direct call remains, while retaining only the other store symbols operations actually names.\"},{\"subject\":\"owner_interface → upload_framing import\",\"kind\":\"standard_violation\",\"text\":\"`upload_framing.read_upload_head` reads the body's head alone and answers the CSRF value and the file part's declared length;\",\"rule\":\"Это **единственный авторитетный источник** внутренних импортов consumer-а: объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"The passage must become an explicit module_internal[\\\"owner_interface\\\"][\\\"upload_framing\\\"] declaration of read_upload_head together with the call text, or the dependency must be removed.\"},{\"subject\":\"owner_interface → owner_sessions import\",\"kind\":\"standard_violation\",\"text\":\"every form of a page rendered for a valid session carries the CSRF value `owner_sessions.give_session_csrf` gives for it, and the sign-in form none (A13 rules 4, 5, 7);\",\"rule\":\"Недостающий символ — такая же ошибка спеки, как лишний: в строгом режиме импортов (ниже) сгенерированный модуль без него отвергается\",\"section\":\"7\",\"question\":\"The owner_interface-to-owner_sessions module_internal row must include give_session_csrf if this direct call remains.\"}]}",
+ "set_aside": []
+}

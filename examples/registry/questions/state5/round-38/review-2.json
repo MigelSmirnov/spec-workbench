@@ -1,0 +1,417 @@
+{
+ "open_points": [
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:upload_framing.read_upload_head`",
+   "kind": "output_contract",
+   "text": "The CSRF value the first part carries, the delimiter that ends the file part, and the file part's declared length",
+   "question": "Does the operation also return the `MultipartFileBody`, or must `owner_interface` construct it from the delimiter despite `upload_framing` owning and hiding that mechanism?",
+   "options": [
+    "Return the CSRF value, derived length, and a ready-to-read `MultipartFileBody`",
+    "Return the delimiter and require `owner_interface` to construct the stream",
+    "Return both the delimiter and the constructed stream"
+   ],
+   "default_guess": "Return a ready-to-read `MultipartFileBody` and keep the delimiter private to `upload_framing`.",
+   "witness": {
+    "initial": "A valid multipart upload has been received and its head has been read.",
+    "events": [
+     "`owner_interface` calls `read_upload_head`.",
+     "`owner_interface` must pass an unread file-part stream to `operations.perform_owner_operation`."
+    ],
+    "outcomes": [
+     "`read_upload_head` returns the stream, so `owner_interface` passes it without understanding multipart framing.",
+     "`read_upload_head` returns only a delimiter, so `owner_interface` must implement the hidden delimiter and look-ahead mechanism itself."
+    ],
+    "observer": "The module implementation and tests see different return shapes and dependency ownership."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:upload_framing.read_upload_head`",
+   "kind": "multipart_form",
+   "text": "the first part that is not the CSRF field, no second part that is the file",
+   "question": "What exact part names, `Content-Disposition` parameters, header forms, encodings, line endings, duplicate-header handling and filename rules identify the CSRF and file parts?",
+   "options": [
+    "Fix one exact multipart/form-data profile and reject every deviation",
+    "Accept every standards-valid multipart spelling that denotes the two required parts",
+    "Let the generated HTML form and parser choose matching private names and syntax"
+   ],
+   "default_guess": "Fix field names and accept standards-valid multipart/form-data syntax with CRLF, case-insensitive header names and quoted or unquoted valid boundaries.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:upload_framing.read_upload_head`",
+   "kind": "csrf_decoding",
+   "text": "The CSRF value the first part carries",
+   "question": "Are the first part's contents compared as raw bytes or decoded text, and what happens for an empty value, invalid text encoding, a transfer encoding, or more than one value?",
+   "options": [
+    "Return the raw part bytes exactly",
+    "Decode one specified charset and reject invalid encoding",
+    "Treat any undecodable or structurally unusual value as no CSRF value"
+   ],
+   "default_guess": "Return raw bytes exactly; an empty value is present but compares unequal, and unsupported transfer encoding makes the head invalid.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:upload_framing.read_upload_head`",
+   "kind": "stream_failure",
+   "text": "None: a head of another form answers no CSRF value",
+   "question": "What does the operation do if the request stream raises or ends while the multipart head itself is being read?",
+   "options": [
+    "Answer that the head is of another form",
+    "Raise a transport or internal failure",
+    "Return a distinct malformed-head result"
+   ],
+   "default_guess": "Return a distinct unreadable-body failure that the surface turns into `invalid_request`/`file_unreadable`.",
+   "witness": {
+    "initial": "The request has a multipart content type but its connection fails halfway through the first part's headers.",
+    "events": [
+     "`owner_interface` calls `read_upload_head`.",
+     "The body stream ends or raises before the start of the file content."
+    ],
+    "outcomes": [
+     "The operation treats the incomplete head as another form and the request is refused as missing CSRF at stage (1).",
+     "The operation reports a body-read failure, producing a transport or file-unreadable result."
+    ],
+    "observer": "The owner sees a different refusal, and diagnostics may differ."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "length_boundary",
+   "text": "Its declared length is the request's declared length less the head read before the file — at most the imported\n   `UPLOAD_FORM_HEAD_MAX_BYTES` constant, which the code that reads the head\n   imports from the data provider (SPEC_STANDARD §15.3.1) — and the closing\n   delimiter;",
+   "question": "Does the subtracted closing delimiter include the CRLF immediately before the boundary, and exactly which bytes comprise its final line ending?",
+   "options": [
+    "Include the leading CRLF, boundary marker, final `--`, and trailing CRLF",
+    "Exclude the leading CRLF from the delimiter",
+    "Permit both CRLF and LF and subtract whichever was received"
+   ],
+   "default_guess": "Include `\\r\\n--<boundary>--\\r\\n` in the closing-delimiter length.",
+   "witness": {
+    "initial": "The HTTP content length is exact and the file part contains exactly 50 × 1024 × 1024 bytes.",
+    "events": [
+     "`read_upload_head` subtracts the head and its interpretation of the closing delimiter.",
+     "`migration_import` compares the derived file length with the limit before reading file bytes."
+    ],
+    "outcomes": [
+     "Including the delimiter's leading CRLF derives exactly 50 MiB and accepts the file.",
+     "Excluding those two bytes derives 50 MiB plus two and refuses the file as too large."
+    ],
+    "observer": "The owner sees acceptance or `file_too_large` for the required boundary test."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:upload_framing.read_upload_head`",
+   "kind": "multipart_tail",
+   "text": "the request's declared length less the head it read and the closing delimiter with its final `--` and line end",
+   "question": "Are multipart epilogues, a third part, bytes after the final line ending, or a non-closing boundary after the file permitted, and how do they affect the derived file length?",
+   "options": [
+    "Require the file to be the final part and permit no epilogue or trailing bytes",
+    "Permit a multipart epilogue and subtract it separately",
+    "Permit further parts and derive the file length without using total request length"
+   ],
+   "default_guess": "Require exactly two parts, the file second and final, with no epilogue or trailing bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:upload_framing.read_upload_head`",
+   "kind": "stream_framing",
+   "text": "read only when its reader asks and never buffered beyond the delimiter it must look ahead for",
+   "question": "What exact boundary-matching rule and maximum look-ahead apply when file bytes contain partial or delimiter-like boundary sequences?",
+   "options": [
+    "Use the multipart boundary-line grammar and buffer at most one complete candidate delimiter",
+    "Treat the first raw occurrence of the boundary token as the end",
+    "Leave matching and buffering to the HTTP library"
+   ],
+   "default_guess": "Recognize only a complete multipart boundary line and buffer no more than the longest possible delimiter candidate.",
+   "witness": {
+    "initial": "A file contains bytes matching a prefix of the multipart boundary followed by a differing byte.",
+    "events": [
+     "`migration_import` reads through `MultipartFileBody`.",
+     "The reader encounters the boundary-like sequence."
+    ],
+    "outcomes": [
+     "The bytes are returned as file content because the complete delimiter did not match.",
+     "The stream is truncated or fails because the implementation treats the prefix as a delimiter."
+    ],
+    "observer": "The owner receives a valid mapping in one implementation and `file_unreadable` or different file bytes in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_1_foundation.md:`public_op:store.opened_store`",
+   "kind": "signature_contradiction",
+   "text": "`store` keeps the one\n`open_store` opened, and `operations` hands it to `run_in_transaction` and\n`read_in_transaction`.",
+   "question": "Do `run_in_transaction` and `read_in_transaction` take the opened store as an explicit input, or do they use the store retained internally by their own module? Their stated Inputs currently name only the step.",
+   "options": [
+    "Add the store as an explicit first input to both transaction operations",
+    "Keep the store module-global and remove the claim that `operations` hands it back",
+    "Have `opened_store` return a bound transaction runner rather than the store"
+   ],
+   "default_guess": "Add the opened store as an explicit input to both transaction operations.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`",
+   "kind": "arrival_race",
+   "text": "Every request is checked at its arrival, and only then — at the arrival\nreading it carries, however long its upload's head took to read after it",
+   "question": "How is session state at arrival preserved when `owner_interface` reads the upload head before calling this operation and a sign-out or expiry pass changes or removes the session meanwhile?",
+   "options": [
+    "Reserve/admit the request when headers arrive, before reading the head",
+    "Keep timestamped session history and reconstruct validity at the supplied reading",
+    "Check current signed-out/existence state when called but apply time limits at the old reading"
+   ],
+   "default_guess": "Perform and reserve the session check when headers arrive, then read the multipart head before running the admitted step.",
+   "witness": {
+    "initial": "Session S is valid and has an upload form open.",
+    "events": [
+     "Upload U's headers arrive and `owner_interface` records time t0.",
+     "While U's multipart head is still arriving, a sign-out request is admitted and marks S signed out.",
+     "After reading the head, `owner_interface` calls `admit_owner_request` for U with t0."
+    ],
+    "outcomes": [
+     "Because U was valid at its arrival, it is admitted and completes despite the later sign-out.",
+     "Because S is signed out when `admit_owner_request` is finally called, U is refused."
+    ],
+    "observer": "The owner sees either the upload result or the sign-in page."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`",
+   "kind": "lock_scope",
+   "text": "whether it reads or\nchanges an uploaded file — an upload, the mapping, the import's\nconfirmation step, a confirmation, a sign-out, change or not",
+   "question": "Does “a confirmation” mean only import confirmation, or every confirmed action such as archiving a project and erasing audit entries?",
+   "options": [
+    "Only import confirmation touches the uploaded file and takes the import lock",
+    "Every confirmation takes the import lock",
+    "The caller supplies an explicit `touches_uploaded_file` classification fixed per operation"
+   ],
+   "default_guess": "Only the import confirmation takes the import lock; fix the classification explicitly per owner operation.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`",
+   "kind": "ordering_point",
+   "text": "The import lock is granted in the order requests asked for it, and\nthe session's lock in the order places were taken",
+   "question": "What event establishes “asked” and “place taken”: HTTP arrival, invocation of `admit_owner_request`, entry into the lock wait queue, or another explicit sequence number?",
+   "options": [
+    "Order by request arrival reading",
+    "Order by invocation/enqueue at each lock",
+    "Assign an explicit monotonic admission sequence"
+   ],
+   "default_guess": "Order by the lock's explicit FIFO enqueue point and define that point as the call that requests the lock.",
+   "witness": {
+    "initial": "Uploads A and B belong to different sessions; A's headers arrive first but its multipart head is slow.",
+    "events": [
+     "B finishes reading its head and calls admission first.",
+     "A finishes later and calls admission second."
+    ],
+    "outcomes": [
+     "Arrival ordering grants the import lock to A first.",
+     "Lock-request ordering grants the import lock to B first."
+    ],
+    "observer": "Both owners see a different upload complete first, and an intervening accepted import may cause the other upload to be refused."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_2_sessions.md:`public_op:owner_sessions.give_session_csrf`",
+   "kind": "validity_race",
+   "text": "The session's CSRF value, or none when no session of that identity exists\nor it has reached a limit.",
+   "question": "Is validity evaluated at this helper's call time or at the rendering request's admitted arrival, and may it return none after that request already passed the session check?",
+   "options": [
+    "Take the admitted session or arrival reading and return its CSRF snapshot",
+    "Recheck current limits and return none after expiry",
+    "Render no forms when the session expires during an already admitted request"
+   ],
+   "default_guess": "Take the admitted session and return its CSRF value without a second validity decision.",
+   "witness": {
+    "initial": "A session is 29 minutes 59 seconds idle.",
+    "events": [
+     "A page request arrives and passes admission.",
+     "Rendering takes two seconds.",
+     "`owner_interface` calls `give_session_csrf`."
+    ],
+    "outcomes": [
+     "The admitted request completes with forms carrying the session's CSRF value.",
+     "The helper observes 30 minutes elapsed and returns none, so the valid-session page has forms without CSRF."
+    ],
+    "observer": "The owner sees usable forms in one implementation and forms whose submissions are inevitably refused in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:`public_op:operations.perform_service_operation`",
+   "kind": "transport_contradiction",
+   "text": "for Kernel, the agent session the\nrequest's envelope names beside the token",
+   "question": "Must `perform_service_operation` receive a separately parsed header value, or an envelope containing it, given that `serve_service_request` now places the session in the named HTTP header?",
+   "options": [
+    "Receive the parsed agent-session header as a separate argument",
+    "Receive a transport envelope containing token, session and operation",
+    "Receive only operation inputs and obtain transport metadata through a request context"
+   ],
+   "default_guess": "Receive the parsed token and agent-session header as separate arguments from `service_api`.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:`public_op:operations.perform_service_operation`",
+   "kind": "stage_contradiction",
+   "text": "an answer above `service_access.highest_class_of_service` is\nrefused whole (A09 rule 4). No stage is re-ordered and no check added after stage (2).",
+   "question": "At what stage is the answer-class check performed, since the answer must first be constructed to know which optional and nested personal fields hold values, but `answer_above_class` is declared a stage-(1) refusal and the text forbids a check after stage (2)?",
+   "options": [
+    "Classify the possible answer schema at stage (1), before record checks",
+    "Build the answer and then apply a logically stage-(1) class refusal",
+    "Remove dynamic classification and fix one maximum class per operation"
+   ],
+   "default_guess": "Build the answer, compute its actual class, and explicitly define this as a post-operation authorization check whose refusal is encoded with stage (1).",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:`public_op:operations.perform_service_operation`",
+   "kind": "classification_semantics",
+   "text": "when one of the fields the imported\n`PERSONAL_DATA_FIELDS` constant lists holds a value in it, nested views\nincluded",
+   "question": "What counts as “holds a value” for absent fields, explicit nulls, absent-value markers, empty lists or objects, discriminated erased views, and repeated nested fields?",
+   "options": [
+    "Only a present non-null leaf value counts",
+    "The presence of the field counts even when null or marked absent",
+    "Each answer model defines its own presence predicate"
+   ],
+   "default_guess": "Only a present, non-null personal-data leaf counts; empty containers and explicit absence markers do not.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:`public_op:operations.perform_owner_operation`",
+   "kind": "upload_contract_contradiction",
+   "text": "its unread byte\nstream, which `owner_interface` hands on without reading and this operation\npasses, unread, to `migration_import.read_import_mapping`",
+   "question": "Is this input the original request body or the already-framed file-part stream, and is its declared length the HTTP body length or the derived file-part length?",
+   "options": [
+    "Receive the `MultipartFileBody` and derived file-part length from `upload_framing`",
+    "Receive the original HTTP body and let `migration_import` parse multipart framing",
+    "Receive both original and framed streams"
+   ],
+   "default_guess": "Receive only the `MultipartFileBody` and its derived file-part length.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:`public_op:operations.perform_owner_operation`",
+   "kind": "backup_failure_result",
+   "text": "the newest backup's instant from\n`backups.newest_backup_instant` in the backup location\n`configuration.give_backup_location` gives",
+   "question": "What owner-operation answer or refusal is produced when the backup location cannot be listed, given that `newest_backup_instant` distinguishes that condition from “none” but declares no error?",
+   "options": [
+    "Render an explicit backup-status-unavailable answer",
+    "Return `internal_error`/`transaction_failed`",
+    "Return another refusal code and kind",
+    "Silently show no backup"
+   ],
+   "default_guess": "Return an explicit unavailable result distinct from both a refusal and “no backup”.",
+   "witness": {
+    "initial": "Registry started successfully, but the backup directory later becomes unreadable.",
+    "events": [
+     "The owner opens the page that shows the newest backup.",
+     "`newest_backup_instant` cannot list the location."
+    ],
+    "outcomes": [
+     "The page renders an explicit unavailable state.",
+     "The operation converts the condition to `internal_error` or incorrectly renders that no backup exists."
+    ],
+    "observer": "The owner sees materially different backup health information."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`",
+   "kind": "wire_request",
+   "text": "the inputs in the wire format States 5 and 6\ndeclare",
+   "question": "What are the HTTP method and route for each operation, the token's header or other location, the request media type and character encoding, the JSON envelope and field names, and the distinction among absent, null and empty values?",
+   "options": [
+    "One route per operation with operation-specific request bodies",
+    "One dispatch route carrying an operation name and input object",
+    "A fixed route table derived from the operation contracts"
+   ],
+   "default_guess": "Use one fixed route per operation, bearer token in an authorization header, UTF-8 JSON bodies and contract-defined absent/null semantics.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`",
+   "kind": "wire_refusal",
+   "text": "the refusal's code, stage\nand kinds",
+   "question": "How are multiple failure entries and their required paths represented on the wire, and are `kinds` strings or objects containing kind and path?",
+   "options": [
+    "`kinds` is an ordered array of objects with `kind` and `path`",
+    "Return separate ordered `kinds` and `paths` arrays",
+    "Expose only kind strings and discard paths"
+   ],
+   "default_guess": "Use an ordered array of failure objects, each containing its kind and structured path.",
+   "witness": {
+    "initial": "A request has two invalid values of the same kind at different input paths.",
+    "events": [
+     "The record module returns both ordered failures as required by the conventions.",
+     "`service_api` serializes the refusal."
+    ],
+    "outcomes": [
+     "The response preserves two entries and their distinct paths.",
+     "The response contains only the repeated kind strings, so the client cannot identify the failing fields."
+    ],
+    "observer": "The service client sees different actionable error detail."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`",
+   "kind": "wire_serialization",
+   "text": "Instants are ISO 8601 text in UTC\nending in `Z`, dates ISO 8601 dates, decimals JSON strings in the stored form\n(`\"45.00\"`).",
+   "question": "What canonical instant precision and fractional-second spelling are required, and what normalization defines a decimal's “stored form”?",
+   "options": [
+    "Preserve the exact stored decimal scale and emit fixed microsecond UTC instants",
+    "Canonicalize decimals numerically and omit zero fractional seconds on instants",
+    "Define canonical formatting separately for each field"
+   ],
+   "default_guess": "Preserve decimal scale exactly and emit UTC instants with six fractional digits followed by `Z`.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`",
+   "kind": "header_parsing",
+   "text": "the agent session in the header the imported\n`SERVICE_AGENT_SESSION_HEADER` constant names",
+   "question": "What happens when the header is missing, empty, repeated, comma-combined, contains invalid bytes, or is supplied to a non-Kernel operation?",
+   "options": [
+    "Treat missing or malformed as the stage-(2) agent refusal; reject duplicates; ignore it for non-agent calls",
+    "Treat malformed or duplicate headers as a stage-(4) wire error",
+    "Let the HTTP library choose one value and pass it through"
+   ],
+   "default_guess": "Reject duplicate or syntactically invalid values as a wire error, treat a missing Kernel value as `agent_call_refused`, and ignore the header for operations without agent authority.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`",
+   "kind": "cookie_scope",
+   "text": "not readable by scripts, only to\nRegistry's origin, and always HTTPS-only",
+   "question": "What cookie name, Path, Domain/host-only setting, SameSite policy and persistence attributes implement “only to Registry's origin,” especially across all owner-interface routes?",
+   "options": [
+    "A host-only session cookie with `Path=/`, `Secure`, `HttpOnly` and fixed SameSite",
+    "Use browser defaults except `Secure` and `HttpOnly`",
+    "Use a route-local default path"
+   ],
+   "default_guess": "Use a fixed host-only session cookie with `Path=/`, `Secure`, `HttpOnly`, no persistent expiry and `SameSite=Lax`.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`",
+   "kind": "framing_failure_response",
+   "text": "A\nhead of another form gives no CSRF value, and the upload is refused at stage\n(1) before any byte of the file is read.",
+   "question": "Are every overlong, incomplete and syntactically malformed multipart head intentionally collapsed into `csrf_refused`, including failures that prevent determining whether a file part exists?",
+   "options": [
+    "Collapse every invalid head to missing CSRF at stage (1)",
+    "Distinguish transport/unreadable-body failures from missing CSRF",
+    "Return a stage-(4) malformed-wire refusal after authentication"
+   ],
+   "default_guess": "Collapse structurally complete but wrong forms to `csrf_refused`, while reporting premature stream failure as an unreadable-body error.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"50_public_apis_1_foundation.md:`public_op:upload_framing.read_upload_head`\",\"kind\":\"output_contract\",\"text\":\"The CSRF value the first part carries, the delimiter that ends the file part, and the file part's declared length\",\"question\":\"Does the operation also return the `MultipartFileBody`, or must `owner_interface` construct it from the delimiter despite `upload_framing` owning and hiding that mechanism?\",\"options\":[\"Return the CSRF value, derived length, and a ready-to-read `MultipartFileBody`\",\"Return the delimiter and require `owner_interface` to construct the stream\",\"Return both the delimiter and the constructed stream\"],\"default_guess\":\"Return a ready-to-read `MultipartFileBody` and keep the delimiter private to `upload_framing`.\",\"witness\":{\"initial\":\"A valid multipart upload has been received and its head has been read.\",\"events\":[\"`owner_interface` calls `read_upload_head`.\",\"`owner_interface` must pass an unread file-part stream to `operations.perform_owner_operation`.\"],\"outcomes\":[\"`read_upload_head` returns the stream, so `owner_interface` passes it without understanding multipart framing.\",\"`read_upload_head` returns only a delimiter, so `owner_interface` must implement the hidden delimiter and look-ahead mechanism itself.\"],\"observer\":\"The module implementation and tests see different return shapes and dependency ownership.\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:upload_framing.read_upload_head`\",\"kind\":\"multipart_form\",\"text\":\"the first part that is not the CSRF field, no second part that is the file\",\"question\":\"What exact part names, `Content-Disposition` parameters, header forms, encodings, line endings, duplicate-header handling and filename rules identify the CSRF and file parts?\",\"options\":[\"Fix one exact multipart/form-data profile and reject every deviation\",\"Accept every standards-valid multipart spelling that denotes the two required parts\",\"Let the generated HTML form and parser choose matching private names and syntax\"],\"default_guess\":\"Fix field names and accept standards-valid multipart/form-data syntax with CRLF, case-insensitive header names and quoted or unquoted valid boundaries.\"},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:upload_framing.read_upload_head`\",\"kind\":\"csrf_decoding\",\"text\":\"The CSRF value the first part carries\",\"question\":\"Are the first part's contents compared as raw bytes or decoded text, and what happens for an empty value, invalid text encoding, a transfer encoding, or more than one value?\",\"options\":[\"Return the raw part bytes exactly\",\"Decode one specified charset and reject invalid encoding\",\"Treat any undecodable or structurally unusual value as no CSRF value\"],\"default_guess\":\"Return raw bytes exactly; an empty value is present but compares unequal, and unsupported transfer encoding makes the head invalid.\"},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:upload_framing.read_upload_head`\",\"kind\":\"stream_failure\",\"text\":\"None: a head of another form answers no CSRF value\",\"question\":\"What does the operation do if the request stream raises or ends while the multipart head itself is being read?\",\"options\":[\"Answer that the head is of another form\",\"Raise a transport or internal failure\",\"Return a distinct malformed-head result\"],\"default_guess\":\"Return a distinct unreadable-body failure that the surface turns into `invalid_request`/`file_unreadable`.\",\"witness\":{\"initial\":\"The request has a multipart content type but its connection fails halfway through the first part's headers.\",\"events\":[\"`owner_interface` calls `read_upload_head`.\",\"The body stream ends or raises before the start of the file content.\"],\"outcomes\":[\"The operation treats the incomplete head as another form and the request is refused as missing CSRF at stage (1).\",\"The operation reports a body-read failure, producing a transport or file-unreadable result.\"],\"observer\":\"The owner sees a different refusal, and diagnostics may differ.\"}},{\"subject\":\"context\",\"kind\":\"length_boundary\",\"text\":\"Its declared length is the request's declared length less the head read before the file — at most the imported\\n   `UPLOAD_FORM_HEAD_MAX_BYTES` constant, which the code that reads the head\\n   imports from the data provider (SPEC_STANDARD §15.3.1) — and the closing\\n   delimiter;\",\"question\":\"Does the subtracted closing delimiter include the CRLF immediately before the boundary, and exactly which bytes comprise its final line ending?\",\"options\":[\"Include the leading CRLF, boundary marker, final `--`, and trailing CRLF\",\"Exclude the leading CRLF from the delimiter\",\"Permit both CRLF and LF and subtract whichever was received\"],\"default_guess\":\"Include `\\\\r\\\\n--<boundary>--\\\\r\\\\n` in the closing-delimiter length.\",\"witness\":{\"initial\":\"The HTTP content length is exact and the file part contains exactly 50 × 1024 × 1024 bytes.\",\"events\":[\"`read_upload_head` subtracts the head and its interpretation of the closing delimiter.\",\"`migration_import` compares the derived file length with the limit before reading file bytes.\"],\"outcomes\":[\"Including the delimiter's leading CRLF derives exactly 50 MiB and accepts the file.\",\"Excluding those two bytes derives 50 MiB plus two and refuses the file as too large.\"],\"observer\":\"The owner sees acceptance or `file_too_large` for the required boundary test.\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:upload_framing.read_upload_head`\",\"kind\":\"multipart_tail\",\"text\":\"the request's declared length less the head it read and the closing delimiter with its final `--` and line end\",\"question\":\"Are multipart epilogues, a third part, bytes after the final line ending, or a non-closing boundary after the file permitted, and how do they affect the derived file length?\",\"options\":[\"Require the file to be the final part and permit no epilogue or trailing bytes\",\"Permit a multipart epilogue and subtract it separately\",\"Permit further parts and derive the file length without using total request length\"],\"default_guess\":\"Require exactly two parts, the file second and final, with no epilogue or trailing bytes.\"},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:upload_framing.read_upload_head`\",\"kind\":\"stream_framing\",\"text\":\"read only when its reader asks and never buffered beyond the delimiter it must look ahead for\",\"question\":\"What exact boundary-matching rule and maximum look-ahead apply when file bytes contain partial or delimiter-like boundary sequences?\",\"options\":[\"Use the multipart boundary-line grammar and buffer at most one complete candidate delimiter\",\"Treat the first raw occurrence of the boundary token as the end\",\"Leave matching and buffering to the HTTP library\"],\"default_guess\":\"Recognize only a complete multipart boundary line and buffer no more than the longest possible delimiter candidate.\",\"witness\":{\"initial\":\"A file contains bytes matching a prefix of the multipart boundary followed by a differing byte.\",\"events\":[\"`migration_import` reads through `MultipartFileBody`.\",\"The reader encounters the boundary-like sequence.\"],\"outcomes\":[\"The bytes are returned as file content because the complete delimiter did not match.\",\"The stream is truncated or fails because the implementation treats the prefix as a delimiter.\"],\"observer\":\"The owner receives a valid mapping in one implementation and `file_unreadable` or different file bytes in the other.\"}},{\"subject\":\"50_public_apis_1_foundation.md:`public_op:store.opened_store`\",\"kind\":\"signature_contradiction\",\"text\":\"`store` keeps the one\\n`open_store` opened, and `operations` hands it to `run_in_transaction` and\\n`read_in_transaction`.\",\"question\":\"Do `run_in_transaction` and `read_in_transaction` take the opened store as an explicit input, or do they use the store retained internally by their own module? Their stated Inputs currently name only the step.\",\"options\":[\"Add the store as an explicit first input to both transaction operations\",\"Keep the store module-global and remove the claim that `operations` hands it back\",\"Have `opened_store` return a bound transaction runner rather than the store\"],\"default_guess\":\"Add the opened store as an explicit input to both transaction operations.\"},{\"subject\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`\",\"kind\":\"arrival_race\",\"text\":\"Every request is checked at its arrival, and only then — at the arrival\\nreading it carries, however long its upload's head took to read after it\",\"question\":\"How is session state at arrival preserved when `owner_interface` reads the upload head before calling this operation and a sign-out or expiry pass changes or removes the session meanwhile?\",\"options\":[\"Reserve/admit the request when headers arrive, before reading the head\",\"Keep timestamped session history and reconstruct validity at the supplied reading\",\"Check current signed-out/existence state when called but apply time limits at the old reading\"],\"default_guess\":\"Perform and reserve the session check when headers arrive, then read the multipart head before running the admitted step.\",\"witness\":{\"initial\":\"Session S is valid and has an upload form open.\",\"events\":[\"Upload U's headers arrive and `owner_interface` records time t0.\",\"While U's multipart head is still arriving, a sign-out request is admitted and marks S signed out.\",\"After reading the head, `owner_interface` calls `admit_owner_request` for U with t0.\"],\"outcomes\":[\"Because U was valid at its arrival, it is admitted and completes despite the later sign-out.\",\"Because S is signed out when `admit_owner_request` is finally called, U is refused.\"],\"observer\":\"The owner sees either the upload result or the sign-in page.\"}},{\"subject\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`\",\"kind\":\"lock_scope\",\"text\":\"whether it reads or\\nchanges an uploaded file — an upload, the mapping, the import's\\nconfirmation step, a confirmation, a sign-out, change or not\",\"question\":\"Does “a confirmation” mean only import confirmation, or every confirmed action such as archiving a project and erasing audit entries?\",\"options\":[\"Only import confirmation touches the uploaded file and takes the import lock\",\"Every confirmation takes the import lock\",\"The caller supplies an explicit `touches_uploaded_file` classification fixed per operation\"],\"default_guess\":\"Only the import confirmation takes the import lock; fix the classification explicitly per owner operation.\"},{\"subject\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`\",\"kind\":\"ordering_point\",\"text\":\"The import lock is granted in the order requests asked for it, and\\nthe session's lock in the order places were taken\",\"question\":\"What event establishes “asked” and “place taken”: HTTP arrival, invocation of `admit_owner_request`, entry into the lock wait queue, or another explicit sequence number?\",\"options\":[\"Order by request arrival reading\",\"Order by invocation/enqueue at each lock\",\"Assign an explicit monotonic admission sequence\"],\"default_guess\":\"Order by the lock's explicit FIFO enqueue point and define that point as the call that requests the lock.\",\"witness\":{\"initial\":\"Uploads A and B belong to different sessions; A's headers arrive first but its multipart head is slow.\",\"events\":[\"B finishes reading its head and calls admission first.\",\"A finishes later and calls admission second.\"],\"outcomes\":[\"Arrival ordering grants the import lock to A first.\",\"Lock-request ordering grants the import lock to B first.\"],\"observer\":\"Both owners see a different upload complete first, and an intervening accepted import may cause the other upload to be refused.\"}},{\"subject\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.give_session_csrf`\",\"kind\":\"validity_race\",\"text\":\"The session's CSRF value, or none when no session of that identity exists\\nor it has reached a limit.\",\"question\":\"Is validity evaluated at this helper's call time or at the rendering request's admitted arrival, and may it return none after that request already passed the session check?\",\"options\":[\"Take the admitted session or arrival reading and return its CSRF snapshot\",\"Recheck current limits and return none after expiry\",\"Render no forms when the session expires during an already admitted request\"],\"default_guess\":\"Take the admitted session and return its CSRF value without a second validity decision.\",\"witness\":{\"initial\":\"A session is 29 minutes 59 seconds idle.\",\"events\":[\"A page request arrives and passes admission.\",\"Rendering takes two seconds.\",\"`owner_interface` calls `give_session_csrf`.\"],\"outcomes\":[\"The admitted request completes with forms carrying the session's CSRF value.\",\"The helper observes 30 minutes elapsed and returns none, so the valid-session page has forms without CSRF.\"],\"observer\":\"The owner sees usable forms in one implementation and forms whose submissions are inevitably refused in the other.\"}},{\"subject\":\"50_public_apis_5_surfaces.md:`public_op:operations.perform_service_operation`\",\"kind\":\"transport_contradiction\",\"text\":\"for Kernel, the agent session the\\nrequest's envelope names beside the token\",\"question\":\"Must `perform_service_operation` receive a separately parsed header value, or an envelope containing it, given that `serve_service_request` now places the session in the named HTTP header?\",\"options\":[\"Receive the parsed agent-session header as a separate argument\",\"Receive a transport envelope containing token, session and operation\",\"Receive only operation inputs and obtain transport metadata through a request context\"],\"default_guess\":\"Receive the parsed token and agent-session header as separate arguments from `service_api`.\"},{\"subject\":\"50_public_apis_5_surfaces.md:`public_op:operations.perform_service_operation`\",\"kind\":\"stage_contradiction\",\"text\":\"an answer above `service_access.highest_class_of_service` is\\nrefused whole (A09 rule 4). No stage is re-ordered and no check added after stage (2).\",\"question\":\"At what stage is the answer-class check performed, since the answer must first be constructed to know which optional and nested personal fields hold values, but `answer_above_class` is declared a stage-(1) refusal and the text forbids a check after stage (2)?\",\"options\":[\"Classify the possible answer schema at stage (1), before record checks\",\"Build the answer and then apply a logically stage-(1) class refusal\",\"Remove dynamic classification and fix one maximum class per operation\"],\"default_guess\":\"Build the answer, compute its actual class, and explicitly define this as a post-operation authorization check whose refusal is encoded with stage (1).\"},{\"subject\":\"50_public_apis_5_surfaces.md:`public_op:operations.perform_service_operation`\",\"kind\":\"classification_semantics\",\"text\":\"when one of the fields the imported\\n`PERSONAL_DATA_FIELDS` constant lists holds a value in it, nested views\\nincluded\",\"question\":\"What counts as “holds a value” for absent fields, explicit nulls, absent-value markers, empty lists or objects, discriminated erased views, and repeated nested fields?\",\"options\":[\"Only a present non-null leaf value counts\",\"The presence of the field counts even when null or marked absent\",\"Each answer model defines its own presence predicate\"],\"default_guess\":\"Only a present, non-null personal-data leaf counts; empty containers and explicit absence markers do not.\"},{\"subject\":\"50_public_apis_5_surfaces.md:`public_op:operations.perform_owner_operation`\",\"kind\":\"upload_contract_contradiction\",\"text\":\"its unread byte\\nstream, which `owner_interface` hands on without reading and this operation\\npasses, unread, to `migration_import.read_import_mapping`\",\"question\":\"Is this input the original request body or the already-framed file-part stream, and is its declared length the HTTP body length or the derived file-part length?\",\"options\":[\"Receive the `MultipartFileBody` and derived file-part length from `upload_framing`\",\"Receive the original HTTP body and let `migration_import` parse multipart framing\",\"Receive both original and framed streams\"],\"default_guess\":\"Receive only the `MultipartFileBody` and its derived file-part length.\"},{\"subject\":\"50_public_apis_5_surfaces.md:`public_op:operations.perform_owner_operation`\",\"kind\":\"backup_failure_result\",\"text\":\"the newest backup's instant from\\n`backups.newest_backup_instant` in the backup location\\n`configuration.give_backup_location` gives\",\"question\":\"What owner-operation answer or refusal is produced when the backup location cannot be listed, given that `newest_backup_instant` distinguishes that condition from “none” but declares no error?\",\"options\":[\"Render an explicit backup-status-unavailable answer\",\"Return `internal_error`/`transaction_failed`\",\"Return another refusal code and kind\",\"Silently show no backup\"],\"default_guess\":\"Return an explicit unavailable result distinct from both a refusal and “no backup”.\",\"witness\":{\"initial\":\"Registry started successfully, but the backup directory later becomes unreadable.\",\"events\":[\"The owner opens the page that shows the newest backup.\",\"`newest_backup_instant` cannot list the location.\"],\"outcomes\":[\"The page renders an explicit unavailable state.\",\"The operation converts the condition to `internal_error` or incorrectly renders that no backup exists.\"],\"observer\":\"The owner sees materially different backup health information.\"}},{\"subject\":\"50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`\",\"kind\":\"wire_request\",\"text\":\"the inputs in the wire format States 5 and 6\\ndeclare\",\"question\":\"What are the HTTP method and route for each operation, the token's header or other location, the request media type and character encoding, the JSON envelope and field names, and the distinction among absent, null and empty values?\",\"options\":[\"One route per operation with operation-specific request bodies\",\"One dispatch route carrying an operation name and input object\",\"A fixed route table derived from the operation contracts\"],\"default_guess\":\"Use one fixed route per operation, bearer token in an authorization header, UTF-8 JSON bodies and contract-defined absent/null semantics.\"},{\"subject\":\"50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`\",\"kind\":\"wire_refusal\",\"text\":\"the refusal's code, stage\\nand kinds\",\"question\":\"How are multiple failure entries and their required paths represented on the wire, and are `kinds` strings or objects containing kind and path?\",\"options\":[\"`kinds` is an ordered array of objects with `kind` and `path`\",\"Return separate ordered `kinds` and `paths` arrays\",\"Expose only kind strings and discard paths\"],\"default_guess\":\"Use an ordered array of failure objects, each containing its kind and structured path.\",\"witness\":{\"initial\":\"A request has two invalid values of the same kind at different input paths.\",\"events\":[\"The record module returns both ordered failures as required by the conventions.\",\"`service_api` serializes the refusal.\"],\"outcomes\":[\"The response preserves two entries and their distinct paths.\",\"The response contains only the repeated kind strings, so the client cannot identify the failing fields.\"],\"observer\":\"The service client sees different actionable error detail.\"}},{\"subject\":\"50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`\",\"kind\":\"wire_serialization\",\"text\":\"Instants are ISO 8601 text in UTC\\nending in `Z`, dates ISO 8601 dates, decimals JSON strings in the stored form\\n(`\\\"45.00\\\"`).\",\"question\":\"What canonical instant precision and fractional-second spelling are required, and what normalization defines a decimal's “stored form”?\",\"options\":[\"Preserve the exact stored decimal scale and emit fixed microsecond UTC instants\",\"Canonicalize decimals numerically and omit zero fractional seconds on instants\",\"Define canonical formatting separately for each field\"],\"default_guess\":\"Preserve decimal scale exactly and emit UTC instants with six fractional digits followed by `Z`.\"},{\"subject\":\"50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`\",\"kind\":\"header_parsing\",\"text\":\"the agent session in the header the imported\\n`SERVICE_AGENT_SESSION_HEADER` constant names\",\"question\":\"What happens when the header is missing, empty, repeated, comma-combined, contains invalid bytes, or is supplied to a non-Kernel operation?\",\"options\":[\"Treat missing or malformed as the stage-(2) agent refusal; reject duplicates; ignore it for non-agent calls\",\"Treat malformed or duplicate headers as a stage-(4) wire error\",\"Let the HTTP library choose one value and pass it through\"],\"default_guess\":\"Reject duplicate or syntactically invalid values as a wire error, treat a missing Kernel value as `agent_call_refused`, and ignore the header for operations without agent authority.\"},{\"subject\":\"50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`\",\"kind\":\"cookie_scope\",\"text\":\"not readable by scripts, only to\\nRegistry's origin, and always HTTPS-only\",\"question\":\"What cookie name, Path, Domain/host-only setting, SameSite policy and persistence attributes implement “only to Registry's origin,” especially across all owner-interface routes?\",\"options\":[\"A host-only session cookie with `Path=/`, `Secure`, `HttpOnly` and fixed SameSite\",\"Use browser defaults except `Secure` and `HttpOnly`\",\"Use a route-local default path\"],\"default_guess\":\"Use a fixed host-only session cookie with `Path=/`, `Secure`, `HttpOnly`, no persistent expiry and `SameSite=Lax`.\"},{\"subject\":\"50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`\",\"kind\":\"framing_failure_response\",\"text\":\"A\\nhead of another form gives no CSRF value, and the upload is refused at stage\\n(1) before any byte of the file is read.\",\"question\":\"Are every overlong, incomplete and syntactically malformed multipart head intentionally collapsed into `csrf_refused`, including failures that prevent determining whether a file part exists?\",\"options\":[\"Collapse every invalid head to missing CSRF at stage (1)\",\"Distinguish transport/unreadable-body failures from missing CSRF\",\"Return a stage-(4) malformed-wire refusal after authentication\"],\"default_guess\":\"Collapse structurally complete but wrong forms to `csrf_refused`, while reporting premature stream failure as an unreadable-body error.\"}]}",
+ "set_aside": []
+}
