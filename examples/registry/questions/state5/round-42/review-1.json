@@ -1,0 +1,157 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:owner_sessions.admit_owner_request",
+   "kind": "contradiction",
+   "text": "A sign-out's admission marks the session signed out at once.",
+   "question": "Does sign-out mark the session signed out during admission under the session-table lock, or only when its step reaches its turn under the import lock and session lock, as A13 and flow:owner_sign_in_and_session specify?",
+   "options": [
+    "Mark it during admission, immediately refusing later arrivals while previously admitted requests still complete.",
+    "Mark it only in the sign-out step's ordered turn, allowing arrivals before that turn to be admitted."
+   ],
+   "default_guess": "Mark it during admission, and retain enough session state for every previously admitted request to complete.",
+   "witness": {
+    "initial": "Owner session S is valid; change A has been admitted but has not finished, and sign-out B arrives.",
+    "events": [
+     "B passes admission but waits for the locks needed by its step.",
+     "Request C carrying S arrives before B's step obtains those locks."
+    ],
+    "outcomes": [
+     "Because B marked S signed out at admission, C is refused.",
+     "Because sign-out applies only in its ordered session-lock turn, C is admitted before B applies and must complete."
+    ],
+    "observer": "The owner making request C"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:owner_sessions.admit_owner_request",
+   "kind": "session-lock ordering gap",
+   "text": "After the check, a change that touches no uploaded file takes its place on the session's lock at once;",
+   "question": "Is the place on the session lock reserved while the session-table lock is still held, making admission order the queue order, or only after releasing the table lock, allowing a later admission to reserve the earlier place?",
+   "options": [
+    "Reserve the session-lock place inside the session-table-lock hold, then release the table lock before waiting.",
+    "Release the session-table lock first and reserve the session-lock place afterward."
+   ],
+   "default_guess": "Reserve the place while still holding the session-table lock and wait only after releasing it.",
+   "witness": {
+    "initial": "Two changes A and B target the same valid owner session and neither touches an uploaded file.",
+    "events": [
+     "A completes its session-table-lock admission first.",
+     "A is descheduled immediately after releasing that lock.",
+     "B completes admission and attempts to reserve the session-lock place."
+    ],
+    "outcomes": [
+     "A reserved its place during admission, so A's step applies before B's.",
+     "A had not reserved its place, so B may apply before A."
+    ],
+    "observer": "The owner reading the session state or durable records changed by A and B"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:owner_sessions.admit_owner_request",
+   "kind": "import-lock ordering gap",
+   "text": "A request asks for the import lock when it is admitted.",
+   "question": "At what exact point is the import-lock request durably enqueued relative to the session-table-lock hold, so that concurrent admissions have one deterministic FIFO order?",
+   "options": [
+    "Enqueue the import-lock request before releasing the session-table lock.",
+    "Release the session-table lock and enqueue afterward.",
+    "Give the import lock its own independent linearization order unrelated to session admission order."
+   ],
+   "default_guess": "Enqueue the import-lock request before releasing the session-table lock, then wait after release.",
+   "witness": {
+    "initial": "No migration closure exists; two owner sessions hold different valid import confirmations.",
+    "events": [
+     "Confirmation A completes its session-table admission first.",
+     "A is descheduled before beginning to wait for the import lock.",
+     "Confirmation B completes admission and reaches the import lock."
+    ],
+    "outcomes": [
+     "A was already enqueued and imports its selected records; B then finds the closure and is refused.",
+     "B enqueues first and imports its selected records; A then finds the closure and is refused."
+    ],
+    "observer": "The owner and every reader of the imported production records"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:owner_sessions.admit_owner_request",
+   "kind": "lock-authority gap",
+   "text": "this operation reads the clock, looks the session up, checks it and restarts its 30 minutes, then releases the table lock before it waits for the import lock or a place on the session's lock;",
+   "question": "Which lock authoritatively protects session existence, signed-out state and the monotonic readings, and how must end_expired_sessions, sign-in and sign-out coordinate with the new session-table lock and the per-session locks?",
+   "options": [
+    "The session-table lock protects lookup, validity fields and table membership; every operation that reads or removes them must also take it in a declared order.",
+    "The per-session lock protects validity fields after lookup, requiring admission to take it too.",
+    "The table lock protects only lookup while validity fields use another synchronization mechanism."
+   ],
+   "default_guess": "Make the session-table lock authoritative for table membership and validity fields, and declare its acquisition order for every operation that ends or creates a session.",
+   "witness": {
+    "initial": "Session S is just short of its idle limit; the expiry pass has obtained the import lock and S's lock but has not yet decided, while an arrival obtains the session-table lock before the limit.",
+    "events": [
+     "The arrival reads the clock and restarts S's idle time under the session-table lock.",
+     "The expiry pass reads S's validity state under the locks specified for the pass."
+    ],
+    "outcomes": [
+     "The expiry pass observes the restarted time and leaves S alive.",
+     "The expiry pass observes the old time and removes S although the arrival passed its check."
+    ],
+    "observer": "The owner whose admitted request uses S"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:owner_sessions.admit_owner_request",
+   "kind": "request-classification ambiguity",
+   "text": "whether it reads or changes an uploaded file — an upload, the mapping, the import's confirmation step, a confirmation, a sign-out, change or not;",
+   "question": "Does “a confirmation” mean only confirmation of an import, or every confirmed owner action such as archiving a project and erasing audit entries?",
+   "options": [
+    "Only import confirmation touches an uploaded file and takes the import lock.",
+    "Every confirmation request takes the import lock.",
+    "Each confirmation action declares separately whether it can read or change an uploaded file."
+   ],
+   "default_guess": "Only the import confirmation takes the import lock; other confirmed actions do not touch uploaded files.",
+   "witness": {
+    "initial": "One owner session is processing a long import upload while another submits a valid confirmation to archive a project.",
+    "events": [
+     "The archive submission is admitted while the upload holds the import lock."
+    ],
+    "outcomes": [
+     "If every confirmation is classified as touching an uploaded file, the archive waits for the upload.",
+     "If only import confirmation is so classified, the archive takes only its session lock and proceeds concurrently."
+    ],
+    "observer": "The owner awaiting the archive result"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:owner_sessions.admit_owner_request",
+   "kind": "input-invariant gap",
+   "text": "whether it reads or changes an uploaded file — an upload, the mapping, the import's confirmation step, a confirmation, a sign-out, change or not; whether it is a sign-out;",
+   "question": "Are these booleans trusted classifications supplied by module:operations, derived by owner_sessions from an operation identity, or validated against allowed combinations; and what happens for inconsistent inputs such as sign-out false for change or sign-out false for uploaded-file access?",
+   "options": [
+    "Trust the caller's booleans without validation.",
+    "Derive every classification from a closed operation identifier.",
+    "Validate the supplied combination and refuse or fail internally when it is inconsistent."
+   ],
+   "default_guess": "Derive the classifications from a closed operation identifier rather than accepting independently variable booleans.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:owner_sessions.admit_owner_request",
+   "kind": "resource-scope ambiguity",
+   "text": "nothing else is held for the request between its headers and that hold.",
+   "question": "What does “nothing else” cover: only Registry locks, or also parsed request state, upload buffers, streams, store transactions and other resources; and which exact header-processing boundary starts this interval for ordinary and multipart requests?",
+   "options": [
+    "It means no Registry lock is held; request parsing state and bounded buffers may exist.",
+    "It forbids holding any resource or buffered request data.",
+    "It refers only to the import lock and session lock named in the surrounding passage."
+   ],
+   "default_guess": "Interpret it as forbidding other Registry locks and store transactions, while allowing the bounded request-head data and transport resources needed to reach admission.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:owner_sessions.admit_owner_request\",\"kind\":\"contradiction\",\"text\":\"A sign-out's admission marks the session signed out at once.\",\"question\":\"Does sign-out mark the session signed out during admission under the session-table lock, or only when its step reaches its turn under the import lock and session lock, as A13 and flow:owner_sign_in_and_session specify?\",\"options\":[\"Mark it during admission, immediately refusing later arrivals while previously admitted requests still complete.\",\"Mark it only in the sign-out step's ordered turn, allowing arrivals before that turn to be admitted.\"],\"default_guess\":\"Mark it during admission, and retain enough session state for every previously admitted request to complete.\",\"witness\":{\"initial\":\"Owner session S is valid; change A has been admitted but has not finished, and sign-out B arrives.\",\"events\":[\"B passes admission but waits for the locks needed by its step.\",\"Request C carrying S arrives before B's step obtains those locks.\"],\"outcomes\":[\"Because B marked S signed out at admission, C is refused.\",\"Because sign-out applies only in its ordered session-lock turn, C is admitted before B applies and must complete.\"],\"observer\":\"The owner making request C\"}},{\"subject\":\"public_op:owner_sessions.admit_owner_request\",\"kind\":\"session-lock ordering gap\",\"text\":\"After the check, a change that touches no uploaded file takes its place on the session's lock at once;\",\"question\":\"Is the place on the session lock reserved while the session-table lock is still held, making admission order the queue order, or only after releasing the table lock, allowing a later admission to reserve the earlier place?\",\"options\":[\"Reserve the session-lock place inside the session-table-lock hold, then release the table lock before waiting.\",\"Release the session-table lock first and reserve the session-lock place afterward.\"],\"default_guess\":\"Reserve the place while still holding the session-table lock and wait only after releasing it.\",\"witness\":{\"initial\":\"Two changes A and B target the same valid owner session and neither touches an uploaded file.\",\"events\":[\"A completes its session-table-lock admission first.\",\"A is descheduled immediately after releasing that lock.\",\"B completes admission and attempts to reserve the session-lock place.\"],\"outcomes\":[\"A reserved its place during admission, so A's step applies before B's.\",\"A had not reserved its place, so B may apply before A.\"],\"observer\":\"The owner reading the session state or durable records changed by A and B\"}},{\"subject\":\"public_op:owner_sessions.admit_owner_request\",\"kind\":\"import-lock ordering gap\",\"text\":\"A request asks for the import lock when it is admitted.\",\"question\":\"At what exact point is the import-lock request durably enqueued relative to the session-table-lock hold, so that concurrent admissions have one deterministic FIFO order?\",\"options\":[\"Enqueue the import-lock request before releasing the session-table lock.\",\"Release the session-table lock and enqueue afterward.\",\"Give the import lock its own independent linearization order unrelated to session admission order.\"],\"default_guess\":\"Enqueue the import-lock request before releasing the session-table lock, then wait after release.\",\"witness\":{\"initial\":\"No migration closure exists; two owner sessions hold different valid import confirmations.\",\"events\":[\"Confirmation A completes its session-table admission first.\",\"A is descheduled before beginning to wait for the import lock.\",\"Confirmation B completes admission and reaches the import lock.\"],\"outcomes\":[\"A was already enqueued and imports its selected records; B then finds the closure and is refused.\",\"B enqueues first and imports its selected records; A then finds the closure and is refused.\"],\"observer\":\"The owner and every reader of the imported production records\"}},{\"subject\":\"public_op:owner_sessions.admit_owner_request\",\"kind\":\"lock-authority gap\",\"text\":\"this operation reads the clock, looks the session up, checks it and restarts its 30 minutes, then releases the table lock before it waits for the import lock or a place on the session's lock;\",\"question\":\"Which lock authoritatively protects session existence, signed-out state and the monotonic readings, and how must end_expired_sessions, sign-in and sign-out coordinate with the new session-table lock and the per-session locks?\",\"options\":[\"The session-table lock protects lookup, validity fields and table membership; every operation that reads or removes them must also take it in a declared order.\",\"The per-session lock protects validity fields after lookup, requiring admission to take it too.\",\"The table lock protects only lookup while validity fields use another synchronization mechanism.\"],\"default_guess\":\"Make the session-table lock authoritative for table membership and validity fields, and declare its acquisition order for every operation that ends or creates a session.\",\"witness\":{\"initial\":\"Session S is just short of its idle limit; the expiry pass has obtained the import lock and S's lock but has not yet decided, while an arrival obtains the session-table lock before the limit.\",\"events\":[\"The arrival reads the clock and restarts S's idle time under the session-table lock.\",\"The expiry pass reads S's validity state under the locks specified for the pass.\"],\"outcomes\":[\"The expiry pass observes the restarted time and leaves S alive.\",\"The expiry pass observes the old time and removes S although the arrival passed its check.\"],\"observer\":\"The owner whose admitted request uses S\"}},{\"subject\":\"public_op:owner_sessions.admit_owner_request\",\"kind\":\"request-classification ambiguity\",\"text\":\"whether it reads or changes an uploaded file — an upload, the mapping, the import's confirmation step, a confirmation, a sign-out, change or not;\",\"question\":\"Does “a confirmation” mean only confirmation of an import, or every confirmed owner action such as archiving a project and erasing audit entries?\",\"options\":[\"Only import confirmation touches an uploaded file and takes the import lock.\",\"Every confirmation request takes the import lock.\",\"Each confirmation action declares separately whether it can read or change an uploaded file.\"],\"default_guess\":\"Only the import confirmation takes the import lock; other confirmed actions do not touch uploaded files.\",\"witness\":{\"initial\":\"One owner session is processing a long import upload while another submits a valid confirmation to archive a project.\",\"events\":[\"The archive submission is admitted while the upload holds the import lock.\"],\"outcomes\":[\"If every confirmation is classified as touching an uploaded file, the archive waits for the upload.\",\"If only import confirmation is so classified, the archive takes only its session lock and proceeds concurrently.\"],\"observer\":\"The owner awaiting the archive result\"}},{\"subject\":\"public_op:owner_sessions.admit_owner_request\",\"kind\":\"input-invariant gap\",\"text\":\"whether it reads or changes an uploaded file — an upload, the mapping, the import's confirmation step, a confirmation, a sign-out, change or not; whether it is a sign-out;\",\"question\":\"Are these booleans trusted classifications supplied by module:operations, derived by owner_sessions from an operation identity, or validated against allowed combinations; and what happens for inconsistent inputs such as sign-out false for change or sign-out false for uploaded-file access?\",\"options\":[\"Trust the caller's booleans without validation.\",\"Derive every classification from a closed operation identifier.\",\"Validate the supplied combination and refuse or fail internally when it is inconsistent.\"],\"default_guess\":\"Derive the classifications from a closed operation identifier rather than accepting independently variable booleans.\"},{\"subject\":\"public_op:owner_sessions.admit_owner_request\",\"kind\":\"resource-scope ambiguity\",\"text\":\"nothing else is held for the request between its headers and that hold.\",\"question\":\"What does “nothing else” cover: only Registry locks, or also parsed request state, upload buffers, streams, store transactions and other resources; and which exact header-processing boundary starts this interval for ordinary and multipart requests?\",\"options\":[\"It means no Registry lock is held; request parsing state and bounded buffers may exist.\",\"It forbids holding any resource or buffered request data.\",\"It refers only to the import lock and session lock named in the surrounding passage.\"],\"default_guess\":\"Interpret it as forbidding other Registry locks and store transactions, while allowing the bounded request-head data and transport resources needed to reach admission.\"}]}",
+ "set_aside": []
+}

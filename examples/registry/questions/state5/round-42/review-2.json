@@ -1,0 +1,198 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:owner_sessions.admit_owner_request input classifications",
+   "kind": "ambiguous_inputs",
+   "text": "whether it reads or changes an uploaded file — an upload, the mapping, the import's confirmation step, a confirmation, a sign-out, change or not; whether it is a sign-out",
+   "question": "Are these classifications derived from the operation being performed, or trusted independent inputs; which confirmations touch an uploaded file; and must sign-out imply both change and uploaded-file access?",
+   "options": [
+    "Derive all classifications from a closed request-operation kind and reject an impossible combination",
+    "Trust the caller-supplied booleans exactly",
+    "State explicit invariants among the booleans and require callers to satisfy them"
+   ],
+   "default_guess": "Use a closed operation kind and derive the three properties; sign-out is a CSRF-protected change that touches the uploaded file, while only an import confirmation touches it.",
+   "witness": {
+    "initial": "A valid owner session has an uploaded import file and a pending ordinary project-archive confirmation.",
+    "events": [
+     "module:operations calls admit_owner_request for the archive confirmation with change=true and reports that a confirmation touches an uploaded file.",
+     "In another implementation, module:operations classifies only import confirmations as touching an uploaded file."
+    ],
+    "outcomes": [
+     "The archive submission waits for and holds the instance import lock.",
+     "The archive submission uses only the session lock and may run concurrently with another session's import work."
+    ],
+    "observer": "Owners using the two sessions see different blocking and completion order."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:owner_sessions.admit_owner_request import-lock queue position",
+   "kind": "undefined_linearization",
+   "text": "then releases the table lock before it waits for the import lock or a place on the session's lock; nothing else is held for the request between its headers and that hold.",
+   "question": "Does a file-touching request register its request for the FIFO import lock atomically inside the session-table hold, or only after releasing that lock when it actually begins waiting?",
+   "options": [
+    "Enqueue the import-lock request while holding the session-table lock, then release the table lock before waiting",
+    "Release the session-table lock and enqueue afterward",
+    "Assign an admission sequence under the table lock and order the import lock by that sequence"
+   ],
+   "default_guess": "Assign and enqueue the import-lock request during the admission hold, but release the table lock before blocking.",
+   "witness": {
+    "initial": "One session has uploaded file X; two concurrent accepted uploads A and B will replace it with files A and B.",
+    "events": [
+     "A completes its session-table hold first and is descheduled immediately after release.",
+     "B completes its hold and begins waiting for the import lock before A resumes.",
+     "Both uploads eventually run."
+    ],
+    "outcomes": [
+     "If asking occurs in the admission hold, A runs before B and file B remains.",
+     "If asking occurs only when the wait begins, B runs before A and file A remains."
+    ],
+    "observer": "The owner sees a different file and mapping in the session."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "OwnerSession idle-time synchronization",
+   "kind": "contradictory_locking",
+   "text": "this operation reads the clock, looks the session up, checks it and restarts its 30 minutes, then releases the table lock before it waits for the import lock or a place on the session's lock",
+   "question": "How is the last-request reading synchronized with the expiry pass, which the earlier rule says decides expiry while holding the import lock and the session lock rather than the session-table lock?",
+   "options": [
+    "The expiry pass also holds the session-table lock while reading and ending each session",
+    "Admission also takes the session lock while checking and updating last_request",
+    "last_request is an explicitly atomic value with a specified compare/update protocol"
+   ],
+   "default_guess": "Make admission and expiry share the session-table lock for lookup, validity decision, last_request update and removal, while never holding it during waits for other locks.",
+   "witness": {
+    "initial": "A session is just short of 30 minutes idle when an owner request arrives, and the periodic expiry pass is running concurrently.",
+    "events": [
+     "The request holds the session-table lock, reads a still-valid monotonic time and writes a new last-request reading.",
+     "The expiry pass holds the import lock and the session lock and reads or has already read the old last-request value."
+    ],
+    "outcomes": [
+     "Using the refreshed value, the pass keeps the session and the admitted request is served.",
+     "Using the old value under the disjoint locks, the pass ends the session and drops its pending confirmation and upload."
+    ],
+    "observer": "The owner sees either a continuing session or a sign-in response and lost session state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "OwnerSession lifetime after admission",
+   "kind": "unspecified_lifetime",
+   "text": "A request that passed completes even if a limit or a sign-out comes while it runs or waits",
+   "question": "What pins the admitted session and the particular pending confirmation or uploaded file it needs after the session-table lock is released, so that expiry or sign-out cannot remove that state before the step uses it?",
+   "options": [
+    "Admission creates a request lease that defers destruction of required session state until the step finishes",
+    "Removal takes the session out of the table but retains its state for already admitted requests",
+    "Every admitted state-changing request is guaranteed an earlier queue position than any later expiry or sign-out"
+   ],
+   "default_guess": "Keep a request lease and retain the session object and the state visible at its ordered turn until every admitted request has finished.",
+   "witness": {
+    "initial": "A valid session has an uploaded import file and an import confirmation ready to submit.",
+    "events": [
+     "The confirmation passes the arrival check and releases the session-table lock before obtaining the import and session locks.",
+     "The session reaches its idle limit and the expiry pass obtains its locks.",
+     "The confirmation later reaches its step."
+    ],
+    "outcomes": [
+     "If admission pins the state, the confirmation can use the uploaded file and complete.",
+     "If expiry destroys the state immediately, the file is gone and the already admitted confirmation is refused or fails."
+    ],
+    "observer": "The owner sees either a completed import or a refusal despite admission having passed."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "sign-out ordering against previously admitted changes",
+   "kind": "contradiction",
+   "text": "A sign-out's admission marks the session signed out at once.",
+   "question": "How must sign-out be queued so that marking it at admission and ordering by subsequently taken lock places still satisfies the earlier requirement that every session change admitted before the sign-out gets its turn and completes first?",
+   "options": [
+    "During sign-out admission, place a barrier after every request already admitted for that session",
+    "Reserve every request's session-lock place atomically during its admission",
+    "Replace the earlier admission-order guarantee with session-lock queue order"
+   ],
+   "default_guess": "Reserve a per-session admission sequence during the table hold and require sign-out to wait for every earlier admitted change before ending the session.",
+   "witness": {
+    "initial": "A valid session has no import activity; change C does not touch an uploaded file.",
+    "events": [
+     "C passes admission first but is descheduled before taking its place on the session lock.",
+     "A sign-out arrives later, is marked at admission, obtains the import lock and takes the first available session-lock place.",
+     "C resumes afterward."
+    ],
+    "outcomes": [
+     "The earlier A13 and flow text require C to run before sign-out and commit its store change.",
+     "The stated place-taking order permits sign-out to end the session first, leaving C without its session state or forcing it to run after sign-out."
+    ],
+    "observer": "The owner sees whether C's change commits and which response it receives."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "session-table lock protocol",
+   "kind": "incomplete_lock_contract",
+   "text": "The arrival is fixed in one hold of the session-table lock",
+   "question": "Which operations take the session-table lock, what state it protects, and what is its global acquisition order relative to the import lock and each session lock for sign-in, sign-out, expiry, restart cleanup and request admission?",
+   "options": [
+    "All session-table lookup, insertion, signed-out marking and removal require this lock, with a declared order that never holds it while acquiring import or session locks",
+    "The table lock protects only lookup and last_request while session removal is protected by the session lock",
+    "Use immutable table entries and atomic replacement so removals need no shared lock"
+   ],
+   "default_guess": "Use the table lock for every table membership and admission-state decision, declare table-lock acquisition before queue registration but release it before waiting, and prohibit acquiring it while holding import or session locks.",
+   "witness": {
+    "initial": "A request is looking up session S while the expiry pass is ending S and a sign-in is adding another session.",
+    "events": [
+     "The three actions mutate or inspect the session table concurrently.",
+     "Implementer one protects every table operation with the named lock; implementer two follows the earlier expiry text and removes S under only the import and session locks."
+    ],
+    "outcomes": [
+     "The lookup has one serialized result and cannot retain a removed table entry.",
+     "The lookup may admit S concurrently with its removal or observe partially coordinated session state."
+    ],
+    "observer": "The owner sees a request either served or refused at the same apparent arrival."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "request step execution contract",
+   "kind": "incomplete_callback_contract",
+   "text": "the request's step, which receives the admitted session.",
+   "question": "Is the step synchronous or asynchronous, what may it return or raise, what happens on cancellation or client disconnect, and are its failures propagated as its own refusal or converted by admit_owner_request?",
+   "options": [
+    "Run the step to completion after admission, propagate its typed answer or error, and release all locks in a finally path",
+    "Cancel the step when the caller disconnects and release its queue place and locks",
+    "Allow each caller to select cancellation behavior"
+   ],
+   "default_guess": "Run an admitted state-changing step to its transactional completion despite client disconnect, propagate its declared result, and release every acquired lock and queue reservation in a finally path.",
+   "witness": {
+    "initial": "A change has passed admission and is waiting for the session lock when its HTTP client disconnects.",
+    "events": [
+     "The disconnect cancels the transport task before the request obtains the lock.",
+     "The queued request reaches the front."
+    ],
+    "outcomes": [
+     "One implementation removes the queued request and performs no change.",
+     "Another implementation runs the admitted step and commits the change, although no response can be delivered."
+    ],
+    "observer": "The owner sees different durable state on the next read."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:owner_sessions.admit_owner_request error surface",
+   "kind": "underspecified_errors",
+   "text": "The step's answer, or the refusal.",
+   "question": "Which refusals and failures produced by the supplied step are part of this operation's output, and how are exceptions, transaction failures and cancellation distinguished from `no_owner_session` and `csrf_refused`?",
+   "options": [
+    "The operation declares only its two admission errors and transparently returns every typed result or error of the step",
+    "The operation maps every step failure to one generic refusal",
+    "The callback contract is parameterized by an explicit result/error union"
+   ],
+   "default_guess": "Declare a generic typed result parameter and propagate the step's result or domain error unchanged; reserve `no_owner_session` and `csrf_refused` for admission failures.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:owner_sessions.admit_owner_request input classifications\",\"kind\":\"ambiguous_inputs\",\"text\":\"whether it reads or changes an uploaded file — an upload, the mapping, the import's confirmation step, a confirmation, a sign-out, change or not; whether it is a sign-out\",\"question\":\"Are these classifications derived from the operation being performed, or trusted independent inputs; which confirmations touch an uploaded file; and must sign-out imply both change and uploaded-file access?\",\"options\":[\"Derive all classifications from a closed request-operation kind and reject an impossible combination\",\"Trust the caller-supplied booleans exactly\",\"State explicit invariants among the booleans and require callers to satisfy them\"],\"default_guess\":\"Use a closed operation kind and derive the three properties; sign-out is a CSRF-protected change that touches the uploaded file, while only an import confirmation touches it.\",\"witness\":{\"initial\":\"A valid owner session has an uploaded import file and a pending ordinary project-archive confirmation.\",\"events\":[\"module:operations calls admit_owner_request for the archive confirmation with change=true and reports that a confirmation touches an uploaded file.\",\"In another implementation, module:operations classifies only import confirmations as touching an uploaded file.\"],\"outcomes\":[\"The archive submission waits for and holds the instance import lock.\",\"The archive submission uses only the session lock and may run concurrently with another session's import work.\"],\"observer\":\"Owners using the two sessions see different blocking and completion order.\"}},{\"subject\":\"public_op:owner_sessions.admit_owner_request import-lock queue position\",\"kind\":\"undefined_linearization\",\"text\":\"then releases the table lock before it waits for the import lock or a place on the session's lock; nothing else is held for the request between its headers and that hold.\",\"question\":\"Does a file-touching request register its request for the FIFO import lock atomically inside the session-table hold, or only after releasing that lock when it actually begins waiting?\",\"options\":[\"Enqueue the import-lock request while holding the session-table lock, then release the table lock before waiting\",\"Release the session-table lock and enqueue afterward\",\"Assign an admission sequence under the table lock and order the import lock by that sequence\"],\"default_guess\":\"Assign and enqueue the import-lock request during the admission hold, but release the table lock before blocking.\",\"witness\":{\"initial\":\"One session has uploaded file X; two concurrent accepted uploads A and B will replace it with files A and B.\",\"events\":[\"A completes its session-table hold first and is descheduled immediately after release.\",\"B completes its hold and begins waiting for the import lock before A resumes.\",\"Both uploads eventually run.\"],\"outcomes\":[\"If asking occurs in the admission hold, A runs before B and file B remains.\",\"If asking occurs only when the wait begins, B runs before A and file A remains.\"],\"observer\":\"The owner sees a different file and mapping in the session.\"}},{\"subject\":\"OwnerSession idle-time synchronization\",\"kind\":\"contradictory_locking\",\"text\":\"this operation reads the clock, looks the session up, checks it and restarts its 30 minutes, then releases the table lock before it waits for the import lock or a place on the session's lock\",\"question\":\"How is the last-request reading synchronized with the expiry pass, which the earlier rule says decides expiry while holding the import lock and the session lock rather than the session-table lock?\",\"options\":[\"The expiry pass also holds the session-table lock while reading and ending each session\",\"Admission also takes the session lock while checking and updating last_request\",\"last_request is an explicitly atomic value with a specified compare/update protocol\"],\"default_guess\":\"Make admission and expiry share the session-table lock for lookup, validity decision, last_request update and removal, while never holding it during waits for other locks.\",\"witness\":{\"initial\":\"A session is just short of 30 minutes idle when an owner request arrives, and the periodic expiry pass is running concurrently.\",\"events\":[\"The request holds the session-table lock, reads a still-valid monotonic time and writes a new last-request reading.\",\"The expiry pass holds the import lock and the session lock and reads or has already read the old last-request value.\"],\"outcomes\":[\"Using the refreshed value, the pass keeps the session and the admitted request is served.\",\"Using the old value under the disjoint locks, the pass ends the session and drops its pending confirmation and upload.\"],\"observer\":\"The owner sees either a continuing session or a sign-in response and lost session state.\"}},{\"subject\":\"OwnerSession lifetime after admission\",\"kind\":\"unspecified_lifetime\",\"text\":\"A request that passed completes even if a limit or a sign-out comes while it runs or waits\",\"question\":\"What pins the admitted session and the particular pending confirmation or uploaded file it needs after the session-table lock is released, so that expiry or sign-out cannot remove that state before the step uses it?\",\"options\":[\"Admission creates a request lease that defers destruction of required session state until the step finishes\",\"Removal takes the session out of the table but retains its state for already admitted requests\",\"Every admitted state-changing request is guaranteed an earlier queue position than any later expiry or sign-out\"],\"default_guess\":\"Keep a request lease and retain the session object and the state visible at its ordered turn until every admitted request has finished.\",\"witness\":{\"initial\":\"A valid session has an uploaded import file and an import confirmation ready to submit.\",\"events\":[\"The confirmation passes the arrival check and releases the session-table lock before obtaining the import and session locks.\",\"The session reaches its idle limit and the expiry pass obtains its locks.\",\"The confirmation later reaches its step.\"],\"outcomes\":[\"If admission pins the state, the confirmation can use the uploaded file and complete.\",\"If expiry destroys the state immediately, the file is gone and the already admitted confirmation is refused or fails.\"],\"observer\":\"The owner sees either a completed import or a refusal despite admission having passed.\"}},{\"subject\":\"sign-out ordering against previously admitted changes\",\"kind\":\"contradiction\",\"text\":\"A sign-out's admission marks the session signed out at once.\",\"question\":\"How must sign-out be queued so that marking it at admission and ordering by subsequently taken lock places still satisfies the earlier requirement that every session change admitted before the sign-out gets its turn and completes first?\",\"options\":[\"During sign-out admission, place a barrier after every request already admitted for that session\",\"Reserve every request's session-lock place atomically during its admission\",\"Replace the earlier admission-order guarantee with session-lock queue order\"],\"default_guess\":\"Reserve a per-session admission sequence during the table hold and require sign-out to wait for every earlier admitted change before ending the session.\",\"witness\":{\"initial\":\"A valid session has no import activity; change C does not touch an uploaded file.\",\"events\":[\"C passes admission first but is descheduled before taking its place on the session lock.\",\"A sign-out arrives later, is marked at admission, obtains the import lock and takes the first available session-lock place.\",\"C resumes afterward.\"],\"outcomes\":[\"The earlier A13 and flow text require C to run before sign-out and commit its store change.\",\"The stated place-taking order permits sign-out to end the session first, leaving C without its session state or forcing it to run after sign-out.\"],\"observer\":\"The owner sees whether C's change commits and which response it receives.\"}},{\"subject\":\"session-table lock protocol\",\"kind\":\"incomplete_lock_contract\",\"text\":\"The arrival is fixed in one hold of the session-table lock\",\"question\":\"Which operations take the session-table lock, what state it protects, and what is its global acquisition order relative to the import lock and each session lock for sign-in, sign-out, expiry, restart cleanup and request admission?\",\"options\":[\"All session-table lookup, insertion, signed-out marking and removal require this lock, with a declared order that never holds it while acquiring import or session locks\",\"The table lock protects only lookup and last_request while session removal is protected by the session lock\",\"Use immutable table entries and atomic replacement so removals need no shared lock\"],\"default_guess\":\"Use the table lock for every table membership and admission-state decision, declare table-lock acquisition before queue registration but release it before waiting, and prohibit acquiring it while holding import or session locks.\",\"witness\":{\"initial\":\"A request is looking up session S while the expiry pass is ending S and a sign-in is adding another session.\",\"events\":[\"The three actions mutate or inspect the session table concurrently.\",\"Implementer one protects every table operation with the named lock; implementer two follows the earlier expiry text and removes S under only the import and session locks.\"],\"outcomes\":[\"The lookup has one serialized result and cannot retain a removed table entry.\",\"The lookup may admit S concurrently with its removal or observe partially coordinated session state.\"],\"observer\":\"The owner sees a request either served or refused at the same apparent arrival.\"}},{\"subject\":\"request step execution contract\",\"kind\":\"incomplete_callback_contract\",\"text\":\"the request's step, which receives the admitted session.\",\"question\":\"Is the step synchronous or asynchronous, what may it return or raise, what happens on cancellation or client disconnect, and are its failures propagated as its own refusal or converted by admit_owner_request?\",\"options\":[\"Run the step to completion after admission, propagate its typed answer or error, and release all locks in a finally path\",\"Cancel the step when the caller disconnects and release its queue place and locks\",\"Allow each caller to select cancellation behavior\"],\"default_guess\":\"Run an admitted state-changing step to its transactional completion despite client disconnect, propagate its declared result, and release every acquired lock and queue reservation in a finally path.\",\"witness\":{\"initial\":\"A change has passed admission and is waiting for the session lock when its HTTP client disconnects.\",\"events\":[\"The disconnect cancels the transport task before the request obtains the lock.\",\"The queued request reaches the front.\"],\"outcomes\":[\"One implementation removes the queued request and performs no change.\",\"Another implementation runs the admitted step and commits the change, although no response can be delivered.\"],\"observer\":\"The owner sees different durable state on the next read.\"}},{\"subject\":\"public_op:owner_sessions.admit_owner_request error surface\",\"kind\":\"underspecified_errors\",\"text\":\"The step's answer, or the refusal.\",\"question\":\"Which refusals and failures produced by the supplied step are part of this operation's output, and how are exceptions, transaction failures and cancellation distinguished from `no_owner_session` and `csrf_refused`?\",\"options\":[\"The operation declares only its two admission errors and transparently returns every typed result or error of the step\",\"The operation maps every step failure to one generic refusal\",\"The callback contract is parameterized by an explicit result/error union\"],\"default_guess\":\"Declare a generic typed result parameter and propagate the step's result or domain error unchanged; reserve `no_owner_session` and `csrf_refused` for admission failures.\"}]}",
+ "set_aside": []
+}

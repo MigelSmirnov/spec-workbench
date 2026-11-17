@@ -73,7 +73,12 @@ a sign-out; the request's step, which receives the admitted session.
 
 ### Outputs
 
-The step's answer, or the refusal. The step runs holding the session's
+The step's answer, or the refusal. The step runs synchronously, in the
+request's own thread: its answer, a refusal among them, is this operation's
+answer unchanged; a step that raises has its locks released and the
+exception passed on unchanged, this operation adding no answer of its own;
+a client that disconnects does not cancel it, so an admitted change
+completes (A13 rule 2). The step runs holding the session's
 lock when the request is a change or touches an uploaded file, and for the
 latter the import lock taken before it; both are released when the step
 returns, on every path (Conventions, "Locks of an owner request").

@@ -91,10 +91,13 @@ types and Python signatures are State 6's.
   takes its place on the session's lock — the latter after waiting for the
   import lock, granted in the order requests asked for it — and the session's
   lock is granted in the order places were taken (A13 rule 2, A16 rule 2).
-  `owner_sessions` also keeps one session-table lock, held only while a
-  session's entry is looked up, added or removed: a sign-in adds its session
-  under it, a sign-out and the pass remove one, and the session check and
-  `give_session_csrf` look one up. It is taken last — after the import lock,
+  `owner_sessions` also keeps one session-table lock, which guards every
+  session's entry with its signed-out mark and its last-request reading:
+  each read or write of them is made under it and only there — a sign-in
+  adds its session, the session check reads the session and restarts its 30
+  minutes, a sign-out marks and removes it, the pass reads every session's
+  readings by its one clock reading and removes those past a limit, and
+  `give_session_csrf` reads one. It is taken last — after the import lock,
   the sign-in lock and a session's lock, where the path holds them — and
   released before any other lock is taken, so the order of all four is
   import, sign-in, session, table, and no holder of the table lock waits for

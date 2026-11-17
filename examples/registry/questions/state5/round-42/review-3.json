@@ -1,0 +1,127 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:owner_sessions.admit_owner_request",
+   "kind": "timing_contradiction",
+   "text": "The arrival is fixed in one hold of the session-table lock\n(Conventions, \"Locks of an owner request\"): this operation reads the clock,\nlooks the session up, checks it and restarts its 30 minutes, then releases\nthe table lock before it waits for the import lock or a place on the\nsession's lock;",
+   "question": "Is the request's arrival time the instant the operation is called (and, for an upload, its bounded head has been read), or the later instant at which it acquires the session-table lock and reads the clock?",
+   "options": [
+    "Capture the monotonic reading when the operation is called, then use that captured reading while holding the table lock.",
+    "Define arrival as acquisition of the session-table lock and read the monotonic clock only then."
+   ],
+   "default_guess": "Capture the monotonic reading immediately after the headers or bounded upload head are ready, before waiting for the session-table lock, and use it during the locked check.",
+   "witness": {
+    "initial": "A session's last request was 29 minutes 59 seconds ago, and another operation holds the session-table lock for two seconds.",
+    "events": [
+     "The owner request is handed to admit_owner_request before the 30-minute limit.",
+     "The request waits for the session-table lock and acquires it after the limit."
+    ],
+    "outcomes": [
+     "Using the call/head-completion instant, the session is valid and the request completes.",
+     "Using the clock reading taken after acquiring the table lock, the session has reached its idle limit and the request is refused."
+    ],
+    "observer": "The owner sees either the requested answer or the sign-in form."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "session-table lock",
+   "kind": "undefined_lock_participants",
+   "text": "The arrival is fixed in one hold of the session-table lock",
+   "question": "Which operations acquire this lock, and does it protect session creation, the signed-out admission mark, expiry removal, sign-out removal, table lookup and removal as one synchronization domain?",
+   "options": [
+    "Every operation that adds, looks up, marks or removes an owner session uses the session-table lock.",
+    "Only admission lookup and idle-time restart use it; sign-in, sign-out and expiry synchronize by other stated locks."
+   ],
+   "default_guess": "Use the session-table lock for every addition, lookup, admission-closing mark and removal of an owner session, while using the per-session lock for the session's mutable contents.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner-session lifetime after admission",
+   "kind": "lifetime_unspecified",
+   "text": "then releases\nthe table lock before it waits for the import lock or a place on the\nsession's lock",
+   "question": "What keeps the admitted session and the state needed by its step alive after the table lock is released if sign-out or the expiry pass removes that session before the request obtains its later locks?",
+   "options": [
+    "Admission pins a session object or records an in-flight request until the admitted step returns.",
+    "Sign-out and expiry retain ended session state until every already-admitted request has finished.",
+    "The request uses a detached admitted-session snapshot, with separately retained confirmation or upload state when needed."
+   ],
+   "default_guess": "Admission returns a pinned session handle; removal makes the session unavailable to new admissions but defers destruction of its state until all admitted handles finish.",
+   "witness": {
+    "initial": "A valid upload-related request has passed its session and CSRF checks but is waiting for the import lock.",
+    "events": [
+     "The admission releases the session-table lock.",
+     "The expiry pass or a sign-out obtains the import and session locks and removes the session and its upload.",
+     "The admitted request later obtains the locks and runs its step."
+    ],
+    "outcomes": [
+     "With a pin or deferred cleanup, the already-admitted request completes using the session state it was admitted with.",
+     "With immediate removal, the step finds no session or upload and cannot complete as promised."
+    ],
+    "observer": "The owner sees either completion of the admitted request or a refusal/failure after it had passed admission."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "import-lock ordering",
+   "kind": "enqueue_boundary",
+   "text": "A request asks for the import lock when it is admitted.",
+   "question": "Is the request's FIFO place on the import lock reserved atomically during the session-table hold, or only after that hold is released?",
+   "options": [
+    "Enqueue the import-lock request before releasing the session-table lock, then wait after releasing it.",
+    "Release the session-table lock first and enqueue on the import lock afterward."
+   ],
+   "default_guess": "Reserve the FIFO import-lock place during admission while holding the session-table lock, release the table lock, and only then wait for the grant.",
+   "witness": {
+    "initial": "The import lock is held, and two requests that touch uploaded files arrive for different sessions.",
+    "events": [
+     "Request A completes its session-table check first but is descheduled immediately after the table lock is released.",
+     "Request B completes its check second and reaches the import-lock queue first.",
+     "Both wait for the import lock."
+    ],
+    "outcomes": [
+     "If asking occurs atomically at admission, A receives the import lock first.",
+     "If asking occurs after releasing the table lock, B may receive the import lock first."
+    ],
+    "observer": "The owner sees the requests' upload or confirmation effects occur in different orders."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "sign-out admission",
+   "kind": "two_phase_state_unspecified",
+   "text": "A sign-out's admission marks the\nsession signed out at once.",
+   "question": "Is this an admission-closed flag written under the session-table lock and distinct from the later ordered destruction of session state, and which lock protects reads and writes of that flag?",
+   "options": [
+    "Admission sets a table-lock-protected closed-to-new-requests flag; the queued sign-out later destroys the session under the import and session locks.",
+    "The session is not marked until sign_out_owner obtains its ordered locks and takes its turn."
+   ],
+   "default_guess": "Use a two-phase sign-out: atomically close the session to new admissions under the session-table lock, then perform ordered cleanup under the import and session locks.",
+   "unit": "?"
+  },
+  {
+   "subject": "locks held before admission",
+   "kind": "vague_scope",
+   "text": "nothing else is held for the request between its headers\nand that hold.",
+   "question": "Does \"nothing else\" prohibit only Registry synchronization locks, or also retained parsing state, buffers, transport resources and the upload-head data needed to perform the check?",
+   "options": [
+    "It means no Registry lock is held; request framing and bounded header data may remain retained.",
+    "It means no resource or state of any kind is retained between header parsing and the table-lock hold."
+   ],
+   "default_guess": "Interpret it as a lock rule only: no Registry lock is held, while the bounded parsed header data and transport state remain available.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:owner_sessions.admit_owner_request",
+   "kind": "standard_violation",
+   "text": "The arrival is fixed in one hold of the session-table lock\n(Conventions, \"Locks of an owner request\"): this operation reads the clock,\nlooks the session up, checks it and restarts its 30 minutes, then releases\nthe table lock before it waits for the import lock or a place on the\nsession's lock;",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "The specification must declare `owner_sessions` as a consumer of `clock.monotonic_reading` in `module_internal`, or rewrite the operation so it does not directly name or call that provider symbol.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:owner_sessions.admit_owner_request\",\"kind\":\"timing_contradiction\",\"text\":\"The arrival is fixed in one hold of the session-table lock\\n(Conventions, \\\"Locks of an owner request\\\"): this operation reads the clock,\\nlooks the session up, checks it and restarts its 30 minutes, then releases\\nthe table lock before it waits for the import lock or a place on the\\nsession's lock;\",\"question\":\"Is the request's arrival time the instant the operation is called (and, for an upload, its bounded head has been read), or the later instant at which it acquires the session-table lock and reads the clock?\",\"options\":[\"Capture the monotonic reading when the operation is called, then use that captured reading while holding the table lock.\",\"Define arrival as acquisition of the session-table lock and read the monotonic clock only then.\"],\"default_guess\":\"Capture the monotonic reading immediately after the headers or bounded upload head are ready, before waiting for the session-table lock, and use it during the locked check.\",\"witness\":{\"initial\":\"A session's last request was 29 minutes 59 seconds ago, and another operation holds the session-table lock for two seconds.\",\"events\":[\"The owner request is handed to admit_owner_request before the 30-minute limit.\",\"The request waits for the session-table lock and acquires it after the limit.\"],\"outcomes\":[\"Using the call/head-completion instant, the session is valid and the request completes.\",\"Using the clock reading taken after acquiring the table lock, the session has reached its idle limit and the request is refused.\"],\"observer\":\"The owner sees either the requested answer or the sign-in form.\"}},{\"subject\":\"session-table lock\",\"kind\":\"undefined_lock_participants\",\"text\":\"The arrival is fixed in one hold of the session-table lock\",\"question\":\"Which operations acquire this lock, and does it protect session creation, the signed-out admission mark, expiry removal, sign-out removal, table lookup and removal as one synchronization domain?\",\"options\":[\"Every operation that adds, looks up, marks or removes an owner session uses the session-table lock.\",\"Only admission lookup and idle-time restart use it; sign-in, sign-out and expiry synchronize by other stated locks.\"],\"default_guess\":\"Use the session-table lock for every addition, lookup, admission-closing mark and removal of an owner session, while using the per-session lock for the session's mutable contents.\"},{\"subject\":\"owner-session lifetime after admission\",\"kind\":\"lifetime_unspecified\",\"text\":\"then releases\\nthe table lock before it waits for the import lock or a place on the\\nsession's lock\",\"question\":\"What keeps the admitted session and the state needed by its step alive after the table lock is released if sign-out or the expiry pass removes that session before the request obtains its later locks?\",\"options\":[\"Admission pins a session object or records an in-flight request until the admitted step returns.\",\"Sign-out and expiry retain ended session state until every already-admitted request has finished.\",\"The request uses a detached admitted-session snapshot, with separately retained confirmation or upload state when needed.\"],\"default_guess\":\"Admission returns a pinned session handle; removal makes the session unavailable to new admissions but defers destruction of its state until all admitted handles finish.\",\"witness\":{\"initial\":\"A valid upload-related request has passed its session and CSRF checks but is waiting for the import lock.\",\"events\":[\"The admission releases the session-table lock.\",\"The expiry pass or a sign-out obtains the import and session locks and removes the session and its upload.\",\"The admitted request later obtains the locks and runs its step.\"],\"outcomes\":[\"With a pin or deferred cleanup, the already-admitted request completes using the session state it was admitted with.\",\"With immediate removal, the step finds no session or upload and cannot complete as promised.\"],\"observer\":\"The owner sees either completion of the admitted request or a refusal/failure after it had passed admission.\"}},{\"subject\":\"import-lock ordering\",\"kind\":\"enqueue_boundary\",\"text\":\"A request asks for the import lock when it is admitted.\",\"question\":\"Is the request's FIFO place on the import lock reserved atomically during the session-table hold, or only after that hold is released?\",\"options\":[\"Enqueue the import-lock request before releasing the session-table lock, then wait after releasing it.\",\"Release the session-table lock first and enqueue on the import lock afterward.\"],\"default_guess\":\"Reserve the FIFO import-lock place during admission while holding the session-table lock, release the table lock, and only then wait for the grant.\",\"witness\":{\"initial\":\"The import lock is held, and two requests that touch uploaded files arrive for different sessions.\",\"events\":[\"Request A completes its session-table check first but is descheduled immediately after the table lock is released.\",\"Request B completes its check second and reaches the import-lock queue first.\",\"Both wait for the import lock.\"],\"outcomes\":[\"If asking occurs atomically at admission, A receives the import lock first.\",\"If asking occurs after releasing the table lock, B may receive the import lock first.\"],\"observer\":\"The owner sees the requests' upload or confirmation effects occur in different orders.\"}},{\"subject\":\"sign-out admission\",\"kind\":\"two_phase_state_unspecified\",\"text\":\"A sign-out's admission marks the\\nsession signed out at once.\",\"question\":\"Is this an admission-closed flag written under the session-table lock and distinct from the later ordered destruction of session state, and which lock protects reads and writes of that flag?\",\"options\":[\"Admission sets a table-lock-protected closed-to-new-requests flag; the queued sign-out later destroys the session under the import and session locks.\",\"The session is not marked until sign_out_owner obtains its ordered locks and takes its turn.\"],\"default_guess\":\"Use a two-phase sign-out: atomically close the session to new admissions under the session-table lock, then perform ordered cleanup under the import and session locks.\"},{\"subject\":\"locks held before admission\",\"kind\":\"vague_scope\",\"text\":\"nothing else is held for the request between its headers\\nand that hold.\",\"question\":\"Does \\\"nothing else\\\" prohibit only Registry synchronization locks, or also retained parsing state, buffers, transport resources and the upload-head data needed to perform the check?\",\"options\":[\"It means no Registry lock is held; request framing and bounded header data may remain retained.\",\"It means no resource or state of any kind is retained between header parsing and the table-lock hold.\"],\"default_guess\":\"Interpret it as a lock rule only: no Registry lock is held, while the bounded parsed header data and transport state remain available.\"},{\"subject\":\"public_op:owner_sessions.admit_owner_request\",\"kind\":\"standard_violation\",\"text\":\"The arrival is fixed in one hold of the session-table lock\\n(Conventions, \\\"Locks of an owner request\\\"): this operation reads the clock,\\nlooks the session up, checks it and restarts its 30 minutes, then releases\\nthe table lock before it waits for the import lock or a place on the\\nsession's lock;\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"The specification must declare `owner_sessions` as a consumer of `clock.monotonic_reading` in `module_internal`, or rewrite the operation so it does not directly name or call that provider symbol.\"}]}",
+ "set_aside": []
+}
