@@ -94,7 +94,12 @@ reached 8 hours from sign-in or 30 minutes without a request, or is marked
 signed out, serves no request; a change carries the CSRF value of its
 session, compared in constant time (A13 rule 5). A request that passed
 completes even if a limit or a sign-out comes while it runs or waits (A13
-rule 2). After the check, a change that touches no uploaded file takes its
+rule 2). The arrival is fixed in one hold of the session-table lock
+(Conventions, "Locks of an owner request"): this operation reads the clock,
+looks the session up, checks it and restarts its 30 minutes, then releases
+the table lock before it waits for the import lock or a place on the
+session's lock; nothing else is held for the request between its headers
+and that hold. After the check, a change that touches no uploaded file takes its
 place on the session's lock at once; a request that touches one first waits
 for the import lock and then takes its place, so the locks are always taken
 import first and no place on a session's lock waits for the import lock (A16

@@ -1,0 +1,84 @@
+{
+ "open_points": [],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"Conventions every operation follows\",\"subject\":\"owner session entry lifetime between lookup and session-lock acquisition\",\"kind\":\"concurrency_race\",\"text\":\"held only while a session's entry is looked up, added or removed\",\"question\":\"After the table lock is released following a successful lookup, what keeps that session entry and its lock alive until the request takes the session lock, and what must happen if sign-out or the expiry pass removes the entry in between?\",\"options\":[\"The lookup returns a pinned entry that remains usable; a request already admitted queues on its lock and completes before removal takes effect.\",\"Removal marks the entry ended but retains it until every lookup reference is released; a later lock taker observes the ended mark and is refused.\",\"Removal destroys or invalidates the entry, so a request that has looked it up but not yet taken its lock is aborted or repeats the session check.\"],\"default_guess\":\"Return a pinned entry, enqueue the admitted request on that entry's session lock, and defer final destruction until all pins are released.\",\"witness\":{\"initial\":\"Owner session S is valid and present; change request R has passed the session check but has not yet acquired S's session lock.\",\"events\":[\"The owner concurrently submits sign-out for S.\",\"Sign-out acquires S's lock and removes S under the session-table lock before R acquires S's lock.\",\"R continues using the entry obtained by its earlier lookup.\"],\"outcomes\":[\"R retains a pinned entry, takes its place on S's lock, completes its accepted change, and sign-out is ordered after it.\",\"Removal invalidates the entry, so R is refused or aborted despite having passed the arrival-time session check.\"],\"observer\":\"The owner, and any reader of the store change R attempted.\"}},{\"unit\":\"Conventions every operation follows\",\"subject\":\"expiry-pass traversal of the owner-session table\",\"kind\":\"iteration_semantics\",\"text\":\"a sign-out and the pass remove one\",\"question\":\"How does the expiry pass discover and traverse session entries without holding the session-table lock while it waits for the import or session locks, and which set and order of sessions belongs to one pass?\",\"options\":[\"Take a pinned snapshot of all session entries under the table lock, release it, then process that snapshot.\",\"Look up and process entries one at a time, allowing additions and removals to change what the same pass visits.\",\"Hold the table lock while enumerating entries but release it before acquiring another lock, with an explicit cursor or restart rule after each release.\"],\"default_guess\":\"Take a pinned snapshot under the table lock and process that snapshot in a declared deterministic order.\",\"witness\":{\"initial\":\"Two live sessions are close to their idle limits when an expiry pass starts; another thread signs one session out while the pass is between entries.\",\"events\":[\"The pass obtains whatever table view its implementation chooses.\",\"Time advances across an idle deadline while the pass processes the first session.\",\"The concurrent sign-out removes an entry before the pass reaches or revisits it.\"],\"outcomes\":[\"A start-of-pass snapshot causes both original entries to be considered exactly once in that pass.\",\"A live traversal skips, revisits, or defers an entry according to mutation timing and traversal order, leaving a different table until the next pass.\"],\"observer\":\"The owner-session subsystem and concurrency tests; later session lookups can observe whether the entry remains.\"}},{\"unit\":\"Conventions every operation follows\",\"subject\":\"give_session_csrf\",\"kind\":\"operation_contract\",\"text\":\"the session check and `give_session_csrf` look one up\",\"question\":\"What are `give_session_csrf`'s caller, input, validity checks, output and failure result, and is its lookup result allowed to survive a concurrent sign-out or expiry removal?\",\"options\":[\"It is called only inside an already admitted owner request and returns that pinned session's CSRF value even if removal is concurrently requested.\",\"It accepts a session identity, independently checks that the table still contains a valid session, and refuses or returns no value otherwise.\",\"It accepts an already locked session entry and performs no table lookup of its own; the stated lookup belongs to its caller.\"],\"default_guess\":\"Make it an internal step of an already admitted request, taking a pinned session entry and returning its CSRF value without a second validity decision.\",\"witness\":{\"initial\":\"Session S is valid and a form-rendering request has begun while S remains in the table.\",\"events\":[\"The rendering path calls `give_session_csrf`.\",\"A concurrent sign-out removes S before or just after the table lookup.\"],\"outcomes\":[\"The admitted rendering request receives S's CSRF value and completes.\",\"`give_session_csrf` observes the removal and returns no value or a refusal, so the same admitted request cannot render its form.\"],\"observer\":\"The owner receiving the form.\"}}]}",
+ "set_aside": [
+  {
+   "unit": "Conventions every operation follows",
+   "subject": "owner session entry lifetime between lookup and session-lock acquisition",
+   "kind": "concurrency_race",
+   "text": "held only while a session's entry is looked up, added or removed",
+   "question": "After the table lock is released following a successful lookup, what keeps that session entry and its lock alive until the request takes the session lock, and what must happen if sign-out or the expiry pass removes the entry in between?",
+   "options": [
+    "The lookup returns a pinned entry that remains usable; a request already admitted queues on its lock and completes before removal takes effect.",
+    "Removal marks the entry ended but retains it until every lookup reference is released; a later lock taker observes the ended mark and is refused.",
+    "Removal destroys or invalidates the entry, so a request that has looked it up but not yet taken its lock is aborted or repeats the session check."
+   ],
+   "default_guess": "Return a pinned entry, enqueue the admitted request on that entry's session lock, and defer final destruction until all pins are released.",
+   "witness": {
+    "initial": "Owner session S is valid and present; change request R has passed the session check but has not yet acquired S's session lock.",
+    "events": [
+     "The owner concurrently submits sign-out for S.",
+     "Sign-out acquires S's lock and removes S under the session-table lock before R acquires S's lock.",
+     "R continues using the entry obtained by its earlier lookup."
+    ],
+    "outcomes": [
+     "R retains a pinned entry, takes its place on S's lock, completes its accepted change, and sign-out is ordered after it.",
+     "Removal invalidates the entry, so R is refused or aborted despite having passed the arrival-time session check."
+    ],
+    "observer": "The owner, and any reader of the store change R attempted."
+   }
+  },
+  {
+   "unit": "Conventions every operation follows",
+   "subject": "expiry-pass traversal of the owner-session table",
+   "kind": "iteration_semantics",
+   "text": "a sign-out and the pass remove one",
+   "question": "How does the expiry pass discover and traverse session entries without holding the session-table lock while it waits for the import or session locks, and which set and order of sessions belongs to one pass?",
+   "options": [
+    "Take a pinned snapshot of all session entries under the table lock, release it, then process that snapshot.",
+    "Look up and process entries one at a time, allowing additions and removals to change what the same pass visits.",
+    "Hold the table lock while enumerating entries but release it before acquiring another lock, with an explicit cursor or restart rule after each release."
+   ],
+   "default_guess": "Take a pinned snapshot under the table lock and process that snapshot in a declared deterministic order.",
+   "witness": {
+    "initial": "Two live sessions are close to their idle limits when an expiry pass starts; another thread signs one session out while the pass is between entries.",
+    "events": [
+     "The pass obtains whatever table view its implementation chooses.",
+     "Time advances across an idle deadline while the pass processes the first session.",
+     "The concurrent sign-out removes an entry before the pass reaches or revisits it."
+    ],
+    "outcomes": [
+     "A start-of-pass snapshot causes both original entries to be considered exactly once in that pass.",
+     "A live traversal skips, revisits, or defers an entry according to mutation timing and traversal order, leaving a different table until the next pass."
+    ],
+    "observer": "The owner-session subsystem and concurrency tests; later session lookups can observe whether the entry remains."
+   }
+  },
+  {
+   "unit": "Conventions every operation follows",
+   "subject": "give_session_csrf",
+   "kind": "operation_contract",
+   "text": "the session check and `give_session_csrf` look one up",
+   "question": "What are `give_session_csrf`'s caller, input, validity checks, output and failure result, and is its lookup result allowed to survive a concurrent sign-out or expiry removal?",
+   "options": [
+    "It is called only inside an already admitted owner request and returns that pinned session's CSRF value even if removal is concurrently requested.",
+    "It accepts a session identity, independently checks that the table still contains a valid session, and refuses or returns no value otherwise.",
+    "It accepts an already locked session entry and performs no table lookup of its own; the stated lookup belongs to its caller."
+   ],
+   "default_guess": "Make it an internal step of an already admitted request, taking a pinned session entry and returning its CSRF value without a second validity decision.",
+   "witness": {
+    "initial": "Session S is valid and a form-rendering request has begun while S remains in the table.",
+    "events": [
+     "The rendering path calls `give_session_csrf`.",
+     "A concurrent sign-out removes S before or just after the table lookup."
+    ],
+    "outcomes": [
+     "The admitted rendering request receives S's CSRF value and completes.",
+     "`give_session_csrf` observes the removal and returns no value or a refusal, so the same admitted request cannot render its form."
+    ],
+    "observer": "The owner receiving the form."
+   }
+  }
+ ]
+}

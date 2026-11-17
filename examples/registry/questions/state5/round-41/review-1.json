@@ -1,0 +1,163 @@
+{
+ "open_points": [
+  {
+   "subject": "owner_sessions session-table lookup",
+   "kind": "entry_lifetime",
+   "text": "the session check and `give_session_csrf` look one up.",
+   "question": "After the table lock is released, what keeps the looked-up session entry valid if sign-out or the expiry pass removes it before the caller finishes using it?",
+   "options": [
+    "The lookup pins the entry until the caller releases it.",
+    "Removal marks the entry ended, and every later use rechecks that mark under the session lock.",
+    "The caller rechecks table membership after taking the session lock.",
+    "Removal may invalidate the reference immediately."
+   ],
+   "default_guess": "Keep a stable entry reference, mark it ended under its session lock, and make every user refuse an ended entry.",
+   "witness": {
+    "initial": "Owner session S is valid and present in the session table.",
+    "events": [
+     "Request R looks up S under the table lock and releases that lock.",
+     "The owner signs out in another request, which takes S's lock and removes S from the table.",
+     "R then takes S's lock and continues with the reference returned by its lookup."
+    ],
+    "outcomes": [
+     "R observes that S ended and is refused.",
+     "R treats the referenced object as a valid session and performs the request."
+    ],
+    "observer": "The owner and any store or session state changed by R"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "admit_owner_request arrival ordering",
+   "kind": "undefined_linearization",
+   "text": "Every request is checked at its arrival; a change, or any request touching an uploaded file, then takes its place on the session's lock",
+   "question": "How does a request reserve its arrival-time check and its place on the session lock when it must first look the session up under a separately contended table lock?",
+   "options": [
+    "Arrival atomically pins the session and reserves the request's session-lock place.",
+    "The table lookup determines whether the request arrived before removal or expiry.",
+    "The request records its arrival time, and a later lookup must reconstruct the result that applied at that time."
+   ],
+   "default_guess": "At arrival, record the monotonic reading and atomically pin the table entry before allowing expiry or sign-out removal to invalidate it.",
+   "witness": {
+    "initial": "Session S is valid until monotonic time 30:00 and is present in the table; another operation temporarily holds the table lock.",
+    "events": [
+     "An owner request for S arrives at 29:59.999 and waits to look up S.",
+     "At 30:00 the expiry pass obtains S and removes it.",
+     "The request later obtains the table lock and finds no entry."
+    ],
+    "outcomes": [
+     "The request is served because S was valid at its arrival.",
+     "The request is refused because S was gone when its delayed lookup ran."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner_sessions table traversal",
+   "kind": "missing_concurrency_protocol",
+   "text": "`owner_sessions` also keeps one session-table lock, held only while a\n    session's entry is looked up, added or removed",
+   "question": "How do operations that must visit multiple or all sessions—especially the expiry pass and `drop_uploaded_files` after an import—enumerate the table, and what happens when entries are added or removed during that traversal?",
+   "options": [
+    "Take a pinned snapshot under the table lock, release it, then process the snapshot.",
+    "Hold the table lock for the entire traversal.",
+    "Repeatedly look up one entry at a time with a defined cursor.",
+    "Require callers to maintain a separate immutable session index."
+   ],
+   "default_guess": "Take a snapshot of pinned entry references under the table lock, release it, then process each entry under its session lock; ended entries are harmless no-ops.",
+   "witness": {
+    "initial": "Sessions S1 and S2 have uploaded files, and an import has committed and must drop every session's upload.",
+    "events": [
+     "The import begins traversing the session table.",
+     "A concurrent sign-out removes S2 while the traversal is in progress.",
+     "The import reaches the position where S2 was stored."
+    ],
+    "outcomes": [
+     "The traversal retains a stable reference and drops S2's upload or observes that sign-out already dropped it, then completes normally.",
+     "The traversal skips or dereferences the removed entry, leaving bytes retained or making post-commit cleanup fail."
+    ],
+    "observer": "The owner, the import response, and the process's memory usage"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "sign_in_owner session identity",
+   "kind": "undefined_collision_handling",
+   "text": "a sign-in adds its session under it",
+   "question": "While holding the table lock, must sign-in check that the newly minted session identity is absent and mint again on collision, or may insertion overwrite or refuse?",
+   "options": [
+    "Check atomically and mint again until the identity is unused.",
+    "Refuse the sign-in on a collision.",
+    "Overwrite the existing session entry.",
+    "Allow the table implementation's duplicate-key behavior to decide."
+   ],
+   "default_guess": "Check for an existing entry under the table lock and mint again on collision.",
+   "witness": {
+    "initial": "A live owner session S already has identity X, and the random source returns X for a new successful sign-in.",
+    "events": [
+     "The second owner supplies the correct credential.",
+     "Sign-in attempts to add the new session under identity X."
+    ],
+    "outcomes": [
+     "Registry detects the collision, mints another identity, and both sessions remain valid.",
+     "Registry overwrites S, refuses the new sign-in, or returns two cookies naming one table entry."
+    ],
+    "observer": "Both signed-in browser sessions"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner_sessions.give_session_csrf",
+   "kind": "undefined_authorization_and_locking",
+   "text": "the session check and `give_session_csrf` look one up.",
+   "question": "Does `give_session_csrf` merely return the value found by table lookup, or must it also take the session lock and recheck validity and ended state before returning the secret?",
+   "options": [
+    "It is callable only inside an already admitted request that holds the session lock.",
+    "It independently locks and validates the session before returning the CSRF value.",
+    "It returns the value for any table entry, even if its time limit has been reached but the pass has not removed it."
+   ],
+   "default_guess": "Permit it only within an admitted valid owner request while that request holds the session lock.",
+   "witness": {
+    "initial": "Session S has reached its idle limit but the periodic pass has not removed it yet.",
+    "events": [
+     "A form-rendering request calls `give_session_csrf` for S.",
+     "The expiry pass has not yet acquired S's lock."
+    ],
+    "outcomes": [
+     "The operation rechecks validity and refuses to return a CSRF value.",
+     "The operation returns S's CSRF value because the table entry still exists."
+    ],
+    "observer": "The browser receiving the rendered form"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Conventions every operation follows lock order",
+   "kind": "ambiguous_lock_order",
+   "text": "It is taken last — after the import lock,\n  the sign-in lock and a session's lock, where the path holds them — and\n  released before any other lock is taken, so the order of all four is\n  import, sign-in, session, table",
+   "question": "Is this order a nesting order only for locks held simultaneously, or does it forbid acquiring a session lock after a completed table-lock lookup?",
+   "options": [
+    "It constrains only nested/co-held locks; table lookup may finish before a later session-lock acquisition.",
+    "It is a global acquisition order even across releases, so a path may never take table and later session.",
+    "Lookup must obtain the session lock before releasing the table lock, despite the release-before-another-lock clause."
+   ],
+   "default_guess": "Treat it as a nesting order only: no path holds the table lock while waiting for another lock, and a stable lookup reference may later be locked.",
+   "witness": {
+    "initial": "An owner request has only the session cookie and must find the corresponding session entry.",
+    "events": [
+     "The request takes the table lock, retrieves the entry, and releases the table lock.",
+     "It then needs the entry's session lock to validate and admit the request."
+    ],
+    "outcomes": [
+     "The sequence is allowed because the locks are never co-held in reverse nesting order.",
+     "The sequence violates the declared order, so the implementation must use a different lookup or locking protocol."
+    ],
+    "observer": "Implementers and, under contention, owners whose requests may deadlock, fail, or be admitted differently"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner_sessions session-table lookup\",\"kind\":\"entry_lifetime\",\"text\":\"the session check and `give_session_csrf` look one up.\",\"question\":\"After the table lock is released, what keeps the looked-up session entry valid if sign-out or the expiry pass removes it before the caller finishes using it?\",\"options\":[\"The lookup pins the entry until the caller releases it.\",\"Removal marks the entry ended, and every later use rechecks that mark under the session lock.\",\"The caller rechecks table membership after taking the session lock.\",\"Removal may invalidate the reference immediately.\"],\"default_guess\":\"Keep a stable entry reference, mark it ended under its session lock, and make every user refuse an ended entry.\",\"witness\":{\"initial\":\"Owner session S is valid and present in the session table.\",\"events\":[\"Request R looks up S under the table lock and releases that lock.\",\"The owner signs out in another request, which takes S's lock and removes S from the table.\",\"R then takes S's lock and continues with the reference returned by its lookup.\"],\"outcomes\":[\"R observes that S ended and is refused.\",\"R treats the referenced object as a valid session and performs the request.\"],\"observer\":\"The owner and any store or session state changed by R\"}},{\"subject\":\"admit_owner_request arrival ordering\",\"kind\":\"undefined_linearization\",\"text\":\"Every request is checked at its arrival; a change, or any request touching an uploaded file, then takes its place on the session's lock\",\"question\":\"How does a request reserve its arrival-time check and its place on the session lock when it must first look the session up under a separately contended table lock?\",\"options\":[\"Arrival atomically pins the session and reserves the request's session-lock place.\",\"The table lookup determines whether the request arrived before removal or expiry.\",\"The request records its arrival time, and a later lookup must reconstruct the result that applied at that time.\"],\"default_guess\":\"At arrival, record the monotonic reading and atomically pin the table entry before allowing expiry or sign-out removal to invalidate it.\",\"witness\":{\"initial\":\"Session S is valid until monotonic time 30:00 and is present in the table; another operation temporarily holds the table lock.\",\"events\":[\"An owner request for S arrives at 29:59.999 and waits to look up S.\",\"At 30:00 the expiry pass obtains S and removes it.\",\"The request later obtains the table lock and finds no entry.\"],\"outcomes\":[\"The request is served because S was valid at its arrival.\",\"The request is refused because S was gone when its delayed lookup ran.\"],\"observer\":\"The owner\"}},{\"subject\":\"owner_sessions table traversal\",\"kind\":\"missing_concurrency_protocol\",\"text\":\"`owner_sessions` also keeps one session-table lock, held only while a\\n    session's entry is looked up, added or removed\",\"question\":\"How do operations that must visit multiple or all sessions—especially the expiry pass and `drop_uploaded_files` after an import—enumerate the table, and what happens when entries are added or removed during that traversal?\",\"options\":[\"Take a pinned snapshot under the table lock, release it, then process the snapshot.\",\"Hold the table lock for the entire traversal.\",\"Repeatedly look up one entry at a time with a defined cursor.\",\"Require callers to maintain a separate immutable session index.\"],\"default_guess\":\"Take a snapshot of pinned entry references under the table lock, release it, then process each entry under its session lock; ended entries are harmless no-ops.\",\"witness\":{\"initial\":\"Sessions S1 and S2 have uploaded files, and an import has committed and must drop every session's upload.\",\"events\":[\"The import begins traversing the session table.\",\"A concurrent sign-out removes S2 while the traversal is in progress.\",\"The import reaches the position where S2 was stored.\"],\"outcomes\":[\"The traversal retains a stable reference and drops S2's upload or observes that sign-out already dropped it, then completes normally.\",\"The traversal skips or dereferences the removed entry, leaving bytes retained or making post-commit cleanup fail.\"],\"observer\":\"The owner, the import response, and the process's memory usage\"}},{\"subject\":\"sign_in_owner session identity\",\"kind\":\"undefined_collision_handling\",\"text\":\"a sign-in adds its session under it\",\"question\":\"While holding the table lock, must sign-in check that the newly minted session identity is absent and mint again on collision, or may insertion overwrite or refuse?\",\"options\":[\"Check atomically and mint again until the identity is unused.\",\"Refuse the sign-in on a collision.\",\"Overwrite the existing session entry.\",\"Allow the table implementation's duplicate-key behavior to decide.\"],\"default_guess\":\"Check for an existing entry under the table lock and mint again on collision.\",\"witness\":{\"initial\":\"A live owner session S already has identity X, and the random source returns X for a new successful sign-in.\",\"events\":[\"The second owner supplies the correct credential.\",\"Sign-in attempts to add the new session under identity X.\"],\"outcomes\":[\"Registry detects the collision, mints another identity, and both sessions remain valid.\",\"Registry overwrites S, refuses the new sign-in, or returns two cookies naming one table entry.\"],\"observer\":\"Both signed-in browser sessions\"}},{\"subject\":\"owner_sessions.give_session_csrf\",\"kind\":\"undefined_authorization_and_locking\",\"text\":\"the session check and `give_session_csrf` look one up.\",\"question\":\"Does `give_session_csrf` merely return the value found by table lookup, or must it also take the session lock and recheck validity and ended state before returning the secret?\",\"options\":[\"It is callable only inside an already admitted request that holds the session lock.\",\"It independently locks and validates the session before returning the CSRF value.\",\"It returns the value for any table entry, even if its time limit has been reached but the pass has not removed it.\"],\"default_guess\":\"Permit it only within an admitted valid owner request while that request holds the session lock.\",\"witness\":{\"initial\":\"Session S has reached its idle limit but the periodic pass has not removed it yet.\",\"events\":[\"A form-rendering request calls `give_session_csrf` for S.\",\"The expiry pass has not yet acquired S's lock.\"],\"outcomes\":[\"The operation rechecks validity and refuses to return a CSRF value.\",\"The operation returns S's CSRF value because the table entry still exists.\"],\"observer\":\"The browser receiving the rendered form\"}},{\"subject\":\"Conventions every operation follows lock order\",\"kind\":\"ambiguous_lock_order\",\"text\":\"It is taken last — after the import lock,\\n  the sign-in lock and a session's lock, where the path holds them — and\\n  released before any other lock is taken, so the order of all four is\\n  import, sign-in, session, table\",\"question\":\"Is this order a nesting order only for locks held simultaneously, or does it forbid acquiring a session lock after a completed table-lock lookup?\",\"options\":[\"It constrains only nested/co-held locks; table lookup may finish before a later session-lock acquisition.\",\"It is a global acquisition order even across releases, so a path may never take table and later session.\",\"Lookup must obtain the session lock before releasing the table lock, despite the release-before-another-lock clause.\"],\"default_guess\":\"Treat it as a nesting order only: no path holds the table lock while waiting for another lock, and a stable lookup reference may later be locked.\",\"witness\":{\"initial\":\"An owner request has only the session cookie and must find the corresponding session entry.\",\"events\":[\"The request takes the table lock, retrieves the entry, and releases the table lock.\",\"It then needs the entry's session lock to validate and admit the request.\"],\"outcomes\":[\"The sequence is allowed because the locks are never co-held in reverse nesting order.\",\"The sequence violates the declared order, so the implementation must use a different lookup or locking protocol.\"],\"observer\":\"Implementers and, under contention, owners whose requests may deadlock, fail, or be admitted differently\"}}]}",
+ "set_aside": []
+}
