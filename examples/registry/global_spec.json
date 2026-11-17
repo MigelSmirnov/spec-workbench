@@ -12,12 +12,18 @@
     "read_optional_text": "(text: str | None) -> str | None",
     "check_value_forms": "(form_values: tuple[GivenFormValue, ...]) -> tuple[RefusalFailure, ...]",
     "read_required_text": "(text: str | None) -> TextReading",
+    "read_upload_head": "(stream: ByteStream, content_type: str | None, declared_length: int | None) -> UploadHead",
+    "MultipartFileBody.__init__": "(self, stream: ByteStream, delimiter: str) -> None",
+    "MultipartFileBody.read": "(self, size: int) -> bytes",
     "load_runtime_settings": "() -> RuntimeSettings",
     "load_configuration": "() -> ConfigurationLoad",
     "give_service_tokens": "() -> tuple[ServiceToken, ...]",
     "give_owner_credential": "() -> str",
     "give_backup_key": "() -> str",
+    "give_backup_location": "() -> str",
+    "_parse_listen_address": "(text: str) -> ListenAddress | None",
     "open_store": "(registry_store: RegistryStore) -> StoreOpening",
+    "opened_store": "() -> RegistryStore",
     "discard_new_store": "(registry_store: RegistryStore) -> DiscardResult",
     "run_in_transaction": "(registry_store: RegistryStore, step: TransactionStep) -> OperationAnswer",
     "read_in_transaction": "(registry_store: RegistryStore, step: TransactionStep) -> OperationAnswer",
@@ -34,6 +40,7 @@
     "sign_out_owner": "(session_id: str) -> None",
     "show_confirmation_step": "(session_id: str, action: ConfirmedAction, target: str | None, shown_version: int | None, inputs: ConfirmationInputs) -> str",
     "take_confirmation": "(session_id: str, presented_value: str | None, action: ConfirmedAction, target: str | None, stated_version: int | None, inputs: ConfirmationInputs) -> ConfirmationOutcome",
+    "give_session_csrf": "(session_id: str | None) -> str | None",
     "keep_uploaded_file": "(session_id: str, content: bytes, file_digest: str) -> int",
     "read_uploaded_file": "(session_id: str) -> UploadedFile | None",
     "drop_uploaded_files": "() -> None",
@@ -87,11 +94,12 @@
     "perform_service_operation": "(presented_token: str | None, request: ServiceRequest | None, kernel_session_id: str | None) -> OperationAnswer",
     "perform_owner_operation": "(admission: OwnerAdmission, request: OwnerRequest, body: UploadBody | None) -> OperationAnswer",
     "serve_service_request": "(request: HttpRequest, body: bytes) -> HttpResponse",
-    "serve_owner_request": "(request: HttpRequest, body: BinaryIO) -> HttpResponse",
+    "serve_owner_request": "(request: HttpRequest, body: ByteStream) -> HttpResponse",
     "start_instance": "() -> int",
     "RegistryStore.__init__": "(self, store_path: str) -> None",
     "TransactionStep.run": "(self, transaction: object) -> OperationAnswer",
     "UploadBody.read": "(self, size: int) -> bytes",
+    "ByteStream.read": "(self, size: int) -> bytes",
     "StoreTransaction.__init__": "(self, repository: StoreRepository) -> None",
     "StoreTransaction.read_audit_sequence": "(self) -> AuditSequence",
     "StoreTransaction.write_audit_sequence": "(self, sequence: AuditSequence) -> None",
@@ -174,8 +182,8 @@
     "_confirmation_inputs": "(request: OwnerRequest) -> ConfirmationInputs",
     "_read_service_request": "(request: HttpRequest, body: bytes) -> ServiceRequest | None",
     "_write_service_answer": "(answer: OperationAnswer) -> HttpResponse",
-    "_read_owner_request": "(request: HttpRequest, body: BinaryIO) -> OwnerRequest",
-    "_render_owner_page": "(request: OwnerRequest, answer: OperationAnswer) -> HttpResponse",
+    "_read_owner_request": "(request: HttpRequest, body: ByteStream) -> OwnerRequest",
+    "_render_owner_page": "(request: OwnerRequest, answer: OperationAnswer, csrf_value: str | None) -> HttpResponse",
     "_stop_start": "(diagnostic: str) -> int",
     "SqliteStoreRepository.__init__": "(self, connection: object) -> None",
     "create_store_schema": "(connection: object) -> None",
@@ -250,7 +258,308 @@
     "StoreRepository.list_migration_closure_rows": "(self, field: StoreRowField | None, value: str | None) -> tuple[MigrationClosureRow, ...]",
     "SqliteStoreRepository.list_migration_closure_rows": "(self, field: StoreRowField | None, value: str | None) -> tuple[MigrationClosureRow, ...]"
   },
-  "notes": [],
+  "notes": [
+    "mint_identity: [BEHAVIOR] MUST return the canonical text of a new random UUID on every call, its randomness taken only from the operating system's random source, never from a seeded pseudo-random generator, the clock, a counter or any input; whether the identity is free is left to the writing module, which checks it.",
+    "make_secret_value: [BEHAVIOR] MUST draw exactly as many bytes as the imported SECRET_MIN_BYTES constant names from the operating system's random source and MUST return them in a text form a cookie value and an HTML form field carry without escaping, a fresh value on every call.",
+    "make_secret_value: [SECURITY_BOUNDARY] MUST take its bytes only from the operating system's random source, never from a seeded pseudo-random generator, and MUST NOT keep, log or put into a diagnostic the value it makes.",
+    "equal_in_constant_time: [SECURITY_BOUNDARY] MUST answer whether presented and held are equal using a comparison whose time does not depend on the position of the first differing byte, and MUST answer false, without raising, when their lengths differ.",
+    "equal_in_constant_time: [FORBIDDEN_ACTION] MUST NOT keep, log or put into a diagnostic either value it compares.",
+    "check_request_id_form: [VALIDATION_ERROR] MUST answer a FailedValue with the MISSING_VALUE member of = models.RefusalKind when request_id is None or holds only white space, and one with the MALFORMED_REQUEST_ID member when it is not printable text or is longer than the imported REQUEST_ID_MAX_CHARACTERS constant counted in Unicode code points; otherwise it MUST answer a GivenText holding request_id exactly as given.",
+    "facts_equal_for_repeat: [BEHAVIOR] MUST answer true only when given and current are of the same facts kind and every field is equal: a required field compared exactly as written, an optional field read through read_optional_text on both sides so that a blank one equals one not given; given and current of different facts kinds MUST answer false.",
+    "read_optional_text: [BEHAVIOR] MUST answer None when text is None, empty or white space only, and otherwise MUST answer text exactly as given, neither trimmed nor rewritten.",
+    "check_value_forms: [VALIDATION_ERROR] MUST answer one RefusalFailure, carrying the value's path, for every form value outside its form and none for the others, in the order of form_values: the OUTSIDE_FORM member of = models.RefusalKind for an alias longer than the imported ALIAS_MAX_CHARACTERS constant counted in Unicode code points, a floor area that is not a decimal number greater than the imported OBJECT_FLOOR_AREA_MIN_EXCLUSIVE constant, a number of rooms that is not a whole number of at least the imported OBJECT_ROOMS_MIN constant, or a floor that is not a whole number; the OUTSIDE_CLOSED_LIST member for an object kind outside = models.ObjectKind, a customer language outside = models.CustomerLanguage or a customer kind outside = models.CustomerKind.",
+    "check_value_forms: [BEHAVIOR] MUST check only the length of an alias, never its characters, and MUST answer an empty tuple when every form value is within its form; every given value it receives is present, an absent value never reaching it.",
+    "read_required_text: [VALIDATION_ERROR] MUST answer a FailedValue with the MISSING_VALUE member of = models.RefusalKind when text is None, empty or white space only, and otherwise MUST answer a GivenText holding text exactly as given, neither trimmed nor rewritten.",
+    "load_runtime_settings: [BEHAVIOR] MUST read exactly the environment variables of the case's runtime environment variable table, each into the RuntimeSettings field it targets as given or as None when unset, applying no default and no normalization, and MUST NOT read any other environment variable.",
+    "load_runtime_settings: [SECURITY_BOUNDARY] MUST NOT log or put into a diagnostic any value it reads from the environment.",
+    "load_configuration: [VALIDATION_ERROR] MUST check the settings load_runtime_settings answers in this order and answer a StartDiagnostic at the first check that fails, naming the failed item by its RuntimeSettings field name and never its value, items within one check taken in the order store_path, backup_dir, backup_key, owner_credential, owner_listen, token_presupro, token_client_portal, token_cabinet, token_cabinet_kernel, service_listen: the four tokens and service_listen all set or all unset, a partial set failing on its first unset item; store_path, backup_dir, backup_key, owner_credential and owner_listen each set; each address well formed; the two addresses' ports different; each secret at least the imported SECRET_MIN_BYTES constant in UTF-8 bytes; no two secrets equal; the store and the backup location apart.",
+    "load_configuration: [SCHEMA_CONSTRAINT] MUST accept an address only as host:port with no white space and no sign: the host either a dotted-decimal IPv4 address with no leading zero in any part but a lone zero, or a bracketed IPv6 address in its standard text form with no zone identifier and not IPv4-mapped; the port ASCII decimal digits without a leading zero, from the imported LISTEN_PORT_MIN constant to the imported LISTEN_PORT_MAX constant.",
+    "load_configuration: [PATH_OR_ARTIFACT_POLICY] MUST compare the store and the backup location by their absolute paths with every symbolic link resolved, a store file that does not exist yet compared as its resolved directory with its name added, and MUST fail naming both items when the paths are equal or one lies inside the other, and naming the item when its path cannot be resolved, a missing directory, a broken link or a loop included; it MUST NOT create, open or remove any file.",
+    "load_configuration: [RETURN_SHAPE] MUST answer, when every check passes, a LoadedConfiguration holding the store path and the backup location as given and each listener address as a ListenAddress of its host without brackets and its port as an integer, the service API's address None for an owner-only start; it MUST keep the checked secrets in the module's memory, from which the give functions answer them, and MUST put no secret into its answer.",
+    "give_service_tokens: [RETURN_SHAPE] MUST answer one ServiceToken for each member of = models.ServiceName, in the enumeration's order, with the token the last passed load_configuration kept for it, or an empty tuple when that start is owner-only; it MUST NOT read the environment or call load_runtime_settings again.",
+    "give_owner_credential: [RETURN_SHAPE] MUST answer the owner credential exactly as the last passed load_configuration kept it, and MUST NOT read the environment or call load_runtime_settings again.",
+    "give_backup_key: [RETURN_SHAPE] MUST answer the backup key exactly as the last passed load_configuration kept it, and MUST NOT read the environment or call load_runtime_settings again.",
+    "StoreRepository.insert_project_row: [DEPENDENCY_BOUNDARY] MUST add the given row as one new row of project_rows, inside the transaction the store holds on its connection, never committing or rolling it back; a key already present is an integrity error raised to the caller and no row is replaced.",
+    "StoreRepository.load_project_row: [DEPENDENCY_BOUNDARY] MUST answer the row of project_rows whose project_id equals the given value, or None when there is none, inside the transaction the store holds on its connection, never committing or rolling it back; it changes nothing.",
+    "StoreRepository.find_project_row_by_request_id: [DEPENDENCY_BOUNDARY] MUST answer the row of project_rows whose create_request_id equals the given value, or None when there is none, inside the transaction the store holds on its connection, never committing or rolling it back; two such rows are an integrity error raised to the caller, and it changes nothing.",
+    "StoreRepository.update_project_row: [DEPENDENCY_BOUNDARY] MUST replace the stored create_request_id, status, anonymised, last_changed_at, record of the row of project_rows whose project_id equals the given row's, inside the transaction the store holds on its connection, never committing or rolling it back; a row that is not there is an error raised to the caller, and no other row changes.",
+    "StoreRepository.list_project_rows_by_status: [DEPENDENCY_BOUNDARY] MUST answer every row of project_rows whose status and anonymised equal the given values, ordered by last_changed_at descending, then project_id ascending, inside the transaction the store holds on its connection, never committing or rolling it back; it changes nothing.",
+    "StoreRepository.delete_project_row: [DEPENDENCY_BOUNDARY] MUST remove every row of project_rows whose project_id equals the given value and answer how many it removed, none removed answering zero, inside the transaction the store holds on its connection, never committing or rolling it back.",
+    "StoreRepository.insert_room_row: [DEPENDENCY_BOUNDARY] MUST add the given row as one new row of room_rows, inside the transaction the store holds on its connection, never committing or rolling it back; a key already present is an integrity error raised to the caller and no row is replaced.",
+    "StoreRepository.load_room_row: [DEPENDENCY_BOUNDARY] MUST answer the row of room_rows whose room_id equals the given value, or None when there is none, inside the transaction the store holds on its connection, never committing or rolling it back; it changes nothing.",
+    "StoreRepository.find_room_row_by_request_id: [DEPENDENCY_BOUNDARY] MUST answer the row of room_rows whose project_id and create_request_id equal the given values, or None when there is none, inside the transaction the store holds on its connection, never committing or rolling it back; two such rows are an integrity error raised to the caller, and it changes nothing.",
+    "StoreRepository.list_room_rows_of_project: [DEPENDENCY_BOUNDARY] MUST answer every row of room_rows whose project_id equals the given value, ordered by name ascending, then room_id ascending, inside the transaction the store holds on its connection, never committing or rolling it back; it changes nothing.",
+    "StoreRepository.delete_room_rows_of_project: [DEPENDENCY_BOUNDARY] MUST remove every row of room_rows whose project_id equals the given value and answer how many it removed, none removed answering zero, inside the transaction the store holds on its connection, never committing or rolling it back.",
+    "StoreRepository.insert_customer_row: [DEPENDENCY_BOUNDARY] MUST add the given row as one new row of customer_rows, inside the transaction the store holds on its connection, never committing or rolling it back; a key already present is an integrity error raised to the caller and no row is replaced.",
+    "StoreRepository.load_customer_row: [DEPENDENCY_BOUNDARY] MUST answer the row of customer_rows whose customer_ref equals the given value, or None when there is none, inside the transaction the store holds on its connection, never committing or rolling it back; it changes nothing.",
+    "StoreRepository.find_customer_row_by_request_id: [DEPENDENCY_BOUNDARY] MUST answer the row of customer_rows whose create_request_id equals the given value, or None when there is none, inside the transaction the store holds on its connection, never committing or rolling it back; two such rows are an integrity error raised to the caller, and it changes nothing.",
+    "StoreRepository.update_customer_row: [DEPENDENCY_BOUNDARY] MUST replace the stored create_request_id, erased, name, record of the row of customer_rows whose customer_ref equals the given row's, inside the transaction the store holds on its connection, never committing or rolling it back; a row that is not there is an error raised to the caller, and no other row changes.",
+    "StoreRepository.list_customer_rows_by_erased: [DEPENDENCY_BOUNDARY] MUST answer every row of customer_rows whose erased equals the given value, ordered by name ascending, then customer_ref ascending, inside the transaction the store holds on its connection, never committing or rolling it back; it changes nothing.",
+    "StoreRepository.insert_pointer_row: [DEPENDENCY_BOUNDARY] MUST add the given row as one new row of pointer_rows, inside the transaction the store holds on its connection, never committing or rolling it back; a key already present is an integrity error raised to the caller and no row is replaced.",
+    "StoreRepository.load_pointer_row: [DEPENDENCY_BOUNDARY] MUST answer the row of pointer_rows whose pointer_id equals the given value, or None when there is none, inside the transaction the store holds on its connection, never committing or rolling it back; it changes nothing.",
+    "StoreRepository.find_pointer_row_by_request_id: [DEPENDENCY_BOUNDARY] MUST answer the row of pointer_rows whose project_id and create_request_id equal the given values, or None when there is none, inside the transaction the store holds on its connection, never committing or rolling it back; two such rows are an integrity error raised to the caller, and it changes nothing.",
+    "StoreRepository.update_pointer_row: [DEPENDENCY_BOUNDARY] MUST replace the stored status, record of the row of pointer_rows whose pointer_id equals the given row's, inside the transaction the store holds on its connection, never committing or rolling it back; a row that is not there is an error raised to the caller, and no other row changes.",
+    "StoreRepository.list_pointer_rows_of_project: [DEPENDENCY_BOUNDARY] MUST answer every row of pointer_rows whose project_id equals the given value, ordered by artifact_type ascending, then version descending, then pointer_id ascending, inside the transaction the store holds on its connection, never committing or rolling it back; it changes nothing.",
+    "StoreRepository.list_pointer_rows_of_type: [DEPENDENCY_BOUNDARY] MUST answer every row of pointer_rows whose project_id and artifact_type equal the given values, ordered by version descending, then pointer_id ascending, inside the transaction the store holds on its connection, never committing or rolling it back; it changes nothing.",
+    "StoreRepository.delete_pointer_rows_of_project: [DEPENDENCY_BOUNDARY] MUST remove every row of pointer_rows whose project_id equals the given value and answer how many it removed, none removed answering zero, inside the transaction the store holds on its connection, never committing or rolling it back.",
+    "StoreRepository.insert_agent_session_row: [DEPENDENCY_BOUNDARY] MUST add the given row as one new row of agent_session_rows, inside the transaction the store holds on its connection, never committing or rolling it back; a key already present is an integrity error raised to the caller and no row is replaced.",
+    "StoreRepository.load_agent_session_row: [DEPENDENCY_BOUNDARY] MUST answer the row of agent_session_rows whose session_id equals the given value, or None when there is none, inside the transaction the store holds on its connection, never committing or rolling it back; it changes nothing.",
+    "StoreRepository.update_agent_session_row: [DEPENDENCY_BOUNDARY] MUST replace the stored record of the row of agent_session_rows whose session_id equals the given row's, inside the transaction the store holds on its connection, never committing or rolling it back; a row that is not there is an error raised to the caller, and no other row changes.",
+    "StoreRepository.list_agent_session_rows: [DEPENDENCY_BOUNDARY] MUST answer every row of agent_session_rows, ordered by registered_at ascending, then session_id ascending, inside the transaction the store holds on its connection, never committing or rolling it back, its callers giving None for both field and value; it changes nothing.",
+    "StoreRepository.delete_agent_session_row: [DEPENDENCY_BOUNDARY] MUST remove every row of agent_session_rows whose session_id equals the given value and answer how many it removed, none removed answering zero, inside the transaction the store holds on its connection, never committing or rolling it back.",
+    "StoreRepository.insert_audit_entry_row: [DEPENDENCY_BOUNDARY] MUST add the given row as one new row of audit_entry_rows, inside the transaction the store holds on its connection, never committing or rolling it back; a key already present is an integrity error raised to the caller and no row is replaced.",
+    "StoreRepository.list_audit_entry_rows: [DEPENDENCY_BOUNDARY] MUST answer every row of audit_entry_rows, ordered by sequence_number ascending, inside the transaction the store holds on its connection, never committing or rolling it back, its callers giving None for both field and value; it changes nothing.",
+    "StoreRepository.delete_audit_entry_row: [DEPENDENCY_BOUNDARY] MUST remove every row of audit_entry_rows whose sequence_number equals the given value and answer how many it removed, none removed answering zero, inside the transaction the store holds on its connection, never committing or rolling it back.",
+    "StoreRepository.load_audit_sequence_row: [DEPENDENCY_BOUNDARY] MUST answer the row of audit_sequence_rows whose sequence equals the given value, or None when there is none, inside the transaction the store holds on its connection, never committing or rolling it back; it changes nothing.",
+    "StoreRepository.upsert_audit_sequence_row: [DEPENDENCY_BOUNDARY] MUST write the given row into audit_sequence_rows, replacing the stored last_sequence_number of the row of the same sequence when one exists, inside the transaction the store holds on its connection, never committing or rolling it back.",
+    "StoreRepository.insert_migration_closure_row: [DEPENDENCY_BOUNDARY] MUST add the given row as one new row of migration_closure_rows, inside the transaction the store holds on its connection, never committing or rolling it back; a key already present is an integrity error raised to the caller and no row is replaced.",
+    "StoreRepository.list_migration_closure_rows: [DEPENDENCY_BOUNDARY] MUST answer every row of migration_closure_rows, ordered by file_digest ascending, inside the transaction the store holds on its connection, never committing or rolling it back, its callers giving None for both field and value; it changes nothing.",
+    "TransactionStep.run: [BEHAVIOR] Every implementation MUST run one action's step on the StoreTransaction that run_in_transaction or read_in_transaction created and hands it as transaction, and answer the step's OperationAnswer, a refusal included, without committing, rolling back or keeping the transaction after it returns.",
+    "OwnerStep.run: [BEHAVIOR] Every implementation MUST run one owner request that admit_owner_request admitted, for the owner session session_id names, while admit_owner_request holds the locks the request needs, and answer its OperationAnswer, a refusal included, without taking or releasing those locks itself.",
+    "UploadBody.read: [BEHAVIOR] Every implementation MUST answer the next bytes of the upload's stream, at most size of them, and an empty bytes value only at the stream's end, size being passed positionally; a stream that fails raises to the caller.",
+    "RegistryStore.__init__: [BEHAVIOR] MUST keep store_path and one lock that serialises every transaction on the store's one connection, and MUST open no connection and touch no file: open_store opens the connection and discard_new_store closes it.",
+    "open_store: [PATH_OR_ARTIFACT_POLICY] MUST first remove a file at the store's path with the imported STORE_TEMPORARY_SUFFIX constant added, and no other file; when that file cannot be removed and the store's file is absent it MUST answer a StartDiagnostic naming that failure.",
+    "open_store: [BEHAVIOR] MUST, when the store's file does not exist and its directory does, make a new store under the temporary name: in one transaction on that file's own connection call create_store_schema, set the database's user version to the imported STORE_VERSION constant and write through upsert_audit_sequence_row the AUDIT member of = models.AuditSequenceName with no sequence number yet issued, commit, close that connection and rename the file to the store's name; a making that fails MUST remove the temporary file when it can, leave it otherwise, and answer a StartDiagnostic.",
+    "open_store: [VALIDATION_ERROR] MUST open an existing store for reading and writing without creating it and answer a StartDiagnostic naming the failure, never a record's content, when it does not open, when its integrity check does not answer ok, when its foreign key check finds anything, or when its user version is not the imported STORE_VERSION constant; it MUST never give an existing store its schema again or change its version.",
+    "open_store: [RETURN_SHAPE] MUST keep the actions' connection on registry_store, usable from every thread under its lock, set that connection to SQLite's write-ahead log, and answer an OpenedStore whose made_new is true only for a store this call made.",
+    "discard_new_store: [PATH_OR_ARTIFACT_POLICY] MUST act only on a store open_store made new in this process, answering removed false and touching nothing otherwise; it MUST close the store's connection, then remove in this order the store's write-ahead log, shared-memory and rollback-journal companion files and last the store's file, reading each path's type without following a link, removing only a regular file, passing over a path that does not exist, and stopping at the first step that fails.",
+    "discard_new_store: [RETURN_SHAPE] MUST answer a DiscardResult whose removed is true only when the store's path no longer names a file, and whose failure, for the first step that failed, names its member of = models.DiscardStep and its member of = models.DiscardFailureKind: CLOSE_FAILED for a close that fails, NOT_REGULAR_FILE for a link, directory or other non-regular object, TYPE_UNREADABLE for a type it cannot read, REMOVE_FAILED for a removal that fails; after a failed close it MUST try nothing else.",
+    "run_in_transaction: [ORCHESTRATION] MUST take registry_store's lock, begin a write transaction that holds the database's write lock from its start, construct one StoreTransaction over a new SqliteStoreRepository of the actions' connection, hand that StoreTransaction to step and commit only when step answers anything but a RefusedAnswer, rolling back on a RefusedAnswer, and release the lock on every path.",
+    "run_in_transaction: [VALIDATION_ERROR] MUST, when step raises or the commit fails, roll the transaction back and answer a RefusedAnswer whose refusal carries the INTERNAL_ERROR member of = models.RefusalCode, no stage and one failure of the TRANSACTION_FAILED member of = models.RefusalKind with an empty path, so that nothing of the step's changes remains.",
+    "read_in_transaction: [ORCHESTRATION] MUST take registry_store's lock, begin one transaction on the actions' connection, construct one StoreTransaction over a new SqliteStoreRepository of that connection, hand it to step, end the transaction without committing anything, release the lock on every path and answer what step answers.",
+    "read_in_transaction: [VALIDATION_ERROR] MUST, when step raises or the store cannot be read, answer a RefusedAnswer whose refusal carries the INTERNAL_ERROR member of = models.RefusalCode, no stage and one failure of the TRANSACTION_FAILED member of = models.RefusalKind with an empty path.",
+    "copy_store_snapshot: [BEHAVIOR] MUST open its own read connection to the store with its own SqliteStoreRepository, begin one read transaction, fix the snapshot by its first read, load_audit_sequence_row of the AUDIT member of = models.AuditSequenceName, read recorded_now at that read, copy the database to target_path with SQLite's online backup inside that transaction, then on the copy's own connection and repository remove every agent session row, each listed by list_agent_session_rows being deleted by delete_agent_session_row, and commit; it MUST close both connections on every path and never take registry_store's lock.",
+    "copy_store_snapshot: [RETURN_SHAPE] MUST answer a StoreSnapshot with fixed_at the instant recorded_now gave at the fixing read and last_sequence_number the audit counter's value in the snapshot, zero when the snapshot holds no counter, or a SnapshotFailed when the copy cannot be read or written, leaving at target_path whatever was written.",
+    "check_store_file: [VALIDATION_ERROR] MUST open the file at file_path for reading only, never creating or writing it, and answer a StoreFileCheck naming the first check that fails by its member of = models.StoreFileCheckKind, in this order: UNREADABLE when it does not open or cannot be read, the STORE_VERSION member when its user version is not the imported STORE_VERSION constant, INTEGRITY when its integrity check does not answer ok, FOREIGN_KEYS when its foreign key check finds anything, SEQUENCE when the audit counter its own SqliteStoreRepository reads differs from recorded_sequence, a missing counter counting as zero; passed is true with no failed check otherwise, and the connection is closed on every path.",
+    "StoreTransaction.__init__: [BEHAVIOR] MUST keep repository as the one repository every method of this transaction reads and writes through, and MUST NOT begin, commit or roll back a transaction: run_in_transaction and read_in_transaction own its lifecycle.",
+    "StoreTransaction.read_audit_sequence: [FIELD_PROJECTION] MUST answer an AuditSequence holding the last_sequence_number of the row load_audit_sequence_row gives for the AUDIT member of = models.AuditSequenceName, zero when there is no such row.",
+    "StoreTransaction.write_audit_sequence: [FIELD_PROJECTION] MUST write through upsert_audit_sequence_row an AuditSequenceRow of the AUDIT member of = models.AuditSequenceName holding sequence's last_sequence_number.",
+    "StoreTransaction.insert_audit_entry: [FIELD_PROJECTION] MUST write through insert_audit_entry_row one AuditEntryRow whose sequence_number and recorded_at are entry's and whose record is entry.",
+    "StoreTransaction.delete_audit_entries_before: [BEHAVIOR] MUST read every audit entry row through list_audit_entry_rows with None for field and value, remove each whose recorded_at is earlier than cutoff through delete_audit_entry_row by its sequence number, and answer how many it removed.",
+    "StoreTransaction.list_audit_entries: [DETERMINISM_OR_ORDERING] MUST answer the record of every row list_audit_entry_rows gives with None for field and value, in the order it gives them, ascending sequence number.",
+    "StoreTransaction.load_customer: [FIELD_PROJECTION] MUST answer the record of the row load_customer_row gives for customer_ref, or None when there is none.",
+    "StoreTransaction.load_project: [FIELD_PROJECTION] MUST answer the record of the row load_project_row gives for project_id, or None when there is none.",
+    "StoreTransaction.load_room: [FIELD_PROJECTION] MUST answer the record of the row load_room_row gives for room_id, or None when there is none.",
+    "StoreTransaction.load_pointer: [FIELD_PROJECTION] MUST answer the record of the row load_pointer_row gives for pointer_id, or None when there is none.",
+    "StoreTransaction.load_agent_session: [FIELD_PROJECTION] MUST answer the record of the row load_agent_session_row gives for session_id, or None when there is none.",
+    "StoreTransaction.find_customer_by_request_id: [FIELD_PROJECTION] MUST answer the record of the row find_customer_row_by_request_id gives for request_id, or None when there is none.",
+    "StoreTransaction.find_project_by_request_id: [FIELD_PROJECTION] MUST answer the record of the row find_project_row_by_request_id gives for request_id, or None when there is none.",
+    "StoreTransaction.find_room_by_request_id: [FIELD_PROJECTION] MUST answer the record of the row find_room_row_by_request_id gives for project_id and request_id, or None when there is none, so a room of another project is never reached.",
+    "StoreTransaction.find_pointer_by_request_id: [FIELD_PROJECTION] MUST answer the record of the row find_pointer_row_by_request_id gives for project_id and request_id, or None when there is none, so a pointer of another project is never reached.",
+    "StoreTransaction.insert_customer: [FIELD_PROJECTION] MUST write through insert_customer_row one CustomerRow whose customer_ref, create_request_id and name are customer's, whose erased is true exactly when customer's erased_at is set, and whose record is customer.",
+    "StoreTransaction.replace_customer: [FIELD_PROJECTION] MUST replace through update_customer_row the row of customer's customer_ref with the CustomerRow built from customer as insert_customer builds it.",
+    "StoreTransaction.list_customer_rows: [DETERMINISM_OR_ORDERING] MUST answer the records of the rows list_customer_rows_by_erased gives for false, in its order of name then customer_ref, followed by those it gives for true, ordered by customer_ref.",
+    "StoreTransaction.insert_project: [FIELD_PROJECTION] MUST write through insert_project_row one ProjectRow whose project_id, create_request_id, status, anonymised and last_changed_at are project's and whose record is project.",
+    "StoreTransaction.replace_project: [FIELD_PROJECTION] MUST replace through update_project_row the row of project's project_id with the ProjectRow built from project as insert_project builds it.",
+    "StoreTransaction.remove_project_row: [BEHAVIOR] MUST remove the project's row through delete_project_row for project_id and nothing else of the project.",
+    "StoreTransaction.list_project_rows: [DETERMINISM_OR_ORDERING] MUST answer the records of the rows list_project_rows_by_status gives for the ACTIVE member of = models.ProjectStatus with anonymised false and, when include_archived is true, those it gives for the ARCHIVED member with anonymised false, merged into one sequence by last_changed_at latest first, a row without one after every row with one, then by project_id ascending; an anonymised project is never answered.",
+    "StoreTransaction.insert_room: [FIELD_PROJECTION] MUST write through insert_room_row one RoomRow whose room_id, project_id, create_request_id and name are room's and whose record is room.",
+    "StoreTransaction.list_room_rows: [DETERMINISM_OR_ORDERING] MUST answer the records of the rows list_room_rows_of_project gives for project_id, in its order of name then room_id.",
+    "StoreTransaction.remove_room_rows_of_project: [BEHAVIOR] MUST remove every room row of project_id through delete_room_rows_of_project and answer how many it removed.",
+    "StoreTransaction.insert_pointer: [FIELD_PROJECTION] MUST write through insert_pointer_row one PointerRow whose pointer_id, project_id, artifact_type, version, status and create_request_id are pointer's and whose record is pointer.",
+    "StoreTransaction.replace_pointer: [FIELD_PROJECTION] MUST replace through update_pointer_row the row of pointer's pointer_id with the PointerRow built from pointer as insert_pointer builds it.",
+    "StoreTransaction.list_pointer_rows: [DETERMINISM_OR_ORDERING] MUST answer the records of the rows list_pointer_rows_of_project gives for project_id, in its order of artifact type, then version highest first, then pointer id.",
+    "StoreTransaction.published_pointer_row_of_type: [BEHAVIOR] MUST answer the record of the one row list_pointer_rows_of_type gives for project_id and artifact_type whose status is the PUBLISHED member of = models.PointerStatus, or None when none is published, never falling back to another version.",
+    "StoreTransaction.last_pointer_version: [BEHAVIOR] MUST answer the highest version among the rows list_pointer_rows_of_type gives for project_id and artifact_type, whatever their status, or zero when there is none.",
+    "StoreTransaction.remove_pointer_rows_of_project: [BEHAVIOR] MUST remove every pointer row of project_id through delete_pointer_rows_of_project and answer how many it removed.",
+    "StoreTransaction.insert_agent_session: [FIELD_PROJECTION] MUST write through insert_agent_session_row one AgentSessionRow whose session_id and registered_at are session's and whose record is session.",
+    "StoreTransaction.replace_agent_session: [FIELD_PROJECTION] MUST replace through update_agent_session_row the row of session's session_id with the AgentSessionRow built from session as insert_agent_session builds it.",
+    "StoreTransaction.remove_agent_session: [BEHAVIOR] MUST remove the row of session_id through delete_agent_session_row.",
+    "StoreTransaction.list_agent_session_rows: [DETERMINISM_OR_ORDERING] MUST answer the record of every row list_agent_session_rows gives with None for field and value, in its order of registration instant earliest first, then session identity.",
+    "StoreTransaction.agent_session_rows_holding: [BEHAVIOR] MUST answer, in the order list_agent_session_rows gives with None for field and value, the record of every session whose granted_project_ids hold project_id or whose active_project_id is project_id.",
+    "StoreTransaction.load_migration_closure: [FIELD_PROJECTION] MUST answer the record of the row list_migration_closure_rows gives with None for field and value, or None when it gives none.",
+    "StoreTransaction.insert_migration_closure: [FIELD_PROJECTION] MUST write through insert_migration_closure_row one MigrationClosureRow whose file_digest is closure's and whose record is closure.",
+    "StoreTransaction.held_project_ids: [BEHAVIOR] MUST answer, in the order given and each once, the ids among project_ids for which load_project_row finds a row of this store.",
+    "StoreTransaction.held_room_ids: [BEHAVIOR] MUST answer, in the order given and each once, the ids among room_ids for which load_room_row finds a row of this store.",
+    "StoreTransaction.held_pointer_ids: [BEHAVIOR] MUST answer, in the order given and each once, the ids among pointer_ids for which load_pointer_row finds a row of this store.",
+    "append_audit_entry: [BEHAVIOR] MUST read the counter with read_audit_sequence, take one more than its last_sequence_number as the entry's sequence number, write the raised counter with write_audit_sequence and the entry with insert_audit_entry, both on transaction, so that no number is reused after any erasure; it MUST NOT commit or roll back.",
+    "append_audit_entry: [FIELD_ASSIGNMENT] MUST answer and write an AuditEntry whose recorded_at is instant, whose action, subject, principal, confirmation_id and erased_before are the given ones, whose outcome is the ACCEPTED member of = models.AuditOutcome, whose release_version is the imported RELEASE_VERSION constant and whose contract_version is the imported CONTRACT_VERSION constant.",
+    "erase_audit_entries_before: [VALIDATION_ERROR] MUST answer a Refusal with the INVALID_REQUEST member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_VALUES constant names and one failure of the DATE_AFTER_TODAY member of = models.RefusalKind when before is later than today, removing nothing.",
+    "erase_audit_entries_before: [BEHAVIOR] MUST otherwise remove through delete_audit_entries_before on transaction every entry recorded before the start of before in UTC, answer ErasedEntries with the number it removed, and leave the counter untouched.",
+    "read_audit_entries: [DETERMINISM_OR_ORDERING] MUST answer every entry list_audit_entries gives on transaction, in ascending sequence number, and change nothing.",
+    "identify_service: [SECURITY_BOUNDARY] MUST compare the UTF-8 bytes of presented_token through equal_in_constant_time with the bytes of every token give_service_tokens answers, asking for them at this call and keeping none, and answer an IdentifiedService of the service whose token is equal.",
+    "identify_service: [VALIDATION_ERROR] MUST answer a Refusal with the UNAUTHENTICATED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the NO_VALID_TOKEN member of = models.RefusalKind when presented_token is None or equals no token, an unknown token answered as a wrong one, without any count or limit.",
+    "service_may_call: [BEHAVIOR] MUST answer a ServicePermission whose may_call is true exactly when the imported SERVICE_RIGHTS constant holds a row of service and operation, and whose agent_authority is true exactly when may_call is true and service is the CABINET_KERNEL member of = models.ServiceName.",
+    "highest_class_of_service: [BEHAVIOR] MUST answer the highest_class of the row of service in the imported SERVICE_HIGHEST_CLASSES constant.",
+    "sign_in_owner: [BEHAVIOR] MUST, holding the module's one sign-in lock from its monotonic_reading to its decision, refuse without counting while a lockout holds, that is while the reading is less than the imported SIGN_IN_LOCKOUT_MINUTES constant, in nanoseconds of the monotonic reading, after the refusal that started it; otherwise compare the UTF-8 bytes of presented_credential with those of the credential give_owner_credential answers at this call through equal_in_constant_time, a missing credential counting as wrong.",
+    "sign_in_owner: [BEHAVIOR] MUST record a wrong credential's refusal at its reading and start a lockout at that refusal when _refused_sign_ins_since then answers the imported SIGN_IN_REFUSAL_LIMIT constant or more, never extending a lockout that holds; a right credential MUST clear every recorded refusal and make a new OwnerSession whose session_id and csrf_value come from make_secret_value, whose signed-in and last-request readings are the reading, not signed out, with no pending confirmation, no uploaded file and no upload numbered yet, leaving every other session open.",
+    "sign_in_owner: [RETURN_SHAPE] MUST answer SignedIn with the new session's session_id and csrf_value, or one Refusal with the UNAUTHENTICATED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the SIGN_IN_REFUSED member of = models.RefusalKind, the same whatever was wrong, never echoing the credential.",
+    "admit_owner_request: [SECURITY_BOUNDARY] MUST at arrival take one monotonic_reading, find the session whose session_id equals admission's through equal_in_constant_time, and refuse with the UNAUTHENTICATED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the NO_OWNER_SESSION member of = models.RefusalKind when there is none, it is signed out, or _session_reached_limit answers true at that reading; a session that passes MUST have its last-request reading raised to the arrival's reading unless a later one is already held, before any further check.",
+    "admit_owner_request: [VALIDATION_ERROR] MUST, for a change, refuse with the NOT_PERMITTED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the CSRF_REFUSED member of = models.RefusalKind when admission's csrf_value is not equal, through equal_in_constant_time, to the session's; a sign-out that passes MUST mark the session signed out at once, so a later arrival is refused.",
+    "admit_owner_request: [ORCHESTRATION] MUST then, for a request that touches an upload, wait for the instance's one import lock and afterwards take its place on the session's lock, for any other change take its place on the session's lock at once, and for a read take no lock; each lock MUST grant its waiters in the order they asked; it MUST run step with the session's session_id, answer what step answers and release every lock it took on every path, a raised failure included.",
+    "sign_out_owner: [BEHAVIOR] MUST end the session of session_id, which admit_owner_request admitted and marked signed out and whose locks it holds, removing it with its pending confirmation and its uploaded file from the module's sessions.",
+    "show_confirmation_step: [BEHAVIOR] MUST replace the session's pending confirmation with a new PendingConfirmation holding a new value from make_secret_value, the given action with its target and with shown_version as its stated version, the digest _confirmation_binding_digest gives for them and inputs, and the monotonic_reading it was shown at, and MUST answer that value; it MUST never keep inputs themselves.",
+    "take_confirmation: [VALIDATION_ERROR] MUST refuse with the CONFIRMATION_REFUSED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names: with the CONFIRMATION_NOT_PENDING member of = models.RefusalKind when the session holds no pending confirmation; with the CONFIRMATION_EXPIRED member, clearing the pending one whatever value is given, when the imported CONFIRMATION_VALID_MINUTES constant, in nanoseconds of the monotonic reading, has passed since it was shown; with the CONFIRMATION_OTHER_VALUE member, leaving the pending one as it is, when presented_value is None or not equal to it through equal_in_constant_time.",
+    "take_confirmation: [BEHAVIOR] MUST, once presented_value equals the pending value, clear the pending confirmation whatever follows, then answer ConfirmationTaken when action, target, stated_version and the digest _confirmation_binding_digest gives for them and inputs all equal the pending ones, and otherwise refuse with the CONFIRMATION_REFUSED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the CONFIRMATION_BOUND_ELSEWHERE member of = models.RefusalKind.",
+    "keep_uploaded_file: [BEHAVIOR] MUST number the upload one more than the session's last upload number, which sign-in leaves at no upload numbered, replace the session's uploaded file, one of the same bytes included, with an UploadedFile of content, file_digest and that number, keep it in the process's memory only, never in the store or on a disk, and answer the number.",
+    "read_uploaded_file: [RETURN_SHAPE] MUST answer the UploadedFile the session of session_id keeps, or None when it keeps none, and change nothing.",
+    "drop_uploaded_files: [BEHAVIOR] MUST remove the uploaded file of every owner session, keeping each session's last upload number, and change nothing else.",
+    "end_expired_sessions: [ORCHESTRATION] MUST take the instance's import lock, take one monotonic_reading, and for each session in the order of their sign-in take its place on that session's lock and end it, with its pending confirmation and uploaded file, when _session_reached_limit answers true at that one reading; it MUST release every lock on every path and answer how many sessions it ended.",
+    "_session_reached_limit: [BEHAVIOR] MUST answer true when the session is signed out, when reading is at or past its signed-in reading plus the imported OWNER_SESSION_MAX_HOURS constant, or when reading is at or past its last-request reading plus the imported OWNER_SESSION_IDLE_MINUTES constant, each duration in nanoseconds of the monotonic reading, and false otherwise.",
+    "_confirmation_binding_digest: [DETERMINISM_OR_ORDERING] MUST answer the hexadecimal text of a collision-resistant cryptographic digest of one unambiguous serialisation of the action, then the target, then the version, then every field of inputs in the order its model declares them, lists in the order given and an absent value told apart from an empty one, so that equal arguments always give equal digests and different ones different digests.",
+    "_refused_sign_ins_since: [BEHAVIOR] MUST answer how many recorded refused sign-ins have a reading less than the imported SIGN_IN_WINDOW_MINUTES constant, in nanoseconds of the monotonic reading, before reading.",
+    "publish_pointer: [VALIDATION_ERROR] MUST check in stage order and answer only the first failing stage, as a Refusal carrying every failure of that stage: first a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names and one failure of the UNKNOWN_PROJECT member of = models.RefusalKind, its path naming the project_id input, when validate_project_reference answers that project_id does not exist; then a Refusal with the INVALID_REQUEST member at the stage the imported REFUSAL_STAGE_VALUES constant names.",
+    "publish_pointer: [VALIDATION_ERROR] MUST collect the failures of the values stage as follows, ordered by kind as the RefusalKind members MISSING_VALUE then MALFORMED_REQUEST_ID then UNKNOWN_ARTIFACT_TYPE and within one kind by path, each path one element holding the field's name: the failure read_required_text answers for the given artifact type; the UNKNOWN_ARTIFACT_TYPE failure when that type is present but _owner_service_of_type answers None for it; one MISSING_VALUE failure for each of the two reference fields of GivenPointer when read_optional_text answers None for both; and the failure check_request_id_form answers for request_id.",
+    "publish_pointer: [BEHAVIOR] MUST, once the values pass, look the request id up only with find_pointer_by_request_id for project_id, so that a pointer of another project is never reached, and treat a found pointer as a repeat when facts_equal_for_repeat answers true for PointerRepeatFacts built from project_id, publisher and the given type, references and digest against those of the found pointer, its publisher being the principal its PrincipalPublisher holds; a repeat MUST still be refused when the project is archived, and otherwise MUST answer the found pointer as it stands now, whatever its status, with changed false, writing nothing, superseding nothing and making no version.",
+    "publish_pointer: [VALIDATION_ERROR] MUST answer a Refusal with the REFUSED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names, changing nothing, carrying a failure of the ARCHIVED member of = models.RefusalKind with its path naming the project_id input when validate_project_reference answers the project not active, an anonymised one included, and after it a failure of the CONFLICT member with its path naming the request_id input when a pointer of the project carries the request id and facts_equal_for_repeat answers false.",
+    "publish_pointer: [BEHAVIOR] MUST otherwise publish within the transaction it is handed, never committing or rolling it back: when published_pointer_row_of_type finds the type's published pointer, write it back through replace_pointer with the SUPERSEDED member of = models.PointerStatus and superseded_at set to instant and nothing else changed, then insert through insert_pointer one new pointer with the PUBLISHED member, so that at no moment two pointers of one type are published and a withdrawn pointer is never touched.",
+    "publish_pointer: [FIELD_ASSIGNMENT] MUST give the new ArtifactPointer the identity _mint_pointer_id answers, a version one more than last_pointer_version answers for the project and type whatever their status, the owner service _owner_service_of_type answers for the type and never one the caller gives, the given type as written, each reference and the digest as read_optional_text answers them and the digest never computed or checked, published_at set to instant, a PrincipalPublisher of publisher, create_request_id the request id as given, and no superseded or withdrawn instant nor withdrawing principal.",
+    "publish_pointer: [RETURN_SHAPE] MUST answer an accepted publish as PointerAccepted holding the new pointer's _pointer_view with changed true, and a repeat as PointerAccepted holding the found pointer's _pointer_view with changed false, the view carrying its superseded instant, withdrawn instant and withdrawing principal when it has since moved on.",
+    "withdraw_pointer: [VALIDATION_ERROR] MUST check in stage order and answer only the first failing stage, as a Refusal carrying every failure of that stage, each path naming the pointer_id input: a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names and one failure of the UNKNOWN_POINTER member of = models.RefusalKind when load_pointer finds no pointer of pointer_id; then one with the INVALID_REQUEST member at the stage the imported REFUSAL_STAGE_VALUES constant names and one failure of the UNKNOWN_ARTIFACT_TYPE member when _owner_service_of_type answers None for the pointer's type; then one with the REFUSED member at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names carrying, in this order, a failure of the WITHDRAWN member when the pointer is withdrawn, of the SUPERSEDED member when it is superseded, and of the ARCHIVED member when validate_project_reference answers its project not active.",
+    "withdraw_pointer: [BEHAVIOR] MUST take the project only from the loaded pointer, never from an input, and MUST otherwise write that one pointer back through replace_pointer on the transaction it is handed with the WITHDRAWN member of = models.PointerStatus, withdrawn_at set to instant and withdrawn_by set to principal, every other fact kept, and change no other pointer: an earlier version of its type MUST stay as it is and never become published again.",
+    "withdraw_pointer: [RETURN_SHAPE] MUST answer an accepted withdrawal as PointerWithdrawn holding the _pointer_view of the withdrawn pointer; a refusal MUST leave every pointer unchanged.",
+    "project_of_pointer: [BEHAVIOR] MUST answer the project_id of the pointer load_pointer finds for pointer_id, or None when there is none, whatever the pointer's status or type, reading nothing else, changing nothing and refusing nothing.",
+    "list_pointers: [VALIDATION_ERROR] MUST answer a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names and one failure of the UNKNOWN_PROJECT member of = models.RefusalKind, its path naming the project_id input, when validate_project_reference answers that project_id does not exist; an archived or anonymised project MUST be listed as any other.",
+    "list_pointers: [DETERMINISM_OR_ORDERING] MUST answer PointersListed holding the _pointer_view of every pointer list_pointer_rows gives for project_id, in the order it gives them, whatever their status and whether or not their type is still declared, sorting and filtering nothing itself and changing nothing.",
+    "latest_pointer_of_type: [VALIDATION_ERROR] MUST first answer a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names and one failure of the UNKNOWN_PROJECT member of = models.RefusalKind, its path naming the project_id input, when validate_project_reference answers that project_id does not exist, and then a Refusal with the INVALID_REQUEST member at the stage the imported REFUSAL_STAGE_VALUES constant names and one failure of the UNKNOWN_ARTIFACT_TYPE member, its path naming the artifact_type input, when artifact_type is None or _owner_service_of_type answers None for it, a removed type refused even when pointers of it remain.",
+    "latest_pointer_of_type: [BEHAVIOR] MUST answer LatestPointer holding the _pointer_view of the pointer published_pointer_row_of_type gives for project_id and artifact_type, or None when none is published, never falling back to a superseded or withdrawn version, and change nothing.",
+    "published_pointers: [DETERMINISM_OR_ORDERING] MUST answer the _pointer_view of each pointer list_pointer_rows gives for project_id whose status is the PUBLISHED member of = models.PointerStatus, in the order it gives them, a pointer of a type no longer declared included, never a superseded or withdrawn one; an unknown project MUST answer an empty tuple without a refusal, and it changes nothing.",
+    "delete_pointers_of_project: [BEHAVIOR] MUST remove every pointer of project_id, whatever its status or type, through remove_pointer_rows_of_project on the transaction it is handed, never committing or rolling it back, and answer the count that call answers, zero when the project had none; it MUST touch no pointer of another project.",
+    "write_imported_pointer: [FIELD_ASSIGNMENT] MUST write through insert_pointer one ArtifactPointer carrying every field of imported under the field of the same name exactly as given, its identity and instants kept and nothing minted or recomputed, with an ImportPublisher of file_digest as its publisher, no request id, no withdrawn instant and no withdrawing principal, and answer that pointer; it MUST NOT check the type or the version, which the import checked, nor supersede any other pointer.",
+    "_pointer_view: [FIELD_PROJECTION] MUST answer a PointerView carrying each fact of pointer under the field of the same name, exactly as stored, and MUST leave out the pointer's request id, which no answer carries.",
+    "_owner_service_of_type: [BEHAVIOR] MUST answer the owner_service of the row of the imported ARTIFACT_TYPE_OWNERS constant whose artifact_type equals artifact_type exactly as written, or None when no row holds it; it reads no store, configuration or environment.",
+    "_mint_pointer_id: [BEHAVIOR] MUST take an identity from mint_identity and, while load_pointer on transaction finds a pointer of it, take another, answering the first identity no pointer holds; a collision MUST never refuse the publish.",
+    "probe_backup_location: [PATH_OR_ARTIFACT_POLICY] MUST create one new regular file directly in backup_dir, created exclusively and without following a link, under a name that begins with the imported BACKUP_TEMPORARY_PREFIX constant and that no file of the location has, and MUST then remove that same file, touching no other file of the location.",
+    "probe_backup_location: [RETURN_SHAPE] MUST answer a ProbePassed when the probe file was created and removed, and otherwise a StartDiagnostic whose diagnostic names the backup_dir item and what failed, the location missing or not a directory or the file not created or not removed, never the location's path; a probe file it could not remove MUST be left where it is, for the next run's removal of temporary files.",
+    "run_daily_backup_if_due: [ORCHESTRATION] MUST read clock.recorded_now once per call and ask _backup_due with that instant; only when it answers true and no run of this process is going MUST it start the run on a thread of its own and return at once, never waiting for the run; a call while a run is going MUST start none, so that runs never overlap, and the flag that a run is going MUST be set by the call that starts the run and cleared by the run when it ends, under a lock.",
+    "run_daily_backup_if_due: [BEHAVIOR] The run MUST first look for a kept backup of its date, the UTC date of the look that started it, by reading with _read_backup_record every regular file directly in backup_dir whose name begins with the imported BACKUP_KEPT_PREFIX constant, and MUST end with no step and no diagnostic when one records a made_at of that UTC date; a file whose record cannot be read, or a location that cannot be listed, counts as no kept backup of the date.",
+    "run_daily_backup_if_due: [BEHAVIOR] The run's removal step MUST remove every regular file directly in backup_dir whose name begins with the imported BACKUP_TEMPORARY_PREFIX constant; when the location cannot be listed or one removal fails it MUST report the REMOVE_TEMPORARY member of = models.BackupRunStep through _report_run_failure and end the run there, making no backup and deleting nothing else.",
+    "run_daily_backup_if_due: [BEHAVIOR] The run's backup step MUST call store.copy_store_snapshot with registry_store and a new temporary path, ask configuration.give_backup_key for the key, make the BackupRecord from the imported BACKUP_RECORD_VERSION constant, the StoreSnapshot's fixed_at as its made_at and its last_sequence_number, the imported RELEASE_VERSION constant and _key_digest of the key, write _encrypt_backup of the copy's bytes into a second new temporary file, and remove the unencrypted copy before going on.",
+    "run_daily_backup_if_due: [BEHAVIOR] The backup step MUST then read the written backup back from its file, decrypt it with _decrypt_backup into a third new temporary file, call store.check_store_file on that file with the recorded last sequence number, and remove that file; the backup MUST be renamed to its kept name only when the snapshot, the encryption, the decryption and the check passed and both unencrypted files were removed, and otherwise the step MUST delete the backup when it can and report the MAKE_BACKUP member of = models.BackupRunStep, a file it cannot remove or delete staying under the temporary prefix for the next run.",
+    "run_daily_backup_if_due: [PATH_OR_ARTIFACT_POLICY] MUST make a backup's kept name from the imported BACKUP_KEPT_PREFIX constant followed by its made_at in UTC to the microsecond, written in a fixed-width form of ASCII digits and letters whose order as text is the order of the instants, and MUST never overwrite a file: when a file of the kept name exists or the rename fails, the backup MUST be deleted and the MAKE_BACKUP member of = models.BackupRunStep reported.",
+    "run_daily_backup_if_due: [BEHAVIOR] The run's rotation step MUST run whatever the backup step did, read clock.recorded_now once before it looks at any file and take one cutoff, that instant less the imported BACKUP_RETENTION_HOURS constant in hours; it MUST then take the regular files directly in backup_dir whose name begins with the imported BACKUP_KEPT_PREFIX constant in the order of their names and delete each whose record _read_backup_record cannot read and each whose made_at is earlier than the cutoff, comparing to the microsecond with neither side rounded, so that a backup made exactly at the cutoff is kept.",
+    "run_daily_backup_if_due: [VALIDATION_ERROR] A rotation step that cannot list the location MUST report the REMOVE_EXPIRED member of = models.BackupRunStep with no file name, and a file it cannot delete MUST be reported with that member and the file's name and the next file taken; such a run counts as failed while its new backup stays kept, and every exception raised inside a run MUST be caught there and reported as the failure of the step it arose in, never reaching the caller or stopping Registry.",
+    "run_daily_backup_if_due: [PATH_OR_ARTIFACT_POLICY] MUST touch in backup_dir only regular files directly in it whose name begins with the imported BACKUP_KEPT_PREFIX constant or the imported BACKUP_TEMPORARY_PREFIX constant, MUST follow no symbolic link and enter no directory there, and MUST create each temporary file exclusively under the temporary prefix with a name no other file has; it MUST write nothing to the store and make no audit entry.",
+    "run_daily_backup_if_due: [SECURITY_BOUNDARY] MUST ask configuration.give_backup_key anew for each run it starts and MUST hold the key only while that run lasts, never in the module's memory between runs, never in a file name, a record or a diagnostic; the record MUST carry only the key's digest.",
+    "newest_backup_instant: [RETURN_SHAPE] MUST list backup_dir once and answer a NewestBackupFound with the latest made_at among the regular files directly in it whose name begins with the imported BACKUP_KEPT_PREFIX constant and whose record _read_backup_record reads, a NoBackup when there is none, and a BackupsUnlisted when the location cannot be listed, never a NoBackup for that; a file whose record cannot be read, or that is gone after the listing, MUST count as no backup, a temporary file never counts, and it MUST write nothing.",
+    "_backup_due: [BEHAVIOR] MUST compare now's UTC time of day with the imported BACKUP_DAILY_TIME_UTC constant read as hours and minutes; before it, it MUST remember now's UTC date in the module's memory as seen before the daily time and answer false; at or after it, it MUST answer true only when now's date was so remembered and not yet decided, and MUST then remember the date as decided whatever it answers, so that only a date's first look at or after the daily time can answer true and a process answers true for each date at most once; the memory starts empty with each process.",
+    "_key_digest: [SECURITY_BOUNDARY] MUST answer the text sha256: followed by the lowercase hexadecimal SHA-256 of the UTF-8 bytes of the imported BACKUP_KEY_DIGEST_DOMAIN constant, one zero byte and the UTF-8 bytes of backup_key, the same text for the same key on every call, and MUST keep neither the key nor the digest.",
+    "_encrypt_backup: [SCHEMA_CONSTRAINT] MUST answer the backup file's bytes: first the record line, one UTF-8 JSON object holding exactly the fields of = models.BackupRecord from record, made_at as the text Python's datetime isoformat gives for the instant in UTC with its offset and with microseconds, written on one line and ended by one line feed; then a fresh random nonce of the standard nonce length of AES-GCM drawn from the operating system's random source; then the AES-256-GCM ciphertext with its tag of snapshot.",
+    "_encrypt_backup: [SECURITY_BOUNDARY] MUST seal under a key of the length AES-256 takes that HKDF-SHA256 derives, with no salt, from the UTF-8 bytes of backup_key with the UTF-8 bytes of the imported BACKUP_KEY_DERIVATION_INFO constant as its info, using the cryptography package, and MUST pass the record line's bytes without its line feed as the associated data, so that a changed record fails the decryption.",
+    "_decrypt_backup: [VALIDATION_ERROR] MUST split sealed at its first line feed, take the nonce of the standard AES-GCM nonce length after it and decrypt the rest with the key derived from backup_key as _encrypt_backup derives it and the record line's bytes without its line feed as associated data, answering the decrypted snapshot; it MUST answer None, without raising, when sealed has no line feed, is too short to hold a nonce and a tag, or fails the authentication.",
+    "_read_backup_record: [VALIDATION_ERROR] MUST open file_path for reading only without following a link, read only its first line, and answer a BackupRecord when that line is a UTF-8 JSON object with exactly the fields of = models.BackupRecord, each of its type, made_at a text Python's datetime fromisoformat reads into an instant with an offset, taken as UTC to the microsecond and no integer field a boolean, whatever its record_version; it MUST answer None, without raising, for a file that is not a regular file or cannot be opened or read, and for any other first line.",
+    "_report_run_failure: [BEHAVIOR] MUST write exactly one line to the process's standard error naming that a backup run failed, the failed step by its member of = models.BackupRunStep and, when file_name is given, that file's name within the backup location, and nothing else: never a key, a digest, a record's value, the location's path or a file's content.",
+    "read_import_mapping: [VALIDATION_ERROR] MUST first ask transaction.load_migration_closure and, when it answers a closure, MUST answer at once a Refusal whose code is the REFUSED member of = models.RefusalCode, whose stage is the imported REFUSAL_STAGE_LIFECYCLE constant and whose failures are one RefusalFailure of the IMPORT_CLOSED member of = models.RefusalKind with an empty path, reading no byte of body, parsing nothing and making no other check.",
+    "read_import_mapping: [ORCHESTRATION] In the UPLOAD member of = models.ImportMode it MUST read body only through _read_bounded with declared_length, then MUST parse the bytes read only through _parse_export, and for an accepted file MUST answer an ImportUploaded holding exactly those bytes as content, their digest from _file_digest and one ExportProjectSummary for each project of the file with its project_id and status as the file gives them, ordered by project_id compared by Unicode code point.",
+    "read_import_mapping: [ORCHESTRATION] In the MAPPING member of = models.ImportMode it MUST work on kept_content alone, never reading body: it MUST compute the digest with _file_digest, parse with _parse_export, check the picks and Customer values of choices, and for choices that pass MUST answer an ImportMapped holding that digest and the mapping _build_mapping gives in the transaction it was handed, a mapping that is not clean being an answer and not a refusal.",
+    "read_import_mapping: [VALIDATION_ERROR] MUST answer the refusal of _read_bounded or of _parse_export as a Refusal whose code is the INVALID_REQUEST member of = models.RefusalCode, whose stage is the imported REFUSAL_STAGE_VALUES constant and whose failures are one RefusalFailure of the kind they gave with an empty path; such a refusal carries no digest and no part of the file.",
+    "read_import_mapping: [VALIDATION_ERROR] In the MAPPING member of = models.ImportMode it MUST refuse, with the INVALID_REQUEST member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_VALUES constant names, every pick whose project_id is not a project of the file and every Customer value whose v1_value no pick brings in, each as the OUTSIDE_CLOSED_LIST member of = models.RefusalKind, and every later entry repeating a project_id or a v1_value already given, each as the DUPLICATE_PICK member, whatever names, aliases or Customer values the entries carry; all such failures are answered together and _build_mapping is not called.",
+    "read_import_mapping: [DETERMINISM_OR_ORDERING] Each refused pick or Customer value MUST carry the path of a PathElement naming its list by the field of = models.ImportChoices that holds it followed by a PathElement holding its position in that list counted from zero; the failures MUST be ordered by kind with every outside_closed_list failure before every duplicate_pick failure, and within one kind by path, names compared by Unicode code point and positions as numbers.",
+    "read_import_mapping: [DEPENDENCY_BOUNDARY] MUST only read: it MUST NOT write, insert or replace any record, MUST NOT open, commit or roll back a transaction, MUST NOT keep the file's bytes beyond its answer nor write them to the store or a disk, and MUST NOT take a digest from any caller.",
+    "read_import_mapping: [VALIDATION_ERROR] MUST raise ValueError, before reading anything, when the inputs its mode needs are not given: body in the UPLOAD member of = models.ImportMode, or kept_content and choices in the MAPPING member; this is a wiring fault and never an answer to the owner.",
+    "_read_bounded: [VALIDATION_ERROR] MUST answer a ReadRefused of the FILE_TOO_LARGE member of = models.RefusalKind, without calling body.read even once, when declared_length is given and greater than the imported IMPORT_FILE_MAX_BYTES constant.",
+    "_read_bounded: [BEHAVIOR] MUST otherwise call body.read repeatedly with a positional size, asking each time for no more bytes than keep the total read at most one byte past the imported IMPORT_FILE_MAX_BYTES constant, until body.read answers empty bytes; it MUST answer a ReadRefused of the FILE_TOO_LARGE member of = models.RefusalKind as soon as the bytes read exceed that constant, whatever length was declared or whether one was, and stop reading then.",
+    "_read_bounded: [VALIDATION_ERROR] MUST answer a ReadRefused of the FILE_UNREADABLE member of = models.RefusalKind when body.read raises, and when the stream ends having given fewer bytes than a given declared_length; the exception is not raised further and none of the bytes read is answered.",
+    "_read_bounded: [RETURN_SHAPE] MUST answer a BytesRead holding every byte read, in stream order, only when the stream ended within the imported IMPORT_FILE_MAX_BYTES constant and not before a given declared_length; it is the only function of the module that calls body.read.",
+    "_parse_export: [VALIDATION_ERROR] MUST answer an ExportRefused of the FILE_UNREADABLE member of = models.RefusalKind when content is not valid UTF-8, is not one JSON object, lacks one of the arrays named by the fields of = models.ExportFile, holds an array element that is not a JSON object, or holds a member value that is neither JSON text nor null.",
+    "_parse_export: [VALIDATION_ERROR] MUST answer an ExportRefused of the FILE_MALFORMED member of = models.RefusalKind when a project's project_id or status is absent, null or blank text, or when two projects carry the same project_id compared exactly as text; no other defect of any record refuses the file here.",
+    "_parse_export: [SCHEMA_CONSTRAINT] MUST answer an ExportParsed whose ExportFile keeps every record of each array in file order, each with its position in its array counted from zero and every field named by = models.ExportProject, = models.ExportRoom or = models.ExportPointer as the member of that name gives it, unchanged text or None when the member is absent or null; members of other names are ignored.",
+    "_parse_export: [SECURITY_BOUNDARY] MUST read the file only as data with a JSON parser that builds plain values, and MUST NOT execute, evaluate, import or deserialise into objects anything the file holds.",
+    "_file_digest: [BEHAVIOR] MUST answer the lowercase hexadecimal SHA-256 of content exactly as given, the same text for the same bytes on every call.",
+    "_file_digest: [PROVENANCE] MUST be the only source of a file digest in this module: every digest the module answers or compares is computed by it over the bytes in hand, never taken from a caller.",
+    "_build_mapping: [BEHAVIOR] MUST bring in only what the picks name: each picked project, the rooms and pointers whose project_id is a picked project_id, and the v1 customer_ref each picked project names read through read_optional_text; records of projects not picked, or naming a project the file does not hold, MUST take no part in any check, conflict, duplicate count or list of the mapping.",
+    "_build_mapping: [VALIDATION_ERROR] MUST make one MalformedRecord for each brought-in record with at least one defect, carrying its record kind, its id as the file gives it or None, its position and every defect it has as members of = models.ImportDefect: a field missing or blank that the matching field of = models.ImportedProject, = models.ImportedRoom or = models.ImportedPointer requires, and an id carried by more than one brought-in record of its kind, in which case every record carrying it is malformed.",
+    "_build_mapping: [VALIDATION_ERROR] MUST mark as defects of = models.ImportDefect a status outside = models.ProjectStatus or = models.PointerStatus, a pointer whose status is the WITHDRAWN member of = models.PointerStatus, a pointer whose artifact_type is not a row of the imported ARTIFACT_TYPE_OWNERS constant or whose owner_service is not that row's, and a version that is not a whole number or a sequence of a project's pointers of one type that does not run from one up without gaps with every one superseded but the highest, which is published.",
+    "_build_mapping: [VALIDATION_ERROR] MUST mark as defects of = models.ImportDefect an instant that is not date-time text with its UTC offset as the import file's format writes it, an active project with an archived instant or an archived one without, a superseded pointer without a superseded instant or a published one with one, and a record whose own instant of change, archiving or supersession is before its own instant of creation, adding or publishing; it MUST NOT compare one record's instants with another record's nor an archived project's last-changed instant with its archived instant.",
+    "_build_mapping: [VALIDATION_ERROR] MUST make one ConflictingRecord for each brought-in record whose id production holds for its kind, asking transaction held_project_ids with the brought-in project ids only; held_room_ids with the brought-in room ids only; held_pointer_ids with the brought-in pointer ids only; so that ids are compared per kind and no other production id is read.",
+    "_build_mapping: [VALIDATION_ERROR] MUST read each picked project's display name as the pick's display_name when read_required_text gives it, else the v1 name, and each Customer's name and kind as given, and MUST make one MissingMappingValue, named by its subject kind of = models.MappingSubject, its subject as the project_id or the v1 value and its field of = models.MappingField, for every one absent or blank; a Customer with no Customer value given misses both its name and its kind.",
+    "_build_mapping: [VALIDATION_ERROR] MUST pass every given alias as the ALIAS member of = models.FormField and every given Customer kind as the CUSTOMER_KIND member through check_value_forms, each with a path naming its subject, and MUST make one MappingFormFailure, with the subject and field of the value and the kind check_value_forms answered, for each failure it answers.",
+    "_build_mapping: [RETURN_SHAPE] MUST answer one MappedProject per picked project ordered by project_id, its rooms the well-formed brought-in rooms as RoomView ordered by name then room_id and its pointers the well-formed brought-in pointers ordered by artifact type, version highest first, then pointer_id, and one MappedCustomer per distinct v1 value the picks bring in ordered by v1 value, with the project_ids that name it ordered and the fields of the ImportCustomerValue of its v1 value carried over, or no name, no kind and is_tax_id false when choices gives none.",
+    "_build_mapping: [DETERMINISM_OR_ORDERING] MUST order malformed records and conflicts by record kind in the member order of = models.RecordKind then by position, missing values and form failures by subject kind in the member order of = models.MappingSubject, then subject by Unicode code point, then field in the member order of = models.MappingField, and MUST convert every instant it answers to a timezone-aware UTC datetime.",
+    "_build_mapping: [FIELD_ASSIGNMENT] MUST set clean true only when the mapping has no malformed record, no conflict, no missing value, no form failure and at least one pick.",
+    "confirm_import: [VALIDATION_ERROR] MUST first ask transaction.load_migration_closure and, when it answers a closure, MUST answer at once a Refusal whose code is the REFUSED member of = models.RefusalCode, whose stage is the imported REFUSAL_STAGE_LIFECYCLE constant and whose failures are one RefusalFailure of the IMPORT_CLOSED member of = models.RefusalKind with an empty path, writing nothing.",
+    "confirm_import: [VALIDATION_ERROR] MUST then answer, alone and at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names with the REFUSED member of = models.RefusalCode, one failure of the FILE_NOT_KEPT member of = models.RefusalKind with an empty path when kept is None, when its upload_number is not bound_upload_number, or when _file_digest of its content is not bound_digest; equal bytes of another upload never stand in for the bound one.",
+    "confirm_import: [VALIDATION_ERROR] MUST otherwise parse the kept content with _parse_export and build the mapping of choices with _build_mapping in transaction, and MUST refuse the whole import at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names with the REFUSED member of = models.RefusalCode, answering together a failure of the MAPPING_NOT_CLEAN member of = models.RefusalKind when the mapping is not clean for any reason but having no pick, or when a pick or Customer value would be refused by read_import_mapping, and a failure of the NO_PICKS member when choices holds no pick, in that order and with empty paths.",
+    "confirm_import: [ORCHESTRATION] For a clean mapping it MUST have every record written by its own module in transaction: first each MappedCustomer through make_imported_customer with its name, its kind as = models.CustomerKind, its v1 value, its tax-id answer and instant; then each picked project through write_imported_project with the display name and alias it arrives under and the customer_ref minted for its v1 value, or None when it names none; then each brought-in pointer through write_imported_pointer with the file's digest.",
+    "confirm_import: [FIELD_PROJECTION] MUST build every imported record it hands to a writing module from the file's record of it, with instants read as timezone-aware UTC datetimes, the project's updated_at as last_changed_at, a room's created_at as added_at and a pointer's created_at as published_at, statuses and services as members of their enumerations and the version as a whole number.",
+    "confirm_import: [RETURN_SHAPE] MUST answer an ImportConfirmed holding the bound digest, one ImportedProjectResult per written project in project_id order with the values it was written with, and one MadeCustomer per Customer made in v1 value order with the customer_ref make_imported_customer gave it.",
+    "confirm_import: [DEPENDENCY_BOUNDARY] MUST leave every write to the record's own module: it MUST NOT write a record itself, MUST NOT open, commit or roll back a transaction, MUST NOT write the migration closure, and MUST NOT apply any value other than those choices carries.",
+    "record_migration_closure: [FIELD_ASSIGNMENT] MUST make one MigrationClosure with file_digest and confirmation_id as given, accepted_at the given instant and principal an ActingPrincipal of the OWNER member of = models.PrincipalKind with no service and no session_id, MUST write it through transaction.insert_migration_closure and MUST answer it.",
+    "record_migration_closure: [FORBIDDEN_ACTION] MUST NOT open, commit or roll back a transaction, MUST NOT mint the confirmation id or read the clock itself, and MUST NOT write any other record.",
+    "record_customer: [VALIDATION_ERROR] MUST check the values before any Customer is looked up: the FailedValue check_request_id_form answers for request_id, carried on the path naming request_id, together with every failure _customer_input_failures answers for facts; when any fails it MUST answer a Refusal with the INVALID_REQUEST member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_VALUES constant names, carrying every one of them ordered by kind in the order the operation's errors list the kinds and within one kind by path, and MUST write nothing.",
+    "record_customer: [BEHAVIOR] MUST, once the values pass, look the request id up only with find_customer_by_request_id of the transaction it was handed: a Customer found whose current facts facts_equal_for_repeat answers equal to the given ones, both read as CustomerRepeatFacts, MUST be answered as it stands through _customer_view with changed false and nothing written, and one with other facts MUST answer a Refusal with the REFUSED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names with the CONFLICT member of = models.RefusalKind on the path naming request_id, nothing written; no other lookup decides a repeat, so a Customer of equal name and contact data under another request id never stops the create.",
+    "record_customer: [FIELD_ASSIGNMENT] MUST write a new Customer once with insert_customer and answer CustomerChanged with its view and changed true: customer_ref from _mint_customer_ref, the name and every present optional text exactly as given and an optional text read_optional_text answers None for stored as None, the kind and the language as members of = models.CustomerKind and = models.CustomerLanguage, the revision the imported REVISION_FIRST constant names; created_at set to the given instant and last_changed_at to that same instant; create_request_id the request id exactly as given, and no mark set.",
+    "correct_customer: [VALIDATION_ERROR] MUST check in stage order and answer a Refusal at the first failing stage with every failure of that stage, writing nothing: a Customer load_customer does not find answers the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names with the UNKNOWN_CUSTOMER member of = models.RefusalKind on the path naming customer_ref; then any failure _customer_input_failures answers for facts answers the INVALID_REQUEST member at the stage the imported REFUSAL_STAGE_VALUES constant names; then a stated_revision other than the Customer's current revision, one given for an erased Customer, or none given for a Customer that has a revision answers the STALE member at the stage the imported REFUSAL_STAGE_VERSION constant names with the STALE_REVISION member on the path naming stated_revision; then an erased Customer answers the REFUSED member at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names with the CUSTOMER_ERASED member.",
+    "correct_customer: [BEHAVIOR] MUST answer the Customer as it stands with changed false and write nothing when facts_equal_for_repeat answers the given facts equal to the stored ones, both read as CustomerRepeatFacts; otherwise it MUST replace every editable fact of GivenCustomerFacts at once, an optional one not given cleared to None, move the revision by one and set last_changed_at to the given instant together, keep the identity, the created instant, the request id and every mark as they are, write it with replace_customer and answer CustomerChanged with its view and changed true.",
+    "mark_customer: [VALIDATION_ERROR] MUST check in stage order and answer a Refusal at the first failing stage with every failure of that stage, writing nothing: a Customer that load_customer does not find answers the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names with the UNKNOWN_CUSTOMER member of = models.RefusalKind on the path naming customer_ref; for the END member of = models.CustomerTransition an end_date later than today answers the INVALID_REQUEST member at the stage the imported REFUSAL_STAGE_VALUES constant names with the DATE_AFTER_TODAY member on the path naming end_date; then a stated_revision other than the Customer's current revision, a stated_revision given for an erased Customer, or none given for a Customer that has a revision, answers the STALE member at the stage the imported REFUSAL_STAGE_VERSION constant names with the STALE_REVISION member on the path naming stated_revision; then an erased Customer answers the REFUSED member at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names with the CUSTOMER_ERASED member on the path naming customer_ref.",
+    "mark_customer: [BEHAVIOR] MUST apply the transition to the one mark it names and leave the other mark, the contact data and the fiscal data as they are: the RESTRICT member of = models.CustomerTransition sets restricted_at to the given instant and the LIFT member clears it; the END member sets relationship_ended_on to end_date, or to today when end_date is None, and relationship_ended_at to the given instant, and the RESUME member clears both; end_date is read for the END member only.",
+    "mark_customer: [BEHAVIOR] MUST answer the Customer as it stands with changed false and write nothing when the transition asks for the state the mark is already in: restricting a restricted Customer, lifting an unrestricted one, resuming one whose relationship is not ended, and ending an ended relationship whatever end_date is given, the recorded date staying; an accepted change MUST move the revision by one and set last_changed_at to the given instant together, be written with replace_customer and answer CustomerChanged with its view and changed true.",
+    "erase_customer_contact: [VALIDATION_ERROR] MUST check in stage order and answer a Refusal, writing nothing: a Customer load_customer does not find answers the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names with the UNKNOWN_CUSTOMER member of = models.RefusalKind on the path naming customer_ref; then a stated_revision given for an erased Customer, the revision it was erased from included, none given for a Customer that has a revision, or one other than its current revision answers the STALE member at the stage the imported REFUSAL_STAGE_VERSION constant names with the STALE_REVISION member on the path naming stated_revision.",
+    "erase_customer_contact: [BEHAVIOR] MUST answer an erased Customer with no revision stated as it stands with changed false and write nothing; otherwise it MUST replace the Customer with one holding only its customer_ref and erased_at set to the given instant, every other field of Customer None so that nothing but the identity and the erased mark with its instant survives, write it with replace_customer and answer CustomerChanged with its ErasedCustomer view and changed true; the erasure is final and the customer_ref stays, so projects still name it.",
+    "read_customer: [RETURN_SHAPE] MUST answer CustomerFound with the view _customer_view makes of the Customer load_customer finds, an erased Customer in its erased form and a restricted or ended one unchanged with its marks, and MUST answer a Customer it does not find as a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names with the UNKNOWN_CUSTOMER member of = models.RefusalKind on the path naming customer_ref; it writes nothing.",
+    "list_customers: [DETERMINISM_OR_ORDERING] MUST answer one item for each Customer list_customer_rows answers, in exactly the order it answers them and never sorted again: an erased Customer as ErasedCustomer, any other as ListedCustomer carrying its customer_ref, its name, its restricted instant and its ended date and no contact or fiscal value; it writes nothing.",
+    "read_billing_data: [SECURITY_BOUNDARY] MUST answer BillingData carrying only the stored kind, tax id and legal name, a value never recorded answered as None and never a refusal, and MUST never carry a contact value of the Customer, its ordinary name included; a Customer load_customer does not find MUST be answered as a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names with the UNKNOWN_CUSTOMER member of = models.RefusalKind on the path naming customer_ref, an erased one with the REFUSED member at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names with the CUSTOMER_ERASED member, and a restricted one likewise with the CUSTOMER_RESTRICTED member; an ended relationship alone does not refuse it.",
+    "check_customer_eligible: [BEHAVIOR] MUST answer a member of = models.CustomerEligibility and never a Refusal: UNKNOWN when load_customer finds no Customer, ERASED for an erased one, then RESTRICTED for a restricted one, then ENDED for one whose relationship is ended, and ELIGIBLE for any other; a Customer both restricted and ended answers RESTRICTED, and it writes nothing.",
+    "make_imported_customer: [FIELD_ASSIGNMENT] MUST write a new Customer once with insert_customer and answer it: customer_ref from _mint_customer_ref, the given name and kind, tax_id the v1 value exactly as given when v1_value_is_tax_id is true and None otherwise, every other contact and fiscal value None, the revision the imported REVISION_FIRST constant names; created_at set to the given instant and last_changed_at to that same instant; create_request_id None and no mark set; it refuses nothing, the values having been checked by its caller.",
+    "_customer_view: [RETURN_SHAPE] MUST answer ErasedCustomer carrying only customer_ref and erased_at when erased_at is set, and otherwise CustomerDetail carrying each of its fields from the stored Customer field of the same name; it MUST never carry create_request_id or relationship_ended_at.",
+    "_customer_input_failures: [VALIDATION_ERROR] MUST answer the failure read_required_text answers for the name on the path naming name and for the customer kind on the path naming customer_kind, then every failure check_value_forms answers for the present kind and the language read_optional_text answers present, given as GivenFormValue with the CUSTOMER_KIND and CUSTOMER_LANGUAGE members of = models.FormField and their paths; it MUST refuse no other optional value, an absent language never failing, and MUST answer an empty tuple when every value is within its form.",
+    "_mint_customer_ref: [BEHAVIOR] MUST take an identity from mint_identity and, while load_customer of the transaction it was handed finds a Customer of that identity, MUST mint again, answering the first identity no Customer holds; a collision never refuses the action.",
+    "register_session: [BEHAVIOR] MUST, when load_agent_session finds no session of session_id, insert through insert_agent_session a new AgentSession holding session_id exactly as given, never minted or rewritten, with no granted project, no active project, no pending request, the imported ACCESS_VERSION_FIRST constant as its access version and instant as its registration instant, and answer SessionRegistered with its access and changed true; when a session of session_id is registered it MUST answer SessionRegistered with that session's access as it stands and changed false, writing nothing.",
+    "check_agent_call: [SECURITY_BOUNDARY] MUST read the session of session_id through load_agent_session in transaction and answer AgentCallAdmitted only when it is registered and, when on_project is true, the project the call acts on is among its granted_project_ids: project_id when given, otherwise the session's active project; the admitted answer MUST carry that project_id, and None when on_project is false, where the registered session alone suffices.",
+    "check_agent_call: [VALIDATION_ERROR] MUST answer an unregistered session, a project outside the set and no active project when none is named with one and the same Refusal: the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AGENT_SESSION constant names and one failure of the AGENT_CALL_REFUSED member of = models.RefusalKind with an empty path, so the answer never tells which of them failed nor whether the project exists, and it MUST change nothing.",
+    "request_project_access: [VALIDATION_ERROR] MUST read request_text through read_required_text and, when it answers a FailedValue, answer a Refusal with the INVALID_REQUEST member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_VALUES constant names and one failure of the MISSING_VALUE member of = models.RefusalKind whose path names request_text, changing nothing.",
+    "request_project_access: [BEHAVIOR] MUST, for a given text, replace the session's pending request through replace_agent_session with an AccessRequest of that text as given and instant, whatever request was pending, make its access version one more than the one before and leave its granted set and active project as they are, taking no stated version; it MUST answer AccessRequestPending, which carries nothing about which projects exist.",
+    "read_session_access: [RETURN_SHAPE] MUST answer SessionAccessFound with the access _session_access gives for the session of session_id, and a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names and one failure of the UNKNOWN_SESSION member of = models.RefusalKind when load_agent_session finds none.",
+    "list_sessions: [DETERMINISM_OR_ORDERING] MUST answer one SessionListItem for every session list_agent_session_rows gives, in the order it gives them without sorting again, each with the session's registration instant, the access _session_access gives and the text of its pending request, None when no request is pending.",
+    "answer_access_request: [VALIDATION_ERROR] MUST check in stage order and answer the first failing stage with every failure of it: at the stage the imported REFUSAL_STAGE_EXISTENCE constant names the NOT_FOUND member of = models.RefusalCode with the UNKNOWN_SESSION member of = models.RefusalKind when load_agent_session finds no session and, for a GrantAnswer, the UNKNOWN_PROJECT member when validation says the project does not exist; at the stage the imported REFUSAL_STAGE_VERSION constant names the STALE member with the STALE_ACCESS_VERSION member when _access_version_stale answers true; at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names the REFUSED member with the NOT_PENDING member when the session has no pending request and, for a GrantAnswer, the ARCHIVED member when validation says the project exists and is not active.",
+    "answer_access_request: [BEHAVIOR] MUST, once accepted, clear the pending request without keeping any reason; for a GrantAnswer it MUST add the answer's project_id to the granted set when it is not there and make it the active project when make_active asks; the whole answer MUST make the access version, once, one more than the one before through one replace_agent_session, and answer AccessChanged with the access _session_access gives, project_joined true only when the project was not in the set before, and changed true.",
+    "grant_project: [VALIDATION_ERROR] MUST check in stage order and answer the first failing stage with every failure of it: at the stage the imported REFUSAL_STAGE_EXISTENCE constant names the NOT_FOUND member of = models.RefusalCode with the UNKNOWN_SESSION member of = models.RefusalKind when load_agent_session finds no session and the UNKNOWN_PROJECT member when validation says the project does not exist; at the stage the imported REFUSAL_STAGE_VERSION constant names the STALE member with the STALE_ACCESS_VERSION member when _access_version_stale answers true; at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names the REFUSED member with the ARCHIVED member when validation says the project exists and is not active, a project already granted or active included.",
+    "grant_project: [BEHAVIOR] MUST add project_id to the granted set when it is not there and, when make_active is true, make it the active project, making the access version, once, one more than the one before through one replace_agent_session for the whole change and answering AccessChanged with project_joined telling whether it joined the set and changed true; when the project is already in the set and nothing else changes it MUST write nothing, leave the version and answer changed false.",
+    "set_active_project: [VALIDATION_ERROR] MUST check in stage order and answer the first failing stage with every failure of it: at the stage the imported REFUSAL_STAGE_EXISTENCE constant names the NOT_FOUND member of = models.RefusalCode with the UNKNOWN_SESSION member of = models.RefusalKind when load_agent_session finds no session; at the stage the imported REFUSAL_STAGE_VERSION constant names the STALE member with the STALE_ACCESS_VERSION member when _access_version_stale answers true; at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names, for a given project_id, the REFUSED member with the NOT_GRANTED member when it is not in the granted set and the ARCHIVED member when project_archived is true, the project already active included.",
+    "set_active_project: [BEHAVIOR] MUST make project_id the active project, or clear the active project when project_id is None, leaving the granted set as it is, so clearing revokes nothing; a change MUST make the access version, once, one more than the one before through replace_agent_session and answer AccessChanged with changed true, and a project already active or a clearing of a clear one MUST write nothing and answer changed false; project_joined MUST be false.",
+    "revoke_project: [VALIDATION_ERROR] MUST check in stage order and answer the first failing stage with every failure of it: at the stage the imported REFUSAL_STAGE_EXISTENCE constant names the NOT_FOUND member of = models.RefusalCode with the UNKNOWN_SESSION member of = models.RefusalKind when load_agent_session finds no session; at the stage the imported REFUSAL_STAGE_VERSION constant names the STALE member with the STALE_ACCESS_VERSION member when _access_version_stale answers true; at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names the REFUSED member with the NOT_GRANTED member when project_id is not in the granted set.",
+    "revoke_project: [BEHAVIOR] MUST remove project_id from the granted set and clear the active project when it was that project, make the access version, once, one more than the one before through replace_agent_session and answer AccessChanged with project_joined false and changed true, so that the next check_agent_call on the project refuses it.",
+    "end_session: [VALIDATION_ERROR] MUST answer a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names and one failure of the UNKNOWN_SESSION member of = models.RefusalKind when load_agent_session finds no session, and, only when by_owner is true, one with the STALE member at the stage the imported REFUSAL_STAGE_VERSION constant names and one failure of the STALE_ACCESS_VERSION member when _access_version_stale answers true; when by_owner is false the stated version MUST be ignored.",
+    "end_session: [BEHAVIOR] MUST remove the session's record through remove_agent_session, its set, active project, pending request and access version with it, making no next version and touching no audit entry, and answer SessionEnded.",
+    "drop_project_from_sessions: [BEHAVIOR] MUST, for every session agent_session_rows_holding gives for project_id in transaction, remove project_id from its granted set and clear its active project when it was that project, make that session's access version, once, one more than the one before and write it through replace_agent_session, and answer the session_id of each session it changed in the order agent_session_rows_holding gives them.",
+    "_session_access: [FIELD_PROJECTION] MUST answer a SessionAccess with the session's session_id, its granted project ids ordered by project_id by Unicode code point, its active project id, request_pending true exactly when a pending request is held, and its access version, carrying no request text and no instant.",
+    "_access_version_stale: [BEHAVIOR] MUST answer true when stated_access_version is None or differs from the session's access version, and false only when it equals it.",
+    "create_project: [VALIDATION_ERROR] MUST ask check_customer_eligible at most once, only when read_optional_text answers a customer reference for the given customer_ref, and check in stage order, answering only the first failing stage as a Refusal carrying every failure of that stage: first a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names and one failure of the UNKNOWN_CUSTOMER member of = models.RefusalKind, its path naming the customer_ref field, when that answer is the UNKNOWN member of = models.CustomerEligibility; then a Refusal with the INVALID_REQUEST member at the stage the imported REFUSAL_STAGE_VALUES constant names carrying the failures _project_input_failures answers for facts together with the failure check_request_id_form answers for request_id, its path naming the request_id input, ordered by kind as the RefusalKind members MISSING_VALUE then MALFORMED_REQUEST_ID then OUTSIDE_CLOSED_LIST then OUTSIDE_FORM and within one kind by path.",
+    "create_project: [BEHAVIOR] MUST, once the values pass, look the request id up only with find_project_by_request_id and treat a found project as a repeat when facts_equal_for_repeat answers true for ProjectRepeatFacts built from the given facts against ProjectRepeatFacts built from the found project's current facts, each stored value written as its text and an object kind as its member's value; a repeat MUST answer the found project as it stands now, an archived one included and never reactivated, with changed false, writing nothing and asking no customer check of the lifecycle stage, even when the customer it names has since become ineligible.",
+    "create_project: [VALIDATION_ERROR] MUST answer a Refusal with the REFUSED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names, changing nothing, carrying a failure of the CONFLICT member of = models.RefusalKind with its path naming the request_id input when a project carries the request id and facts_equal_for_repeat answers false, and after it one failure, its path naming the customer_ref field, when the eligibility answer is a member of = models.CustomerEligibility other than ELIGIBLE: the CUSTOMER_ERASED member of = models.RefusalKind for its ERASED member, then the CUSTOMER_RESTRICTED member for its RESTRICTED member, then the CUSTOMER_ENDED member for its ENDED member.",
+    "create_project: [FIELD_ASSIGNMENT] MUST otherwise write through insert_project one new Project whose identity is the one _mint_project_id answers, whose display name is the given one exactly as written, whose alias and customer reference are what read_optional_text answers for them, whose object is what _object_from_given answers, with the ACTIVE member of = models.ProjectStatus and the revision the imported REVISION_FIRST constant names, its created instant set to instant and its last-changed instant set to instant too, create_request_id the request id as given, no archived instant and anonymised false; a request id that an erasure removed from its project MUST therefore make a new project with a new identity.",
+    "create_project: [RETURN_SHAPE] MUST answer an accepted create as ProjectCardChanged holding the new project's _project_card with changed true, and a repeat as ProjectCardChanged holding the found project's _project_card with changed false; no answer carries the request id.",
+    "correct_project: [VALIDATION_ERROR] MUST check in stage order and answer only the first failing stage as a Refusal carrying every failure of that stage: at the stage the imported REFUSAL_STAGE_EXISTENCE constant names, a Refusal with the NOT_FOUND member of = models.RefusalCode carrying a failure of the UNKNOWN_PROJECT member of = models.RefusalKind, its path naming the project_id input, when load_project finds no project, and after it one of the UNKNOWN_CUSTOMER member, its path naming the customer_ref field, when a newly named customer is answered the UNKNOWN member of = models.CustomerEligibility; then a Refusal with the INVALID_REQUEST member at the stage the imported REFUSAL_STAGE_VALUES constant names carrying the failures _project_input_failures answers for facts.",
+    "correct_project: [VALIDATION_ERROR] MUST then answer a Refusal with the STALE member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_VERSION constant names and one failure of the STALE_REVISION member of = models.RefusalKind, its path naming the stated_revision input, when stated_revision differs from the project's revision, None being equal only to None, so that stating none for a project that has a revision, or stating one for an anonymised project, is stale and is answered before the lifecycle stage; then a Refusal with the REFUSED member at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names carrying a failure of the ARCHIVED member, its path naming the project_id input, when the project is archived, an anonymised one included, and after it one failure, its path naming the customer_ref field, when a newly named customer is answered a member of = models.CustomerEligibility other than ELIGIBLE: the CUSTOMER_ERASED member of = models.RefusalKind for its ERASED member, then the CUSTOMER_RESTRICTED member for its RESTRICTED member, then the CUSTOMER_ENDED member for its ENDED member.",
+    "correct_project: [BEHAVIOR] MUST treat a customer as newly named only when read_optional_text answers a customer reference for the given customer_ref that differs from the project's stored one, asking check_customer_eligible once for it and never for the customer the project already names, so that keeping a customer that has since become ineligible is accepted.",
+    "correct_project: [BEHAVIOR] MUST, when every check passes, replace the editable facts as a whole: the display name as given, the alias and customer reference as read_optional_text answers them, an optional fact not given cleared, and the object as _object_from_given answers it; when these equal the stored editable facts it MUST write nothing and keep the revision and last-changed instant, and otherwise MUST write the project back through replace_project with its revision one more than before and last_changed_at set to instant; every field of Project that is not an editable fact MUST stay as stored.",
+    "correct_project: [RETURN_SHAPE] MUST answer an accepted correction as ProjectCardChanged holding the project's _project_card as it stands after it, with changed true when it wrote the project and changed false when the facts were equal.",
+    "archive_project: [VALIDATION_ERROR] MUST answer a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names and one failure of the UNKNOWN_PROJECT member of = models.RefusalKind, its path naming the project_id input, when load_project finds no project, and then a Refusal with the STALE member at the stage the imported REFUSAL_STAGE_VERSION constant names and one failure of the STALE_REVISION member, its path naming the stated_revision input, when stated_revision differs from the project's revision, None being equal only to None.",
+    "archive_project: [BEHAVIOR] MUST, for an active project, write it back through replace_project with the ARCHIVED member of = models.ProjectStatus, archived_at and last_changed_at set to instant and its revision one more than before, every other fact kept, and MUST, for a project already archived, an anonymised one included, write nothing; archiving is final and MUST leave the project's rooms as they are, its pointers and the agent sessions holding it being no part of this call.",
+    "archive_project: [RETURN_SHAPE] MUST answer ProjectCardChanged holding the project's _project_card as it stands after the call, with changed true only when it archived an active project.",
+    "erase_project: [VALIDATION_ERROR] MUST check in stage order and answer only the first failing stage: a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names and one failure of the UNKNOWN_PROJECT member of = models.RefusalKind when load_project finds no project; then a Refusal with the STALE member at the stage the imported REFUSAL_STAGE_VERSION constant names and one failure of the STALE_REVISION member, its path naming the stated_revision input, when stated_revision differs from the project's revision, None being equal only to None; then a Refusal with the REFUSED member at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names and one failure of the ACTIVE member when the project is active, or of the ANONYMISED member when the DELETE_WHOLE member of = models.ProjectErasure is asked for an anonymised project; each failure other than the stale one has its path naming the project_id input.",
+    "erase_project: [BEHAVIOR] MUST, for the ANONYMISE member of = models.ProjectErasure on a project not yet anonymised, remove its rooms through remove_room_rows_of_project and write it back through replace_project keeping only its identity, the ARCHIVED member of = models.ProjectStatus and anonymised true, every other field of Project set to None so that nothing else of the record remains; for an anonymised project it MUST write nothing; for the DELETE_WHOLE member it MUST remove the rooms through remove_room_rows_of_project and then the record through remove_project_row; it MUST leave pointers and agent sessions to the modules that own them.",
+    "erase_project: [RETURN_SHAPE] MUST answer ProjectErased holding project_id, the erasure asked for and changed, changed being false only when an anonymised project is anonymised again.",
+    "read_project_card: [BEHAVIOR] MUST answer a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names and one failure of the UNKNOWN_PROJECT member of = models.RefusalKind, its path naming the project_id input, when load_project finds no project, and otherwise ProjectCardFound holding the _project_card of the project whatever its status, an anonymised project answering its erased form and never a refusal; it MUST change nothing.",
+    "read_project_context: [FIELD_PROJECTION] MUST answer, for a project load_project finds that is not anonymised, ProjectContextFound holding a ProjectContext of its identity, display name, status, its object's address, its customer reference, its created instant and, as registry_updated_at, its last-changed instant; an anonymised project MUST answer an AnonymisedProject of its identity and status; it MUST read no Customer and carry no contact data.",
+    "read_project_context: [VALIDATION_ERROR] MUST answer a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names and one failure of the UNKNOWN_PROJECT member of = models.RefusalKind, its path naming the project_id input, when load_project finds no project.",
+    "validate_project_reference: [BEHAVIOR] MUST answer a ProjectValidation and never a refusal: exists and active both false with the NOT_FOUND member of = models.ValidationReason when load_project finds no project, a deleted one included; exists true and active false with the ARCHIVED member when the project is archived, an anonymised one included; exists and active both true with no reason when the project is active; it MUST change nothing.",
+    "read_agent_view: [SECURITY_BOUNDARY] MUST answer, for a project load_project finds that is not anonymised, AgentViewFound holding an AgentProject carrying only the fields that model declares, its rooms being the RoomView of each room list_room_rows gives for it in that order, and never a personal value of the project such as its display name, its object or its customer reference; an anonymised project MUST answer an AnonymisedProject of its identity and status.",
+    "read_agent_view: [VALIDATION_ERROR] MUST answer a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names and one failure of the UNKNOWN_PROJECT member of = models.RefusalKind, its path naming the project_id input, when load_project finds no project.",
+    "add_room: [VALIDATION_ERROR] MUST check in stage order and answer only the first failing stage as a Refusal carrying every failure of that stage: a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names and one failure of the UNKNOWN_PROJECT member of = models.RefusalKind, its path naming the project_id input, when load_project finds no project; then a Refusal with the INVALID_REQUEST member at the stage the imported REFUSAL_STAGE_VALUES constant names carrying the failure read_required_text answers for room_name, its path naming the room_name input, and the failure check_request_id_form answers for request_id, its path naming the request_id input, ordered by kind as the RefusalKind members MISSING_VALUE then MALFORMED_REQUEST_ID and within one kind by path.",
+    "add_room: [VALIDATION_ERROR] MUST then answer a Refusal with the REFUSED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_LIFECYCLE constant names, changing nothing, carrying a failure of the ARCHIVED member of = models.RefusalKind, its path naming the project_id input, when the project is archived, an anonymised one included and a repeat included, and after it a failure of the CONFLICT member, its path naming the request_id input, when a room of this project carries the request id and facts_equal_for_repeat answers false.",
+    "add_room: [BEHAVIOR] MUST look the request id up only with find_room_by_request_id for project_id, so a room of another project is never reached, and treat a found room as a repeat when facts_equal_for_repeat answers true for RoomRepeatFacts of project_id and the given name against those of the found room, answering it with changed false and writing nothing; otherwise it MUST write through insert_room one new Room with the identity _mint_room_id answers, project_id, the name as given, added_at set to instant and the request id as given, a room of a name the project already has being a second room, and MUST NOT write the project, whose revision and last-changed instant stay.",
+    "add_room: [RETURN_SHAPE] MUST answer RoomAdded holding a RoomView of the new or found room's identity, name and added instant, with changed true for a new room and false for a repeat; the view carries no request id.",
+    "list_rooms: [DETERMINISM_OR_ORDERING] MUST answer RoomsListed holding a RoomList of a RoomView for each room list_room_rows gives for project_id, in the order it gives them, sorting and filtering nothing itself; an anonymised project MUST answer an AnonymisedProject of its identity and status instead, and a project load_project does not find MUST be answered by a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names and one failure of the UNKNOWN_PROJECT member of = models.RefusalKind, its path naming the project_id input.",
+    "list_projects: [VALIDATION_ERROR] MUST read list_choice as the ACTIVE member of = models.ProjectListChoice when it is None, as the member whose value it equals exactly as written otherwise, and MUST answer any other text with a Refusal carrying the INVALID_REQUEST member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_VALUES constant names and one failure of the OUTSIDE_CLOSED_LIST member of = models.RefusalKind, its path naming the list_choice input, reading no project.",
+    "list_projects: [DETERMINISM_OR_ORDERING] MUST answer ProjectsListed holding one ProjectListItem for each project list_project_rows gives, include_archived true only for the WITH_ARCHIVED member of = models.ProjectListChoice, in the order it gives them, sorting and filtering nothing itself, so that the archived projects are never listed alone and an anonymised one never; each item MUST carry each fact of the project under the ProjectListItem field of the same name and, as archived_on, the UTC date of its archived instant or None when it is active, and no object or rooms.",
+    "write_imported_project: [FIELD_ASSIGNMENT] MUST write through insert_project one Project whose identity, status and created, last-changed and archived instants are those of imported exactly as given, whose remaining facts are the arguments of the same names, whose object is an Object of imported's address with no kind or characteristics, with the revision the imported REVISION_FIRST constant names, no request id and anonymised false, and MUST then write through insert_room one Room for each room of imported with its identity, name and added instant exactly as given, that project's identity and no request id; it mints nothing and answers the Project it wrote.",
+    "write_imported_project: [BEHAVIOR] MUST make no check and refuse nothing, the import having checked conflicts and malformed records before, and MUST NOT ask mint_identity or any clock, every identity and instant coming from imported.",
+    "_project_card: [FIELD_PROJECTION] MUST answer, for an anonymised project, an AnonymisedProject of its identity and status, and otherwise a ProjectCard carrying each fact of project under the field of the same name, archived_on the UTC date of its archived instant or None when it has none, and as rooms a RoomView for each room list_room_rows gives for the project, in the order it gives them; it MUST leave out the request id.",
+    "_project_input_failures: [VALIDATION_ERROR] MUST answer the failure read_required_text answers for the display name and for the address of facts, and the failures check_value_forms answers for a GivenFormValue of each optional form value of facts that read_optional_text answers present, its field the member of = models.FormField of the same name, and no failure for the customer reference or for an optional value not given; each path MUST be one element holding the field's name of GivenProjectFacts, and the failures ordered by kind as the RefusalKind members MISSING_VALUE then OUTSIDE_CLOSED_LIST then OUTSIDE_FORM and within one kind by path, an empty tuple when every value passes.",
+    "_object_from_given: [FIELD_ASSIGNMENT] MUST answer an Object of the given address exactly as written, the member of = models.ObjectKind whose value the given kind equals, the floor area as a Decimal of its text, the number of rooms and the floor as integers of their text, each optional one None when read_optional_text answers None for it; it is called only on facts _project_input_failures passed, and it reads no store.",
+    "_mint_project_id: [BEHAVIOR] MUST take an identity from mint_identity and, while load_project on transaction finds a project of it, take another, answering the first identity no project holds; a collision MUST never refuse the create.",
+    "_mint_room_id: [BEHAVIOR] MUST take an identity from mint_identity and, while load_room on transaction finds a room of it, take another, answering the first identity no room holds; a collision MUST never refuse adding the room.",
+    "start_instance: [ORCHESTRATION] MUST start in this order, going no further at the first step that answers a StartDiagnostic: load_configuration; probe_backup_location with the backup_dir of the LoadedConfiguration it answered; open_store with a RegistryStore made from its store_path; then the listeners. A StartDiagnostic of any step MUST end the start through _stop_start with its diagnostic unchanged, and nothing MUST be served before every step passed.",
+    "start_instance: [BEHAVIOR] MUST open the owner interface's listener at the LoadedConfiguration's owner_listen first and then, only when its service_listen is not None, the service API's listener at service_listen, each a listening TCP socket of its host's address family, bound and listening but accepting no connection until every listener of this start is open; an owner-only start, whose service_listen is None, MUST open the owner interface's listener alone.",
+    "start_instance: [VALIDATION_ERROR] When a listener cannot be opened it MUST close every listener already opened, a close that fails being neither retried nor named, then, only when open_store answered an OpenedStore whose made_new is true, call discard_new_store with the RegistryStore, and MUST end through _stop_start with one diagnostic that names the surface that could not be opened, never its address, and, when the DiscardResult's removed is false, says that the new store was left with the step of = models.DiscardStep and the kind of = models.DiscardFailureKind its failure names; a store this start did not make new MUST be left as it is.",
+    "start_instance: [ORCHESTRATION] Once every listener is open it MUST accept connections on each and serve every connection on a thread of its own, so that a request waiting for a lock holds no other: a request on the service API's listener MUST be read into an HttpRequest, every field of = models.HttpRequest taken from its request line and header fields, and handed to serve_service_request with its body read whole as bytes, an empty body when it declares none; a request on the owner interface's listener MUST be read into an HttpRequest the same way and handed to serve_owner_request with the connection's body stream unread, a stream that ends at the request's declared length or, for a body framed in chunks, gives the decoded bytes as they are read; the HttpResponse either answers MUST be written back with its status, header fields and body unchanged.",
+    "start_instance: [BEHAVIOR] After writing the answer to an owner interface request that carried a body, it MUST close that connection without reading what remains of the body and MUST serve no further request on it.",
+    "start_instance: [ORCHESTRATION] Once serving began it MUST take one monotonic_reading as the passes' origin and run two passes, each on a thread of its own and neither waiting for the other: end_expired_sessions at the interval of the imported SESSION_PASS_SECONDS constant and, only when service_listen is not None, run_daily_backup_if_due with the backup_dir and the RegistryStore at the interval of the imported BACKUP_LOOK_SECONDS constant; an owner-only start MUST run the session pass alone and make no backup run.",
+    "start_instance: [DETERMINISM_OR_ORDERING] A pass's deadlines MUST be its origin plus a whole positive number of its intervals, in nanoseconds of monotonic_reading, the first one interval after the origin; each time a call returns the pass MUST take one monotonic_reading and wait for the first deadline at or after it, and when that wait ends, on time or late after a suspension, MUST make exactly one call whatever deadlines the wait passed, never making up a passed deadline and never calling while its previous call runs.",
+    "start_instance: [RETURN_SHAPE] MUST answer what _stop_start answers for a stopped start, and otherwise keep the process serving and its passes running until the host ends it.",
+    "_stop_start: [BEHAVIOR] MUST write diagnostic as one line on the process's standard error, nothing else and no value added to it, and MUST answer a non-zero exit status for the process."
+  ],
   "config": {
     "runtime_environment_variables": {
       "kind": "runtime_environment_variables",
@@ -569,6 +878,20 @@
       "fields": {
         "service": "ServiceName",
         "highest_class": "DisclosureClass"
+      }
+    },
+    "PersonalDataField": {
+      "identity": "value",
+      "fields": {
+        "answer_model": "str",
+        "field": "str"
+      }
+    },
+    "RefusalHttpStatus": {
+      "identity": "value",
+      "fields": {
+        "code": "RefusalCode",
+        "status": "int"
       }
     },
     "Project": {
@@ -1224,6 +1547,17 @@
     },
     "UploadBody": {
       "kind": "interface"
+    },
+    "ByteStream": {
+      "kind": "interface"
+    },
+    "UploadHead": {
+      "identity": "value",
+      "fields": {
+        "csrf_value": "str | None",
+        "delimiter": "str | None",
+        "file_declared_length": "int | None"
+      }
     },
     "AuditErasure": {
       "kind": "discriminated_union",
@@ -2077,6 +2411,13 @@
         "mapping"
       ]
     },
+    "ProjectListChoice": {
+      "kind": "enum",
+      "values": [
+        "active",
+        "with_archived"
+      ]
+    },
     "ExportProjectSummary": {
       "identity": "value",
       "fields": {
@@ -2740,13 +3081,6 @@
         "headers": "tuple[HeaderField, ...]",
         "body": "bytes"
       }
-    },
-    "ProjectListChoice": {
-      "kind": "enum",
-      "values": [
-        "active",
-        "with_archived"
-      ]
     }
   },
   "rules": {
@@ -4170,6 +4504,178 @@
         "STORE_VERSION": {
           "value_type": "positive_integer",
           "value": 1
+        },
+        "PERSONAL_DATA_FIELDS": {
+          "value_type": "record_tuple",
+          "row_model": "PersonalDataField",
+          "key": [
+            "answer_model",
+            "field"
+          ],
+          "value": [
+            {
+              "answer_model": "ProjectCard",
+              "field": "display_name"
+            },
+            {
+              "answer_model": "ProjectContext",
+              "field": "display_name"
+            },
+            {
+              "answer_model": "ProjectContext",
+              "field": "address"
+            },
+            {
+              "answer_model": "ProjectListItem",
+              "field": "display_name"
+            },
+            {
+              "answer_model": "ImportedProjectResult",
+              "field": "display_name"
+            },
+            {
+              "answer_model": "ImportPick",
+              "field": "display_name"
+            },
+            {
+              "answer_model": "MappedProject",
+              "field": "display_name"
+            },
+            {
+              "answer_model": "Object",
+              "field": "address"
+            },
+            {
+              "answer_model": "Object",
+              "field": "object_kind"
+            },
+            {
+              "answer_model": "Object",
+              "field": "floor_area_m2"
+            },
+            {
+              "answer_model": "Object",
+              "field": "rooms_count"
+            },
+            {
+              "answer_model": "Object",
+              "field": "floor"
+            },
+            {
+              "answer_model": "CustomerDetail",
+              "field": "name"
+            },
+            {
+              "answer_model": "CustomerDetail",
+              "field": "phone"
+            },
+            {
+              "answer_model": "CustomerDetail",
+              "field": "email"
+            },
+            {
+              "answer_model": "CustomerDetail",
+              "field": "language"
+            },
+            {
+              "answer_model": "CustomerDetail",
+              "field": "tax_id"
+            },
+            {
+              "answer_model": "CustomerDetail",
+              "field": "legal_name"
+            },
+            {
+              "answer_model": "ListedCustomer",
+              "field": "name"
+            },
+            {
+              "answer_model": "BillingAnswer",
+              "field": "tax_id"
+            },
+            {
+              "answer_model": "BillingAnswer",
+              "field": "legal_name"
+            },
+            {
+              "answer_model": "ImportCustomerValue",
+              "field": "name"
+            },
+            {
+              "answer_model": "ImportCustomerValue",
+              "field": "v1_value"
+            },
+            {
+              "answer_model": "MappedCustomer",
+              "field": "name"
+            },
+            {
+              "answer_model": "MappedCustomer",
+              "field": "v1_value"
+            },
+            {
+              "answer_model": "MadeCustomer",
+              "field": "v1_value"
+            }
+          ]
+        },
+        "SERVICE_AGENT_SESSION_HEADER": {
+          "value_type": "string",
+          "value": "Registry-Agent-Session"
+        },
+        "SERVICE_ANSWER_STATUS": {
+          "value_type": "positive_integer",
+          "value": 200
+        },
+        "REFUSAL_HTTP_STATUSES": {
+          "value_type": "record_tuple",
+          "row_model": "RefusalHttpStatus",
+          "key": [
+            "code"
+          ],
+          "total": true,
+          "value": [
+            {
+              "code": "unauthenticated",
+              "status": 422
+            },
+            {
+              "code": "not_permitted",
+              "status": 422
+            },
+            {
+              "code": "confirmation_refused",
+              "status": 422
+            },
+            {
+              "code": "not_found",
+              "status": 404
+            },
+            {
+              "code": "invalid_request",
+              "status": 422
+            },
+            {
+              "code": "stale",
+              "status": 422
+            },
+            {
+              "code": "refused",
+              "status": 422
+            },
+            {
+              "code": "internal_error",
+              "status": 500
+            }
+          ]
+        },
+        "UPLOAD_FORM_HEAD_MAX_BYTES": {
+          "value_type": "positive_integer",
+          "value": 8192
+        },
+        "LISTENER_READ_TIMEOUT_SECONDS": {
+          "value_type": "positive_integer",
+          "value": 30
         }
       }
     }
@@ -4195,14 +4701,19 @@
       ]
     },
     "UploadBody": {
+      "disposition": "policy",
+      "implementations": [
+        "MultipartFileBody"
+      ]
+    },
+    "ByteStream": {
       "disposition": "external"
     }
   },
   "imports": {
     "stdlib": [
       "from datetime import date, datetime",
-      "from decimal import Decimal",
-      "from typing import BinaryIO"
+      "from decimal import Decimal"
     ],
     "third_party": [],
     "internal": {
@@ -4222,6 +4733,10 @@
         "check_value_forms",
         "read_required_text"
       ],
+      "upload_framing": [
+        "read_upload_head",
+        "MultipartFileBody"
+      ],
       "runtime_settings": [
         "load_runtime_settings"
       ],
@@ -4229,7 +4744,8 @@
         "load_configuration",
         "give_service_tokens",
         "give_owner_credential",
-        "give_backup_key"
+        "give_backup_key",
+        "give_backup_location"
       ],
       "store_persistence": [
         "SqliteStoreRepository",
@@ -4237,6 +4753,7 @@
       ],
       "store": [
         "open_store",
+        "opened_store",
         "discard_new_store",
         "run_in_transaction",
         "read_in_transaction",
@@ -4261,6 +4778,7 @@
         "sign_out_owner",
         "show_confirmation_step",
         "take_confirmation",
+        "give_session_csrf",
         "keep_uploaded_file",
         "read_uploaded_file",
         "drop_uploaded_files",
@@ -4356,6 +4874,8 @@
         "ArtifactTypeOwner",
         "ServiceRight",
         "ServiceHighestClass",
+        "PersonalDataField",
+        "RefusalHttpStatus",
         "Project",
         "Object",
         "Room",
@@ -4424,6 +4944,8 @@
         "StoreFileCheck",
         "TransactionStep",
         "UploadBody",
+        "ByteStream",
+        "UploadHead",
         "AuditErasure",
         "ErasedEntries",
         "ServiceIdentification",
@@ -4525,6 +5047,7 @@
         "BytesRead",
         "ReadRefused",
         "ImportMode",
+        "ProjectListChoice",
         "ExportProjectSummary",
         "RecordKind",
         "ImportDefect",
@@ -4594,8 +5117,7 @@
         "PreparedOwnerAction",
         "HeaderField",
         "HttpRequest",
-        "HttpResponse",
-        "ProjectListChoice"
+        "HttpResponse"
       ],
       "data_provider": [
         "ACCESS_VERSION_FIRST",
@@ -4612,12 +5134,15 @@
         "CONFIRMATION_VALID_MINUTES",
         "CONTRACT_VERSION",
         "IMPORT_FILE_MAX_BYTES",
+        "LISTENER_READ_TIMEOUT_SECONDS",
         "LISTEN_PORT_MAX",
         "LISTEN_PORT_MIN",
         "OBJECT_FLOOR_AREA_MIN_EXCLUSIVE",
         "OBJECT_ROOMS_MIN",
         "OWNER_SESSION_IDLE_MINUTES",
         "OWNER_SESSION_MAX_HOURS",
+        "PERSONAL_DATA_FIELDS",
+        "REFUSAL_HTTP_STATUSES",
         "REFUSAL_STAGE_AGENT_SESSION",
         "REFUSAL_STAGE_AUTHENTICATION",
         "REFUSAL_STAGE_EXISTENCE",
@@ -4628,6 +5153,8 @@
         "REQUEST_ID_MAX_CHARACTERS",
         "REVISION_FIRST",
         "SECRET_MIN_BYTES",
+        "SERVICE_AGENT_SESSION_HEADER",
+        "SERVICE_ANSWER_STATUS",
         "SERVICE_HIGHEST_CLASSES",
         "SERVICE_RIGHTS",
         "SESSION_PASS_SECONDS",
@@ -4635,7 +5162,8 @@
         "SIGN_IN_REFUSAL_LIMIT",
         "SIGN_IN_WINDOW_MINUTES",
         "STORE_TEMPORARY_SUFFIX",
-        "STORE_VERSION"
+        "STORE_VERSION",
+        "UPLOAD_FORM_HEAD_MAX_BYTES"
       ]
     },
     "module_internal": {
@@ -4856,6 +5384,7 @@
     "models": [
       "TransactionStep",
       "UploadBody",
+      "ByteStream",
       "OwnerStep",
       "StoreRepository",
       "ProjectStatus",
@@ -4873,6 +5402,8 @@
       "ArtifactTypeOwner",
       "ServiceRight",
       "ServiceHighestClass",
+      "PersonalDataField",
+      "RefusalHttpStatus",
       "Project",
       "Object",
       "Room",
@@ -4938,6 +5469,7 @@
       "SnapshotFailed",
       "StoreFileCheckKind",
       "StoreFileCheck",
+      "UploadHead",
       "AuditErasure",
       "ErasedEntries",
       "ServiceIdentification",
@@ -5038,6 +5570,7 @@
       "BytesRead",
       "ReadRefused",
       "ImportMode",
+      "ProjectListChoice",
       "ExportProjectSummary",
       "RecordKind",
       "ImportDefect",
@@ -5107,8 +5640,7 @@
       "PreparedOwnerAction",
       "HeaderField",
       "HttpRequest",
-      "HttpResponse",
-      "ProjectListChoice"
+      "HttpResponse"
     ],
     "data_provider": [
       "ACCESS_VERSION_FIRST",
@@ -5125,12 +5657,15 @@
       "CONFIRMATION_VALID_MINUTES",
       "CONTRACT_VERSION",
       "IMPORT_FILE_MAX_BYTES",
+      "LISTENER_READ_TIMEOUT_SECONDS",
       "LISTEN_PORT_MAX",
       "LISTEN_PORT_MIN",
       "OBJECT_FLOOR_AREA_MIN_EXCLUSIVE",
       "OBJECT_ROOMS_MIN",
       "OWNER_SESSION_IDLE_MINUTES",
       "OWNER_SESSION_MAX_HOURS",
+      "PERSONAL_DATA_FIELDS",
+      "REFUSAL_HTTP_STATUSES",
       "REFUSAL_STAGE_AGENT_SESSION",
       "REFUSAL_STAGE_AUTHENTICATION",
       "REFUSAL_STAGE_EXISTENCE",
@@ -5141,6 +5676,8 @@
       "REQUEST_ID_MAX_CHARACTERS",
       "REVISION_FIRST",
       "SECRET_MIN_BYTES",
+      "SERVICE_AGENT_SESSION_HEADER",
+      "SERVICE_ANSWER_STATUS",
       "SERVICE_HIGHEST_CLASSES",
       "SERVICE_RIGHTS",
       "SESSION_PASS_SECONDS",
@@ -5148,7 +5685,8 @@
       "SIGN_IN_REFUSAL_LIMIT",
       "SIGN_IN_WINDOW_MINUTES",
       "STORE_TEMPORARY_SUFFIX",
-      "STORE_VERSION"
+      "STORE_VERSION",
+      "UPLOAD_FORM_HEAD_MAX_BYTES"
     ],
     "clock": [
       "recorded_now",
@@ -5166,6 +5704,10 @@
       "check_value_forms",
       "read_required_text"
     ],
+    "upload_framing": [
+      "read_upload_head",
+      "MultipartFileBody"
+    ],
     "runtime_settings": [
       "load_runtime_settings"
     ],
@@ -5173,7 +5715,9 @@
       "load_configuration",
       "give_service_tokens",
       "give_owner_credential",
-      "give_backup_key"
+      "give_backup_key",
+      "give_backup_location",
+      "_parse_listen_address"
     ],
     "store_persistence": [
       "SqliteStoreRepository",
@@ -5181,6 +5725,7 @@
     ],
     "store": [
       "open_store",
+      "opened_store",
       "discard_new_store",
       "run_in_transaction",
       "read_in_transaction",
@@ -5205,6 +5750,7 @@
       "sign_out_owner",
       "show_confirmation_step",
       "take_confirmation",
+      "give_session_csrf",
       "keep_uploaded_file",
       "read_uploaded_file",
       "drop_uploaded_files",
@@ -5328,6 +5874,7 @@
     "clock",
     "random_values",
     "given_values",
+    "upload_framing",
     "runtime_settings",
     "configuration",
     "store_persistence",
@@ -5352,6 +5899,7 @@
     "clock": "app/clock",
     "random_values": "app/random_values",
     "given_values": "app/given_values",
+    "upload_framing": "app/upload_framing",
     "runtime_settings": "app/runtime_settings",
     "configuration": "app/configuration",
     "store_persistence": "app/store_persistence",
@@ -5409,12 +5957,18 @@
     "read_optional_text",
     "check_value_forms",
     "read_required_text",
+    "read_upload_head",
+    "MultipartFileBody.__init__",
+    "MultipartFileBody.read",
     "load_runtime_settings",
     "load_configuration",
     "give_service_tokens",
     "give_owner_credential",
     "give_backup_key",
+    "give_backup_location",
+    "_parse_listen_address",
     "open_store",
+    "opened_store",
     "discard_new_store",
     "run_in_transaction",
     "read_in_transaction",
@@ -5431,6 +5985,7 @@
     "sign_out_owner",
     "show_confirmation_step",
     "take_confirmation",
+    "give_session_csrf",
     "keep_uploaded_file",
     "read_uploaded_file",
     "drop_uploaded_files",
@@ -5489,6 +6044,7 @@
     "RegistryStore.__init__",
     "TransactionStep.run",
     "UploadBody.read",
+    "ByteStream.read",
     "StoreTransaction.__init__",
     "StoreTransaction.read_audit_sequence",
     "StoreTransaction.write_audit_sequence",
