@@ -403,6 +403,52 @@ the file brings in is a malformed record (A16 rule 4), not a missing value.
 
 Pure; touches no record.
 
+## `public_op:upload_framing.read_upload_head`
+
+### Owner
+
+`module:upload_framing`. Read an upload's multipart head alone, so that its
+CSRF value travels in the form and the file reaches `migration_import`
+unread (A13 rules 5, 7; owner, 2026-11-17).
+
+### Callers
+
+`module:owner_interface`.
+
+### Inputs
+
+The request's unread body stream and its content type.
+
+### Outputs
+
+The CSRF value the first part carries and the delimiter that ends the file
+part; or that the head is not of that form — no multipart content type or
+boundary, a first part that is not the CSRF field, no second part that is
+the file — or is longer than the imported `UPLOAD_FORM_HEAD_MAX_BYTES`
+constant, with neither value.
+
+### Observable effect
+
+Reads the stream up to the start of the file part's content and no further,
+at most the bound; a head it refuses leaves the rest of the stream unread.
+
+### Enforces
+
+A13 rule 7: the CSRF value is taken from the form's body, never from a URL,
+and is neither checked nor kept here — `owner_sessions` checks it at the
+session check. A19 rule 4 stays `migration_import`'s: no byte of the file is
+read here, and the file part's stream, a `MultipartFileBody` over the same
+stream and that delimiter, gives the file's bytes only as its reader asks.
+
+### Errors
+
+None: a head of another form answers no CSRF value, and the upload is
+refused at stage (1) as a change without one (A04 rule 6, A13 rule 5).
+
+### State impact
+
+None: it reads the request's stream only.
+
 ## `public_op:runtime_settings.load_runtime_settings`
 
 ### Owner
@@ -620,6 +666,86 @@ the only other modules that keep it.
 
 Reads the process's memory; touches no record.
 
+## `public_op:configuration.give_backup_location`
+
+### Owner
+
+`module:configuration`. Give the checked backup location to `operations`,
+which asks `backups` for the newest backup's instant there for the owner's
+page (A18 rule 1; owner, 2026-11-17).
+
+### Callers
+
+`module:operations`.
+
+### Inputs
+
+None.
+
+### Outputs
+
+The backup location, as `load_configuration` checked and resolved it.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+The location is the one of this start's `load_configuration`, never read
+again from the environment, so a changed location takes effect at the next
+start (A17 rule 7). It is not a secret: `instance_lifecycle` also receives
+it from `load_configuration`.
+
+### Errors
+
+None: after a start whose `load_configuration` passed, it always answers.
+
+### State impact
+
+Reads the process's memory; touches no file and no record.
+
+## `public_op:configuration.give_owner_cookie_secure`
+
+### Owner
+
+`module:configuration`. Answer whether the owner session's cookie is sent
+only over HTTPS (A13 rule 1; owner, 2026-11-17).
+
+### Callers
+
+`module:owner_interface`.
+
+### Inputs
+
+None.
+
+### Outputs
+
+True when the owner interface's checked address has a host other than a
+loopback address — `127.0.0.0/8` for IPv4, `::1` for IPv6 — and false when
+its host is a loopback address.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A13 rule 1: the interface is reached from another machine only through an
+address other than a loopback one, so the cookie is HTTPS-only exactly then.
+The HTTPS that carries the interface is the host's (Explicit exclusions):
+Registry sets the cookie's flag and serves plain HTTP on its listener. It is
+answered from this start's checked address and never from a request.
+
+### Errors
+
+None: after a start whose `load_configuration` passed, it always answers.
+
+### State impact
+
+Reads the process's memory; touches no file and no record.
+
 ## `public_op:store.open_store`
 
 ### Owner
@@ -667,6 +793,45 @@ removes or, when it cannot, leaves for the next start (A17 rule 2).
 
 Opens or creates the store file; a store made new holds one record, M12
 AuditSequence at 0, made with it, and no other.
+
+## `public_op:store.opened_store`
+
+### Owner
+
+`module:store`. Give the store this start opened to the module that runs an
+action's transaction (owner, 2026-11-17).
+
+### Callers
+
+`module:operations`.
+
+### Inputs
+
+None.
+
+### Outputs
+
+The open store `open_store` answered for this start.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+There is one open store per process (L19): `store` keeps the one
+`open_store` opened, and `operations` hands it to `run_in_transaction` and
+`read_in_transaction`. It is kept for the process and never replaced.
+
+### Errors
+
+None: it is asked only by a surface's request, and a surface serves nothing
+until `open_store` succeeded (A17 rule 2). Asked before that, it is a wiring
+fault that raises, so nothing is read or written.
+
+### State impact
+
+Reads the process's memory; touches no file and no record.
 
 ## `public_op:store.discard_new_store`
 

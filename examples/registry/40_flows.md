@@ -235,7 +235,10 @@ rule 7).
    sign-in reading, no pending confirmation, no uploaded file. Other open
    sessions stay. `module:owner_interface` sets the cookie — not readable by
    scripts, sent only to Registry's origin, and only over HTTPS when the
-   interface is reached from another machine (A13 rule 1).
+   interface is reached from another machine (A13 rule 1), which
+   `capability:configuration.give_owner_cookie_secure` answers: the owner
+   interface listens on an address other than a loopback one (owner,
+   2026-11-17).
 2. **Every request of the session.** `capability:owner_sessions.admit_owner_request`
    checks at arrival that the cookie names a session that has reached no
    limit — 8 hours from sign-in, 30 minutes without an owner request, not
@@ -246,7 +249,10 @@ rule 7).
    session's one lock and holds it until done, so the session's changes
    apply one at a time; one that reads or changes an uploaded file takes the
    instance's import lock first (A16 rule 2). The request goes on as its
-   own flow.
+   own flow. Every page rendered for a valid session carries in its forms the
+   CSRF value `capability:owner_sessions.give_session_csrf` gives for it
+   (A13 rules 5, 7; owner, 2026-11-17). An upload's form sends that value as
+   the first part of its multipart body, before the file.
 3. **Sign out.** `capability:owner_sessions.sign_out_owner` takes the import
    lock, then the session's lock, and in its turn among the session's changes
    ends the session and drops its pending confirmation and its uploaded file
@@ -319,7 +325,8 @@ reached by its `customer_ref` only; no contact value crosses into a project.
    `capability:random_values.mint_identity` and the session's CSRF value.
 2. **Create.** `capability:operations.perform_owner_operation` admits the
    request through `capability:owner_sessions.admit_owner_request`, opens the
-   transaction with `capability:store.run_in_transaction`, reads the instant
+   transaction with `capability:store.run_in_transaction` on the store
+   `capability:store.opened_store` gives, reads the instant
    from `capability:clock.recorded_now` and calls
    `capability:projects.create_project`. `module:projects` asks
    `capability:customers.check_customer_eligible` once for a named customer
@@ -447,8 +454,8 @@ confirmation id, written into the entry only.
    one is used up from here on, whatever the answer; a binding to another
    action, target, revision or inputs refuses it; an expired one refuses the
    submission and clears it; another value while the pending one is valid
-   refuses it and leaves it (A13 rule 6). Then `capability:store.run_in_transaction`
-   opens the transaction with the action's instant from
+   refuses it and leaves it (A13 rule 6). Then `capability:store.run_in_transaction`,
+   on the store `capability:store.opened_store` gives, opens the transaction with the action's instant from
    `capability:clock.recorded_now` and today's date, that instant's UTC date.
 3. **Archive.** `capability:projects.archive_project`: (3) the project exists;
    (5) the stated revision is current; an archived project is answered
@@ -533,7 +540,8 @@ recorded or absent, never contact data (R0-83).
 
 1. **Record.** `capability:operations.perform_owner_operation` admits the
    request (`capability:owner_sessions.admit_owner_request`), opens the
-   transaction (`capability:store.run_in_transaction`) and calls
+   transaction (`capability:store.run_in_transaction`, on the store
+   `capability:store.opened_store` gives) and calls
    `capability:customers.record_customer`: (4) the request id's form, the
    name and kind required, the contact and fiscal data optional (A02); a
    request id a Customer carries with equal facts is a repeat answered as it
@@ -639,7 +647,8 @@ pointers.
    service API listener, so no call gets here (A17 rule 1). `capability:service_access.service_may_call`
    refuses an operation outside the service's row, whatever the request
    holds (A09 rule 3).
-2. **Read.** In one `capability:store.read_in_transaction`:
+2. **Read.** In one `capability:store.read_in_transaction`, on the store
+   `capability:store.opened_store` gives:
    - `capability:projects.validate_project_reference` answers exists, active,
      `not_found` or `archived` — an anonymised project `archived`, a deleted
      one `not_found` (R0-62); it refuses nothing.
@@ -901,7 +910,10 @@ file (R0-79), confirming the mapping Registry shows (A16).
 ### Boundary
 
 `module:owner_interface` serves the upload, the mapping and the confirmation
-pages. `module:owner_sessions` keeps the uploaded file in the session's
+pages. `module:upload_framing` reads an upload's multipart head — its first
+part the CSRF field, then the file part's headers — and frames the file part
+as a stream that ends where the part ends (owner, 2026-11-17).
+`module:owner_sessions` keeps the uploaded file in the session's
 memory, holds the import lock and the session's lock, and owns the
 confirmation value (A16 rule 2, A13 rule 6). `module:migration_import` owns
 reading the file, the mapping and its checks, the re-check at confirmation
@@ -921,8 +933,13 @@ minted `customer_ref`.
 
 ### Steps
 
-1. **Upload.** `capability:operations.perform_owner_operation` admits the
-   upload with the import lock taken before the session's
+1. **Upload.** `capability:upload_framing.read_upload_head` reads the
+   upload's head alone, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES`
+   constant, and answers its CSRF value, or none for a head of another form,
+   which the session check then refuses before any byte of the file is read
+   (A13 rule 5). `capability:operations.perform_owner_operation`, whose
+   transactions run on the store `capability:store.opened_store` gives,
+   admits the upload with the import lock taken before the session's
    (`capability:owner_sessions.admit_owner_request`). Holding them,
    `capability:migration_import.read_import_mapping` refuses when the closure
    exists (rule 8), refuses a file over
@@ -1072,7 +1089,9 @@ key; the kept name made from the instant.
    read or delete is reported and the next one taken (A18 rule 4).
 5. **Show.** `capability:backups.newest_backup_instant` gives the owner
    interface the instant of the newest kept backup with a readable record, or
-   that there is none, from one listing (A18 rule 1).
+   that there is none, from one listing (A18 rule 1), in the backup location
+   `capability:configuration.give_backup_location` gives (owner,
+   2026-11-17).
 
 ### Outcomes
 
@@ -1119,7 +1138,8 @@ subject.
 1. **Read.** `capability:operations.perform_owner_operation` admits the
    request (`capability:owner_sessions.admit_owner_request`);
    `capability:audit_log.read_audit_entries` answers the entries by sequence
-   number, ascending (A06 rule 6), in `capability:store.read_in_transaction`.
+   number, ascending (A06 rule 6), in `capability:store.read_in_transaction`
+   on the store `capability:store.opened_store` gives.
 2. **Show the step.** `capability:owner_sessions.show_confirmation_step`
    binds a value to the erasure and the digest of the date; the step shows
    no revision (A13 rule 6).

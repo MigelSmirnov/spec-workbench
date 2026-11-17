@@ -30,7 +30,7 @@ which no module owns. The table is the one mapping; `30_trace.json` records the 
 | A10 | `agent_sessions` | `operations` |
 | A11 | `agent_sessions` | `operations`, `owner_interface` |
 | A12 | `agent_sessions` | `owner_interface` |
-| A13 | `owner_sessions` | `data_provider`, `clock`, `random_values`, `owner_interface`, `operations` |
+| A13 | `owner_sessions` | `data_provider`, `clock`, `random_values`, `upload_framing`, `configuration`, `owner_interface`, `operations` |
 | A14 | `audit_log` | `operations` |
 | A15 | `audit_log` | `store`, `backups` |
 | A16 | `migration_import` | `owner_sessions`, `owner_interface`, `projects`, `customers`, `artifact_pointers` |
@@ -68,7 +68,7 @@ which only `store` calls, over that connection (below). The dependency direction
 ```text
 models
 data_provider
-clock, random_values, given_values
+clock, random_values, given_values, upload_framing
 runtime_settings
 configuration
 store_persistence
@@ -146,9 +146,12 @@ later line, and modules on one line do not know each other.
   built by the module that owns its records — the project card, with its
   object and its rooms in 'list rooms' order, by `projects` alone; the one
   answer that joins records of two modules, the agent projection with its
-  project's published pointers, is joined by `operations`. Each fact's disclosure class
-  is `models`' ("Disclosure classes by field"); `operations` computes an
-  answer's class as the highest of its facts' and refuses the answer whole
+  project's published pointers, is joined by `operations`. Which facts are
+  `personal_data` ("Disclosure classes by field") is one table of the release,
+  `data_provider`'s `PERSONAL_DATA_FIELDS`, of (answer model, field) pairs
+  (owner, 2026-11-17); every other fact is `business_confidential` and none
+  is `open`. `operations` computes an answer's class as the highest of its
+  facts' — `personal_data` when one of those fields holds a value — and refuses the answer whole
   when it is above the caller's highest (A09 rule 4): a service's from
   `service_access`, and for the owner `personal_data`, the highest class, so
   no owner answer is refused for its class (Actors and trust boundaries,
@@ -180,7 +183,10 @@ later line, and modules on one line do not know each other.
   prefixes, the daily time, the look and the retention (A18 rules 1, 4, 5),
   a backup record's version, the key digest's domain and the key
   derivation's info (A18 rules 1, 3),
-  the import file's size limit (A19 rule 4), the release's and contract's
+  the import file's size limit (A19 rule 4) and the bound of an upload
+  form's head (A13 rule 5), the fields that hold `personal_data` (A09 rule 4),
+  the service API's session header and its HTTP statuses (owner,
+  2026-11-17), the release's and contract's
   versions, the owner
   session's limits (A13), the lengths of A01 rule 1, A02 rule 4, A13 rule 7
   and A17 rule 3. A module that needs one imports it; nothing reads them from
@@ -336,7 +342,14 @@ configured secret (A13 rule 7, A17 rule 3); the number of each of A04 rule
 6's six stages, which every refusal of a check carries (A04, owner,
 2026-11-17); the first revision of a Project and of a Customer (State 1,
 "an ordinal starting at 1") and an agent session's first access version
-(A12 rule 1). The list names groups; the data closure names each constant,
+(A12 rule 1); the (answer model, field) pairs that hold State 1's
+`personal_data` facts (A09 rule 4, "Disclosure classes by field"); the
+service API's wire constants — the header that names Kernel's agent session
+(R0-53), the status of an accepted answer, 200, and each refusal code's
+status, as v1 answered: `not_found` 404, `internal_error` 500, every other
+code 422 (owner, 2026-11-17); and the bound of the head an upload form sends
+before its file, its CSRF field among it (A13 rule 5, owner, 2026-11-17).
+The list names groups; the data closure names each constant,
 and every one is exported.
 
 ### Knows
@@ -346,7 +359,10 @@ and every one is exported.
 `ARTIFACT_TYPE_OWNERS`; `ServiceRight` (a service and an operation) with
 `ServiceName` and `ServiceOperation` for `SERVICE_RIGHTS`;
 `ServiceHighestClass` (a service and its highest class) with `ServiceName`
-and `DisclosureClass` for `SERVICE_HIGHEST_CLASSES`. Its other constants are scalars and import nothing.
+and `DisclosureClass` for `SERVICE_HIGHEST_CLASSES`; `PersonalDataField` (an
+answer model's name and a field's) for `PERSONAL_DATA_FIELDS`;
+`RefusalHttpStatus` (a code and its status) with `RefusalCode` for
+`REFUSAL_HTTP_STATUSES`. Its other constants are scalars and import nothing.
 
 ### Must not own
 
@@ -402,6 +418,11 @@ REFUSAL_STAGE_VERSION
 REFUSAL_STAGE_LIFECYCLE
 REVISION_FIRST
 ACCESS_VERSION_FIRST
+PERSONAL_DATA_FIELDS
+SERVICE_AGENT_SESSION_HEADER
+SERVICE_ANSWER_STATUS
+REFUSAL_HTTP_STATUSES
+UPLOAD_FORM_HEAD_MAX_BYTES
 ```
 
 ### Depth assessment
@@ -456,6 +477,47 @@ facts_equal_for_repeat
 
 - kind: deep
 - hidden mechanism: the one rule by which every given value is read and compared
+
+## `upload_framing`
+
+### Owns
+
+The multipart framing of an upload (owner, 2026-11-17): an upload form
+sends its CSRF field as the first part of its body and the file as the
+second, so that the CSRF value travels in a form (A13 rules 5, 7) and the
+file still reaches `migration_import` unread. Reading the body's head alone
+— the boundary the request's content type names, the first part, which
+must be the CSRF field, and the second part's headers — at most the
+data provider's `UPLOAD_FORM_HEAD_MAX_BYTES`, answering the CSRF value, or
+none for a head of another form or longer than the bound; and the file
+part's bytes as a stream that ends where the part ends, read only when its
+reader asks and never buffered beyond the delimiter it must look ahead for.
+
+### Knows
+
+`models`, `data_provider`.
+
+### Must not own
+
+Any check of the CSRF value (`owner_sessions`), the size limit of the file
+and its reading (`migration_import`, A19 rule 4), the HTTP server and its
+connection (`instance_lifecycle`), the forms and pages (`owner_interface`).
+
+### Hides
+
+The multipart syntax: boundaries, part headers, the look-ahead for the
+closing delimiter.
+
+### Candidate public capabilities
+
+```text
+read_upload_head
+```
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: the multipart framing of an upload's body
 
 ## `runtime_settings`
 
@@ -514,7 +576,10 @@ each well formed, the addresses' ports different, each secret at least the 32 by
 two secrets equal — with the diagnostic naming the failed item and never its
 value; that no default is applied (rule 5); an owner-only start when no token
 is given (rule 1); and last the path checks of rule 5 that need no file — the
-store and the backup location apart, compared with every link resolved. The
+store and the backup location apart, compared with every link resolved;
+and, from the address it checked, whether the owner interface listens on an
+address other than a loopback one, which makes the session cookie HTTPS-only
+(A13 rule 1, owner, 2026-11-17). The
 checks after them — the backup probe (`backups`), opening or making the store
 (`store`) and the listeners — are run in rule 2's order by
 `instance_lifecycle`, which calls this module first.
@@ -540,6 +605,8 @@ load_configuration
 give_service_tokens
 give_owner_credential
 give_backup_key
+give_backup_location
+give_owner_cookie_secure
 ```
 
 ### Depth assessment
@@ -586,7 +653,9 @@ which holds it where the release's statements put it: `audit_log` alone
 decides when it moves and what it means (A15 rule 5), and `store` reads it as
 the copy's first read, and in a checked file, as it reads any stored value,
 deciding nothing about it — so the reading needs no call upward to
-`audit_log`.
+`audit_log`. The store this start opened: `store` keeps the `RegistryStore`
+`open_store` opened for the process and gives it to the module that runs
+an action's transaction (owner, 2026-11-17).
 
 ### Knows
 
@@ -608,6 +677,7 @@ the temporary-name dance of a new store, the integrity pragmas.
 
 ```text
 open_store
+opened_store
 discard_new_store
 run_in_transaction
 read_in_transaction
@@ -756,7 +826,9 @@ was wrong (rules 3, 4); the session, its cookie rules and its limits — 8 hours
 30 minutes without a request, sign-out, restart — held as monotonic readings
 (rule 2); the pass every 60 seconds that ends sessions by their limits, taking
 the import lock and then each session's lock; each session's one lock, under
-which its state-changing requests apply one at a time; the CSRF value (rule 5);
+which its state-changing requests apply one at a time; the CSRF value (rule 5),
+given for a valid session to the interface that renders its forms (owner,
+2026-11-17);
 the pending confirmation — made when a step is shown, bound to the action, its
 target, the revision or access version the step showed or that it showed none,
 and the digest of its inputs; valid 10 minutes, used up by the first
@@ -788,6 +860,7 @@ sign_out_owner
 admit_owner_request
 show_confirmation_step
 take_confirmation
+give_session_csrf
 keep_uploaded_file
 read_uploaded_file
 drop_uploaded_files
@@ -1120,13 +1193,17 @@ its project, through `artifact_pointers.project_of_pointer`, before stage (2)
 checks that project against the session's set (A08 rule 7). A05 rule 2's no entry and no
 confirmation id for a repeat. The compositions: erasing a project (with
 `agent_sessions` and `artifact_pointers`), granting through an access request,
-joining the agent projection with its published pointers.
+joining the agent projection with its published pointers. The store
+`store` opened, through `store.opened_store`, and the backup location,
+through `configuration.give_backup_location`, are asked by `operations`
+when an action needs them (owner, 2026-11-17).
 
 ### Knows
 
-`models`, `clock`, `random_values`, `store`, `audit_log`, `service_access`,
-`owner_sessions`, `customers`, `projects`, `artifact_pointers`,
-`agent_sessions`, `migration_import`, `backups`.
+`models`, `data_provider`, `clock`, `random_values`, `configuration`,
+`store`, `audit_log`, `service_access`, `owner_sessions`, `customers`,
+`projects`, `artifact_pointers`, `agent_sessions`, `migration_import`,
+`backups`.
 
 ### Must not own
 
@@ -1153,12 +1230,15 @@ perform_owner_operation
 ### Owns
 
 The service API's transport for the four services (R0-27, R0-28): reading the
-token and the request, calling `operations`, answering in the wire format
-States 5 and 6 declare; nothing reachable without a token.
+token, the session header and the request, calling `operations`,
+answering in the wire format States 5 and 6 declare — v1's (owner,
+2026-11-17): the answer's fields with no kind on the wire, `validate` and
+`context` as v1 wrote them (R0-04), and v1's HTTP statuses, the data
+provider's; nothing reachable without a token.
 
 ### Knows
 
-`models`, `operations`.
+`models`, `data_provider`, `operations`.
 
 ### Must not own
 
@@ -1192,13 +1272,19 @@ revision of the card it rendered, or none for one that shows none; A12 rule
 3's access version likewise. The session cookie and the CSRF value in its
 forms (A13 rules 1, 5, 7), no personal value or secret in a URL (R0-29). The
 newest backup's instant on its page (A18 rule 1). A16's upload, mapping and
-confirmation pages. An upload's bytes are handed on as the request's
-declared length and its unread stream, never read or buffered here, so
-that `migration_import` alone applies A19 rule 4 to them.
+confirmation pages. An upload form sends its CSRF field as the first part
+of its multipart body (owner, 2026-11-17): `owner_interface` has
+`upload_framing` read that head alone and hands the file part on as the
+request's declared length and an unread stream that ends where the part
+ends, never read or buffered here, so that `migration_import` alone applies
+A19 rule 4 to the file. The session cookie is HTTPS-only when `configuration` says the owner
+interface listens beyond loopback (A13 rule 1); every form carries the CSRF
+value `owner_sessions` gives for the session.
 
 ### Knows
 
-`models`, `random_values`, `owner_sessions`, `operations`.
+`models`, `random_values`, `upload_framing`, `configuration`,
+`owner_sessions`, `operations`.
 
 ### Must not own
 

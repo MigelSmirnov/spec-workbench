@@ -16,7 +16,8 @@ Sources:
   order, or none while State 7 is unwritten; tools/design_notes.py
   --propagate carries them afterwards.
 - imports.stdlib: one line per standard-library type the contracts and models
-  name (§12, source 3): date, datetime, Decimal, BinaryIO.
+  name (§12, source 3): date, datetime, Decimal. The request streams are
+  ports (`ByteStream`, `UploadBody`), so no `BinaryIO`.
 - imports.internal: every public State 6 function of its module, every class
   with contracts owned outside models, the repository module's schema
   function. data_provider's constants are the projector's.
@@ -92,7 +93,8 @@ implementation_obligations = {
     "OwnerStep": {"disposition": "policy", "implementations": ["OwnerRequestStep"]},
     "StoreRepository": {"disposition": "local", "implementations": ["SqliteStoreRepository"]},
     "TransactionStep": {"disposition": "policy", "implementations": ["OwnerActionStep", "ServiceCallStep"]},
-    "UploadBody": {"disposition": "external"},
+    "UploadBody": {"disposition": "policy", "implementations": ["MultipartFileBody"]},
+    "ByteStream": {"disposition": "external"},
 }
 interfaces = sorted(n for n, d in models.items() if d.get("kind") == "interface")
 assert sorted(implementation_obligations) == interfaces, interfaces
@@ -121,7 +123,6 @@ skeleton = {
         "stdlib": [
             "from datetime import date, datetime",
             "from decimal import Decimal",
-            "from typing import BinaryIO",
         ],
         "third_party": [],
         "internal": internal,

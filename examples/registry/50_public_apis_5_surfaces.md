@@ -49,10 +49,14 @@ checked for the token only (A10 rule 1); every other call through
 answer as any refusal of it (A08 rule 7, A10 rule 3). Every Kernel call runs
 in a write transaction (A10 rule 6); every other read in
 `store.read_in_transaction`, every change in `store.run_in_transaction`,
-with the instant of `clock.recorded_now`. The agent projection joins
+each on the store `store.opened_store` gives, with the instant of
+`clock.recorded_now`. The agent projection joins
 `projects.read_agent_view` with `artifact_pointers.published_pointers`. An
-answer above `service_access.highest_class_of_service` is refused whole (A09
-rule 4). No stage is re-ordered and no check added after stage (2).
+answer's class is `personal_data` when one of the fields the imported
+`PERSONAL_DATA_FIELDS` constant lists holds a value in it, nested views
+included, and `business_confidential` otherwise, never `open` (owner,
+2026-11-17); an answer above `service_access.highest_class_of_service` is
+refused whole (A09 rule 4). No stage is re-ordered and no check added after stage (2).
 
 ### Errors
 
@@ -90,7 +94,9 @@ consumes it within the request.
 
 The answer the page renders — a card, a list, a mapping, a confirmation
 step, an accepted change, the newest backup's instant from
-`backups.newest_backup_instant` — or a refusal of the closed set.
+`backups.newest_backup_instant` in the backup location
+`configuration.give_backup_location` gives — or a refusal of the closed
+set.
 
 ### Observable effect
 
@@ -106,7 +112,8 @@ Stage (1) through `owner_sessions.admit_owner_request` — the import lock
 first for a request that reads or changes an uploaded file — and, where one
 is asked, `owner_sessions.take_confirmation`; sign-in alone through
 `owner_sessions.sign_in_owner`. The transaction through
-`store.run_in_transaction` with one instant and today from `clock`. The
+`store.run_in_transaction`, on the store `store.opened_store` gives, with one
+instant and today from `clock`. The
 compositions: an erasure with `agent_sessions.drop_project_from_sessions`
 and, deleting whole, `artifact_pointers.delete_pointers_of_project`; a grant
 through a request with `projects.validate_project_reference`; the import
@@ -140,16 +147,24 @@ One transaction per change; runtime state of the session.
 ### Inputs
 
 One HTTP request on the service API's listener: the token, the operation
-and, for Kernel, the agent session in the request's envelope, apart from
-the operation's inputs; the inputs in the wire format States 5 and 6
+and, for Kernel, the agent session in the header the imported
+`SERVICE_AGENT_SESSION_HEADER` constant names, apart from the operation's
+inputs; the inputs in the wire format States 5 and 6
 declare. Kernel fills the session from its own run context and never from a
 value the agent's flow supplies (R0-53); Registry relies on it as it relies
 on Kernel naming the session.
 
 ### Outputs
 
-One response in that wire format: the answer, or the refusal's code, stage
-and kinds.
+One response in that wire format, v1's (owner, 2026-11-17): the answer, or
+the refusal's code, stage and kinds. An answer is written as its fields with
+no `answer_kind` or `view_kind` on the wire; `validate` and `context` are
+their v1 bodies, field for field (R0-04). Instants are ISO 8601 text in UTC
+ending in `Z`, dates ISO 8601 dates, decimals JSON strings in the stored form
+(`"45.00"`). The HTTP status is the imported `SERVICE_ANSWER_STATUS` for an
+answer and, for a refusal, its code's in the imported
+`REFUSAL_HTTP_STATUSES` — v1's: `not_found` 404, `internal_error` 500, every
+other code 422.
 
 ### Observable effect
 
@@ -194,8 +209,13 @@ forms over the owner's operations (R0-29, A19).
 One HTTP request from the owner's browser: the session cookie, the form's
 fields with their CSRF value, a confirmation value where the step carries
 one, the revision or access version the rendered card carried; for an
-upload, its declared length and its body as an unread stream, which it hands
-to `operations.perform_owner_operation` without reading or buffering it.
+upload, a multipart body whose first part is the CSRF field and whose second
+is the file (owner, 2026-11-17). `upload_framing.read_upload_head` reads
+the body's head alone and answers the CSRF value; `owner_interface` hands
+the request's declared length and the file part, as an unread stream that
+ends where the part ends, to `operations.perform_owner_operation`, without
+reading or buffering it. A head of another form gives no CSRF value, and the
+upload is refused at stage (1) before any byte of the file is read.
 
 ### Outputs
 
@@ -206,8 +226,8 @@ refusal rendered — the sign-in page for a request without a valid session.
 ### Observable effect
 
 On sign-in, the session cookie set: not readable by scripts, only to
-Registry's origin, over HTTPS when reached from another machine (A13 rule
-1). Registry never expires or deletes the cookie: an ended session's
+Registry's origin, and HTTPS-only when `configuration.give_owner_cookie_secure`
+answers that the owner interface listens beyond loopback (A13 rule 1). Registry never expires or deletes the cookie: an ended session's
 cookie is refused at the session check and replaced by the next sign-in, so
 no answer, however late it arrives, can remove a newer session's cookie.
 Two sign-ins of one browser whose answers cross make two valid sessions;
@@ -223,7 +243,9 @@ never reused. A proxy or TLS terminator in front of Registry is the host's
 ### Enforces
 
 A create form carries a request id from `random_values.mint_identity` made
-when it is rendered (A01 rule 1); every form carries the revision or access
+when it is rendered (A01 rule 1); every form of a page rendered for a valid
+session carries the CSRF value `owner_sessions.give_session_csrf` gives for
+it (A13 rules 5, 7); every form carries the revision or access
 version of what it rendered, or none (A04, A12 rule 3); no personal value
 or secret in a URL (R0-29); the newest backup's instant on its page (A18
 rule 1). Every check is `operations`'.

@@ -50,7 +50,8 @@ readings, so an action's today is `operations`' (`_today_of`).
   `implementation_obligations`: `TransactionStep` → `policy`
   [`ServiceCallStep`, `OwnerActionStep`]; `OwnerStep` → `policy`
   [`OwnerRequestStep`]; `StoreRepository` → `local`
-  [`SqliteStoreRepository`]; `UploadBody` → `external` (below).
+  [`SqliteStoreRepository`]; `UploadBody` → `policy`
+  [`MultipartFileBody`]; `ByteStream` → `external` (below).
 - **`StoreTransaction` is a class** (owner, 2026-11-16, replacing the
   interface of the first draft). The transaction is the `StoreTransaction`
   class `store` owns, whose methods are the rows each record module reads and
@@ -75,23 +76,58 @@ readings, so an action's today is `operations`' (`_today_of`).
   read or written, so the transaction commits nothing and `store` answers
   `internal_error` (`transaction_failed`) as State 5 declares for a step
   that fails.
-- **The upload body is a port** (owner, 2026-11-16). An upload's stream
-  reaches the step unread: `OwnerRequestStep`, `perform_owner_operation`,
-  `read_import_mapping` and `_read_bounded` take it as `UploadBody`, a port
-  of `models` with one method, `read(size)` — positional, the next bytes of
-  the stream, at most `size`, empty at its end. It is `external`: the HTTP
-  server makes the stream, `owner_interface` takes it as `BinaryIO` and
-  passes it on unread, and the step can only read it in portions. This
-  keeps `OwnerRequestStep` a legal `policy` class (a `BinaryIO` argument is
-  neither a model, a port nor a scalar) and keeps the moment and the limit
-  of the reading where State 5 put them: after admission, under the locks
+- **The upload body is a port** (owner, 2026-11-16; its multipart framing,
+  owner, 2026-11-17). An upload's file reaches the step unread:
+  `OwnerRequestStep`, `perform_owner_operation`, `read_import_mapping` and
+  `_read_bounded` take it as `UploadBody`, a port of `models` with one
+  method, `read(size)` — positional, the next bytes of the stream, at most
+  `size`, empty at its end. The request's raw body is another port of
+  `models` with the same one method, `ByteStream`, which is `external`: the
+  HTTP server makes it, and `owner_interface` takes it as such. An upload
+  form sends its CSRF field first and the file second, as multipart, since a
+  script-free form has no other way to carry the CSRF value with a file
+  (A13 rules 5, 7). `upload_framing.read_upload_head` reads the head alone,
+  at most `UPLOAD_FORM_HEAD_MAX_BYTES` (8192 bytes) — the boundary from the
+  content type, the CSRF part, the file part's headers — and answers
+  `UploadHead`: the CSRF value and the delimiter `\r\n--<boundary>` that ends
+  the file part, or neither. `UploadBody`'s one implementation is
+  `MultipartFileBody(stream, delimiter)`, `policy`, owned by
+  `upload_framing`: it gives the file part's bytes and ends before the
+  delimiter, holding in memory no more than the delimiter's length of
+  look-ahead, so `_parse_export` still receives the bare JSON object. Its
+  module imports nothing that opens a file or a connection (§5.1), which is
+  why it is not `owner_interface`'s: that module reads urlencoded forms. The
+  file is read in portions, and only by the step. This keeps
+  `OwnerRequestStep` a legal `policy` class and keeps the moment and the
+  limit of the reading where State 5 put them: after admission, under the locks
   the request needs, inside the read transaction, by `_read_bounded` at most
   one byte past the imported `IMPORT_FILE_MAX_BYTES` constant, a declared
   length over it refused before the first read. A request refused at
-  admission never reads its stream.
+  admission never reads its file. The declared length is the request's
+  whole body, so the multipart head counts toward the limit a declared
+  length is compared with, and the bytes read are counted over the file
+  part: A19 rule 4 is kept as written, and a file within a few hundred bytes
+  of 50 MB that declares its length may be refused.
 - **The store is a class.** A model field may not hold a connection, so the
   store this start opens is the `RegistryStore` class `store` owns; every
-  store operation takes it.
+  store operation takes it. `store` keeps the one `open_store` opened and
+  gives it through `opened_store` (owner, 2026-11-17; State 7 structure
+  request of `operations`), so that `operations` hands it to every
+  transaction without the surfaces carrying it.
+- **What `operations` asks** (owner, 2026-11-17; State 7 structure requests
+  of `operations`). The backup location, for the newest backup's instant on
+  the owner's page, through `configuration.give_backup_location`. An
+  answer's class through the data provider's `PERSONAL_DATA_FIELDS`: an
+  answer is `personal_data` when one of the listed (answer model, field)
+  pairs holds a value in it, nested views included, and
+  `business_confidential` otherwise; `open` is never answered.
+- **The owner's pages** (owner, 2026-11-17; State 7 structure requests of
+  `owner_interface`). `_render_owner_page` receives the session's CSRF value,
+  which `owner_sessions.give_session_csrf` gives for the cookie's session, or
+  none, and whether the cookie is HTTPS-only, which
+  `configuration.give_owner_cookie_secure` answers from the owner
+  interface's checked address: `true` when its host is not a loopback
+  address (`_is_loopback_host`).
 - **The project list's choice** (owner, 2026-11-17; State 7 structure
   request of `projects`). `list_projects` takes `list_choice` as text, so a
   value outside its closed list is refused (`outside_closed_list`, A19 rule
@@ -124,13 +160,25 @@ readings, so an action's today is `operations`' (`_today_of`).
 
 ## Formats State 6 declares
 
-- **The service API's wire format** (`service_api`): a request is one JSON
-  object, `{"operation": <name>, "inputs": {...}}`, the session Kernel names
-  in the `Registry-Agent-Session` header beside the bearer token, never among
-  the inputs (R0-53); an answer is one JSON object, the answer's fields or,
-  for a refusal, `{"code", "stage", "failures": [{"kind", "path"}]}`, its
-  `stage` JSON `null` for `internal_error`, the one refusal without a stage
-  (State 5, "Closed set of refusal codes"; round-36 T2).
+- **The service API's wire format** (`service_api`; v1's, owner,
+  2026-11-17): a request is one JSON object, `{"operation": <name>,
+  "inputs": {...}}`, the session Kernel names in the header the data
+  provider's `SERVICE_AGENT_SESSION_HEADER` names (`Registry-Agent-Session`)
+  beside the bearer token, never among the inputs (R0-53). An answer is one
+  JSON object:
+  - for a refusal, `{"code", "stage", "failures": [{"kind", "path"}]}`, its
+    `stage` JSON `null` for `internal_error`, the one refusal without a
+    stage (State 5, "Closed set of refusal codes"; round-36 T2);
+  - otherwise the answer's fields, with no `answer_kind` and no `view_kind`
+    on the wire; `validate` and `context` are the nested view alone, v1's
+    body field for field (R0-04);
+  - instants are ISO 8601 text in UTC ending in `Z`, dates ISO 8601 dates,
+    decimals JSON strings in the stored form (`"45.00"`).
+
+  The HTTP status is `SERVICE_ANSWER_STATUS` (200) for an answer and, for a
+  refusal, its code's row of `REFUSAL_HTTP_STATUSES`: `not_found` 404,
+  `internal_error` 500, every other code 422, as v1 answered (`SOURCE.md`
+  L14).
 - **The import file** (R0-72): one UTF-8 JSON object with the arrays
   `projects` (`project_id`, `name`, `address`, `status`, `customer_ref`,
   `created_at`, `updated_at`, `archived_at`), `rooms` (`room_id`,

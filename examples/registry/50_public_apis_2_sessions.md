@@ -256,6 +256,47 @@ compared in constant time; it is not the confirmation id, which
 
 Runtime state only.
 
+## `public_op:owner_sessions.give_session_csrf`
+
+### Owner
+
+`module:owner_sessions`. Give a valid session's CSRF value to the interface
+that renders its forms (A13 rules 5, 7; owner, 2026-11-17).
+
+### Callers
+
+`module:owner_interface`.
+
+### Inputs
+
+The session identity the request's cookie carried, or none.
+
+### Outputs
+
+The session's CSRF value, or none when no session of that identity exists
+or it has reached a limit.
+
+### Observable effect
+
+None: it is not an owner request, so it restarts no 30 minutes, and it
+changes no session.
+
+### Enforces
+
+A13 rule 7: the value is the one made at sign-in and kept by this module;
+`owner_interface` puts it only in the forms of the page it renders for that
+session and keeps nothing. The identity is looked up as the session check
+looks it up, compared in constant time; a session past a limit answers none,
+as it serves no request (A13 rule 2).
+
+### Errors
+
+None.
+
+### State impact
+
+Runtime state only, read.
+
 ## `public_op:owner_sessions.keep_uploaded_file`
 
 ### Owner

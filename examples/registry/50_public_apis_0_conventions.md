@@ -136,7 +136,9 @@ second authority beside them. The values are the data closure's.
 | `agent_sessions` | `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_VERSION`, `REFUSAL_STAGE_LIFECYCLE`, `ACCESS_VERSION_FIRST` |
 | `migration_import` | `ARTIFACT_TYPE_OWNERS`, `IMPORT_FILE_MAX_BYTES`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_LIFECYCLE` |
 | `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION` |
-| `operations` | `REFUSAL_STAGE_AUTHENTICATION`, `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_VALUES` |
+| `operations` | `REFUSAL_STAGE_AUTHENTICATION`, `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_VALUES`, `PERSONAL_DATA_FIELDS` |
+| `service_api` | `SERVICE_AGENT_SESSION_HEADER`, `SERVICE_ANSWER_STATUS`, `REFUSAL_HTTP_STATUSES` |
+| `upload_framing` | `UPLOAD_FORM_HEAD_MAX_BYTES` |
 | `instance_lifecycle` | `SESSION_PASS_SECONDS`, `BACKUP_LOOK_SECONDS` |
 
 Likewise `module_internal["configuration"]["runtime_settings"]` holds
@@ -148,7 +150,11 @@ by the module that uses each (State 3, "Secrets never leave"):
 `module_internal["service_access"]["configuration"]` holds
 `give_service_tokens`, `module_internal["owner_sessions"]["configuration"]`
 `give_owner_credential`, and `module_internal["backups"]["configuration"]`
-`give_backup_key`, each that one symbol. A secret such an operation returns
+`give_backup_key`, each that one symbol. Two values that are not secrets
+are asked the same way (owner, 2026-11-17):
+`module_internal["operations"]["configuration"]` holds
+`give_backup_location`, and `module_internal["owner_interface"]["configuration"]`
+`give_owner_cookie_secure`. A secret such an operation returns
 to its caller inside the process is not an answer in A13 rule 7's and A17
 rule 6's sense, which is what Registry gives a service or the owner
 (R0-23, R0-37); it never reaches one.
