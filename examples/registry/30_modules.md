@@ -353,7 +353,9 @@ service API's wire constants — the header that names Kernel's agent session
 (R0-53), the status of an accepted answer, 200, and each refusal code's
 status, as v1 answered: `not_found` 404, `internal_error` 500, every other
 code 422 (owner, 2026-11-17); and the bound of the head an upload form sends
-before its file, its CSRF field among it (A13 rule 5, owner, 2026-11-17).
+before its file, its CSRF field among it (A13 rule 5, owner, 2026-11-17);
+the listeners' read timeout, how long a listener waits for a request's next
+bytes before it closes the connection (State 2 round-90 T8).
 The list names groups; the data closure names each constant,
 and every one is exported.
 
@@ -428,6 +430,7 @@ SERVICE_AGENT_SESSION_HEADER
 SERVICE_ANSWER_STATUS
 REFUSAL_HTTP_STATUSES
 UPLOAD_FORM_HEAD_MAX_BYTES
+LISTENER_READ_TIMEOUT_SECONDS
 ```
 
 ### Depth assessment

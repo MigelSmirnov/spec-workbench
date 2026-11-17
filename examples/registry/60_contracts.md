@@ -311,6 +311,8 @@ surface is State 6's (State 5 round-34 T1, T8).
 | State 5 round-19 T17 | listener addresses | `ListenAddress` (`host` an IP address as text, `port` an `int` from `LISTEN_PORT_MIN` to `LISTEN_PORT_MAX`); the family is the host's address's |
 | State 5 round-19 T19 | release and contract versions | the data provider's `RELEASE_VERSION` and `CONTRACT_VERSION`, strings fixed by each release |
 | State 5 round-30 T1–T4, T6, T7, T9, T10 | `store.discard_new_store` | below |
+| State 2 round-90 T8, State 5 round-39 T3 | the listeners' read timeout | below, "The listeners" |
+| State 5 round-39 T9 | an unread body's remainder and connection reuse | below, "The listeners" |
 
 `store.discard_new_store` answers `DiscardResult`: `removed` is true when
 the store's pathname no longer names a file, and `failure` names the first
@@ -330,6 +332,20 @@ non-regular object at the store's own pathname answers `removed: false`.
 `instance_lifecycle` writes the failure's step and kind in the start's one
 diagnostic, beside the listener that could not be opened, never a path's
 content.
+
+## The listeners
+
+`instance_lifecycle`'s two listeners share one HTTP implementation. Each
+connection's socket waits at most the imported
+`LISTENER_READ_TIMEOUT_SECONDS` (30) for the next bytes of a request — its
+headers or its body, an upload's head and file among them; a wait that
+reaches it ends the stream with a failure, which the reader sees as any
+stream failure: an upload's head then gives no CSRF value (refused at stage
+(1)), its file part `file_unreadable`, and the connection is closed. A
+request answered before its body was read to its framed end — any request,
+not an upload alone — has the remainder discarded unread and its
+connection closed; a connection carries a next request only after one whose
+body was read to its end.
 
 ## Open
 

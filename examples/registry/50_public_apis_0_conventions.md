@@ -150,7 +150,7 @@ second authority beside them. The values are the data closure's.
 | `operations` | `REFUSAL_STAGE_AUTHENTICATION`, `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_VALUES`, `PERSONAL_DATA_FIELDS` |
 | `service_api` | `SERVICE_AGENT_SESSION_HEADER`, `SERVICE_ANSWER_STATUS`, `REFUSAL_HTTP_STATUSES` |
 | `upload_framing` | `UPLOAD_FORM_HEAD_MAX_BYTES` |
-| `instance_lifecycle` | `SESSION_PASS_SECONDS`, `BACKUP_LOOK_SECONDS` |
+| `instance_lifecycle` | `SESSION_PASS_SECONDS`, `BACKUP_LOOK_SECONDS`, `LISTENER_READ_TIMEOUT_SECONDS` |
 
 Likewise `module_internal["configuration"]["runtime_settings"]` holds
 `load_runtime_settings`, which `configuration` calls itself, once per start;
