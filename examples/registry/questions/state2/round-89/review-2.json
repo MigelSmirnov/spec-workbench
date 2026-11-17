@@ -1,0 +1,180 @@
+{
+ "open_points": [
+  {
+   "subject": "A19",
+   "kind": "undecided_constant",
+   "text": "the head read before the file — at most the imported\n   `UPLOAD_FORM_HEAD_MAX_BYTES` constant, which the code that reads the head\n   imports from the data provider (SPEC_STANDARD §15.3.1) —",
+   "question": "What exact byte value does `UPLOAD_FORM_HEAD_MAX_BYTES` have in this release?",
+   "options": [
+    "Set a specific release constant such as 65536 bytes.",
+    "Let the data-provider implementer choose the value."
+   ],
+   "default_guess": "Set it to 65536 bytes and make that value the sole data-provider definition.",
+   "witness": {
+    "initial": "The import is open and an owner session has no uploaded file.",
+    "events": [
+     "The owner submits a valid multipart request whose pre-file head is 65536 bytes and whose file is small.",
+     "One implementation defines the constant as 32768; another defines it as 131072."
+    ],
+    "outcomes": [
+     "The first implementation refuses the request.",
+     "The second implementation accepts the upload and shows its mapping."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19",
+   "kind": "missing_refusal_condition",
+   "text": "the head read before the file — at most the imported\n   `UPLOAD_FORM_HEAD_MAX_BYTES` constant",
+   "question": "What must Registry do when the bytes before the file would exceed `UPLOAD_FORM_HEAD_MAX_BYTES`, and must it stop before reading the first excess byte or merely before reading file data?",
+   "options": [
+    "Refuse immediately upon reaching one byte over the bound, preserve the session's previous upload, and read no file byte.",
+    "Continue parsing until the file begins and then refuse.",
+    "Treat the bound as an implementation assumption rather than an enforced refusal condition."
+   ],
+   "default_guess": "Refuse as soon as one byte beyond the bound is received, read no file byte, and preserve the previous upload.",
+   "witness": {
+    "initial": "The import is open and the session already keeps file A.",
+    "events": [
+     "A caller sends a multipart body with a valid eventual file B but a pre-file head one byte larger than `UPLOAD_FORM_HEAD_MAX_BYTES`."
+    ],
+    "outcomes": [
+     "Registry refuses at the head limit and keeps file A.",
+     "Registry continues parsing and accepts file B, replacing file A."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19",
+   "kind": "multipart_acceptance_undefined",
+   "text": "The upload is the file the owner\n   interface's form sends as the second part of a multipart body, after the\n   field that carries the CSRF value",
+   "question": "Which nonconforming multipart requests are refused: a file first, a missing or duplicate CSRF part, duplicate file parts, extra parts, a non-final file part, or malformed boundaries; and at what point is each refused?",
+   "options": [
+    "Accept exactly one CSRF part followed by exactly one final file part and refuse every other shape.",
+    "Locate the first CSRF and file parts regardless of order or extra parts.",
+    "Use the last matching parts when duplicates occur."
+   ],
+   "default_guess": "Require exactly two parts in order—one CSRF field and one final file—and refuse any other structure before retaining or parsing file content.",
+   "witness": {
+    "initial": "The import is open and the session keeps file A.",
+    "events": [
+     "A caller submits a multipart body containing a valid file B first and a valid CSRF field second."
+    ],
+    "outcomes": [
+     "Registry refuses the request and keeps file A because the required order is part of the accepted format.",
+     "Registry accepts file B after finding and validating the later CSRF field."
+    ],
+    "observer": "The caller and the owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19",
+   "kind": "byte_accounting_ambiguous",
+   "text": "Its declared length is the request's declared length less\n   the head read before the file — at most the imported\n   `UPLOAD_FORM_HEAD_MAX_BYTES` constant, which the code that reads the head\n   imports from the data provider (SPEC_STANDARD §15.3.1) — and the closing\n   delimiter",
+   "question": "Exactly which bytes belong to the head and to the closing delimiter for this subtraction, including the CRLF before the final boundary, the final `--`, the trailing CRLF, and any permitted epilogue; and what happens when the request length is absent, invalid, or smaller than that overhead?",
+   "options": [
+    "Define one canonical multipart encoding and count every framing byte explicitly.",
+    "Use the multipart parser's consumed-head and remaining-tail counts.",
+    "Treat the calculation only as an optimization and apply no declared-file-length refusal when the subtraction is not exact."
+   ],
+   "default_guess": "Define a canonical two-part encoding, include the CRLF introducing the final boundary and the entire final boundary line in the tail, prohibit an epilogue, and treat an absent request length as no declared file length while refusing invalid or negative calculations.",
+   "witness": {
+    "initial": "The import is open and the owner submits a canonical multipart request containing a file of exactly 52428800 bytes with a request `Content-Length`.",
+    "events": [
+     "One implementation counts the CRLF preceding the final boundary as part of the file; another counts it as part of the closing delimiter.",
+     "Both subtract their chosen head and delimiter lengths before reading file content."
+    ],
+    "outcomes": [
+     "The first computes a declared file length of 52428802 and refuses before reading the file.",
+     "The second computes 52428800 and reads the file, as Required test 4 requires."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19",
+   "kind": "check_precedence",
+   "text": "a declared length over the limit is refused before any byte is\n   read; otherwise Registry reads the upload up to one byte more than the\n   limit",
+   "question": "After the later clarification that “before any byte is read” means before a file byte, what is the required order among validating the CSRF value, enforcing the head bound, checking the migration closure, and refusing an over-limit declared file length?",
+   "options": [
+    "Take the import lock and check closure, then read and validate the bounded CSRF head, then check declared file length, then read file bytes.",
+    "Validate CSRF before taking the import lock, then check closure and size.",
+    "Check declared request length before CSRF or closure whenever possible."
+   ],
+   "default_guess": "Follow A16's lock order first, check the closure, parse and validate the bounded CSRF head, then enforce the computed declared file length before reading any file byte.",
+   "witness": {
+    "initial": "The migration closure exists, and a request has an invalid CSRF value and a declared file length over the limit.",
+    "events": [
+     "The caller submits the request to the upload endpoint."
+    ],
+    "outcomes": [
+     "Registry refuses because the import is closed without processing the multipart head.",
+     "Registry parses or validates CSRF, or reports the size refusal, before checking the closure."
+    ],
+    "observer": "The caller through the response and observable request processing"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21",
+   "kind": "retention_semantics_undefined",
+   "text": "the\nhead before it is bounded by a constant and never kept",
+   "question": "What does “never kept” require for the multipart head: no durable storage, no owner-session storage, no logging, disposal immediately after CSRF validation, or no complete in-memory buffering at all?",
+   "options": [
+    "Allow bounded transient memory only and discard the raw head immediately after extracting and validating required fields.",
+    "Forbid durable storage and logging but permit the raw head for the whole request.",
+    "Require streaming parsing that never holds the complete head."
+   ],
+   "default_guess": "Permit bounded transient parsing memory, prohibit session or durable retention and logging, and discard the raw bytes immediately after validation.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16",
+   "kind": "invariant_test_incomplete",
+   "text": "conflict at confirmation => store unchanged",
+   "question": "Which Required tests item must explicitly read the store before and after a confirmation-time conflict and assert that every affected record, closure, and audit entry is unchanged?",
+   "options": [
+    "Extend Required test 2 to confirm a mapping, induce or encounter the production conflict, and compare the complete store before and after.",
+    "Add a separate confirmation-conflict atomicity test.",
+    "Treat “refuses the whole import” as sufficient without asserting store state."
+   ],
+   "default_guess": "Extend Required test 2 with an explicit before-and-after store comparison covering projects, rooms, pointers, Customers, closure, and audit entries.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19",
+   "kind": "invariant_test_incomplete",
+   "text": "render(v) = escape(v) for every stored value v",
+   "question": "What Required tests item must show that every owner-interface rendering sink escapes every stored-value field, rather than only the room name and access-request examples?",
+   "options": [
+    "Require a parameterized test over every stored field and every owner-interface rendering location.",
+    "Name a representative test for each template or rendering context.",
+    "Limit the invariant to the two fields currently tested."
+   ],
+   "default_guess": "Require a parameterized inventory test covering every stored field rendered in every HTML context.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19",
+   "kind": "invariant_test_incomplete",
+   "text": "no stored value is ever evaluated or executed",
+   "question": "What Required tests item must explicitly show that stored values and import contents are never evaluated or executed in each relevant interpreter boundary, including browser rendering, query or command construction, and import processing?",
+   "options": [
+    "Add tests with executable-looking values at every interpreter boundary and assert they remain inert data.",
+    "Declare that Required tests 1–3 collectively witness the invariant and state which boundary each covers.",
+    "Narrow the invariant to the browser and query examples already tested."
+   ],
+   "default_guess": "Add explicit inert-data tests for browser output, store commands or queries, fixed-alternative selectors, and import payload processing.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A19\",\"kind\":\"undecided_constant\",\"text\":\"the head read before the file — at most the imported\\n   `UPLOAD_FORM_HEAD_MAX_BYTES` constant, which the code that reads the head\\n   imports from the data provider (SPEC_STANDARD §15.3.1) —\",\"question\":\"What exact byte value does `UPLOAD_FORM_HEAD_MAX_BYTES` have in this release?\",\"options\":[\"Set a specific release constant such as 65536 bytes.\",\"Let the data-provider implementer choose the value.\"],\"default_guess\":\"Set it to 65536 bytes and make that value the sole data-provider definition.\",\"witness\":{\"initial\":\"The import is open and an owner session has no uploaded file.\",\"events\":[\"The owner submits a valid multipart request whose pre-file head is 65536 bytes and whose file is small.\",\"One implementation defines the constant as 32768; another defines it as 131072.\"],\"outcomes\":[\"The first implementation refuses the request.\",\"The second implementation accepts the upload and shows its mapping.\"],\"observer\":\"The owner\"}},{\"subject\":\"A19\",\"kind\":\"missing_refusal_condition\",\"text\":\"the head read before the file — at most the imported\\n   `UPLOAD_FORM_HEAD_MAX_BYTES` constant\",\"question\":\"What must Registry do when the bytes before the file would exceed `UPLOAD_FORM_HEAD_MAX_BYTES`, and must it stop before reading the first excess byte or merely before reading file data?\",\"options\":[\"Refuse immediately upon reaching one byte over the bound, preserve the session's previous upload, and read no file byte.\",\"Continue parsing until the file begins and then refuse.\",\"Treat the bound as an implementation assumption rather than an enforced refusal condition.\"],\"default_guess\":\"Refuse as soon as one byte beyond the bound is received, read no file byte, and preserve the previous upload.\",\"witness\":{\"initial\":\"The import is open and the session already keeps file A.\",\"events\":[\"A caller sends a multipart body with a valid eventual file B but a pre-file head one byte larger than `UPLOAD_FORM_HEAD_MAX_BYTES`.\"],\"outcomes\":[\"Registry refuses at the head limit and keeps file A.\",\"Registry continues parsing and accepts file B, replacing file A.\"],\"observer\":\"The owner\"}},{\"subject\":\"A19\",\"kind\":\"multipart_acceptance_undefined\",\"text\":\"The upload is the file the owner\\n   interface's form sends as the second part of a multipart body, after the\\n   field that carries the CSRF value\",\"question\":\"Which nonconforming multipart requests are refused: a file first, a missing or duplicate CSRF part, duplicate file parts, extra parts, a non-final file part, or malformed boundaries; and at what point is each refused?\",\"options\":[\"Accept exactly one CSRF part followed by exactly one final file part and refuse every other shape.\",\"Locate the first CSRF and file parts regardless of order or extra parts.\",\"Use the last matching parts when duplicates occur.\"],\"default_guess\":\"Require exactly two parts in order—one CSRF field and one final file—and refuse any other structure before retaining or parsing file content.\",\"witness\":{\"initial\":\"The import is open and the session keeps file A.\",\"events\":[\"A caller submits a multipart body containing a valid file B first and a valid CSRF field second.\"],\"outcomes\":[\"Registry refuses the request and keeps file A because the required order is part of the accepted format.\",\"Registry accepts file B after finding and validating the later CSRF field.\"],\"observer\":\"The caller and the owner\"}},{\"subject\":\"A19\",\"kind\":\"byte_accounting_ambiguous\",\"text\":\"Its declared length is the request's declared length less\\n   the head read before the file — at most the imported\\n   `UPLOAD_FORM_HEAD_MAX_BYTES` constant, which the code that reads the head\\n   imports from the data provider (SPEC_STANDARD §15.3.1) — and the closing\\n   delimiter\",\"question\":\"Exactly which bytes belong to the head and to the closing delimiter for this subtraction, including the CRLF before the final boundary, the final `--`, the trailing CRLF, and any permitted epilogue; and what happens when the request length is absent, invalid, or smaller than that overhead?\",\"options\":[\"Define one canonical multipart encoding and count every framing byte explicitly.\",\"Use the multipart parser's consumed-head and remaining-tail counts.\",\"Treat the calculation only as an optimization and apply no declared-file-length refusal when the subtraction is not exact.\"],\"default_guess\":\"Define a canonical two-part encoding, include the CRLF introducing the final boundary and the entire final boundary line in the tail, prohibit an epilogue, and treat an absent request length as no declared file length while refusing invalid or negative calculations.\",\"witness\":{\"initial\":\"The import is open and the owner submits a canonical multipart request containing a file of exactly 52428800 bytes with a request `Content-Length`.\",\"events\":[\"One implementation counts the CRLF preceding the final boundary as part of the file; another counts it as part of the closing delimiter.\",\"Both subtract their chosen head and delimiter lengths before reading file content.\"],\"outcomes\":[\"The first computes a declared file length of 52428802 and refuses before reading the file.\",\"The second computes 52428800 and reads the file, as Required test 4 requires.\"],\"observer\":\"The owner\"}},{\"subject\":\"A19\",\"kind\":\"check_precedence\",\"text\":\"a declared length over the limit is refused before any byte is\\n   read; otherwise Registry reads the upload up to one byte more than the\\n   limit\",\"question\":\"After the later clarification that “before any byte is read” means before a file byte, what is the required order among validating the CSRF value, enforcing the head bound, checking the migration closure, and refusing an over-limit declared file length?\",\"options\":[\"Take the import lock and check closure, then read and validate the bounded CSRF head, then check declared file length, then read file bytes.\",\"Validate CSRF before taking the import lock, then check closure and size.\",\"Check declared request length before CSRF or closure whenever possible.\"],\"default_guess\":\"Follow A16's lock order first, check the closure, parse and validate the bounded CSRF head, then enforce the computed declared file length before reading any file byte.\",\"witness\":{\"initial\":\"The migration closure exists, and a request has an invalid CSRF value and a declared file length over the limit.\",\"events\":[\"The caller submits the request to the upload endpoint.\"],\"outcomes\":[\"Registry refuses because the import is closed without processing the multipart head.\",\"Registry parses or validates CSRF, or reports the size refusal, before checking the closure.\"],\"observer\":\"The caller through the response and observable request processing\"}},{\"subject\":\"A21\",\"kind\":\"retention_semantics_undefined\",\"text\":\"the\\nhead before it is bounded by a constant and never kept\",\"question\":\"What does “never kept” require for the multipart head: no durable storage, no owner-session storage, no logging, disposal immediately after CSRF validation, or no complete in-memory buffering at all?\",\"options\":[\"Allow bounded transient memory only and discard the raw head immediately after extracting and validating required fields.\",\"Forbid durable storage and logging but permit the raw head for the whole request.\",\"Require streaming parsing that never holds the complete head.\"],\"default_guess\":\"Permit bounded transient parsing memory, prohibit session or durable retention and logging, and discard the raw bytes immediately after validation.\"},{\"subject\":\"A16\",\"kind\":\"invariant_test_incomplete\",\"text\":\"conflict at confirmation => store unchanged\",\"question\":\"Which Required tests item must explicitly read the store before and after a confirmation-time conflict and assert that every affected record, closure, and audit entry is unchanged?\",\"options\":[\"Extend Required test 2 to confirm a mapping, induce or encounter the production conflict, and compare the complete store before and after.\",\"Add a separate confirmation-conflict atomicity test.\",\"Treat “refuses the whole import” as sufficient without asserting store state.\"],\"default_guess\":\"Extend Required test 2 with an explicit before-and-after store comparison covering projects, rooms, pointers, Customers, closure, and audit entries.\"},{\"subject\":\"A19\",\"kind\":\"invariant_test_incomplete\",\"text\":\"render(v) = escape(v) for every stored value v\",\"question\":\"What Required tests item must show that every owner-interface rendering sink escapes every stored-value field, rather than only the room name and access-request examples?\",\"options\":[\"Require a parameterized test over every stored field and every owner-interface rendering location.\",\"Name a representative test for each template or rendering context.\",\"Limit the invariant to the two fields currently tested.\"],\"default_guess\":\"Require a parameterized inventory test covering every stored field rendered in every HTML context.\"},{\"subject\":\"A19\",\"kind\":\"invariant_test_incomplete\",\"text\":\"no stored value is ever evaluated or executed\",\"question\":\"What Required tests item must explicitly show that stored values and import contents are never evaluated or executed in each relevant interpreter boundary, including browser rendering, query or command construction, and import processing?\",\"options\":[\"Add tests with executable-looking values at every interpreter boundary and assert they remain inert data.\",\"Declare that Required tests 1–3 collectively witness the invariant and state which boundary each covers.\",\"Narrow the invariant to the browser and query examples already tested.\"],\"default_guess\":\"Add explicit inert-data tests for browser output, store commands or queries, fixed-alternative selectors, and import payload processing.\"}]}",
+ "set_aside": []
+}
