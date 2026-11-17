@@ -1,0 +1,157 @@
+{
+ "open_points": [
+  {
+   "subject": "owner request arrival timestamp",
+   "kind": "unclear_owner",
+   "text": "A request's arrival is the monotonic reading taken when its headers are read, before any of its body, handed on for the session check (A13 rule 2).",
+   "question": "Which module observes the exact completion of header reading and invokes the clock read, given that `owner_interface` is assigned the reading but the HTTP server and connection belong to later `instance_lifecycle`, which `owner_interface` may not know?",
+   "options": [
+    "`owner_interface` is invoked exactly when header parsing completes and reads the clock itself",
+    "`instance_lifecycle` reads the clock at header completion and passes the reading down",
+    "Arrival means entry to `serve_owner_request`, even if that is later than header completion"
+   ],
+   "default_guess": "Have `instance_lifecycle` invoke `owner_interface` immediately after complete headers and let `owner_interface` read the clock as its first operation.",
+   "witness": {
+    "initial": "A session is one instant short of its 30-minute idle limit while a request's headers are being read slowly.",
+    "events": [
+     "The HTTP server finishes reading the headers.",
+     "The session reaches its idle limit before `serve_owner_request` begins."
+    ],
+    "outcomes": [
+     "Arrival is the header-completion instant, so the request is valid.",
+     "Arrival is handler-entry time, so the request is refused as expired."
+    ],
+    "observer": "The owner submitting the request"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "session admission versus upload-head reading",
+   "kind": "ordering_gap",
+   "text": "the session's validity at a request's arrival, judged at the monotonic reading `owner_interface` took when the request's headers were read, before any of its body — so an upload's head, read afterwards, never delays it (rule 2);",
+   "question": "Must `owner_sessions.admit_owner_request` receive and apply the arrival reading before `upload_framing` reads the multipart head, or may the head be read first and the earlier reading supplied only afterward?",
+   "options": [
+    "Admit and refresh the session immediately after headers, then read the upload head and check CSRF",
+    "Read the bounded upload head first, then admit the session using the saved arrival reading",
+    "Reserve the arrival in `owner_sessions` before the body and complete admission after the CSRF field is available"
+   ],
+   "default_guess": "Admit and update the session immediately after headers, before reading any body bytes.",
+   "witness": {
+    "initial": "A valid session is just under its idle limit when upload headers finish, and reading the multipart head is delayed.",
+    "events": [
+     "`owner_interface` records the arrival reading.",
+     "Before the multipart head is delivered, the 60-second expiry pass takes the import and session locks.",
+     "The upload later reaches the session check."
+    ],
+    "outcomes": [
+     "If admission refreshed the session before the body, the expiry pass keeps it and the upload proceeds.",
+     "If the saved reading was not handed to `owner_sessions` until after the head, the pass removes the session and the upload is refused."
+    ],
+    "observer": "The owner uploading the import"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner-session last-request update",
+   "kind": "concurrency_semantics",
+   "text": "the session's validity at a request's arrival, judged at the monotonic reading `owner_interface` took when the request's headers were read",
+   "question": "When concurrent requests arrive in one order but acquire the session lock in the opposite order, must `last_request` be assigned the processed reading or updated to the maximum arrival reading?",
+   "options": [
+    "Set `last_request = max(last_request, arrival_reading)`",
+    "Assign each admitted request's arrival reading in session-lock order",
+    "Serialize admission in arrival order before body processing"
+   ],
+   "default_guess": "Update `last_request` to the maximum arrival reading.",
+   "witness": {
+    "initial": "One session receives request A at monotonic time 100 and request B at time 101.",
+    "events": [
+     "B acquires the session lock first and records 101.",
+     "A acquires it afterward with its earlier saved reading of 100."
+    ],
+    "outcomes": [
+     "A maximum update leaves the idle period starting at 101.",
+     "Assignment in lock order moves the idle period backward to 100 and expires the session earlier."
+    ],
+    "observer": "The owner making the next request near the idle boundary"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner session cookie transport",
+   "kind": "contradiction",
+   "text": "The session cookie is always HTTPS-only (A13 rule 1, owner, 2026-11-17): a browser on Registry's own machine accepts it from a loopback address over plain HTTP, and from any other machine the interface is reached only through HTTPS (R0-29).",
+   "question": "Is the cookie required to work on loopback plain HTTP, or is it forbidden from being accepted or sent on every plain-HTTP connection as “always HTTPS-only” states?",
+   "options": [
+    "Use a Secure cookie and explicitly rely on the browser's loopback exception",
+    "Permit the cookie over loopback HTTP and require HTTPS only for other machines",
+    "Require HTTPS on loopback too"
+   ],
+   "default_guess": "Use a Secure cookie and state explicitly that the intended browser loopback exception permits local HTTP.",
+   "witness": {
+    "initial": "The owner opens Registry at a loopback `http://` address and signs in.",
+    "events": [
+     "Registry returns the session cookie.",
+     "The browser makes the next owner-interface request over the same plain-HTTP loopback origin."
+    ],
+    "outcomes": [
+     "Under the loopback clause, the browser carries the cookie and the session works.",
+     "Under literal always-HTTPS-only handling, the browser does not carry the cookie and the request is unauthenticated."
+    ],
+    "observer": "The owner using Registry locally"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "multipart file declared length",
+   "kind": "undefined_value",
+   "text": "Its declared length is the request's declared length less the head read before the file — at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, which the code that reads the head imports from the data provider (SPEC_STANDARD §15.3.1) — and the closing delimiter;",
+   "question": "What is the file part's declared length when the request declares a total length smaller than the measured head plus the expected closing delimiter, or otherwise makes the subtraction negative or inconsistent with the streamed body?",
+   "options": [
+    "Treat the file length as unknown and enforce the limit from streamed bytes",
+    "Refuse the multipart request as malformed before reading file bytes",
+    "Pass the negative result to `migration_import` and let its contract decide"
+   ],
+   "default_guess": "Refuse a negative result as malformed framing; for a nonnegative but understated result, continue enforcing the real limit from streamed bytes.",
+   "witness": {
+    "initial": "A multipart request declares a total length smaller than its already-read head plus closing delimiter, while bytes for a file follow.",
+    "events": [
+     "`upload_framing` reads the bounded head.",
+     "It subtracts the head and delimiter sizes from the declared request length."
+    ],
+    "outcomes": [
+     "One implementation refuses malformed framing immediately.",
+     "Another treats the derived length as absent and reads the file stream, possibly producing a mapping."
+    ],
+    "observer": "The owner uploading the file"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "unterminated multipart file part",
+   "kind": "failure_semantics",
+   "text": "the file part's bytes as a stream that ends where the part ends, read only when its reader asks and never buffered beyond the delimiter it must look ahead for;",
+   "question": "What must the stream do if the closing multipart delimiter is absent, malformed or truncated after a syntactically valid head?",
+   "options": [
+    "Raise a framing error that refuses the upload and preserves the previously kept file",
+    "Treat connection EOF as the file-part end",
+    "Return a truncated stream and let `migration_import` decide whether its contents are readable"
+   ],
+   "default_guess": "Raise a framing error and refuse the upload without replacing the session's previous file.",
+   "witness": {
+    "initial": "The request has a valid CSRF part and file-part headers, and the file bytes form an otherwise valid import, but the closing multipart delimiter is missing.",
+    "events": [
+     "`migration_import` reads the lazy file stream to the connection's end."
+    ],
+    "outcomes": [
+     "A strict framing stream reports an error, so the upload is refused.",
+     "An EOF-terminating stream exposes the valid file bytes, so the mapping is shown."
+    ],
+    "observer": "The owner uploading the import"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner request arrival timestamp\",\"kind\":\"unclear_owner\",\"text\":\"A request's arrival is the monotonic reading taken when its headers are read, before any of its body, handed on for the session check (A13 rule 2).\",\"question\":\"Which module observes the exact completion of header reading and invokes the clock read, given that `owner_interface` is assigned the reading but the HTTP server and connection belong to later `instance_lifecycle`, which `owner_interface` may not know?\",\"options\":[\"`owner_interface` is invoked exactly when header parsing completes and reads the clock itself\",\"`instance_lifecycle` reads the clock at header completion and passes the reading down\",\"Arrival means entry to `serve_owner_request`, even if that is later than header completion\"],\"default_guess\":\"Have `instance_lifecycle` invoke `owner_interface` immediately after complete headers and let `owner_interface` read the clock as its first operation.\",\"witness\":{\"initial\":\"A session is one instant short of its 30-minute idle limit while a request's headers are being read slowly.\",\"events\":[\"The HTTP server finishes reading the headers.\",\"The session reaches its idle limit before `serve_owner_request` begins.\"],\"outcomes\":[\"Arrival is the header-completion instant, so the request is valid.\",\"Arrival is handler-entry time, so the request is refused as expired.\"],\"observer\":\"The owner submitting the request\"}},{\"subject\":\"session admission versus upload-head reading\",\"kind\":\"ordering_gap\",\"text\":\"the session's validity at a request's arrival, judged at the monotonic reading `owner_interface` took when the request's headers were read, before any of its body — so an upload's head, read afterwards, never delays it (rule 2);\",\"question\":\"Must `owner_sessions.admit_owner_request` receive and apply the arrival reading before `upload_framing` reads the multipart head, or may the head be read first and the earlier reading supplied only afterward?\",\"options\":[\"Admit and refresh the session immediately after headers, then read the upload head and check CSRF\",\"Read the bounded upload head first, then admit the session using the saved arrival reading\",\"Reserve the arrival in `owner_sessions` before the body and complete admission after the CSRF field is available\"],\"default_guess\":\"Admit and update the session immediately after headers, before reading any body bytes.\",\"witness\":{\"initial\":\"A valid session is just under its idle limit when upload headers finish, and reading the multipart head is delayed.\",\"events\":[\"`owner_interface` records the arrival reading.\",\"Before the multipart head is delivered, the 60-second expiry pass takes the import and session locks.\",\"The upload later reaches the session check.\"],\"outcomes\":[\"If admission refreshed the session before the body, the expiry pass keeps it and the upload proceeds.\",\"If the saved reading was not handed to `owner_sessions` until after the head, the pass removes the session and the upload is refused.\"],\"observer\":\"The owner uploading the import\"}},{\"subject\":\"owner-session last-request update\",\"kind\":\"concurrency_semantics\",\"text\":\"the session's validity at a request's arrival, judged at the monotonic reading `owner_interface` took when the request's headers were read\",\"question\":\"When concurrent requests arrive in one order but acquire the session lock in the opposite order, must `last_request` be assigned the processed reading or updated to the maximum arrival reading?\",\"options\":[\"Set `last_request = max(last_request, arrival_reading)`\",\"Assign each admitted request's arrival reading in session-lock order\",\"Serialize admission in arrival order before body processing\"],\"default_guess\":\"Update `last_request` to the maximum arrival reading.\",\"witness\":{\"initial\":\"One session receives request A at monotonic time 100 and request B at time 101.\",\"events\":[\"B acquires the session lock first and records 101.\",\"A acquires it afterward with its earlier saved reading of 100.\"],\"outcomes\":[\"A maximum update leaves the idle period starting at 101.\",\"Assignment in lock order moves the idle period backward to 100 and expires the session earlier.\"],\"observer\":\"The owner making the next request near the idle boundary\"}},{\"subject\":\"owner session cookie transport\",\"kind\":\"contradiction\",\"text\":\"The session cookie is always HTTPS-only (A13 rule 1, owner, 2026-11-17): a browser on Registry's own machine accepts it from a loopback address over plain HTTP, and from any other machine the interface is reached only through HTTPS (R0-29).\",\"question\":\"Is the cookie required to work on loopback plain HTTP, or is it forbidden from being accepted or sent on every plain-HTTP connection as “always HTTPS-only” states?\",\"options\":[\"Use a Secure cookie and explicitly rely on the browser's loopback exception\",\"Permit the cookie over loopback HTTP and require HTTPS only for other machines\",\"Require HTTPS on loopback too\"],\"default_guess\":\"Use a Secure cookie and state explicitly that the intended browser loopback exception permits local HTTP.\",\"witness\":{\"initial\":\"The owner opens Registry at a loopback `http://` address and signs in.\",\"events\":[\"Registry returns the session cookie.\",\"The browser makes the next owner-interface request over the same plain-HTTP loopback origin.\"],\"outcomes\":[\"Under the loopback clause, the browser carries the cookie and the session works.\",\"Under literal always-HTTPS-only handling, the browser does not carry the cookie and the request is unauthenticated.\"],\"observer\":\"The owner using Registry locally\"}},{\"subject\":\"multipart file declared length\",\"kind\":\"undefined_value\",\"text\":\"Its declared length is the request's declared length less the head read before the file — at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, which the code that reads the head imports from the data provider (SPEC_STANDARD §15.3.1) — and the closing delimiter;\",\"question\":\"What is the file part's declared length when the request declares a total length smaller than the measured head plus the expected closing delimiter, or otherwise makes the subtraction negative or inconsistent with the streamed body?\",\"options\":[\"Treat the file length as unknown and enforce the limit from streamed bytes\",\"Refuse the multipart request as malformed before reading file bytes\",\"Pass the negative result to `migration_import` and let its contract decide\"],\"default_guess\":\"Refuse a negative result as malformed framing; for a nonnegative but understated result, continue enforcing the real limit from streamed bytes.\",\"witness\":{\"initial\":\"A multipart request declares a total length smaller than its already-read head plus closing delimiter, while bytes for a file follow.\",\"events\":[\"`upload_framing` reads the bounded head.\",\"It subtracts the head and delimiter sizes from the declared request length.\"],\"outcomes\":[\"One implementation refuses malformed framing immediately.\",\"Another treats the derived length as absent and reads the file stream, possibly producing a mapping.\"],\"observer\":\"The owner uploading the file\"}},{\"subject\":\"unterminated multipart file part\",\"kind\":\"failure_semantics\",\"text\":\"the file part's bytes as a stream that ends where the part ends, read only when its reader asks and never buffered beyond the delimiter it must look ahead for;\",\"question\":\"What must the stream do if the closing multipart delimiter is absent, malformed or truncated after a syntactically valid head?\",\"options\":[\"Raise a framing error that refuses the upload and preserves the previously kept file\",\"Treat connection EOF as the file-part end\",\"Return a truncated stream and let `migration_import` decide whether its contents are readable\"],\"default_guess\":\"Raise a framing error and refuse the upload without replacing the session's previous file.\",\"witness\":{\"initial\":\"The request has a valid CSRF part and file-part headers, and the file bytes form an otherwise valid import, but the closing multipart delimiter is missing.\",\"events\":[\"`migration_import` reads the lazy file stream to the connection's end.\"],\"outcomes\":[\"A strict framing stream reports an error, so the upload is refused.\",\"An EOF-terminating stream exposes the valid file bytes, so the mapping is shown.\"],\"observer\":\"The owner uploading the import\"}}]}",
+ "set_aside": []
+}

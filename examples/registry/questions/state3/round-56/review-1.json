@@ -1,0 +1,98 @@
+{
+ "open_points": [
+  {
+   "subject": "owner request admission and idle-session renewal",
+   "kind": "ordering ambiguity",
+   "text": "the session's\nvalidity at a request's arrival, judged at the monotonic reading\n`owner_interface` took when the request's headers were read, before any of\nits body — so an upload's head, read afterwards, never delays it (rule 2);",
+   "question": "How are concurrent header-arrival readings ordered and applied when their session checks acquire the session lock in a different order, including whether `last_request` is assigned, advanced by `max`, or processed strictly in arrival order?",
+   "options": [
+    "Atomically enqueue admissions in header-arrival order and validate and advance `last_request` in that order",
+    "Validate in session-lock acquisition order but set `last_request` to the maximum reading seen",
+    "Validate and assign `last_request` in session-lock acquisition order, allowing an older reading to replace a newer one"
+   ],
+   "default_guess": "Atomically enqueue each admission when the headers complete, order admissions by the captured monotonic reading with a sequence tie-breaker, and validate and advance `last_request` in that order.",
+   "witness": {
+    "initial": "A valid session has `last_request` at 09:30:00 and reaches its idle limit at 10:00:00.",
+    "events": [
+     "Request A's headers are read at 09:59:59, but its handler pauses before `owner_sessions` checks it.",
+     "Request B's headers are read at 10:00:00.500 and B reaches `owner_sessions` first.",
+     "B is checked, then A is checked."
+    ],
+    "outcomes": [
+     "Admissions are applied in arrival order: A renews the session at 09:59:59, so B is valid and the final `last_request` is 10:00:00.500.",
+     "Admissions are applied in check order against the old state: B is refused as expired; A may then be accepted and may leave `last_request` at 09:59:59."
+    ],
+    "observer": "The owner sees whether request B is served or asks for sign-in again."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "an admitted owner request after session expiry or sign-out",
+   "kind": "lifetime ambiguity",
+   "text": "A\nrequest's arrival is the monotonic reading taken when its headers are read,\nbefore any of its body, handed on for the session check (A13 rule 2).",
+   "question": "Does the header-time session check create an admission that retains everything needed to finish the request after the session is removed by the expiry pass or sign-out, or is validity checked again after the body head and CSRF value have been read?",
+   "options": [
+    "Return a durable per-request admission handle that survives removal of the session and retains the CSRF-checking state",
+    "Keep the session record alive until every admitted request finishes",
+    "Look the session up again after reading the body and refuse if expiry or sign-out removed it"
+   ],
+   "default_guess": "Have `owner_sessions` return an opaque admission handle at the header-time check; it retains the session reference and CSRF-checking material until that admitted request finishes, while expiry or sign-out blocks only later arrivals.",
+   "witness": {
+    "initial": "An upload session is valid until 10:00:00 and holds a valid CSRF value.",
+    "events": [
+     "The upload's headers arrive at 09:59:59 and the arrival reading is captured.",
+     "The client delays the multipart body.",
+     "At 10:00:00 the expiry pass removes the session, or another request signs it out.",
+     "The upload's CSRF head and file arrive afterward."
+    ],
+    "outcomes": [
+     "The upload was admitted at 09:59:59 and completes using retained admission state.",
+     "The later session lookup finds no session and refuses the upload."
+    ],
+    "observer": "The owner sees either the upload mapping or a sign-in/session refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "multipart upload request shape",
+   "kind": "wire grammar ambiguity",
+   "text": "The multipart framing of an upload (owner, 2026-11-17): an upload form\nsends its CSRF field as the first part of its body and the file as the\nsecond, so that the CSRF value travels in a form (A13 rules 5, 7) and the\nfile still reaches `migration_import` unread.",
+   "question": "Must an accepted upload contain exactly the CSRF part followed by exactly one final file part, and what are the required part names and headers and the treatment of extra parts, an epilogue, a missing final delimiter, or conflicting part headers?",
+   "options": [
+    "Accept only the exact two-part grammar and report every deviation as malformed framing",
+    "Extract the first CSRF part and second file part while ignoring later parts and epilogues",
+    "Accept any multipart layout that lets the parser identify a CSRF field and a file field"
+   ],
+   "default_guess": "Accept exactly two named parts in that order, require the file part to be final, ignore no extra part or epilogue, and have `upload_framing` surface any truncation or delimiter error so the upload is refused without replacing the kept file.",
+   "witness": {
+    "initial": "The owner has a valid session and CSRF value and submits a multipart body containing a valid CSRF first part, a small file second part, and a third text part before the final delimiter.",
+    "events": [
+     "`upload_framing` reads the bounded head and exposes the second part's stream.",
+     "The reader reaches the delimiter after the file and discovers the third part."
+    ],
+    "outcomes": [
+     "The request is refused because the file was not the final part of the required two-part body.",
+     "The file is accepted and mapped while the third part is ignored."
+    ],
+    "observer": "The owner sees either a mapping for the file or an upload refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "derived declared length of the multipart file",
+   "kind": "length arithmetic ambiguity",
+   "text": "and the file\npart's declared length — the request's declared length less\nthe head it read and the closing delimiter with its final `--` and line end,\nor none when the request declares none — so that a file of exactly the\nimport limit is not refused for its framing (A19 rule 4).",
+   "question": "What result is passed to `migration_import` when the declared request length is smaller than the measured head plus the required closing delimiter, conflicts with the bytes actually exposed by the HTTP server, or cannot describe a complete final delimiter?",
+   "options": [
+    "Refuse the request as malformed framing before exposing any file byte",
+    "Treat the file's declared length as absent and rely on streamed counting",
+    "Clamp the derived length to zero and let the stream determine whether bytes follow"
+   ],
+   "default_guess": "Refuse a negative, inconsistent, or incomplete derived length as malformed multipart framing; never clamp it or convert it to an absent declaration, and leave the session's previously kept file unchanged.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner request admission and idle-session renewal\",\"kind\":\"ordering ambiguity\",\"text\":\"the session's\\nvalidity at a request's arrival, judged at the monotonic reading\\n`owner_interface` took when the request's headers were read, before any of\\nits body — so an upload's head, read afterwards, never delays it (rule 2);\",\"question\":\"How are concurrent header-arrival readings ordered and applied when their session checks acquire the session lock in a different order, including whether `last_request` is assigned, advanced by `max`, or processed strictly in arrival order?\",\"options\":[\"Atomically enqueue admissions in header-arrival order and validate and advance `last_request` in that order\",\"Validate in session-lock acquisition order but set `last_request` to the maximum reading seen\",\"Validate and assign `last_request` in session-lock acquisition order, allowing an older reading to replace a newer one\"],\"default_guess\":\"Atomically enqueue each admission when the headers complete, order admissions by the captured monotonic reading with a sequence tie-breaker, and validate and advance `last_request` in that order.\",\"witness\":{\"initial\":\"A valid session has `last_request` at 09:30:00 and reaches its idle limit at 10:00:00.\",\"events\":[\"Request A's headers are read at 09:59:59, but its handler pauses before `owner_sessions` checks it.\",\"Request B's headers are read at 10:00:00.500 and B reaches `owner_sessions` first.\",\"B is checked, then A is checked.\"],\"outcomes\":[\"Admissions are applied in arrival order: A renews the session at 09:59:59, so B is valid and the final `last_request` is 10:00:00.500.\",\"Admissions are applied in check order against the old state: B is refused as expired; A may then be accepted and may leave `last_request` at 09:59:59.\"],\"observer\":\"The owner sees whether request B is served or asks for sign-in again.\"}},{\"subject\":\"an admitted owner request after session expiry or sign-out\",\"kind\":\"lifetime ambiguity\",\"text\":\"A\\nrequest's arrival is the monotonic reading taken when its headers are read,\\nbefore any of its body, handed on for the session check (A13 rule 2).\",\"question\":\"Does the header-time session check create an admission that retains everything needed to finish the request after the session is removed by the expiry pass or sign-out, or is validity checked again after the body head and CSRF value have been read?\",\"options\":[\"Return a durable per-request admission handle that survives removal of the session and retains the CSRF-checking state\",\"Keep the session record alive until every admitted request finishes\",\"Look the session up again after reading the body and refuse if expiry or sign-out removed it\"],\"default_guess\":\"Have `owner_sessions` return an opaque admission handle at the header-time check; it retains the session reference and CSRF-checking material until that admitted request finishes, while expiry or sign-out blocks only later arrivals.\",\"witness\":{\"initial\":\"An upload session is valid until 10:00:00 and holds a valid CSRF value.\",\"events\":[\"The upload's headers arrive at 09:59:59 and the arrival reading is captured.\",\"The client delays the multipart body.\",\"At 10:00:00 the expiry pass removes the session, or another request signs it out.\",\"The upload's CSRF head and file arrive afterward.\"],\"outcomes\":[\"The upload was admitted at 09:59:59 and completes using retained admission state.\",\"The later session lookup finds no session and refuses the upload.\"],\"observer\":\"The owner sees either the upload mapping or a sign-in/session refusal.\"}},{\"subject\":\"multipart upload request shape\",\"kind\":\"wire grammar ambiguity\",\"text\":\"The multipart framing of an upload (owner, 2026-11-17): an upload form\\nsends its CSRF field as the first part of its body and the file as the\\nsecond, so that the CSRF value travels in a form (A13 rules 5, 7) and the\\nfile still reaches `migration_import` unread.\",\"question\":\"Must an accepted upload contain exactly the CSRF part followed by exactly one final file part, and what are the required part names and headers and the treatment of extra parts, an epilogue, a missing final delimiter, or conflicting part headers?\",\"options\":[\"Accept only the exact two-part grammar and report every deviation as malformed framing\",\"Extract the first CSRF part and second file part while ignoring later parts and epilogues\",\"Accept any multipart layout that lets the parser identify a CSRF field and a file field\"],\"default_guess\":\"Accept exactly two named parts in that order, require the file part to be final, ignore no extra part or epilogue, and have `upload_framing` surface any truncation or delimiter error so the upload is refused without replacing the kept file.\",\"witness\":{\"initial\":\"The owner has a valid session and CSRF value and submits a multipart body containing a valid CSRF first part, a small file second part, and a third text part before the final delimiter.\",\"events\":[\"`upload_framing` reads the bounded head and exposes the second part's stream.\",\"The reader reaches the delimiter after the file and discovers the third part.\"],\"outcomes\":[\"The request is refused because the file was not the final part of the required two-part body.\",\"The file is accepted and mapped while the third part is ignored.\"],\"observer\":\"The owner sees either a mapping for the file or an upload refusal.\"}},{\"subject\":\"derived declared length of the multipart file\",\"kind\":\"length arithmetic ambiguity\",\"text\":\"and the file\\npart's declared length — the request's declared length less\\nthe head it read and the closing delimiter with its final `--` and line end,\\nor none when the request declares none — so that a file of exactly the\\nimport limit is not refused for its framing (A19 rule 4).\",\"question\":\"What result is passed to `migration_import` when the declared request length is smaller than the measured head plus the required closing delimiter, conflicts with the bytes actually exposed by the HTTP server, or cannot describe a complete final delimiter?\",\"options\":[\"Refuse the request as malformed framing before exposing any file byte\",\"Treat the file's declared length as absent and rely on streamed counting\",\"Clamp the derived length to zero and let the stream determine whether bytes follow\"],\"default_guess\":\"Refuse a negative, inconsistent, or incomplete derived length as malformed multipart framing; never clamp it or convert it to an absent declaration, and leave the session's previously kept file unchanged.\"}]}",
+ "set_aside": []
+}

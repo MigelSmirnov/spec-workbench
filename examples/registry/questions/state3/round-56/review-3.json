@@ -1,0 +1,173 @@
+{
+ "open_points": [
+  {
+   "subject": "30_modules.md:`owner_interface`",
+   "kind": "timing_boundary",
+   "text": "A request's arrival is the monotonic reading taken when its headers are read, before any of its body, handed on for the session check (A13 rule 2).",
+   "question": "Is the reading taken when header reading begins, when the complete header block has been received, or at another precisely defined boundary?",
+   "options": [
+    "Take the reading before reading the first header byte",
+    "Take the reading after the complete header block and before the first body byte",
+    "Let the HTTP server supply its own request-arrival timestamp"
+   ],
+   "default_guess": "Take the reading after the complete header block and before the first body byte.",
+   "witness": {
+    "initial": "An owner session is one microsecond short of its 30-minute idle limit when a client begins sending headers slowly.",
+    "events": [
+     "The client begins the request before the limit and completes its headers after the limit.",
+     "owner_interface chooses the request-arrival reading and owner_sessions checks the session at that reading."
+    ],
+    "outcomes": [
+     "The reading is taken when header reading begins, so the request is admitted.",
+     "The reading is taken after all headers arrive, so the request is refused as expired."
+    ],
+    "observer": "The owner sees either the requested page or a sign-in refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`owner_interface`",
+   "kind": "unclear_handoff_order",
+   "text": "A request's arrival is the monotonic reading taken when its headers are read, before any of its body, handed on for the session check (A13 rule 2).",
+   "question": "Must owner_interface invoke the owner_sessions admission check before reading any body, or may it read the upload head first and later check the session using the saved reading?",
+   "options": [
+    "Admit the session immediately after the headers and before reading the body",
+    "Capture the reading before the body but defer the session check until the upload head has been read"
+   ],
+   "default_guess": "Admit the session immediately after the headers and before reading the body.",
+   "witness": {
+    "initial": "A valid session is close to its idle limit and an upload request finishes its headers just before that limit.",
+    "events": [
+     "owner_interface records the arrival reading.",
+     "The client sends the multipart head slowly.",
+     "The 60-second expiry pass runs after the idle limit.",
+     "The upload reaches the session check."
+    ],
+    "outcomes": [
+     "If admission occurs before the body, the request passes and completes even though the expiry pass runs later.",
+     "If admission is deferred, the expiry pass removes the session and the same request is refused despite its pre-limit arrival reading."
+    ],
+    "observer": "The owner sees either an accepted upload or a request to sign in again."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`owner_interface`",
+   "kind": "two_owners",
+   "text": "An upload form sends its CSRF field as the first part of its multipart body (owner, 2026-11-17): `owner_interface` has `upload_framing` read that head alone and hands the file part on as its declared length, which `upload_framing` derives, and an unread stream that ends where the part ends, never read or buffered here, so that `migration_import` alone applies A19 rule 4 to the file.",
+   "question": "Which single module owns the multipart part order: owner_interface, which constructs the form and claims it in Owns, or upload_framing, whose Owns section also claims that the form sends the CSRF field first and the file second?",
+   "options": [
+    "owner_interface owns the emitted part order and upload_framing only parses it",
+    "upload_framing owns the multipart contract and owner_interface consumes that contract",
+    "Split form construction and parsing into two explicitly distinct decisions with one owner each"
+   ],
+   "default_guess": "owner_interface owns the emitted part order; upload_framing owns only parsing and derivation of the file stream and length.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`owner_interface`",
+   "kind": "unclear_dependency_path",
+   "text": "`owner_interface` has `upload_framing` read that head alone and hands the file part on as its declared length, which `upload_framing` derives, and an unread stream that ends where the part ends, never read or buffered here, so that `migration_import` alone applies A19 rule 4 to the file.",
+   "question": "Through which module and capability do the declared length and unread stream reach migration_import, given that owner_interface does not list migration_import under Knows?",
+   "options": [
+    "owner_interface passes them to operations, which calls migration_import",
+    "owner_interface directly depends on and calls migration_import",
+    "owner_interface gives them to owner_sessions, and migration_import later reads the kept upload from owner_sessions"
+   ],
+   "default_guess": "owner_interface passes them to operations, which calls migration_import.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`owner_interface`",
+   "kind": "consumer_mapping_contradiction",
+   "text": "| A19 | `owner_interface` | `data_provider`, `store`, `migration_import` |",
+   "question": "Must upload_framing be added as an A19 consumer, or must its ownership text stop assigning it A19 rule 4's multipart-length and file-stream responsibilities?",
+   "options": [
+    "Add upload_framing to A19's consumers",
+    "Move all A19 responsibility out of upload_framing",
+    "Reassign A19's primary owner and rewrite the mapping"
+   ],
+   "default_guess": "Add upload_framing to A19's consumers.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "undefined_invalid_length",
+   "text": "Its declared length is the request's declared length less the head read before the file — at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, which the code that reads the head imports from the data provider (SPEC_STANDARD §15.3.1) — and the closing delimiter;",
+   "question": "What result does upload_framing produce when the request's declared length is smaller than the measured head plus the required closing delimiter, or otherwise cannot yield a non-negative file-part length?",
+   "options": [
+    "Refuse the request as malformed framing",
+    "Return no declared file length and enforce only the streamed-byte limit",
+    "Pass the negative or inconsistent result to migration_import"
+   ],
+   "default_guess": "Refuse the request as malformed framing.",
+   "witness": {
+    "initial": "A request has a valid session and CSRF field but declares a total length smaller than the multipart head plus closing delimiter.",
+    "events": [
+     "upload_framing reads the bounded head.",
+     "upload_framing subtracts the head and delimiter from the declared request length.",
+     "The upload is handed toward migration_import."
+    ],
+    "outcomes": [
+     "The framing layer refuses the malformed request before migration_import reads file bytes.",
+     "The framing layer treats the derived length as absent or non-positive and migration_import proceeds to read the stream."
+    ],
+    "observer": "The caller sees either an immediate framing refusal or normal upload processing."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`owner_interface`",
+   "kind": "contradictory_transport_rule",
+   "text": "The session cookie is always HTTPS-only (A13 rule 1, owner, 2026-11-17): a browser on Registry's own machine accepts it from a loopback address over plain HTTP, and from any other machine the interface is reached only through HTTPS (R0-29).",
+   "question": "Is the cookie forbidden over every plain-HTTP connection, or is loopback plain HTTP an explicit permitted exception?",
+   "options": [
+    "The cookie is Secure/HTTPS-only everywhere, so loopback must also use HTTPS",
+    "Plain HTTP is permitted on loopback and HTTPS is required only from another machine"
+   ],
+   "default_guess": "Plain HTTP is permitted on loopback and HTTPS is required from another machine.",
+   "witness": {
+    "initial": "Registry's owner interface is opened at a loopback HTTP address on Registry's own machine.",
+    "events": [
+     "The owner signs in successfully.",
+     "owner_interface attempts to set and subsequently receive the session cookie."
+    ],
+    "outcomes": [
+     "Under the literal always-HTTPS-only rule, the cookie is not usable over the HTTP connection and the owner cannot maintain a session.",
+     "Under the stated loopback exception, the browser accepts and returns the cookie and the session works."
+    ],
+    "observer": "The owner sees either a working signed-in interface or repeated loss of the session."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "incomplete_required_review",
+   "text": "Performed again on 2026-11-17, after that day's change to A19 reopened it (rule 2): the owner interface's upload form sends its CSRF field first and the file second, as multipart, and A19 rule 4's limit, counting and declared length are the file part's. Reviewed under files_artifacts and injection_interpreted_input (A19), and browser_boundary (A13, A19): the size limit still holds over the bytes of the file Registry receives, the head before it is bounded by a constant and never kept, the CSRF value still travels only in a form (A13 rule 7), and the session cookie is always HTTPS-only, which is stricter than A13 rule 1. No outcome changed.",
+   "question": "Because the same change set alters A13's request-arrival and session-validity timing, must the reopened review also record review of authentication_credential_abuse and concurrency, both of which name A13, or is the text asserting that A13 did not change?",
+   "options": [
+    "Review and record authentication_credential_abuse and concurrency for the A13 timing change",
+    "State that only A19 changed and remove the A13 timing change from this round",
+    "Explain why the A13 timing change does not reopen the categories that reference A13"
+   ],
+   "default_guess": "Review and record authentication_credential_abuse and concurrency for the A13 timing change.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "unowned_lifetime",
+   "text": "the head before it is bounded by a constant and never kept",
+   "question": "Which module owns destroying or releasing the multipart-head buffer, and at what point must it cease to be kept?",
+   "options": [
+    "upload_framing owns the buffer and releases it immediately after producing the CSRF value and file stream",
+    "owner_interface owns the buffer for the duration of the request",
+    "The phrase means only that the head is never persisted, while transient retention has no specified bound"
+   ],
+   "default_guess": "upload_framing owns the buffer and releases it immediately after producing the CSRF value and file stream.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"30_modules.md:`owner_interface`\",\"kind\":\"timing_boundary\",\"text\":\"A request's arrival is the monotonic reading taken when its headers are read, before any of its body, handed on for the session check (A13 rule 2).\",\"question\":\"Is the reading taken when header reading begins, when the complete header block has been received, or at another precisely defined boundary?\",\"options\":[\"Take the reading before reading the first header byte\",\"Take the reading after the complete header block and before the first body byte\",\"Let the HTTP server supply its own request-arrival timestamp\"],\"default_guess\":\"Take the reading after the complete header block and before the first body byte.\",\"witness\":{\"initial\":\"An owner session is one microsecond short of its 30-minute idle limit when a client begins sending headers slowly.\",\"events\":[\"The client begins the request before the limit and completes its headers after the limit.\",\"owner_interface chooses the request-arrival reading and owner_sessions checks the session at that reading.\"],\"outcomes\":[\"The reading is taken when header reading begins, so the request is admitted.\",\"The reading is taken after all headers arrive, so the request is refused as expired.\"],\"observer\":\"The owner sees either the requested page or a sign-in refusal.\"}},{\"subject\":\"30_modules.md:`owner_interface`\",\"kind\":\"unclear_handoff_order\",\"text\":\"A request's arrival is the monotonic reading taken when its headers are read, before any of its body, handed on for the session check (A13 rule 2).\",\"question\":\"Must owner_interface invoke the owner_sessions admission check before reading any body, or may it read the upload head first and later check the session using the saved reading?\",\"options\":[\"Admit the session immediately after the headers and before reading the body\",\"Capture the reading before the body but defer the session check until the upload head has been read\"],\"default_guess\":\"Admit the session immediately after the headers and before reading the body.\",\"witness\":{\"initial\":\"A valid session is close to its idle limit and an upload request finishes its headers just before that limit.\",\"events\":[\"owner_interface records the arrival reading.\",\"The client sends the multipart head slowly.\",\"The 60-second expiry pass runs after the idle limit.\",\"The upload reaches the session check.\"],\"outcomes\":[\"If admission occurs before the body, the request passes and completes even though the expiry pass runs later.\",\"If admission is deferred, the expiry pass removes the session and the same request is refused despite its pre-limit arrival reading.\"],\"observer\":\"The owner sees either an accepted upload or a request to sign in again.\"}},{\"subject\":\"30_modules.md:`owner_interface`\",\"kind\":\"two_owners\",\"text\":\"An upload form sends its CSRF field as the first part of its multipart body (owner, 2026-11-17): `owner_interface` has `upload_framing` read that head alone and hands the file part on as its declared length, which `upload_framing` derives, and an unread stream that ends where the part ends, never read or buffered here, so that `migration_import` alone applies A19 rule 4 to the file.\",\"question\":\"Which single module owns the multipart part order: owner_interface, which constructs the form and claims it in Owns, or upload_framing, whose Owns section also claims that the form sends the CSRF field first and the file second?\",\"options\":[\"owner_interface owns the emitted part order and upload_framing only parses it\",\"upload_framing owns the multipart contract and owner_interface consumes that contract\",\"Split form construction and parsing into two explicitly distinct decisions with one owner each\"],\"default_guess\":\"owner_interface owns the emitted part order; upload_framing owns only parsing and derivation of the file stream and length.\"},{\"subject\":\"30_modules.md:`owner_interface`\",\"kind\":\"unclear_dependency_path\",\"text\":\"`owner_interface` has `upload_framing` read that head alone and hands the file part on as its declared length, which `upload_framing` derives, and an unread stream that ends where the part ends, never read or buffered here, so that `migration_import` alone applies A19 rule 4 to the file.\",\"question\":\"Through which module and capability do the declared length and unread stream reach migration_import, given that owner_interface does not list migration_import under Knows?\",\"options\":[\"owner_interface passes them to operations, which calls migration_import\",\"owner_interface directly depends on and calls migration_import\",\"owner_interface gives them to owner_sessions, and migration_import later reads the kept upload from owner_sessions\"],\"default_guess\":\"owner_interface passes them to operations, which calls migration_import.\"},{\"subject\":\"30_modules.md:`owner_interface`\",\"kind\":\"consumer_mapping_contradiction\",\"text\":\"| A19 | `owner_interface` | `data_provider`, `store`, `migration_import` |\",\"question\":\"Must upload_framing be added as an A19 consumer, or must its ownership text stop assigning it A19 rule 4's multipart-length and file-stream responsibilities?\",\"options\":[\"Add upload_framing to A19's consumers\",\"Move all A19 responsibility out of upload_framing\",\"Reassign A19's primary owner and rewrite the mapping\"],\"default_guess\":\"Add upload_framing to A19's consumers.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"undefined_invalid_length\",\"text\":\"Its declared length is the request's declared length less the head read before the file — at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, which the code that reads the head imports from the data provider (SPEC_STANDARD §15.3.1) — and the closing delimiter;\",\"question\":\"What result does upload_framing produce when the request's declared length is smaller than the measured head plus the required closing delimiter, or otherwise cannot yield a non-negative file-part length?\",\"options\":[\"Refuse the request as malformed framing\",\"Return no declared file length and enforce only the streamed-byte limit\",\"Pass the negative or inconsistent result to migration_import\"],\"default_guess\":\"Refuse the request as malformed framing.\",\"witness\":{\"initial\":\"A request has a valid session and CSRF field but declares a total length smaller than the multipart head plus closing delimiter.\",\"events\":[\"upload_framing reads the bounded head.\",\"upload_framing subtracts the head and delimiter from the declared request length.\",\"The upload is handed toward migration_import.\"],\"outcomes\":[\"The framing layer refuses the malformed request before migration_import reads file bytes.\",\"The framing layer treats the derived length as absent or non-positive and migration_import proceeds to read the stream.\"],\"observer\":\"The caller sees either an immediate framing refusal or normal upload processing.\"}},{\"subject\":\"30_modules.md:`owner_interface`\",\"kind\":\"contradictory_transport_rule\",\"text\":\"The session cookie is always HTTPS-only (A13 rule 1, owner, 2026-11-17): a browser on Registry's own machine accepts it from a loopback address over plain HTTP, and from any other machine the interface is reached only through HTTPS (R0-29).\",\"question\":\"Is the cookie forbidden over every plain-HTTP connection, or is loopback plain HTTP an explicit permitted exception?\",\"options\":[\"The cookie is Secure/HTTPS-only everywhere, so loopback must also use HTTPS\",\"Plain HTTP is permitted on loopback and HTTPS is required only from another machine\"],\"default_guess\":\"Plain HTTP is permitted on loopback and HTTPS is required from another machine.\",\"witness\":{\"initial\":\"Registry's owner interface is opened at a loopback HTTP address on Registry's own machine.\",\"events\":[\"The owner signs in successfully.\",\"owner_interface attempts to set and subsequently receive the session cookie.\"],\"outcomes\":[\"Under the literal always-HTTPS-only rule, the cookie is not usable over the HTTP connection and the owner cannot maintain a session.\",\"Under the stated loopback exception, the browser accepts and returns the cookie and the session works.\"],\"observer\":\"The owner sees either a working signed-in interface or repeated loss of the session.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"incomplete_required_review\",\"text\":\"Performed again on 2026-11-17, after that day's change to A19 reopened it (rule 2): the owner interface's upload form sends its CSRF field first and the file second, as multipart, and A19 rule 4's limit, counting and declared length are the file part's. Reviewed under files_artifacts and injection_interpreted_input (A19), and browser_boundary (A13, A19): the size limit still holds over the bytes of the file Registry receives, the head before it is bounded by a constant and never kept, the CSRF value still travels only in a form (A13 rule 7), and the session cookie is always HTTPS-only, which is stricter than A13 rule 1. No outcome changed.\",\"question\":\"Because the same change set alters A13's request-arrival and session-validity timing, must the reopened review also record review of authentication_credential_abuse and concurrency, both of which name A13, or is the text asserting that A13 did not change?\",\"options\":[\"Review and record authentication_credential_abuse and concurrency for the A13 timing change\",\"State that only A19 changed and remove the A13 timing change from this round\",\"Explain why the A13 timing change does not reopen the categories that reference A13\"],\"default_guess\":\"Review and record authentication_credential_abuse and concurrency for the A13 timing change.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"unowned_lifetime\",\"text\":\"the head before it is bounded by a constant and never kept\",\"question\":\"Which module owns destroying or releasing the multipart-head buffer, and at what point must it cease to be kept?\",\"options\":[\"upload_framing owns the buffer and releases it immediately after producing the CSRF value and file stream\",\"owner_interface owns the buffer for the duration of the request\",\"The phrase means only that the head is never persisted, while transient retention has no specified bound\"],\"default_guess\":\"upload_framing owns the buffer and releases it immediately after producing the CSRF value and file stream.\"}]}",
+ "set_aside": []
+}
