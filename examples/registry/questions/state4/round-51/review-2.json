@@ -1,0 +1,182 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "HTTP request dispatch from `instance_lifecycle` to both surfaces",
+   "kind": "missing step and capability",
+   "text": "“The HTTP server, its connections and HTTP's framing are `instance_lifecycle`'s listener's” and “Only now the surfaces answer: `capability:service_api.serve_service_request` and `capability:owner_interface.serve_owner_request`.”",
+   "question": "Which named capability accepts and frames each HTTP request, and which operation calls the appropriate surface capability after framing succeeds?",
+   "options": [
+    "Add an `instance_lifecycle` request-dispatch capability that calls the selected surface",
+    "Make request dispatch an explicit step of `instance_lifecycle.start_instance`",
+    "Let each surface pull framed requests from its listener despite the stated ownership"
+   ],
+   "default_guess": "Add an `instance_lifecycle` listener-dispatch capability which owns framing and calls the selected surface capability.",
+   "witness": {
+    "initial": "The instance is running with both listeners open.",
+    "events": [
+     "A service sends a well-framed request.",
+     "The listener accepts and frames it."
+    ],
+    "outcomes": [
+     "`instance_lifecycle` calls `service_api.serve_service_request`.",
+     "`service_api` independently obtains the request from the listener."
+    ],
+    "observer": "The implementation and its module dependency boundary"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "requests rejected from malformed HTTP headers",
+   "kind": "contradiction and missing outcome",
+   "text": "“Every request of a caller enters through one of the two surfaces” contradicts “a request whose `Content-Length` or `Transfer-Encoding` header is malformed is refused by the listener from its headers alone, its connection closed, and reaches no surface.”",
+   "question": "Are malformed-header messages requests that bypass the surfaces, and does their refusal send an HTTP answer before closing or close unanswered?",
+   "options": [
+    "Define the universal statement as applying only after listener framing and send a fixed listener-level error",
+    "Define it as applying only after listener framing and close unanswered",
+    "Route the malformed request to a surface, contrary to the changed ownership text"
+   ],
+   "default_guess": "Restrict “every request” to requests accepted by the listener, send a fixed non-personal HTTP bad-request answer, then close the connection.",
+   "witness": {
+    "initial": "The service API listener is running.",
+    "events": [
+     "A caller sends headers containing a malformed `Content-Length`.",
+     "The listener detects the fault before invoking `service_api`."
+    ],
+    "outcomes": [
+     "The listener sends an HTTP error and closes.",
+     "The listener closes without sending any answer."
+    ],
+    "observer": "The caller"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "selection of HTTP body framing",
+   "kind": "vague framing rule",
+   "text": "“a stream that ends where HTTP's own framing ends the body — after its `Content-Length` bytes, or at the last chunk of a chunked body” and “a request whose `Content-Length` or `Transfer-Encoding` header is malformed”",
+   "question": "What must the listener do when both headers are present, either header is repeated, multiple lengths disagree, or `Transfer-Encoding` contains codings other than exactly supported chunked framing?",
+   "options": [
+    "Reject every request containing both headers, conflicting or repeated lengths, or any unsupported transfer coding",
+    "Give `Transfer-Encoding: chunked` precedence over `Content-Length`",
+    "Give `Content-Length` precedence and ignore `Transfer-Encoding`"
+   ],
+   "default_guess": "Reject ambiguous combinations and accept only one canonical `Content-Length` or a supported terminal chunked encoding.",
+   "witness": {
+    "initial": "A persistent service connection is open.",
+    "events": [
+     "The caller sends one request with both `Content-Length: 4` and `Transfer-Encoding: chunked`.",
+     "Bytes after the first four can be parsed either as body framing or as later connection data."
+    ],
+    "outcomes": [
+     "The listener rejects the request and closes.",
+     "The listener accepts it using one header as authoritative."
+    ],
+    "observer": "The caller and the parser of the next request"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "premature or malformed HTTP bodies on either surface",
+   "kind": "failure without outcome",
+   "text": "“a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it”",
+   "question": "Which module turns this stream failure into the request outcome, whether an HTTP answer is sent, whether the connection closes, and how an operation already begun is terminated?",
+   "options": [
+    "The surface catches it, returns a fixed bad-request answer when possible, aborts any transaction and closes",
+    "`instance_lifecycle` catches it and closes unanswered",
+    "The consuming domain module reports its ordinary unreadable-input refusal while the connection remains reusable"
+   ],
+   "default_guess": "The surface catches the framing-stream failure, ensures any transaction fails with no changes, sends a fixed bad-request answer only when safely possible, and closes the connection.",
+   "witness": {
+    "initial": "A request has valid headers declaring a longer or chunked body.",
+    "events": [
+     "The listener hands its body stream to the surface.",
+     "The caller closes early or sends a malformed chunk while the reader is consuming it."
+    ],
+    "outcomes": [
+     "The caller receives a refusal response and the connection closes.",
+     "The connection closes with no response."
+    ],
+    "observer": "The caller"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "unread request bodies after an early refusal or answer",
+   "kind": "missing operation",
+   "text": "“the body itself is never read ahead by the listener” together with stage-(1) refusals that “record nothing and reach no module of stages (3) to (6)”",
+   "question": "When authentication, rights, session, CSRF, confirmation, or another header-level check produces an answer before the framed body is consumed, who discards the remaining body or closes the connection so the next request cannot be mistaken for it?",
+   "options": [
+    "Close the connection after answering whenever the body was not consumed",
+    "Add a listener operation that drains exactly the framed remainder before reusing the connection",
+    "Require each surface to consume every body before performing an early check"
+   ],
+   "default_guess": "Answer the refusal and close the connection whenever the request body has not been fully consumed.",
+   "witness": {
+    "initial": "A persistent connection carries a request with a large framed body and an invalid token or CSRF value.",
+    "events": [
+     "The surface can decide the refusal from headers or the multipart head.",
+     "The caller sends another request on the same connection before or after the refusal."
+    ],
+    "outcomes": [
+     "Registry closes after the refusal, so the second request is not processed.",
+     "Registry drains the first body and then processes the second request on the connection."
+    ],
+    "observer": "The caller and any state changed by the second request"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "multipart upload head failures",
+   "kind": "failure without outcome",
+   "text": "“`capability:upload_framing.read_upload_head` reads the upload's head alone, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, and answers its CSRF value, or none for a head of another form”",
+   "question": "What outcome does `read_upload_head` produce when the multipart head is malformed, its boundary never arrives within the limit, or its HTTP body stream fails before the file part, and who answers that failure?",
+   "options": [
+    "Return no CSRF value and let `owner_sessions` issue the ordinary CSRF refusal",
+    "Return a distinct malformed-upload failure which `owner_interface` answers",
+    "Treat an HTTP stream failure separately but map malformed or oversized multipart heads to no CSRF value"
+   ],
+   "default_guess": "Return a distinct malformed-upload failure to `owner_interface`; reserve the ordinary CSRF refusal for a well-framed form with a missing or wrong CSRF field.",
+   "witness": {
+    "initial": "An owner session is valid and an earlier uploaded file is kept.",
+    "events": [
+     "The browser or another caller starts a multipart upload.",
+     "The multipart head exceeds its bound or ends malformed before a complete CSRF part."
+    ],
+    "outcomes": [
+     "The request is refused as malformed upload and the earlier file stays kept.",
+     "The request is refused as missing CSRF and the earlier file stays kept."
+    ],
+    "observer": "The owner"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "multiple requests on one HTTP connection",
+   "kind": "unspecified dispatch order",
+   "text": "“no byte of another request is read as the body's” and “The HTTP server, its connections and HTTP's framing are `instance_lifecycle`'s listener's”",
+   "question": "May a listener dispatch pipelined requests from one connection concurrently, must it process them serially in wire order, or does it refuse pipelining?",
+   "options": [
+    "Process one request at a time per connection in wire order",
+    "Permit concurrent dispatch while emitting responses in request order",
+    "Close or refuse when another request is received before the prior response completes"
+   ],
+   "default_guess": "Process requests serially per connection in wire order while allowing different connections to run concurrently.",
+   "witness": {
+    "initial": "One owner connection has two correction submissions made against the same revision.",
+    "events": [
+     "The client pipelines correction A and then correction B.",
+     "Both are fully framed before either answer is returned."
+    ],
+    "outcomes": [
+     "Serial dispatch accepts A and refuses B as stale.",
+     "Concurrent dispatch allows either request to take the transaction lock first, so B may be accepted and A refused."
+    ],
+    "observer": "The owner and the stored project"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"HTTP request dispatch from `instance_lifecycle` to both surfaces\",\"kind\":\"missing step and capability\",\"text\":\"“The HTTP server, its connections and HTTP's framing are `instance_lifecycle`'s listener's” and “Only now the surfaces answer: `capability:service_api.serve_service_request` and `capability:owner_interface.serve_owner_request`.”\",\"question\":\"Which named capability accepts and frames each HTTP request, and which operation calls the appropriate surface capability after framing succeeds?\",\"options\":[\"Add an `instance_lifecycle` request-dispatch capability that calls the selected surface\",\"Make request dispatch an explicit step of `instance_lifecycle.start_instance`\",\"Let each surface pull framed requests from its listener despite the stated ownership\"],\"default_guess\":\"Add an `instance_lifecycle` listener-dispatch capability which owns framing and calls the selected surface capability.\",\"witness\":{\"initial\":\"The instance is running with both listeners open.\",\"events\":[\"A service sends a well-framed request.\",\"The listener accepts and frames it.\"],\"outcomes\":[\"`instance_lifecycle` calls `service_api.serve_service_request`.\",\"`service_api` independently obtains the request from the listener.\"],\"observer\":\"The implementation and its module dependency boundary\"}},{\"unit\":\"context\",\"subject\":\"requests rejected from malformed HTTP headers\",\"kind\":\"contradiction and missing outcome\",\"text\":\"“Every request of a caller enters through one of the two surfaces” contradicts “a request whose `Content-Length` or `Transfer-Encoding` header is malformed is refused by the listener from its headers alone, its connection closed, and reaches no surface.”\",\"question\":\"Are malformed-header messages requests that bypass the surfaces, and does their refusal send an HTTP answer before closing or close unanswered?\",\"options\":[\"Define the universal statement as applying only after listener framing and send a fixed listener-level error\",\"Define it as applying only after listener framing and close unanswered\",\"Route the malformed request to a surface, contrary to the changed ownership text\"],\"default_guess\":\"Restrict “every request” to requests accepted by the listener, send a fixed non-personal HTTP bad-request answer, then close the connection.\",\"witness\":{\"initial\":\"The service API listener is running.\",\"events\":[\"A caller sends headers containing a malformed `Content-Length`.\",\"The listener detects the fault before invoking `service_api`.\"],\"outcomes\":[\"The listener sends an HTTP error and closes.\",\"The listener closes without sending any answer.\"],\"observer\":\"The caller\"}},{\"unit\":\"context\",\"subject\":\"selection of HTTP body framing\",\"kind\":\"vague framing rule\",\"text\":\"“a stream that ends where HTTP's own framing ends the body — after its `Content-Length` bytes, or at the last chunk of a chunked body” and “a request whose `Content-Length` or `Transfer-Encoding` header is malformed”\",\"question\":\"What must the listener do when both headers are present, either header is repeated, multiple lengths disagree, or `Transfer-Encoding` contains codings other than exactly supported chunked framing?\",\"options\":[\"Reject every request containing both headers, conflicting or repeated lengths, or any unsupported transfer coding\",\"Give `Transfer-Encoding: chunked` precedence over `Content-Length`\",\"Give `Content-Length` precedence and ignore `Transfer-Encoding`\"],\"default_guess\":\"Reject ambiguous combinations and accept only one canonical `Content-Length` or a supported terminal chunked encoding.\",\"witness\":{\"initial\":\"A persistent service connection is open.\",\"events\":[\"The caller sends one request with both `Content-Length: 4` and `Transfer-Encoding: chunked`.\",\"Bytes after the first four can be parsed either as body framing or as later connection data.\"],\"outcomes\":[\"The listener rejects the request and closes.\",\"The listener accepts it using one header as authoritative.\"],\"observer\":\"The caller and the parser of the next request\"}},{\"unit\":\"context\",\"subject\":\"premature or malformed HTTP bodies on either surface\",\"kind\":\"failure without outcome\",\"text\":\"“a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it”\",\"question\":\"Which module turns this stream failure into the request outcome, whether an HTTP answer is sent, whether the connection closes, and how an operation already begun is terminated?\",\"options\":[\"The surface catches it, returns a fixed bad-request answer when possible, aborts any transaction and closes\",\"`instance_lifecycle` catches it and closes unanswered\",\"The consuming domain module reports its ordinary unreadable-input refusal while the connection remains reusable\"],\"default_guess\":\"The surface catches the framing-stream failure, ensures any transaction fails with no changes, sends a fixed bad-request answer only when safely possible, and closes the connection.\",\"witness\":{\"initial\":\"A request has valid headers declaring a longer or chunked body.\",\"events\":[\"The listener hands its body stream to the surface.\",\"The caller closes early or sends a malformed chunk while the reader is consuming it.\"],\"outcomes\":[\"The caller receives a refusal response and the connection closes.\",\"The connection closes with no response.\"],\"observer\":\"The caller\"}},{\"unit\":\"context\",\"subject\":\"unread request bodies after an early refusal or answer\",\"kind\":\"missing operation\",\"text\":\"“the body itself is never read ahead by the listener” together with stage-(1) refusals that “record nothing and reach no module of stages (3) to (6)”\",\"question\":\"When authentication, rights, session, CSRF, confirmation, or another header-level check produces an answer before the framed body is consumed, who discards the remaining body or closes the connection so the next request cannot be mistaken for it?\",\"options\":[\"Close the connection after answering whenever the body was not consumed\",\"Add a listener operation that drains exactly the framed remainder before reusing the connection\",\"Require each surface to consume every body before performing an early check\"],\"default_guess\":\"Answer the refusal and close the connection whenever the request body has not been fully consumed.\",\"witness\":{\"initial\":\"A persistent connection carries a request with a large framed body and an invalid token or CSRF value.\",\"events\":[\"The surface can decide the refusal from headers or the multipart head.\",\"The caller sends another request on the same connection before or after the refusal.\"],\"outcomes\":[\"Registry closes after the refusal, so the second request is not processed.\",\"Registry drains the first body and then processes the second request on the connection.\"],\"observer\":\"The caller and any state changed by the second request\"}},{\"unit\":\"context\",\"subject\":\"multipart upload head failures\",\"kind\":\"failure without outcome\",\"text\":\"“`capability:upload_framing.read_upload_head` reads the upload's head alone, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, and answers its CSRF value, or none for a head of another form”\",\"question\":\"What outcome does `read_upload_head` produce when the multipart head is malformed, its boundary never arrives within the limit, or its HTTP body stream fails before the file part, and who answers that failure?\",\"options\":[\"Return no CSRF value and let `owner_sessions` issue the ordinary CSRF refusal\",\"Return a distinct malformed-upload failure which `owner_interface` answers\",\"Treat an HTTP stream failure separately but map malformed or oversized multipart heads to no CSRF value\"],\"default_guess\":\"Return a distinct malformed-upload failure to `owner_interface`; reserve the ordinary CSRF refusal for a well-framed form with a missing or wrong CSRF field.\",\"witness\":{\"initial\":\"An owner session is valid and an earlier uploaded file is kept.\",\"events\":[\"The browser or another caller starts a multipart upload.\",\"The multipart head exceeds its bound or ends malformed before a complete CSRF part.\"],\"outcomes\":[\"The request is refused as malformed upload and the earlier file stays kept.\",\"The request is refused as missing CSRF and the earlier file stays kept.\"],\"observer\":\"The owner\"}},{\"unit\":\"context\",\"subject\":\"multiple requests on one HTTP connection\",\"kind\":\"unspecified dispatch order\",\"text\":\"“no byte of another request is read as the body's” and “The HTTP server, its connections and HTTP's framing are `instance_lifecycle`'s listener's”\",\"question\":\"May a listener dispatch pipelined requests from one connection concurrently, must it process them serially in wire order, or does it refuse pipelining?\",\"options\":[\"Process one request at a time per connection in wire order\",\"Permit concurrent dispatch while emitting responses in request order\",\"Close or refuse when another request is received before the prior response completes\"],\"default_guess\":\"Process requests serially per connection in wire order while allowing different connections to run concurrently.\",\"witness\":{\"initial\":\"One owner connection has two correction submissions made against the same revision.\",\"events\":[\"The client pipelines correction A and then correction B.\",\"Both are fully framed before either answer is returned.\"],\"outcomes\":[\"Serial dispatch accepts A and refuses B as stale.\",\"Concurrent dispatch allows either request to take the transaction lock first, so B may be accepted and A refused.\"],\"observer\":\"The owner and the stored project\"}}]}",
+ "set_aside": []
+}

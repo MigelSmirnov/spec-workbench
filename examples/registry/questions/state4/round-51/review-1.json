@@ -1,0 +1,169 @@
+{
+ "open_points": [
+  {
+   "subject": "context: HTTP request dispatch",
+   "kind": "missing operation",
+   "text": "“Only now the surfaces answer: `capability:service_api.serve_service_request` and `capability:owner_interface.serve_owner_request`.”",
+   "question": "Which named `instance_lifecycle` operation accepts a connection, frames each request body and invokes the appropriate surface capability?",
+   "options": [
+    "`start_instance` remains running and performs accept, framing and dispatch itself",
+    "Add a separate `instance_lifecycle` capability for per-request framing and dispatch"
+   ],
+   "default_guess": "Treat `start_instance` as the long-running accept, framing and dispatch loop.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: requests rejected from headers",
+   "kind": "contradiction",
+   "text": "“Every request of a caller enters through one of the two surfaces” versus “a request whose `Content-Length` or `Transfer-Encoding` header is malformed is refused by the listener from its headers alone, its connection closed, and reaches no surface”",
+   "question": "Does the claim that every request enters a surface exclude requests rejected by HTTP framing before dispatch?",
+   "options": [
+    "Exclude framing-invalid requests from the claim",
+    "Dispatch every caller request to a surface, including framing-invalid ones"
+   ],
+   "default_guess": "Exclude requests rejected by the listener before dispatch.",
+   "witness": {
+    "initial": "The service API listener is running and no surface operation has begun.",
+    "events": [
+     "A service client opens a connection and sends a request with a malformed `Content-Length` header.",
+     "The `instance_lifecycle` listener parses the headers."
+    ],
+    "outcomes": [
+     "The request enters `service_api`, as the State 4 status says every caller request does.",
+     "The listener closes the connection and the request reaches no surface, as the changed State 3 passage says."
+    ],
+    "observer": "The service API module and any request tracing around its invocation"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: malformed framing headers",
+   "kind": "unstated failure outcome",
+   "text": "“is refused by the listener from its headers alone, its connection closed”",
+   "question": "Before closing, does the listener send an HTTP error response, and if so which surface-independent response does it send?",
+   "options": [
+    "Send a framing-error HTTP response and then close",
+    "Close without sending any HTTP response"
+   ],
+   "default_guess": "Send an HTTP 400 response and then close.",
+   "witness": {
+    "initial": "A listener has accepted a service connection.",
+    "events": [
+     "The client sends a syntactically malformed `Transfer-Encoding` header.",
+     "The listener detects the malformed header before invoking a surface."
+    ],
+    "outcomes": [
+     "The client receives an HTTP error response and then EOF.",
+     "The client receives EOF without an HTTP response."
+    ],
+    "observer": "The calling HTTP client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: body framing failure",
+   "kind": "unstated failure outcome",
+   "text": "“a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it”",
+   "question": "What result must the surface produce when its request-body stream fails, and who closes or otherwise disposes of the connection?",
+   "options": [
+    "The surface converts the stream failure to its wire-format refusal, after which the listener closes the connection",
+    "The listener aborts the connection without a surface answer",
+    "The failure is handled differently by each surface"
+   ],
+   "default_guess": "Have the listener abort the connection without a surface answer, while ensuring no domain transaction is begun or committed.",
+   "witness": {
+    "initial": "The service API listener has dispatched a request and its surface is reading the framed body.",
+    "events": [
+     "A service client sends valid headers declaring a longer body than it actually sends.",
+     "The client ends the connection while `service_api` is reading the request."
+    ],
+    "outcomes": [
+     "The service API returns a defined refusal in its wire format before the connection closes.",
+     "The connection closes with no Registry answer when the body stream fails."
+    ],
+    "observer": "The service client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: unread request bodies",
+   "kind": "missing flow outcome",
+   "text": "“the body itself is never read ahead by the listener”",
+   "question": "When a surface answers or refuses before consuming the framed body, must the listener drain the remaining body, close the connection, or permit connection reuse by another mechanism?",
+   "options": [
+    "Close the connection without draining the body",
+    "Drain the body before reusing the connection",
+    "Require every surface to consume the complete body before answering"
+   ],
+   "default_guess": "Close the connection whenever the surface finishes without consuming the complete body.",
+   "witness": {
+    "initial": "An owner session already holds an uploaded import file and the connection supports another request.",
+    "events": [
+     "The owner submits a new upload whose declared file length is over the limit.",
+     "The upload is refused before any file byte is read, leaving the remainder of the HTTP body unread.",
+     "The client attempts another request on the same connection."
+    ],
+    "outcomes": [
+     "Registry closes the connection, so the next request requires a new connection.",
+     "Registry drains the rejected body and accepts the next request on the same connection."
+    ],
+    "observer": "The owner's browser or HTTP client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: chunked import uploads",
+   "kind": "contradiction",
+   "text": "“after its `Content-Length` bytes, or at the last chunk of a chunked body” versus “the upload's stream, which `module:owner_interface` hands on unread with its declared length”",
+   "question": "May an import upload use chunked transfer encoding without a declared length, and what length metadata is handed to `migration_import` in that case?",
+   "options": [
+    "Allow chunked uploads and hand on no declared length, enforcing the limit from bytes read",
+    "Require `Content-Length` for import uploads and refuse chunked uploads",
+    "Buffer or count the chunked body to manufacture a length before handing it on"
+   ],
+   "default_guess": "Allow chunked uploads, pass no declared length, and enforce the limit from the file bytes actually read.",
+   "witness": {
+    "initial": "The owner has a valid session and no migration closure exists.",
+    "events": [
+     "The browser submits a valid multipart import using chunked transfer encoding and no `Content-Length`.",
+     "The listener frames the body through the terminating chunk."
+    ],
+    "outcomes": [
+     "The upload is accepted for parsing and its file-size limit is enforced from received bytes.",
+     "The upload is refused because `owner_interface` cannot hand on the declared length the flow says it supplies."
+    ],
+    "observer": "The owner uploading the migration file"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: owner-session arrival on body failure",
+   "kind": "ambiguous ordering",
+   "text": "“An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes” together with “a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it”",
+   "question": "If a request carries a valid session cookie but its body stream fails before the CSRF value or complete form can be read, has it arrived for purposes of restarting the session's 30-minute idle period?",
+   "options": [
+    "Restart the idle period as soon as the valid session cookie is admitted, even if body parsing later fails",
+    "Do not restart it unless enough of the body is read to call `admit_owner_request`",
+    "Define separate arrival points for ordinary forms and uploads"
+   ],
+   "default_guess": "Restart only when `admit_owner_request` performs the valid-session check; for an upload, that remains after its bounded head has been read.",
+   "witness": {
+    "initial": "A valid owner session is one minute short of its idle limit.",
+    "events": [
+     "The owner client sends valid headers and the valid session cookie.",
+     "It begins a chunked form body but sends a malformed chunk before the CSRF field can be read.",
+     "The next session pass and then another owner request occur."
+    ],
+    "outcomes": [
+     "The malformed request restarted the idle period because it carried the valid session, so the later request is admitted.",
+     "The malformed request never reached session admission, so the session expires and the later request is refused."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context: HTTP request dispatch\",\"kind\":\"missing operation\",\"text\":\"“Only now the surfaces answer: `capability:service_api.serve_service_request` and `capability:owner_interface.serve_owner_request`.”\",\"question\":\"Which named `instance_lifecycle` operation accepts a connection, frames each request body and invokes the appropriate surface capability?\",\"options\":[\"`start_instance` remains running and performs accept, framing and dispatch itself\",\"Add a separate `instance_lifecycle` capability for per-request framing and dispatch\"],\"default_guess\":\"Treat `start_instance` as the long-running accept, framing and dispatch loop.\"},{\"subject\":\"context: requests rejected from headers\",\"kind\":\"contradiction\",\"text\":\"“Every request of a caller enters through one of the two surfaces” versus “a request whose `Content-Length` or `Transfer-Encoding` header is malformed is refused by the listener from its headers alone, its connection closed, and reaches no surface”\",\"question\":\"Does the claim that every request enters a surface exclude requests rejected by HTTP framing before dispatch?\",\"options\":[\"Exclude framing-invalid requests from the claim\",\"Dispatch every caller request to a surface, including framing-invalid ones\"],\"default_guess\":\"Exclude requests rejected by the listener before dispatch.\",\"witness\":{\"initial\":\"The service API listener is running and no surface operation has begun.\",\"events\":[\"A service client opens a connection and sends a request with a malformed `Content-Length` header.\",\"The `instance_lifecycle` listener parses the headers.\"],\"outcomes\":[\"The request enters `service_api`, as the State 4 status says every caller request does.\",\"The listener closes the connection and the request reaches no surface, as the changed State 3 passage says.\"],\"observer\":\"The service API module and any request tracing around its invocation\"}},{\"subject\":\"context: malformed framing headers\",\"kind\":\"unstated failure outcome\",\"text\":\"“is refused by the listener from its headers alone, its connection closed”\",\"question\":\"Before closing, does the listener send an HTTP error response, and if so which surface-independent response does it send?\",\"options\":[\"Send a framing-error HTTP response and then close\",\"Close without sending any HTTP response\"],\"default_guess\":\"Send an HTTP 400 response and then close.\",\"witness\":{\"initial\":\"A listener has accepted a service connection.\",\"events\":[\"The client sends a syntactically malformed `Transfer-Encoding` header.\",\"The listener detects the malformed header before invoking a surface.\"],\"outcomes\":[\"The client receives an HTTP error response and then EOF.\",\"The client receives EOF without an HTTP response.\"],\"observer\":\"The calling HTTP client\"}},{\"subject\":\"context: body framing failure\",\"kind\":\"unstated failure outcome\",\"text\":\"“a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it”\",\"question\":\"What result must the surface produce when its request-body stream fails, and who closes or otherwise disposes of the connection?\",\"options\":[\"The surface converts the stream failure to its wire-format refusal, after which the listener closes the connection\",\"The listener aborts the connection without a surface answer\",\"The failure is handled differently by each surface\"],\"default_guess\":\"Have the listener abort the connection without a surface answer, while ensuring no domain transaction is begun or committed.\",\"witness\":{\"initial\":\"The service API listener has dispatched a request and its surface is reading the framed body.\",\"events\":[\"A service client sends valid headers declaring a longer body than it actually sends.\",\"The client ends the connection while `service_api` is reading the request.\"],\"outcomes\":[\"The service API returns a defined refusal in its wire format before the connection closes.\",\"The connection closes with no Registry answer when the body stream fails.\"],\"observer\":\"The service client\"}},{\"subject\":\"context: unread request bodies\",\"kind\":\"missing flow outcome\",\"text\":\"“the body itself is never read ahead by the listener”\",\"question\":\"When a surface answers or refuses before consuming the framed body, must the listener drain the remaining body, close the connection, or permit connection reuse by another mechanism?\",\"options\":[\"Close the connection without draining the body\",\"Drain the body before reusing the connection\",\"Require every surface to consume the complete body before answering\"],\"default_guess\":\"Close the connection whenever the surface finishes without consuming the complete body.\",\"witness\":{\"initial\":\"An owner session already holds an uploaded import file and the connection supports another request.\",\"events\":[\"The owner submits a new upload whose declared file length is over the limit.\",\"The upload is refused before any file byte is read, leaving the remainder of the HTTP body unread.\",\"The client attempts another request on the same connection.\"],\"outcomes\":[\"Registry closes the connection, so the next request requires a new connection.\",\"Registry drains the rejected body and accepts the next request on the same connection.\"],\"observer\":\"The owner's browser or HTTP client\"}},{\"subject\":\"context: chunked import uploads\",\"kind\":\"contradiction\",\"text\":\"“after its `Content-Length` bytes, or at the last chunk of a chunked body” versus “the upload's stream, which `module:owner_interface` hands on unread with its declared length”\",\"question\":\"May an import upload use chunked transfer encoding without a declared length, and what length metadata is handed to `migration_import` in that case?\",\"options\":[\"Allow chunked uploads and hand on no declared length, enforcing the limit from bytes read\",\"Require `Content-Length` for import uploads and refuse chunked uploads\",\"Buffer or count the chunked body to manufacture a length before handing it on\"],\"default_guess\":\"Allow chunked uploads, pass no declared length, and enforce the limit from the file bytes actually read.\",\"witness\":{\"initial\":\"The owner has a valid session and no migration closure exists.\",\"events\":[\"The browser submits a valid multipart import using chunked transfer encoding and no `Content-Length`.\",\"The listener frames the body through the terminating chunk.\"],\"outcomes\":[\"The upload is accepted for parsing and its file-size limit is enforced from received bytes.\",\"The upload is refused because `owner_interface` cannot hand on the declared length the flow says it supplies.\"],\"observer\":\"The owner uploading the migration file\"}},{\"subject\":\"context: owner-session arrival on body failure\",\"kind\":\"ambiguous ordering\",\"text\":\"“An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes” together with “a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it”\",\"question\":\"If a request carries a valid session cookie but its body stream fails before the CSRF value or complete form can be read, has it arrived for purposes of restarting the session's 30-minute idle period?\",\"options\":[\"Restart the idle period as soon as the valid session cookie is admitted, even if body parsing later fails\",\"Do not restart it unless enough of the body is read to call `admit_owner_request`\",\"Define separate arrival points for ordinary forms and uploads\"],\"default_guess\":\"Restart only when `admit_owner_request` performs the valid-session check; for an upload, that remains after its bounded head has been read.\",\"witness\":{\"initial\":\"A valid owner session is one minute short of its idle limit.\",\"events\":[\"The owner client sends valid headers and the valid session cookie.\",\"It begins a chunked form body but sends a malformed chunk before the CSRF field can be read.\",\"The next session pass and then another owner request occur.\"],\"outcomes\":[\"The malformed request restarted the idle period because it carried the valid session, so the later request is admitted.\",\"The malformed request never reached session admission, so the session expires and the later request is refused.\"],\"observer\":\"The owner\"}}]}",
+ "set_aside": []
+}
