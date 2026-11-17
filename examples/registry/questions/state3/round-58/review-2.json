@@ -1,0 +1,151 @@
+{
+ "open_points": [
+  {
+   "subject": "upload request arrival",
+   "kind": "contradictory_timing",
+   "text": "Validity is\n   checked when a request arrives (A04 rule 6, stage 1) — an upload, whose\n   form sends its CSRF value before its file (A19 rule 4), arrives when that\n   head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been\n   read (owner, 2026-11-17);",
+   "question": "Is an upload's arrival instant the instant the bounded head finishes being read, or the later instant when `operations` hands the request to `owner_sessions`?",
+   "options": [
+    "The instant the bounded head finishes being read",
+    "The instant `operations` invokes the session check after the head",
+    "One instant captured at head completion and handed through `operations`"
+   ],
+   "default_guess": "Capture the monotonic instant when the bounded head finishes and hand that instant through `operations` to `owner_sessions`.",
+   "witness": {
+    "initial": "A valid owner session will reach its idle limit after the bounded upload head finishes but before `operations` invokes the session check.",
+    "events": [
+     "The owner sends an upload head while the session is still valid.",
+     "`upload_framing` finishes reading the bounded head.",
+     "The session reaches its idle limit during a scheduling delay.",
+     "`operations` hands the request to `owner_sessions`."
+    ],
+    "outcomes": [
+     "The upload is admitted because it arrived when the head finished, before the limit.",
+     "The upload is refused because arrival is the later handoff to the session check, after the limit."
+    ],
+    "observer": "The owner uploading the import file"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "non-upload owner request arrival",
+   "kind": "undefined_ordering",
+   "text": "the session's\nvalidity at a request's arrival, read when `operations` hands the request to\nthe session check — for an upload after its head, at most\n`UPLOAD_FORM_HEAD_MAX_BYTES`, has been read (rule 2; owner, 2026-11-17);",
+   "question": "For every non-upload owner request, how much of its body may be read before `operations` hands it to the session check?",
+   "options": [
+    "No body bytes; hand it over after routing from the headers",
+    "Read only enough body data to identify the operation or CSRF field",
+    "Parse the complete form body before the handoff"
+   ],
+   "default_guess": "Perform the session check after routing from the headers and before reading any non-upload body.",
+   "witness": {
+    "initial": "A valid session is close to its idle limit and the owner sends a non-upload form body slowly.",
+    "events": [
+     "The server receives and routes the request while the session is valid.",
+     "The client continues sending the form body.",
+     "The session reaches its idle limit before the complete form has been parsed.",
+     "`operations` is invoked at the implementation-chosen point."
+    ],
+    "outcomes": [
+     "The request is admitted because the handoff occurs before its body is read.",
+     "The request is refused because the implementation parses the body before the handoff and the session expires meanwhile."
+    ],
+    "observer": "The owner submitting the form"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "session admission and expiry-pass locking",
+   "kind": "atomicity_gap",
+   "text": "the pass every 60 seconds that ends sessions by their limits, taking\nthe import lock and then each session's lock; each session's one lock, under\nwhich its state-changing requests apply one at a time; the session's\nvalidity at a request's arrival, read when `operations` hands the request to\nthe session check",
+   "question": "What is the atomic ordering among taking the arrival reading, acquiring the session lock, checking validity, updating the last-request reading, and an expiry pass removing the session?",
+   "options": [
+    "The request captures arrival first and must be admitted if it was valid then, even if the expiry pass obtains the lock first",
+    "The expiry pass may remove the session before the request obtains its lock, causing refusal despite a valid arrival",
+    "Taking the session lock defines admission, with the clock read and validity check performed under it"
+   ],
+   "default_guess": "Capture arrival at the defined handoff, then acquire the session lock and preserve admission based on that captured reading unless the session had already ended before the arrival.",
+   "witness": {
+    "initial": "A session is valid at request arrival but reaches its idle limit immediately afterward.",
+    "events": [
+     "`operations` captures or initiates the request's session check just before the limit.",
+     "The expiry pass obtains the session lock just after the limit and removes the session.",
+     "The request then obtains or attempts to obtain the session lock."
+    ],
+    "outcomes": [
+     "The request completes because validity is judged at its earlier arrival.",
+     "The request is refused because the expiry pass removed the session before the check acquired its lock."
+    ],
+    "observer": "The owner and any module performing the requested action"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "malformed upload request arrival",
+   "kind": "scope_ambiguity",
+   "text": "an owner request's arrival among them — for an upload, once its bounded\n  head has been read (A13 rule 2);",
+   "question": "Does “an upload” include a request to the upload route whose bounded head is malformed, exceeds the head bound, lacks the expected CSRF first part, or yields no file part; and if so, does that request refresh a valid session's idle limit?",
+   "options": [
+    "Every request to the upload route arrives after the bounded-head attempt and refreshes a valid session",
+    "Only a successfully framed upload with the expected head is an upload; malformed attempts do not refresh the session",
+    "Malformed attempts receive a separate arrival point before or during head parsing"
+   ],
+   "default_guess": "Treat every request to the upload route as arriving when bounded-head processing finishes, then check the session and refresh it if valid regardless of the later framing or CSRF refusal.",
+   "witness": {
+    "initial": "A session is valid and near its idle limit; a request with its valid cookie reaches the upload route but has a malformed multipart head.",
+    "events": [
+     "`upload_framing` reads up to the bounded head limit and cannot produce the expected CSRF and file framing.",
+     "The server refuses the request.",
+     "A later valid owner request arrives after the old idle deadline but within 30 minutes of the malformed attempt."
+    ],
+    "outcomes": [
+     "The later request is served because the malformed upload refreshed the session as a request carrying a valid session.",
+     "The later request is refused because the malformed request was not considered an upload arrival and did not refresh the session."
+    ],
+    "observer": "The owner using the same session"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "request body stream without a declared length",
+   "kind": "contradiction",
+   "text": "each request's body handed on as a stream that ends where the body ends, at\nits declared length, so that no reader of it waits for bytes the client\nsends only after an answer;",
+   "question": "How must `instance_lifecycle` delimit and hand on a body when the request declares no length, which A19 rule 4 explicitly permits for an upload?",
+   "options": [
+    "Support an absent declared length and terminate the stream using the HTTP message framing or transport end",
+    "Reject every request without a declared length before handing it on",
+    "Use a nullable length and define a separate end rule when it is absent"
+   ],
+   "default_guess": "Use a nullable declared length and terminate an absent-length body according to the HTTP server's message framing, while retaining the upload byte limit.",
+   "witness": {
+    "initial": "The owner sends a correctly framed upload without a declared request length.",
+    "events": [
+     "`instance_lifecycle` accepts the connection and must construct the request-body stream.",
+     "`upload_framing` reads the head and `migration_import` reads the file part."
+    ],
+    "outcomes": [
+     "The upload can be processed because the stream ends according to HTTP framing despite having no declared length.",
+     "The request is rejected or cannot be represented because the stream is required to end at a declared length."
+    ],
+    "observer": "The owner uploading the import file"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "state before upload admission",
+   "kind": "vague_security_claim",
+   "text": "the\nsession is checked once, at that moment, with no state held between the\nrequest's headers and its admission;",
+   "question": "What state is forbidden between receipt of the headers and admission: owner-session state only, durable application state, or also the multipart parser's bounded buffer, delimiter look-ahead, body stream and connection state?",
+   "options": [
+    "Only owner-session or other application state is forbidden; bounded transport and parser state is allowed",
+    "No state of any kind may be retained, requiring the bounded head to be processed without retained parser or connection state",
+    "Only durable state is forbidden; arbitrary temporary in-memory state is allowed"
+   ],
+   "default_guess": "Interpret the claim as forbidding mutation or reservation of owner-session and durable application state before admission, while allowing bounded parser, stream and connection state.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"upload request arrival\",\"kind\":\"contradictory_timing\",\"text\":\"Validity is\\n   checked when a request arrives (A04 rule 6, stage 1) — an upload, whose\\n   form sends its CSRF value before its file (A19 rule 4), arrives when that\\n   head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been\\n   read (owner, 2026-11-17);\",\"question\":\"Is an upload's arrival instant the instant the bounded head finishes being read, or the later instant when `operations` hands the request to `owner_sessions`?\",\"options\":[\"The instant the bounded head finishes being read\",\"The instant `operations` invokes the session check after the head\",\"One instant captured at head completion and handed through `operations`\"],\"default_guess\":\"Capture the monotonic instant when the bounded head finishes and hand that instant through `operations` to `owner_sessions`.\",\"witness\":{\"initial\":\"A valid owner session will reach its idle limit after the bounded upload head finishes but before `operations` invokes the session check.\",\"events\":[\"The owner sends an upload head while the session is still valid.\",\"`upload_framing` finishes reading the bounded head.\",\"The session reaches its idle limit during a scheduling delay.\",\"`operations` hands the request to `owner_sessions`.\"],\"outcomes\":[\"The upload is admitted because it arrived when the head finished, before the limit.\",\"The upload is refused because arrival is the later handoff to the session check, after the limit.\"],\"observer\":\"The owner uploading the import file\"}},{\"subject\":\"non-upload owner request arrival\",\"kind\":\"undefined_ordering\",\"text\":\"the session's\\nvalidity at a request's arrival, read when `operations` hands the request to\\nthe session check — for an upload after its head, at most\\n`UPLOAD_FORM_HEAD_MAX_BYTES`, has been read (rule 2; owner, 2026-11-17);\",\"question\":\"For every non-upload owner request, how much of its body may be read before `operations` hands it to the session check?\",\"options\":[\"No body bytes; hand it over after routing from the headers\",\"Read only enough body data to identify the operation or CSRF field\",\"Parse the complete form body before the handoff\"],\"default_guess\":\"Perform the session check after routing from the headers and before reading any non-upload body.\",\"witness\":{\"initial\":\"A valid session is close to its idle limit and the owner sends a non-upload form body slowly.\",\"events\":[\"The server receives and routes the request while the session is valid.\",\"The client continues sending the form body.\",\"The session reaches its idle limit before the complete form has been parsed.\",\"`operations` is invoked at the implementation-chosen point.\"],\"outcomes\":[\"The request is admitted because the handoff occurs before its body is read.\",\"The request is refused because the implementation parses the body before the handoff and the session expires meanwhile.\"],\"observer\":\"The owner submitting the form\"}},{\"subject\":\"session admission and expiry-pass locking\",\"kind\":\"atomicity_gap\",\"text\":\"the pass every 60 seconds that ends sessions by their limits, taking\\nthe import lock and then each session's lock; each session's one lock, under\\nwhich its state-changing requests apply one at a time; the session's\\nvalidity at a request's arrival, read when `operations` hands the request to\\nthe session check\",\"question\":\"What is the atomic ordering among taking the arrival reading, acquiring the session lock, checking validity, updating the last-request reading, and an expiry pass removing the session?\",\"options\":[\"The request captures arrival first and must be admitted if it was valid then, even if the expiry pass obtains the lock first\",\"The expiry pass may remove the session before the request obtains its lock, causing refusal despite a valid arrival\",\"Taking the session lock defines admission, with the clock read and validity check performed under it\"],\"default_guess\":\"Capture arrival at the defined handoff, then acquire the session lock and preserve admission based on that captured reading unless the session had already ended before the arrival.\",\"witness\":{\"initial\":\"A session is valid at request arrival but reaches its idle limit immediately afterward.\",\"events\":[\"`operations` captures or initiates the request's session check just before the limit.\",\"The expiry pass obtains the session lock just after the limit and removes the session.\",\"The request then obtains or attempts to obtain the session lock.\"],\"outcomes\":[\"The request completes because validity is judged at its earlier arrival.\",\"The request is refused because the expiry pass removed the session before the check acquired its lock.\"],\"observer\":\"The owner and any module performing the requested action\"}},{\"subject\":\"malformed upload request arrival\",\"kind\":\"scope_ambiguity\",\"text\":\"an owner request's arrival among them — for an upload, once its bounded\\n  head has been read (A13 rule 2);\",\"question\":\"Does “an upload” include a request to the upload route whose bounded head is malformed, exceeds the head bound, lacks the expected CSRF first part, or yields no file part; and if so, does that request refresh a valid session's idle limit?\",\"options\":[\"Every request to the upload route arrives after the bounded-head attempt and refreshes a valid session\",\"Only a successfully framed upload with the expected head is an upload; malformed attempts do not refresh the session\",\"Malformed attempts receive a separate arrival point before or during head parsing\"],\"default_guess\":\"Treat every request to the upload route as arriving when bounded-head processing finishes, then check the session and refresh it if valid regardless of the later framing or CSRF refusal.\",\"witness\":{\"initial\":\"A session is valid and near its idle limit; a request with its valid cookie reaches the upload route but has a malformed multipart head.\",\"events\":[\"`upload_framing` reads up to the bounded head limit and cannot produce the expected CSRF and file framing.\",\"The server refuses the request.\",\"A later valid owner request arrives after the old idle deadline but within 30 minutes of the malformed attempt.\"],\"outcomes\":[\"The later request is served because the malformed upload refreshed the session as a request carrying a valid session.\",\"The later request is refused because the malformed request was not considered an upload arrival and did not refresh the session.\"],\"observer\":\"The owner using the same session\"}},{\"subject\":\"request body stream without a declared length\",\"kind\":\"contradiction\",\"text\":\"each request's body handed on as a stream that ends where the body ends, at\\nits declared length, so that no reader of it waits for bytes the client\\nsends only after an answer;\",\"question\":\"How must `instance_lifecycle` delimit and hand on a body when the request declares no length, which A19 rule 4 explicitly permits for an upload?\",\"options\":[\"Support an absent declared length and terminate the stream using the HTTP message framing or transport end\",\"Reject every request without a declared length before handing it on\",\"Use a nullable length and define a separate end rule when it is absent\"],\"default_guess\":\"Use a nullable declared length and terminate an absent-length body according to the HTTP server's message framing, while retaining the upload byte limit.\",\"witness\":{\"initial\":\"The owner sends a correctly framed upload without a declared request length.\",\"events\":[\"`instance_lifecycle` accepts the connection and must construct the request-body stream.\",\"`upload_framing` reads the head and `migration_import` reads the file part.\"],\"outcomes\":[\"The upload can be processed because the stream ends according to HTTP framing despite having no declared length.\",\"The request is rejected or cannot be represented because the stream is required to end at a declared length.\"],\"observer\":\"The owner uploading the import file\"}},{\"subject\":\"state before upload admission\",\"kind\":\"vague_security_claim\",\"text\":\"the\\nsession is checked once, at that moment, with no state held between the\\nrequest's headers and its admission;\",\"question\":\"What state is forbidden between receipt of the headers and admission: owner-session state only, durable application state, or also the multipart parser's bounded buffer, delimiter look-ahead, body stream and connection state?\",\"options\":[\"Only owner-session or other application state is forbidden; bounded transport and parser state is allowed\",\"No state of any kind may be retained, requiring the bounded head to be processed without retained parser or connection state\",\"Only durable state is forbidden; arbitrary temporary in-memory state is allowed\"],\"default_guess\":\"Interpret the claim as forbidding mutation or reservation of owner-session and durable application state before admission, while allowing bounded parser, stream and connection state.\"}]}",
+ "set_aside": []
+}

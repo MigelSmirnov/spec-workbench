@@ -1,0 +1,164 @@
+{
+ "open_points": [
+  {
+   "subject": "upload arrival instant",
+   "kind": "contradictory timing",
+   "text": "the session's\nvalidity at a request's arrival, read when `operations` hands the request to\nthe session check — for an upload after its head, at most\n`UPLOAD_FORM_HEAD_MAX_BYTES`, has been read",
+   "question": "Is an upload's arrival instant the instant its head finishes being read, or the later instant when `operations` hands it to `owner_sessions`; and which permitted module observes and timestamps that event, given that `owner_interface` no longer knows `clock`, `upload_framing` does not know `clock`, and `owner_sessions` cannot observe head completion?",
+   "options": [
+    "The final byte of the bounded head fixes arrival, and a module observing that byte passes its monotonic reading onward.",
+    "`owner_sessions` fixes arrival by reading the clock when `operations` calls the session check.",
+    "Head completion fixes only ordering; the later handoff fixes the recorded monotonic instant."
+   ],
+   "default_guess": "Use the `owner_sessions` monotonic reading at the session-check handoff and define that handoff itself as arrival.",
+   "witness": {
+    "initial": "The session is valid when the upload head finishes but reaches its idle or absolute limit before `operations` invokes the session check.",
+    "events": [
+     "The owner sends an upload and `upload_framing` finishes its bounded head.",
+     "Dispatch is delayed across the session limit.",
+     "`operations` hands the request to `owner_sessions`."
+    ],
+    "outcomes": [
+     "Arrival was head completion, so the upload passes and completes.",
+     "Arrival was the handoff reading, so the upload is refused as expired."
+    ],
+    "observer": "The owner sees acceptance versus a sign-in response, and the store may differ if the import is later confirmed."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "non-upload owner request arrival",
+   "kind": "undefined boundary",
+   "text": "validity at a request's arrival, read when `operations` hands the request to\nthe session check",
+   "question": "For a non-upload form, does `operations` hand the request to the session check after headers, after the CSRF/form fields have been parsed, or only after the complete body has been read?",
+   "options": [
+    "Handoff immediately after headers.",
+    "Handoff after enough body has been read to obtain the CSRF value.",
+    "Handoff after the entire request body has been read and parsed."
+   ],
+   "default_guess": "Hand off after headers and before reading the ordinary form body.",
+   "witness": {
+    "initial": "A valid session has one second left before its idle limit.",
+    "events": [
+     "The owner sends headers for a non-upload change while the session is valid.",
+     "The client sends the form body slowly, completing it after the limit.",
+     "`operations` performs the session check at its chosen handoff point."
+    ],
+    "outcomes": [
+     "A header-time handoff admits the request and restarts the idle period.",
+     "A post-body handoff finds the session expired and refuses the request."
+    ],
+    "observer": "The owner sees whether the change is accepted and whether the session remains usable."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "failed or incomplete upload head",
+   "kind": "undefined arrival",
+   "text": "for an upload after its head, at most\n`UPLOAD_FORM_HEAD_MAX_BYTES`, has been read",
+   "question": "What counts as the head having been read when the body ends early, the multipart head is malformed, or no complete head is found within the bound; does such a request reach the owner-session check and restart the idle period?",
+   "options": [
+    "Every attempt reaches the session check when EOF or the bound is reached, even without a valid upload head.",
+    "Only a successfully parsed head containing the expected parts reaches the session check.",
+    "Malformed or incomplete heads reach authentication only when a session and CSRF value were recoverable."
+   ],
+   "default_guess": "Reach the session check at EOF or at the bound whenever the session cookie can be read, then refuse malformed framing at its later check.",
+   "witness": {
+    "initial": "The session is almost idle-expired and still valid when an upload begins.",
+    "events": [
+     "The owner sends a valid session cookie.",
+     "The multipart body ends before the file-part headers, or exceeds the head bound without completing them.",
+     "The implementation either invokes or bypasses `admit_owner_request`."
+    ],
+    "outcomes": [
+     "The malformed upload counts as an owner request and restarts the session's idle period.",
+     "It never arrives for session purposes, so the idle period is not restarted and the session expires."
+    ],
+    "observer": "The owner sees whether the next otherwise-valid request is admitted."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "admission versus session locking",
+   "kind": "concurrency contradiction",
+   "text": "The requests of one owner session that change its state — showing a\n   confirmation step, uploading a file, a submission, a sign-out — are\n   applied one at a time, in the order in which they take the session's one\n   lock, after passing the session check",
+   "question": "How is a request that has passed the session check guaranteed to complete if the expiry pass or sign-out can take the session lock and remove the session before that request takes the lock; is admission atomic with acquiring or reserving the session?",
+   "options": [
+    "The session check and acquisition of the session lock are one atomic operation, and the request retains the lock through its session-state change.",
+    "Passing the check creates an admission reservation that survives later expiry or sign-out.",
+    "There is an unlocked interval, and a request may be refused if the session disappears during it despite having passed the check."
+   ],
+   "default_guess": "Make the validity check and acquisition of the session lock atomic, retaining the lock for the state-changing request.",
+   "witness": {
+    "initial": "An upload has passed its session check while the session record still exists.",
+    "events": [
+     "The upload waits before acquiring the import lock and session lock.",
+     "The 60-second expiry pass acquires the import lock and session lock and ends the session.",
+     "The upload then acquires the locks and tries to keep its file."
+    ],
+    "outcomes": [
+     "Because admission already passed, the upload completes and its state change is applied despite the intervening expiry.",
+     "Because the session record is gone, the upload is refused or cannot store the file."
+    ],
+    "observer": "The owner sees whether the upload succeeds; later mapping requests see whether a file is kept."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "request body stream without a declared length",
+   "kind": "text contradiction",
+   "text": "each request's body handed on as a stream that ends where the body ends, at\nits declared length",
+   "question": "How is the request-body stream delimited when the request declares no length, which A19 explicitly permits for an upload?",
+   "options": [
+    "Support another HTTP framing mechanism, such as chunked transfer coding, and end at that framing boundary.",
+    "End at connection EOF.",
+    "Reject every request body without a declared length before any module reads it."
+   ],
+   "default_guess": "Support protocol framing without a declared length and make the stream end at that framing boundary.",
+   "witness": {
+    "initial": "The owner has a valid session and sends an upload whose request declares no length.",
+    "events": [
+     "The HTTP layer receives a correctly framed multipart body without a declared length.",
+     "`instance_lifecycle` creates the body stream.",
+     "`upload_framing` and `migration_import` read it."
+    ],
+    "outcomes": [
+     "The framing mechanism supplies a finite stream and the upload is processed.",
+     "The implementation requires a declared length, so it rejects or cannot terminate the stream."
+    ],
+    "observer": "The owner sees a valid upload accepted versus refused or stalled."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "short request body",
+   "kind": "missing termination policy",
+   "text": "so that no reader of it waits for bytes the client\nsends only after an answer",
+   "question": "When a client declares a body longer than the bytes it sends and waits for an answer without closing the connection, what concrete event ends or fails the stream so the stated non-waiting guarantee holds?",
+   "options": [
+    "A specified read deadline fails the body stream.",
+    "The server may wait indefinitely, contrary to the stated guarantee.",
+    "The server sends an early refusal and closes the connection once a framing or application condition is known.",
+    "Only peer EOF can fail a short body, so the guarantee is limited to well-formed clients."
+   ],
+   "default_guess": "Specify a bounded body-read deadline and surface expiry as an unreadable-body refusal while closing the connection.",
+   "witness": {
+    "initial": "A client declares a 1 MB body and sends only a valid-looking prefix.",
+    "events": [
+     "The client keeps the connection open and waits for Registry's answer before sending anything else.",
+     "A reader asks the body stream for the remaining declared bytes.",
+     "The server must either wait, time out, or answer and close."
+    ],
+    "outcomes": [
+     "The reader waits indefinitely because the declared body has not ended.",
+     "A defined timeout or early-close rule fails the stream and lets Registry answer."
+    ],
+    "observer": "The client sees a hang versus a refusal; other users may see resource exhaustion if many such requests remain blocked."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"upload arrival instant\",\"kind\":\"contradictory timing\",\"text\":\"the session's\\nvalidity at a request's arrival, read when `operations` hands the request to\\nthe session check — for an upload after its head, at most\\n`UPLOAD_FORM_HEAD_MAX_BYTES`, has been read\",\"question\":\"Is an upload's arrival instant the instant its head finishes being read, or the later instant when `operations` hands it to `owner_sessions`; and which permitted module observes and timestamps that event, given that `owner_interface` no longer knows `clock`, `upload_framing` does not know `clock`, and `owner_sessions` cannot observe head completion?\",\"options\":[\"The final byte of the bounded head fixes arrival, and a module observing that byte passes its monotonic reading onward.\",\"`owner_sessions` fixes arrival by reading the clock when `operations` calls the session check.\",\"Head completion fixes only ordering; the later handoff fixes the recorded monotonic instant.\"],\"default_guess\":\"Use the `owner_sessions` monotonic reading at the session-check handoff and define that handoff itself as arrival.\",\"witness\":{\"initial\":\"The session is valid when the upload head finishes but reaches its idle or absolute limit before `operations` invokes the session check.\",\"events\":[\"The owner sends an upload and `upload_framing` finishes its bounded head.\",\"Dispatch is delayed across the session limit.\",\"`operations` hands the request to `owner_sessions`.\"],\"outcomes\":[\"Arrival was head completion, so the upload passes and completes.\",\"Arrival was the handoff reading, so the upload is refused as expired.\"],\"observer\":\"The owner sees acceptance versus a sign-in response, and the store may differ if the import is later confirmed.\"}},{\"subject\":\"non-upload owner request arrival\",\"kind\":\"undefined boundary\",\"text\":\"validity at a request's arrival, read when `operations` hands the request to\\nthe session check\",\"question\":\"For a non-upload form, does `operations` hand the request to the session check after headers, after the CSRF/form fields have been parsed, or only after the complete body has been read?\",\"options\":[\"Handoff immediately after headers.\",\"Handoff after enough body has been read to obtain the CSRF value.\",\"Handoff after the entire request body has been read and parsed.\"],\"default_guess\":\"Hand off after headers and before reading the ordinary form body.\",\"witness\":{\"initial\":\"A valid session has one second left before its idle limit.\",\"events\":[\"The owner sends headers for a non-upload change while the session is valid.\",\"The client sends the form body slowly, completing it after the limit.\",\"`operations` performs the session check at its chosen handoff point.\"],\"outcomes\":[\"A header-time handoff admits the request and restarts the idle period.\",\"A post-body handoff finds the session expired and refuses the request.\"],\"observer\":\"The owner sees whether the change is accepted and whether the session remains usable.\"}},{\"subject\":\"failed or incomplete upload head\",\"kind\":\"undefined arrival\",\"text\":\"for an upload after its head, at most\\n`UPLOAD_FORM_HEAD_MAX_BYTES`, has been read\",\"question\":\"What counts as the head having been read when the body ends early, the multipart head is malformed, or no complete head is found within the bound; does such a request reach the owner-session check and restart the idle period?\",\"options\":[\"Every attempt reaches the session check when EOF or the bound is reached, even without a valid upload head.\",\"Only a successfully parsed head containing the expected parts reaches the session check.\",\"Malformed or incomplete heads reach authentication only when a session and CSRF value were recoverable.\"],\"default_guess\":\"Reach the session check at EOF or at the bound whenever the session cookie can be read, then refuse malformed framing at its later check.\",\"witness\":{\"initial\":\"The session is almost idle-expired and still valid when an upload begins.\",\"events\":[\"The owner sends a valid session cookie.\",\"The multipart body ends before the file-part headers, or exceeds the head bound without completing them.\",\"The implementation either invokes or bypasses `admit_owner_request`.\"],\"outcomes\":[\"The malformed upload counts as an owner request and restarts the session's idle period.\",\"It never arrives for session purposes, so the idle period is not restarted and the session expires.\"],\"observer\":\"The owner sees whether the next otherwise-valid request is admitted.\"}},{\"subject\":\"admission versus session locking\",\"kind\":\"concurrency contradiction\",\"text\":\"The requests of one owner session that change its state — showing a\\n   confirmation step, uploading a file, a submission, a sign-out — are\\n   applied one at a time, in the order in which they take the session's one\\n   lock, after passing the session check\",\"question\":\"How is a request that has passed the session check guaranteed to complete if the expiry pass or sign-out can take the session lock and remove the session before that request takes the lock; is admission atomic with acquiring or reserving the session?\",\"options\":[\"The session check and acquisition of the session lock are one atomic operation, and the request retains the lock through its session-state change.\",\"Passing the check creates an admission reservation that survives later expiry or sign-out.\",\"There is an unlocked interval, and a request may be refused if the session disappears during it despite having passed the check.\"],\"default_guess\":\"Make the validity check and acquisition of the session lock atomic, retaining the lock for the state-changing request.\",\"witness\":{\"initial\":\"An upload has passed its session check while the session record still exists.\",\"events\":[\"The upload waits before acquiring the import lock and session lock.\",\"The 60-second expiry pass acquires the import lock and session lock and ends the session.\",\"The upload then acquires the locks and tries to keep its file.\"],\"outcomes\":[\"Because admission already passed, the upload completes and its state change is applied despite the intervening expiry.\",\"Because the session record is gone, the upload is refused or cannot store the file.\"],\"observer\":\"The owner sees whether the upload succeeds; later mapping requests see whether a file is kept.\"}},{\"subject\":\"request body stream without a declared length\",\"kind\":\"text contradiction\",\"text\":\"each request's body handed on as a stream that ends where the body ends, at\\nits declared length\",\"question\":\"How is the request-body stream delimited when the request declares no length, which A19 explicitly permits for an upload?\",\"options\":[\"Support another HTTP framing mechanism, such as chunked transfer coding, and end at that framing boundary.\",\"End at connection EOF.\",\"Reject every request body without a declared length before any module reads it.\"],\"default_guess\":\"Support protocol framing without a declared length and make the stream end at that framing boundary.\",\"witness\":{\"initial\":\"The owner has a valid session and sends an upload whose request declares no length.\",\"events\":[\"The HTTP layer receives a correctly framed multipart body without a declared length.\",\"`instance_lifecycle` creates the body stream.\",\"`upload_framing` and `migration_import` read it.\"],\"outcomes\":[\"The framing mechanism supplies a finite stream and the upload is processed.\",\"The implementation requires a declared length, so it rejects or cannot terminate the stream.\"],\"observer\":\"The owner sees a valid upload accepted versus refused or stalled.\"}},{\"subject\":\"short request body\",\"kind\":\"missing termination policy\",\"text\":\"so that no reader of it waits for bytes the client\\nsends only after an answer\",\"question\":\"When a client declares a body longer than the bytes it sends and waits for an answer without closing the connection, what concrete event ends or fails the stream so the stated non-waiting guarantee holds?\",\"options\":[\"A specified read deadline fails the body stream.\",\"The server may wait indefinitely, contrary to the stated guarantee.\",\"The server sends an early refusal and closes the connection once a framing or application condition is known.\",\"Only peer EOF can fail a short body, so the guarantee is limited to well-formed clients.\"],\"default_guess\":\"Specify a bounded body-read deadline and surface expiry as an unreadable-body refusal while closing the connection.\",\"witness\":{\"initial\":\"A client declares a 1 MB body and sends only a valid-looking prefix.\",\"events\":[\"The client keeps the connection open and waits for Registry's answer before sending anything else.\",\"A reader asks the body stream for the remaining declared bytes.\",\"The server must either wait, time out, or answer and close.\"],\"outcomes\":[\"The reader waits indefinitely because the declared body has not ended.\",\"A defined timeout or early-close rule fails the stream and lets Registry answer.\"],\"observer\":\"The client sees a hang versus a refusal; other users may see resource exhaustion if many such requests remain blocked.\"}}]}",
+ "set_aside": []
+}
