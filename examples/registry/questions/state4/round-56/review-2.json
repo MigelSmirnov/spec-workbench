@@ -1,0 +1,84 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "flow:start_instance — listener opening and read-timeout installation",
+   "kind": "unnamed capability",
+   "text": "`module:instance_lifecycle` opens the owner interface's listener and then, unless the start is owner-only, the service API's",
+   "question": "Which capability opens each listener and imports and installs `LISTENER_READ_TIMEOUT_SECONDS`, and does it install the timeout on both surfaces before either can accept a connection?",
+   "options": [
+    "`capability:instance_lifecycle.open_listener` opens both listeners and applies the imported timeout",
+    "Each surface's serving capability opens its own listener and applies the timeout",
+    "A deterministic listener backend opens them and applies the timeout on calls emitted by `module:instance_lifecycle`"
+   ],
+   "default_guess": "Give `module:instance_lifecycle` an explicit listener-opening capability that imports the constant and applies it identically to both listeners before serving begins.",
+   "witness": {
+    "initial": "Registry has a complete configuration and both listener addresses are free.",
+    "events": [
+     "The host starts Registry.",
+     "`module:instance_lifecycle` opens both listeners.",
+     "A client connects to the service API, sends part of a request, and then sends no more bytes for longer than `LISTENER_READ_TIMEOUT_SECONDS`."
+    ],
+    "outcomes": [
+     "The listener was opened with the timeout and closes the stalled connection.",
+     "The listener was opened without the timeout because no named opening operation consumed the new constant, so the connection remains open."
+    ],
+    "observer": "The client and the host operator observing the open connection"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "flow:start_instance — serving a partially received request",
+   "kind": "unnamed owner",
+   "text": "the listeners' read timeout, how long a listener waits for a request's next bytes before it closes the connection",
+   "question": "Which module and capability own the wait, reset its timer when bytes arrive, and close the connection when it expires: `instance_lifecycle`, `service_api` or `owner_interface`, or a deterministic transport backend called by them?",
+   "options": [
+    "`module:instance_lifecycle` owns timeout handling for both listeners",
+    "Each surface module owns timeout handling for its connections",
+    "A deterministic transport backend owns it and reports the close to the surface"
+   ],
+   "default_guess": "Use one deterministic transport backend for both surfaces, called by `module:instance_lifecycle`, with an inactivity timer reset whenever request bytes arrive.",
+   "witness": {
+    "initial": "Registry is serving both surfaces and a connection has delivered only part of a request.",
+    "events": [
+     "The peer pauses before sending the request's next bytes.",
+     "The configured read-timeout interval expires."
+    ],
+    "outcomes": [
+     "A shared listener backend closes the connection without invoking either surface operation.",
+     "The surface operation already owns the connection and handles the timeout as an operation failure."
+    ],
+    "observer": "The surface module, which either receives a call/failure or sees no call"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "flow:import_from_vps — timeout while reading the uploaded file",
+   "kind": "unstated failure outcome",
+   "text": "and a file that cannot be read",
+   "question": "When the listener read timeout expires after the upload head passed session and CSRF checks but while the file stream is being read, is this the stated unreadable-file refusal, or a transport close with no refusal answer; and in either case what cleanup completes before the connection closes?",
+   "options": [
+    "Treat it as an unreadable-file refusal, return that refusal if possible, keep the previous uploaded file and discard the partial new file",
+    "Close the connection unanswered as the timeout text says, abort the operation, keep the previous uploaded file and discard the partial new file",
+    "Close the connection but allow the already-admitted upload operation to continue reading or waiting independently"
+   ],
+   "default_guess": "Abort the admitted operation, close the connection unanswered, discard the partial upload, and leave the session's previously kept file unchanged.",
+   "witness": {
+    "initial": "An owner session already keeps upload A and begins uploading replacement B with valid session and CSRF values.",
+    "events": [
+     "`read_upload_head` accepts B's head.",
+     "The upload operation starts reading B's file stream.",
+     "The owner sends part of B and then sends no next bytes until the listener timeout expires."
+    ],
+    "outcomes": [
+     "The timeout is an unreadable-file refusal produced by `migration_import`; A remains kept and the owner receives a refusal page.",
+     "The listener closes the connection before an application answer; B is aborted and A remains kept."
+    ],
+    "observer": "The owner, who either receives a refusal response or only a closed connection"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"flow:start_instance — listener opening and read-timeout installation\",\"kind\":\"unnamed capability\",\"text\":\"`module:instance_lifecycle` opens the owner interface's listener and then, unless the start is owner-only, the service API's\",\"question\":\"Which capability opens each listener and imports and installs `LISTENER_READ_TIMEOUT_SECONDS`, and does it install the timeout on both surfaces before either can accept a connection?\",\"options\":[\"`capability:instance_lifecycle.open_listener` opens both listeners and applies the imported timeout\",\"Each surface's serving capability opens its own listener and applies the timeout\",\"A deterministic listener backend opens them and applies the timeout on calls emitted by `module:instance_lifecycle`\"],\"default_guess\":\"Give `module:instance_lifecycle` an explicit listener-opening capability that imports the constant and applies it identically to both listeners before serving begins.\",\"witness\":{\"initial\":\"Registry has a complete configuration and both listener addresses are free.\",\"events\":[\"The host starts Registry.\",\"`module:instance_lifecycle` opens both listeners.\",\"A client connects to the service API, sends part of a request, and then sends no more bytes for longer than `LISTENER_READ_TIMEOUT_SECONDS`.\"],\"outcomes\":[\"The listener was opened with the timeout and closes the stalled connection.\",\"The listener was opened without the timeout because no named opening operation consumed the new constant, so the connection remains open.\"],\"observer\":\"The client and the host operator observing the open connection\"}},{\"unit\":\"context\",\"subject\":\"flow:start_instance — serving a partially received request\",\"kind\":\"unnamed owner\",\"text\":\"the listeners' read timeout, how long a listener waits for a request's next bytes before it closes the connection\",\"question\":\"Which module and capability own the wait, reset its timer when bytes arrive, and close the connection when it expires: `instance_lifecycle`, `service_api` or `owner_interface`, or a deterministic transport backend called by them?\",\"options\":[\"`module:instance_lifecycle` owns timeout handling for both listeners\",\"Each surface module owns timeout handling for its connections\",\"A deterministic transport backend owns it and reports the close to the surface\"],\"default_guess\":\"Use one deterministic transport backend for both surfaces, called by `module:instance_lifecycle`, with an inactivity timer reset whenever request bytes arrive.\",\"witness\":{\"initial\":\"Registry is serving both surfaces and a connection has delivered only part of a request.\",\"events\":[\"The peer pauses before sending the request's next bytes.\",\"The configured read-timeout interval expires.\"],\"outcomes\":[\"A shared listener backend closes the connection without invoking either surface operation.\",\"The surface operation already owns the connection and handles the timeout as an operation failure.\"],\"observer\":\"The surface module, which either receives a call/failure or sees no call\"}},{\"unit\":\"context\",\"subject\":\"flow:import_from_vps — timeout while reading the uploaded file\",\"kind\":\"unstated failure outcome\",\"text\":\"and a file that cannot be read\",\"question\":\"When the listener read timeout expires after the upload head passed session and CSRF checks but while the file stream is being read, is this the stated unreadable-file refusal, or a transport close with no refusal answer; and in either case what cleanup completes before the connection closes?\",\"options\":[\"Treat it as an unreadable-file refusal, return that refusal if possible, keep the previous uploaded file and discard the partial new file\",\"Close the connection unanswered as the timeout text says, abort the operation, keep the previous uploaded file and discard the partial new file\",\"Close the connection but allow the already-admitted upload operation to continue reading or waiting independently\"],\"default_guess\":\"Abort the admitted operation, close the connection unanswered, discard the partial upload, and leave the session's previously kept file unchanged.\",\"witness\":{\"initial\":\"An owner session already keeps upload A and begins uploading replacement B with valid session and CSRF values.\",\"events\":[\"`read_upload_head` accepts B's head.\",\"The upload operation starts reading B's file stream.\",\"The owner sends part of B and then sends no next bytes until the listener timeout expires.\"],\"outcomes\":[\"The timeout is an unreadable-file refusal produced by `migration_import`; A remains kept and the owner receives a refusal page.\",\"The listener closes the connection before an application answer; B is aborted and A remains kept.\"],\"observer\":\"The owner, who either receives a refusal response or only a closed connection\"}}]}",
+ "set_aside": []
+}
