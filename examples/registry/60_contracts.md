@@ -347,6 +347,22 @@ not an upload alone — has the remainder discarded unread and its
 connection closed; a connection carries a next request only after one whose
 body was read to its end.
 
+The timeout is a wait for progress, not a deadline for the request: it
+applies to each read of the socket and restarts with every byte that
+arrives, so a slow client that keeps sending is never cut, and one that
+stops for `LISTENER_READ_TIMEOUT_SECONDS` is. It is the socket's own timeout,
+measured by the operating system; `clock` does not time it, and a suspension
+of the host counts as whatever the operating system counts it as (A13 rule
+2's monotonic readings are the sessions', not the listeners'). A wait that
+reaches it while the headers are read closes the connection with no answer
+and reaches no surface. One that reaches it while a body is read is a
+failure of the body's stream: what its reader has already handed on stands
+— a session check already made, with its restarted 30 minutes, an admitted
+change already committed — and the reader answers the failure as it answers
+any stream failure (an upload's head no CSRF value, its file part
+`file_unreadable`); the answer is sent if the connection still takes it,
+and the connection is then closed.
+
 ## Open
 
 - `60_contract_plan.json` stays `open` until the State 6 transition checks

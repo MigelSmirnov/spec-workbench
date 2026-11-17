@@ -1,0 +1,153 @@
+{
+ "open_points": [
+  {
+   "subject": "50_public_apis_0_conventions.md:Constants each module imports",
+   "kind": "missing_constant_value",
+   "text": "| `instance_lifecycle` | `SESSION_PASS_SECONDS`, `BACKUP_LOOK_SECONDS`, `LISTENER_READ_TIMEOUT_SECONDS` |",
+   "question": "What numeric value does `LISTENER_READ_TIMEOUT_SECONDS` have in this release?",
+   "options": [
+    "A fixed positive number of seconds such as 30",
+    "Another fixed positive number of seconds",
+    "No timeout, represented by a sentinel value"
+   ],
+   "default_guess": "30 seconds",
+   "witness": {
+    "initial": "Registry has started and a client has connected to either listener.",
+    "events": [
+     "The client sends part of a request and then sends no more bytes.",
+     "The listener waits for the release's read timeout."
+    ],
+    "outcomes": [
+     "With a 30-second value, Registry closes the connection after 30 seconds.",
+     "With a 60-second value, the same connection remains open for another 30 seconds."
+    ],
+    "observer": "The connected client and the Registry host administrator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "timeout_scope",
+   "text": "the listeners' read timeout, how long a listener waits for a request's next\nbytes before it closes the connection",
+   "question": "Exactly which waits are governed by this timeout: partial request headers, fixed-length body bytes, chunk headers and data, the multipart stream, and/or the wait for a new request on a persistent connection?",
+   "options": [
+    "Every wait for bytes belonging to an already-started request, including headers and all body framing, but not idle time between requests",
+    "Only request-body reads after complete headers",
+    "All socket reads, including the idle wait between persistent requests"
+   ],
+   "default_guess": "Apply it to every wait for bytes of an already-started request, including partial headers and body framing, but not between requests.",
+   "witness": {
+    "initial": "A client has a persistent connection to the owner-interface listener.",
+    "events": [
+     "The client sends half of an HTTP header line and pauses longer than the timeout.",
+     "In a second history, it completes one request and then leaves the persistent connection idle for the same duration."
+    ],
+    "outcomes": [
+     "An implementation treating every socket read alike closes both connections.",
+     "An implementation treating only bytes of an active request as covered closes the partial-header connection but leaves the between-request connection open."
+    ],
+    "observer": "The client and the listener's connection accounting"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "timeout_reset_semantics",
+   "text": "the listeners' read timeout, how long a listener waits for a request's next\nbytes before it closes the connection",
+   "question": "Is this an inactivity timeout restarted whenever any request byte arrives, a deadline for completing each parsing unit, or an absolute deadline for receiving the whole request?",
+   "options": [
+    "Restart the timeout after every non-empty receipt of request bytes",
+    "Restart it only after a complete header, chunk, or multipart unit",
+    "Measure one absolute deadline from the request's first byte"
+   ],
+   "default_guess": "Restart the timeout after every non-empty receipt of request bytes.",
+   "witness": {
+    "initial": "The timeout is 30 seconds and a client begins a large request.",
+    "events": [
+     "The client sends one valid request byte every 29 seconds without completing the request."
+    ],
+    "outcomes": [
+     "With a per-byte inactivity timeout, the connection can remain open indefinitely.",
+     "With an absolute request deadline, the listener closes it 30 seconds after the request began."
+    ],
+    "observer": "The client and an administrator monitoring occupied connections"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "timeout_clock",
+   "text": "the listeners' read timeout, how long a listener waits for a request's next\nbytes before it closes the connection",
+   "question": "Which time source measures the listener read timeout, and does suspended host or VM time count toward it?",
+   "options": [
+    "Use the process monotonic clock and count suspension, like the owner-session durations",
+    "Use a monotonic clock whose platform behavior may exclude suspension",
+    "Use the wall clock"
+   ],
+   "default_guess": "Use the process monotonic clock and count suspension.",
+   "witness": {
+    "initial": "A connection is waiting for the next request byte with 20 seconds remaining.",
+    "events": [
+     "The VM is suspended for one minute and then resumed without the client sending data."
+    ],
+    "outcomes": [
+     "If suspension counts, the listener closes the connection immediately on resume.",
+     "If suspension does not count, the listener continues waiting for about 20 seconds."
+    ],
+    "observer": "The connected client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "deadline_boundary",
+   "text": "the listeners' read timeout, how long a listener waits for a request's next\nbytes before it closes the connection",
+   "question": "What happens when the next byte and the timeout become ready at the boundary: is a byte accepted only when it arrives strictly before the deadline, or also when it arrives exactly at the deadline, and how is that ordering serialized?",
+   "options": [
+    "Accept only bytes observed strictly before the deadline",
+    "Accept bytes observed at or before the deadline",
+    "Let the event loop's nondeterministic readiness order decide"
+   ],
+   "default_guess": "Accept only a byte observed strictly before the deadline; otherwise close the connection.",
+   "witness": {
+    "initial": "The listener began waiting at monotonic time 100 with a 30-second timeout.",
+    "events": [
+     "The client's next byte becomes available at time 130 exactly."
+    ],
+    "outcomes": [
+     "A strict-before implementation closes the connection without accepting the byte.",
+     "An inclusive implementation accepts the byte and continues the request."
+    ],
+    "observer": "The client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "timeout_failure_contract",
+   "text": "the listeners' read timeout, how long a listener waits for a request's next\nbytes before it closes the connection",
+   "question": "When the timeout expires, must the listener close silently, send a particular HTTP response before closing, or expose a stream failure to the surface reader; and what refusal code, if any, is produced?",
+   "options": [
+    "Close silently and let an active body reader observe an unreadable/aborted stream, with no HTTP answer",
+    "Send a fixed HTTP timeout response and then close",
+    "Report a normal operation refusal through the relevant surface"
+   ],
+   "default_guess": "Close silently; if a surface is already reading the body, expose an aborted-stream failure so an upload is `file_unreadable`, and produce no operation refusal or HTTP answer.",
+   "witness": {
+    "initial": "A valid owner session uploads an import; its CSRF head has been admitted, but only half of the declared file body has arrived.",
+    "events": [
+     "The client stops sending until the listener read timeout expires."
+    ],
+    "outcomes": [
+     "One implementation closes immediately, the upload reader reports `file_unreadable`, and the client receives no response.",
+     "Another implementation sends an HTTP timeout response before closing and never exposes the timeout as the upload stream's unreadable-file failure."
+    ],
+    "observer": "The owner using the interface and any client retry logic"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"50_public_apis_0_conventions.md:Constants each module imports\",\"kind\":\"missing_constant_value\",\"text\":\"| `instance_lifecycle` | `SESSION_PASS_SECONDS`, `BACKUP_LOOK_SECONDS`, `LISTENER_READ_TIMEOUT_SECONDS` |\",\"question\":\"What numeric value does `LISTENER_READ_TIMEOUT_SECONDS` have in this release?\",\"options\":[\"A fixed positive number of seconds such as 30\",\"Another fixed positive number of seconds\",\"No timeout, represented by a sentinel value\"],\"default_guess\":\"30 seconds\",\"witness\":{\"initial\":\"Registry has started and a client has connected to either listener.\",\"events\":[\"The client sends part of a request and then sends no more bytes.\",\"The listener waits for the release's read timeout.\"],\"outcomes\":[\"With a 30-second value, Registry closes the connection after 30 seconds.\",\"With a 60-second value, the same connection remains open for another 30 seconds.\"],\"observer\":\"The connected client and the Registry host administrator\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"timeout_scope\",\"text\":\"the listeners' read timeout, how long a listener waits for a request's next\\nbytes before it closes the connection\",\"question\":\"Exactly which waits are governed by this timeout: partial request headers, fixed-length body bytes, chunk headers and data, the multipart stream, and/or the wait for a new request on a persistent connection?\",\"options\":[\"Every wait for bytes belonging to an already-started request, including headers and all body framing, but not idle time between requests\",\"Only request-body reads after complete headers\",\"All socket reads, including the idle wait between persistent requests\"],\"default_guess\":\"Apply it to every wait for bytes of an already-started request, including partial headers and body framing, but not between requests.\",\"witness\":{\"initial\":\"A client has a persistent connection to the owner-interface listener.\",\"events\":[\"The client sends half of an HTTP header line and pauses longer than the timeout.\",\"In a second history, it completes one request and then leaves the persistent connection idle for the same duration.\"],\"outcomes\":[\"An implementation treating every socket read alike closes both connections.\",\"An implementation treating only bytes of an active request as covered closes the partial-header connection but leaves the between-request connection open.\"],\"observer\":\"The client and the listener's connection accounting\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"timeout_reset_semantics\",\"text\":\"the listeners' read timeout, how long a listener waits for a request's next\\nbytes before it closes the connection\",\"question\":\"Is this an inactivity timeout restarted whenever any request byte arrives, a deadline for completing each parsing unit, or an absolute deadline for receiving the whole request?\",\"options\":[\"Restart the timeout after every non-empty receipt of request bytes\",\"Restart it only after a complete header, chunk, or multipart unit\",\"Measure one absolute deadline from the request's first byte\"],\"default_guess\":\"Restart the timeout after every non-empty receipt of request bytes.\",\"witness\":{\"initial\":\"The timeout is 30 seconds and a client begins a large request.\",\"events\":[\"The client sends one valid request byte every 29 seconds without completing the request.\"],\"outcomes\":[\"With a per-byte inactivity timeout, the connection can remain open indefinitely.\",\"With an absolute request deadline, the listener closes it 30 seconds after the request began.\"],\"observer\":\"The client and an administrator monitoring occupied connections\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"timeout_clock\",\"text\":\"the listeners' read timeout, how long a listener waits for a request's next\\nbytes before it closes the connection\",\"question\":\"Which time source measures the listener read timeout, and does suspended host or VM time count toward it?\",\"options\":[\"Use the process monotonic clock and count suspension, like the owner-session durations\",\"Use a monotonic clock whose platform behavior may exclude suspension\",\"Use the wall clock\"],\"default_guess\":\"Use the process monotonic clock and count suspension.\",\"witness\":{\"initial\":\"A connection is waiting for the next request byte with 20 seconds remaining.\",\"events\":[\"The VM is suspended for one minute and then resumed without the client sending data.\"],\"outcomes\":[\"If suspension counts, the listener closes the connection immediately on resume.\",\"If suspension does not count, the listener continues waiting for about 20 seconds.\"],\"observer\":\"The connected client\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"deadline_boundary\",\"text\":\"the listeners' read timeout, how long a listener waits for a request's next\\nbytes before it closes the connection\",\"question\":\"What happens when the next byte and the timeout become ready at the boundary: is a byte accepted only when it arrives strictly before the deadline, or also when it arrives exactly at the deadline, and how is that ordering serialized?\",\"options\":[\"Accept only bytes observed strictly before the deadline\",\"Accept bytes observed at or before the deadline\",\"Let the event loop's nondeterministic readiness order decide\"],\"default_guess\":\"Accept only a byte observed strictly before the deadline; otherwise close the connection.\",\"witness\":{\"initial\":\"The listener began waiting at monotonic time 100 with a 30-second timeout.\",\"events\":[\"The client's next byte becomes available at time 130 exactly.\"],\"outcomes\":[\"A strict-before implementation closes the connection without accepting the byte.\",\"An inclusive implementation accepts the byte and continues the request.\"],\"observer\":\"The client\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"timeout_failure_contract\",\"text\":\"the listeners' read timeout, how long a listener waits for a request's next\\nbytes before it closes the connection\",\"question\":\"When the timeout expires, must the listener close silently, send a particular HTTP response before closing, or expose a stream failure to the surface reader; and what refusal code, if any, is produced?\",\"options\":[\"Close silently and let an active body reader observe an unreadable/aborted stream, with no HTTP answer\",\"Send a fixed HTTP timeout response and then close\",\"Report a normal operation refusal through the relevant surface\"],\"default_guess\":\"Close silently; if a surface is already reading the body, expose an aborted-stream failure so an upload is `file_unreadable`, and produce no operation refusal or HTTP answer.\",\"witness\":{\"initial\":\"A valid owner session uploads an import; its CSRF head has been admitted, but only half of the declared file body has arrived.\",\"events\":[\"The client stops sending until the listener read timeout expires.\"],\"outcomes\":[\"One implementation closes immediately, the upload reader reports `file_unreadable`, and the client receives no response.\",\"Another implementation sends an HTTP timeout response before closing and never exposes the timeout as the upload stream's unreadable-file failure.\"],\"observer\":\"The owner using the interface and any client retry logic\"}}]}",
+ "set_aside": []
+}

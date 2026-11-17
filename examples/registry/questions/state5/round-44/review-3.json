@@ -1,0 +1,123 @@
+{
+ "open_points": [
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "missing_value",
+   "text": "the listeners' read timeout, how long a listener waits for a request's next\nbytes before it closes the connection (State 2 round-90 T8).",
+   "question": "What exact value and numeric type does LISTENER_READ_TIMEOUT_SECONDS have?",
+   "options": [
+    "A positive whole number of seconds fixed by the release",
+    "A positive fractional number of seconds fixed by the release"
+   ],
+   "default_guess": "A positive whole number of seconds fixed by the release.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "timeout_semantics",
+   "text": "the listeners' read timeout, how long a listener waits for a request's next\nbytes before it closes the connection (State 2 round-90 T8).",
+   "question": "Is this an idle timeout restarted after every received byte, a timeout restarted after each successful socket read, or one total deadline for receiving the request? Which clock measures it?",
+   "options": [
+    "A monotonic idle deadline restarted whenever any request byte arrives",
+    "A monotonic deadline restarted after each completed socket read",
+    "One monotonic deadline for the entire request",
+    "A wall-clock deadline"
+   ],
+   "default_guess": "Use a monotonic idle deadline restarted whenever any request byte arrives.",
+   "witness": {
+    "initial": "A client has an open listener connection and sends a request one byte at a time, with every gap shorter than the timeout but the total transfer longer than it.",
+    "events": [
+     "The client sends the first request byte.",
+     "The client continues sending one byte before each idle interval expires.",
+     "instance_lifecycle waits for and reads the request."
+    ],
+    "outcomes": [
+     "An inter-byte idle timeout is continually restarted, so the request remains connected.",
+     "A total request deadline expires, so the listener closes the connection."
+    ],
+    "observer": "The client and any surface waiting for the request."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "timeout_scope",
+   "text": "the listeners' read timeout, how long a listener waits for a request's next\nbytes before it closes the connection (State 2 round-90 T8).",
+   "question": "Exactly which waits are covered: the first byte after accept, request headers, fixed-length body bytes, chunk headers and delimiters, the next request on a persistent connection, and both the owner-interface and service-API listeners?",
+   "options": [
+    "Every wait for request bytes on both listeners, including the first byte, headers, all body framing and a later request on a persistent connection",
+    "Only waits while reading a request body",
+    "Only waits performed after a complete request has been dispatched to a surface"
+   ],
+   "default_guess": "Apply it to every wait for request bytes on both listeners, including headers, body framing and persistent-connection request boundaries.",
+   "witness": {
+    "initial": "A connection to the owner-interface listener is accepted, but the client sends no request byte.",
+    "events": [
+     "The owner client opens the TCP connection.",
+     "The client remains silent for longer than LISTENER_READ_TIMEOUT_SECONDS."
+    ],
+    "outcomes": [
+     "The timeout covers the first request byte and the listener closes the connection.",
+     "The timeout begins only during body reading, so the silent connection remains open."
+    ],
+    "observer": "The owner client and the instance's connection-resource accounting."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "timeout_outcome",
+   "text": "the listeners' read timeout, how long a listener waits for a request's next\nbytes before it closes the connection (State 2 round-90 T8).",
+   "question": "When the timeout expires, does the listener close silently, send an HTTP error before closing, or expose a stream failure to the surface; and what refusal code and status, if any, result?",
+   "options": [
+    "Close without an HTTP answer and do not dispatch an incomplete request",
+    "Send an HTTP timeout answer and then close",
+    "Report a stream-read failure to the dispatched surface and let it produce its ordinary refusal"
+   ],
+   "default_guess": "Close without an HTTP answer; an incomplete request that has not been dispatched reaches no surface.",
+   "witness": {
+    "initial": "A service client sends valid headers and only part of a declared request body, then stops.",
+    "events": [
+     "instance_lifecycle accepts the connection and reads the headers.",
+     "The client sends part of the body.",
+     "No further byte arrives before the timeout."
+    ],
+    "outcomes": [
+     "The listener closes the connection without an HTTP answer.",
+     "The listener or service_api sends a refusal such as an HTTP timeout or file-unreadable answer before closing."
+    ],
+    "observer": "The service client."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "dispatch_boundary",
+   "text": "the listeners' read timeout, how long a listener waits for a request's next\nbytes before it closes the connection (State 2 round-90 T8).",
+   "question": "For a lazily consumed body, does expiry become the same stream failure already specified for premature EOF or malformed chunks, and may a request whose headers or upload head were already admitted retain effects such as advancing the owner session's last-request time?",
+   "options": [
+    "Expiry makes the body stream fail; already completed admission effects remain, but no incomplete domain action is applied",
+    "Expiry cancels every effect of the request, including owner-session admission",
+    "Expiry is handled only by the listener and the body reader is not notified"
+   ],
+   "default_guess": "Make the body stream fail like premature framing termination; preserve already completed owner-session admission effects, replace no uploaded file, and apply no incomplete domain action.",
+   "witness": {
+    "initial": "An owner session has a previously uploaded import file and is near its idle limit.",
+    "events": [
+     "The owner sends a new upload whose CSRF-first head is valid and is admitted, restarting the session's idle interval.",
+     "The owner sends part of the file and then stalls beyond the listener timeout.",
+     "The listener closes the connection."
+    ],
+    "outcomes": [
+     "The stream failure refuses the new upload, keeps the previous uploaded file, and the admitted request's arrival still refreshed the session.",
+     "The timeout rolls back admission or is not reported to migration_import, producing a different session timestamp or uploaded-file state."
+    ],
+    "observer": "The owner on the next owner-interface request."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"missing_value\",\"text\":\"the listeners' read timeout, how long a listener waits for a request's next\\nbytes before it closes the connection (State 2 round-90 T8).\",\"question\":\"What exact value and numeric type does LISTENER_READ_TIMEOUT_SECONDS have?\",\"options\":[\"A positive whole number of seconds fixed by the release\",\"A positive fractional number of seconds fixed by the release\"],\"default_guess\":\"A positive whole number of seconds fixed by the release.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"timeout_semantics\",\"text\":\"the listeners' read timeout, how long a listener waits for a request's next\\nbytes before it closes the connection (State 2 round-90 T8).\",\"question\":\"Is this an idle timeout restarted after every received byte, a timeout restarted after each successful socket read, or one total deadline for receiving the request? Which clock measures it?\",\"options\":[\"A monotonic idle deadline restarted whenever any request byte arrives\",\"A monotonic deadline restarted after each completed socket read\",\"One monotonic deadline for the entire request\",\"A wall-clock deadline\"],\"default_guess\":\"Use a monotonic idle deadline restarted whenever any request byte arrives.\",\"witness\":{\"initial\":\"A client has an open listener connection and sends a request one byte at a time, with every gap shorter than the timeout but the total transfer longer than it.\",\"events\":[\"The client sends the first request byte.\",\"The client continues sending one byte before each idle interval expires.\",\"instance_lifecycle waits for and reads the request.\"],\"outcomes\":[\"An inter-byte idle timeout is continually restarted, so the request remains connected.\",\"A total request deadline expires, so the listener closes the connection.\"],\"observer\":\"The client and any surface waiting for the request.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"timeout_scope\",\"text\":\"the listeners' read timeout, how long a listener waits for a request's next\\nbytes before it closes the connection (State 2 round-90 T8).\",\"question\":\"Exactly which waits are covered: the first byte after accept, request headers, fixed-length body bytes, chunk headers and delimiters, the next request on a persistent connection, and both the owner-interface and service-API listeners?\",\"options\":[\"Every wait for request bytes on both listeners, including the first byte, headers, all body framing and a later request on a persistent connection\",\"Only waits while reading a request body\",\"Only waits performed after a complete request has been dispatched to a surface\"],\"default_guess\":\"Apply it to every wait for request bytes on both listeners, including headers, body framing and persistent-connection request boundaries.\",\"witness\":{\"initial\":\"A connection to the owner-interface listener is accepted, but the client sends no request byte.\",\"events\":[\"The owner client opens the TCP connection.\",\"The client remains silent for longer than LISTENER_READ_TIMEOUT_SECONDS.\"],\"outcomes\":[\"The timeout covers the first request byte and the listener closes the connection.\",\"The timeout begins only during body reading, so the silent connection remains open.\"],\"observer\":\"The owner client and the instance's connection-resource accounting.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"timeout_outcome\",\"text\":\"the listeners' read timeout, how long a listener waits for a request's next\\nbytes before it closes the connection (State 2 round-90 T8).\",\"question\":\"When the timeout expires, does the listener close silently, send an HTTP error before closing, or expose a stream failure to the surface; and what refusal code and status, if any, result?\",\"options\":[\"Close without an HTTP answer and do not dispatch an incomplete request\",\"Send an HTTP timeout answer and then close\",\"Report a stream-read failure to the dispatched surface and let it produce its ordinary refusal\"],\"default_guess\":\"Close without an HTTP answer; an incomplete request that has not been dispatched reaches no surface.\",\"witness\":{\"initial\":\"A service client sends valid headers and only part of a declared request body, then stops.\",\"events\":[\"instance_lifecycle accepts the connection and reads the headers.\",\"The client sends part of the body.\",\"No further byte arrives before the timeout.\"],\"outcomes\":[\"The listener closes the connection without an HTTP answer.\",\"The listener or service_api sends a refusal such as an HTTP timeout or file-unreadable answer before closing.\"],\"observer\":\"The service client.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"dispatch_boundary\",\"text\":\"the listeners' read timeout, how long a listener waits for a request's next\\nbytes before it closes the connection (State 2 round-90 T8).\",\"question\":\"For a lazily consumed body, does expiry become the same stream failure already specified for premature EOF or malformed chunks, and may a request whose headers or upload head were already admitted retain effects such as advancing the owner session's last-request time?\",\"options\":[\"Expiry makes the body stream fail; already completed admission effects remain, but no incomplete domain action is applied\",\"Expiry cancels every effect of the request, including owner-session admission\",\"Expiry is handled only by the listener and the body reader is not notified\"],\"default_guess\":\"Make the body stream fail like premature framing termination; preserve already completed owner-session admission effects, replace no uploaded file, and apply no incomplete domain action.\",\"witness\":{\"initial\":\"An owner session has a previously uploaded import file and is near its idle limit.\",\"events\":[\"The owner sends a new upload whose CSRF-first head is valid and is admitted, restarting the session's idle interval.\",\"The owner sends part of the file and then stalls beyond the listener timeout.\",\"The listener closes the connection.\"],\"outcomes\":[\"The stream failure refuses the new upload, keeps the previous uploaded file, and the admitted request's arrival still refreshed the session.\",\"The timeout rolls back admission or is not reported to migration_import, producing a different session timestamp or uploaded-file state.\"],\"observer\":\"The owner on the next owner-interface request.\"}}]}",
+ "set_aside": []
+}
