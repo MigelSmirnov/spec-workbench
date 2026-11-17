@@ -15,13 +15,15 @@ nothing ("Explicit exclusions", R0-29): the service API reads the token and the
 request and hands them to `operations`; the owner interface reads the cookie,
 the CSRF value and the form and hands them to `operations`, and renders its
 answer as escaped text (A19 rules 1, 2). A surface whose reading of a body
-fails before it has a request to hand on — a form, a service request, an
-upload's head — answers nothing: the connection is closed and nothing reaches
-`operations`. Such a request never arrives in A13 rule 2's sense, since an
-owner request arrives when it is handed to the session check (State 3,
-`owner_sessions`): it is no owner request and restarts no 30 minutes. Once an upload's file part is handed on, its stream's failure
-is `migration_import`'s `file_unreadable`, rendered as any refusal, and the
-connection is then closed (State 5, `serve_owner_request`). `operations` runs A04 rule 6: stage
+fails — a form, a service request, an upload's head — hands the request on
+all the same, with no CSRF value and no values: the session check admits the
+owner's, restarting the session's 30 minutes when it is valid (A13 rule 2),
+and it is refused at stage (1) as a change without its CSRF value, a
+service's as State 5's `serve_service_request` says; the answer is sent if
+the connection still takes it, and the connection is then closed. Once an
+upload's file part is handed on, its stream's failure is `migration_import`'s
+`file_unreadable`, rendered as any refusal, and the connection is then
+closed (State 5, `serve_owner_request`). `operations` runs A04 rule 6: stage
 (1) through `service_access` for a service or `owner_sessions` for the owner,
 stage (2) through `agent_sessions` for agent authority, and hands the action
 to the module that owns its record for stages (3) to (6), which answers every
