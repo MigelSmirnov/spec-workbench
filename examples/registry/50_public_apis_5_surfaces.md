@@ -211,10 +211,11 @@ fields with their CSRF value, a confirmation value where the step carries
 one, the revision or access version the rendered card carried; for an
 upload, a multipart body whose first part is the CSRF field and whose second
 is the file (owner, 2026-11-17). `upload_framing.read_upload_head` reads
-the body's head alone and answers the CSRF value; `owner_interface` hands
-the request's declared length and the file part, as an unread stream that
-ends where the part ends, to `operations.perform_owner_operation`, without
-reading or buffering it. A head of another form gives no CSRF value, and the
+the body's head alone and answers the CSRF value and the file part's
+declared length; `owner_interface` hands that length and the file part, as
+an unread stream that ends where the part ends, to
+`operations.perform_owner_operation`, without reading or buffering it. The
+upload arrives, for the session check, when it is handed on (A13 rule 2). A head of another form gives no CSRF value, and the
 upload is refused at stage (1) before any byte of the file is read.
 
 ### Outputs
@@ -226,8 +227,7 @@ refusal rendered — the sign-in page for a request without a valid session.
 ### Observable effect
 
 On sign-in, the session cookie set: not readable by scripts, only to
-Registry's origin, and HTTPS-only when `configuration.give_owner_cookie_secure`
-answers that the owner interface listens beyond loopback (A13 rule 1). Registry never expires or deletes the cookie: an ended session's
+Registry's origin, and always HTTPS-only (A13 rule 1; owner, 2026-11-17). Registry never expires or deletes the cookie: an ended session's
 cookie is refused at the session check and replaced by the next sign-in, so
 no answer, however late it arrives, can remove a newer session's cookie.
 Two sign-ins of one browser whose answers cross make two valid sessions;
@@ -245,7 +245,7 @@ never reused. A proxy or TLS terminator in front of Registry is the host's
 A create form carries a request id from `random_values.mint_identity` made
 when it is rendered (A01 rule 1); every form of a page rendered for a valid
 session carries the CSRF value `owner_sessions.give_session_csrf` gives for
-it (A13 rules 5, 7); every form carries the revision or access
+it, and the sign-in form none (A13 rules 4, 5, 7); every form carries the revision or access
 version of what it rendered, or none (A04, A12 rule 3); no personal value
 or secret in a URL (R0-29); the newest backup's instant on its page (A18
 rule 1). Every check is `operations`'.

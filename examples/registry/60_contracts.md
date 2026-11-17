@@ -89,8 +89,10 @@ readings, so an action's today is `operations`' (`_today_of`).
   (A13 rules 5, 7). `upload_framing.read_upload_head` reads the head alone,
   at most `UPLOAD_FORM_HEAD_MAX_BYTES` (8192 bytes) — the boundary from the
   content type, the CSRF part, the file part's headers — and answers
-  `UploadHead`: the CSRF value and the delimiter `\r\n--<boundary>` that ends
-  the file part, or neither. `UploadBody`'s one implementation is
+  `UploadHead`: the CSRF value, the delimiter `\r\n--<boundary>` that ends
+  the file part, and the file part's declared length — the request's
+  declared length less the head read and the closing delimiter with its
+  final `--\r\n` — or none of them. `UploadBody`'s one implementation is
   `MultipartFileBody(stream, delimiter)`, `policy`, owned by
   `upload_framing`: it gives the file part's bytes and ends before the
   delimiter, holding in memory no more than the delimiter's length of
@@ -103,11 +105,11 @@ readings, so an action's today is `operations`' (`_today_of`).
   the request needs, inside the read transaction, by `_read_bounded` at most
   one byte past the imported `IMPORT_FILE_MAX_BYTES` constant, a declared
   length over it refused before the first read. A request refused at
-  admission never reads its file. The declared length is the request's
-  whole body, so the multipart head counts toward the limit a declared
-  length is compared with, and the bytes read are counted over the file
-  part: A19 rule 4 is kept as written, and a file within a few hundred bytes
-  of 50 MB that declares its length may be refused.
+  admission never reads its file. The declared length `_read_bounded`
+  compares is the file part's, so a file of exactly 50 MB is read (A19 rule
+  4's required test); a body with an epilogue after the closing delimiter
+  declares more than its file, and only a file that near the limit is then
+  refused early. The bytes are counted over the file part as it is read.
 - **The store is a class.** A model field may not hold a connection, so the
   store this start opens is the `RegistryStore` class `store` owns; every
   store operation takes it. `store` keeps the one `open_store` opened and
@@ -124,10 +126,10 @@ readings, so an action's today is `operations`' (`_today_of`).
 - **The owner's pages** (owner, 2026-11-17; State 7 structure requests of
   `owner_interface`). `_render_owner_page` receives the session's CSRF value,
   which `owner_sessions.give_session_csrf` gives for the cookie's session, or
-  none, and whether the cookie is HTTPS-only, which
-  `configuration.give_owner_cookie_secure` answers from the owner
-  interface's checked address: `true` when its host is not a loopback
-  address (`_is_loopback_host`).
+  none — the sign-in page's form carries none (A13 rule 4). The session
+  cookie is always `Secure` (owner, 2026-11-17): a browser accepts it from a
+  loopback address over plain HTTP, and from another machine the interface
+  is reached only through HTTPS (R0-29, A13 rule 1).
 - **The project list's choice** (owner, 2026-11-17; State 7 structure
   request of `projects`). `list_projects` takes `list_choice` as text, so a
   value outside its closed list is refused (`outside_closed_list`, A19 rule

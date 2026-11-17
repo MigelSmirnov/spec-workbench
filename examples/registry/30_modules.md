@@ -30,7 +30,7 @@ which no module owns. The table is the one mapping; `30_trace.json` records the 
 | A10 | `agent_sessions` | `operations` |
 | A11 | `agent_sessions` | `operations`, `owner_interface` |
 | A12 | `agent_sessions` | `owner_interface` |
-| A13 | `owner_sessions` | `data_provider`, `clock`, `random_values`, `upload_framing`, `configuration`, `owner_interface`, `operations` |
+| A13 | `owner_sessions` | `data_provider`, `clock`, `random_values`, `upload_framing`, `owner_interface`, `operations` |
 | A14 | `audit_log` | `operations` |
 | A15 | `audit_log` | `store`, `backups` |
 | A16 | `migration_import` | `owner_sessions`, `owner_interface`, `projects`, `customers`, `artifact_pointers` |
@@ -491,7 +491,11 @@ must be the CSRF field, and the second part's headers — at most the
 data provider's `UPLOAD_FORM_HEAD_MAX_BYTES`, answering the CSRF value, or
 none for a head of another form or longer than the bound; and the file
 part's bytes as a stream that ends where the part ends, read only when its
-reader asks and never buffered beyond the delimiter it must look ahead for.
+reader asks and never buffered beyond the delimiter it must look ahead for;
+and the file part's declared length — the request's declared length less
+the head it read and the closing delimiter with its final `--` and line end,
+or none when the request declares none — so that a file of exactly the
+import limit is not refused for its framing (A19 rule 4).
 
 ### Knows
 
@@ -576,10 +580,7 @@ each well formed, the addresses' ports different, each secret at least the 32 by
 two secrets equal — with the diagnostic naming the failed item and never its
 value; that no default is applied (rule 5); an owner-only start when no token
 is given (rule 1); and last the path checks of rule 5 that need no file — the
-store and the backup location apart, compared with every link resolved;
-and, from the address it checked, whether the owner interface listens on an
-address other than a loopback one, which makes the session cookie HTTPS-only
-(A13 rule 1, owner, 2026-11-17). The
+store and the backup location apart, compared with every link resolved. The
 checks after them — the backup probe (`backups`), opening or making the store
 (`store`) and the listeners — are run in rule 2's order by
 `instance_lifecycle`, which calls this module first.
@@ -606,7 +607,6 @@ give_service_tokens
 give_owner_credential
 give_backup_key
 give_backup_location
-give_owner_cookie_secure
 ```
 
 ### Depth assessment
@@ -826,7 +826,11 @@ was wrong (rules 3, 4); the session, its cookie rules and its limits — 8 hours
 30 minutes without a request, sign-out, restart — held as monotonic readings
 (rule 2); the pass every 60 seconds that ends sessions by their limits, taking
 the import lock and then each session's lock; each session's one lock, under
-which its state-changing requests apply one at a time; the CSRF value (rule 5),
+which its state-changing requests apply one at a time; the arrival of an
+owner request, which is the moment `operations` hands it to the session
+check — after its headers and, for an upload, the head `upload_framing`
+read, at most `UPLOAD_FORM_HEAD_MAX_BYTES` — where `owner_sessions` takes the
+monotonic reading its validity is checked at (rule 2); the CSRF value (rule 5),
 given for a valid session to the interface that renders its forms (owner,
 2026-11-17);
 the pending confirmation — made when a step is shown, bound to the action, its
@@ -1274,17 +1278,21 @@ forms (A13 rules 1, 5, 7), no personal value or secret in a URL (R0-29). The
 newest backup's instant on its page (A18 rule 1). A16's upload, mapping and
 confirmation pages. An upload form sends its CSRF field as the first part
 of its multipart body (owner, 2026-11-17): `owner_interface` has
-`upload_framing` read that head alone and hands the file part on as the
-request's declared length and an unread stream that ends where the part
-ends, never read or buffered here, so that `migration_import` alone applies
-A19 rule 4 to the file. The session cookie is HTTPS-only when `configuration` says the owner
-interface listens beyond loopback (A13 rule 1); every form carries the CSRF
-value `owner_sessions` gives for the session.
+`upload_framing` read that head alone and hands the file part on as its
+declared length, which `upload_framing` derives, and an unread stream that
+ends where the part ends, never read or buffered here, so that
+`migration_import` alone applies A19 rule 4 to the file. The session cookie
+is always HTTPS-only (A13 rule 1, owner, 2026-11-17): a browser on Registry's
+own machine accepts it from a loopback address over plain HTTP, and from any
+other machine the interface is reached only through HTTPS (R0-29). Every
+form of a page rendered for a valid session carries the CSRF value
+`owner_sessions` gives for the session; the sign-in form, made without a
+session, carries none (A13 rule 4).
 
 ### Knows
 
-`models`, `random_values`, `upload_framing`, `configuration`,
-`owner_sessions`, `operations`.
+`models`, `random_values`, `upload_framing`, `owner_sessions`,
+`operations`.
 
 ### Must not own
 

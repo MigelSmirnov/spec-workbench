@@ -1,0 +1,316 @@
+{
+ "open_points": [
+  {
+   "subject": "data_provider table models",
+   "kind": "contradictory_count",
+   "text": "`models`, for exactly the row models and enumerations of its three tables:",
+   "question": "Does `data_provider` have three table constants or the five subsequently listed, and must the description and dependency surface name the same set?",
+   "options": [
+    "Change “three” to “five” and keep all five listed table models",
+    "Treat only the original three as tables and define `PERSONAL_DATA_FIELDS` and `REFUSAL_HTTP_STATUSES` differently"
+   ],
+   "default_guess": "Change “three” to “five” and keep all five listed table models.",
+   "unit": "?"
+  },
+  {
+   "subject": "UPLOAD_FORM_HEAD_MAX_BYTES",
+   "kind": "missing_constant_value",
+   "text": "and the bound of the head an upload form sends before its file, its CSRF field among it (A13 rule 5, owner, 2026-11-17).",
+   "question": "What exact integer value does `UPLOAD_FORM_HEAD_MAX_BYTES` hold?",
+   "options": [
+    "Declare a fixed byte count in this state",
+    "Carry the exact value explicitly to a later state"
+   ],
+   "default_guess": "Declare 65536 bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "upload head bound",
+   "kind": "unclear_measurement",
+   "text": "Reading the body's head alone — the boundary the request's content type names, the first part, which must be the CSRF field, and the second part's headers — at most the data provider's `UPLOAD_FORM_HEAD_MAX_BYTES`",
+   "question": "Which received bytes count toward the bound, and at exactly what byte is the head considered complete: through the second part's header terminator, including delimiters and look-ahead, or by another definition?",
+   "options": [
+    "Count every body byte through the blank line ending the file part's headers",
+    "Exclude multipart delimiters and parser look-ahead",
+    "Bound only the first part"
+   ],
+   "default_guess": "Count every received body byte from the initial boundary through the blank line ending the file part's headers, inclusive.",
+   "unit": "?"
+  },
+  {
+   "subject": "upload_framing multipart acceptance",
+   "kind": "unspecified_syntax",
+   "text": "The multipart syntax: boundaries, part headers, the look-ahead for the closing delimiter.",
+   "question": "What exact multipart grammar is accepted, including quoted boundaries, header-name casing, transfer encodings, duplicate headers, preamble or epilogue, and line endings?",
+   "options": [
+    "Accept the applicable standard multipart/form-data grammar with explicitly listed restrictions",
+    "Accept only one canonical encoding emitted by `owner_interface`",
+    "Delegate acceptance to a named parser with a fixed version and configuration"
+   ],
+   "default_guess": "Accept only the canonical multipart/form-data encoding emitted by `owner_interface`, with CRLF, no transfer encoding, and unique required headers.",
+   "unit": "?"
+  },
+  {
+   "subject": "upload form part structure",
+   "kind": "unspecified_cardinality",
+   "text": "an upload form sends its CSRF field as the first part of its body and the file as the second",
+   "question": "Must the body contain exactly those two parts, or may it contain duplicate CSRF fields, additional fields, or parts after the file, and what outcome does each deviation produce?",
+   "options": [
+    "Require exactly two parts in that order",
+    "Require those first two parts but ignore later parts",
+    "Allow arbitrary fields while selecting the first matching CSRF and file parts"
+   ],
+   "default_guess": "Require exactly two parts in that order and refuse every deviation as missing or invalid CSRF protection.",
+   "unit": "?"
+  },
+  {
+   "subject": "import upload declared length",
+   "kind": "contradictory_length",
+   "text": "hands the file part on as the request's declared length and an unread stream that ends where the part ends",
+   "question": "Is the length passed to A19 the HTTP request Content-Length, which covers the whole multipart body, or a declared length of the file part, and what happens when no trustworthy file-part length exists?",
+   "options": [
+    "Pass the whole request Content-Length",
+    "Pass a validated Content-Length header of the file part",
+    "Pass no declared file length and let `migration_import` enforce the limit from streamed bytes",
+    "Subtract framing bytes from the whole request length"
+   ],
+   "default_guess": "Pass a validated file-part length when one exists; otherwise pass no declared length and enforce the limit from streamed file bytes.",
+   "witness": {
+    "initial": "An upload contains a file of exactly `IMPORT_FILE_MAX_BYTES` bytes plus a non-empty multipart head and closing delimiter.",
+    "events": [
+     "The owner submits the upload form.",
+     "`owner_interface` asks `upload_framing` for the head and file stream.",
+     "The length is handed to `migration_import`, which applies A19 rule 4."
+    ],
+    "outcomes": [
+     "If the request Content-Length is handed on, it exceeds the file limit and the upload is refused before the file is read.",
+     "If the file-part length or no declared length is handed on, the exactly-at-limit file is read and accepted."
+    ],
+    "observer": "The owner submitting the import sees refusal versus an import mapping."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "upload stream lifetime",
+   "kind": "missing_resource_owner",
+   "text": "the file part's bytes as a stream that ends where the part ends, read only when its reader asks and never buffered beyond the delimiter it must look ahead for.",
+   "question": "Which module owns closing or draining this stream and the remainder of the request body after acceptance, refusal, cancellation, parser failure, or an early size-limit refusal?",
+   "options": [
+    "`upload_framing` owns cleanup through an explicit close operation",
+    "`owner_interface` owns cleanup after `operations` returns",
+    "`migration_import` must always consume or close it",
+    "The HTTP server discards the connection whenever the stream is not exhausted"
+   ],
+   "default_guess": "`owner_interface` owns a closeable stream and always closes it; the transport closes the connection if unread request bytes remain.",
+   "unit": "?"
+  },
+  {
+   "subject": "RegistryStore",
+   "kind": "missing_type_owner",
+   "text": "`store` keeps the `RegistryStore` `open_store` opened for the process and gives it to the module that runs an action's transaction",
+   "question": "Which module owns and exports the `RegistryStore` type, and may consumers name that type directly?",
+   "options": [
+    "`store` owns and exports `RegistryStore`",
+    "`models` owns the interface while `store` implements it",
+    "The handle is opaque and no consumer names its concrete type"
+   ],
+   "default_guess": "`store` owns `RegistryStore`, but consumers receive it as an opaque store-owned interface.",
+   "unit": "?"
+  },
+  {
+   "subject": "opened_store",
+   "kind": "unspecified_lifecycle",
+   "text": "opened_store",
+   "question": "What does `opened_store` do before `open_store` succeeds, after a failed start, during shutdown, or after the store has been closed, and can `open_store` replace an already kept handle?",
+   "options": [
+    "Raise a defined internal lifecycle error outside the single open interval",
+    "Return an optional handle",
+    "Allow replacing the kept handle on another successful open"
+   ],
+   "default_guess": "Permit exactly one successful open per process; outside its open interval `opened_store` raises a defined internal lifecycle error.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner session cookie security",
+   "kind": "contradiction",
+   "text": "from the address it checked, whether the owner interface listens on an address other than a loopback one, which makes the session cookie HTTPS-only",
+   "question": "How can bind-address class decide A13's rule that the cookie is sent only over HTTPS when the interface is reached from another machine, especially when TLS terminates at a proxy or VPN endpoint and Registry listens on loopback?",
+   "options": [
+    "Derive `Secure` from the externally visible request scheme using trusted proxy configuration",
+    "Configure explicitly whether the owner surface is HTTPS",
+    "Keep bind-address inference and forbid externally reachable loopback deployments"
+   ],
+   "default_guess": "Configure a trusted external HTTPS mode explicitly and set `Secure` from that checked setting.",
+   "witness": {
+    "initial": "Registry listens on `127.0.0.1` behind an HTTPS reverse proxy reached from the owner's other machine.",
+    "events": [
+     "The owner connects to the proxy over HTTPS.",
+     "The proxy forwards the request to Registry's loopback listener.",
+     "`configuration` classifies the listener as loopback and `owner_interface` creates the session cookie."
+    ],
+    "outcomes": [
+     "The new State 3 rule omits the HTTPS-only setting because the bind address is loopback.",
+     "A13 rule 1 requires the cookie to be HTTPS-only because the interface was reached from another machine."
+    ],
+    "observer": "The owner's browser and a security reviewer see the missing `Secure` attribute."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "loopback address classification",
+   "kind": "undefined_predicate",
+   "text": "an address other than a loopback one",
+   "question": "Which configured IPv4 and IPv6 addresses count as loopback: only `127.0.0.1` and `::1`, all of `127.0.0.0/8` and `::1`, or another explicitly defined set; how are wildcard addresses classified?",
+   "options": [
+    "Use the platform IP-address library's loopback predicate and classify wildcard addresses as non-loopback",
+    "Recognize only `127.0.0.1` and `::1`",
+    "List the accepted loopback literals explicitly"
+   ],
+   "default_guess": "Use the IP-address library's loopback predicate; treat `0.0.0.0` and `::` as non-loopback.",
+   "unit": "?"
+  },
+  {
+   "subject": "session cookie rule ownership",
+   "kind": "overlapping_ownership",
+   "text": "the session, its cookie rules and its limits",
+   "question": "Does `owner_sessions` own all cookie policy, or does `configuration` own the Secure-policy decision while `owner_interface` owns cookie construction and emission?",
+   "options": [
+    "`owner_sessions` owns policy; configuration supplies only checked deployment facts",
+    "`configuration` owns the Secure decision and `owner_interface` owns all other cookie attributes",
+    "`owner_interface` owns cookie policy using facts from the other modules"
+   ],
+   "default_guess": "`owner_sessions` owns the cookie policy, `configuration` supplies the checked external-transport fact, and `owner_interface` only emits the cookie.",
+   "unit": "?"
+  },
+  {
+   "subject": "PERSONAL_DATA_FIELDS",
+   "kind": "underspecified_table_key",
+   "text": "`data_provider`'s `PERSONAL_DATA_FIELDS`, of (answer model, field) pairs",
+   "question": "How does a pair identify personal facts inside nested objects and collections, and is the field component a top-level name, a schema path, or a reference to the underlying domain-model field?",
+   "options": [
+    "Use full schema paths into answer models",
+    "Classify only top-level answer fields, making a containing field personal when any nested value is personal",
+    "Reference domain-model fields and derive answer paths from contracts"
+   ],
+   "default_guess": "Use full schema paths into each answer model and validate them against the final contract schemas.",
+   "unit": "?"
+  },
+  {
+   "subject": "answer disclosure computation",
+   "kind": "undefined_value_presence",
+   "text": "`personal_data` when one of those fields holds a value",
+   "question": "What counts as a field holding a value for disclosure classification: field presence, a non-null value, a non-empty collection, or a nested personal fact, and how are explicit absent markers classified?",
+   "options": [
+    "Personal whenever the field is present, including null or an absent marker",
+    "Personal only when an actual personal value is present",
+    "Use a static class per answer schema regardless of runtime absence"
+   ],
+   "default_guess": "Classify as personal only when an actual personal fact is present; null and explicit absence markers do not count.",
+   "witness": {
+    "initial": "A customer's billing record has no tax id and no legal name, and the billing answer marks both as absent.",
+    "events": [
+     "PresuPro requests the billing read.",
+     "The customer module builds the answer with the required absence representation.",
+     "`operations` computes its disclosure class from `PERSONAL_DATA_FIELDS`."
+    ],
+    "outcomes": [
+     "Treating field presence as holding a value makes the answer `personal_data`.",
+     "Treating only a recorded fiscal value as holding a value makes the answer `business_confidential`."
+    ],
+    "observer": "Authorization tests and any caller whose highest class differs between the two outcomes see acceptance versus refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "SERVICE_AGENT_SESSION_HEADER",
+   "kind": "missing_constant_value",
+   "text": "the header that names Kernel's agent session (R0-53)",
+   "question": "What exact HTTP header name does `SERVICE_AGENT_SESSION_HEADER` contain, including its canonical spelling?",
+   "options": [
+    "Declare the exact header name in State 3",
+    "Carry the exact header name explicitly to States 5 and 6"
+   ],
+   "default_guess": "Declare `X-Registry-Agent-Session`.",
+   "unit": "?"
+  },
+  {
+   "subject": "agent session header applicability",
+   "kind": "unclear_transport_rule",
+   "text": "reading the token, the session header and the request",
+   "question": "Is the agent-session header required only for Cabinet Kernel operations that require a registered session, optional and ignored for other services, or required on every service request?",
+   "options": [
+    "Require it only for Kernel operations other than session registration as their rules demand",
+    "Parse it when present but ignore it for non-Kernel services",
+    "Require it on every service API request"
+   ],
+   "default_guess": "Require it only on Kernel operations whose A10 check names a session; ignore or reject it by an explicit rule on other services.",
+   "witness": {
+    "initial": "PresuPro has a valid token and sends `validate` without an agent-session header.",
+    "events": [
+     "PresuPro calls the service API.",
+     "`service_api` reads the token and request."
+    ],
+    "outcomes": [
+     "If the listed session header is universally required, the request is refused before `operations`.",
+     "If it applies only to agent authority, `operations` validates the project normally."
+    ],
+    "observer": "PresuPro sees refusal versus the validation answer."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "service answer kind field",
+   "kind": "ambiguous_wire_contract",
+   "text": "the answer's fields with no kind on the wire",
+   "question": "Does “kind” mean only an internal answer-discriminator field, or does it also remove domain fields named `kind`, such as the Customer kind required by the billing read and the Object kind?",
+   "options": [
+    "Omit only an internal response-envelope discriminator",
+    "Omit every field literally named `kind`",
+    "Rename the discriminator so domain `kind` fields remain unambiguous"
+   ],
+   "default_guess": "Omit only an internal response-envelope discriminator and retain every domain field named `kind`.",
+   "witness": {
+    "initial": "A company Customer has recorded billing data and its Customer kind is `company`.",
+    "events": [
+     "PresuPro requests the customer's billing data.",
+     "The customer module builds the answer required by R0-83.",
+     "`service_api` serializes it under the “no kind on the wire” rule."
+    ],
+    "outcomes": [
+     "Reading the phrase literally removes the Customer's `kind` field.",
+     "Reading it as an envelope rule preserves the Customer's `kind` field as R0-83 requires."
+    ],
+    "observer": "PresuPro sees two different billing contracts."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "give_backup_location",
+   "kind": "unclear_path_identity",
+   "text": "the backup location, through `configuration.give_backup_location`",
+   "question": "Does this capability return the original configured path or the canonical absolute path with symbolic links resolved during A17's checks, and which path must later file operations use?",
+   "options": [
+    "Return and use the resolved canonical path",
+    "Return and use the original configured path after validation",
+    "Return both the configured and resolved paths with distinct purposes"
+   ],
+   "default_guess": "Return and use the resolved canonical absolute path.",
+   "witness": {
+    "initial": "The configured backup location is a symbolic link to directory A and passes startup checks.",
+    "events": [
+     "After startup, the host administrator retargets the link to directory B.",
+     "An operation asks `configuration.give_backup_location` and accesses backups."
+    ],
+    "outcomes": [
+     "Using the configured spelling follows the changed link and operates in B.",
+     "Using the resolved checked path continues operating in A."
+    ],
+    "observer": "The owner sees different backup files listed, created, or deleted."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"data_provider table models\",\"kind\":\"contradictory_count\",\"text\":\"`models`, for exactly the row models and enumerations of its three tables:\",\"question\":\"Does `data_provider` have three table constants or the five subsequently listed, and must the description and dependency surface name the same set?\",\"options\":[\"Change “three” to “five” and keep all five listed table models\",\"Treat only the original three as tables and define `PERSONAL_DATA_FIELDS` and `REFUSAL_HTTP_STATUSES` differently\"],\"default_guess\":\"Change “three” to “five” and keep all five listed table models.\"},{\"subject\":\"UPLOAD_FORM_HEAD_MAX_BYTES\",\"kind\":\"missing_constant_value\",\"text\":\"and the bound of the head an upload form sends before its file, its CSRF field among it (A13 rule 5, owner, 2026-11-17).\",\"question\":\"What exact integer value does `UPLOAD_FORM_HEAD_MAX_BYTES` hold?\",\"options\":[\"Declare a fixed byte count in this state\",\"Carry the exact value explicitly to a later state\"],\"default_guess\":\"Declare 65536 bytes.\"},{\"subject\":\"upload head bound\",\"kind\":\"unclear_measurement\",\"text\":\"Reading the body's head alone — the boundary the request's content type names, the first part, which must be the CSRF field, and the second part's headers — at most the data provider's `UPLOAD_FORM_HEAD_MAX_BYTES`\",\"question\":\"Which received bytes count toward the bound, and at exactly what byte is the head considered complete: through the second part's header terminator, including delimiters and look-ahead, or by another definition?\",\"options\":[\"Count every body byte through the blank line ending the file part's headers\",\"Exclude multipart delimiters and parser look-ahead\",\"Bound only the first part\"],\"default_guess\":\"Count every received body byte from the initial boundary through the blank line ending the file part's headers, inclusive.\"},{\"subject\":\"upload_framing multipart acceptance\",\"kind\":\"unspecified_syntax\",\"text\":\"The multipart syntax: boundaries, part headers, the look-ahead for the closing delimiter.\",\"question\":\"What exact multipart grammar is accepted, including quoted boundaries, header-name casing, transfer encodings, duplicate headers, preamble or epilogue, and line endings?\",\"options\":[\"Accept the applicable standard multipart/form-data grammar with explicitly listed restrictions\",\"Accept only one canonical encoding emitted by `owner_interface`\",\"Delegate acceptance to a named parser with a fixed version and configuration\"],\"default_guess\":\"Accept only the canonical multipart/form-data encoding emitted by `owner_interface`, with CRLF, no transfer encoding, and unique required headers.\"},{\"subject\":\"upload form part structure\",\"kind\":\"unspecified_cardinality\",\"text\":\"an upload form sends its CSRF field as the first part of its body and the file as the second\",\"question\":\"Must the body contain exactly those two parts, or may it contain duplicate CSRF fields, additional fields, or parts after the file, and what outcome does each deviation produce?\",\"options\":[\"Require exactly two parts in that order\",\"Require those first two parts but ignore later parts\",\"Allow arbitrary fields while selecting the first matching CSRF and file parts\"],\"default_guess\":\"Require exactly two parts in that order and refuse every deviation as missing or invalid CSRF protection.\"},{\"subject\":\"import upload declared length\",\"kind\":\"contradictory_length\",\"text\":\"hands the file part on as the request's declared length and an unread stream that ends where the part ends\",\"question\":\"Is the length passed to A19 the HTTP request Content-Length, which covers the whole multipart body, or a declared length of the file part, and what happens when no trustworthy file-part length exists?\",\"options\":[\"Pass the whole request Content-Length\",\"Pass a validated Content-Length header of the file part\",\"Pass no declared file length and let `migration_import` enforce the limit from streamed bytes\",\"Subtract framing bytes from the whole request length\"],\"default_guess\":\"Pass a validated file-part length when one exists; otherwise pass no declared length and enforce the limit from streamed file bytes.\",\"witness\":{\"initial\":\"An upload contains a file of exactly `IMPORT_FILE_MAX_BYTES` bytes plus a non-empty multipart head and closing delimiter.\",\"events\":[\"The owner submits the upload form.\",\"`owner_interface` asks `upload_framing` for the head and file stream.\",\"The length is handed to `migration_import`, which applies A19 rule 4.\"],\"outcomes\":[\"If the request Content-Length is handed on, it exceeds the file limit and the upload is refused before the file is read.\",\"If the file-part length or no declared length is handed on, the exactly-at-limit file is read and accepted.\"],\"observer\":\"The owner submitting the import sees refusal versus an import mapping.\"}},{\"subject\":\"upload stream lifetime\",\"kind\":\"missing_resource_owner\",\"text\":\"the file part's bytes as a stream that ends where the part ends, read only when its reader asks and never buffered beyond the delimiter it must look ahead for.\",\"question\":\"Which module owns closing or draining this stream and the remainder of the request body after acceptance, refusal, cancellation, parser failure, or an early size-limit refusal?\",\"options\":[\"`upload_framing` owns cleanup through an explicit close operation\",\"`owner_interface` owns cleanup after `operations` returns\",\"`migration_import` must always consume or close it\",\"The HTTP server discards the connection whenever the stream is not exhausted\"],\"default_guess\":\"`owner_interface` owns a closeable stream and always closes it; the transport closes the connection if unread request bytes remain.\"},{\"subject\":\"RegistryStore\",\"kind\":\"missing_type_owner\",\"text\":\"`store` keeps the `RegistryStore` `open_store` opened for the process and gives it to the module that runs an action's transaction\",\"question\":\"Which module owns and exports the `RegistryStore` type, and may consumers name that type directly?\",\"options\":[\"`store` owns and exports `RegistryStore`\",\"`models` owns the interface while `store` implements it\",\"The handle is opaque and no consumer names its concrete type\"],\"default_guess\":\"`store` owns `RegistryStore`, but consumers receive it as an opaque store-owned interface.\"},{\"subject\":\"opened_store\",\"kind\":\"unspecified_lifecycle\",\"text\":\"opened_store\",\"question\":\"What does `opened_store` do before `open_store` succeeds, after a failed start, during shutdown, or after the store has been closed, and can `open_store` replace an already kept handle?\",\"options\":[\"Raise a defined internal lifecycle error outside the single open interval\",\"Return an optional handle\",\"Allow replacing the kept handle on another successful open\"],\"default_guess\":\"Permit exactly one successful open per process; outside its open interval `opened_store` raises a defined internal lifecycle error.\"},{\"subject\":\"owner session cookie security\",\"kind\":\"contradiction\",\"text\":\"from the address it checked, whether the owner interface listens on an address other than a loopback one, which makes the session cookie HTTPS-only\",\"question\":\"How can bind-address class decide A13's rule that the cookie is sent only over HTTPS when the interface is reached from another machine, especially when TLS terminates at a proxy or VPN endpoint and Registry listens on loopback?\",\"options\":[\"Derive `Secure` from the externally visible request scheme using trusted proxy configuration\",\"Configure explicitly whether the owner surface is HTTPS\",\"Keep bind-address inference and forbid externally reachable loopback deployments\"],\"default_guess\":\"Configure a trusted external HTTPS mode explicitly and set `Secure` from that checked setting.\",\"witness\":{\"initial\":\"Registry listens on `127.0.0.1` behind an HTTPS reverse proxy reached from the owner's other machine.\",\"events\":[\"The owner connects to the proxy over HTTPS.\",\"The proxy forwards the request to Registry's loopback listener.\",\"`configuration` classifies the listener as loopback and `owner_interface` creates the session cookie.\"],\"outcomes\":[\"The new State 3 rule omits the HTTPS-only setting because the bind address is loopback.\",\"A13 rule 1 requires the cookie to be HTTPS-only because the interface was reached from another machine.\"],\"observer\":\"The owner's browser and a security reviewer see the missing `Secure` attribute.\"}},{\"subject\":\"loopback address classification\",\"kind\":\"undefined_predicate\",\"text\":\"an address other than a loopback one\",\"question\":\"Which configured IPv4 and IPv6 addresses count as loopback: only `127.0.0.1` and `::1`, all of `127.0.0.0/8` and `::1`, or another explicitly defined set; how are wildcard addresses classified?\",\"options\":[\"Use the platform IP-address library's loopback predicate and classify wildcard addresses as non-loopback\",\"Recognize only `127.0.0.1` and `::1`\",\"List the accepted loopback literals explicitly\"],\"default_guess\":\"Use the IP-address library's loopback predicate; treat `0.0.0.0` and `::` as non-loopback.\"},{\"subject\":\"session cookie rule ownership\",\"kind\":\"overlapping_ownership\",\"text\":\"the session, its cookie rules and its limits\",\"question\":\"Does `owner_sessions` own all cookie policy, or does `configuration` own the Secure-policy decision while `owner_interface` owns cookie construction and emission?\",\"options\":[\"`owner_sessions` owns policy; configuration supplies only checked deployment facts\",\"`configuration` owns the Secure decision and `owner_interface` owns all other cookie attributes\",\"`owner_interface` owns cookie policy using facts from the other modules\"],\"default_guess\":\"`owner_sessions` owns the cookie policy, `configuration` supplies the checked external-transport fact, and `owner_interface` only emits the cookie.\"},{\"subject\":\"PERSONAL_DATA_FIELDS\",\"kind\":\"underspecified_table_key\",\"text\":\"`data_provider`'s `PERSONAL_DATA_FIELDS`, of (answer model, field) pairs\",\"question\":\"How does a pair identify personal facts inside nested objects and collections, and is the field component a top-level name, a schema path, or a reference to the underlying domain-model field?\",\"options\":[\"Use full schema paths into answer models\",\"Classify only top-level answer fields, making a containing field personal when any nested value is personal\",\"Reference domain-model fields and derive answer paths from contracts\"],\"default_guess\":\"Use full schema paths into each answer model and validate them against the final contract schemas.\"},{\"subject\":\"answer disclosure computation\",\"kind\":\"undefined_value_presence\",\"text\":\"`personal_data` when one of those fields holds a value\",\"question\":\"What counts as a field holding a value for disclosure classification: field presence, a non-null value, a non-empty collection, or a nested personal fact, and how are explicit absent markers classified?\",\"options\":[\"Personal whenever the field is present, including null or an absent marker\",\"Personal only when an actual personal value is present\",\"Use a static class per answer schema regardless of runtime absence\"],\"default_guess\":\"Classify as personal only when an actual personal fact is present; null and explicit absence markers do not count.\",\"witness\":{\"initial\":\"A customer's billing record has no tax id and no legal name, and the billing answer marks both as absent.\",\"events\":[\"PresuPro requests the billing read.\",\"The customer module builds the answer with the required absence representation.\",\"`operations` computes its disclosure class from `PERSONAL_DATA_FIELDS`.\"],\"outcomes\":[\"Treating field presence as holding a value makes the answer `personal_data`.\",\"Treating only a recorded fiscal value as holding a value makes the answer `business_confidential`.\"],\"observer\":\"Authorization tests and any caller whose highest class differs between the two outcomes see acceptance versus refusal.\"}},{\"subject\":\"SERVICE_AGENT_SESSION_HEADER\",\"kind\":\"missing_constant_value\",\"text\":\"the header that names Kernel's agent session (R0-53)\",\"question\":\"What exact HTTP header name does `SERVICE_AGENT_SESSION_HEADER` contain, including its canonical spelling?\",\"options\":[\"Declare the exact header name in State 3\",\"Carry the exact header name explicitly to States 5 and 6\"],\"default_guess\":\"Declare `X-Registry-Agent-Session`.\"},{\"subject\":\"agent session header applicability\",\"kind\":\"unclear_transport_rule\",\"text\":\"reading the token, the session header and the request\",\"question\":\"Is the agent-session header required only for Cabinet Kernel operations that require a registered session, optional and ignored for other services, or required on every service request?\",\"options\":[\"Require it only for Kernel operations other than session registration as their rules demand\",\"Parse it when present but ignore it for non-Kernel services\",\"Require it on every service API request\"],\"default_guess\":\"Require it only on Kernel operations whose A10 check names a session; ignore or reject it by an explicit rule on other services.\",\"witness\":{\"initial\":\"PresuPro has a valid token and sends `validate` without an agent-session header.\",\"events\":[\"PresuPro calls the service API.\",\"`service_api` reads the token and request.\"],\"outcomes\":[\"If the listed session header is universally required, the request is refused before `operations`.\",\"If it applies only to agent authority, `operations` validates the project normally.\"],\"observer\":\"PresuPro sees refusal versus the validation answer.\"}},{\"subject\":\"service answer kind field\",\"kind\":\"ambiguous_wire_contract\",\"text\":\"the answer's fields with no kind on the wire\",\"question\":\"Does “kind” mean only an internal answer-discriminator field, or does it also remove domain fields named `kind`, such as the Customer kind required by the billing read and the Object kind?\",\"options\":[\"Omit only an internal response-envelope discriminator\",\"Omit every field literally named `kind`\",\"Rename the discriminator so domain `kind` fields remain unambiguous\"],\"default_guess\":\"Omit only an internal response-envelope discriminator and retain every domain field named `kind`.\",\"witness\":{\"initial\":\"A company Customer has recorded billing data and its Customer kind is `company`.\",\"events\":[\"PresuPro requests the customer's billing data.\",\"The customer module builds the answer required by R0-83.\",\"`service_api` serializes it under the “no kind on the wire” rule.\"],\"outcomes\":[\"Reading the phrase literally removes the Customer's `kind` field.\",\"Reading it as an envelope rule preserves the Customer's `kind` field as R0-83 requires.\"],\"observer\":\"PresuPro sees two different billing contracts.\"}},{\"subject\":\"give_backup_location\",\"kind\":\"unclear_path_identity\",\"text\":\"the backup location, through `configuration.give_backup_location`\",\"question\":\"Does this capability return the original configured path or the canonical absolute path with symbolic links resolved during A17's checks, and which path must later file operations use?\",\"options\":[\"Return and use the resolved canonical path\",\"Return and use the original configured path after validation\",\"Return both the configured and resolved paths with distinct purposes\"],\"default_guess\":\"Return and use the resolved canonical absolute path.\",\"witness\":{\"initial\":\"The configured backup location is a symbolic link to directory A and passes startup checks.\",\"events\":[\"After startup, the host administrator retargets the link to directory B.\",\"An operation asks `configuration.give_backup_location` and accesses backups.\"],\"outcomes\":[\"Using the configured spelling follows the changed link and operates in B.\",\"Using the resolved checked path continues operating in A.\"],\"observer\":\"The owner sees different backup files listed, created, or deleted.\"}}]}",
+ "set_aside": []
+}

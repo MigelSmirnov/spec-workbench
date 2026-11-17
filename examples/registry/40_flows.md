@@ -235,10 +235,8 @@ rule 7).
    sign-in reading, no pending confirmation, no uploaded file. Other open
    sessions stay. `module:owner_interface` sets the cookie — not readable by
    scripts, sent only to Registry's origin, and only over HTTPS when the
-   interface is reached from another machine (A13 rule 1), which
-   `capability:configuration.give_owner_cookie_secure` answers: the owner
-   interface listens on an address other than a loopback one (owner,
-   2026-11-17).
+   interface is reached from another machine (A13 rule 1): Registry always
+   marks it HTTPS-only (owner, 2026-11-17).
 2. **Every request of the session.** `capability:owner_sessions.admit_owner_request`
    checks at arrival that the cookie names a session that has reached no
    limit — 8 hours from sign-in, 30 minutes without an owner request, not

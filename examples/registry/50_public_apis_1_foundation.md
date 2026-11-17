@@ -417,15 +417,18 @@ unread (A13 rules 5, 7; owner, 2026-11-17).
 
 ### Inputs
 
-The request's unread body stream and its content type.
+The request's unread body stream, its content type and its declared length,
+or that it declared none.
 
 ### Outputs
 
-The CSRF value the first part carries and the delimiter that ends the file
-part; or that the head is not of that form — no multipart content type or
+The CSRF value the first part carries, the delimiter that ends the file
+part, and the file part's declared length — the request's declared length
+less the head it read and the closing delimiter with its final `--` and line
+end, or none when the request declared none; or that the head is not of that form — no multipart content type or
 boundary, a first part that is not the CSRF field, no second part that is
 the file — or is longer than the imported `UPLOAD_FORM_HEAD_MAX_BYTES`
-constant, with neither value.
+constant, with none of these values.
 
 ### Observable effect
 
@@ -696,47 +699,6 @@ The location is the one of this start's `load_configuration`, never read
 again from the environment, so a changed location takes effect at the next
 start (A17 rule 7). It is not a secret: `instance_lifecycle` also receives
 it from `load_configuration`.
-
-### Errors
-
-None: after a start whose `load_configuration` passed, it always answers.
-
-### State impact
-
-Reads the process's memory; touches no file and no record.
-
-## `public_op:configuration.give_owner_cookie_secure`
-
-### Owner
-
-`module:configuration`. Answer whether the owner session's cookie is sent
-only over HTTPS (A13 rule 1; owner, 2026-11-17).
-
-### Callers
-
-`module:owner_interface`.
-
-### Inputs
-
-None.
-
-### Outputs
-
-True when the owner interface's checked address has a host other than a
-loopback address — `127.0.0.0/8` for IPv4, `::1` for IPv6 — and false when
-its host is a loopback address.
-
-### Observable effect
-
-None.
-
-### Enforces
-
-A13 rule 1: the interface is reached from another machine only through an
-address other than a loopback one, so the cookie is HTTPS-only exactly then.
-The HTTPS that carries the interface is the host's (Explicit exclusions):
-Registry sets the cookie's flag and serves plain HTTP on its listener. It is
-answered from this start's checked address and never from a request.
 
 ### Errors
 
