@@ -1,0 +1,141 @@
+{
+ "open_points": [
+  {
+   "subject": "40_flows.md:Status",
+   "kind": "missing failure route",
+   "text": "the service API reads the token and the request and hands them to `operations`",
+   "question": "When the framing headers were accepted but the service API cannot finish reading or decoding the request body, does it still call `operations`, with what representation of the failed or partially read request, and which module produces the failure answer?",
+   "options": [
+    "Hand a body-read failure to `operations`, which performs stage (1) before producing the body/value refusal",
+    "Discard all body values and hand an empty request to `operations`",
+    "Keep successfully decoded values and hand the partial request to `operations`",
+    "Have `service_api` refuse before `operations` is called",
+    "Abort the request without an operation answer"
+   ],
+   "default_guess": "Hand an explicit body-read failure to `operations`, discard partial values, run authentication and rights first, then return the declared unreadable-request refusal.",
+   "witness": {
+    "initial": "A service connection has accepted framing headers; the presented token is wrong and the framed body ends early.",
+    "events": [
+     "The service sends the request.",
+     "`instance_lifecycle` accepts its headers and exposes the body stream.",
+     "`service_api` encounters the stream failure before it can hand a complete request to `operations`."
+    ],
+    "outcomes": [
+     "`service_api` refuses or aborts for the unreadable body before the token is checked.",
+     "The failure is handed to `operations`; stage (1) checks the token first and returns the authentication refusal."
+    ],
+    "observer": "The calling service sees which refusal wins, or whether it receives an answer at all."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:Status",
+   "kind": "missing failure outcome",
+   "text": "the owner interface reads the cookie, the CSRF value and the form and hands them to `operations`",
+   "question": "When an ordinary owner form cannot be completely read or decoded, what values are handed to `operations`, what failure is returned, and how is A13's required session admission and idle-time restart performed?",
+   "options": [
+    "Admit the request, restart the valid session's idle period, discard all form values, and refuse it as lacking CSRF",
+    "Admit the request, preserve a successfully read CSRF value, and refuse the malformed or missing action values at their normal stage",
+    "Refuse in `owner_interface` before `operations` or `owner_sessions` is called",
+    "Close or abort without an answer"
+   ],
+   "default_guess": "Call `operations` with an explicit failed-form result, admit and refresh a valid session, discard every partially decoded form value, then return the stage-(1) missing-CSRF refusal.",
+   "witness": {
+    "initial": "The owner has a valid session that is near its 30-minute idle limit and submits a change form whose body fails after some fields have been read.",
+    "events": [
+     "The owner interface reads the cookie.",
+     "It reads part of the form and then encounters a body or form-decoding failure.",
+     "A later owner request arrives after the old idle deadline but within 30 minutes of the failed submission."
+    ],
+    "outcomes": [
+     "The failed submission is admitted as an owner request, restarts the idle period, and the later request is served.",
+     "The surface rejects the failed submission before session admission, so the idle period is not restarted and the later request is refused as expired."
+    ],
+    "observer": "The owner sees whether the later request remains signed in; the failed submission may also show a CSRF refusal, a malformed-form refusal, or no answer."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:Status",
+   "kind": "missing upload-head route",
+   "text": "an upload, whose form sends its CSRF value before its file (A19 rule 4), arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read",
+   "question": "If the upload's multipart head or its stream fails before the head has been completely read, which module and capability handle that pre-arrival failure, what answer is produced, and is any partially read CSRF value used or discarded?",
+   "options": [
+    "`owner_interface` produces an unreadable-upload-head refusal without admitting an owner request",
+    "`instance_lifecycle` treats it as a body-stream failure and aborts the request",
+    "The partial head is handed to `operations`, which performs the owner-session and CSRF checks",
+    "A successfully decoded CSRF field makes the upload arrive even though the rest of the head failed"
+   ],
+   "default_guess": "Treat the upload as not yet arrived, discard the partial head, have `owner_interface` return a specific unreadable-upload-head refusal, and do not touch the owner session.",
+   "witness": {
+    "initial": "A valid owner session has a pending confirmation and an uploaded file; a new multipart upload contains the CSRF field but its framing fails before the file part begins.",
+    "events": [
+     "The owner sends the replacement upload.",
+     "The reader obtains the CSRF field and then fails before completing the upload head."
+    ],
+    "outcomes": [
+     "The request never reaches session admission; the pending confirmation, existing upload, and idle time remain unchanged.",
+     "The decoded CSRF value is enough to admit the request; the session idle time is restarted and subsequent handling may change or consume session state."
+    ],
+    "observer": "The owner sees later whether the session expired and whether its prior confirmation and uploaded file remain usable."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:Status",
+   "kind": "unnamed upload failure step",
+   "text": "Registry reads it as data (A19) and answers, without changing anything, each project the file holds with its id and status.",
+   "question": "After an upload head has been admitted, which module capability reads the file-part stream, which caller invokes it, and what exact failure does it return if the stream becomes unreadable before the file is complete?",
+   "options": [
+    "`owner_interface` reads the stream and returns an unreadable-upload refusal",
+    "`operations` calls a `migration_import` capability that reads the stream and returns an unreadable-file refusal",
+    "`instance_lifecycle` owns the stream failure and aborts without a Registry refusal",
+    "The partially received file is treated as a parseable file and normal import-format validation decides the result"
+   ],
+   "default_guess": "`operations` calls a named `migration_import` upload-reading capability; it returns an unreadable-file refusal, keeps no partial file, and leaves the session's earlier uploaded file unchanged.",
+   "witness": {
+    "initial": "The owner has a valid session containing upload A and begins uploading replacement B with a valid cookie, CSRF value, and readable multipart head.",
+    "events": [
+     "The request passes the owner-session and CSRF checks, restarting the idle period.",
+     "The file-part stream for B fails after some bytes.",
+     "The owner asks to show the mapping."
+    ],
+    "outcomes": [
+     "The upload operation returns an unreadable-file refusal and preserves A, so the mapping still describes A.",
+     "A partial B replaces A or is passed to format validation, so the mapping describes B or reports B's malformed records."
+    ],
+    "observer": "The owner sees which file remains in the session and which failure is reported."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:Status",
+   "kind": "missing connection disposition",
+   "text": "a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it",
+   "question": "After any surface's body reader receives this failure, does Registry attempt to send the operation's refusal, and must it close the connection or may it keep the connection alive?",
+   "options": [
+    "Attempt to send the refusal, then always close the connection",
+    "Close immediately without attempting an answer",
+    "Send the refusal and keep the connection alive",
+    "Let each surface or failure choose independently"
+   ],
+   "default_guess": "Attempt to send the refusal if the connection can still take it, then always close the connection because the request-body boundary can no longer be trusted.",
+   "witness": {
+    "initial": "A persistent HTTP connection carries a request whose accepted framing promises more body bytes than arrive, followed by bytes the client intends as another request.",
+    "events": [
+     "The surface's reader receives a premature-end failure.",
+     "The client waits for the first response and then attempts another request on the same connection."
+    ],
+    "outcomes": [
+     "Registry sends the first request's refusal and closes the connection; the client reconnects for the next request.",
+     "Registry keeps the connection alive, so the next bytes may be accepted as another request or the connection may remain blocked or desynchronised."
+    ],
+    "observer": "The HTTP client sees the response and whether the connection remains reusable; Registry may also observe different subsequent requests."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"40_flows.md:Status\",\"kind\":\"missing failure route\",\"text\":\"the service API reads the token and the request and hands them to `operations`\",\"question\":\"When the framing headers were accepted but the service API cannot finish reading or decoding the request body, does it still call `operations`, with what representation of the failed or partially read request, and which module produces the failure answer?\",\"options\":[\"Hand a body-read failure to `operations`, which performs stage (1) before producing the body/value refusal\",\"Discard all body values and hand an empty request to `operations`\",\"Keep successfully decoded values and hand the partial request to `operations`\",\"Have `service_api` refuse before `operations` is called\",\"Abort the request without an operation answer\"],\"default_guess\":\"Hand an explicit body-read failure to `operations`, discard partial values, run authentication and rights first, then return the declared unreadable-request refusal.\",\"witness\":{\"initial\":\"A service connection has accepted framing headers; the presented token is wrong and the framed body ends early.\",\"events\":[\"The service sends the request.\",\"`instance_lifecycle` accepts its headers and exposes the body stream.\",\"`service_api` encounters the stream failure before it can hand a complete request to `operations`.\"],\"outcomes\":[\"`service_api` refuses or aborts for the unreadable body before the token is checked.\",\"The failure is handed to `operations`; stage (1) checks the token first and returns the authentication refusal.\"],\"observer\":\"The calling service sees which refusal wins, or whether it receives an answer at all.\"}},{\"subject\":\"40_flows.md:Status\",\"kind\":\"missing failure outcome\",\"text\":\"the owner interface reads the cookie, the CSRF value and the form and hands them to `operations`\",\"question\":\"When an ordinary owner form cannot be completely read or decoded, what values are handed to `operations`, what failure is returned, and how is A13's required session admission and idle-time restart performed?\",\"options\":[\"Admit the request, restart the valid session's idle period, discard all form values, and refuse it as lacking CSRF\",\"Admit the request, preserve a successfully read CSRF value, and refuse the malformed or missing action values at their normal stage\",\"Refuse in `owner_interface` before `operations` or `owner_sessions` is called\",\"Close or abort without an answer\"],\"default_guess\":\"Call `operations` with an explicit failed-form result, admit and refresh a valid session, discard every partially decoded form value, then return the stage-(1) missing-CSRF refusal.\",\"witness\":{\"initial\":\"The owner has a valid session that is near its 30-minute idle limit and submits a change form whose body fails after some fields have been read.\",\"events\":[\"The owner interface reads the cookie.\",\"It reads part of the form and then encounters a body or form-decoding failure.\",\"A later owner request arrives after the old idle deadline but within 30 minutes of the failed submission.\"],\"outcomes\":[\"The failed submission is admitted as an owner request, restarts the idle period, and the later request is served.\",\"The surface rejects the failed submission before session admission, so the idle period is not restarted and the later request is refused as expired.\"],\"observer\":\"The owner sees whether the later request remains signed in; the failed submission may also show a CSRF refusal, a malformed-form refusal, or no answer.\"}},{\"subject\":\"40_flows.md:Status\",\"kind\":\"missing upload-head route\",\"text\":\"an upload, whose form sends its CSRF value before its file (A19 rule 4), arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read\",\"question\":\"If the upload's multipart head or its stream fails before the head has been completely read, which module and capability handle that pre-arrival failure, what answer is produced, and is any partially read CSRF value used or discarded?\",\"options\":[\"`owner_interface` produces an unreadable-upload-head refusal without admitting an owner request\",\"`instance_lifecycle` treats it as a body-stream failure and aborts the request\",\"The partial head is handed to `operations`, which performs the owner-session and CSRF checks\",\"A successfully decoded CSRF field makes the upload arrive even though the rest of the head failed\"],\"default_guess\":\"Treat the upload as not yet arrived, discard the partial head, have `owner_interface` return a specific unreadable-upload-head refusal, and do not touch the owner session.\",\"witness\":{\"initial\":\"A valid owner session has a pending confirmation and an uploaded file; a new multipart upload contains the CSRF field but its framing fails before the file part begins.\",\"events\":[\"The owner sends the replacement upload.\",\"The reader obtains the CSRF field and then fails before completing the upload head.\"],\"outcomes\":[\"The request never reaches session admission; the pending confirmation, existing upload, and idle time remain unchanged.\",\"The decoded CSRF value is enough to admit the request; the session idle time is restarted and subsequent handling may change or consume session state.\"],\"observer\":\"The owner sees later whether the session expired and whether its prior confirmation and uploaded file remain usable.\"}},{\"subject\":\"40_flows.md:Status\",\"kind\":\"unnamed upload failure step\",\"text\":\"Registry reads it as data (A19) and answers, without changing anything, each project the file holds with its id and status.\",\"question\":\"After an upload head has been admitted, which module capability reads the file-part stream, which caller invokes it, and what exact failure does it return if the stream becomes unreadable before the file is complete?\",\"options\":[\"`owner_interface` reads the stream and returns an unreadable-upload refusal\",\"`operations` calls a `migration_import` capability that reads the stream and returns an unreadable-file refusal\",\"`instance_lifecycle` owns the stream failure and aborts without a Registry refusal\",\"The partially received file is treated as a parseable file and normal import-format validation decides the result\"],\"default_guess\":\"`operations` calls a named `migration_import` upload-reading capability; it returns an unreadable-file refusal, keeps no partial file, and leaves the session's earlier uploaded file unchanged.\",\"witness\":{\"initial\":\"The owner has a valid session containing upload A and begins uploading replacement B with a valid cookie, CSRF value, and readable multipart head.\",\"events\":[\"The request passes the owner-session and CSRF checks, restarting the idle period.\",\"The file-part stream for B fails after some bytes.\",\"The owner asks to show the mapping.\"],\"outcomes\":[\"The upload operation returns an unreadable-file refusal and preserves A, so the mapping still describes A.\",\"A partial B replaces A or is passed to format validation, so the mapping describes B or reports B's malformed records.\"],\"observer\":\"The owner sees which file remains in the session and which failure is reported.\"}},{\"subject\":\"40_flows.md:Status\",\"kind\":\"missing connection disposition\",\"text\":\"a body that ends before its framing says, or whose chunks are malformed, is a failure of the stream its reader sees while reading it\",\"question\":\"After any surface's body reader receives this failure, does Registry attempt to send the operation's refusal, and must it close the connection or may it keep the connection alive?\",\"options\":[\"Attempt to send the refusal, then always close the connection\",\"Close immediately without attempting an answer\",\"Send the refusal and keep the connection alive\",\"Let each surface or failure choose independently\"],\"default_guess\":\"Attempt to send the refusal if the connection can still take it, then always close the connection because the request-body boundary can no longer be trusted.\",\"witness\":{\"initial\":\"A persistent HTTP connection carries a request whose accepted framing promises more body bytes than arrive, followed by bytes the client intends as another request.\",\"events\":[\"The surface's reader receives a premature-end failure.\",\"The client waits for the first response and then attempts another request on the same connection.\"],\"outcomes\":[\"Registry sends the first request's refusal and closes the connection; the client reconnects for the next request.\",\"Registry keeps the connection alive, so the next bytes may be accepted as another request or the connection may remain blocked or desynchronised.\"],\"observer\":\"The HTTP client sees the response and whether the connection remains reusable; Registry may also observe different subsequent requests.\"}}]}",
+ "set_aside": []
+}

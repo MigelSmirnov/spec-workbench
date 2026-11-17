@@ -1,0 +1,111 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "service request body-read failure",
+   "kind": "unstated failure outcome",
+   "text": "the service API reads the token and the request and hands them to `operations`",
+   "question": "When accepted framing is followed by a body-stream failure, who handles it, what failure reaches the service, and is the connection closed?",
+   "options": [
+    "The service API hands the token and an empty request to `operations`, sends its refusal if possible, then closes the connection.",
+    "The service API produces a transport-level refusal itself and closes the connection.",
+    "The failed stream closes the connection without an answer and never reaches `operations`."
+   ],
+   "default_guess": "Hand the token and an empty request to `operations`, send the resulting refusal if possible, then close the connection.",
+   "witness": {
+    "initial": "A service has a valid token and opens a request whose framing headers are accepted but whose body ends early.",
+    "events": [
+     "The listener hands the body stream to the service API.",
+     "The service API reads the token and begins reading the request.",
+     "The body stream fails before the request values are complete."
+    ],
+    "outcomes": [
+     "`operations` receives an empty request and returns the first applicable refusal before the connection is closed.",
+     "`operations` is never called; the connection ends with either a transport refusal or no answer."
+    ],
+    "observer": "The calling service sees a Registry refusal in one implementation and a transport failure in the other."
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "owner form body-read failure",
+   "kind": "unnamed failure path",
+   "text": "the owner interface reads the cookie, the CSRF value and the form and hands them to `operations`",
+   "question": "If an ordinary owner form cannot be read after its request arrives, must the owner interface still call `operations` so `owner_sessions.admit_owner_request` checks and refreshes a valid session, and what answer and connection disposition follow?",
+   "options": [
+    "Hand the cookie with no CSRF value and no form values to `operations`; a valid session is refreshed, the change is refused for missing CSRF, the answer is sent if possible, and the connection is closed.",
+    "Reject the unreadable form in the owner interface without calling `operations`, then close the connection.",
+    "Close the connection without an answer or session processing."
+   ],
+   "default_guess": "Hand the cookie and empty values to `operations`, refresh any valid session, return the missing-CSRF refusal if possible, then close the connection.",
+   "witness": {
+    "initial": "An owner session is valid but nearly at its 30-minute idle limit.",
+    "events": [
+     "The owner submits a changing form with the valid session cookie.",
+     "The request arrives while the session is valid.",
+     "The accepted body framing ends early before the CSRF field or other form values can be read."
+    ],
+    "outcomes": [
+     "The request reaches `owner_sessions`; the idle period restarts and the owner receives a missing-CSRF refusal.",
+     "The surface rejects or drops the unreadable body before `owner_sessions`; the idle period does not restart and the session expires."
+    ],
+    "observer": "The owner sees whether the session remains usable after the failed submission."
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "upload admission and handoff",
+   "kind": "contradictory step timing",
+   "text": "the owner interface reads the cookie, the CSRF value and the form and hands them to `operations`; an upload, whose form sends its CSRF value before its file, arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read",
+   "question": "Does the owner interface hand an upload to `operations` immediately after reading its head so the session check occurs before the file is streamed, or only after it has read the entire form?",
+   "options": [
+    "Hand off after the bounded head; `operations` admits the owner request and the file is then streamed under the import and session locks.",
+    "Read the entire multipart form in the owner interface and hand it to `operations` only after the file has completed.",
+    "Have the owner interface call `owner_sessions` at the head and later call `operations` with the completed form."
+   ],
+   "default_guess": "Hand the request to `operations` after the bounded head and stream the file only after the owner-session and CSRF checks pass.",
+   "witness": {
+    "initial": "A valid owner session has one second left before its idle limit, and the owner starts a slow import upload.",
+    "events": [
+     "The owner interface reads the cookie, CSRF field and bounded upload head while the session is valid.",
+     "The file takes several seconds to arrive, crossing the idle limit.",
+     "The upload completes without any stream error."
+    ],
+    "outcomes": [
+     "Admission occurs at the head, so the request passes and completes even though the limit is crossed while the file streams.",
+     "Admission occurs after the full form is read, so the session is then expired and the upload is refused."
+    ],
+    "observer": "The owner sees the same upload accepted in one implementation and refused for an expired session in the other."
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "upload file-stream failure after admission",
+   "kind": "unnamed owner and failure",
+   "text": "the owner interface reads the cookie, the CSRF value and the form and hands them to `operations`",
+   "question": "After an upload head has passed the owner-session and CSRF checks, which module capability reads the file stream, which failure does a later stream error produce, how is it rendered, and when is the connection closed?",
+   "options": [
+    "`operations` hands the stream to a `migration_import` capability, which produces an unreadable-file refusal; the prior uploaded file remains, the refusal is rendered, and the connection is closed.",
+    "The owner interface owns the remaining stream read and produces a malformed-form refusal before calling an import capability.",
+    "`owner_sessions.keep_uploaded_file` owns the read and reports a generic upload refusal while preserving the prior file."
+   ],
+   "default_guess": "Have `operations` call a `migration_import` file-reading capability; preserve any prior uploaded file, render an unreadable-file refusal, then close the connection.",
+   "witness": {
+    "initial": "A valid owner session already holds upload A, then begins uploading file B with a valid CSRF value.",
+    "events": [
+     "The upload head is read and the owner request is admitted.",
+     "The file part of B begins streaming.",
+     "The stream fails before B is complete."
+    ],
+    "outcomes": [
+     "`migration_import` returns an unreadable-file refusal, upload A remains, the refusal is rendered, and the connection closes.",
+     "The owner interface treats B as a malformed form and returns a different refusal without invoking `migration_import`; upload A still remains."
+    ],
+    "observer": "The owner sees different refusal outcomes, and later contract authors assign the failure to different modules."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:Status\",\"subject\":\"service request body-read failure\",\"kind\":\"unstated failure outcome\",\"text\":\"the service API reads the token and the request and hands them to `operations`\",\"question\":\"When accepted framing is followed by a body-stream failure, who handles it, what failure reaches the service, and is the connection closed?\",\"options\":[\"The service API hands the token and an empty request to `operations`, sends its refusal if possible, then closes the connection.\",\"The service API produces a transport-level refusal itself and closes the connection.\",\"The failed stream closes the connection without an answer and never reaches `operations`.\"],\"default_guess\":\"Hand the token and an empty request to `operations`, send the resulting refusal if possible, then close the connection.\",\"witness\":{\"initial\":\"A service has a valid token and opens a request whose framing headers are accepted but whose body ends early.\",\"events\":[\"The listener hands the body stream to the service API.\",\"The service API reads the token and begins reading the request.\",\"The body stream fails before the request values are complete.\"],\"outcomes\":[\"`operations` receives an empty request and returns the first applicable refusal before the connection is closed.\",\"`operations` is never called; the connection ends with either a transport refusal or no answer.\"],\"observer\":\"The calling service sees a Registry refusal in one implementation and a transport failure in the other.\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"owner form body-read failure\",\"kind\":\"unnamed failure path\",\"text\":\"the owner interface reads the cookie, the CSRF value and the form and hands them to `operations`\",\"question\":\"If an ordinary owner form cannot be read after its request arrives, must the owner interface still call `operations` so `owner_sessions.admit_owner_request` checks and refreshes a valid session, and what answer and connection disposition follow?\",\"options\":[\"Hand the cookie with no CSRF value and no form values to `operations`; a valid session is refreshed, the change is refused for missing CSRF, the answer is sent if possible, and the connection is closed.\",\"Reject the unreadable form in the owner interface without calling `operations`, then close the connection.\",\"Close the connection without an answer or session processing.\"],\"default_guess\":\"Hand the cookie and empty values to `operations`, refresh any valid session, return the missing-CSRF refusal if possible, then close the connection.\",\"witness\":{\"initial\":\"An owner session is valid but nearly at its 30-minute idle limit.\",\"events\":[\"The owner submits a changing form with the valid session cookie.\",\"The request arrives while the session is valid.\",\"The accepted body framing ends early before the CSRF field or other form values can be read.\"],\"outcomes\":[\"The request reaches `owner_sessions`; the idle period restarts and the owner receives a missing-CSRF refusal.\",\"The surface rejects or drops the unreadable body before `owner_sessions`; the idle period does not restart and the session expires.\"],\"observer\":\"The owner sees whether the session remains usable after the failed submission.\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"upload admission and handoff\",\"kind\":\"contradictory step timing\",\"text\":\"the owner interface reads the cookie, the CSRF value and the form and hands them to `operations`; an upload, whose form sends its CSRF value before its file, arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read\",\"question\":\"Does the owner interface hand an upload to `operations` immediately after reading its head so the session check occurs before the file is streamed, or only after it has read the entire form?\",\"options\":[\"Hand off after the bounded head; `operations` admits the owner request and the file is then streamed under the import and session locks.\",\"Read the entire multipart form in the owner interface and hand it to `operations` only after the file has completed.\",\"Have the owner interface call `owner_sessions` at the head and later call `operations` with the completed form.\"],\"default_guess\":\"Hand the request to `operations` after the bounded head and stream the file only after the owner-session and CSRF checks pass.\",\"witness\":{\"initial\":\"A valid owner session has one second left before its idle limit, and the owner starts a slow import upload.\",\"events\":[\"The owner interface reads the cookie, CSRF field and bounded upload head while the session is valid.\",\"The file takes several seconds to arrive, crossing the idle limit.\",\"The upload completes without any stream error.\"],\"outcomes\":[\"Admission occurs at the head, so the request passes and completes even though the limit is crossed while the file streams.\",\"Admission occurs after the full form is read, so the session is then expired and the upload is refused.\"],\"observer\":\"The owner sees the same upload accepted in one implementation and refused for an expired session in the other.\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"upload file-stream failure after admission\",\"kind\":\"unnamed owner and failure\",\"text\":\"the owner interface reads the cookie, the CSRF value and the form and hands them to `operations`\",\"question\":\"After an upload head has passed the owner-session and CSRF checks, which module capability reads the file stream, which failure does a later stream error produce, how is it rendered, and when is the connection closed?\",\"options\":[\"`operations` hands the stream to a `migration_import` capability, which produces an unreadable-file refusal; the prior uploaded file remains, the refusal is rendered, and the connection is closed.\",\"The owner interface owns the remaining stream read and produces a malformed-form refusal before calling an import capability.\",\"`owner_sessions.keep_uploaded_file` owns the read and reports a generic upload refusal while preserving the prior file.\"],\"default_guess\":\"Have `operations` call a `migration_import` file-reading capability; preserve any prior uploaded file, render an unreadable-file refusal, then close the connection.\",\"witness\":{\"initial\":\"A valid owner session already holds upload A, then begins uploading file B with a valid CSRF value.\",\"events\":[\"The upload head is read and the owner request is admitted.\",\"The file part of B begins streaming.\",\"The stream fails before B is complete.\"],\"outcomes\":[\"`migration_import` returns an unreadable-file refusal, upload A remains, the refusal is rendered, and the connection closes.\",\"The owner interface treats B as a malformed form and returns a different refusal without invoking `migration_import`; upload A still remains.\"],\"observer\":\"The owner sees different refusal outcomes, and later contract authors assign the failure to different modules.\"}}]}",
+ "set_aside": []
+}

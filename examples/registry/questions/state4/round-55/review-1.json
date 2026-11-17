@@ -1,0 +1,137 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "service request body-read failure",
+   "kind": "failure outcome",
+   "text": "the service API reads the token and the request and hands them to `operations`",
+   "question": "If the listener accepted the framing headers but the service API cannot finish reading or decoding the request body, does it call `operations`, which failure wins over an invalid token or other stage-(1) failure, and what answer is produced?",
+   "options": [
+    "Hand the token and an absent request to `operations`, so the normal staged checks determine the answer.",
+    "Refuse the unreadable body at the service API before `operations` runs.",
+    "Authenticate the token first, then return a body-unreadable failure only for an otherwise admitted caller."
+   ],
+   "default_guess": "Hand the token and an absent request to `operations`; let stage (1) run first and return the body failure only after admission.",
+   "witness": {
+    "initial": "The listener has accepted a service request's framing headers; its token is wrong and its framed body fails while being read.",
+    "events": [
+     "The service API reads the token.",
+     "The service API encounters the body-stream failure before it can construct the request.",
+     "The service API must decide whether to invoke `operations`."
+    ],
+    "outcomes": [
+     "The caller receives the ordinary wrong-token refusal because `operations` runs stage (1).",
+     "The caller receives a malformed or unreadable-request failure because the surface refuses before `operations`."
+    ],
+    "observer": "The service caller"
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "owner form body-read failure",
+   "kind": "unnamed step",
+   "text": "the owner interface reads the cookie, the CSRF value and the form and hands them to `operations`",
+   "question": "When an ordinary owner form cannot be fully read or decoded, which capability admits the cookie-bearing request, restarts the valid session's 30 minutes, and produces the failure, and are absent CSRF and form values handed to `operations`?",
+   "options": [
+    "Hand the cookie with no CSRF or form values to `operations`; `owner_sessions` admits and refreshes the session, then stage (1) refuses the missing CSRF.",
+    "Call `owner_sessions.admit_owner_request` before parsing, then have the owner interface return an unreadable-form failure.",
+    "Fail in the owner interface without calling a session or operation capability."
+   ],
+   "default_guess": "Hand the cookie and absent values to `operations`, refresh a valid session, and return the missing-CSRF refusal.",
+   "witness": {
+    "initial": "A live owner session is near its idle limit, and the owner submits a change whose form body fails during reading.",
+    "events": [
+     "The owner interface reads the valid session cookie.",
+     "Reading the CSRF field and form fails.",
+     "The request reaches the point at which an implementation must choose whether and how to admit it."
+    ],
+    "outcomes": [
+     "The session's idle time is restarted and the answer is a missing-CSRF refusal.",
+     "The surface returns an unreadable-form failure without admitting the request, so the idle time is not restarted."
+    ],
+    "observer": "The owner, on this response and on the next request when the session either remains live or has expired"
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "upload-head read failure",
+   "kind": "failure outcome",
+   "text": "an upload, whose form sends its CSRF value before its file (A19 rule 4), arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read",
+   "question": "If the listener accepted the framing headers but the upload head ends early, exceeds its head bound, has malformed multipart framing, or otherwise cannot be read, which module produces which refusal, and is the request considered to have arrived for owner-session admission?",
+   "options": [
+    "The owner interface returns an upload-head/body-unreadable refusal without admitting the owner request.",
+    "The owner interface hands the cookie with no CSRF or values to `operations`, which performs the session check and refuses the missing CSRF.",
+    "A named upload parser reports a distinct head-too-large or malformed-head failure through `operations`."
+   ],
+   "default_guess": "Treat an incomplete or malformed head as not yet arrived for session admission, return an upload-head-unreadable refusal, and leave the session runtime state unchanged.",
+   "witness": {
+    "initial": "A valid owner session has a pending confirmation and an earlier uploaded file; a new upload begins but its multipart head fails before the file part is reached.",
+    "events": [
+     "The listener accepts the HTTP framing headers.",
+     "The owner interface begins reading the bounded multipart head.",
+     "The head reader fails before it can supply a complete CSRF field and file-part boundary."
+    ],
+    "outcomes": [
+     "The request is not admitted; the idle timer, pending confirmation, and earlier uploaded file remain unchanged.",
+     "The cookie is admitted through `operations`; the idle timer restarts and the request is refused for missing CSRF, while the other session values remain."
+    ],
+    "observer": "The owner, especially at the idle deadline"
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "upload file-part stream failure",
+   "kind": "unnamed capability",
+   "text": "The owner uploads the export file (R0-72) in the owner interface. Registry reads it as data (A19)",
+   "question": "After a valid upload head has admitted the owner request and the file part's stream then fails, which module capability detects and reports the unreadable file, who calls it, and how is that refusal returned while preserving the previously kept upload?",
+   "options": [
+    "The owner interface detects the stream failure and calls `operations` with an unreadable-upload result.",
+    "`operations` streams the file to a `migration_import` capability that produces the unreadable-file refusal.",
+    "`owner_sessions.keep_uploaded_file` owns the stream read and refuses before replacing the prior upload."
+   ],
+   "default_guess": "Have `operations` call a `migration_import` file-reading capability; return an unreadable-file refusal and preserve the session's earlier upload.",
+   "witness": {
+    "initial": "A valid owner session already keeps upload A; the owner starts upload B with a valid cookie and CSRF value.",
+    "events": [
+     "The upload head is read and the owner request is admitted, restarting the idle period.",
+     "The file part of B yields some bytes and then its stream fails.",
+     "The implementation must assign the failure to a module before deciding whether to replace A."
+    ],
+    "outcomes": [
+     "`migration_import` reports an unreadable file; upload A remains kept and the owner receives the ordinary upload refusal.",
+     "A surface or session implementation treats the partial bytes as B, replaces or clears A, and returns a different parsing failure."
+    ],
+    "observer": "The owner when asking for the mapping after the failed upload"
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "connection disposition after a body-reader failure",
+   "kind": "transport outcome",
+   "text": "each request's body handed on as a stream that ends where HTTP's own framing ends the body",
+   "question": "After a surface or upload reader reports a body-stream failure, must Registry attempt to send the refusal, and must it close the connection or may it reuse the connection when the framing boundary is still known?",
+   "options": [
+    "Attempt to send the refusal if possible, then always close the connection.",
+    "Close immediately without attempting an answer.",
+    "Send the refusal and keep the connection alive when the reader consumed a known complete framing boundary; close only when framing was lost."
+   ],
+   "default_guess": "Attempt the refusal and then close the connection after every body-stream failure.",
+   "witness": {
+    "initial": "A persistent HTTP connection carries a request whose headers were accepted but whose body reader fails; the peer can still receive a response.",
+    "events": [
+     "The reader reports its failure to the surface.",
+     "Registry produces a refusal.",
+     "The client attempts another request on the same connection."
+    ],
+    "outcomes": [
+     "Registry closes after the refusal, so the client reconnects.",
+     "Registry keeps the connection alive and processes the next request."
+    ],
+    "observer": "The owner-interface browser or service HTTP client"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:Status\",\"subject\":\"service request body-read failure\",\"kind\":\"failure outcome\",\"text\":\"the service API reads the token and the request and hands them to `operations`\",\"question\":\"If the listener accepted the framing headers but the service API cannot finish reading or decoding the request body, does it call `operations`, which failure wins over an invalid token or other stage-(1) failure, and what answer is produced?\",\"options\":[\"Hand the token and an absent request to `operations`, so the normal staged checks determine the answer.\",\"Refuse the unreadable body at the service API before `operations` runs.\",\"Authenticate the token first, then return a body-unreadable failure only for an otherwise admitted caller.\"],\"default_guess\":\"Hand the token and an absent request to `operations`; let stage (1) run first and return the body failure only after admission.\",\"witness\":{\"initial\":\"The listener has accepted a service request's framing headers; its token is wrong and its framed body fails while being read.\",\"events\":[\"The service API reads the token.\",\"The service API encounters the body-stream failure before it can construct the request.\",\"The service API must decide whether to invoke `operations`.\"],\"outcomes\":[\"The caller receives the ordinary wrong-token refusal because `operations` runs stage (1).\",\"The caller receives a malformed or unreadable-request failure because the surface refuses before `operations`.\"],\"observer\":\"The service caller\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"owner form body-read failure\",\"kind\":\"unnamed step\",\"text\":\"the owner interface reads the cookie, the CSRF value and the form and hands them to `operations`\",\"question\":\"When an ordinary owner form cannot be fully read or decoded, which capability admits the cookie-bearing request, restarts the valid session's 30 minutes, and produces the failure, and are absent CSRF and form values handed to `operations`?\",\"options\":[\"Hand the cookie with no CSRF or form values to `operations`; `owner_sessions` admits and refreshes the session, then stage (1) refuses the missing CSRF.\",\"Call `owner_sessions.admit_owner_request` before parsing, then have the owner interface return an unreadable-form failure.\",\"Fail in the owner interface without calling a session or operation capability.\"],\"default_guess\":\"Hand the cookie and absent values to `operations`, refresh a valid session, and return the missing-CSRF refusal.\",\"witness\":{\"initial\":\"A live owner session is near its idle limit, and the owner submits a change whose form body fails during reading.\",\"events\":[\"The owner interface reads the valid session cookie.\",\"Reading the CSRF field and form fails.\",\"The request reaches the point at which an implementation must choose whether and how to admit it.\"],\"outcomes\":[\"The session's idle time is restarted and the answer is a missing-CSRF refusal.\",\"The surface returns an unreadable-form failure without admitting the request, so the idle time is not restarted.\"],\"observer\":\"The owner, on this response and on the next request when the session either remains live or has expired\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"upload-head read failure\",\"kind\":\"failure outcome\",\"text\":\"an upload, whose form sends its CSRF value before its file (A19 rule 4), arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read\",\"question\":\"If the listener accepted the framing headers but the upload head ends early, exceeds its head bound, has malformed multipart framing, or otherwise cannot be read, which module produces which refusal, and is the request considered to have arrived for owner-session admission?\",\"options\":[\"The owner interface returns an upload-head/body-unreadable refusal without admitting the owner request.\",\"The owner interface hands the cookie with no CSRF or values to `operations`, which performs the session check and refuses the missing CSRF.\",\"A named upload parser reports a distinct head-too-large or malformed-head failure through `operations`.\"],\"default_guess\":\"Treat an incomplete or malformed head as not yet arrived for session admission, return an upload-head-unreadable refusal, and leave the session runtime state unchanged.\",\"witness\":{\"initial\":\"A valid owner session has a pending confirmation and an earlier uploaded file; a new upload begins but its multipart head fails before the file part is reached.\",\"events\":[\"The listener accepts the HTTP framing headers.\",\"The owner interface begins reading the bounded multipart head.\",\"The head reader fails before it can supply a complete CSRF field and file-part boundary.\"],\"outcomes\":[\"The request is not admitted; the idle timer, pending confirmation, and earlier uploaded file remain unchanged.\",\"The cookie is admitted through `operations`; the idle timer restarts and the request is refused for missing CSRF, while the other session values remain.\"],\"observer\":\"The owner, especially at the idle deadline\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"upload file-part stream failure\",\"kind\":\"unnamed capability\",\"text\":\"The owner uploads the export file (R0-72) in the owner interface. Registry reads it as data (A19)\",\"question\":\"After a valid upload head has admitted the owner request and the file part's stream then fails, which module capability detects and reports the unreadable file, who calls it, and how is that refusal returned while preserving the previously kept upload?\",\"options\":[\"The owner interface detects the stream failure and calls `operations` with an unreadable-upload result.\",\"`operations` streams the file to a `migration_import` capability that produces the unreadable-file refusal.\",\"`owner_sessions.keep_uploaded_file` owns the stream read and refuses before replacing the prior upload.\"],\"default_guess\":\"Have `operations` call a `migration_import` file-reading capability; return an unreadable-file refusal and preserve the session's earlier upload.\",\"witness\":{\"initial\":\"A valid owner session already keeps upload A; the owner starts upload B with a valid cookie and CSRF value.\",\"events\":[\"The upload head is read and the owner request is admitted, restarting the idle period.\",\"The file part of B yields some bytes and then its stream fails.\",\"The implementation must assign the failure to a module before deciding whether to replace A.\"],\"outcomes\":[\"`migration_import` reports an unreadable file; upload A remains kept and the owner receives the ordinary upload refusal.\",\"A surface or session implementation treats the partial bytes as B, replaces or clears A, and returns a different parsing failure.\"],\"observer\":\"The owner when asking for the mapping after the failed upload\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"connection disposition after a body-reader failure\",\"kind\":\"transport outcome\",\"text\":\"each request's body handed on as a stream that ends where HTTP's own framing ends the body\",\"question\":\"After a surface or upload reader reports a body-stream failure, must Registry attempt to send the refusal, and must it close the connection or may it reuse the connection when the framing boundary is still known?\",\"options\":[\"Attempt to send the refusal if possible, then always close the connection.\",\"Close immediately without attempting an answer.\",\"Send the refusal and keep the connection alive when the reader consumed a known complete framing boundary; close only when framing was lost.\"],\"default_guess\":\"Attempt the refusal and then close the connection after every body-stream failure.\",\"witness\":{\"initial\":\"A persistent HTTP connection carries a request whose headers were accepted but whose body reader fails; the peer can still receive a response.\",\"events\":[\"The reader reports its failure to the surface.\",\"Registry produces a refusal.\",\"The client attempts another request on the same connection.\"],\"outcomes\":[\"Registry closes after the refusal, so the client reconnects.\",\"Registry keeps the connection alive and processes the next request.\"],\"observer\":\"The owner-interface browser or service HTTP client\"}}]}",
+ "set_aside": []
+}
