@@ -1,0 +1,134 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "failed upload-head read",
+   "kind": "contradiction",
+   "text": "“an upload's head — hands the request on all the same” contradicts A13 rule 2: “an upload ... arrives when that head ... has been read”",
+   "question": "When the upload head cannot be completely read, has the owner request arrived for session admission and idle-time renewal?",
+   "options": [
+    "Admit it and restart the valid session's 30-minute idle period",
+    "Treat it as not arrived, perform no session check and do not restart the idle period"
+   ],
+   "default_guess": "Treat the changed State 4 rule as controlling: admit it and restart the valid session's idle period.",
+   "witness": {
+    "initial": "A valid owner session is close to its 30-minute idle limit.",
+    "events": [
+     "The owner sends an upload with the valid session cookie.",
+     "The multipart head becomes unreadable before it has been completely read."
+    ],
+    "outcomes": [
+     "State 4 hands the request to the session check and restarts the session's 30 minutes.",
+     "A13 says the upload arrives only when its head has been read, so no request arrives and the 30 minutes are not restarted."
+    ],
+    "observer": "The owner, whose next request is accepted in the first implementation and refused as idle in the second."
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "service request whose body read fails",
+   "kind": "unstated failure outcome",
+   "text": "“a service's as State 5's `serve_service_request` says”",
+   "question": "What failure does `operations` produce for a service request handed on with no values, at which stage is it produced, and does any stage-(3)-to-(6) module receive the call?",
+   "options": [
+    "Refuse at stage (1) with a transport/body-read refusal",
+    "Run authentication and authority checks, then let the operation's first missing-value or missing-record check refuse it",
+    "Close the connection without an operation refusal"
+   ],
+   "default_guess": "Authenticate and check authority, then return a dedicated malformed-body refusal before any record module is called.",
+   "witness": {
+    "initial": "A service has a valid token and is entitled to call a writing operation.",
+    "events": [
+     "The service sends the operation's route and valid token.",
+     "Reading the request body fails before any input value is obtained.",
+     "The service API hands the request to `operations` with no values."
+    ],
+    "outcomes": [
+     "The call is refused immediately as an unreadable request and reaches no domain module.",
+     "The normal pipeline runs until the operation's module refuses missing values or records."
+    ],
+    "observer": "The service, through the refusal it receives, and domain-module instrumentation through whether that module is called."
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "operation selection after body-read failure",
+   "kind": "missing decision",
+   "text": "“hands the request on all the same, with no CSRF value and no values”",
+   "question": "What identifies the operation handed to `operations` when reading the request has failed, and what happens if the operation itself was encoded in the unreadable form or body?",
+   "options": [
+    "Every route identifies one operation independently of the body",
+    "The surface supplies a distinguished unreadable-request operation",
+    "If no operation can be identified, the connection is closed without calling `operations`"
+   ],
+   "default_guess": "Require every route to identify its operation independently of the body; otherwise close the connection without calling `operations`.",
+   "witness": {
+    "initial": "The listener has accepted a framed request whose body is needed to determine the requested action.",
+    "events": [
+     "A caller sends the request.",
+     "The body fails before the action discriminator is read.",
+     "The surface is required to hand a request to `operations` with no values."
+    ],
+    "outcomes": [
+     "The surface infers an operation from the route and calls that operation.",
+     "The surface cannot select an operation and closes the connection without an `operations` call."
+    ],
+    "observer": "The caller and `operations`, which is invoked only in the first implementation."
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "failed owner-interface form read",
+   "kind": "ambiguous scope",
+   "text": "“a form ... hands the request on all the same ... the session check admits the owner's ... and it is refused at stage (1) as a change without its CSRF value”",
+   "question": "Does this rule cover sign-in and non-changing owner-interface requests, or only forms that invoke authenticated changes?",
+   "options": [
+    "Only authenticated change forms use the missing-CSRF outcome",
+    "Every form, including sign-in, uses the missing-CSRF outcome",
+    "Sign-in is handled as a missing credential, reads by their own operation rules, and only changes use missing CSRF"
+   ],
+   "default_guess": "Apply the rule only to authenticated changes; handle sign-in as a missing credential and reads under their own operation rules.",
+   "witness": {
+    "initial": "No owner session exists and the instance is not locked out.",
+    "events": [
+     "The owner submits the sign-in form.",
+     "Reading its body fails before the credential is obtained."
+    ],
+    "outcomes": [
+     "A13's sign-in exception treats it as a missing credential and counts the refusal toward lockout.",
+     "The new generic form rule attempts owner-session admission and refuses it as a change without CSRF."
+    ],
+    "observer": "The owner, especially after repeated failures when one implementation enters sign-in lockout and the other does not."
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "closing the connection after a body-read failure",
+   "kind": "unnamed owner or capability",
+   "text": "“the answer is sent if the connection still takes it, and the connection is then closed”",
+   "question": "Which module and capability sends the best-effort answer and closes the connection, and who calls it after `operations` returns?",
+   "options": [
+    "The relevant surface sends the answer and asks `instance_lifecycle` to close",
+    "`instance_lifecycle` owns both response delivery and closing",
+    "The surface itself owns both response delivery and closing"
+   ],
+   "default_guess": "Let each surface send the answer and return a close-after-response result to `instance_lifecycle`, which owns the connection.",
+   "witness": {
+    "initial": "A malformed body leaves the connection writable after `operations` produces a refusal.",
+    "events": [
+     "The surface receives the refusal.",
+     "The refusal is successfully written.",
+     "The flow reaches the required connection-close step."
+    ],
+    "outcomes": [
+     "The surface closes the transport directly.",
+     "The surface returns control and `instance_lifecycle` closes it through a dedicated capability."
+    ],
+    "observer": "Tests and maintainers at the module boundary; connection lifetime and cleanup belong to different modules in the two implementations."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:Status\",\"subject\":\"failed upload-head read\",\"kind\":\"contradiction\",\"text\":\"“an upload's head — hands the request on all the same” contradicts A13 rule 2: “an upload ... arrives when that head ... has been read”\",\"question\":\"When the upload head cannot be completely read, has the owner request arrived for session admission and idle-time renewal?\",\"options\":[\"Admit it and restart the valid session's 30-minute idle period\",\"Treat it as not arrived, perform no session check and do not restart the idle period\"],\"default_guess\":\"Treat the changed State 4 rule as controlling: admit it and restart the valid session's idle period.\",\"witness\":{\"initial\":\"A valid owner session is close to its 30-minute idle limit.\",\"events\":[\"The owner sends an upload with the valid session cookie.\",\"The multipart head becomes unreadable before it has been completely read.\"],\"outcomes\":[\"State 4 hands the request to the session check and restarts the session's 30 minutes.\",\"A13 says the upload arrives only when its head has been read, so no request arrives and the 30 minutes are not restarted.\"],\"observer\":\"The owner, whose next request is accepted in the first implementation and refused as idle in the second.\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"service request whose body read fails\",\"kind\":\"unstated failure outcome\",\"text\":\"“a service's as State 5's `serve_service_request` says”\",\"question\":\"What failure does `operations` produce for a service request handed on with no values, at which stage is it produced, and does any stage-(3)-to-(6) module receive the call?\",\"options\":[\"Refuse at stage (1) with a transport/body-read refusal\",\"Run authentication and authority checks, then let the operation's first missing-value or missing-record check refuse it\",\"Close the connection without an operation refusal\"],\"default_guess\":\"Authenticate and check authority, then return a dedicated malformed-body refusal before any record module is called.\",\"witness\":{\"initial\":\"A service has a valid token and is entitled to call a writing operation.\",\"events\":[\"The service sends the operation's route and valid token.\",\"Reading the request body fails before any input value is obtained.\",\"The service API hands the request to `operations` with no values.\"],\"outcomes\":[\"The call is refused immediately as an unreadable request and reaches no domain module.\",\"The normal pipeline runs until the operation's module refuses missing values or records.\"],\"observer\":\"The service, through the refusal it receives, and domain-module instrumentation through whether that module is called.\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"operation selection after body-read failure\",\"kind\":\"missing decision\",\"text\":\"“hands the request on all the same, with no CSRF value and no values”\",\"question\":\"What identifies the operation handed to `operations` when reading the request has failed, and what happens if the operation itself was encoded in the unreadable form or body?\",\"options\":[\"Every route identifies one operation independently of the body\",\"The surface supplies a distinguished unreadable-request operation\",\"If no operation can be identified, the connection is closed without calling `operations`\"],\"default_guess\":\"Require every route to identify its operation independently of the body; otherwise close the connection without calling `operations`.\",\"witness\":{\"initial\":\"The listener has accepted a framed request whose body is needed to determine the requested action.\",\"events\":[\"A caller sends the request.\",\"The body fails before the action discriminator is read.\",\"The surface is required to hand a request to `operations` with no values.\"],\"outcomes\":[\"The surface infers an operation from the route and calls that operation.\",\"The surface cannot select an operation and closes the connection without an `operations` call.\"],\"observer\":\"The caller and `operations`, which is invoked only in the first implementation.\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"failed owner-interface form read\",\"kind\":\"ambiguous scope\",\"text\":\"“a form ... hands the request on all the same ... the session check admits the owner's ... and it is refused at stage (1) as a change without its CSRF value”\",\"question\":\"Does this rule cover sign-in and non-changing owner-interface requests, or only forms that invoke authenticated changes?\",\"options\":[\"Only authenticated change forms use the missing-CSRF outcome\",\"Every form, including sign-in, uses the missing-CSRF outcome\",\"Sign-in is handled as a missing credential, reads by their own operation rules, and only changes use missing CSRF\"],\"default_guess\":\"Apply the rule only to authenticated changes; handle sign-in as a missing credential and reads under their own operation rules.\",\"witness\":{\"initial\":\"No owner session exists and the instance is not locked out.\",\"events\":[\"The owner submits the sign-in form.\",\"Reading its body fails before the credential is obtained.\"],\"outcomes\":[\"A13's sign-in exception treats it as a missing credential and counts the refusal toward lockout.\",\"The new generic form rule attempts owner-session admission and refuses it as a change without CSRF.\"],\"observer\":\"The owner, especially after repeated failures when one implementation enters sign-in lockout and the other does not.\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"closing the connection after a body-read failure\",\"kind\":\"unnamed owner or capability\",\"text\":\"“the answer is sent if the connection still takes it, and the connection is then closed”\",\"question\":\"Which module and capability sends the best-effort answer and closes the connection, and who calls it after `operations` returns?\",\"options\":[\"The relevant surface sends the answer and asks `instance_lifecycle` to close\",\"`instance_lifecycle` owns both response delivery and closing\",\"The surface itself owns both response delivery and closing\"],\"default_guess\":\"Let each surface send the answer and return a close-after-response result to `instance_lifecycle`, which owns the connection.\",\"witness\":{\"initial\":\"A malformed body leaves the connection writable after `operations` produces a refusal.\",\"events\":[\"The surface receives the refusal.\",\"The refusal is successfully written.\",\"The flow reaches the required connection-close step.\"],\"outcomes\":[\"The surface closes the transport directly.\",\"The surface returns control and `instance_lifecycle` closes it through a dedicated capability.\"],\"observer\":\"Tests and maintainers at the module boundary; connection lifetime and cleanup belong to different modules in the two implementations.\"}}]}",
+ "set_aside": []
+}
