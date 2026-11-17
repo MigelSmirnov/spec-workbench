@@ -1259,8 +1259,9 @@ Any check, right or record rule.
 
 ### Hides
 
-The HTTP server of the service API and the reading and writing of its wire
-format.
+The reading and writing of its wire format. The HTTP server, its
+connections and HTTP's framing are `instance_lifecycle`'s listener's, as for
+the owner interface.
 
 ### Candidate public capabilities
 
@@ -1338,7 +1339,10 @@ each request's body handed on as a stream that ends where HTTP's own
 framing ends the body — after its `Content-Length` bytes, or at the last
 chunk of a chunked body — so that no reader of it waits for bytes the client
 sends only after an answer, and no byte of another request is read as the
-body's; the 60-second pass
+body's — HTTP's framing of every request of both surfaces, one
+implementation: a request whose `Content-Length` or chunked framing is
+malformed, or whose body ends before its framing says, is refused by the
+listener, its connection closed, and reaches no surface; the 60-second pass
 of `owner_sessions` and the minute look of `backups` (A13 rule 2, A18 rule 1);
 that a restart ends every owner session (A13 rule 2).
 

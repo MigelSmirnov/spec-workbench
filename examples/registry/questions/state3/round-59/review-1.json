@@ -1,0 +1,156 @@
+{
+ "open_points": [
+  {
+   "subject": "request-body framing protocol",
+   "kind": "undefined protocol scope",
+   "text": "HTTP's own framing",
+   "question": "Which HTTP versions and request-body framing rules does the listener implement, including whether close-delimited request bodies or transfer codings other than chunked are supported?",
+   "options": [
+    "HTTP/1.1 only, with no close-delimited request bodies and chunked as the only accepted transfer coding",
+    "HTTP/1.0 and HTTP/1.1, including connection-close framing where applicable",
+    "Delegate all framing and supported versions to a named HTTP server implementation"
+   ],
+   "default_guess": "Support HTTP/1.1 only and reject unsupported transfer codings.",
+   "unit": "?"
+  },
+  {
+   "subject": "Content-Length and chunked precedence",
+   "kind": "ambiguous framing",
+   "text": "after its `Content-Length` bytes, or at the last chunk of a chunked body",
+   "question": "What happens when a request carries both `Content-Length` and chunked transfer coding, or carries repeated or conflicting `Content-Length` values?",
+   "options": [
+    "Reject every request containing both forms or conflicting lengths and close the connection",
+    "Use chunked framing and ignore `Content-Length`",
+    "Use `Content-Length` framing",
+    "Accept equal repeated `Content-Length` values but reject conflicting ones"
+   ],
+   "default_guess": "Reject ambiguous framing before dispatch and close the connection.",
+   "witness": {
+    "initial": "A persistent connection is open to the owner interface.",
+    "events": [
+     "The owner client sends one request containing both `Content-Length: 4` and chunked framing, followed on the same connection by bytes that can also form another request."
+    ],
+    "outcomes": [
+     "The listener rejects the ambiguous request and closes the connection, so the following bytes are never dispatched.",
+     "The listener gives one framing form precedence, consumes a different byte boundary and may dispatch the following bytes as another request."
+    ],
+    "observer": "The owner client and the operation reached by the following bytes"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "bytes exposed by a chunked body stream",
+   "kind": "undefined stream contract",
+   "text": "each request's body handed on as a stream that ends where HTTP's own framing ends the body — after its `Content-Length` bytes, or at the last chunk of a chunked body",
+   "question": "Does the handed-on stream contain only decoded body bytes, or does it expose chunk sizes, delimiters, extensions or other transfer-coding bytes to `service_api` and `owner_interface`?",
+   "options": [
+    "Expose only de-chunked body bytes",
+    "Expose the raw chunked representation",
+    "Expose decoded bytes plus trailer metadata through a separate interface"
+   ],
+   "default_guess": "Expose only de-chunked body bytes and keep all transfer framing inside `instance_lifecycle`.",
+   "witness": {
+    "initial": "The owner has a valid session and sends a multipart upload using chunked transfer coding.",
+    "events": [
+     "The listener parses the chunks and hands the request stream to the owner-interface upload reader."
+    ],
+    "outcomes": [
+     "The upload reader receives only multipart bytes and parses the upload successfully.",
+     "The upload reader receives chunk-size lines and delimiters and rejects the same upload as malformed."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "chunked trailers",
+   "kind": "undefined boundary ownership",
+   "text": "at the last chunk of a chunked body",
+   "question": "Who consumes and validates the trailer section after the last chunk, what trailer fields are allowed, and when may parsing of the next request begin?",
+   "options": [
+    "`instance_lifecycle` consumes and validates bounded trailers before parsing another request",
+    "All trailers are rejected",
+    "Trailers are ignored but consumed before parsing another request",
+    "The body consumer receives trailers separately"
+   ],
+   "default_guess": "Have `instance_lifecycle` consume bounded trailers, expose none to operation code, and begin the next request only after the trailer section ends.",
+   "witness": {
+    "initial": "A persistent connection carries a chunked request.",
+    "events": [
+     "The client sends the zero-size last chunk, a trailer field, the terminating empty line, and then another request."
+    ],
+    "outcomes": [
+     "The listener consumes the trailer section as framing and dispatches the following request normally.",
+     "The listener treats bytes after the last chunk as the next request, so the trailer changes or prevents dispatch."
+    ],
+    "observer": "The client sending the second request"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "unconsumed request bodies",
+   "kind": "undefined connection disposition",
+   "text": "so that no reader of it waits for bytes the client sends only after an answer, and no byte of another request is read as the body's",
+   "question": "When an operation answers or refuses before consuming its whole framed body, must the listener drain the remaining body and reuse the connection, or close the connection without draining it?",
+   "options": [
+    "Close the connection whenever the body is not fully consumed",
+    "Drain the framed remainder before accepting another request on the connection",
+    "Require every operation to consume its stream fully before answering"
+   ],
+   "default_guess": "Close the connection when the operation leaves any body bytes unread.",
+   "witness": {
+    "initial": "The owner has a valid session, an upload is declared over the file-size limit, and the connection supports another request.",
+    "events": [
+     "The owner sends the upload head, Registry refuses before reading file bytes as A19 requires, and the client has a valid request queued after the rejected body's remaining bytes."
+    ],
+    "outcomes": [
+     "Registry closes the connection; the queued request is not served and must be retried on a new connection.",
+     "Registry drains the rejected body and then serves the queued request on the same connection."
+    ],
+    "observer": "The owner client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "incomplete or stalled request body",
+   "kind": "missing failure policy",
+   "text": "after its `Content-Length` bytes, or at the last chunk of a chunked body",
+   "question": "What ends a request whose client stalls, closes early, sends fewer than its declared bytes, or never sends the last chunk, and is there a body-read deadline?",
+   "options": [
+    "Wait without a deadline until the declared boundary arrives",
+    "Apply a specified monotonic body-read deadline, then abort and close",
+    "Abort immediately only on EOF or malformed framing, with no idle deadline"
+   ],
+   "default_guess": "Use a specified monotonic idle deadline and close the connection on timeout, premature EOF or malformed chunks.",
+   "witness": {
+    "initial": "An owner session is valid when an upload head is admitted.",
+    "events": [
+     "The client declares a body longer than the bytes it sends, sends the admitted head, and then remains connected without completing the body.",
+     "The owner session subsequently reaches its lifetime limit."
+    ],
+    "outcomes": [
+     "The admitted request remains running indefinitely because it may complete after the session limit and no body deadline is stated.",
+     "The listener times out the incomplete body, aborts the request and closes the connection."
+    ],
+    "observer": "The owner client and the process operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "malformed HTTP body framing",
+   "kind": "unowned decision",
+   "text": "The start and the running instance: `configuration` first, then the backup probe and `store`, then the listeners at the configured addresses",
+   "question": "Which module owns validation and rejection of malformed `Content-Length`, chunk syntax, chunk extensions, trailers and premature framing termination: `instance_lifecycle`, `service_api`, `owner_interface`, or an unnamed HTTP transport module?",
+   "options": [
+    "`instance_lifecycle` owns all transport framing and hands only valid bounded streams onward",
+    "Each surface module owns parsing and validation for its listener",
+    "Introduce a shared HTTP transport module known by both surfaces"
+   ],
+   "default_guess": "Make `instance_lifecycle` the owner of transport framing and validation, with both surface modules receiving the same validated stream abstraction.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"request-body framing protocol\",\"kind\":\"undefined protocol scope\",\"text\":\"HTTP's own framing\",\"question\":\"Which HTTP versions and request-body framing rules does the listener implement, including whether close-delimited request bodies or transfer codings other than chunked are supported?\",\"options\":[\"HTTP/1.1 only, with no close-delimited request bodies and chunked as the only accepted transfer coding\",\"HTTP/1.0 and HTTP/1.1, including connection-close framing where applicable\",\"Delegate all framing and supported versions to a named HTTP server implementation\"],\"default_guess\":\"Support HTTP/1.1 only and reject unsupported transfer codings.\"},{\"subject\":\"Content-Length and chunked precedence\",\"kind\":\"ambiguous framing\",\"text\":\"after its `Content-Length` bytes, or at the last chunk of a chunked body\",\"question\":\"What happens when a request carries both `Content-Length` and chunked transfer coding, or carries repeated or conflicting `Content-Length` values?\",\"options\":[\"Reject every request containing both forms or conflicting lengths and close the connection\",\"Use chunked framing and ignore `Content-Length`\",\"Use `Content-Length` framing\",\"Accept equal repeated `Content-Length` values but reject conflicting ones\"],\"default_guess\":\"Reject ambiguous framing before dispatch and close the connection.\",\"witness\":{\"initial\":\"A persistent connection is open to the owner interface.\",\"events\":[\"The owner client sends one request containing both `Content-Length: 4` and chunked framing, followed on the same connection by bytes that can also form another request.\"],\"outcomes\":[\"The listener rejects the ambiguous request and closes the connection, so the following bytes are never dispatched.\",\"The listener gives one framing form precedence, consumes a different byte boundary and may dispatch the following bytes as another request.\"],\"observer\":\"The owner client and the operation reached by the following bytes\"}},{\"subject\":\"bytes exposed by a chunked body stream\",\"kind\":\"undefined stream contract\",\"text\":\"each request's body handed on as a stream that ends where HTTP's own framing ends the body — after its `Content-Length` bytes, or at the last chunk of a chunked body\",\"question\":\"Does the handed-on stream contain only decoded body bytes, or does it expose chunk sizes, delimiters, extensions or other transfer-coding bytes to `service_api` and `owner_interface`?\",\"options\":[\"Expose only de-chunked body bytes\",\"Expose the raw chunked representation\",\"Expose decoded bytes plus trailer metadata through a separate interface\"],\"default_guess\":\"Expose only de-chunked body bytes and keep all transfer framing inside `instance_lifecycle`.\",\"witness\":{\"initial\":\"The owner has a valid session and sends a multipart upload using chunked transfer coding.\",\"events\":[\"The listener parses the chunks and hands the request stream to the owner-interface upload reader.\"],\"outcomes\":[\"The upload reader receives only multipart bytes and parses the upload successfully.\",\"The upload reader receives chunk-size lines and delimiters and rejects the same upload as malformed.\"],\"observer\":\"The owner\"}},{\"subject\":\"chunked trailers\",\"kind\":\"undefined boundary ownership\",\"text\":\"at the last chunk of a chunked body\",\"question\":\"Who consumes and validates the trailer section after the last chunk, what trailer fields are allowed, and when may parsing of the next request begin?\",\"options\":[\"`instance_lifecycle` consumes and validates bounded trailers before parsing another request\",\"All trailers are rejected\",\"Trailers are ignored but consumed before parsing another request\",\"The body consumer receives trailers separately\"],\"default_guess\":\"Have `instance_lifecycle` consume bounded trailers, expose none to operation code, and begin the next request only after the trailer section ends.\",\"witness\":{\"initial\":\"A persistent connection carries a chunked request.\",\"events\":[\"The client sends the zero-size last chunk, a trailer field, the terminating empty line, and then another request.\"],\"outcomes\":[\"The listener consumes the trailer section as framing and dispatches the following request normally.\",\"The listener treats bytes after the last chunk as the next request, so the trailer changes or prevents dispatch.\"],\"observer\":\"The client sending the second request\"}},{\"subject\":\"unconsumed request bodies\",\"kind\":\"undefined connection disposition\",\"text\":\"so that no reader of it waits for bytes the client sends only after an answer, and no byte of another request is read as the body's\",\"question\":\"When an operation answers or refuses before consuming its whole framed body, must the listener drain the remaining body and reuse the connection, or close the connection without draining it?\",\"options\":[\"Close the connection whenever the body is not fully consumed\",\"Drain the framed remainder before accepting another request on the connection\",\"Require every operation to consume its stream fully before answering\"],\"default_guess\":\"Close the connection when the operation leaves any body bytes unread.\",\"witness\":{\"initial\":\"The owner has a valid session, an upload is declared over the file-size limit, and the connection supports another request.\",\"events\":[\"The owner sends the upload head, Registry refuses before reading file bytes as A19 requires, and the client has a valid request queued after the rejected body's remaining bytes.\"],\"outcomes\":[\"Registry closes the connection; the queued request is not served and must be retried on a new connection.\",\"Registry drains the rejected body and then serves the queued request on the same connection.\"],\"observer\":\"The owner client\"}},{\"subject\":\"incomplete or stalled request body\",\"kind\":\"missing failure policy\",\"text\":\"after its `Content-Length` bytes, or at the last chunk of a chunked body\",\"question\":\"What ends a request whose client stalls, closes early, sends fewer than its declared bytes, or never sends the last chunk, and is there a body-read deadline?\",\"options\":[\"Wait without a deadline until the declared boundary arrives\",\"Apply a specified monotonic body-read deadline, then abort and close\",\"Abort immediately only on EOF or malformed framing, with no idle deadline\"],\"default_guess\":\"Use a specified monotonic idle deadline and close the connection on timeout, premature EOF or malformed chunks.\",\"witness\":{\"initial\":\"An owner session is valid when an upload head is admitted.\",\"events\":[\"The client declares a body longer than the bytes it sends, sends the admitted head, and then remains connected without completing the body.\",\"The owner session subsequently reaches its lifetime limit.\"],\"outcomes\":[\"The admitted request remains running indefinitely because it may complete after the session limit and no body deadline is stated.\",\"The listener times out the incomplete body, aborts the request and closes the connection.\"],\"observer\":\"The owner client and the process operator\"}},{\"subject\":\"malformed HTTP body framing\",\"kind\":\"unowned decision\",\"text\":\"The start and the running instance: `configuration` first, then the backup probe and `store`, then the listeners at the configured addresses\",\"question\":\"Which module owns validation and rejection of malformed `Content-Length`, chunk syntax, chunk extensions, trailers and premature framing termination: `instance_lifecycle`, `service_api`, `owner_interface`, or an unnamed HTTP transport module?\",\"options\":[\"`instance_lifecycle` owns all transport framing and hands only valid bounded streams onward\",\"Each surface module owns parsing and validation for its listener\",\"Introduce a shared HTTP transport module known by both surfaces\"],\"default_guess\":\"Make `instance_lifecycle` the owner of transport framing and validation, with both surface modules receiving the same validated stream abstraction.\"}]}",
+ "set_aside": []
+}

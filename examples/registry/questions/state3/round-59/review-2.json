@@ -1,0 +1,176 @@
+{
+ "open_points": [
+  {
+   "subject": "request-body stream contract",
+   "kind": "unowned interface",
+   "text": "each request's body handed on as a stream",
+   "question": "Which module owns the request-body stream abstraction, and what exact interface, blocking or asynchronous read semantics, cancellation operation, and framing-error signal must `instance_lifecycle`, `service_api`, and `owner_interface` share?",
+   "options": [
+    "`instance_lifecycle` owns an asynchronous byte-stream contract used by both interfaces",
+    "A shared model or transport module owns the stream contract",
+    "Each interface receives a framework-native stream and defines its own use"
+   ],
+   "default_guess": "Have `instance_lifecycle` own one asynchronous pull-based byte-stream contract, with explicit EOF, cancellation, and framing-error semantics.",
+   "unit": "?"
+  },
+  {
+   "subject": "supported HTTP versions",
+   "kind": "protocol scope",
+   "text": "where HTTP's own framing ends the body — after its `Content-Length` bytes, or at the last chunk of a chunked body —",
+   "question": "Which HTTP versions and body-framing forms do the listeners support, including HTTP/1.0 close-delimited bodies and HTTP/2 or HTTP/3 end-of-stream framing?",
+   "options": [
+    "Support HTTP/1.1 only",
+    "Support HTTP/1.0 and HTTP/1.1",
+    "Support HTTP/1.1 plus HTTP/2 or HTTP/3 and map each protocol's end-of-stream to the same stream contract"
+   ],
+   "default_guess": "Support HTTP/1.1 only and reject unsupported protocol versions during connection negotiation.",
+   "witness": {
+    "initial": "Registry is running and a permitted client can reach one configured listener.",
+    "events": [
+     "The client opens an HTTP/2 connection and sends a valid request body in DATA frames ending with END_STREAM.",
+     "The listener receives a body that has neither HTTP/1.1 chunked framing nor a meaningful need for `Content-Length`."
+    ],
+    "outcomes": [
+     "The listener rejects or cannot negotiate HTTP/2 because only HTTP/1.1 framing is supported.",
+     "The listener accepts HTTP/2 and ends the handed-on stream at END_STREAM."
+    ],
+    "observer": "The calling service or owner client sees either a failed connection or a served request."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ambiguous or invalid HTTP framing",
+   "kind": "undefined rejection",
+   "text": "after its `Content-Length` bytes, or at the last chunk of a chunked body",
+   "question": "What must the listener do when framing is ambiguous or malformed, including both `Content-Length` and chunked transfer coding, conflicting repeated `Content-Length` fields, an invalid chunk size, or bytes after a malformed terminator?",
+   "options": [
+    "Reject the request and close the connection before dispatch",
+    "Give chunked transfer coding precedence over `Content-Length`",
+    "Use `Content-Length` precedence",
+    "Delegate the choice to the HTTP library"
+   ],
+   "default_guess": "Reject the request as malformed, dispatch nothing, and close the connection so remaining bytes cannot be reinterpreted as another request.",
+   "witness": {
+    "initial": "One persistent connection carries a request with `Content-Length: 4`, chunked transfer coding, body bytes whose chunked boundary differs from four bytes, and then bytes forming a privileged second request.",
+    "events": [
+     "A client sends the ambiguous first request and the following bytes on the same connection.",
+     "The listener must choose a framing boundary before handing on the first body or parsing another request."
+    ],
+    "outcomes": [
+     "The listener rejects the ambiguous request and closes the connection; no second request is dispatched.",
+     "The listener gives one framing declaration precedence, dispatches the first request, and may parse the remaining bytes as a second request."
+    ],
+    "observer": "The client and the target operation see whether either request is executed."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "chunked trailers",
+   "kind": "boundary ambiguity",
+   "text": "at the last chunk of a chunked body",
+   "question": "Does “at the last chunk” mean when the zero-sized terminating chunk is read or only after its trailer section is parsed, and are trailer fields rejected, ignored, or exposed to a downstream module?",
+   "options": [
+    "Consume and validate trailers, hide them, then permit the next request",
+    "Consume and expose trailers through a defined request contract",
+    "Reject every chunked request containing trailers",
+    "Signal body EOF at the terminating chunk while consuming trailers separately before parsing another request"
+   ],
+   "default_guess": "Decode only chunk data into the body stream, consume and validate allowed trailer syntax without exposing it, and do not parse another request until the trailer section ends.",
+   "witness": {
+    "initial": "A permitted client has a persistent connection and sends a valid chunked request with trailer fields followed by another request.",
+    "events": [
+     "The listener reads the zero-sized terminating chunk.",
+     "The client sends the trailer section and then the next request."
+    ],
+    "outcomes": [
+     "The listener accepts and consumes the trailers before treating later bytes as the next request.",
+     "The listener treats the body as complete without a defined trailer policy and either rejects the request or misclassifies trailer bytes."
+    ],
+    "observer": "The client sees whether the first request and the following request are accepted."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "unconsumed request bodies",
+   "kind": "missing lifecycle rule",
+   "text": "each request's body handed on as a stream that ends where HTTP's own framing ends the body",
+   "question": "When a handler answers without consuming the entire framed body, must the listener drain and discard the remainder before reusing the connection, cancel the stream and close the connection, or keep reading in the background; and which module makes that decision?",
+   "options": [
+    "Drain the remainder within a bounded policy, then reuse the connection",
+    "Close the connection without draining",
+    "Always consume the complete body before allowing a handler to answer",
+    "Let each downstream handler choose"
+   ],
+   "default_guess": "Cancel the body stream and close the connection unless the complete framed body has already been consumed.",
+   "witness": {
+    "initial": "A persistent connection carries a request whose headers allow Registry to refuse it before its nonempty body is consumed.",
+    "events": [
+     "The client sends the refused request and begins its declared body.",
+     "The handler returns the refusal without reading the rest of the stream.",
+     "The client attempts another valid request on the same connection."
+    ],
+    "outcomes": [
+     "The listener drains the first body and safely serves the next request on the connection.",
+     "The listener closes the connection rather than draining, so the next request must use a new connection."
+    ],
+    "observer": "The calling client sees whether its existing connection remains reusable."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "incomplete or stalled request body",
+   "kind": "missing timeout policy",
+   "text": "after its `Content-Length` bytes, or at the last chunk of a chunked body",
+   "question": "What happens when the client sends fewer than its declared bytes, never sends the terminating chunk, stalls between bytes, or disconnects early; specifically, what timeout applies and does the stream report EOF, a framing error, or cancellation?",
+   "options": [
+    "Wait without a Registry-defined timeout until completion or disconnect",
+    "Apply a fixed release-defined body-read timeout",
+    "Apply an idle timeout renewed by each byte",
+    "Delegate timeout and disconnect semantics to the HTTP library"
+   ],
+   "default_guess": "Use a release-defined idle body-read timeout; premature disconnect or timeout produces a framing error, dispatches no state change, and closes the connection.",
+   "witness": {
+    "initial": "Registry is running and a client opens a request declaring a 100-byte body.",
+    "events": [
+     "The client sends ten body bytes and keeps the connection open without sending the remaining bytes.",
+     "A downstream reader requests the rest of the body."
+    ],
+    "outcomes": [
+     "The reader waits indefinitely and the connection and request remain live.",
+     "A timeout ends the request with an error and releases its resources."
+    ],
+    "observer": "The client and the host administrator see, respectively, a hanging versus closed request and persistent versus released resources."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "`Expect: 100-continue` handling",
+   "kind": "undefined handshake",
+   "text": "each request's body handed on as a stream",
+   "question": "When a request carries `Expect: 100-continue`, who decides whether and when to send the interim response, particularly when authentication, session, CSRF, declared-length, or other header checks can refuse the request before its body is sent?",
+   "options": [
+    "The listener automatically sends `100 Continue` before dispatch",
+    "Registry performs header-stage checks first and sends `100 Continue` only when it will read the body",
+    "Reject requests using `Expect: 100-continue`",
+    "Delegate the behavior to the HTTP library"
+   ],
+   "default_guess": "Perform every check possible from the request head first, send a final refusal without `100 Continue` when one fails, and otherwise send `100 Continue` immediately before body reading begins.",
+   "witness": {
+    "initial": "The owner has a valid session and sends an upload request with `Expect: 100-continue`, waiting for the interim response before transmitting the multipart body.",
+    "events": [
+     "The listener receives the complete request head but no body bytes.",
+     "The client waits for either `100 Continue` or a final response."
+    ],
+    "outcomes": [
+     "The listener sends `100 Continue`; the client sends the body and the upload proceeds.",
+     "The listener sends no interim or final response while waiting for body bytes, so both sides wait indefinitely."
+    ],
+    "observer": "The owner sees the upload proceed or hang."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"request-body stream contract\",\"kind\":\"unowned interface\",\"text\":\"each request's body handed on as a stream\",\"question\":\"Which module owns the request-body stream abstraction, and what exact interface, blocking or asynchronous read semantics, cancellation operation, and framing-error signal must `instance_lifecycle`, `service_api`, and `owner_interface` share?\",\"options\":[\"`instance_lifecycle` owns an asynchronous byte-stream contract used by both interfaces\",\"A shared model or transport module owns the stream contract\",\"Each interface receives a framework-native stream and defines its own use\"],\"default_guess\":\"Have `instance_lifecycle` own one asynchronous pull-based byte-stream contract, with explicit EOF, cancellation, and framing-error semantics.\"},{\"subject\":\"supported HTTP versions\",\"kind\":\"protocol scope\",\"text\":\"where HTTP's own framing ends the body — after its `Content-Length` bytes, or at the last chunk of a chunked body —\",\"question\":\"Which HTTP versions and body-framing forms do the listeners support, including HTTP/1.0 close-delimited bodies and HTTP/2 or HTTP/3 end-of-stream framing?\",\"options\":[\"Support HTTP/1.1 only\",\"Support HTTP/1.0 and HTTP/1.1\",\"Support HTTP/1.1 plus HTTP/2 or HTTP/3 and map each protocol's end-of-stream to the same stream contract\"],\"default_guess\":\"Support HTTP/1.1 only and reject unsupported protocol versions during connection negotiation.\",\"witness\":{\"initial\":\"Registry is running and a permitted client can reach one configured listener.\",\"events\":[\"The client opens an HTTP/2 connection and sends a valid request body in DATA frames ending with END_STREAM.\",\"The listener receives a body that has neither HTTP/1.1 chunked framing nor a meaningful need for `Content-Length`.\"],\"outcomes\":[\"The listener rejects or cannot negotiate HTTP/2 because only HTTP/1.1 framing is supported.\",\"The listener accepts HTTP/2 and ends the handed-on stream at END_STREAM.\"],\"observer\":\"The calling service or owner client sees either a failed connection or a served request.\"}},{\"subject\":\"ambiguous or invalid HTTP framing\",\"kind\":\"undefined rejection\",\"text\":\"after its `Content-Length` bytes, or at the last chunk of a chunked body\",\"question\":\"What must the listener do when framing is ambiguous or malformed, including both `Content-Length` and chunked transfer coding, conflicting repeated `Content-Length` fields, an invalid chunk size, or bytes after a malformed terminator?\",\"options\":[\"Reject the request and close the connection before dispatch\",\"Give chunked transfer coding precedence over `Content-Length`\",\"Use `Content-Length` precedence\",\"Delegate the choice to the HTTP library\"],\"default_guess\":\"Reject the request as malformed, dispatch nothing, and close the connection so remaining bytes cannot be reinterpreted as another request.\",\"witness\":{\"initial\":\"One persistent connection carries a request with `Content-Length: 4`, chunked transfer coding, body bytes whose chunked boundary differs from four bytes, and then bytes forming a privileged second request.\",\"events\":[\"A client sends the ambiguous first request and the following bytes on the same connection.\",\"The listener must choose a framing boundary before handing on the first body or parsing another request.\"],\"outcomes\":[\"The listener rejects the ambiguous request and closes the connection; no second request is dispatched.\",\"The listener gives one framing declaration precedence, dispatches the first request, and may parse the remaining bytes as a second request.\"],\"observer\":\"The client and the target operation see whether either request is executed.\"}},{\"subject\":\"chunked trailers\",\"kind\":\"boundary ambiguity\",\"text\":\"at the last chunk of a chunked body\",\"question\":\"Does “at the last chunk” mean when the zero-sized terminating chunk is read or only after its trailer section is parsed, and are trailer fields rejected, ignored, or exposed to a downstream module?\",\"options\":[\"Consume and validate trailers, hide them, then permit the next request\",\"Consume and expose trailers through a defined request contract\",\"Reject every chunked request containing trailers\",\"Signal body EOF at the terminating chunk while consuming trailers separately before parsing another request\"],\"default_guess\":\"Decode only chunk data into the body stream, consume and validate allowed trailer syntax without exposing it, and do not parse another request until the trailer section ends.\",\"witness\":{\"initial\":\"A permitted client has a persistent connection and sends a valid chunked request with trailer fields followed by another request.\",\"events\":[\"The listener reads the zero-sized terminating chunk.\",\"The client sends the trailer section and then the next request.\"],\"outcomes\":[\"The listener accepts and consumes the trailers before treating later bytes as the next request.\",\"The listener treats the body as complete without a defined trailer policy and either rejects the request or misclassifies trailer bytes.\"],\"observer\":\"The client sees whether the first request and the following request are accepted.\"}},{\"subject\":\"unconsumed request bodies\",\"kind\":\"missing lifecycle rule\",\"text\":\"each request's body handed on as a stream that ends where HTTP's own framing ends the body\",\"question\":\"When a handler answers without consuming the entire framed body, must the listener drain and discard the remainder before reusing the connection, cancel the stream and close the connection, or keep reading in the background; and which module makes that decision?\",\"options\":[\"Drain the remainder within a bounded policy, then reuse the connection\",\"Close the connection without draining\",\"Always consume the complete body before allowing a handler to answer\",\"Let each downstream handler choose\"],\"default_guess\":\"Cancel the body stream and close the connection unless the complete framed body has already been consumed.\",\"witness\":{\"initial\":\"A persistent connection carries a request whose headers allow Registry to refuse it before its nonempty body is consumed.\",\"events\":[\"The client sends the refused request and begins its declared body.\",\"The handler returns the refusal without reading the rest of the stream.\",\"The client attempts another valid request on the same connection.\"],\"outcomes\":[\"The listener drains the first body and safely serves the next request on the connection.\",\"The listener closes the connection rather than draining, so the next request must use a new connection.\"],\"observer\":\"The calling client sees whether its existing connection remains reusable.\"}},{\"subject\":\"incomplete or stalled request body\",\"kind\":\"missing timeout policy\",\"text\":\"after its `Content-Length` bytes, or at the last chunk of a chunked body\",\"question\":\"What happens when the client sends fewer than its declared bytes, never sends the terminating chunk, stalls between bytes, or disconnects early; specifically, what timeout applies and does the stream report EOF, a framing error, or cancellation?\",\"options\":[\"Wait without a Registry-defined timeout until completion or disconnect\",\"Apply a fixed release-defined body-read timeout\",\"Apply an idle timeout renewed by each byte\",\"Delegate timeout and disconnect semantics to the HTTP library\"],\"default_guess\":\"Use a release-defined idle body-read timeout; premature disconnect or timeout produces a framing error, dispatches no state change, and closes the connection.\",\"witness\":{\"initial\":\"Registry is running and a client opens a request declaring a 100-byte body.\",\"events\":[\"The client sends ten body bytes and keeps the connection open without sending the remaining bytes.\",\"A downstream reader requests the rest of the body.\"],\"outcomes\":[\"The reader waits indefinitely and the connection and request remain live.\",\"A timeout ends the request with an error and releases its resources.\"],\"observer\":\"The client and the host administrator see, respectively, a hanging versus closed request and persistent versus released resources.\"}},{\"subject\":\"`Expect: 100-continue` handling\",\"kind\":\"undefined handshake\",\"text\":\"each request's body handed on as a stream\",\"question\":\"When a request carries `Expect: 100-continue`, who decides whether and when to send the interim response, particularly when authentication, session, CSRF, declared-length, or other header checks can refuse the request before its body is sent?\",\"options\":[\"The listener automatically sends `100 Continue` before dispatch\",\"Registry performs header-stage checks first and sends `100 Continue` only when it will read the body\",\"Reject requests using `Expect: 100-continue`\",\"Delegate the behavior to the HTTP library\"],\"default_guess\":\"Perform every check possible from the request head first, send a final refusal without `100 Continue` when one fails, and otherwise send `100 Continue` immediately before body reading begins.\",\"witness\":{\"initial\":\"The owner has a valid session and sends an upload request with `Expect: 100-continue`, waiting for the interim response before transmitting the multipart body.\",\"events\":[\"The listener receives the complete request head but no body bytes.\",\"The client waits for either `100 Continue` or a final response.\"],\"outcomes\":[\"The listener sends `100 Continue`; the client sends the body and the upload proceeds.\",\"The listener sends no interim or final response while waiting for body bytes, so both sides wait indefinitely.\"],\"observer\":\"The owner sees the upload proceed or hang.\"}}]}",
+ "set_aside": []
+}

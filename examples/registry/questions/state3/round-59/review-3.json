@@ -1,0 +1,161 @@
+{
+ "open_points": [
+  {
+   "subject": "HTTP request framing",
+   "kind": "unowned_responsibility",
+   "text": "each request's body handed on as a stream that ends where HTTP's own framing ends the body",
+   "question": "Which module owns parsing and validating HTTP framing and constructing the bounded body stream, and which declared dependency supplies it?",
+   "options": [
+    "`instance_lifecycle` implements the HTTP parser and body stream",
+    "`service_api` and `owner_interface` each implement framing",
+    "A separate transport module or server library owns framing and `instance_lifecycle` depends on it"
+   ],
+   "default_guess": "Use one transport adapter owned by `instance_lifecycle`, backed by a declared HTTP-server dependency, and give both surfaces the same validated bounded-stream implementation.",
+   "witness": {
+    "initial": "Both listeners are running and receive the same malformed chunked request.",
+    "events": [
+     "A client sends an invalid chunk sequence to the owner interface.",
+     "The client sends the equivalent request to the service API."
+    ],
+    "outcomes": [
+     "A shared framing owner rejects both requests identically before either interface handles them.",
+     "Each interface parses framing independently and one rejects the request while the other exposes a partial body."
+    ],
+    "observer": "The caller and the operator comparing the two surfaces"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "request-body stream representation",
+   "kind": "ambiguous_contract",
+   "text": "after its `Content-Length` bytes, or at the last chunk of a chunked body",
+   "question": "Does the handed-on stream contain only decoded body payload bytes, or does it expose transfer-coding bytes such as chunk sizes, delimiters and trailers?",
+   "options": [
+    "Expose only transfer-decoded payload bytes",
+    "Expose the raw framed bytes",
+    "Expose payload bytes and provide trailers separately"
+   ],
+   "default_guess": "Expose only transfer-decoded payload bytes; consume and validate chunk framing in the transport layer and do not include trailers in the body stream.",
+   "witness": {
+    "initial": "An authenticated owner session uploads a multipart file using chunked transfer coding.",
+    "events": [
+     "The browser sends one file payload chunk surrounded by HTTP chunk-size lines and delimiters.",
+     "The owner interface reads the handed-on body stream and parses the multipart form."
+    ],
+    "outcomes": [
+     "The stream contains only multipart bytes, so the uploaded file is parsed and its file-byte limit is applied to the payload.",
+     "The stream contains chunk framing bytes, so the multipart parser rejects the same upload or counts different bytes."
+    ],
+    "observer": "The owner uploading the import file"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "malformed or truncated request bodies",
+   "kind": "missing_failure_semantics",
+   "text": "a stream that ends where HTTP's own framing ends the body — after its `Content-Length` bytes, or at the last chunk of a chunked body",
+   "question": "What must happen when the declared boundary is never reached or the framing is invalid, including premature EOF, malformed chunks, conflicting framing headers or inconsistent duplicate lengths?",
+   "options": [
+    "Reject the request before invoking the interface when detectable, otherwise make the stream fail and abort the operation",
+    "End the stream at the bytes received and let the interface decide",
+    "Close the connection without an HTTP answer",
+    "Apply a specified framing precedence and continue"
+   ],
+   "default_guess": "Reject ambiguous framing, make premature or malformed framing a stream error, abort the operation without state change, and close the connection after a safe error response when possible.",
+   "witness": {
+    "initial": "A project correction is sent with a body whose `Content-Length` is 100 bytes.",
+    "events": [
+     "The authenticated caller sends 60 bytes containing a syntactically complete-looking form.",
+     "The caller closes its sending side before the remaining 40 bytes arrive."
+    ],
+    "outcomes": [
+     "The stream raises a framing error, so the correction is not applied.",
+     "The stream reports ordinary end-of-stream at 60 bytes, so the interface may parse and apply the correction."
+    ],
+    "observer": "The owner reading the corrected project and the caller receiving the response"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "unconsumed request bodies on persistent connections",
+   "kind": "unspecified_lifecycle",
+   "text": "so that no reader of it waits for bytes the client sends only after an answer, and no byte of another request is read as the body's",
+   "question": "When a handler answers without consuming its entire bounded body stream, must the transport drain the remainder, close the connection, or delay/refuse the next request?",
+   "options": [
+    "Drain the remainder through the framing boundary, then accept the next request",
+    "Close the connection after the response",
+    "Require handlers to consume the stream and treat early return as an error",
+    "Keep the next request pending until the first stream is explicitly discarded"
+   ],
+   "default_guess": "Explicitly discard or drain the remainder up to the validated boundary before parsing another request, closing the connection if draining or framing fails.",
+   "witness": {
+    "initial": "One persistent connection carries two requests; the first declares a ten-byte body, but its handler reads only one byte and returns an answer.",
+    "events": [
+     "The client sends the remaining nine bytes of the first body.",
+     "The client then sends a complete second request on the same connection."
+    ],
+    "outcomes": [
+     "The transport drains the nine bytes and serves the second request on the connection.",
+     "The transport closes the connection after the first answer, so the second request is not served and must be retried."
+    ],
+    "observer": "The client sending the two requests"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "request-body waiting policy",
+   "kind": "missing_timeout_policy",
+   "text": "a stream that ends where HTTP's own framing ends the body — after its `Content-Length` bytes, or at the last chunk of a chunked body",
+   "question": "How long may the stream wait for the next body byte or the framing terminator, and which module owns cancellation, timeout and resource release for a stalled body?",
+   "options": [
+    "Wait without a Registry-imposed timeout until the peer closes or completes the body",
+    "Apply a fixed release-defined idle timeout",
+    "Apply a total request-body deadline",
+    "Delegate timeout behavior to the HTTP server or operating system"
+   ],
+   "default_guess": "Declare a release-defined body-read idle timeout owned by the transport layer; on expiry, fail the stream, apply no state change and close the connection.",
+   "witness": {
+    "initial": "A client opens a request with a large valid `Content-Length` and sends only its first byte.",
+    "events": [
+     "The client leaves the connection open indefinitely without sending another byte.",
+     "Other clients continue making requests."
+    ],
+    "outcomes": [
+     "Registry retains the request and its resources indefinitely while waiting for the declared boundary.",
+     "Registry times it out, releases its resources and closes the connection."
+    ],
+    "observer": "The stalled client and the host owner observing resource use"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "supported HTTP protocol and framing modes",
+   "kind": "underspecified_protocol",
+   "text": "where HTTP's own framing ends the body — after its `Content-Length` bytes, or at the last chunk of a chunked body",
+   "question": "Which HTTP versions and request-framing modes must the two listeners accept, and are requests using any other mode refused?",
+   "options": [
+    "HTTP/1.1 only, accepting `Content-Length` and chunked request bodies",
+    "HTTP/1.0 and HTTP/1.1, including connection-close behavior where applicable",
+    "HTTP/1.1 plus HTTP/2, with HTTP/2 DATA-frame boundaries",
+    "Whatever versions the selected server library enables by default"
+   ],
+   "default_guess": "Specify HTTP/1.1 for both listeners and reject unsupported versions or invalid framing consistently rather than inheriting library defaults.",
+   "witness": {
+    "initial": "A reachable client attempts to use HTTP/2 on the owner-interface listener.",
+    "events": [
+     "The client negotiates or sends an HTTP/2 request whose body arrives in DATA frames.",
+     "The request otherwise contains a valid authenticated owner action."
+    ],
+    "outcomes": [
+     "The listener supports HTTP/2 and hands the DATA payload on as the bounded body stream.",
+     "The listener supports only HTTP/1.1 and refuses or fails the connection before the action is handled."
+    ],
+    "observer": "The owner using that client"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"HTTP request framing\",\"kind\":\"unowned_responsibility\",\"text\":\"each request's body handed on as a stream that ends where HTTP's own framing ends the body\",\"question\":\"Which module owns parsing and validating HTTP framing and constructing the bounded body stream, and which declared dependency supplies it?\",\"options\":[\"`instance_lifecycle` implements the HTTP parser and body stream\",\"`service_api` and `owner_interface` each implement framing\",\"A separate transport module or server library owns framing and `instance_lifecycle` depends on it\"],\"default_guess\":\"Use one transport adapter owned by `instance_lifecycle`, backed by a declared HTTP-server dependency, and give both surfaces the same validated bounded-stream implementation.\",\"witness\":{\"initial\":\"Both listeners are running and receive the same malformed chunked request.\",\"events\":[\"A client sends an invalid chunk sequence to the owner interface.\",\"The client sends the equivalent request to the service API.\"],\"outcomes\":[\"A shared framing owner rejects both requests identically before either interface handles them.\",\"Each interface parses framing independently and one rejects the request while the other exposes a partial body.\"],\"observer\":\"The caller and the operator comparing the two surfaces\"}},{\"subject\":\"request-body stream representation\",\"kind\":\"ambiguous_contract\",\"text\":\"after its `Content-Length` bytes, or at the last chunk of a chunked body\",\"question\":\"Does the handed-on stream contain only decoded body payload bytes, or does it expose transfer-coding bytes such as chunk sizes, delimiters and trailers?\",\"options\":[\"Expose only transfer-decoded payload bytes\",\"Expose the raw framed bytes\",\"Expose payload bytes and provide trailers separately\"],\"default_guess\":\"Expose only transfer-decoded payload bytes; consume and validate chunk framing in the transport layer and do not include trailers in the body stream.\",\"witness\":{\"initial\":\"An authenticated owner session uploads a multipart file using chunked transfer coding.\",\"events\":[\"The browser sends one file payload chunk surrounded by HTTP chunk-size lines and delimiters.\",\"The owner interface reads the handed-on body stream and parses the multipart form.\"],\"outcomes\":[\"The stream contains only multipart bytes, so the uploaded file is parsed and its file-byte limit is applied to the payload.\",\"The stream contains chunk framing bytes, so the multipart parser rejects the same upload or counts different bytes.\"],\"observer\":\"The owner uploading the import file\"}},{\"subject\":\"malformed or truncated request bodies\",\"kind\":\"missing_failure_semantics\",\"text\":\"a stream that ends where HTTP's own framing ends the body — after its `Content-Length` bytes, or at the last chunk of a chunked body\",\"question\":\"What must happen when the declared boundary is never reached or the framing is invalid, including premature EOF, malformed chunks, conflicting framing headers or inconsistent duplicate lengths?\",\"options\":[\"Reject the request before invoking the interface when detectable, otherwise make the stream fail and abort the operation\",\"End the stream at the bytes received and let the interface decide\",\"Close the connection without an HTTP answer\",\"Apply a specified framing precedence and continue\"],\"default_guess\":\"Reject ambiguous framing, make premature or malformed framing a stream error, abort the operation without state change, and close the connection after a safe error response when possible.\",\"witness\":{\"initial\":\"A project correction is sent with a body whose `Content-Length` is 100 bytes.\",\"events\":[\"The authenticated caller sends 60 bytes containing a syntactically complete-looking form.\",\"The caller closes its sending side before the remaining 40 bytes arrive.\"],\"outcomes\":[\"The stream raises a framing error, so the correction is not applied.\",\"The stream reports ordinary end-of-stream at 60 bytes, so the interface may parse and apply the correction.\"],\"observer\":\"The owner reading the corrected project and the caller receiving the response\"}},{\"subject\":\"unconsumed request bodies on persistent connections\",\"kind\":\"unspecified_lifecycle\",\"text\":\"so that no reader of it waits for bytes the client sends only after an answer, and no byte of another request is read as the body's\",\"question\":\"When a handler answers without consuming its entire bounded body stream, must the transport drain the remainder, close the connection, or delay/refuse the next request?\",\"options\":[\"Drain the remainder through the framing boundary, then accept the next request\",\"Close the connection after the response\",\"Require handlers to consume the stream and treat early return as an error\",\"Keep the next request pending until the first stream is explicitly discarded\"],\"default_guess\":\"Explicitly discard or drain the remainder up to the validated boundary before parsing another request, closing the connection if draining or framing fails.\",\"witness\":{\"initial\":\"One persistent connection carries two requests; the first declares a ten-byte body, but its handler reads only one byte and returns an answer.\",\"events\":[\"The client sends the remaining nine bytes of the first body.\",\"The client then sends a complete second request on the same connection.\"],\"outcomes\":[\"The transport drains the nine bytes and serves the second request on the connection.\",\"The transport closes the connection after the first answer, so the second request is not served and must be retried.\"],\"observer\":\"The client sending the two requests\"}},{\"subject\":\"request-body waiting policy\",\"kind\":\"missing_timeout_policy\",\"text\":\"a stream that ends where HTTP's own framing ends the body — after its `Content-Length` bytes, or at the last chunk of a chunked body\",\"question\":\"How long may the stream wait for the next body byte or the framing terminator, and which module owns cancellation, timeout and resource release for a stalled body?\",\"options\":[\"Wait without a Registry-imposed timeout until the peer closes or completes the body\",\"Apply a fixed release-defined idle timeout\",\"Apply a total request-body deadline\",\"Delegate timeout behavior to the HTTP server or operating system\"],\"default_guess\":\"Declare a release-defined body-read idle timeout owned by the transport layer; on expiry, fail the stream, apply no state change and close the connection.\",\"witness\":{\"initial\":\"A client opens a request with a large valid `Content-Length` and sends only its first byte.\",\"events\":[\"The client leaves the connection open indefinitely without sending another byte.\",\"Other clients continue making requests.\"],\"outcomes\":[\"Registry retains the request and its resources indefinitely while waiting for the declared boundary.\",\"Registry times it out, releases its resources and closes the connection.\"],\"observer\":\"The stalled client and the host owner observing resource use\"}},{\"subject\":\"supported HTTP protocol and framing modes\",\"kind\":\"underspecified_protocol\",\"text\":\"where HTTP's own framing ends the body — after its `Content-Length` bytes, or at the last chunk of a chunked body\",\"question\":\"Which HTTP versions and request-framing modes must the two listeners accept, and are requests using any other mode refused?\",\"options\":[\"HTTP/1.1 only, accepting `Content-Length` and chunked request bodies\",\"HTTP/1.0 and HTTP/1.1, including connection-close behavior where applicable\",\"HTTP/1.1 plus HTTP/2, with HTTP/2 DATA-frame boundaries\",\"Whatever versions the selected server library enables by default\"],\"default_guess\":\"Specify HTTP/1.1 for both listeners and reject unsupported versions or invalid framing consistently rather than inheriting library defaults.\",\"witness\":{\"initial\":\"A reachable client attempts to use HTTP/2 on the owner-interface listener.\",\"events\":[\"The client negotiates or sends an HTTP/2 request whose body arrives in DATA frames.\",\"The request otherwise contains a valid authenticated owner action.\"],\"outcomes\":[\"The listener supports HTTP/2 and hands the DATA payload on as the bounded body stream.\",\"The listener supports only HTTP/1.1 and refuses or fails the connection before the action is handled.\"],\"observer\":\"The owner using that client\"}}]}",
+ "set_aside": []
+}
