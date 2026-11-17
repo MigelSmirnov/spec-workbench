@@ -153,7 +153,12 @@ by the module that uses each (State 3, "Secrets never leave"):
 `give_backup_key`, each that one symbol. The backup location, which is not
 a secret, is asked the same way (owner, 2026-11-17):
 `module_internal["operations"]["configuration"]` holds
-`give_backup_location`. A secret such an operation returns
+`give_backup_location`. The other new calls of that day are declared the
+same way: `module_internal["operations"]["store"]` holds `opened_store`
+beside `run_in_transaction` and `read_in_transaction`;
+`module_internal["owner_interface"]["owner_sessions"]` holds
+`give_session_csrf`; and `module_internal["owner_interface"]["upload_framing"]`
+holds `read_upload_head` and the class `MultipartFileBody`. A secret such an operation returns
 to its caller inside the process is not an answer in A13 rule 7's and A17
 rule 6's sense, which is what Registry gives a service or the owner
 (R0-23, R0-37); it never reaches one.

@@ -428,8 +428,10 @@ less the head it read and the closing delimiter with its final `--` and line
 end, or none when the request declared none; or that the head is not of that form — no multipart content type or
 boundary, a first part that is not the CSRF field, no second part that is
 the file — or is longer than the imported `UPLOAD_FORM_HEAD_MAX_BYTES`
-constant, or declares less than that head and the closing delimiter — with
-none of these values. The file part's stream, a `MultipartFileBody`, fails
+constant, or declares less than that head and the closing delimiter, or the
+request's stream fails or ends while the head is read — with none of these
+values. The file part's stream is a `MultipartFileBody`, the class
+`upload_framing` owns that implements `UploadBody` (State 6); it fails
 when the request's stream ends before the closing delimiter, which
 `migration_import.read_import_mapping` refuses as `file_unreadable`, as any
 stream that fails.
@@ -858,7 +860,8 @@ store's one write lock (A04 rule 4, A01 rule 7).
 
 ### Inputs
 
-The step to run inside the transaction, which receives the transaction.
+The open store, which `opened_store` gives; the step to run inside the
+transaction, which receives the transaction.
 
 ### Outputs
 
@@ -897,7 +900,8 @@ Writes the store, atomically.
 
 ### Inputs
 
-The read to run, which receives the transaction.
+The open store, which `opened_store` gives; the read to run, which receives
+the transaction.
 
 ### Outputs
 

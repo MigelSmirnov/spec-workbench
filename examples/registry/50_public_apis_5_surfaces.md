@@ -82,22 +82,23 @@ its one transaction with its entry and confirmation id (A04, A13, A14, A16).
 
 ### Inputs
 
-The session identity from the cookie; the request's arrival reading; the
-CSRF value; the request — which
+The session identity from the cookie; the CSRF value; the request — which
 action or page, its target, its stated revision or access version, its
 values, a confirmation value; for sign-in the credential; for an upload the
-request's declared length, or that it declared none, and its unread byte
-stream, which `owner_interface` hands on without reading and this operation
-passes, unread, to `migration_import.read_import_mapping`, which alone
-consumes it within the request.
+file part's declared length, which `upload_framing.read_upload_head`
+derived, or none, and the file part as an unread stream that ends where the
+part ends, which `owner_interface` hands on without reading and this
+operation passes, unread, to `migration_import.read_import_mapping`, which
+alone consumes it within the request.
 
 ### Outputs
 
 The answer the page renders — a card, a list, a mapping, a confirmation
-step, an accepted change, the newest backup's instant from
+step, an accepted change, the newest backup from
 `backups.newest_backup_instant` in the backup location
-`configuration.give_backup_location` gives — or a refusal of the closed
-set.
+`configuration.give_backup_location` gives — its instant, that there is
+none, or that the location could not be listed, each answered and rendered
+as itself, never as another (A18 rule 1) — or a refusal of the closed set.
 
 ### Observable effect
 
@@ -217,9 +218,10 @@ declared length; `owner_interface` hands that length and the file part, as
 an unread stream that ends where the part ends, to
 `operations.perform_owner_operation`, without reading or buffering it. A
 head of another form gives no CSRF value, and the upload is refused at stage
-(1) before any byte of the file is read. Every request's arrival is the
-`clock.monotonic_reading` taken when its headers are read, before any of its
-body, and the session is checked at it (A13 rule 2).
+(1) before any byte of the file is read. An upload arrives, for the session
+check, once its head has been read (A13 rule 2). The body reaches
+`owner_interface` as a stream that ends where the body ends, at its declared
+length (`instance_lifecycle`'s listener).
 
 ### Outputs
 

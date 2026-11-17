@@ -220,7 +220,10 @@ sees every change as a new version.
    carries the valid session, whatever its answer; its arrival restarts the 30
    minutes — of concurrent requests the latest arrival counts; before the
    first request it runs from the sign-in. Validity is
-   checked when a request arrives (A04 rule 6, stage 1); a request that
+   checked when a request arrives (A04 rule 6, stage 1) — an upload, whose
+   form sends its CSRF value before its file (A19 rule 4), arrives when that
+   head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been
+   read (owner, 2026-11-17); a request that
    passes it completes even if a limit or a sign-out comes while it runs, and
    a restart that interrupts it leaves nothing of it (A04 rule 4). Several
    owner sessions may be open at once; signing in ends none of the others.

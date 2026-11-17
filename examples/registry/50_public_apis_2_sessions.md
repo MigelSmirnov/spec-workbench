@@ -65,9 +65,8 @@ needs (A13 rules 2, 5; A16 rule 2).
 
 ### Inputs
 
-The session identity from the cookie, or none; the request's arrival, the
-monotonic reading `owner_interface` took when its headers were read, before
-any of its body; whether the request is a change; the CSRF value it carries, for a change; whether it reads or
+The session identity from the cookie, or none; whether the request is a
+change; the CSRF value it carries, for a change; whether it reads or
 changes an uploaded file — an upload, the mapping, the import's
 confirmation step, a confirmation, a sign-out, change or not; whether it is
 a sign-out; the request's step, which receives the admitted session.
@@ -88,8 +87,9 @@ session signed out at once.
 
 ### Enforces
 
-Every request is checked at its arrival, and only then — at the arrival
-reading it carries, however long its upload's head took to read after it: a session that has
+Every request is checked at its arrival, and only then — the reading of
+`clock.monotonic_reading` this operation takes when it is called, which for
+an upload is after its bounded head has been read (A13 rule 2): a session that has
 reached 8 hours from sign-in or 30 minutes without a request, or is marked
 signed out, serves no request; a change carries the CSRF value of its
 session, compared in constant time (A13 rule 5). A request that passed
@@ -98,7 +98,8 @@ rule 2). After the check, a change that touches no uploaded file takes its
 place on the session's lock at once; a request that touches one first waits
 for the import lock and then takes its place, so the locks are always taken
 import first and no place on a session's lock waits for the import lock (A16
-rule 2). The import lock is granted in the order requests asked for it, and
+rule 2). A request asks for the import lock when it is admitted. The import
+lock is granted in the order requests asked for it, and
 the session's lock in the order places were taken, and the session's
 changes apply one at a time in that order (A13 rule 2: "in the order in
 which they take the session's one lock"). A change that touches an uploaded
@@ -275,8 +276,8 @@ The session identity the request's cookie carried, or none.
 
 ### Outputs
 
-The session's CSRF value, or none when no session of that identity exists
-or it has reached a limit.
+The session's CSRF value while the session has not been ended — by a
+sign-out, the pass or a restart — or none.
 
 ### Observable effect
 
@@ -288,8 +289,11 @@ changes no session.
 A13 rule 7: the value is the one made at sign-in and kept by this module;
 `owner_interface` puts it only in the forms of the page it renders for that
 session and keeps nothing. The identity is looked up as the session check
-looks it up, compared in constant time; a session past a limit answers none,
-as it serves no request (A13 rule 2).
+looks it up, compared in constant time. It is asked after the request was
+admitted, so a session that reached a limit while the request ran still
+answers its value, and the page of a request that passed completes (A13
+rule 2); a session ended since answers none, and the page is rendered
+without forms that need one.
 
 ### Errors
 

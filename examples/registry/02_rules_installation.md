@@ -668,7 +668,13 @@ injection_interpreted_input (A19), and browser_boundary (A13, A19): the
 size limit still holds over the bytes of the file Registry receives, the
 head before it is bounded by a constant and never kept, the CSRF value
 still travels only in a form (A13 rule 7), and the session cookie is always
-HTTPS-only, which is stricter than A13 rule 1. No outcome changed.
+HTTPS-only, which is stricter than A13 rule 1. A13 rule 2's arrival of an
+upload, changed the same day to the moment its bounded head has been read,
+was reviewed under authentication_credential_abuse and concurrency: the
+session is checked once, at that moment, with no state held between the
+request's headers and its admission; an upload whose session reaches a
+limit while its head is read is refused at the session check, as any
+request arriving after the limit. No outcome changed.
 
 ### Consequence
 

@@ -83,7 +83,12 @@ readings, so an action's today is `operations`' (`_today_of`).
   method, `read(size)` — positional, the next bytes of the stream, at most
   `size`, empty at its end. The request's raw body is another port of
   `models` with the same one method, `ByteStream`, which is `external`: the
-  HTTP server makes it, and `owner_interface` takes it as such. An upload
+  HTTP server makes it, and `owner_interface` takes it as such. It ends where
+  the body ends, at the request's declared length: `MultipartFileBody` looks
+  ahead the delimiter's length, and over the socket's own reader that
+  look-ahead waits for bytes the client sends only after an answer (found by
+  `experiments/registry/upload_framing_proto`, where curl hung until the
+  reader was cut at `Content-Length`). An upload
   form sends its CSRF field first and the file second, as multipart, since a
   script-free form has no other way to carry the CSRF value with a file
   (A13 rules 5, 7). `upload_framing.read_upload_head` reads the head alone,
@@ -127,12 +132,10 @@ readings, so an action's today is `operations`' (`_today_of`).
   answer is `personal_data` when one of the listed (answer model, field)
   pairs holds a value in it, nested views included, and
   `business_confidential` otherwise; `open` is never answered.
-- **An owner request's arrival** (State 3 round-55 T3). `OwnerAdmission`
-  carries `arrived_at`, the `clock.monotonic_reading` `owner_interface` takes
-  when the request's headers are read, before any of its body;
-  `owner_sessions` checks the session's limits and restarts its 30 minutes
-  at that reading, so the bounded head of an upload, read afterwards, never
-  moves the arrival (A13 rule 2).
+- **An owner request's arrival** (owner, 2026-11-17; A13 rule 2).
+  `admit_owner_request` reads `clock.monotonic_reading` when it is called and
+  checks the session there; an upload arrives once its bounded head has
+  been read. Nothing is held between a request's headers and its admission.
 - **The owner's pages** (owner, 2026-11-17; State 7 structure requests of
   `owner_interface`). `_render_owner_page` receives the session's CSRF value,
   which `owner_sessions.give_session_csrf` gives for the cookie's session, or
