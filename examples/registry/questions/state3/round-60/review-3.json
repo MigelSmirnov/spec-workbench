@@ -1,0 +1,174 @@
+{
+ "open_points": [
+  {
+   "subject": "ownership boundary between service_api and instance_lifecycle",
+   "kind": "overlapping_ownership",
+   "text": "The service API's transport for the four services (R0-27, R0-28)",
+   "question": "Does `service_api` own only the application-level service protocol, or does it own part of the HTTP transport that the listener is also said to own?",
+   "options": [
+    "`instance_lifecycle` owns all HTTP transport; `service_api` owns authentication extraction, operation dispatch and application payload serialization",
+    "`service_api` owns the service HTTP adapter while `instance_lifecycle` owns only sockets and connection lifetime",
+    "The two modules jointly own the transport through a separately owned HTTP abstraction"
+   ],
+   "default_guess": "`instance_lifecycle` owns sockets and HTTP syntax/framing; `service_api` owns the service protocol after syntactic HTTP parsing.",
+   "unit": "?"
+  },
+  {
+   "subject": "framed request boundary record",
+   "kind": "missing_owner",
+   "text": "each request's body handed on as a stream that ends where HTTP's own framing ends the body",
+   "question": "Which module owns the request object and stream contract passed from the listener to `service_api` or `owner_interface`, including the request target, parsed headers, duplicate-header representation, framing metadata, read errors and cancellation?",
+   "options": [
+    "An `instance_lifecycle`-owned framed-request type",
+    "A shared model or interface owned by `models`",
+    "Separate input contracts owned by `service_api` and `owner_interface`",
+    "A concrete HTTP-library request object passed through directly"
+   ],
+   "default_guess": "Use an `instance_lifecycle`-owned immutable framed-request interface and a bounded body stream; surface modules receive it without depending on the HTTP library.",
+   "unit": "?"
+  },
+  {
+   "subject": "HTTP response boundary",
+   "kind": "missing_owner",
+   "text": "The reading and writing of its wire format. The HTTP server, its\nconnections and HTTP's framing are `instance_lifecycle`'s listener's, as for\nthe owner interface.",
+   "question": "What does a surface return to the listener, and which module chooses and writes HTTP response headers, body framing, connection headers and the final close or reuse decision?",
+   "options": [
+    "The surface returns status, application headers and body bytes; the listener adds and writes HTTP framing",
+    "The surface writes directly to a listener-owned response stream",
+    "The listener owns the complete HTTP response, and the surface returns only a domain result"
+   ],
+   "default_guess": "The surface returns a status, permitted application headers and serialized body; `instance_lifecycle` adds HTTP framing and writes it to the connection.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner-session arrival versus rejection before a surface",
+   "kind": "contradiction",
+   "text": "a request whose `Content-Length` or chunked framing is\nmalformed, or whose body ends before its framing says, is refused by the\nlistener, its connection closed, and reaches no surface",
+   "question": "If an owner upload's head has been read while its session is valid but malformed chunking or premature EOF is discovered later, did the request reach the owner interface and restart the session's idle period as A13 rule 2 requires, or did it reach no surface and leave the session untouched?",
+   "options": [
+    "Arrival at the multipart head reaches the owner-session check and restarts the idle period even if later body framing fails",
+    "The listener validates the complete framed body first, so the malformed request never reaches the owner-session check and does not restart the idle period",
+    "The listener records the A13 arrival effect itself without invoking the owner interface"
+   ],
+   "default_guess": "Honor A13's precise arrival rule: run the owner-session check when the upload head arrives and restart the idle period; replace “reaches no surface” with a narrower promise that malformed framing reaches no operation or store change.",
+   "witness": {
+    "initial": "An owner session is one second short of its 30-minute idle limit and holds no pending upload.",
+    "events": [
+     "The owner sends a valid session cookie, CSRF field and multipart head before the idle limit.",
+     "The listener reads that head, then later encounters malformed chunk framing or EOF before the declared body end.",
+     "After the original idle limit, the owner sends another request using the same session."
+    ],
+    "outcomes": [
+     "Under A13 rule 2, the upload arrived when its head was read, passed the session check and restarted the idle period, so the later request is accepted.",
+     "Under the changed State 3 clause, the malformed request reached no surface and could not perform the owner-session arrival effect, so the later request is refused as idle."
+    ],
+    "observer": "The owner, through whether the next owner-interface request is accepted or asks for sign-in."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "streaming upload limit versus prevalidation of framing",
+   "kind": "contradiction",
+   "text": "a request whose `Content-Length` or chunked framing is\nmalformed, or whose body ends before its framing says, is refused by the\nlistener, its connection closed, and reaches no surface",
+   "question": "For a chunked multipart upload with no trustworthy total length, must the listener buffer and validate the whole body before routing it, or may the owner interface consume the stream and enforce A19's file-part limit before later framing errors are known?",
+   "options": [
+    "Buffer and validate the entire HTTP body before any surface receives it",
+    "Stream to the owner interface, enforcing the file-part limit immediately, even though a later framing error means the request already reached a surface",
+    "Make the listener parse multipart data and enforce the file-part limit while prevalidating the HTTP body"
+   ],
+   "default_guess": "Stream to the owner interface and enforce A19 at the first file byte over the limit; a later framing failure closes the connection and prevents operation completion, but cannot truthfully be said to have reached no surface.",
+   "witness": {
+    "initial": "A valid owner session sends a chunked multipart upload with no declared total length; its file part will exceed 50 MiB and a later chunk is malformed.",
+    "events": [
+     "The listener receives valid framing through the first 50 MiB plus one byte of the file part.",
+     "The sender continues, then sends malformed chunk framing."
+    ],
+    "outcomes": [
+     "A19 requires refusal as soon as Registry holds the first file byte over 50 MiB, so the owner-interface upload reader has already consumed the request before the later framing error.",
+     "The changed State 3 clause requires detecting the later framing error before the request reaches any surface, so the listener must retain or parse more of the body before the A19 refusal point."
+    ],
+    "observer": "The sender sees when the connection is refused, and the operator can observe whether Registry buffers data beyond the file limit."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "malformed HTTP framing predicate",
+   "kind": "underspecified_rule",
+   "text": "a request whose `Content-Length` or chunked framing is\nmalformed",
+   "question": "Exactly which framing combinations are malformed, including duplicate `Content-Length` fields, conflicting equal or unequal lengths, simultaneous `Transfer-Encoding` and `Content-Length`, unsupported transfer codings, invalid chunk extensions and invalid or forbidden trailers?",
+   "options": [
+    "Apply a named HTTP version and its framing rules strictly, rejecting every ambiguous combination",
+    "Accept combinations the chosen HTTP library normalizes safely",
+    "Declare an explicit closed set of accepted framing forms and reject everything else"
+   ],
+   "default_guess": "Support HTTP/1.1 framing strictly, reject `Transfer-Encoding` together with `Content-Length`, reject conflicting or syntactically invalid lengths, accept only final `chunked`, and validate chunk syntax and trailers.",
+   "unit": "?"
+  },
+  {
+   "subject": "observable refusal for malformed framing",
+   "kind": "unspecified_outcome",
+   "text": "is refused by the\nlistener, its connection closed",
+   "question": "Before closing the connection, does the listener send an HTTP error response, and if so which status and body; or is malformed framing always rejected by a silent close?",
+   "options": [
+    "Send a fixed HTTP 400 response and then close whenever a response can safely be written",
+    "Close silently without an HTTP response",
+    "Use different outcomes for malformed headers, malformed chunks and premature EOF"
+   ],
+   "default_guess": "Send a fixed empty HTTP 400 response and close when possible; use a silent close only when the connection cannot carry a response.",
+   "witness": {
+    "initial": "A client has an open connection to either surface.",
+    "events": [
+     "The client sends a request with an invalid `Content-Length` value.",
+     "The listener detects the malformed framing and closes the connection."
+    ],
+    "outcomes": [
+     "The listener first sends an HTTP 400 response and then closes.",
+     "The listener closes without sending any response bytes."
+    ],
+    "observer": "The HTTP client sees either a status response or only an EOF/reset."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "connection persistence and request sequencing",
+   "kind": "unspecified_connection_policy",
+   "text": "The HTTP server, its\nconnections and HTTP's framing are `instance_lifecycle`'s listener's",
+   "question": "After a valid response, does the listener close the connection or support persistent connections, and if persistent, may it read or process pipelined requests before the preceding response completes?",
+   "options": [
+    "Close after every response",
+    "Support sequential HTTP/1.1 keep-alive but no concurrent pipelining",
+    "Support pipelining with responses kept in request order"
+   ],
+   "default_guess": "Support sequential HTTP/1.1 keep-alive, process one request at a time per connection, and close when either side requests it or framing requires it.",
+   "witness": {
+    "initial": "A client opens one connection and sends two valid requests without waiting for the first response.",
+    "events": [
+     "The listener finishes reading the first request.",
+     "The second request is already present on the connection."
+    ],
+    "outcomes": [
+     "The listener processes both requests on the persistent connection in order.",
+     "The listener answers the first request and closes, so the second request is not processed."
+    ],
+    "observer": "The client sees either two responses on one connection or must reconnect and resend the second request."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "supported HTTP protocol versions",
+   "kind": "unspecified_protocol",
+   "text": "HTTP's framing of every request of both surfaces, one\nimplementation",
+   "question": "Which HTTP versions and request forms does the one listener implementation accept, and what happens when a client uses another version?",
+   "options": [
+    "HTTP/1.1 only",
+    "HTTP/1.0 and HTTP/1.1",
+    "HTTP/1.1 plus HTTP/2 through the same listener"
+   ],
+   "default_guess": "Accept HTTP/1.1 only and reject unsupported versions with a fixed version error followed by connection close.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"ownership boundary between service_api and instance_lifecycle\",\"kind\":\"overlapping_ownership\",\"text\":\"The service API's transport for the four services (R0-27, R0-28)\",\"question\":\"Does `service_api` own only the application-level service protocol, or does it own part of the HTTP transport that the listener is also said to own?\",\"options\":[\"`instance_lifecycle` owns all HTTP transport; `service_api` owns authentication extraction, operation dispatch and application payload serialization\",\"`service_api` owns the service HTTP adapter while `instance_lifecycle` owns only sockets and connection lifetime\",\"The two modules jointly own the transport through a separately owned HTTP abstraction\"],\"default_guess\":\"`instance_lifecycle` owns sockets and HTTP syntax/framing; `service_api` owns the service protocol after syntactic HTTP parsing.\"},{\"subject\":\"framed request boundary record\",\"kind\":\"missing_owner\",\"text\":\"each request's body handed on as a stream that ends where HTTP's own framing ends the body\",\"question\":\"Which module owns the request object and stream contract passed from the listener to `service_api` or `owner_interface`, including the request target, parsed headers, duplicate-header representation, framing metadata, read errors and cancellation?\",\"options\":[\"An `instance_lifecycle`-owned framed-request type\",\"A shared model or interface owned by `models`\",\"Separate input contracts owned by `service_api` and `owner_interface`\",\"A concrete HTTP-library request object passed through directly\"],\"default_guess\":\"Use an `instance_lifecycle`-owned immutable framed-request interface and a bounded body stream; surface modules receive it without depending on the HTTP library.\"},{\"subject\":\"HTTP response boundary\",\"kind\":\"missing_owner\",\"text\":\"The reading and writing of its wire format. The HTTP server, its\\nconnections and HTTP's framing are `instance_lifecycle`'s listener's, as for\\nthe owner interface.\",\"question\":\"What does a surface return to the listener, and which module chooses and writes HTTP response headers, body framing, connection headers and the final close or reuse decision?\",\"options\":[\"The surface returns status, application headers and body bytes; the listener adds and writes HTTP framing\",\"The surface writes directly to a listener-owned response stream\",\"The listener owns the complete HTTP response, and the surface returns only a domain result\"],\"default_guess\":\"The surface returns a status, permitted application headers and serialized body; `instance_lifecycle` adds HTTP framing and writes it to the connection.\"},{\"subject\":\"owner-session arrival versus rejection before a surface\",\"kind\":\"contradiction\",\"text\":\"a request whose `Content-Length` or chunked framing is\\nmalformed, or whose body ends before its framing says, is refused by the\\nlistener, its connection closed, and reaches no surface\",\"question\":\"If an owner upload's head has been read while its session is valid but malformed chunking or premature EOF is discovered later, did the request reach the owner interface and restart the session's idle period as A13 rule 2 requires, or did it reach no surface and leave the session untouched?\",\"options\":[\"Arrival at the multipart head reaches the owner-session check and restarts the idle period even if later body framing fails\",\"The listener validates the complete framed body first, so the malformed request never reaches the owner-session check and does not restart the idle period\",\"The listener records the A13 arrival effect itself without invoking the owner interface\"],\"default_guess\":\"Honor A13's precise arrival rule: run the owner-session check when the upload head arrives and restart the idle period; replace “reaches no surface” with a narrower promise that malformed framing reaches no operation or store change.\",\"witness\":{\"initial\":\"An owner session is one second short of its 30-minute idle limit and holds no pending upload.\",\"events\":[\"The owner sends a valid session cookie, CSRF field and multipart head before the idle limit.\",\"The listener reads that head, then later encounters malformed chunk framing or EOF before the declared body end.\",\"After the original idle limit, the owner sends another request using the same session.\"],\"outcomes\":[\"Under A13 rule 2, the upload arrived when its head was read, passed the session check and restarted the idle period, so the later request is accepted.\",\"Under the changed State 3 clause, the malformed request reached no surface and could not perform the owner-session arrival effect, so the later request is refused as idle.\"],\"observer\":\"The owner, through whether the next owner-interface request is accepted or asks for sign-in.\"}},{\"subject\":\"streaming upload limit versus prevalidation of framing\",\"kind\":\"contradiction\",\"text\":\"a request whose `Content-Length` or chunked framing is\\nmalformed, or whose body ends before its framing says, is refused by the\\nlistener, its connection closed, and reaches no surface\",\"question\":\"For a chunked multipart upload with no trustworthy total length, must the listener buffer and validate the whole body before routing it, or may the owner interface consume the stream and enforce A19's file-part limit before later framing errors are known?\",\"options\":[\"Buffer and validate the entire HTTP body before any surface receives it\",\"Stream to the owner interface, enforcing the file-part limit immediately, even though a later framing error means the request already reached a surface\",\"Make the listener parse multipart data and enforce the file-part limit while prevalidating the HTTP body\"],\"default_guess\":\"Stream to the owner interface and enforce A19 at the first file byte over the limit; a later framing failure closes the connection and prevents operation completion, but cannot truthfully be said to have reached no surface.\",\"witness\":{\"initial\":\"A valid owner session sends a chunked multipart upload with no declared total length; its file part will exceed 50 MiB and a later chunk is malformed.\",\"events\":[\"The listener receives valid framing through the first 50 MiB plus one byte of the file part.\",\"The sender continues, then sends malformed chunk framing.\"],\"outcomes\":[\"A19 requires refusal as soon as Registry holds the first file byte over 50 MiB, so the owner-interface upload reader has already consumed the request before the later framing error.\",\"The changed State 3 clause requires detecting the later framing error before the request reaches any surface, so the listener must retain or parse more of the body before the A19 refusal point.\"],\"observer\":\"The sender sees when the connection is refused, and the operator can observe whether Registry buffers data beyond the file limit.\"}},{\"subject\":\"malformed HTTP framing predicate\",\"kind\":\"underspecified_rule\",\"text\":\"a request whose `Content-Length` or chunked framing is\\nmalformed\",\"question\":\"Exactly which framing combinations are malformed, including duplicate `Content-Length` fields, conflicting equal or unequal lengths, simultaneous `Transfer-Encoding` and `Content-Length`, unsupported transfer codings, invalid chunk extensions and invalid or forbidden trailers?\",\"options\":[\"Apply a named HTTP version and its framing rules strictly, rejecting every ambiguous combination\",\"Accept combinations the chosen HTTP library normalizes safely\",\"Declare an explicit closed set of accepted framing forms and reject everything else\"],\"default_guess\":\"Support HTTP/1.1 framing strictly, reject `Transfer-Encoding` together with `Content-Length`, reject conflicting or syntactically invalid lengths, accept only final `chunked`, and validate chunk syntax and trailers.\"},{\"subject\":\"observable refusal for malformed framing\",\"kind\":\"unspecified_outcome\",\"text\":\"is refused by the\\nlistener, its connection closed\",\"question\":\"Before closing the connection, does the listener send an HTTP error response, and if so which status and body; or is malformed framing always rejected by a silent close?\",\"options\":[\"Send a fixed HTTP 400 response and then close whenever a response can safely be written\",\"Close silently without an HTTP response\",\"Use different outcomes for malformed headers, malformed chunks and premature EOF\"],\"default_guess\":\"Send a fixed empty HTTP 400 response and close when possible; use a silent close only when the connection cannot carry a response.\",\"witness\":{\"initial\":\"A client has an open connection to either surface.\",\"events\":[\"The client sends a request with an invalid `Content-Length` value.\",\"The listener detects the malformed framing and closes the connection.\"],\"outcomes\":[\"The listener first sends an HTTP 400 response and then closes.\",\"The listener closes without sending any response bytes.\"],\"observer\":\"The HTTP client sees either a status response or only an EOF/reset.\"}},{\"subject\":\"connection persistence and request sequencing\",\"kind\":\"unspecified_connection_policy\",\"text\":\"The HTTP server, its\\nconnections and HTTP's framing are `instance_lifecycle`'s listener's\",\"question\":\"After a valid response, does the listener close the connection or support persistent connections, and if persistent, may it read or process pipelined requests before the preceding response completes?\",\"options\":[\"Close after every response\",\"Support sequential HTTP/1.1 keep-alive but no concurrent pipelining\",\"Support pipelining with responses kept in request order\"],\"default_guess\":\"Support sequential HTTP/1.1 keep-alive, process one request at a time per connection, and close when either side requests it or framing requires it.\",\"witness\":{\"initial\":\"A client opens one connection and sends two valid requests without waiting for the first response.\",\"events\":[\"The listener finishes reading the first request.\",\"The second request is already present on the connection.\"],\"outcomes\":[\"The listener processes both requests on the persistent connection in order.\",\"The listener answers the first request and closes, so the second request is not processed.\"],\"observer\":\"The client sees either two responses on one connection or must reconnect and resend the second request.\"}},{\"subject\":\"supported HTTP protocol versions\",\"kind\":\"unspecified_protocol\",\"text\":\"HTTP's framing of every request of both surfaces, one\\nimplementation\",\"question\":\"Which HTTP versions and request forms does the one listener implementation accept, and what happens when a client uses another version?\",\"options\":[\"HTTP/1.1 only\",\"HTTP/1.0 and HTTP/1.1\",\"HTTP/1.1 plus HTTP/2 through the same listener\"],\"default_guess\":\"Accept HTTP/1.1 only and reject unsupported versions with a fixed version error followed by connection close.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,211 @@
+{
+ "open_points": [
+  {
+   "subject": "service_api",
+   "kind": "overlapping_ownership",
+   "text": "The service API's transport for the four services (R0-27, R0-28): reading the token, the session header and the request, calling `operations`, answering in the wire format States 5 and 6 declare",
+   "question": "Where is the exact boundary between `service_api` reading the request and `instance_lifecycle` owning the HTTP server and framing, and what request/response object crosses that boundary?",
+   "options": [
+    "`instance_lifecycle` parses the HTTP request line, headers and body framing and passes a structured request plus a bounded body stream to `service_api`",
+    "`instance_lifecycle` passes connection bytes or a partially parsed request and `service_api` parses the service request",
+    "A separate HTTP adapter owns parsing and is used by both surfaces"
+   ],
+   "default_guess": "Have `instance_lifecycle` own all HTTP parsing and pass method, route, headers and a framing-bounded body stream to `service_api`.",
+   "witness": {
+    "initial": "The service listener has accepted a connection carrying a Kernel request with a token, session header and body.",
+    "events": [
+     "`instance_lifecycle` parses enough bytes to find a route and invokes `service_api`.",
+     "`service_api` must obtain the token, session identity and request fields."
+    ],
+    "outcomes": [
+     "`instance_lifecycle` supplies parsed headers and a bounded body stream; `service_api` performs only semantic decoding.",
+     "`service_api` reads HTTP headers or raw request bytes itself, duplicating part of the framing owned by `instance_lifecycle`."
+    ],
+    "observer": "The implementers of the two modules and tests that substitute either module see different interfaces and dependencies."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle",
+   "kind": "contradiction",
+   "text": "each request's body handed on as a stream that ends where HTTP's own framing ends the body — after its `Content-Length` bytes, or at the last chunk of a chunked body — so that no reader of it waits for bytes the client sends only after an answer, and no byte of another request is read as the body's — HTTP's framing of every request of both surfaces, one implementation: a request whose `Content-Length` or chunked framing is malformed, or whose body ends before its framing says, is refused by the listener, its connection closed, and reaches no surface",
+   "question": "May a surface receive and start reading the body before the listener has proved that the complete framing is valid, or must the listener buffer and validate the whole body before invoking a surface?",
+   "options": [
+    "Invoke the surface with a live bounded stream; a late framing failure is then discovered after the request reached the surface",
+    "Read and validate the complete body before invoking either surface, then expose the buffered body as a stream",
+    "Split surface processing into an early admission step and a later invocation after framing validation"
+   ],
+   "default_guess": "Validate and buffer the complete framed body before invoking a surface, while preserving the head-arrival instant required for owner-session admission.",
+   "witness": {
+    "initial": "A valid owner session uploads a chunked import body whose first chunks and CSRF field are valid, but the connection ends before the terminating chunk.",
+    "events": [
+     "The listener reads the request head and initial chunks.",
+     "The owner-interface handler would need to consume the supplied stream to receive the upload.",
+     "The connection ends before valid chunked framing completes."
+    ],
+    "outcomes": [
+     "Under “handed on as a stream,” the owner interface has already received the request when the listener discovers the premature end.",
+     "Under “reaches no surface,” the listener must withhold the request until the complete body has been read and validated."
+    ],
+    "observer": "The owner interface and any instrumentation or temporary state it creates can observe whether the request reached it."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle",
+   "kind": "missing_handoff_contract",
+   "text": "an upload, whose form sends its CSRF value before its file (A19 rule 4), arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read",
+   "question": "If the listener withholds a request until its complete framing is validated, how is the earlier head-arrival instant conveyed to the owner-session check so that expiry is decided at the time A13 requires?",
+   "options": [
+    "The listener records the head-arrival monotonic time and passes it to `owner_interface`",
+    "The listener calls an owner-session admission operation as soon as the head is read",
+    "The surface checks the session only when the fully validated request is delivered"
+   ],
+   "default_guess": "Record the monotonic head-arrival time in the request envelope and require the owner interface to use it for the session check.",
+   "witness": {
+    "initial": "An owner session has one second left before its idle limit, and a well-formed upload takes ten seconds to finish.",
+    "events": [
+     "The listener finishes the bounded form head before the limit.",
+     "The listener finishes validating the complete HTTP body after the limit.",
+     "The owner interface checks session validity."
+    ],
+    "outcomes": [
+     "Using the head-arrival instant admits the upload and lets it complete under A13.",
+     "Using the later surface-delivery time refuses the upload as expired."
+    ],
+    "observer": "The owner sees either a completed upload or a sign-in refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle",
+   "kind": "undefined_framing_policy",
+   "text": "a request whose `Content-Length` or chunked framing is malformed",
+   "question": "Which framing combinations and syntactic variants are malformed, including simultaneous `Content-Length` and `Transfer-Encoding`, repeated or conflicting `Content-Length` fields, unsupported transfer codings, chunk extensions and trailers, and a request with neither framing form?",
+   "options": [
+    "Reject every request containing both `Content-Length` and `Transfer-Encoding`, every repeated `Content-Length`, and every transfer coding except supported chunked encoding",
+    "Follow the selected HTTP implementation's parsing and precedence rules",
+    "Accept identical repeated lengths and RFC-valid chunk extensions and trailers while rejecting only conflicting lengths"
+   ],
+   "default_guess": "Define and test a strict shared policy that rejects ambiguous length information and unsupported transfer codings before routing.",
+   "witness": {
+    "initial": "A service client sends a valid token and a write request with both `Content-Length: 4` and chunked framing whose decoded body differs from the first four wire bytes.",
+    "events": [
+     "The shared listener parses the request.",
+     "If accepted, the service surface decodes and executes the write."
+    ],
+    "outcomes": [
+     "One careful implementation treats chunked framing as authoritative and executes the request.",
+     "Another treats the two framing declarations as malformed, closes the connection and executes nothing."
+    ],
+    "observer": "The caller and the store observe whether the write occurred."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle",
+   "kind": "undefined_refusal",
+   "text": "is refused by the listener, its connection closed, and reaches no surface",
+   "question": "Does a listener-level framing refusal send an HTTP error response before closing, and if so which status and response format owns that answer?",
+   "options": [
+    "Close the connection without sending any response",
+    "Send a minimal HTTP error response and then close",
+    "Send the surface's normal wire-format error response and then close"
+   ],
+   "default_guess": "Send a minimal listener-owned HTTP 400 response when safely possible, then close; otherwise close without a response.",
+   "witness": {
+    "initial": "A client sends a request with syntactically invalid chunk framing.",
+    "events": [
+     "The listener detects the malformed chunk before invoking a surface.",
+     "The listener closes the connection."
+    ],
+    "outcomes": [
+     "The client receives an HTTP error response before EOF.",
+     "The client receives only EOF or a reset and no HTTP response."
+    ],
+    "observer": "The service or browser client sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle",
+   "kind": "undefined_connection_policy",
+   "text": "The HTTP server, its connections and HTTP's framing are `instance_lifecycle`'s listener's",
+   "question": "What HTTP versions and connection behavior does the listener support: persistent connections, `Connection: close`, pipelining, concurrent requests on one connection, response ordering and the maximum requests per connection?",
+   "options": [
+    "HTTP/1.1 with sequential persistent requests and ordered responses",
+    "One request per connection, always closing after the response",
+    "HTTP/1.1 pipelining or concurrent dispatch with responses kept in request order",
+    "Delegate all behavior to the chosen HTTP library"
+   ],
+   "default_guess": "Support HTTP/1.1 sequential keep-alive, honor `Connection: close`, do not dispatch pipelined requests concurrently, and preserve request order.",
+   "witness": {
+    "initial": "A client opens one HTTP/1.1 connection and sends two complete service requests without waiting for the first answer.",
+    "events": [
+     "The listener frames the first request.",
+     "The first surface call answers.",
+     "The listener encounters the already-buffered second request."
+    ],
+    "outcomes": [
+     "A persistent listener dispatches the second request and returns two ordered answers.",
+     "A one-request listener closes after the first answer, so the second request is never handled."
+    ],
+    "observer": "The client observes one answer or two, and a write in the second request may or may not occur."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle",
+   "kind": "missing_owner",
+   "text": "The HTTP server, its connections and HTTP's framing are `instance_lifecycle`'s listener's, as for the owner interface.",
+   "question": "Who terminates HTTPS for the owner interface and owns certificate handling and the trusted handoff when the interface is reached from another machine?",
+   "options": [
+    "`instance_lifecycle` terminates TLS itself",
+    "A deployment proxy or VPN endpoint terminates TLS and forwards trusted HTTP to the listener",
+    "The listener serves plain HTTP even for remote owner access"
+   ],
+   "default_guess": "Make TLS termination an explicit deployment component outside Registry and state the trusted HTTP handoff to `instance_lifecycle`.",
+   "witness": {
+    "initial": "The owner reaches the owner interface from another machine through the owner's VPN.",
+    "events": [
+     "The browser opens the owner-interface URL.",
+     "The request reaches Registry's configured listener."
+    ],
+    "outcomes": [
+     "Registry's listener performs TLS and sets the protected session cookie over that connection.",
+     "An external component performs TLS and forwards plain HTTP to Registry; Registry must rely on that boundary for HTTPS-only cookie behavior."
+    ],
+    "observer": "The browser, deployment administrator and session-cookie tests see which component provides HTTPS."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle",
+   "kind": "undefined_resource_policy",
+   "text": "a request whose `Content-Length` or chunked framing is malformed, or whose body ends before its framing says, is refused by the listener, its connection closed",
+   "question": "What listener-owned limits and deadlines apply to request lines, headers, chunk metadata, inactive or slow bodies and connections that never finish their declared framing?",
+   "options": [
+    "Fixed release limits and monotonic read deadlines shared by both surfaces",
+    "No listener limits or deadlines beyond operation-specific body limits",
+    "Use the HTTP library's undocumented or configurable defaults"
+   ],
+   "default_guess": "Declare release-fixed header and framing limits plus monotonic idle deadlines, leaving the existing import-file limit to the owner-interface upload logic.",
+   "witness": {
+    "initial": "An unauthenticated peer opens a reachable listener connection, declares a large body and sends one byte periodically without ending it.",
+    "events": [
+     "The listener waits for the framing to finish.",
+     "The peer continues slowly while holding the connection."
+    ],
+    "outcomes": [
+     "With a listener deadline the request is refused and the connection is released.",
+     "Without one the connection remains live indefinitely and consumes listener resources."
+    ],
+    "observer": "Other callers and the operator observe different availability and resource use."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"service_api\",\"kind\":\"overlapping_ownership\",\"text\":\"The service API's transport for the four services (R0-27, R0-28): reading the token, the session header and the request, calling `operations`, answering in the wire format States 5 and 6 declare\",\"question\":\"Where is the exact boundary between `service_api` reading the request and `instance_lifecycle` owning the HTTP server and framing, and what request/response object crosses that boundary?\",\"options\":[\"`instance_lifecycle` parses the HTTP request line, headers and body framing and passes a structured request plus a bounded body stream to `service_api`\",\"`instance_lifecycle` passes connection bytes or a partially parsed request and `service_api` parses the service request\",\"A separate HTTP adapter owns parsing and is used by both surfaces\"],\"default_guess\":\"Have `instance_lifecycle` own all HTTP parsing and pass method, route, headers and a framing-bounded body stream to `service_api`.\",\"witness\":{\"initial\":\"The service listener has accepted a connection carrying a Kernel request with a token, session header and body.\",\"events\":[\"`instance_lifecycle` parses enough bytes to find a route and invokes `service_api`.\",\"`service_api` must obtain the token, session identity and request fields.\"],\"outcomes\":[\"`instance_lifecycle` supplies parsed headers and a bounded body stream; `service_api` performs only semantic decoding.\",\"`service_api` reads HTTP headers or raw request bytes itself, duplicating part of the framing owned by `instance_lifecycle`.\"],\"observer\":\"The implementers of the two modules and tests that substitute either module see different interfaces and dependencies.\"}},{\"subject\":\"instance_lifecycle\",\"kind\":\"contradiction\",\"text\":\"each request's body handed on as a stream that ends where HTTP's own framing ends the body — after its `Content-Length` bytes, or at the last chunk of a chunked body — so that no reader of it waits for bytes the client sends only after an answer, and no byte of another request is read as the body's — HTTP's framing of every request of both surfaces, one implementation: a request whose `Content-Length` or chunked framing is malformed, or whose body ends before its framing says, is refused by the listener, its connection closed, and reaches no surface\",\"question\":\"May a surface receive and start reading the body before the listener has proved that the complete framing is valid, or must the listener buffer and validate the whole body before invoking a surface?\",\"options\":[\"Invoke the surface with a live bounded stream; a late framing failure is then discovered after the request reached the surface\",\"Read and validate the complete body before invoking either surface, then expose the buffered body as a stream\",\"Split surface processing into an early admission step and a later invocation after framing validation\"],\"default_guess\":\"Validate and buffer the complete framed body before invoking a surface, while preserving the head-arrival instant required for owner-session admission.\",\"witness\":{\"initial\":\"A valid owner session uploads a chunked import body whose first chunks and CSRF field are valid, but the connection ends before the terminating chunk.\",\"events\":[\"The listener reads the request head and initial chunks.\",\"The owner-interface handler would need to consume the supplied stream to receive the upload.\",\"The connection ends before valid chunked framing completes.\"],\"outcomes\":[\"Under “handed on as a stream,” the owner interface has already received the request when the listener discovers the premature end.\",\"Under “reaches no surface,” the listener must withhold the request until the complete body has been read and validated.\"],\"observer\":\"The owner interface and any instrumentation or temporary state it creates can observe whether the request reached it.\"}},{\"subject\":\"instance_lifecycle\",\"kind\":\"missing_handoff_contract\",\"text\":\"an upload, whose form sends its CSRF value before its file (A19 rule 4), arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read\",\"question\":\"If the listener withholds a request until its complete framing is validated, how is the earlier head-arrival instant conveyed to the owner-session check so that expiry is decided at the time A13 requires?\",\"options\":[\"The listener records the head-arrival monotonic time and passes it to `owner_interface`\",\"The listener calls an owner-session admission operation as soon as the head is read\",\"The surface checks the session only when the fully validated request is delivered\"],\"default_guess\":\"Record the monotonic head-arrival time in the request envelope and require the owner interface to use it for the session check.\",\"witness\":{\"initial\":\"An owner session has one second left before its idle limit, and a well-formed upload takes ten seconds to finish.\",\"events\":[\"The listener finishes the bounded form head before the limit.\",\"The listener finishes validating the complete HTTP body after the limit.\",\"The owner interface checks session validity.\"],\"outcomes\":[\"Using the head-arrival instant admits the upload and lets it complete under A13.\",\"Using the later surface-delivery time refuses the upload as expired.\"],\"observer\":\"The owner sees either a completed upload or a sign-in refusal.\"}},{\"subject\":\"instance_lifecycle\",\"kind\":\"undefined_framing_policy\",\"text\":\"a request whose `Content-Length` or chunked framing is malformed\",\"question\":\"Which framing combinations and syntactic variants are malformed, including simultaneous `Content-Length` and `Transfer-Encoding`, repeated or conflicting `Content-Length` fields, unsupported transfer codings, chunk extensions and trailers, and a request with neither framing form?\",\"options\":[\"Reject every request containing both `Content-Length` and `Transfer-Encoding`, every repeated `Content-Length`, and every transfer coding except supported chunked encoding\",\"Follow the selected HTTP implementation's parsing and precedence rules\",\"Accept identical repeated lengths and RFC-valid chunk extensions and trailers while rejecting only conflicting lengths\"],\"default_guess\":\"Define and test a strict shared policy that rejects ambiguous length information and unsupported transfer codings before routing.\",\"witness\":{\"initial\":\"A service client sends a valid token and a write request with both `Content-Length: 4` and chunked framing whose decoded body differs from the first four wire bytes.\",\"events\":[\"The shared listener parses the request.\",\"If accepted, the service surface decodes and executes the write.\"],\"outcomes\":[\"One careful implementation treats chunked framing as authoritative and executes the request.\",\"Another treats the two framing declarations as malformed, closes the connection and executes nothing.\"],\"observer\":\"The caller and the store observe whether the write occurred.\"}},{\"subject\":\"instance_lifecycle\",\"kind\":\"undefined_refusal\",\"text\":\"is refused by the listener, its connection closed, and reaches no surface\",\"question\":\"Does a listener-level framing refusal send an HTTP error response before closing, and if so which status and response format owns that answer?\",\"options\":[\"Close the connection without sending any response\",\"Send a minimal HTTP error response and then close\",\"Send the surface's normal wire-format error response and then close\"],\"default_guess\":\"Send a minimal listener-owned HTTP 400 response when safely possible, then close; otherwise close without a response.\",\"witness\":{\"initial\":\"A client sends a request with syntactically invalid chunk framing.\",\"events\":[\"The listener detects the malformed chunk before invoking a surface.\",\"The listener closes the connection.\"],\"outcomes\":[\"The client receives an HTTP error response before EOF.\",\"The client receives only EOF or a reset and no HTTP response.\"],\"observer\":\"The service or browser client sees the difference.\"}},{\"subject\":\"instance_lifecycle\",\"kind\":\"undefined_connection_policy\",\"text\":\"The HTTP server, its connections and HTTP's framing are `instance_lifecycle`'s listener's\",\"question\":\"What HTTP versions and connection behavior does the listener support: persistent connections, `Connection: close`, pipelining, concurrent requests on one connection, response ordering and the maximum requests per connection?\",\"options\":[\"HTTP/1.1 with sequential persistent requests and ordered responses\",\"One request per connection, always closing after the response\",\"HTTP/1.1 pipelining or concurrent dispatch with responses kept in request order\",\"Delegate all behavior to the chosen HTTP library\"],\"default_guess\":\"Support HTTP/1.1 sequential keep-alive, honor `Connection: close`, do not dispatch pipelined requests concurrently, and preserve request order.\",\"witness\":{\"initial\":\"A client opens one HTTP/1.1 connection and sends two complete service requests without waiting for the first answer.\",\"events\":[\"The listener frames the first request.\",\"The first surface call answers.\",\"The listener encounters the already-buffered second request.\"],\"outcomes\":[\"A persistent listener dispatches the second request and returns two ordered answers.\",\"A one-request listener closes after the first answer, so the second request is never handled.\"],\"observer\":\"The client observes one answer or two, and a write in the second request may or may not occur.\"}},{\"subject\":\"instance_lifecycle\",\"kind\":\"missing_owner\",\"text\":\"The HTTP server, its connections and HTTP's framing are `instance_lifecycle`'s listener's, as for the owner interface.\",\"question\":\"Who terminates HTTPS for the owner interface and owns certificate handling and the trusted handoff when the interface is reached from another machine?\",\"options\":[\"`instance_lifecycle` terminates TLS itself\",\"A deployment proxy or VPN endpoint terminates TLS and forwards trusted HTTP to the listener\",\"The listener serves plain HTTP even for remote owner access\"],\"default_guess\":\"Make TLS termination an explicit deployment component outside Registry and state the trusted HTTP handoff to `instance_lifecycle`.\",\"witness\":{\"initial\":\"The owner reaches the owner interface from another machine through the owner's VPN.\",\"events\":[\"The browser opens the owner-interface URL.\",\"The request reaches Registry's configured listener.\"],\"outcomes\":[\"Registry's listener performs TLS and sets the protected session cookie over that connection.\",\"An external component performs TLS and forwards plain HTTP to Registry; Registry must rely on that boundary for HTTPS-only cookie behavior.\"],\"observer\":\"The browser, deployment administrator and session-cookie tests see which component provides HTTPS.\"}},{\"subject\":\"instance_lifecycle\",\"kind\":\"undefined_resource_policy\",\"text\":\"a request whose `Content-Length` or chunked framing is malformed, or whose body ends before its framing says, is refused by the listener, its connection closed\",\"question\":\"What listener-owned limits and deadlines apply to request lines, headers, chunk metadata, inactive or slow bodies and connections that never finish their declared framing?\",\"options\":[\"Fixed release limits and monotonic read deadlines shared by both surfaces\",\"No listener limits or deadlines beyond operation-specific body limits\",\"Use the HTTP library's undocumented or configurable defaults\"],\"default_guess\":\"Declare release-fixed header and framing limits plus monotonic idle deadlines, leaving the existing import-file limit to the owner-interface upload logic.\",\"witness\":{\"initial\":\"An unauthenticated peer opens a reachable listener connection, declares a large body and sends one byte periodically without ending it.\",\"events\":[\"The listener waits for the framing to finish.\",\"The peer continues slowly while holding the connection.\"],\"outcomes\":[\"With a listener deadline the request is refused and the connection is released.\",\"Without one the connection remains live indefinitely and consumes listener resources.\"],\"observer\":\"Other callers and the operator observe different availability and resource use.\"}}]}",
+ "set_aside": []
+}

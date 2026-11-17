@@ -1340,9 +1340,12 @@ framing ends the body — after its `Content-Length` bytes, or at the last
 chunk of a chunked body — so that no reader of it waits for bytes the client
 sends only after an answer, and no byte of another request is read as the
 body's — HTTP's framing of every request of both surfaces, one
-implementation: a request whose `Content-Length` or chunked framing is
-malformed, or whose body ends before its framing says, is refused by the
-listener, its connection closed, and reaches no surface; the 60-second pass
+implementation: a request whose `Content-Length` or `Transfer-Encoding`
+header is malformed is refused by the listener from its headers alone, its
+connection closed, and reaches no surface; the body itself is never read
+ahead by the listener, so a body that ends before its framing says, or
+whose chunks are malformed, is a failure of the stream its reader sees
+while reading it; the 60-second pass
 of `owner_sessions` and the minute look of `backups` (A13 rule 2, A18 rule 1);
 that a restart ends every owner session (A13 rule 2).
 
