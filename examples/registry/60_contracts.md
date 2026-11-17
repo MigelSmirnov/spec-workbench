@@ -96,7 +96,11 @@ readings, so an action's today is `operations`' (`_today_of`).
   `MultipartFileBody(stream, delimiter)`, `policy`, owned by
   `upload_framing`: it gives the file part's bytes and ends before the
   delimiter, holding in memory no more than the delimiter's length of
-  look-ahead, so `_parse_export` still receives the bare JSON object. Its
+  look-ahead, so `_parse_export` still receives the bare JSON object. A
+  stream that ends before the delimiter makes its `read` raise, a failure of
+  the stream that `read_import_mapping` answers `file_unreadable`, as any
+  stream that fails; a request that declares less than the head and the
+  delimiter answers an `UploadHead` with none of its values. Its
   module imports nothing that opens a file or a connection (§5.1), which is
   why it is not `owner_interface`'s: that module reads urlencoded forms. The
   file is read in portions, and only by the step. This keeps

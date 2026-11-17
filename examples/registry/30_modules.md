@@ -146,11 +146,14 @@ later line, and modules on one line do not know each other.
   built by the module that owns its records — the project card, with its
   object and its rooms in 'list rooms' order, by `projects` alone; the one
   answer that joins records of two modules, the agent projection with its
-  project's published pointers, is joined by `operations`. Which facts are
-  `personal_data` ("Disclosure classes by field") is one table of the release,
-  `data_provider`'s `PERSONAL_DATA_FIELDS`, of (answer model, field) pairs
-  (owner, 2026-11-17); every other fact is `business_confidential` and none
-  is `open`. `operations` computes an answer's class as the highest of its
+  project's published pointers, is joined by `operations`. Which facts of
+  an answer are `personal_data` ("Disclosure classes by field") is one table
+  of the release, `data_provider`'s `PERSONAL_DATA_FIELDS`, of (answer model,
+  field) pairs (owner, 2026-11-17); every other fact an answer carries is
+  `business_confidential` and none is `open`. The table classifies answers
+  only: the uploaded import file, `personal_data` by State 1's table, is
+  never an answer's field — `owner_sessions` keeps it in memory and no
+  answer carries its bytes (A16 rule 2). `operations` computes an answer's class as the highest of its
   facts' — `personal_data` when one of those fields holds a value — and refuses the answer whole
   when it is above the caller's highest (A09 rule 4): a service's from
   `service_access`, and for the owner `personal_data`, the highest class, so
@@ -499,7 +502,11 @@ reader asks and never buffered beyond the delimiter it must look ahead for;
 and the file part's declared length — the request's declared length less
 the head it read and the closing delimiter with its final `--` and line end,
 or none when the request declares none — so that a file of exactly the
-import limit is not refused for its framing (A19 rule 4).
+import limit is not refused for its framing (A19 rule 4). A request that
+declares less than the head it read and the closing delimiter is a head of
+another form. A stream that ends before the closing delimiter is a failure
+of the file part's stream, which `migration_import` refuses as a file that
+cannot be read (`file_unreadable`), replacing nothing kept (A16 rule 2).
 
 ### Knows
 
@@ -1286,9 +1293,11 @@ of its multipart body (owner, 2026-11-17): `owner_interface` has
 declared length, which `upload_framing` derives, and an unread stream that
 ends where the part ends, never read or buffered here, so that
 `migration_import` alone applies A19 rule 4 to the file. The session cookie
-is always HTTPS-only (A13 rule 1, owner, 2026-11-17): a browser on Registry's
-own machine accepts it from a loopback address over plain HTTP, and from any
-other machine the interface is reached only through HTTPS (R0-29). A
+is always HTTPS-only (A13 rule 1, owner, 2026-11-17): from another machine
+the interface is reached only through HTTPS (R0-29); whether a browser on
+Registry's own machine sends it over plain HTTP to a loopback address is
+that browser's, and where it does not, HTTPS there too is the host's
+(Explicit exclusions). A
 request's arrival is the monotonic reading taken when its headers are read,
 before any of its body, handed on for the session check (A13 rule 2). Every
 form of a page rendered for a valid session carries the CSRF value

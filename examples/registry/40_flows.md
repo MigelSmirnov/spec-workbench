@@ -236,7 +236,10 @@ rule 7).
    sessions stay. `module:owner_interface` sets the cookie — not readable by
    scripts, sent only to Registry's origin, and only over HTTPS when the
    interface is reached from another machine (A13 rule 1): Registry always
-   marks it HTTPS-only (owner, 2026-11-17).
+   marks it HTTPS-only (owner, 2026-11-17). Whether a browser on Registry's
+   own machine sends such a cookie over plain HTTP to a loopback address is
+   that browser's; where it does not, the owner reaches the interface
+   through HTTPS there too, which is the host's (Explicit exclusions).
 2. **Every request of the session.** `capability:owner_sessions.admit_owner_request`
    checks at arrival that the cookie names a session that has reached no
    limit — 8 hours from sign-in, 30 minutes without an owner request, not
@@ -582,7 +585,9 @@ recorded or absent, never contact data (R0-83).
    for the operation (A09 rules 1–3). `capability:customers.read_billing_data`
    then answers kind, tax id and legal name, a value never recorded marked
    absent; an unknown Customer refused (3), an erased or restricted one
-   refused (6) (R0-65, R0-83). The answer is `personal_data`, within
+   refused (6) (R0-65, R0-83). The answer is `personal_data` when its
+   tax id or legal name holds a value and `business_confidential` when
+   neither does, both within
    `capability:service_access.highest_class_of_service` for PresuPro.
 
 ### Outcomes
