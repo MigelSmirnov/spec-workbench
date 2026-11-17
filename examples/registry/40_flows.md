@@ -17,7 +17,9 @@ the CSRF value and the form and hands them to `operations`, and renders its
 answer as escaped text (A19 rules 1, 2). A surface whose reading of a body
 fails before it has a request to hand on — a form, a service request, an
 upload's head — answers nothing: the connection is closed and nothing reaches
-`operations`. Once an upload's file part is handed on, its stream's failure
+`operations`. Such a request never arrives in A13 rule 2's sense, since an
+owner request arrives when it is handed to the session check (State 3,
+`owner_sessions`): it is no owner request and restarts no 30 minutes. Once an upload's file part is handed on, its stream's failure
 is `migration_import`'s `file_unreadable`, rendered as any refusal, and the
 connection is then closed (State 5, `serve_owner_request`). `operations` runs A04 rule 6: stage
 (1) through `service_access` for a service or `owner_sessions` for the owner,

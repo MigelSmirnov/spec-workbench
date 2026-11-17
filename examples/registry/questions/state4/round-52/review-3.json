@@ -1,0 +1,106 @@
+{
+ "open_points": [
+  {
+   "subject": "40_flows.md:Status",
+   "kind": "missing failure outcome",
+   "text": "“Every request of a caller whose framing headers the listener accepted (`instance_lifecycle`) enters through one of the two surfaces” does not say what the listener answers when framing headers are not accepted; State 3 only says such a request “is refused by the listener from its headers alone, its connection closed”.",
+   "question": "When `Content-Length` or `Transfer-Encoding` is malformed, does the listener send a refusal response before closing, or close without answering?",
+   "options": [
+    "Send a generic HTTP framing-error response, then close the connection",
+    "Close the connection without any response"
+   ],
+   "default_guess": "Send a generic HTTP framing-error response, then close the connection.",
+   "witness": {
+    "initial": "The listener is running and a caller has an open connection to either surface.",
+    "events": [
+     "The caller sends a request with a valid request line but a malformed `Content-Length` header.",
+     "`instance_lifecycle` rejects the framing headers and closes the connection."
+    ],
+    "outcomes": [
+     "The caller receives a generic HTTP error response before the connection closes.",
+     "The connection closes without any response bytes."
+    ],
+    "observer": "The caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:Status",
+   "kind": "contradictory session effect",
+   "text": "“A surface whose reading of a body fails before it has a request to hand on … answers nothing: the connection is closed and nothing reaches `operations`” conflicts with A13’s “An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes”.",
+   "question": "Does an ordinary owner-interface request carrying a valid session restart the idle period when its form body cannot be read and therefore never reaches `operations`?",
+   "options": [
+    "Restart the idle period when the request arrives despite the body failure",
+    "Do not restart it because `owner_sessions` is never reached"
+   ],
+   "default_guess": "Restart the idle period, preserving A13’s rule for every owner request carrying a valid session.",
+   "witness": {
+    "initial": "An owner session is valid, and its last request arrived 29 minutes 59 seconds ago.",
+    "events": [
+     "The owner sends an ordinary form request with the valid session cookie, but the body terminates before its framing is complete.",
+     "The surface closes the connection without handing a request to `operations`.",
+     "Two seconds later the owner sends a complete request with the same session."
+    ],
+    "outcomes": [
+     "The failed-body request restarted the idle period, so the later request is admitted.",
+     "Nothing reached `owner_sessions`, so the idle limit has been reached and the later request is refused."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:Status",
+   "kind": "contradictory confirmation effect",
+   "text": "“nothing reaches `operations`” on a body-reading failure leaves open A13’s rule that a confirmation value “is used up by the first submission that carries it, whatever its answer” once the session and CSRF checks pass and it gives the pending value.",
+   "question": "If a form exposes a valid CSRF value and the pending confirmation value before a later part of its body fails, is that confirmation value consumed?",
+   "options": [
+    "Consume it because the submission carried the valid values",
+    "Keep it because no complete request reached `operations`"
+   ],
+   "default_guess": "Keep it because the surface never produced a request on which the ordered checks could run.",
+   "witness": {
+    "initial": "The owner has a valid session and a valid pending confirmation value that has not expired.",
+    "events": [
+     "The owner submits the confirmed action; the body places the valid CSRF and confirmation values before other required fields.",
+     "The later part of the body terminates early, so the surface closes the connection and hands nothing to `operations`.",
+     "Within ten minutes the owner resubmits a complete form using the same confirmation value."
+    ],
+    "outcomes": [
+     "The first submission consumed the confirmation value, so the complete resubmission is refused.",
+     "The failed body never reached the checks, so the confirmation remains pending and the complete resubmission may proceed."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:Status",
+   "kind": "missing body disposition",
+   "text": "The change closes the connection when “an upload's file part is handed on” and “its stream's failure” occurs, but A19 also requires an oversized upload to be refused before all file bytes are read, and no text says what happens to the unread framed body in that refusal.",
+   "question": "After an upload is refused while file bytes remain unread—because its declared length is over the limit or the received bytes exceed the limit—must Registry close the connection or drain and discard the remaining framed body before reusing it?",
+   "options": [
+    "Render the refusal and close the connection",
+    "Drain and discard the rest of the framed body, then permit connection reuse"
+   ],
+   "default_guess": "Render the refusal and close the connection.",
+   "witness": {
+    "initial": "The owner has a valid session and sends uploads over a persistent owner-interface connection.",
+    "events": [
+     "The owner sends an upload whose declared file length exceeds `IMPORT_FILE_MAX_BYTES`, followed by the file bytes.",
+     "Registry refuses it before reading a file byte as A19 requires.",
+     "The owner attempts another request on the same connection."
+    ],
+    "outcomes": [
+     "Registry closes after the refusal, so the next request requires a new connection.",
+     "Registry drains the rejected upload and keeps the connection reusable, so the next request is accepted on it."
+    ],
+    "observer": "The owner interface client"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"40_flows.md:Status\",\"kind\":\"missing failure outcome\",\"text\":\"“Every request of a caller whose framing headers the listener accepted (`instance_lifecycle`) enters through one of the two surfaces” does not say what the listener answers when framing headers are not accepted; State 3 only says such a request “is refused by the listener from its headers alone, its connection closed”.\",\"question\":\"When `Content-Length` or `Transfer-Encoding` is malformed, does the listener send a refusal response before closing, or close without answering?\",\"options\":[\"Send a generic HTTP framing-error response, then close the connection\",\"Close the connection without any response\"],\"default_guess\":\"Send a generic HTTP framing-error response, then close the connection.\",\"witness\":{\"initial\":\"The listener is running and a caller has an open connection to either surface.\",\"events\":[\"The caller sends a request with a valid request line but a malformed `Content-Length` header.\",\"`instance_lifecycle` rejects the framing headers and closes the connection.\"],\"outcomes\":[\"The caller receives a generic HTTP error response before the connection closes.\",\"The connection closes without any response bytes.\"],\"observer\":\"The caller\"}},{\"subject\":\"40_flows.md:Status\",\"kind\":\"contradictory session effect\",\"text\":\"“A surface whose reading of a body fails before it has a request to hand on … answers nothing: the connection is closed and nothing reaches `operations`” conflicts with A13’s “An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes”.\",\"question\":\"Does an ordinary owner-interface request carrying a valid session restart the idle period when its form body cannot be read and therefore never reaches `operations`?\",\"options\":[\"Restart the idle period when the request arrives despite the body failure\",\"Do not restart it because `owner_sessions` is never reached\"],\"default_guess\":\"Restart the idle period, preserving A13’s rule for every owner request carrying a valid session.\",\"witness\":{\"initial\":\"An owner session is valid, and its last request arrived 29 minutes 59 seconds ago.\",\"events\":[\"The owner sends an ordinary form request with the valid session cookie, but the body terminates before its framing is complete.\",\"The surface closes the connection without handing a request to `operations`.\",\"Two seconds later the owner sends a complete request with the same session.\"],\"outcomes\":[\"The failed-body request restarted the idle period, so the later request is admitted.\",\"Nothing reached `owner_sessions`, so the idle limit has been reached and the later request is refused.\"],\"observer\":\"The owner\"}},{\"subject\":\"40_flows.md:Status\",\"kind\":\"contradictory confirmation effect\",\"text\":\"“nothing reaches `operations`” on a body-reading failure leaves open A13’s rule that a confirmation value “is used up by the first submission that carries it, whatever its answer” once the session and CSRF checks pass and it gives the pending value.\",\"question\":\"If a form exposes a valid CSRF value and the pending confirmation value before a later part of its body fails, is that confirmation value consumed?\",\"options\":[\"Consume it because the submission carried the valid values\",\"Keep it because no complete request reached `operations`\"],\"default_guess\":\"Keep it because the surface never produced a request on which the ordered checks could run.\",\"witness\":{\"initial\":\"The owner has a valid session and a valid pending confirmation value that has not expired.\",\"events\":[\"The owner submits the confirmed action; the body places the valid CSRF and confirmation values before other required fields.\",\"The later part of the body terminates early, so the surface closes the connection and hands nothing to `operations`.\",\"Within ten minutes the owner resubmits a complete form using the same confirmation value.\"],\"outcomes\":[\"The first submission consumed the confirmation value, so the complete resubmission is refused.\",\"The failed body never reached the checks, so the confirmation remains pending and the complete resubmission may proceed.\"],\"observer\":\"The owner\"}},{\"subject\":\"40_flows.md:Status\",\"kind\":\"missing body disposition\",\"text\":\"The change closes the connection when “an upload's file part is handed on” and “its stream's failure” occurs, but A19 also requires an oversized upload to be refused before all file bytes are read, and no text says what happens to the unread framed body in that refusal.\",\"question\":\"After an upload is refused while file bytes remain unread—because its declared length is over the limit or the received bytes exceed the limit—must Registry close the connection or drain and discard the remaining framed body before reusing it?\",\"options\":[\"Render the refusal and close the connection\",\"Drain and discard the rest of the framed body, then permit connection reuse\"],\"default_guess\":\"Render the refusal and close the connection.\",\"witness\":{\"initial\":\"The owner has a valid session and sends uploads over a persistent owner-interface connection.\",\"events\":[\"The owner sends an upload whose declared file length exceeds `IMPORT_FILE_MAX_BYTES`, followed by the file bytes.\",\"Registry refuses it before reading a file byte as A19 requires.\",\"The owner attempts another request on the same connection.\"],\"outcomes\":[\"Registry closes after the refusal, so the next request requires a new connection.\",\"Registry drains the rejected upload and keeps the connection reusable, so the next request is accepted on it.\"],\"observer\":\"The owner interface client\"}}]}",
+ "set_aside": []
+}
