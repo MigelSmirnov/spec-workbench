@@ -222,8 +222,11 @@ an unread stream that ends where the part ends, to
 head of another form gives no CSRF value, and the upload is refused at stage
 (1) before any byte of the file is read. An upload arrives, for the session
 check, once its head has been read (A13 rule 2). The body reaches
-`owner_interface` as a stream that ends where the body ends, at its declared
-length (`instance_lifecycle`'s listener).
+`owner_interface` as a stream that ends where HTTP's framing ends it — after
+its `Content-Length` bytes, or at a chunked body's last chunk
+(`instance_lifecycle`'s listener). A file whose bytes run past that end lacks
+its closing delimiter and is refused as `file_unreadable`; A19 rule 4's
+counting applies to the bytes of the file part the stream gives.
 
 ### Outputs
 

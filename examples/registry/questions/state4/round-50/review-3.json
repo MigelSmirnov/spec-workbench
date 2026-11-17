@@ -1,0 +1,120 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "UPLOAD_FORM_HEAD_MAX_BYTES",
+   "kind": "undefined constant",
+   "text": "at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant",
+   "question": "What exact byte value bounds the multipart head, and is a head exactly that size allowed?",
+   "options": [
+    "A fixed numeric byte limit with equality allowed",
+    "A fixed numeric byte limit with equality refused"
+   ],
+   "default_guess": "65536 bytes, allowing a head of exactly 65536 bytes"
+  },
+  {
+   "unit": "context",
+   "subject": "upload head parsing",
+   "kind": "unstated failure outcome",
+   "text": "reads the upload's head alone, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, and answers its CSRF value, or none for a head of another form",
+   "question": "What happens when the multipart head is malformed, truncated, exceeds the bound, cannot be read, lacks the file-part headers, or ends before a file part appears, and does such a request reach the session check and restart the idle limit?",
+   "options": [
+    "Refuse it as malformed framing before session admission and do not restart the session",
+    "Return no CSRF value, run session admission, restart a valid session's idle limit, then refuse for CSRF",
+    "Treat transport and size failures separately, explicitly assigning each outcome"
+   ],
+   "default_guess": "Refuse malformed, unreadable, truncated, or over-limit framing before session admission; return no CSRF only for a completely parsed head whose CSRF field is absent or wrong",
+   "witness": {
+    "initial": "A valid owner session is one second from its idle limit and no import closure exists.",
+    "events": [
+     "The owner sends an upload whose multipart head exceeds `UPLOAD_FORM_HEAD_MAX_BYTES` before the file-part headers are complete.",
+     "The server reaches the head bound."
+    ],
+    "outcomes": [
+     "The framing request is refused before admission, so the session's idle time is not restarted.",
+     "The parser answers no CSRF value and admission sees a valid session, restarts its idle time, then refuses the upload for CSRF."
+    ],
+    "observer": "The owner, whose next request is respectively refused as expired or admitted"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "upload session admission",
+   "kind": "ambiguous check instant",
+   "text": "admits the upload with the import lock taken before the session's (`capability:owner_sessions.admit_owner_request`)",
+   "question": "Is session validity evaluated at the monotonic reading taken immediately when the bounded head finishes, or at a later reading after the request has waited for the import and session locks?",
+   "options": [
+    "Capture and use the head-completion reading before waiting for either lock",
+    "Acquire the locks and then read the clock for the session check"
+   ],
+   "default_guess": "Capture the monotonic reading when the head finishes and use that reading after the locks are acquired",
+   "witness": {
+    "initial": "The session has one second left before its 30-minute idle limit, and another import request holds the import lock for two seconds.",
+    "events": [
+     "The upload's bounded head finishes while the session is valid.",
+     "The upload waits two seconds for the import lock.",
+     "`admit_owner_request` checks the session."
+    ],
+    "outcomes": [
+     "The upload is admitted because it arrived when its head finished, before the limit.",
+     "The upload is refused because the clock is read only after the lock wait, after the limit."
+    ],
+    "observer": "The owner submitting the upload"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "request-body framing",
+   "kind": "contradiction",
+   "text": "each request's body handed on as a stream that ends where the body ends, at its declared length; whatever length was declared or whether one was",
+   "question": "Is the request's declared length authoritative for the stream boundary, or must the stream follow the actual multipart framing and received bytes when the length is absent or false?",
+   "options": [
+    "End the stream at the declared request length and reject requests without one",
+    "Use the multipart delimiter or transport end as the boundary, treating a declared length only as an early size check",
+    "Require declared and actual framing to agree and refuse a mismatch explicitly"
+   ],
+   "default_guess": "Use actual multipart framing, refuse any declared-length mismatch, and count every received file byte for the import limit",
+   "witness": {
+    "initial": "No import closure exists and the session is valid.",
+    "events": [
+     "The owner uploads a multipart body whose declared length is smaller than the body actually sent.",
+     "The file exceeds `IMPORT_FILE_MAX_BYTES`, but its prefix within the declared length does not."
+    ],
+    "outcomes": [
+     "A19's rule reads the actual file bytes and refuses as soon as more than the limit is received.",
+     "The lifecycle stream ends at the declared length, so the import reader never sees the excess and may accept or parse only the prefix."
+    ],
+    "observer": "The owner and the production store, which respectively receive a size refusal or may receive an import mapping for truncated data"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "unread upload body after an early answer",
+   "kind": "missing transport operation",
+   "text": "so that no reader of it waits for bytes the client sends only after an answer",
+   "question": "After CSRF, session, declared-size, or framing refusal occurs before the file body has been consumed, which module closes, drains, or otherwise disposes of the remaining request body, and may the connection carry another request?",
+   "options": [
+    "`instance_lifecycle` closes the connection after any answer made before the body is consumed",
+    "A surface drains and discards the bounded remaining body before reusing the connection",
+    "The connection is reusable only when the body was fully framed and consumed; otherwise it is closed"
+   ],
+   "default_guess": "Close the connection whenever an upload is answered before its multipart body has been fully consumed",
+   "witness": {
+    "initial": "The browser has a persistent connection and a valid owner-session cookie.",
+    "events": [
+     "The browser begins a large upload with a wrong CSRF value.",
+     "Registry reads the head and answers the CSRF refusal without reading the file.",
+     "The browser sends a valid ordinary owner request on the same connection."
+    ],
+    "outcomes": [
+     "Registry closes the connection after the refusal, so the browser must reconnect before the valid request.",
+     "Registry drains the unread upload and reuses the connection, so the valid request is served on it."
+    ],
+    "observer": "The owner and the browser's connection handling"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"UPLOAD_FORM_HEAD_MAX_BYTES\",\"kind\":\"undefined constant\",\"text\":\"at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant\",\"question\":\"What exact byte value bounds the multipart head, and is a head exactly that size allowed?\",\"options\":[\"A fixed numeric byte limit with equality allowed\",\"A fixed numeric byte limit with equality refused\"],\"default_guess\":\"65536 bytes, allowing a head of exactly 65536 bytes\"},{\"unit\":\"context\",\"subject\":\"upload head parsing\",\"kind\":\"unstated failure outcome\",\"text\":\"reads the upload's head alone, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, and answers its CSRF value, or none for a head of another form\",\"question\":\"What happens when the multipart head is malformed, truncated, exceeds the bound, cannot be read, lacks the file-part headers, or ends before a file part appears, and does such a request reach the session check and restart the idle limit?\",\"options\":[\"Refuse it as malformed framing before session admission and do not restart the session\",\"Return no CSRF value, run session admission, restart a valid session's idle limit, then refuse for CSRF\",\"Treat transport and size failures separately, explicitly assigning each outcome\"],\"default_guess\":\"Refuse malformed, unreadable, truncated, or over-limit framing before session admission; return no CSRF only for a completely parsed head whose CSRF field is absent or wrong\",\"witness\":{\"initial\":\"A valid owner session is one second from its idle limit and no import closure exists.\",\"events\":[\"The owner sends an upload whose multipart head exceeds `UPLOAD_FORM_HEAD_MAX_BYTES` before the file-part headers are complete.\",\"The server reaches the head bound.\"],\"outcomes\":[\"The framing request is refused before admission, so the session's idle time is not restarted.\",\"The parser answers no CSRF value and admission sees a valid session, restarts its idle time, then refuses the upload for CSRF.\"],\"observer\":\"The owner, whose next request is respectively refused as expired or admitted\"}},{\"unit\":\"context\",\"subject\":\"upload session admission\",\"kind\":\"ambiguous check instant\",\"text\":\"admits the upload with the import lock taken before the session's (`capability:owner_sessions.admit_owner_request`)\",\"question\":\"Is session validity evaluated at the monotonic reading taken immediately when the bounded head finishes, or at a later reading after the request has waited for the import and session locks?\",\"options\":[\"Capture and use the head-completion reading before waiting for either lock\",\"Acquire the locks and then read the clock for the session check\"],\"default_guess\":\"Capture the monotonic reading when the head finishes and use that reading after the locks are acquired\",\"witness\":{\"initial\":\"The session has one second left before its 30-minute idle limit, and another import request holds the import lock for two seconds.\",\"events\":[\"The upload's bounded head finishes while the session is valid.\",\"The upload waits two seconds for the import lock.\",\"`admit_owner_request` checks the session.\"],\"outcomes\":[\"The upload is admitted because it arrived when its head finished, before the limit.\",\"The upload is refused because the clock is read only after the lock wait, after the limit.\"],\"observer\":\"The owner submitting the upload\"}},{\"unit\":\"context\",\"subject\":\"request-body framing\",\"kind\":\"contradiction\",\"text\":\"each request's body handed on as a stream that ends where the body ends, at its declared length; whatever length was declared or whether one was\",\"question\":\"Is the request's declared length authoritative for the stream boundary, or must the stream follow the actual multipart framing and received bytes when the length is absent or false?\",\"options\":[\"End the stream at the declared request length and reject requests without one\",\"Use the multipart delimiter or transport end as the boundary, treating a declared length only as an early size check\",\"Require declared and actual framing to agree and refuse a mismatch explicitly\"],\"default_guess\":\"Use actual multipart framing, refuse any declared-length mismatch, and count every received file byte for the import limit\",\"witness\":{\"initial\":\"No import closure exists and the session is valid.\",\"events\":[\"The owner uploads a multipart body whose declared length is smaller than the body actually sent.\",\"The file exceeds `IMPORT_FILE_MAX_BYTES`, but its prefix within the declared length does not.\"],\"outcomes\":[\"A19's rule reads the actual file bytes and refuses as soon as more than the limit is received.\",\"The lifecycle stream ends at the declared length, so the import reader never sees the excess and may accept or parse only the prefix.\"],\"observer\":\"The owner and the production store, which respectively receive a size refusal or may receive an import mapping for truncated data\"}},{\"unit\":\"context\",\"subject\":\"unread upload body after an early answer\",\"kind\":\"missing transport operation\",\"text\":\"so that no reader of it waits for bytes the client sends only after an answer\",\"question\":\"After CSRF, session, declared-size, or framing refusal occurs before the file body has been consumed, which module closes, drains, or otherwise disposes of the remaining request body, and may the connection carry another request?\",\"options\":[\"`instance_lifecycle` closes the connection after any answer made before the body is consumed\",\"A surface drains and discards the bounded remaining body before reusing the connection\",\"The connection is reusable only when the body was fully framed and consumed; otherwise it is closed\"],\"default_guess\":\"Close the connection whenever an upload is answered before its multipart body has been fully consumed\",\"witness\":{\"initial\":\"The browser has a persistent connection and a valid owner-session cookie.\",\"events\":[\"The browser begins a large upload with a wrong CSRF value.\",\"Registry reads the head and answers the CSRF refusal without reading the file.\",\"The browser sends a valid ordinary owner request on the same connection.\"],\"outcomes\":[\"Registry closes the connection after the refusal, so the browser must reconnect before the valid request.\",\"Registry drains the unread upload and reuses the connection, so the valid request is served on it.\"],\"observer\":\"The owner and the browser's connection handling\"}}]}",
+ "set_aside": []
+}

@@ -1334,9 +1334,11 @@ nothing until every check passed and having `store` remove a store this start
 made new when a listener cannot be opened (A17 rule 2); the
 owner-only start, which opens the owner interface alone (A17 rule 1, A18
 rule 9); the two surfaces, the owner interface's listener opened first,
-each request's body handed on as a stream that ends where the body ends, at
-its declared length, so that no reader of it waits for bytes the client
-sends only after an answer; the 60-second pass
+each request's body handed on as a stream that ends where HTTP's own
+framing ends the body — after its `Content-Length` bytes, or at the last
+chunk of a chunked body — so that no reader of it waits for bytes the client
+sends only after an answer, and no byte of another request is read as the
+body's; the 60-second pass
 of `owner_sessions` and the minute look of `backups` (A13 rule 2, A18 rule 1);
 that a restart ends every owner session (A13 rule 2).
 

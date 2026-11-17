@@ -1,0 +1,135 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "upload arrival instant",
+   "kind": "timing ambiguity",
+   "text": "“an upload ... arrives when that head ... has been read” / “validity ... read when `operations` hands the request to the session check” / “admits the upload with the import lock taken before the session's”",
+   "question": "Is the monotonic arrival reading captured immediately when the bounded head finishes, before waiting for the import or session lock, or only when the locked session check runs?",
+   "options": [
+    "Capture the reading immediately after the head is read and carry it into the locked check.",
+    "Take the reading when `owner_sessions` begins the check, after any lock wait.",
+    "Take the reading when `operations` first calls `admit_owner_request`, with the capability required to preserve it across lock acquisition."
+   ],
+   "default_guess": "Capture and preserve the monotonic reading immediately after the bounded head is read, before either lock can delay admission.",
+   "witness": {
+    "initial": "A valid owner session has an idle deadline at monotonic time 100; another import request holds the import lock.",
+    "events": [
+     "The owner finishes sending the upload head at time 99.",
+     "`operations` cannot obtain the import lock until time 105.",
+     "`owner_sessions` checks the session after the lock becomes available."
+    ],
+    "outcomes": [
+     "The upload arrived at 99 and is admitted.",
+     "The arrival reading is 105 and the upload is refused as expired."
+    ],
+    "observer": "The owner sees either the upload result or the sign-in form."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "upload-head parsing failure",
+   "kind": "missing failure outcome",
+   "text": "“`capability:upload_framing.read_upload_head` reads the upload's head alone, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, and answers its CSRF value, or none for a head of another form”",
+   "question": "What happens when the multipart head exceeds the bound, is truncated, is malformed, has no file part, or fails while being read, and does that request reach the session check and restart the idle period?",
+   "options": [
+    "Treat every such case as no CSRF and perform the ordinary stage-(1) refusal.",
+    "Return a distinct malformed-upload response without checking the session.",
+    "Close the request unanswered.",
+    "Distinguish transport failure, malformed framing, and an over-limit head."
+   ],
+   "default_guess": "Read no more than the bound, treat an unparseable or over-limit head as a malformed upload, close its connection, and do not change session state.",
+   "witness": {
+    "initial": "A valid session has a previously kept upload and is close to its idle limit.",
+    "events": [
+     "The owner sends the session cookie and a multipart head larger than `UPLOAD_FORM_HEAD_MAX_BYTES`.",
+     "The head reader reaches its bound without finding a complete file-part header."
+    ],
+    "outcomes": [
+     "The request is treated as an owner request, restarts the idle limit, and is refused as missing CSRF while the earlier upload remains.",
+     "The request is rejected as malformed before session admission, does not restart the idle limit, and the earlier upload remains."
+    ],
+    "observer": "The owner sees a different response and later observes whether the session expired."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "owner-interface handling of the upload form",
+   "kind": "contradictory flow description",
+   "text": "“the owner interface reads the cookie, the CSRF value and the form and hands them to `operations`” / “hands the file part on as its declared length ... and an unread stream”",
+   "question": "For an upload, does `owner_interface` read the whole form before calling `operations`, or read only the bounded head and pass the file part unread?",
+   "options": [
+    "The general statement has an upload exception: only the head is read before admission.",
+    "The whole multipart form is read before admission.",
+    "`upload_framing` reads the whole form while exposing the file as a logical unread stream."
+   ],
+   "default_guess": "Make uploads an explicit exception: `owner_interface` reads only the bounded head before admission and passes the framed file stream unread.",
+   "witness": {
+    "initial": "A request has an invalid session cookie and carries a 50 MB file.",
+    "events": [
+     "The client sends the multipart head and begins the file.",
+     "The interface must obtain the CSRF field before the stage-(1) session check."
+    ],
+    "outcomes": [
+     "Only the bounded head is consumed before the invalid session is refused.",
+     "The entire 50 MB form is consumed before the invalid session is refused."
+    ],
+    "observer": "The client sees how much data Registry accepts before answering, and the host sees the resource use."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "request-body framing versus declared length",
+   "kind": "contradiction",
+   "text": "“each request's body handed on as a stream that ends where the body ends, at its declared length” / “otherwise Registry reads the upload up to one byte more than the limit and refuses it ... whatever length was declared or whether one was”",
+   "question": "How can Registry count bytes beyond an understated declared length, or accept a body with no declared length, if the supplied stream ends at the declared length?",
+   "options": [
+    "HTTP framing is authoritative; bytes beyond a declared length are not part of the request, and a missing length is refused.",
+    "The stream follows actual transfer framing and the declared length is only an early-rejection hint.",
+    "A mismatch between declared and transferred length is a framing failure, with a specified response and connection disposition."
+   ],
+   "default_guess": "Use actual transfer framing for the bounded stream, use a declared length only for early rejection, and reject any framing-length mismatch while closing the connection.",
+   "witness": {
+    "initial": "The client declares a body or derived file length below `IMPORT_FILE_MAX_BYTES` but transmits a file one byte over the limit.",
+    "events": [
+     "`instance_lifecycle` creates the request-body stream.",
+     "`migration_import` reads until the stream ends or observes the byte beyond the file limit."
+    ],
+    "outcomes": [
+     "The stream ends at the declared length, so the excess byte is never counted by this upload and the A19 over-limit refusal cannot occur.",
+     "The stream exposes the transferred bytes, so the byte beyond the limit is observed and the upload is refused."
+    ],
+    "observer": "The client receives either an ordinary result based on the truncated body or the required over-limit refusal."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "unread upload body after early refusal",
+   "kind": "missing operation",
+   "text": "“refuses before any byte of the file is read” / “each request's body handed on as a stream that ends where the body ends, at its declared length, so that no reader of it waits for bytes the client sends only after an answer”",
+   "question": "After Registry answers from the head alone, which module and capability disposes of the unread file body, and does it drain it, cancel it, or close the connection?",
+   "options": [
+    "`owner_interface` closes the request stream and the connection without draining.",
+    "`instance_lifecycle` drains the remaining body before reusing the connection.",
+    "The transport cancels the body stream but may keep the connection only when it can resynchronise framing.",
+    "Registry waits for the client to finish the body before sending the refusal."
+   ],
+   "default_guess": "Have the transport cancel the body and close that connection on every response produced before the request body is consumed.",
+   "witness": {
+    "initial": "A keep-alive connection carries an upload whose bounded head has a missing CSRF value; the client waits for the response before sending the file.",
+    "events": [
+     "Registry reads the head and refuses the request before reading the file.",
+     "The client receives or awaits the refusal and may attempt another request on the same connection."
+    ],
+    "outcomes": [
+     "Registry sends the refusal immediately, cancels the unread body and closes the connection.",
+     "Registry drains or waits for the declared body before answering or reusing the connection."
+    ],
+    "observer": "The owner observes an immediate refusal versus a stalled request, and whether the connection remains reusable."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"upload arrival instant\",\"kind\":\"timing ambiguity\",\"text\":\"“an upload ... arrives when that head ... has been read” / “validity ... read when `operations` hands the request to the session check” / “admits the upload with the import lock taken before the session's”\",\"question\":\"Is the monotonic arrival reading captured immediately when the bounded head finishes, before waiting for the import or session lock, or only when the locked session check runs?\",\"options\":[\"Capture the reading immediately after the head is read and carry it into the locked check.\",\"Take the reading when `owner_sessions` begins the check, after any lock wait.\",\"Take the reading when `operations` first calls `admit_owner_request`, with the capability required to preserve it across lock acquisition.\"],\"default_guess\":\"Capture and preserve the monotonic reading immediately after the bounded head is read, before either lock can delay admission.\",\"witness\":{\"initial\":\"A valid owner session has an idle deadline at monotonic time 100; another import request holds the import lock.\",\"events\":[\"The owner finishes sending the upload head at time 99.\",\"`operations` cannot obtain the import lock until time 105.\",\"`owner_sessions` checks the session after the lock becomes available.\"],\"outcomes\":[\"The upload arrived at 99 and is admitted.\",\"The arrival reading is 105 and the upload is refused as expired.\"],\"observer\":\"The owner sees either the upload result or the sign-in form.\"}},{\"unit\":\"context\",\"subject\":\"upload-head parsing failure\",\"kind\":\"missing failure outcome\",\"text\":\"“`capability:upload_framing.read_upload_head` reads the upload's head alone, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, and answers its CSRF value, or none for a head of another form”\",\"question\":\"What happens when the multipart head exceeds the bound, is truncated, is malformed, has no file part, or fails while being read, and does that request reach the session check and restart the idle period?\",\"options\":[\"Treat every such case as no CSRF and perform the ordinary stage-(1) refusal.\",\"Return a distinct malformed-upload response without checking the session.\",\"Close the request unanswered.\",\"Distinguish transport failure, malformed framing, and an over-limit head.\"],\"default_guess\":\"Read no more than the bound, treat an unparseable or over-limit head as a malformed upload, close its connection, and do not change session state.\",\"witness\":{\"initial\":\"A valid session has a previously kept upload and is close to its idle limit.\",\"events\":[\"The owner sends the session cookie and a multipart head larger than `UPLOAD_FORM_HEAD_MAX_BYTES`.\",\"The head reader reaches its bound without finding a complete file-part header.\"],\"outcomes\":[\"The request is treated as an owner request, restarts the idle limit, and is refused as missing CSRF while the earlier upload remains.\",\"The request is rejected as malformed before session admission, does not restart the idle limit, and the earlier upload remains.\"],\"observer\":\"The owner sees a different response and later observes whether the session expired.\"}},{\"unit\":\"context\",\"subject\":\"owner-interface handling of the upload form\",\"kind\":\"contradictory flow description\",\"text\":\"“the owner interface reads the cookie, the CSRF value and the form and hands them to `operations`” / “hands the file part on as its declared length ... and an unread stream”\",\"question\":\"For an upload, does `owner_interface` read the whole form before calling `operations`, or read only the bounded head and pass the file part unread?\",\"options\":[\"The general statement has an upload exception: only the head is read before admission.\",\"The whole multipart form is read before admission.\",\"`upload_framing` reads the whole form while exposing the file as a logical unread stream.\"],\"default_guess\":\"Make uploads an explicit exception: `owner_interface` reads only the bounded head before admission and passes the framed file stream unread.\",\"witness\":{\"initial\":\"A request has an invalid session cookie and carries a 50 MB file.\",\"events\":[\"The client sends the multipart head and begins the file.\",\"The interface must obtain the CSRF field before the stage-(1) session check.\"],\"outcomes\":[\"Only the bounded head is consumed before the invalid session is refused.\",\"The entire 50 MB form is consumed before the invalid session is refused.\"],\"observer\":\"The client sees how much data Registry accepts before answering, and the host sees the resource use.\"}},{\"unit\":\"context\",\"subject\":\"request-body framing versus declared length\",\"kind\":\"contradiction\",\"text\":\"“each request's body handed on as a stream that ends where the body ends, at its declared length” / “otherwise Registry reads the upload up to one byte more than the limit and refuses it ... whatever length was declared or whether one was”\",\"question\":\"How can Registry count bytes beyond an understated declared length, or accept a body with no declared length, if the supplied stream ends at the declared length?\",\"options\":[\"HTTP framing is authoritative; bytes beyond a declared length are not part of the request, and a missing length is refused.\",\"The stream follows actual transfer framing and the declared length is only an early-rejection hint.\",\"A mismatch between declared and transferred length is a framing failure, with a specified response and connection disposition.\"],\"default_guess\":\"Use actual transfer framing for the bounded stream, use a declared length only for early rejection, and reject any framing-length mismatch while closing the connection.\",\"witness\":{\"initial\":\"The client declares a body or derived file length below `IMPORT_FILE_MAX_BYTES` but transmits a file one byte over the limit.\",\"events\":[\"`instance_lifecycle` creates the request-body stream.\",\"`migration_import` reads until the stream ends or observes the byte beyond the file limit.\"],\"outcomes\":[\"The stream ends at the declared length, so the excess byte is never counted by this upload and the A19 over-limit refusal cannot occur.\",\"The stream exposes the transferred bytes, so the byte beyond the limit is observed and the upload is refused.\"],\"observer\":\"The client receives either an ordinary result based on the truncated body or the required over-limit refusal.\"}},{\"unit\":\"context\",\"subject\":\"unread upload body after early refusal\",\"kind\":\"missing operation\",\"text\":\"“refuses before any byte of the file is read” / “each request's body handed on as a stream that ends where the body ends, at its declared length, so that no reader of it waits for bytes the client sends only after an answer”\",\"question\":\"After Registry answers from the head alone, which module and capability disposes of the unread file body, and does it drain it, cancel it, or close the connection?\",\"options\":[\"`owner_interface` closes the request stream and the connection without draining.\",\"`instance_lifecycle` drains the remaining body before reusing the connection.\",\"The transport cancels the body stream but may keep the connection only when it can resynchronise framing.\",\"Registry waits for the client to finish the body before sending the refusal.\"],\"default_guess\":\"Have the transport cancel the body and close that connection on every response produced before the request body is consumed.\",\"witness\":{\"initial\":\"A keep-alive connection carries an upload whose bounded head has a missing CSRF value; the client waits for the response before sending the file.\",\"events\":[\"Registry reads the head and refuses the request before reading the file.\",\"The client receives or awaits the refusal and may attempt another request on the same connection.\"],\"outcomes\":[\"Registry sends the refusal immediately, cancels the unread body and closes the connection.\",\"Registry drains or waits for the declared body before answering or reusing the connection.\"],\"observer\":\"The owner observes an immediate refusal versus a stalled request, and whether the connection remains reusable.\"}}]}",
+ "set_aside": []
+}

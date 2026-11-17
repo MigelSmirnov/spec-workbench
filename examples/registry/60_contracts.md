@@ -84,7 +84,8 @@ readings, so an action's today is `operations`' (`_today_of`).
   `size`, empty at its end. The request's raw body is another port of
   `models` with the same one method, `ByteStream`, which is `external`: the
   HTTP server makes it, and `owner_interface` takes it as such. It ends where
-  the body ends, at the request's declared length: `MultipartFileBody` looks
+  HTTP's framing ends the body — after its `Content-Length` bytes, or at a
+  chunked body's last chunk: `MultipartFileBody` looks
   ahead the delimiter's length, and over the socket's own reader that
   look-ahead waits for bytes the client sends only after an answer (found by
   `experiments/registry/upload_framing_proto`, where curl hung until the

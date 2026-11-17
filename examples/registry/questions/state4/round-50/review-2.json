@@ -1,0 +1,96 @@
+{
+ "open_points": [
+  {
+   "subject": "context: upload arrival and session validity",
+   "kind": "contradictory instant",
+   "text": "“an upload ... arrives when that head ... has been read” / “validity ... read when `operations` hands the request to the session check”",
+   "question": "Is the upload’s arrival reading captured at the instant the bounded head finishes, or taken later when `operations` invokes `owner_sessions`?",
+   "options": [
+    "Capture the monotonic reading when the bounded head finishes and hand it to the session check.",
+    "Read the monotonic clock when `operations` invokes the session check."
+   ],
+   "default_guess": "Capture and hand on the reading from the instant the bounded head finishes.",
+   "witness": {
+    "initial": "A valid owner session will reach its 30-minute idle limit at T; an upload’s bounded head finishes at T minus one microsecond.",
+    "events": [
+     "The owner sends the upload.",
+     "`upload_framing` finishes reading the bounded head.",
+     "Execution is delayed until after T before `operations` invokes the session check."
+    ],
+    "outcomes": [
+     "The upload arrived before T, so it is admitted and its arrival restarts the idle period.",
+     "Validity is read after T, so the upload is refused as expired."
+    ],
+    "observer": "The owner, who receives either the upload result or the sign-in form and later observes whether the session remained valid."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: upload-head framing failure",
+   "kind": "missing failure outcome",
+   "text": "“`capability:upload_framing.read_upload_head` reads the upload's head alone, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, and answers its CSRF value, or none for a head of another form”",
+   "question": "What happens when the multipart head is malformed, truncated, ends before the file part, or exceeds `UPLOAD_FORM_HEAD_MAX_BYTES`, and does that request count as having arrived for session validity and idle restart?",
+   "options": [
+    "Refuse it as an upload-framing failure before session admission, without restarting the session.",
+    "Return no CSRF value and pass it to the session check, which refuses it and restarts the idle period when the cookie names a valid session.",
+    "Close the request unanswered as a transport failure."
+   ],
+   "default_guess": "Refuse it as an upload-framing failure before session admission and do not restart the session.",
+   "witness": {
+    "initial": "A valid session is close to its idle limit and already keeps an earlier uploaded file.",
+    "events": [
+     "The owner sends an upload whose multipart head exceeds the bound before a file part is framed.",
+     "`upload_framing` reaches `UPLOAD_FORM_HEAD_MAX_BYTES` without completing the head."
+    ],
+    "outcomes": [
+     "Framing fails before arrival; the request does not restart the session and receives a framing refusal or no answer.",
+     "The head is treated as yielding no CSRF value; the valid session is checked, its idle period restarts, and the owner receives the ordinary CSRF refusal."
+    ],
+    "observer": "The owner, through the immediate response and whether the session expires."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: framed upload stream",
+   "kind": "missing capability",
+   "text": "“`capability:upload_framing.read_upload_head` ... answers its CSRF value” and “the upload's stream, which `module:owner_interface` hands on unread with its declared length”",
+   "question": "Which named capability produces the file-part stream that ends at the multipart boundary and derives its declared length, and which operation calls it before `migration_import` reads the file?",
+   "options": [
+    "Make `read_upload_head` return the CSRF value, framed file-part stream, and derived declared length.",
+    "Add a separate `upload_framing` capability called by `owner_interface` after reading the head.",
+    "Have `owner_interface` frame the file part itself despite `upload_framing` owning that operation."
+   ],
+   "default_guess": "Make `read_upload_head` return the CSRF value, framed file-part stream, and derived declared length.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: request-body termination",
+   "kind": "contradictory framing",
+   "text": "“each request's body handed on as a stream that ends where the body ends, at its declared length” / “whatever length was declared or whether one was”",
+   "question": "For an upload with an absent or understated declared length, does the request-body stream continue to the transport or multipart boundary so Registry can count every received file byte, or does it end at the declared length?",
+   "options": [
+    "Continue according to transport and multipart framing, using the declared length only for an early size refusal.",
+    "End the stream at the declared length, even when it understates the bytes sent.",
+    "Refuse every upload whose request length is absent or inconsistent."
+   ],
+   "default_guess": "Continue according to transport and multipart framing, using the declared length only for an early size refusal.",
+   "witness": {
+    "initial": "The owner sends a file of `IMPORT_FILE_MAX_BYTES + 1` bytes while declaring a smaller length.",
+    "events": [
+     "`instance_lifecycle` hands the request body to the owner interface.",
+     "`upload_framing` attempts to expose the complete file part.",
+     "`migration_import` counts file bytes."
+    ],
+    "outcomes": [
+     "The stream continues to the multipart boundary; the extra byte is observed and the upload is refused as over the limit.",
+     "The stream ends at the declared length; the extra byte is invisible and the truncated prefix may be accepted or reported merely as unreadable."
+    ],
+    "observer": "The owner, who sees a size refusal versus acceptance or a different refusal."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context: upload arrival and session validity\",\"kind\":\"contradictory instant\",\"text\":\"“an upload ... arrives when that head ... has been read” / “validity ... read when `operations` hands the request to the session check”\",\"question\":\"Is the upload’s arrival reading captured at the instant the bounded head finishes, or taken later when `operations` invokes `owner_sessions`?\",\"options\":[\"Capture the monotonic reading when the bounded head finishes and hand it to the session check.\",\"Read the monotonic clock when `operations` invokes the session check.\"],\"default_guess\":\"Capture and hand on the reading from the instant the bounded head finishes.\",\"witness\":{\"initial\":\"A valid owner session will reach its 30-minute idle limit at T; an upload’s bounded head finishes at T minus one microsecond.\",\"events\":[\"The owner sends the upload.\",\"`upload_framing` finishes reading the bounded head.\",\"Execution is delayed until after T before `operations` invokes the session check.\"],\"outcomes\":[\"The upload arrived before T, so it is admitted and its arrival restarts the idle period.\",\"Validity is read after T, so the upload is refused as expired.\"],\"observer\":\"The owner, who receives either the upload result or the sign-in form and later observes whether the session remained valid.\"}},{\"subject\":\"context: upload-head framing failure\",\"kind\":\"missing failure outcome\",\"text\":\"“`capability:upload_framing.read_upload_head` reads the upload's head alone, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, and answers its CSRF value, or none for a head of another form”\",\"question\":\"What happens when the multipart head is malformed, truncated, ends before the file part, or exceeds `UPLOAD_FORM_HEAD_MAX_BYTES`, and does that request count as having arrived for session validity and idle restart?\",\"options\":[\"Refuse it as an upload-framing failure before session admission, without restarting the session.\",\"Return no CSRF value and pass it to the session check, which refuses it and restarts the idle period when the cookie names a valid session.\",\"Close the request unanswered as a transport failure.\"],\"default_guess\":\"Refuse it as an upload-framing failure before session admission and do not restart the session.\",\"witness\":{\"initial\":\"A valid session is close to its idle limit and already keeps an earlier uploaded file.\",\"events\":[\"The owner sends an upload whose multipart head exceeds the bound before a file part is framed.\",\"`upload_framing` reaches `UPLOAD_FORM_HEAD_MAX_BYTES` without completing the head.\"],\"outcomes\":[\"Framing fails before arrival; the request does not restart the session and receives a framing refusal or no answer.\",\"The head is treated as yielding no CSRF value; the valid session is checked, its idle period restarts, and the owner receives the ordinary CSRF refusal.\"],\"observer\":\"The owner, through the immediate response and whether the session expires.\"}},{\"subject\":\"context: framed upload stream\",\"kind\":\"missing capability\",\"text\":\"“`capability:upload_framing.read_upload_head` ... answers its CSRF value” and “the upload's stream, which `module:owner_interface` hands on unread with its declared length”\",\"question\":\"Which named capability produces the file-part stream that ends at the multipart boundary and derives its declared length, and which operation calls it before `migration_import` reads the file?\",\"options\":[\"Make `read_upload_head` return the CSRF value, framed file-part stream, and derived declared length.\",\"Add a separate `upload_framing` capability called by `owner_interface` after reading the head.\",\"Have `owner_interface` frame the file part itself despite `upload_framing` owning that operation.\"],\"default_guess\":\"Make `read_upload_head` return the CSRF value, framed file-part stream, and derived declared length.\"},{\"subject\":\"context: request-body termination\",\"kind\":\"contradictory framing\",\"text\":\"“each request's body handed on as a stream that ends where the body ends, at its declared length” / “whatever length was declared or whether one was”\",\"question\":\"For an upload with an absent or understated declared length, does the request-body stream continue to the transport or multipart boundary so Registry can count every received file byte, or does it end at the declared length?\",\"options\":[\"Continue according to transport and multipart framing, using the declared length only for an early size refusal.\",\"End the stream at the declared length, even when it understates the bytes sent.\",\"Refuse every upload whose request length is absent or inconsistent.\"],\"default_guess\":\"Continue according to transport and multipart framing, using the declared length only for an early size refusal.\",\"witness\":{\"initial\":\"The owner sends a file of `IMPORT_FILE_MAX_BYTES + 1` bytes while declaring a smaller length.\",\"events\":[\"`instance_lifecycle` hands the request body to the owner interface.\",\"`upload_framing` attempts to expose the complete file part.\",\"`migration_import` counts file bytes.\"],\"outcomes\":[\"The stream continues to the multipart boundary; the extra byte is observed and the upload is refused as over the limit.\",\"The stream ends at the declared length; the extra byte is invisible and the truncated prefix may be accepted or reported merely as unreadable.\"],\"observer\":\"The owner, who sees a size refusal versus acceptance or a different refusal.\"}}]}",
+ "set_aside": []
+}
