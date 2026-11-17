@@ -1,0 +1,346 @@
+{
+ "open_points": [
+  {
+   "subject": "A13",
+   "kind": "contradictory_session_end",
+   "text": "The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request; the owner's sign-out; the instance's restart (M11 is never durable). Registry ends it — and drops its pending confirmation and its uploaded file with it (M11) — at a pass over the sessions it makes every 60 seconds from the start; the pass alone ends sessions by their limits, taking the import lock and then each session's lock (A16 rule 2) and deciding under them.",
+   "question": "Does reaching a time limit end the session and destroy its state immediately, or only make it invalid until the next cleanup pass ends it and destroys its state?",
+   "options": [
+    "The session ends and its state disappears exactly at the limit.",
+    "The session becomes invalid at the limit but remains, with its state, until the cleanup pass.",
+    "The session ends at the limit but cleanup later removes already-inaccessible state."
+   ],
+   "default_guess": "Treat it as invalid at the exact limit and retain its inaccessible state until the cleanup pass removes it.",
+   "witness": {
+    "initial": "An owner session has a pending confirmation and an uploaded file and reaches its idle limit just after a cleanup pass.",
+    "events": [
+     "The owner or an internal observer examines session state before the next pass."
+    ],
+    "outcomes": [
+     "The session and both temporary values already no longer exist.",
+     "The session is invalid, but its confirmation and upload remain in memory until the next pass."
+    ],
+    "observer": "The owner through a concurrent request, and code managing runtime memory."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13",
+   "kind": "admission_cleanup_race",
+   "text": "a request that passes it completes even if a limit or a sign-out comes while it runs, and a restart that interrupts it leaves nothing of it (A04 rule 4). The requests of one owner session that change its state — showing a confirmation step, uploading a file, a submission, a sign-out — are applied one at a time, in the order in which they take the session's one lock, after passing the session check",
+   "question": "What prevents a cleanup pass or sign-out from ending and removing a session after another request passes the session check but before that request takes the session lock, and what state must the admitted request then operate on?",
+   "options": [
+    "Admission pins the session until the request finishes.",
+    "The session check and acquisition of the required locks are atomic.",
+    "The cleanup or sign-out may win, so the earlier admitted request is refused or aborted.",
+    "The admitted request recreates or retains a private reference to the ended session state."
+   ],
+   "default_guess": "Make admission pin the session and require cleanup or sign-out to wait for every already-admitted request.",
+   "witness": {
+    "initial": "A valid session is one instant from expiry and holds an uploaded file.",
+    "events": [
+     "An upload request passes the session check.",
+     "Before it obtains the import and session locks, the cleanup pass obtains them and ends the session.",
+     "The admitted upload obtains the locks."
+    ],
+    "outcomes": [
+     "The admitted upload completes because passing the check guaranteed completion.",
+     "The upload cannot complete because the session and its file state were removed."
+    ],
+    "observer": "The owner submitting the upload."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13",
+   "kind": "undefined_upload_head",
+   "text": "an upload, whose form sends its CSRF value before its file (A19 rule 4), arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read",
+   "question": "Exactly which bytes constitute the head, what happens when the file part or CSRF field is not found within the maximum, and at what instant such a malformed or oversized-head request is deemed to arrive?",
+   "options": [
+    "The head includes all multipart framing and parts before the file; exceeding the maximum is an immediate upload refusal before arrival.",
+    "Exactly the maximum is read and the request arrives then even if no file part was found.",
+    "A malformed request never arrives and is refused by a separate pre-admission parser rule.",
+    "The request arrives when the file boundary is found, with the constant only limiting retained bytes."
+   ],
+   "default_guess": "Define the head as every multipart byte before the first file byte and refuse before admission if a valid CSRF-first file part is not reached within the constant.",
+   "witness": {
+    "initial": "A client sends a valid session cookie but a multipart body containing more than `UPLOAD_FORM_HEAD_MAX_BYTES` before any file part.",
+    "events": [
+     "Registry reads up to the head limit."
+    ],
+    "outcomes": [
+     "The request is refused before its session check and does not refresh idle time.",
+     "The request is deemed arrived at the limit, passes its session check, refreshes idle time, and is then refused as malformed."
+    ],
+    "observer": "The owner, through whether the session remains alive and which refusal is returned."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A04",
+   "kind": "check_precedence",
+   "text": "(1) the caller's authentication and its right to the operation (A09) — for the owner, a valid owner session (sign-in excepted, A13 rule 4), then for a change its CSRF value (R0-29), then a confirmation value where one is asked (A13);",
+   "question": "For an upload, which refusal wins when the session is invalid and the multipart head is malformed, too large, or does not place the CSRF field before the file, given that A13 requires reading that head before the session check?",
+   "options": [
+    "The head is read without validating it; the invalid-session refusal always wins.",
+    "Head bounds and multipart form are checked before authentication, so their refusal can win.",
+    "Only enough framing is checked to locate admission; authentication wins over every semantic form failure.",
+    "The upload-specific arrival rule is an exception to A04's check order."
+   ],
+   "default_guess": "Read only bounded framing needed to locate the admission point, then return the invalid-session refusal before reporting CSRF or multipart failures.",
+   "witness": {
+    "initial": "A request has an expired session cookie and a multipart body whose pre-file head exceeds its limit.",
+    "events": [
+     "The caller submits the upload."
+    ],
+    "outcomes": [
+     "A04 stage 1 returns the expired-session refusal.",
+     "The upload parser returns the oversized or malformed-head refusal before the session is checked."
+    ],
+    "observer": "The caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13",
+   "kind": "undefined_monotonic_representation",
+   "text": "Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended",
+   "question": "In what representation are monotonic readings and stored session deadlines held, including their unit, precision, ordering and overflow behavior?",
+   "options": [
+    "Integer nanoseconds from an unspecified monotonic epoch.",
+    "Floating-point seconds from an unspecified monotonic epoch.",
+    "Opaque monotonic-instant and duration types supplied by `clock`.",
+    "Absolute deadlines in the backend's native representation."
+   ],
+   "default_guess": "Use opaque monotonic-instant and duration types, with comparisons and addition supplied by the clock port.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13",
+   "kind": "undefined_time_read_count",
+   "text": "Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8).",
+   "question": "How many monotonic and UTC readings does each sign-in, ordinary owner request, confirmation show or submission, sign-out, and cleanup pass take, and are all decisions and timestamps within one operation derived from one captured reading?",
+   "options": [
+    "Each operation captures one monotonic reading and, only if it records a time, one UTC reading.",
+    "Each individual comparison or write may read the clock again.",
+    "A cleanup pass captures one reading for all sessions.",
+    "A cleanup pass captures a separate reading for each session."
+   ],
+   "default_guess": "Capture one monotonic reading at each operation's admission and one UTC reading if it writes recorded time; capture one monotonic reading for the whole cleanup pass.",
+   "witness": {
+    "initial": "A confirmation is just under ten minutes old when its submission begins.",
+    "events": [
+     "The submission performs several checks while the monotonic clock crosses the ten-minute boundary."
+    ],
+    "outcomes": [
+     "One captured reading keeps the confirmation valid for the operation.",
+     "A later reading finds it expired and refuses it."
+    ],
+    "observer": "The owner submitting the confirmed action."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15",
+   "kind": "utc_boundary_snapshot",
+   "text": "The date of an erasure is a date not later than today, the current date in UTC; a later date is refused. Every entry whose instant is before 00:00 UTC of that date is removed. The erasure's own entry is written after the removal, in the same transaction, with the current instant",
+   "question": "Are “today,” the cutoff and the erasure entry's current instant derived from one UTC reading, or may the operation read UTC more than once across midnight?",
+   "options": [
+    "One UTC reading fixes today, the cutoff and the audit instant.",
+    "Today is checked with one reading and the audit entry receives a later reading.",
+    "The transaction may take arbitrary separate readings for validation and writing."
+   ],
+   "default_guess": "Take one UTC reading for the entire erasure and derive both today and the erasure entry's instant from it.",
+   "witness": {
+    "initial": "At 23:59:59.999999 UTC, the owner asks to erase before tomorrow's date.",
+    "events": [
+     "Registry validates the date before midnight.",
+     "The clock crosses midnight before the transaction writes the erasure entry."
+    ],
+    "outcomes": [
+     "The date is refused because one captured instant makes it later than today.",
+     "The date is accepted because a second reading makes it today, or validation and writing disagree about which day governs."
+    ],
+    "observer": "The owner and readers of the audit log."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16",
+   "kind": "undefined_import_instant",
+   "text": "A Customer the import makes is created at the import's instant with revision 1.",
+   "question": "What is the import's instant, how many UTC readings does the import transaction take, and must every new Customer, the migration closure and the import audit entry carry the same instant?",
+   "options": [
+    "One UTC reading at transaction admission is shared by every imported-time fact.",
+    "One UTC reading immediately before commit is shared by all new facts.",
+    "Each record may receive a separate UTC reading.",
+    "The closure's success instant is commit time while Customers and the audit entry use earlier readings."
+   ],
+   "default_guess": "Capture one UTC instant inside the transaction and use it for every new Customer, the closure and the audit entry.",
+   "witness": {
+    "initial": "An accepted import creates two Customers while the UTC clock advances between record writes.",
+    "events": [
+     "Registry writes the Customers, closure and audit entry in one transaction.",
+     "The transaction commits."
+    ],
+    "outcomes": [
+     "All newly written import facts carry one identical instant.",
+     "The Customers, closure and audit entry carry different instants from separate readings."
+    ],
+    "observer": "The owner reading imported Customers and the audit log."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21",
+   "kind": "cookie_rule_contradiction",
+   "text": "the session cookie is always HTTPS-only, which is stricter than A13 rule 1.",
+   "question": "Is the owner-session cookie always marked and handled as HTTPS-only, including local access, or is HTTPS-only required only when the interface is reached from another machine as A13 rule 1 states?",
+   "options": [
+    "Always HTTPS-only.",
+    "HTTPS-only only for access from another machine.",
+    "Local HTTP is allowed but still receives a Secure cookie that the browser will not return.",
+    "A21 is review commentary and creates no stricter behavior than A13."
+   ],
+   "default_guess": "Make the cookie always Secure and require HTTPS for every usable owner session.",
+   "witness": {
+    "initial": "The owner opens Registry locally over plain HTTP and signs in.",
+    "events": [
+     "Registry creates the owner session and responds with its cookie.",
+     "The browser makes the next local HTTP request."
+    ],
+    "outcomes": [
+     "The cookie is usable locally because A13 conditionally requires HTTPS only for another machine.",
+     "The Secure cookie is not sent over local HTTP, so the new session cannot be used."
+    ],
+    "observer": "The owner using the local interface."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21",
+   "kind": "vague_state_claim",
+   "text": "with no state held between the request's headers and its admission",
+   "question": "What state is forbidden before upload admission: session state, uploaded file bytes, the multipart head, parser state, the CSRF value, or every per-request value?",
+   "options": [
+    "No persistent or session mutation is allowed, but bounded parser state and the CSRF value may be held.",
+    "No request-specific state of any kind may be retained.",
+    "Only file bytes are forbidden; the complete head may be retained.",
+    "Only security-relevant session state is forbidden."
+   ],
+   "default_guess": "Allow bounded parser state and the CSRF value in request-local memory, while forbidding session mutation and retention of file bytes before admission.",
+   "unit": "?"
+  },
+  {
+   "subject": "A21",
+   "kind": "review_scope_incomplete",
+   "text": "A13 rule 2's arrival of an upload, changed the same day to the moment its bounded head has been read, was reviewed under authentication_credential_abuse and concurrency",
+   "question": "Was the A13 change also reviewed under `browser_boundary`, which names A13 and which rule 2 therefore reopens, or must that category be reviewed and recorded now?",
+   "options": [
+    "The earlier sentence reviewing `browser_boundary (A13, A19)` includes the simultaneous A13 change.",
+    "Only authentication and concurrency reviewed the A13 change, so browser_boundary remains reopened.",
+    "The upload-arrival change is declared not to affect browser_boundary despite that category naming A13."
+   ],
+   "default_guess": "Record explicitly that browser_boundary was reopened and reviewed for the A13 change as well.",
+   "unit": "?"
+  },
+  {
+   "subject": "A09",
+   "kind": "invariant_test_gap",
+   "text": "class(answer(op)) <= highest_class(s)\nhighest_class(Cabinet Kernel) = business_confidential",
+   "question": "Which Required tests item must show that no accepted answer exceeds a service's highest class and that Cabinet Kernel's highest class is exactly `business_confidential`, rather than merely showing denial of particular operations?",
+   "options": [
+    "Add a test deriving every service's highest class and checking representative answers at and above it.",
+    "Add a Kernel test for an allowed `business_confidential` answer and refusal of a `personal_data` answer.",
+    "Declare an existing table or generated-contract check as the witness and state what it asserts."
+   ],
+   "default_guess": "Add a generated rights-and-disclosure contract test covering every row, including an allowed Kernel business-confidential answer and a refused personal-data answer.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19",
+   "kind": "invariant_test_gap",
+   "text": "no stored value is ever evaluated or executed",
+   "question": "Which Required tests item must demonstrate that stored values cannot become query, command, template or other executable syntax, beyond being stored and read back unchanged?",
+   "options": [
+    "Add backend tests with query and command metacharacters and assert no interpreted effect.",
+    "Expand test 3 to state the attempted interpreted effect that must not occur.",
+    "Bind the invariant to a structural check proving every caller value occupies only a value position."
+   ],
+   "default_guess": "Use a structural generated-code check plus a runtime injection test asserting both unchanged round-trip and absence of interpreted effects.",
+   "unit": "?"
+  },
+  {
+   "subject": "A04",
+   "kind": "invariant_test_gap",
+   "text": "accepted and changed(r) and r keeps a revision\n                          => r.revision' = r.revision + 1\n                             and r.last_changed' = now",
+   "question": "Which Required tests item must show that every accepted revision-moving change increments by exactly one and writes `last_changed` from the operation's decided current-time reading?",
+   "options": [
+    "Add one parameterized test for every revision-moving action.",
+    "Expand existing correction, archive and customer tests to assert both the next revision and exact injected time.",
+    "Use a structural check for the shared revision-moving function and one behavioral test."
+   ],
+   "default_guess": "Add a parameterized behavioral test using a replaced clock, asserting the exact next revision and exact `last_changed` value for every revision-moving action.",
+   "unit": "?"
+  },
+  {
+   "subject": "M06",
+   "kind": "carried_model_question",
+   "text": "What ends a session, and whether its record is kept after, is State 2's (R0-47).",
+   "question": "What events end an agent session, and is its record deleted, retained permanently, or retained for a defined period after it ends?",
+   "options": [
+    "Only Kernel explicitly ends it; delete the record immediately.",
+    "Kernel ends it; retain a tombstone indefinitely.",
+    "Kernel ends it or a restart/timeout ends it; delete it.",
+    "Retain the full ended session for a defined period."
+   ],
+   "default_guess": "End it only through Kernel's explicit end operation and delete its access record atomically.",
+   "unit": "?"
+  },
+  {
+   "subject": "M06",
+   "kind": "carried_model_question",
+   "text": "its start value and how a stale version is checked are State 2's (round 28 judgement P4).",
+   "question": "What is an AgentSession's initial access version, which actions must state it, and what exact refusal and precedence apply when the stated version is stale or absent?",
+   "options": [
+    "Start at 1; every owner access-changing action states it and stale or absent is refused.",
+    "Start at 0; only grant and revoke state it.",
+    "Start at 1; confirmations bind it but submissions need not transmit it separately.",
+    "Use an opaque version rather than an ordinal."
+   ],
+   "default_guess": "Start at 1 and require every owner action that changes the set, active project or pending request to state the current version; refuse stale or missing versions at A04 stage 5.",
+   "unit": "?"
+  },
+  {
+   "subject": "M09",
+   "kind": "carried_model_question",
+   "text": "the outcome (accepted; whether refused attempts are recorded is settled in State 2, round 28 P1);",
+   "question": "Which refused attempts, if any, write audit entries, and what subject, outcome and safe detail does each such entry contain?",
+   "options": [
+    "No refused attempt writes an audit entry.",
+    "Every refused change writes an entry.",
+    "Only security-sensitive refusals such as sign-in, authorization and confirmation failures are recorded.",
+    "Only refused attempts of actions that would write an entry when accepted are recorded."
+   ],
+   "default_guess": "Record no refused attempts in the domain audit log; leave security-event logging to infrastructure as R0-58 states.",
+   "unit": "?"
+  },
+  {
+   "subject": "M09",
+   "kind": "carried_model_question",
+   "text": "Whether refused attempts and agent-authority reads leave an entry is State 2's (round 28 P1; R0-58 says ordinary reads do not).",
+   "question": "Do agent-authority reads or their refusals ever write audit entries, and if so which ones?",
+   "options": [
+    "No agent-authority read or refused read writes an audit entry.",
+    "Successful agent-authority reads are not recorded, but authorization refusals are.",
+    "Every agent-authority read is recorded.",
+    "Only reads of artifact metadata are recorded."
+   ],
+   "default_guess": "Write no audit entry for any agent-authority read or refused read, consistent with R0-58's exclusion of ordinary reads and agent calls.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13\",\"kind\":\"contradictory_session_end\",\"text\":\"The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request; the owner's sign-out; the instance's restart (M11 is never durable). Registry ends it — and drops its pending confirmation and its uploaded file with it (M11) — at a pass over the sessions it makes every 60 seconds from the start; the pass alone ends sessions by their limits, taking the import lock and then each session's lock (A16 rule 2) and deciding under them.\",\"question\":\"Does reaching a time limit end the session and destroy its state immediately, or only make it invalid until the next cleanup pass ends it and destroys its state?\",\"options\":[\"The session ends and its state disappears exactly at the limit.\",\"The session becomes invalid at the limit but remains, with its state, until the cleanup pass.\",\"The session ends at the limit but cleanup later removes already-inaccessible state.\"],\"default_guess\":\"Treat it as invalid at the exact limit and retain its inaccessible state until the cleanup pass removes it.\",\"witness\":{\"initial\":\"An owner session has a pending confirmation and an uploaded file and reaches its idle limit just after a cleanup pass.\",\"events\":[\"The owner or an internal observer examines session state before the next pass.\"],\"outcomes\":[\"The session and both temporary values already no longer exist.\",\"The session is invalid, but its confirmation and upload remain in memory until the next pass.\"],\"observer\":\"The owner through a concurrent request, and code managing runtime memory.\"}},{\"subject\":\"A13\",\"kind\":\"admission_cleanup_race\",\"text\":\"a request that passes it completes even if a limit or a sign-out comes while it runs, and a restart that interrupts it leaves nothing of it (A04 rule 4). The requests of one owner session that change its state — showing a confirmation step, uploading a file, a submission, a sign-out — are applied one at a time, in the order in which they take the session's one lock, after passing the session check\",\"question\":\"What prevents a cleanup pass or sign-out from ending and removing a session after another request passes the session check but before that request takes the session lock, and what state must the admitted request then operate on?\",\"options\":[\"Admission pins the session until the request finishes.\",\"The session check and acquisition of the required locks are atomic.\",\"The cleanup or sign-out may win, so the earlier admitted request is refused or aborted.\",\"The admitted request recreates or retains a private reference to the ended session state.\"],\"default_guess\":\"Make admission pin the session and require cleanup or sign-out to wait for every already-admitted request.\",\"witness\":{\"initial\":\"A valid session is one instant from expiry and holds an uploaded file.\",\"events\":[\"An upload request passes the session check.\",\"Before it obtains the import and session locks, the cleanup pass obtains them and ends the session.\",\"The admitted upload obtains the locks.\"],\"outcomes\":[\"The admitted upload completes because passing the check guaranteed completion.\",\"The upload cannot complete because the session and its file state were removed.\"],\"observer\":\"The owner submitting the upload.\"}},{\"subject\":\"A13\",\"kind\":\"undefined_upload_head\",\"text\":\"an upload, whose form sends its CSRF value before its file (A19 rule 4), arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read\",\"question\":\"Exactly which bytes constitute the head, what happens when the file part or CSRF field is not found within the maximum, and at what instant such a malformed or oversized-head request is deemed to arrive?\",\"options\":[\"The head includes all multipart framing and parts before the file; exceeding the maximum is an immediate upload refusal before arrival.\",\"Exactly the maximum is read and the request arrives then even if no file part was found.\",\"A malformed request never arrives and is refused by a separate pre-admission parser rule.\",\"The request arrives when the file boundary is found, with the constant only limiting retained bytes.\"],\"default_guess\":\"Define the head as every multipart byte before the first file byte and refuse before admission if a valid CSRF-first file part is not reached within the constant.\",\"witness\":{\"initial\":\"A client sends a valid session cookie but a multipart body containing more than `UPLOAD_FORM_HEAD_MAX_BYTES` before any file part.\",\"events\":[\"Registry reads up to the head limit.\"],\"outcomes\":[\"The request is refused before its session check and does not refresh idle time.\",\"The request is deemed arrived at the limit, passes its session check, refreshes idle time, and is then refused as malformed.\"],\"observer\":\"The owner, through whether the session remains alive and which refusal is returned.\"}},{\"subject\":\"A04\",\"kind\":\"check_precedence\",\"text\":\"(1) the caller's authentication and its right to the operation (A09) — for the owner, a valid owner session (sign-in excepted, A13 rule 4), then for a change its CSRF value (R0-29), then a confirmation value where one is asked (A13);\",\"question\":\"For an upload, which refusal wins when the session is invalid and the multipart head is malformed, too large, or does not place the CSRF field before the file, given that A13 requires reading that head before the session check?\",\"options\":[\"The head is read without validating it; the invalid-session refusal always wins.\",\"Head bounds and multipart form are checked before authentication, so their refusal can win.\",\"Only enough framing is checked to locate admission; authentication wins over every semantic form failure.\",\"The upload-specific arrival rule is an exception to A04's check order.\"],\"default_guess\":\"Read only bounded framing needed to locate the admission point, then return the invalid-session refusal before reporting CSRF or multipart failures.\",\"witness\":{\"initial\":\"A request has an expired session cookie and a multipart body whose pre-file head exceeds its limit.\",\"events\":[\"The caller submits the upload.\"],\"outcomes\":[\"A04 stage 1 returns the expired-session refusal.\",\"The upload parser returns the oversized or malformed-head refusal before the session is checked.\"],\"observer\":\"The caller.\"}},{\"subject\":\"A13\",\"kind\":\"undefined_monotonic_representation\",\"text\":\"Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended\",\"question\":\"In what representation are monotonic readings and stored session deadlines held, including their unit, precision, ordering and overflow behavior?\",\"options\":[\"Integer nanoseconds from an unspecified monotonic epoch.\",\"Floating-point seconds from an unspecified monotonic epoch.\",\"Opaque monotonic-instant and duration types supplied by `clock`.\",\"Absolute deadlines in the backend's native representation.\"],\"default_guess\":\"Use opaque monotonic-instant and duration types, with comparisons and addition supplied by the clock port.\"},{\"subject\":\"A13\",\"kind\":\"undefined_time_read_count\",\"text\":\"Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8).\",\"question\":\"How many monotonic and UTC readings does each sign-in, ordinary owner request, confirmation show or submission, sign-out, and cleanup pass take, and are all decisions and timestamps within one operation derived from one captured reading?\",\"options\":[\"Each operation captures one monotonic reading and, only if it records a time, one UTC reading.\",\"Each individual comparison or write may read the clock again.\",\"A cleanup pass captures one reading for all sessions.\",\"A cleanup pass captures a separate reading for each session.\"],\"default_guess\":\"Capture one monotonic reading at each operation's admission and one UTC reading if it writes recorded time; capture one monotonic reading for the whole cleanup pass.\",\"witness\":{\"initial\":\"A confirmation is just under ten minutes old when its submission begins.\",\"events\":[\"The submission performs several checks while the monotonic clock crosses the ten-minute boundary.\"],\"outcomes\":[\"One captured reading keeps the confirmation valid for the operation.\",\"A later reading finds it expired and refuses it.\"],\"observer\":\"The owner submitting the confirmed action.\"}},{\"subject\":\"A15\",\"kind\":\"utc_boundary_snapshot\",\"text\":\"The date of an erasure is a date not later than today, the current date in UTC; a later date is refused. Every entry whose instant is before 00:00 UTC of that date is removed. The erasure's own entry is written after the removal, in the same transaction, with the current instant\",\"question\":\"Are “today,” the cutoff and the erasure entry's current instant derived from one UTC reading, or may the operation read UTC more than once across midnight?\",\"options\":[\"One UTC reading fixes today, the cutoff and the audit instant.\",\"Today is checked with one reading and the audit entry receives a later reading.\",\"The transaction may take arbitrary separate readings for validation and writing.\"],\"default_guess\":\"Take one UTC reading for the entire erasure and derive both today and the erasure entry's instant from it.\",\"witness\":{\"initial\":\"At 23:59:59.999999 UTC, the owner asks to erase before tomorrow's date.\",\"events\":[\"Registry validates the date before midnight.\",\"The clock crosses midnight before the transaction writes the erasure entry.\"],\"outcomes\":[\"The date is refused because one captured instant makes it later than today.\",\"The date is accepted because a second reading makes it today, or validation and writing disagree about which day governs.\"],\"observer\":\"The owner and readers of the audit log.\"}},{\"subject\":\"A16\",\"kind\":\"undefined_import_instant\",\"text\":\"A Customer the import makes is created at the import's instant with revision 1.\",\"question\":\"What is the import's instant, how many UTC readings does the import transaction take, and must every new Customer, the migration closure and the import audit entry carry the same instant?\",\"options\":[\"One UTC reading at transaction admission is shared by every imported-time fact.\",\"One UTC reading immediately before commit is shared by all new facts.\",\"Each record may receive a separate UTC reading.\",\"The closure's success instant is commit time while Customers and the audit entry use earlier readings.\"],\"default_guess\":\"Capture one UTC instant inside the transaction and use it for every new Customer, the closure and the audit entry.\",\"witness\":{\"initial\":\"An accepted import creates two Customers while the UTC clock advances between record writes.\",\"events\":[\"Registry writes the Customers, closure and audit entry in one transaction.\",\"The transaction commits.\"],\"outcomes\":[\"All newly written import facts carry one identical instant.\",\"The Customers, closure and audit entry carry different instants from separate readings.\"],\"observer\":\"The owner reading imported Customers and the audit log.\"}},{\"subject\":\"A21\",\"kind\":\"cookie_rule_contradiction\",\"text\":\"the session cookie is always HTTPS-only, which is stricter than A13 rule 1.\",\"question\":\"Is the owner-session cookie always marked and handled as HTTPS-only, including local access, or is HTTPS-only required only when the interface is reached from another machine as A13 rule 1 states?\",\"options\":[\"Always HTTPS-only.\",\"HTTPS-only only for access from another machine.\",\"Local HTTP is allowed but still receives a Secure cookie that the browser will not return.\",\"A21 is review commentary and creates no stricter behavior than A13.\"],\"default_guess\":\"Make the cookie always Secure and require HTTPS for every usable owner session.\",\"witness\":{\"initial\":\"The owner opens Registry locally over plain HTTP and signs in.\",\"events\":[\"Registry creates the owner session and responds with its cookie.\",\"The browser makes the next local HTTP request.\"],\"outcomes\":[\"The cookie is usable locally because A13 conditionally requires HTTPS only for another machine.\",\"The Secure cookie is not sent over local HTTP, so the new session cannot be used.\"],\"observer\":\"The owner using the local interface.\"}},{\"subject\":\"A21\",\"kind\":\"vague_state_claim\",\"text\":\"with no state held between the request's headers and its admission\",\"question\":\"What state is forbidden before upload admission: session state, uploaded file bytes, the multipart head, parser state, the CSRF value, or every per-request value?\",\"options\":[\"No persistent or session mutation is allowed, but bounded parser state and the CSRF value may be held.\",\"No request-specific state of any kind may be retained.\",\"Only file bytes are forbidden; the complete head may be retained.\",\"Only security-relevant session state is forbidden.\"],\"default_guess\":\"Allow bounded parser state and the CSRF value in request-local memory, while forbidding session mutation and retention of file bytes before admission.\"},{\"subject\":\"A21\",\"kind\":\"review_scope_incomplete\",\"text\":\"A13 rule 2's arrival of an upload, changed the same day to the moment its bounded head has been read, was reviewed under authentication_credential_abuse and concurrency\",\"question\":\"Was the A13 change also reviewed under `browser_boundary`, which names A13 and which rule 2 therefore reopens, or must that category be reviewed and recorded now?\",\"options\":[\"The earlier sentence reviewing `browser_boundary (A13, A19)` includes the simultaneous A13 change.\",\"Only authentication and concurrency reviewed the A13 change, so browser_boundary remains reopened.\",\"The upload-arrival change is declared not to affect browser_boundary despite that category naming A13.\"],\"default_guess\":\"Record explicitly that browser_boundary was reopened and reviewed for the A13 change as well.\"},{\"subject\":\"A09\",\"kind\":\"invariant_test_gap\",\"text\":\"class(answer(op)) <= highest_class(s)\\nhighest_class(Cabinet Kernel) = business_confidential\",\"question\":\"Which Required tests item must show that no accepted answer exceeds a service's highest class and that Cabinet Kernel's highest class is exactly `business_confidential`, rather than merely showing denial of particular operations?\",\"options\":[\"Add a test deriving every service's highest class and checking representative answers at and above it.\",\"Add a Kernel test for an allowed `business_confidential` answer and refusal of a `personal_data` answer.\",\"Declare an existing table or generated-contract check as the witness and state what it asserts.\"],\"default_guess\":\"Add a generated rights-and-disclosure contract test covering every row, including an allowed Kernel business-confidential answer and a refused personal-data answer.\"},{\"subject\":\"A19\",\"kind\":\"invariant_test_gap\",\"text\":\"no stored value is ever evaluated or executed\",\"question\":\"Which Required tests item must demonstrate that stored values cannot become query, command, template or other executable syntax, beyond being stored and read back unchanged?\",\"options\":[\"Add backend tests with query and command metacharacters and assert no interpreted effect.\",\"Expand test 3 to state the attempted interpreted effect that must not occur.\",\"Bind the invariant to a structural check proving every caller value occupies only a value position.\"],\"default_guess\":\"Use a structural generated-code check plus a runtime injection test asserting both unchanged round-trip and absence of interpreted effects.\"},{\"subject\":\"A04\",\"kind\":\"invariant_test_gap\",\"text\":\"accepted and changed(r) and r keeps a revision\\n                          => r.revision' = r.revision + 1\\n                             and r.last_changed' = now\",\"question\":\"Which Required tests item must show that every accepted revision-moving change increments by exactly one and writes `last_changed` from the operation's decided current-time reading?\",\"options\":[\"Add one parameterized test for every revision-moving action.\",\"Expand existing correction, archive and customer tests to assert both the next revision and exact injected time.\",\"Use a structural check for the shared revision-moving function and one behavioral test.\"],\"default_guess\":\"Add a parameterized behavioral test using a replaced clock, asserting the exact next revision and exact `last_changed` value for every revision-moving action.\"},{\"subject\":\"M06\",\"kind\":\"carried_model_question\",\"text\":\"What ends a session, and whether its record is kept after, is State 2's (R0-47).\",\"question\":\"What events end an agent session, and is its record deleted, retained permanently, or retained for a defined period after it ends?\",\"options\":[\"Only Kernel explicitly ends it; delete the record immediately.\",\"Kernel ends it; retain a tombstone indefinitely.\",\"Kernel ends it or a restart/timeout ends it; delete it.\",\"Retain the full ended session for a defined period.\"],\"default_guess\":\"End it only through Kernel's explicit end operation and delete its access record atomically.\"},{\"subject\":\"M06\",\"kind\":\"carried_model_question\",\"text\":\"its start value and how a stale version is checked are State 2's (round 28 judgement P4).\",\"question\":\"What is an AgentSession's initial access version, which actions must state it, and what exact refusal and precedence apply when the stated version is stale or absent?\",\"options\":[\"Start at 1; every owner access-changing action states it and stale or absent is refused.\",\"Start at 0; only grant and revoke state it.\",\"Start at 1; confirmations bind it but submissions need not transmit it separately.\",\"Use an opaque version rather than an ordinal.\"],\"default_guess\":\"Start at 1 and require every owner action that changes the set, active project or pending request to state the current version; refuse stale or missing versions at A04 stage 5.\"},{\"subject\":\"M09\",\"kind\":\"carried_model_question\",\"text\":\"the outcome (accepted; whether refused attempts are recorded is settled in State 2, round 28 P1);\",\"question\":\"Which refused attempts, if any, write audit entries, and what subject, outcome and safe detail does each such entry contain?\",\"options\":[\"No refused attempt writes an audit entry.\",\"Every refused change writes an entry.\",\"Only security-sensitive refusals such as sign-in, authorization and confirmation failures are recorded.\",\"Only refused attempts of actions that would write an entry when accepted are recorded.\"],\"default_guess\":\"Record no refused attempts in the domain audit log; leave security-event logging to infrastructure as R0-58 states.\"},{\"subject\":\"M09\",\"kind\":\"carried_model_question\",\"text\":\"Whether refused attempts and agent-authority reads leave an entry is State 2's (round 28 P1; R0-58 says ordinary reads do not).\",\"question\":\"Do agent-authority reads or their refusals ever write audit entries, and if so which ones?\",\"options\":[\"No agent-authority read or refused read writes an audit entry.\",\"Successful agent-authority reads are not recorded, but authorization refusals are.\",\"Every agent-authority read is recorded.\",\"Only reads of artifact metadata are recorded.\"],\"default_guess\":\"Write no audit entry for any agent-authority read or refused read, consistent with R0-58's exclusion of ordinary reads and agent calls.\"}]}",
+ "set_aside": []
+}

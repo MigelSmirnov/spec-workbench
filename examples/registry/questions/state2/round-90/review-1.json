@@ -1,0 +1,122 @@
+{
+ "open_points": [
+  {
+   "subject": "A13",
+   "kind": "time_representation",
+   "text": "Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended",
+   "question": "In what concrete representation and unit are monotonic readings, stored session instants and deadlines carried and compared?",
+   "options": [
+    "opaque monotonic-clock readings plus durations in one declared unit",
+    "integer elapsed ticks in a declared unit",
+    "absolute monotonic deadlines"
+   ],
+   "default_guess": "Use integer monotonic nanoseconds and store absolute deadlines derived from them.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13",
+   "kind": "reading_count",
+   "text": "Validity is checked when a request arrives (A04 rule 6, stage 1) — an upload, whose form sends its CSRF value before its file (A19 rule 4), arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read",
+   "question": "Does an upload take one monotonic reading at that arrival and use that same value both to decide validity and to update `last_request`, or may those operations take separate readings?",
+   "options": [
+    "one captured reading for validity and idle refresh",
+    "one reading for validity and a later reading for idle refresh",
+    "independent readings wherever the implementation needs them"
+   ],
+   "default_guess": "Capture one monotonic reading when the bounded head is complete and use it for both validity and `last_request`.",
+   "witness": {
+    "initial": "The session's idle limit is one microsecond away when the upload head becomes complete.",
+    "events": [
+     "The owner sends a valid upload whose head finishes just before the limit.",
+     "The session check runs before the limit, while a second clock read for the idle refresh would run after it.",
+     "The owner later sends another request at a time lying between the two possible refreshed deadlines."
+    ],
+    "outcomes": [
+     "One-reading implementation accepts the upload and computes the next idle deadline from the arrival reading.",
+     "Two-reading implementation accepts the upload but computes a later idle deadline from the refresh reading."
+    ],
+    "observer": "The owner sees the later request refused in one implementation and served in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13",
+   "kind": "uncovered_refusal",
+   "text": "an upload, whose form sends its CSRF value before its file (A19 rule 4), arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read",
+   "question": "What happens when the multipart head is malformed, has no file boundary, or exceeds `UPLOAD_FORM_HEAD_MAX_BYTES` before it can be completely read, and which A04 failure stage supplies the answer when the upload has not yet reached its defined arrival?",
+   "options": [
+    "refuse as a malformed or oversized upload before session admission",
+    "authenticate from the headers first and then refuse the head",
+    "terminate the request without an operation-level answer"
+   ],
+   "default_guess": "Authenticate from the cookie when possible, then refuse the request as a malformed or oversized upload without reading further or changing session state.",
+   "witness": {
+    "initial": "A request carries an expired owner-session cookie and sends more than `UPLOAD_FORM_HEAD_MAX_BYTES` without reaching the file part.",
+    "events": [
+     "A caller sends the request headers.",
+     "The caller streams an overlong multipart head."
+    ],
+    "outcomes": [
+     "The server refuses or closes the request for exceeding the head bound before any session check.",
+     "The server reports the expired-session refusal before reporting or acting on the head failure."
+    ],
+    "observer": "The caller sees a different response or connection outcome."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13",
+   "kind": "concurrency_order",
+   "text": "An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts",
+   "question": "When concurrent requests finish their heads in chronological order but execute their session checks or acquire the session lock in the opposite order, must validity and idle refresh be linearized by arrival time or by check/lock order?",
+   "options": [
+    "arrival time controls both validity and the maximum `last_request`",
+    "session-check execution order controls validity",
+    "session-lock acquisition order controls validity and refresh"
+   ],
+   "default_guess": "Linearize admission by arrival time and update `last_request` with the maximum admitted arrival reading.",
+   "witness": {
+    "initial": "The session's previous `last_request` was at 12:00:00 and its idle limit is 12:30:00.",
+    "events": [
+     "Upload A completes its head at 12:29:59 but is delayed before its session-state update.",
+     "Upload B completes its head at 12:30:00.500 and performs its check before A's update."
+    ],
+    "outcomes": [
+     "Arrival-ordered handling admits A, lets A refresh the session, and therefore admits B.",
+     "Execution-ordered handling checks B against the old `last_request` and refuses B, then admits A."
+    ],
+    "observer": "The owner sees upload B accepted in one implementation and refused in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13",
+   "kind": "invariant_test_gap",
+   "text": "A request a microsecond before 30 minutes after the last one is served; one exactly 30 minutes after it is refused.",
+   "question": "Which Required tests item must show the new upload-arrival rule—especially that an upload whose head begins before the idle limit but completes at or after it is refused, while one whose head completes just before it is served?",
+   "options": [
+    "extend this item with uploads crossing the boundary while their heads are read",
+    "add a separate Required tests item for upload admission",
+    "declare that the generic request test must be instantiated for every request framing"
+   ],
+   "default_guess": "Add a separate test with controlled monotonic time and a deliberately delayed multipart head.",
+   "unit": "?"
+  },
+  {
+   "subject": "A21",
+   "kind": "vague_state_scope",
+   "text": "the session is checked once, at that moment, with no state held between the request's headers and its admission",
+   "question": "What does “no state held” forbid: shared session state or locks, retained request-local header and CSRF values, buffered multipart-head bytes, or all of these?",
+   "options": [
+    "no shared lock or pinned mutable session state, but bounded request-local parsed values may be retained",
+    "no multipart bytes may be retained, but parsed cookie and CSRF values may be retained",
+    "no request-local or shared state of any kind may survive until admission"
+   ],
+   "default_guess": "Interpret it as forbidding shared locks and pinned mutable session state; retain only bounded parsed request-local values needed for authentication and CSRF comparison.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13\",\"kind\":\"time_representation\",\"text\":\"Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended\",\"question\":\"In what concrete representation and unit are monotonic readings, stored session instants and deadlines carried and compared?\",\"options\":[\"opaque monotonic-clock readings plus durations in one declared unit\",\"integer elapsed ticks in a declared unit\",\"absolute monotonic deadlines\"],\"default_guess\":\"Use integer monotonic nanoseconds and store absolute deadlines derived from them.\"},{\"subject\":\"A13\",\"kind\":\"reading_count\",\"text\":\"Validity is checked when a request arrives (A04 rule 6, stage 1) — an upload, whose form sends its CSRF value before its file (A19 rule 4), arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read\",\"question\":\"Does an upload take one monotonic reading at that arrival and use that same value both to decide validity and to update `last_request`, or may those operations take separate readings?\",\"options\":[\"one captured reading for validity and idle refresh\",\"one reading for validity and a later reading for idle refresh\",\"independent readings wherever the implementation needs them\"],\"default_guess\":\"Capture one monotonic reading when the bounded head is complete and use it for both validity and `last_request`.\",\"witness\":{\"initial\":\"The session's idle limit is one microsecond away when the upload head becomes complete.\",\"events\":[\"The owner sends a valid upload whose head finishes just before the limit.\",\"The session check runs before the limit, while a second clock read for the idle refresh would run after it.\",\"The owner later sends another request at a time lying between the two possible refreshed deadlines.\"],\"outcomes\":[\"One-reading implementation accepts the upload and computes the next idle deadline from the arrival reading.\",\"Two-reading implementation accepts the upload but computes a later idle deadline from the refresh reading.\"],\"observer\":\"The owner sees the later request refused in one implementation and served in the other.\"}},{\"subject\":\"A13\",\"kind\":\"uncovered_refusal\",\"text\":\"an upload, whose form sends its CSRF value before its file (A19 rule 4), arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read\",\"question\":\"What happens when the multipart head is malformed, has no file boundary, or exceeds `UPLOAD_FORM_HEAD_MAX_BYTES` before it can be completely read, and which A04 failure stage supplies the answer when the upload has not yet reached its defined arrival?\",\"options\":[\"refuse as a malformed or oversized upload before session admission\",\"authenticate from the headers first and then refuse the head\",\"terminate the request without an operation-level answer\"],\"default_guess\":\"Authenticate from the cookie when possible, then refuse the request as a malformed or oversized upload without reading further or changing session state.\",\"witness\":{\"initial\":\"A request carries an expired owner-session cookie and sends more than `UPLOAD_FORM_HEAD_MAX_BYTES` without reaching the file part.\",\"events\":[\"A caller sends the request headers.\",\"The caller streams an overlong multipart head.\"],\"outcomes\":[\"The server refuses or closes the request for exceeding the head bound before any session check.\",\"The server reports the expired-session refusal before reporting or acting on the head failure.\"],\"observer\":\"The caller sees a different response or connection outcome.\"}},{\"subject\":\"A13\",\"kind\":\"concurrency_order\",\"text\":\"An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts\",\"question\":\"When concurrent requests finish their heads in chronological order but execute their session checks or acquire the session lock in the opposite order, must validity and idle refresh be linearized by arrival time or by check/lock order?\",\"options\":[\"arrival time controls both validity and the maximum `last_request`\",\"session-check execution order controls validity\",\"session-lock acquisition order controls validity and refresh\"],\"default_guess\":\"Linearize admission by arrival time and update `last_request` with the maximum admitted arrival reading.\",\"witness\":{\"initial\":\"The session's previous `last_request` was at 12:00:00 and its idle limit is 12:30:00.\",\"events\":[\"Upload A completes its head at 12:29:59 but is delayed before its session-state update.\",\"Upload B completes its head at 12:30:00.500 and performs its check before A's update.\"],\"outcomes\":[\"Arrival-ordered handling admits A, lets A refresh the session, and therefore admits B.\",\"Execution-ordered handling checks B against the old `last_request` and refuses B, then admits A.\"],\"observer\":\"The owner sees upload B accepted in one implementation and refused in the other.\"}},{\"subject\":\"A13\",\"kind\":\"invariant_test_gap\",\"text\":\"A request a microsecond before 30 minutes after the last one is served; one exactly 30 minutes after it is refused.\",\"question\":\"Which Required tests item must show the new upload-arrival rule—especially that an upload whose head begins before the idle limit but completes at or after it is refused, while one whose head completes just before it is served?\",\"options\":[\"extend this item with uploads crossing the boundary while their heads are read\",\"add a separate Required tests item for upload admission\",\"declare that the generic request test must be instantiated for every request framing\"],\"default_guess\":\"Add a separate test with controlled monotonic time and a deliberately delayed multipart head.\"},{\"subject\":\"A21\",\"kind\":\"vague_state_scope\",\"text\":\"the session is checked once, at that moment, with no state held between the request's headers and its admission\",\"question\":\"What does “no state held” forbid: shared session state or locks, retained request-local header and CSRF values, buffered multipart-head bytes, or all of these?\",\"options\":[\"no shared lock or pinned mutable session state, but bounded request-local parsed values may be retained\",\"no multipart bytes may be retained, but parsed cookie and CSRF values may be retained\",\"no request-local or shared state of any kind may survive until admission\"],\"default_guess\":\"Interpret it as forbidding shared locks and pinned mutable session state; retain only bounded parsed request-local values needed for authentication and CSRF comparison.\"}]}",
+ "set_aside": []
+}

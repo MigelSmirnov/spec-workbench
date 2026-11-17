@@ -1,0 +1,208 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 rule 2 — UPLOAD_FORM_HEAD_MAX_BYTES",
+   "kind": "missing_policy_value",
+   "text": "at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant",
+   "question": "What integer byte value does `UPLOAD_FORM_HEAD_MAX_BYTES` have?",
+   "options": [
+    "Set a fixed release value in State 2.",
+    "Leave the data provider or implementation to choose it."
+   ],
+   "default_guess": "Set it to 65536 bytes as a release constant.",
+   "witness": {
+    "initial": "A valid owner session sends a multipart upload whose bytes before the file total 32768.",
+    "events": [
+     "The owner submits the upload form.",
+     "Registry reads toward the file part."
+    ],
+    "outcomes": [
+     "With a 16384-byte maximum, Registry refuses the upload before reaching the file.",
+     "With a 65536-byte maximum, Registry reaches the file and continues admission."
+    ],
+    "observer": "The owner sees refusal or continued upload processing."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 rule 2 and A19 rule 4 — upload head",
+   "kind": "undefined_boundary",
+   "text": "arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read",
+   "question": "Which bytes constitute the bounded head: HTTP request headers, multipart preamble and boundaries, the CSRF part, the file part's headers, and any bytes immediately preceding the file content?",
+   "options": [
+    "Count every request-body byte before the first file-content byte, including multipart framing and both parts' headers.",
+    "Count only the CSRF field and its multipart framing.",
+    "Also count the HTTP request headers."
+   ],
+   "default_guess": "Count every multipart body byte before the first file-content byte, including the file part's headers, but not HTTP request headers.",
+   "witness": {
+    "initial": "A request has small HTTP headers and CSRF value but very large file-part headers.",
+    "events": [
+     "The owner or an authenticated caller sends the multipart request.",
+     "Registry reads the CSRF part and then the file-part headers."
+    ],
+    "outcomes": [
+     "If file-part headers belong to the head, the head limit refuses the request.",
+     "If they do not, Registry admits the request and proceeds to the file."
+    ],
+    "observer": "The caller sees refusal or admission; the server sees different bounded-memory exposure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 rule 2 — oversized upload head",
+   "kind": "missing_refusal_condition",
+   "text": "that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read",
+   "question": "What must Registry do when the file part has not begun after `UPLOAD_FORM_HEAD_MAX_BYTES` bytes, and does that refusal leave the session, idle deadline, pending confirmation, and previously uploaded file unchanged?",
+   "options": [
+    "Refuse immediately at the next byte, without admitting the request or restarting idle time.",
+    "Treat the bounded prefix as the arrival and then refuse malformed input.",
+    "Close the connection without a Registry refusal answer."
+   ],
+   "default_guess": "Refuse immediately once the maximum is exceeded, do not admit the request or restart its idle time, and leave all session contents unchanged.",
+   "witness": {
+    "initial": "A valid session has a pending confirmation and a previously uploaded file.",
+    "events": [
+     "The owner sends a multipart body whose pre-file head exceeds the maximum.",
+     "Registry reaches the maximum without finding the file content."
+    ],
+    "outcomes": [
+     "Registry refuses without admitting the request and preserves the prior session state.",
+     "Registry treats the bounded read as an arrival, restarts idle time, and may replace or otherwise change upload-related state."
+    ],
+    "observer": "The owner sees different session lifetime and retained confirmation or file state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 rule 2 — incomplete or slow upload head",
+   "kind": "missing_timeout_behavior",
+   "text": "arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read",
+   "question": "If the peer stalls, disconnects, or ends the multipart body before the complete head is read, when and how is the request refused, and is there a read deadline?",
+   "options": [
+    "Apply a specified monotonic read deadline and refuse on expiry.",
+    "Wait without a product-level deadline until transport failure.",
+    "Refuse immediately on EOF but leave slow reads to infrastructure policy."
+   ],
+   "default_guess": "Refuse on premature EOF, impose a fixed monotonic read deadline, and never count the incomplete request as an owner request.",
+   "witness": {
+    "initial": "A valid session is one minute from its idle limit.",
+    "events": [
+     "A caller sends headers and part of the CSRF multipart field.",
+     "The caller then stops sending bytes before the file part begins."
+    ],
+    "outcomes": [
+     "Registry times out and releases the request without restarting the session's idle period.",
+     "Registry waits indefinitely, retaining connection/parser resources while the session separately expires."
+    ],
+    "observer": "The caller and operator see different completion and resource behavior."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 owner-session validity invariant",
+   "kind": "invariant_test_gap",
+   "text": "an upload, whose form sends its CSRF value before its file (A19 rule 4), arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read",
+   "question": "Which Required tests item must show that an upload begun before an idle or eight-hour limit but whose head finishes at or after the limit is refused, while one whose head finishes just before it is admitted?",
+   "options": [
+    "Extend Required test 8 with upload-head boundary cases.",
+    "Add a separate Required tests item for upload arrival.",
+    "Treat the prose in A21 as sufficient without a witness test."
+   ],
+   "default_guess": "Add a separate boundary test using a replaceable monotonic clock and a controllable multipart stream.",
+   "witness": {
+    "initial": "A session's idle limit is at monotonic time T.",
+    "events": [
+     "The owner begins sending an upload before T.",
+     "Registry receives the last byte of the bounded head at T."
+    ],
+    "outcomes": [
+     "An implementation using request headers as arrival admits the upload.",
+     "An implementation using completion of the head as arrival refuses it."
+    ],
+    "observer": "The owner sees the upload proceed or receives a sign-in refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 rule 2 — clock sampling at upload arrival",
+   "kind": "unspecified_read_count",
+   "text": "arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read",
+   "question": "Does Registry take exactly one monotonic-clock reading when the head completes and use that same value both to check every session limit and to set `last_request`, or may those decisions use separate readings?",
+   "options": [
+    "Use one reading for admission and the idle-time restart.",
+    "Use separate readings for validity and `last_request`.",
+    "Take the reading only after acquiring the import and session locks."
+   ],
+   "default_guess": "Take one monotonic reading at head completion and use it for both validity and `last_request`.",
+   "witness": {
+    "initial": "The head completes just before the idle deadline, but lock contention delays session processing until after it.",
+    "events": [
+     "Registry finishes reading the upload head.",
+     "Another request holds the import lock across the idle deadline.",
+     "Registry later acquires the required locks."
+    ],
+    "outcomes": [
+     "With the head-completion reading, the upload is admitted and that instant becomes `last_request`.",
+     "With a later validation reading, the upload is refused as expired."
+    ],
+    "observer": "The owner sees admission or a request to sign in again."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 and A21 — owner-session cookie transport",
+   "kind": "contradiction",
+   "text": "A13: \"sent only over HTTPS when the interface is reached from another machine\"; A21: \"the session cookie is always HTTPS-only, which is stricter than A13 rule 1\"",
+   "question": "Is the owner-session cookie always marked Secure and therefore never sent over local HTTP, or is HTTPS-only conditional on access from another machine?",
+   "options": [
+    "Always mark the cookie Secure and require HTTPS for every owner-session request.",
+    "Permit a non-Secure cookie on same-machine HTTP while requiring HTTPS remotely."
+   ],
+   "default_guess": "Always mark the cookie Secure and serve the owner interface only over HTTPS once a session is involved.",
+   "witness": {
+    "initial": "The owner opens Registry from a browser on Registry's own host using HTTP loopback.",
+    "events": [
+     "The owner signs in.",
+     "The browser receives the owner-session cookie.",
+     "The browser makes the next owner request over HTTP."
+    ],
+    "outcomes": [
+     "Under A13's conditional wording, an implementation may send the cookie and accept the request.",
+     "Under A21's always-HTTPS-only statement, the Secure cookie is not sent and the request has no session."
+    ],
+    "observer": "The owner sees a working local session or another sign-in request."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21 upload security-review statement",
+   "kind": "ambiguous_state_claim",
+   "text": "with no state held between the request's headers and its admission",
+   "question": "What kind of state is forbidden during the bounded head read, given that Registry must parse multipart framing and retain the CSRF value long enough to perform the stage-1 CSRF check?",
+   "options": [
+    "Forbid only owner-session mutations and admission reservations; allow bounded request-local parser state and the CSRF value.",
+    "Forbid all request-local buffering except a streaming parser's counters.",
+    "Forbid all state, which makes the later CSRF comparison impossible."
+   ],
+   "default_guess": "Allow bounded request-local parser state and the CSRF value, but hold no session lock, session mutation, uploaded file, or admission reservation before admission.",
+   "witness": {
+    "initial": "A multipart upload places the CSRF field before the file as required.",
+    "events": [
+     "Registry reads and parses the CSRF field.",
+     "Registry continues through the file-part headers to the admission point.",
+     "Registry performs the CSRF check."
+    ],
+    "outcomes": [
+     "If bounded request-local state is allowed, Registry retains the CSRF value and can compare it.",
+     "If the phrase forbids all state, Registry must discard the value and cannot perform the required comparison without rereading or reparsing."
+    ],
+    "observer": "The owner sees a valid upload admitted or incorrectly refused; a reviewer sees materially different pre-authentication memory behavior."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 rule 2 — UPLOAD_FORM_HEAD_MAX_BYTES\",\"kind\":\"missing_policy_value\",\"text\":\"at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant\",\"question\":\"What integer byte value does `UPLOAD_FORM_HEAD_MAX_BYTES` have?\",\"options\":[\"Set a fixed release value in State 2.\",\"Leave the data provider or implementation to choose it.\"],\"default_guess\":\"Set it to 65536 bytes as a release constant.\",\"witness\":{\"initial\":\"A valid owner session sends a multipart upload whose bytes before the file total 32768.\",\"events\":[\"The owner submits the upload form.\",\"Registry reads toward the file part.\"],\"outcomes\":[\"With a 16384-byte maximum, Registry refuses the upload before reaching the file.\",\"With a 65536-byte maximum, Registry reaches the file and continues admission.\"],\"observer\":\"The owner sees refusal or continued upload processing.\"}},{\"subject\":\"A13 rule 2 and A19 rule 4 — upload head\",\"kind\":\"undefined_boundary\",\"text\":\"arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read\",\"question\":\"Which bytes constitute the bounded head: HTTP request headers, multipart preamble and boundaries, the CSRF part, the file part's headers, and any bytes immediately preceding the file content?\",\"options\":[\"Count every request-body byte before the first file-content byte, including multipart framing and both parts' headers.\",\"Count only the CSRF field and its multipart framing.\",\"Also count the HTTP request headers.\"],\"default_guess\":\"Count every multipart body byte before the first file-content byte, including the file part's headers, but not HTTP request headers.\",\"witness\":{\"initial\":\"A request has small HTTP headers and CSRF value but very large file-part headers.\",\"events\":[\"The owner or an authenticated caller sends the multipart request.\",\"Registry reads the CSRF part and then the file-part headers.\"],\"outcomes\":[\"If file-part headers belong to the head, the head limit refuses the request.\",\"If they do not, Registry admits the request and proceeds to the file.\"],\"observer\":\"The caller sees refusal or admission; the server sees different bounded-memory exposure.\"}},{\"subject\":\"A13 rule 2 — oversized upload head\",\"kind\":\"missing_refusal_condition\",\"text\":\"that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read\",\"question\":\"What must Registry do when the file part has not begun after `UPLOAD_FORM_HEAD_MAX_BYTES` bytes, and does that refusal leave the session, idle deadline, pending confirmation, and previously uploaded file unchanged?\",\"options\":[\"Refuse immediately at the next byte, without admitting the request or restarting idle time.\",\"Treat the bounded prefix as the arrival and then refuse malformed input.\",\"Close the connection without a Registry refusal answer.\"],\"default_guess\":\"Refuse immediately once the maximum is exceeded, do not admit the request or restart its idle time, and leave all session contents unchanged.\",\"witness\":{\"initial\":\"A valid session has a pending confirmation and a previously uploaded file.\",\"events\":[\"The owner sends a multipart body whose pre-file head exceeds the maximum.\",\"Registry reaches the maximum without finding the file content.\"],\"outcomes\":[\"Registry refuses without admitting the request and preserves the prior session state.\",\"Registry treats the bounded read as an arrival, restarts idle time, and may replace or otherwise change upload-related state.\"],\"observer\":\"The owner sees different session lifetime and retained confirmation or file state.\"}},{\"subject\":\"A13 rule 2 — incomplete or slow upload head\",\"kind\":\"missing_timeout_behavior\",\"text\":\"arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read\",\"question\":\"If the peer stalls, disconnects, or ends the multipart body before the complete head is read, when and how is the request refused, and is there a read deadline?\",\"options\":[\"Apply a specified monotonic read deadline and refuse on expiry.\",\"Wait without a product-level deadline until transport failure.\",\"Refuse immediately on EOF but leave slow reads to infrastructure policy.\"],\"default_guess\":\"Refuse on premature EOF, impose a fixed monotonic read deadline, and never count the incomplete request as an owner request.\",\"witness\":{\"initial\":\"A valid session is one minute from its idle limit.\",\"events\":[\"A caller sends headers and part of the CSRF multipart field.\",\"The caller then stops sending bytes before the file part begins.\"],\"outcomes\":[\"Registry times out and releases the request without restarting the session's idle period.\",\"Registry waits indefinitely, retaining connection/parser resources while the session separately expires.\"],\"observer\":\"The caller and operator see different completion and resource behavior.\"}},{\"subject\":\"A13 owner-session validity invariant\",\"kind\":\"invariant_test_gap\",\"text\":\"an upload, whose form sends its CSRF value before its file (A19 rule 4), arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read\",\"question\":\"Which Required tests item must show that an upload begun before an idle or eight-hour limit but whose head finishes at or after the limit is refused, while one whose head finishes just before it is admitted?\",\"options\":[\"Extend Required test 8 with upload-head boundary cases.\",\"Add a separate Required tests item for upload arrival.\",\"Treat the prose in A21 as sufficient without a witness test.\"],\"default_guess\":\"Add a separate boundary test using a replaceable monotonic clock and a controllable multipart stream.\",\"witness\":{\"initial\":\"A session's idle limit is at monotonic time T.\",\"events\":[\"The owner begins sending an upload before T.\",\"Registry receives the last byte of the bounded head at T.\"],\"outcomes\":[\"An implementation using request headers as arrival admits the upload.\",\"An implementation using completion of the head as arrival refuses it.\"],\"observer\":\"The owner sees the upload proceed or receives a sign-in refusal.\"}},{\"subject\":\"A13 rule 2 — clock sampling at upload arrival\",\"kind\":\"unspecified_read_count\",\"text\":\"arrives when that head, at most the imported `UPLOAD_FORM_HEAD_MAX_BYTES` constant, has been read\",\"question\":\"Does Registry take exactly one monotonic-clock reading when the head completes and use that same value both to check every session limit and to set `last_request`, or may those decisions use separate readings?\",\"options\":[\"Use one reading for admission and the idle-time restart.\",\"Use separate readings for validity and `last_request`.\",\"Take the reading only after acquiring the import and session locks.\"],\"default_guess\":\"Take one monotonic reading at head completion and use it for both validity and `last_request`.\",\"witness\":{\"initial\":\"The head completes just before the idle deadline, but lock contention delays session processing until after it.\",\"events\":[\"Registry finishes reading the upload head.\",\"Another request holds the import lock across the idle deadline.\",\"Registry later acquires the required locks.\"],\"outcomes\":[\"With the head-completion reading, the upload is admitted and that instant becomes `last_request`.\",\"With a later validation reading, the upload is refused as expired.\"],\"observer\":\"The owner sees admission or a request to sign in again.\"}},{\"subject\":\"A13 and A21 — owner-session cookie transport\",\"kind\":\"contradiction\",\"text\":\"A13: \\\"sent only over HTTPS when the interface is reached from another machine\\\"; A21: \\\"the session cookie is always HTTPS-only, which is stricter than A13 rule 1\\\"\",\"question\":\"Is the owner-session cookie always marked Secure and therefore never sent over local HTTP, or is HTTPS-only conditional on access from another machine?\",\"options\":[\"Always mark the cookie Secure and require HTTPS for every owner-session request.\",\"Permit a non-Secure cookie on same-machine HTTP while requiring HTTPS remotely.\"],\"default_guess\":\"Always mark the cookie Secure and serve the owner interface only over HTTPS once a session is involved.\",\"witness\":{\"initial\":\"The owner opens Registry from a browser on Registry's own host using HTTP loopback.\",\"events\":[\"The owner signs in.\",\"The browser receives the owner-session cookie.\",\"The browser makes the next owner request over HTTP.\"],\"outcomes\":[\"Under A13's conditional wording, an implementation may send the cookie and accept the request.\",\"Under A21's always-HTTPS-only statement, the Secure cookie is not sent and the request has no session.\"],\"observer\":\"The owner sees a working local session or another sign-in request.\"}},{\"subject\":\"A21 upload security-review statement\",\"kind\":\"ambiguous_state_claim\",\"text\":\"with no state held between the request's headers and its admission\",\"question\":\"What kind of state is forbidden during the bounded head read, given that Registry must parse multipart framing and retain the CSRF value long enough to perform the stage-1 CSRF check?\",\"options\":[\"Forbid only owner-session mutations and admission reservations; allow bounded request-local parser state and the CSRF value.\",\"Forbid all request-local buffering except a streaming parser's counters.\",\"Forbid all state, which makes the later CSRF comparison impossible.\"],\"default_guess\":\"Allow bounded request-local parser state and the CSRF value, but hold no session lock, session mutation, uploaded file, or admission reservation before admission.\",\"witness\":{\"initial\":\"A multipart upload places the CSRF field before the file as required.\",\"events\":[\"Registry reads and parses the CSRF field.\",\"Registry continues through the file-part headers to the admission point.\",\"Registry performs the CSRF check.\"],\"outcomes\":[\"If bounded request-local state is allowed, Registry retains the CSRF value and can compare it.\",\"If the phrase forbids all state, Registry must discard the value and cannot perform the required comparison without rereading or reparsing.\"],\"observer\":\"The owner sees a valid upload admitted or incorrectly refused; a reviewer sees materially different pre-authentication memory behavior.\"}}]}",
+ "set_aside": []
+}
