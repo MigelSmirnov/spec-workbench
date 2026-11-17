@@ -556,7 +556,9 @@ None.
 
 ### Enforces
 
-A06 rule 8's order of rooms; the card is `personal_data`.
+A06 rule 8's order of rooms; the card is `personal_data`, and an anonymised
+project's erased form, which carries no fact `PERSONAL_DATA_FIELDS` lists,
+`business_confidential` (`operations` computes the class).
 
 ### Errors
 
@@ -591,7 +593,9 @@ None.
 
 ### Enforces
 
-Never contact data (R0-04); `personal_data`.
+Never contact data (R0-04); `personal_data`, and an anonymised project's
+erased form, which carries no fact `PERSONAL_DATA_FIELDS` lists,
+`business_confidential` (`operations` computes the class).
 
 ### Errors
 

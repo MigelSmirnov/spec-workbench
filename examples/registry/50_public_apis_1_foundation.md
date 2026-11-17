@@ -788,8 +788,8 @@ None.
 ### Enforces
 
 There is one open store per process (L19): `store` keeps the one
-`open_store` opened, and `operations` hands it to `run_in_transaction` and
-`read_in_transaction`. It is kept for the process and never replaced.
+`open_store` opened, and `operations` passes it to `run_in_transaction` and
+`read_in_transaction` as the open store each takes as its first input. It is kept for the process and never replaced.
 
 ### Errors
 

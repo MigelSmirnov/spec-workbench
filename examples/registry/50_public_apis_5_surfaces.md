@@ -49,7 +49,9 @@ checked for the token only (A10 rule 1); every other call through
 answer as any refusal of it (A08 rule 7, A10 rule 3). Every Kernel call runs
 in a write transaction (A10 rule 6); every other read in
 `store.read_in_transaction`, every change in `store.run_in_transaction`,
-each on the store `store.opened_store` gives, with the instant of
+each given as its open store the one `store.opened_store` gives (each of the
+three declared in `module_internal["operations"]["store"]`), with the
+instant of
 `clock.recorded_now`. The agent projection joins
 `projects.read_agent_view` with `artifact_pointers.published_pointers`. An
 answer's class is `personal_data` when one of the fields the imported
