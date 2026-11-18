@@ -1,0 +1,159 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 settling-time comparison",
+   "kind": "time_source",
+   "text": "its age is below the settling time, which includes a modification time in the future",
+   "question": "From what clock is the comparison instant obtained, in what representation and precision are it and the modification time compared, and is the clock read once per scan or once per file?",
+   "options": [
+    "Read one UTC wall-clock instant per scan and compare normalized UTC instants",
+    "Read the UTC wall clock separately for each file",
+    "Use another declared time authority and representation"
+   ],
+   "default_guess": "Read one timezone-aware UTC wall-clock instant at the start of the scan, normalize file modification times to UTC, and reuse that instant for every settling comparison in the scan.",
+   "witness": {
+    "initial": "Two files have modification times close to the settling-time boundary.",
+    "events": [
+     "The caller starts one scan.",
+     "The clock passes the boundary between the visits to the two files."
+    ],
+    "outcomes": [
+     "With one clock reading for the scan, both files are judged against the same instant.",
+     "With one reading per file, the otherwise equivalent files can receive different statuses."
+    ],
+    "observer": "The caller reading the scan results"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 symbolic-link reporting",
+   "kind": "contradiction",
+   "text": "Ignored names are not reported, ignored folders are not entered, and symbolic links are neither reported nor followed.",
+   "question": "When a path listed as an ordinary file becomes a symbolic link before it is opened, is it omitted because symbolic links are never reported, or reported as rejected with `unreadable_file` under rule 6?",
+   "options": [
+    "Omit it from the scan",
+    "Report it as `rejected` with `unreadable_file`",
+    "Distinguish links present at listing from paths that become links later"
+   ],
+   "default_guess": "Distinguish by listing time: omit an entry listed as a symbolic link, but report a formerly ordinary listed path that becomes a link as `rejected` with `unreadable_file`.",
+   "witness": {
+    "initial": "A folder listing contains `photo.jpg` as an ordinary file.",
+    "events": [
+     "Syncthing replaces `photo.jpg` with a symbolic link after the listing.",
+     "The scanner opens the listed path without following the link."
+    ],
+    "outcomes": [
+     "The unconditional symbolic-link rule omits `photo.jpg` from the result.",
+     "Table rule 6 reports `photo.jpg` as `rejected` with `unreadable_file`."
+    ],
+    "observer": "The caller reading the scan results"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 disappearance before metadata",
+   "kind": "undefined_boundary",
+   "text": "A file that disappears before its metadata is read is not reported.",
+   "question": "Which metadata read establishes this boundary: information returned by the folder listing, a separate path metadata call, or metadata obtained from the opened file?",
+   "options": [
+    "The folder listing's metadata counts",
+    "Only a separate metadata call counts",
+    "Only metadata obtained from an opened file counts"
+   ],
+   "default_guess": "Use a separate no-follow metadata check after listing; disappearance before that check omits the entry, while a later open or read failure is reported as `unreadable_file`.",
+   "witness": {
+    "initial": "The folder listing returns a name and file-type information for `photo.jpg`.",
+    "events": [
+     "Syncthing removes `photo.jpg` immediately after the listing.",
+     "The scanner processes the listed entry."
+    ],
+    "outcomes": [
+     "If listing information is the metadata read, the later open failure produces a rejected `unreadable_file` observation.",
+     "If a later stat or open supplies the relevant metadata, the disappeared file is not reported."
+    ],
+    "observer": "The caller reading the scan results"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 placement race boundary",
+   "kind": "uncovered_race",
+   "text": "A file that leaves its listed path before the placement's own scan reads it is not reported as `ready`, so its placement fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure (A3 rule 3). A file that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of = models.PlacementFailure (A3 rule 4).",
+   "question": "What result is required when the file leaves after the placement's scan has finished reading it but before that scan reports it as `ready`?",
+   "options": [
+    "Complete the ready observation and then fail placement with `UNREADABLE_FILE`",
+    "Revalidate before reporting and fail with `NOT_READY_OR_ABSENT`",
+    "Define the scan's successful read as the instant at which it is considered to have reported `ready`"
+   ],
+   "default_guess": "Define completion of the successful scan read as the ready boundary; a subsequent disappearance causes `UNREADABLE_FILE`.",
+   "witness": {
+    "initial": "An unplaced ordinary image is present and ready.",
+    "events": [
+     "The caller requests placement.",
+     "The placement's internal scan reads and hashes the complete file.",
+     "Syncthing removes the path before the scan result is finalized.",
+     "Placement attempts its subsequent source-file read."
+    ],
+    "outcomes": [
+     "The completed scan is treated as ready, so placement fails with `UNREADABLE_FILE`.",
+     "A final path revalidation prevents a ready result, so placement fails with `NOT_READY_OR_ABSENT`."
+    ],
+    "observer": "The caller receiving the placement failure"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 replacement at a listed path",
+   "kind": "object_identity",
+   "text": "Each folder is listed once, when the walk reaches it, and the listing holds what the operating system returns then.",
+   "question": "If an ordinary file is atomically replaced by a different ordinary file at the same listed path before the scanner reads it, does this scan process the replacement, process the originally listed object through a retained handle, or omit the entry until the next scan?",
+   "options": [
+    "Process whichever object occupies the path when it is opened",
+    "Retain and process the object identified during listing",
+    "Omit a replaced entry and defer the new object to the next scan"
+   ],
+   "default_guess": "Open by the listed relative path and process the replacement that occupies that path at open time.",
+   "witness": {
+    "initial": "The listing contains `photo.jpg` with content A.",
+    "events": [
+     "Syncthing atomically replaces `photo.jpg` with a regular file containing content B before the scanner opens it.",
+     "The scanner reaches the listed name."
+    ],
+    "outcomes": [
+     "A path-based implementation reports content B in this scan.",
+     "An implementation retaining an object handle reports content A, or an identity-validating implementation omits the replaced entry."
+    ],
+    "observer": "The caller, which sees a different source identity or no observation"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 opening non-regular objects",
+   "kind": "exact_failure_conditions",
+   "text": "it opens, but what was opened is not a regular file",
+   "question": "What opening mode and classification behavior are required when a listed file has become a FIFO, socket, device, or directory, so implementations do not block or choose differently between `not_a_regular_file` and `unreadable_file`?",
+   "options": [
+    "Open nonblocking without following links and classify every successfully opened special object as `not_a_regular_file`",
+    "Perform a no-follow metadata check before opening and classify special objects as `not_a_regular_file`",
+    "Treat inability to safely open any special object as `unreadable_file`"
+   ],
+   "default_guess": "Use a no-follow metadata or handle-based check that cannot block; classify a confirmed non-regular object as `not_a_regular_file` and reserve `unreadable_file` for failures to inspect or read it.",
+   "witness": {
+    "initial": "The listing contains `photo.jpg` as a regular file.",
+    "events": [
+     "Another actor replaces it with a FIFO before it is opened.",
+     "The scanner processes the listed path."
+    ],
+    "outcomes": [
+     "A scanner that safely inspects the object reports `not_a_regular_file`.",
+     "A scanner whose chosen open mode fails reports `unreadable_file`, while a blocking open may never complete."
+    ],
+    "observer": "The caller awaiting or reading the scan result"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 settling-time comparison\",\"kind\":\"time_source\",\"text\":\"its age is below the settling time, which includes a modification time in the future\",\"question\":\"From what clock is the comparison instant obtained, in what representation and precision are it and the modification time compared, and is the clock read once per scan or once per file?\",\"options\":[\"Read one UTC wall-clock instant per scan and compare normalized UTC instants\",\"Read the UTC wall clock separately for each file\",\"Use another declared time authority and representation\"],\"default_guess\":\"Read one timezone-aware UTC wall-clock instant at the start of the scan, normalize file modification times to UTC, and reuse that instant for every settling comparison in the scan.\",\"witness\":{\"initial\":\"Two files have modification times close to the settling-time boundary.\",\"events\":[\"The caller starts one scan.\",\"The clock passes the boundary between the visits to the two files.\"],\"outcomes\":[\"With one clock reading for the scan, both files are judged against the same instant.\",\"With one reading per file, the otherwise equivalent files can receive different statuses.\"],\"observer\":\"The caller reading the scan results\"}},{\"subject\":\"A1 symbolic-link reporting\",\"kind\":\"contradiction\",\"text\":\"Ignored names are not reported, ignored folders are not entered, and symbolic links are neither reported nor followed.\",\"question\":\"When a path listed as an ordinary file becomes a symbolic link before it is opened, is it omitted because symbolic links are never reported, or reported as rejected with `unreadable_file` under rule 6?\",\"options\":[\"Omit it from the scan\",\"Report it as `rejected` with `unreadable_file`\",\"Distinguish links present at listing from paths that become links later\"],\"default_guess\":\"Distinguish by listing time: omit an entry listed as a symbolic link, but report a formerly ordinary listed path that becomes a link as `rejected` with `unreadable_file`.\",\"witness\":{\"initial\":\"A folder listing contains `photo.jpg` as an ordinary file.\",\"events\":[\"Syncthing replaces `photo.jpg` with a symbolic link after the listing.\",\"The scanner opens the listed path without following the link.\"],\"outcomes\":[\"The unconditional symbolic-link rule omits `photo.jpg` from the result.\",\"Table rule 6 reports `photo.jpg` as `rejected` with `unreadable_file`.\"],\"observer\":\"The caller reading the scan results\"}},{\"subject\":\"A1 disappearance before metadata\",\"kind\":\"undefined_boundary\",\"text\":\"A file that disappears before its metadata is read is not reported.\",\"question\":\"Which metadata read establishes this boundary: information returned by the folder listing, a separate path metadata call, or metadata obtained from the opened file?\",\"options\":[\"The folder listing's metadata counts\",\"Only a separate metadata call counts\",\"Only metadata obtained from an opened file counts\"],\"default_guess\":\"Use a separate no-follow metadata check after listing; disappearance before that check omits the entry, while a later open or read failure is reported as `unreadable_file`.\",\"witness\":{\"initial\":\"The folder listing returns a name and file-type information for `photo.jpg`.\",\"events\":[\"Syncthing removes `photo.jpg` immediately after the listing.\",\"The scanner processes the listed entry.\"],\"outcomes\":[\"If listing information is the metadata read, the later open failure produces a rejected `unreadable_file` observation.\",\"If a later stat or open supplies the relevant metadata, the disappeared file is not reported.\"],\"observer\":\"The caller reading the scan results\"}},{\"subject\":\"A1 placement race boundary\",\"kind\":\"uncovered_race\",\"text\":\"A file that leaves its listed path before the placement's own scan reads it is not reported as `ready`, so its placement fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure (A3 rule 3). A file that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of = models.PlacementFailure (A3 rule 4).\",\"question\":\"What result is required when the file leaves after the placement's scan has finished reading it but before that scan reports it as `ready`?\",\"options\":[\"Complete the ready observation and then fail placement with `UNREADABLE_FILE`\",\"Revalidate before reporting and fail with `NOT_READY_OR_ABSENT`\",\"Define the scan's successful read as the instant at which it is considered to have reported `ready`\"],\"default_guess\":\"Define completion of the successful scan read as the ready boundary; a subsequent disappearance causes `UNREADABLE_FILE`.\",\"witness\":{\"initial\":\"An unplaced ordinary image is present and ready.\",\"events\":[\"The caller requests placement.\",\"The placement's internal scan reads and hashes the complete file.\",\"Syncthing removes the path before the scan result is finalized.\",\"Placement attempts its subsequent source-file read.\"],\"outcomes\":[\"The completed scan is treated as ready, so placement fails with `UNREADABLE_FILE`.\",\"A final path revalidation prevents a ready result, so placement fails with `NOT_READY_OR_ABSENT`.\"],\"observer\":\"The caller receiving the placement failure\"}},{\"subject\":\"A1 replacement at a listed path\",\"kind\":\"object_identity\",\"text\":\"Each folder is listed once, when the walk reaches it, and the listing holds what the operating system returns then.\",\"question\":\"If an ordinary file is atomically replaced by a different ordinary file at the same listed path before the scanner reads it, does this scan process the replacement, process the originally listed object through a retained handle, or omit the entry until the next scan?\",\"options\":[\"Process whichever object occupies the path when it is opened\",\"Retain and process the object identified during listing\",\"Omit a replaced entry and defer the new object to the next scan\"],\"default_guess\":\"Open by the listed relative path and process the replacement that occupies that path at open time.\",\"witness\":{\"initial\":\"The listing contains `photo.jpg` with content A.\",\"events\":[\"Syncthing atomically replaces `photo.jpg` with a regular file containing content B before the scanner opens it.\",\"The scanner reaches the listed name.\"],\"outcomes\":[\"A path-based implementation reports content B in this scan.\",\"An implementation retaining an object handle reports content A, or an identity-validating implementation omits the replaced entry.\"],\"observer\":\"The caller, which sees a different source identity or no observation\"}},{\"subject\":\"A1 opening non-regular objects\",\"kind\":\"exact_failure_conditions\",\"text\":\"it opens, but what was opened is not a regular file\",\"question\":\"What opening mode and classification behavior are required when a listed file has become a FIFO, socket, device, or directory, so implementations do not block or choose differently between `not_a_regular_file` and `unreadable_file`?\",\"options\":[\"Open nonblocking without following links and classify every successfully opened special object as `not_a_regular_file`\",\"Perform a no-follow metadata check before opening and classify special objects as `not_a_regular_file`\",\"Treat inability to safely open any special object as `unreadable_file`\"],\"default_guess\":\"Use a no-follow metadata or handle-based check that cannot block; classify a confirmed non-regular object as `not_a_regular_file` and reserve `unreadable_file` for failures to inspect or read it.\",\"witness\":{\"initial\":\"The listing contains `photo.jpg` as a regular file.\",\"events\":[\"Another actor replaces it with a FIFO before it is opened.\",\"The scanner processes the listed path.\"],\"outcomes\":[\"A scanner that safely inspects the object reports `not_a_regular_file`.\",\"A scanner whose chosen open mode fails reports `unreadable_file`, while a blocking open may never complete.\"],\"observer\":\"The caller awaiting or reading the scan result\"}}]}",
+ "set_aside": []
+}

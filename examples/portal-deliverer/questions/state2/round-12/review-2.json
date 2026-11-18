@@ -1,0 +1,186 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 scan observation identity",
+   "kind": "contradiction",
+   "text": "A scan gives each regular file of the photo folder exactly one status.\nA file moved between folders during the scan may be reported under both paths or under neither.",
+   "question": "Is “each regular file” a filesystem object, which may receive only one observation, or a listed path, so the same filesystem object may receive two observations?",
+   "options": [
+    "Treat each listed path as a file occurrence and allow two observations, with the later one subject to duplicate detection.",
+    "Track filesystem identity and emit at most one observation for the moved file."
+   ],
+   "default_guess": "Treat each listed path as a separate occurrence, because observations are named by relative path.",
+   "witness": {
+    "initial": "Folders a and b exist; a/p.jpg is a ready regular file, and the walk lists a before b.",
+    "events": [
+     "The scan lists and reads a/p.jpg.",
+     "Syncthing moves that same file to b/p.jpg before folder b is listed.",
+     "The scan lists folder b."
+    ],
+    "outcomes": [
+     "The scan reports both a/p.jpg and b/p.jpg, giving the same regular file two statuses.",
+     "The scan reports the filesystem object only once, suppressing the second path."
+    ],
+    "observer": "The calling flow reading the scan results."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 symbolic-link file race",
+   "kind": "contradiction",
+   "text": "opening or reading it fails, which includes a file that disappeared and a path that became a symbolic link, because links are not followed when opening\nIgnored names are not reported, ignored folders are not entered, and symbolic links are neither reported nor followed.",
+   "question": "When a path was listed as a regular file but becomes a symbolic link before opening, is it reported as rejected/unreadable or omitted as a symbolic link?",
+   "options": [
+    "Report a rejected observation with unreadable_file, applying rule 6 to the post-listing race.",
+    "Do not report it, applying the unconditional statement that symbolic links are not reported."
+   ],
+   "default_guess": "Report it as rejected with unreadable_file, because the changed rule expressly includes a path that became a symbolic link.",
+   "witness": {
+    "initial": "p.jpg is a regular file when its folder is listed.",
+    "events": [
+     "The scan records the name p.jpg from the folder listing.",
+     "Syncthing replaces p.jpg with a symbolic link before the scan opens it.",
+     "The scan attempts to process the listed path without following links."
+    ],
+    "outcomes": [
+     "Rule 6 produces a rejected observation with reason unreadable_file.",
+     "The symbolic-link rule omits p.jpg from the scan entirely."
+    ],
+    "observer": "The calling flow reading the scan results."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 placement path-loss boundary",
+   "kind": "undefined cutoff",
+   "text": "A file that leaves its listed path before the placement's own scan reads it is not reported as `ready`, so its placement fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure (A3 rule 3). A file that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of = models.PlacementFailure (A3 rule 4).",
+   "question": "What exact event ends the interval in which leaving the path must turn the placement into UNREADABLE_FILE: opening, completing the read, validating the read, committing the placement, or returning the result?",
+   "options": [
+    "Only opening or reading failure matters; a move after the source has been read does not change the result.",
+    "The path must still identify the scanned file through the placement commit, and a move detected before commit causes UNREADABLE_FILE.",
+    "Any move after the ready report causes UNREADABLE_FILE, including one after the operation has otherwise completed."
+   ],
+   "default_guess": "Require the scanned file to remain at the path until its bytes have been completely read and validated; do not make later moves retroactively affect the result.",
+   "witness": {
+    "initial": "p.jpg has been reported ready by the placement's scan.",
+    "events": [
+     "The placement opens and completely reads p.jpg.",
+     "Syncthing renames p.jpg after the read but before the placement record is committed.",
+     "The placement attempts to finish."
+    ],
+    "outcomes": [
+     "The placement succeeds because its source read completed successfully.",
+     "The placement fails with UNREADABLE_FILE because the file left its path before commit."
+    ],
+    "observer": "The caller and the binary store/state backend."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 replacement at a listed path",
+   "kind": "identity ambiguity",
+   "text": "A file that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of = models.PlacementFailure (A3 rule 4).",
+   "question": "If the scanned filesystem object leaves but another regular file with identical bytes immediately occupies the same path, must placement fail because the object changed, or may it succeed because source identity is content-based?",
+   "options": [
+    "Fail with UNREADABLE_FILE whenever the filesystem object at the path differs from the one scanned.",
+    "Succeed when the replacement bytes produce the same source_id, because a delivered photo is identified by content.",
+    "Use only the path and accept whatever regular file is present without confirming its source_id."
+   ],
+   "default_guess": "Re-read and verify source_id; accept an identical-content replacement and reject a different-content replacement.",
+   "witness": {
+    "initial": "p.jpg contains bytes B and the placement scan reports it ready with source_id hash(B).",
+    "events": [
+     "Syncthing renames the scanned file away.",
+     "Another regular file containing the same bytes B is placed at p.jpg.",
+     "Placement opens p.jpg."
+    ],
+    "outcomes": [
+     "Placement succeeds because the content and source_id are unchanged.",
+     "Placement fails with UNREADABLE_FILE because the particular scanned file left the path."
+    ],
+    "observer": "The placement caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 moved subfolder traversal",
+   "kind": "uncovered race",
+   "text": "Each folder is listed once, when the walk reaches it, and the listing holds what the operating system returns then.",
+   "question": "When the same subfolder is moved between already-listed and not-yet-listed parents during the scan, does “once” apply to the folder's filesystem identity or separately to each listed path?",
+   "options": [
+    "Traverse every listed path, so the same directory may be listed twice after a move.",
+    "Track directory identity and list the moved directory at most once.",
+    "Treat a moved directory as unavailable at its old path and refuse the scan even if it appears at a new path."
+   ],
+   "default_guess": "Apply traversal to listed paths and prevent link following, without filesystem-identity deduplication.",
+   "witness": {
+    "initial": "Parents a and b exist; subfolder a/x contains p.jpg, and a is visited before b.",
+    "events": [
+     "The scan lists a and queues a/x.",
+     "Syncthing moves a/x to b/x before b is listed.",
+     "The scan reaches the queued old path and later the new path returned by b's listing."
+    ],
+    "outcomes": [
+     "The directory is traversed at both listed paths or attempted twice.",
+     "The directory is traversed only once because its filesystem identity is remembered."
+    ],
+    "observer": "The calling flow, through missing, duplicate, or differently named observations."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 subfolder race classification",
+   "kind": "precedence ambiguity",
+   "text": "A listed subfolder that has become a symbolic link is skipped, and one that can no longer be listed for any other reason refuses the operation as above.",
+   "question": "At what observation is a failed descent classified as “became a symbolic link” rather than “can no longer be listed for any other reason,” especially if the path changes again between the failed no-follow open and a type check?",
+   "options": [
+    "Classify from the error produced by the no-follow descent attempt.",
+    "Reinspect the path after failure and skip only if that later inspection sees a symbolic link.",
+    "Remember the type from the parent listing and refuse every failed descent, regardless of the path's later type."
+   ],
+   "default_guess": "Use a no-follow descent operation whose result distinguishes a symbolic link from other failures; skip only the link-specific result and refuse all other failures.",
+   "witness": {
+    "initial": "The parent listing contains subfolder x.",
+    "events": [
+     "Before descent, x is replaced by a symbolic link.",
+     "The no-follow descent fails.",
+     "Before a separate reinspection, the link is removed, so the path is now absent."
+    ],
+    "outcomes": [
+     "The scan skips x because the descent failure was caused by a symbolic link.",
+     "The scan refuses with folder_unavailable because the later inspection sees an absent path."
+    ],
+    "observer": "The caller of the scan."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 photo-folder root failure",
+   "kind": "missing refusal condition",
+   "text": "Syncthing may change the folder during a scan, and a scan is not a view of one instant. Each folder is listed once, when the walk reaches it, and the listing holds what the operating system returns then.",
+   "question": "What is the required outcome if the photo-folder root itself is absent, unreadable, or has become a symbolic link when its listing is attempted? The stated skip/refusal rules name only a listed subfolder.",
+   "options": [
+    "Refuse the whole operation with folder_unavailable for every root listing failure, including a root symbolic link.",
+    "Treat a root symbolic link like other symbolic links and return a complete empty scan.",
+    "Use a distinct connection or path error for failure of the root."
+   ],
+   "default_guess": "Refuse with folder_unavailable and never follow a root symbolic link.",
+   "witness": {
+    "initial": "A confirmed connection names an existing photo-folder root.",
+    "events": [
+     "Syncthing or an administrator replaces the root with a symbolic link before the scan lists it.",
+     "The scan starts."
+    ],
+    "outcomes": [
+     "The operation is refused with folder_unavailable.",
+     "The symbolic-link rule skips the root and the operation returns an empty complete scan."
+    ],
+    "observer": "The caller of the scan."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 scan observation identity\",\"kind\":\"contradiction\",\"text\":\"A scan gives each regular file of the photo folder exactly one status.\\nA file moved between folders during the scan may be reported under both paths or under neither.\",\"question\":\"Is “each regular file” a filesystem object, which may receive only one observation, or a listed path, so the same filesystem object may receive two observations?\",\"options\":[\"Treat each listed path as a file occurrence and allow two observations, with the later one subject to duplicate detection.\",\"Track filesystem identity and emit at most one observation for the moved file.\"],\"default_guess\":\"Treat each listed path as a separate occurrence, because observations are named by relative path.\",\"witness\":{\"initial\":\"Folders a and b exist; a/p.jpg is a ready regular file, and the walk lists a before b.\",\"events\":[\"The scan lists and reads a/p.jpg.\",\"Syncthing moves that same file to b/p.jpg before folder b is listed.\",\"The scan lists folder b.\"],\"outcomes\":[\"The scan reports both a/p.jpg and b/p.jpg, giving the same regular file two statuses.\",\"The scan reports the filesystem object only once, suppressing the second path.\"],\"observer\":\"The calling flow reading the scan results.\"}},{\"subject\":\"A1 symbolic-link file race\",\"kind\":\"contradiction\",\"text\":\"opening or reading it fails, which includes a file that disappeared and a path that became a symbolic link, because links are not followed when opening\\nIgnored names are not reported, ignored folders are not entered, and symbolic links are neither reported nor followed.\",\"question\":\"When a path was listed as a regular file but becomes a symbolic link before opening, is it reported as rejected/unreadable or omitted as a symbolic link?\",\"options\":[\"Report a rejected observation with unreadable_file, applying rule 6 to the post-listing race.\",\"Do not report it, applying the unconditional statement that symbolic links are not reported.\"],\"default_guess\":\"Report it as rejected with unreadable_file, because the changed rule expressly includes a path that became a symbolic link.\",\"witness\":{\"initial\":\"p.jpg is a regular file when its folder is listed.\",\"events\":[\"The scan records the name p.jpg from the folder listing.\",\"Syncthing replaces p.jpg with a symbolic link before the scan opens it.\",\"The scan attempts to process the listed path without following links.\"],\"outcomes\":[\"Rule 6 produces a rejected observation with reason unreadable_file.\",\"The symbolic-link rule omits p.jpg from the scan entirely.\"],\"observer\":\"The calling flow reading the scan results.\"}},{\"subject\":\"A1 placement path-loss boundary\",\"kind\":\"undefined cutoff\",\"text\":\"A file that leaves its listed path before the placement's own scan reads it is not reported as `ready`, so its placement fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure (A3 rule 3). A file that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of = models.PlacementFailure (A3 rule 4).\",\"question\":\"What exact event ends the interval in which leaving the path must turn the placement into UNREADABLE_FILE: opening, completing the read, validating the read, committing the placement, or returning the result?\",\"options\":[\"Only opening or reading failure matters; a move after the source has been read does not change the result.\",\"The path must still identify the scanned file through the placement commit, and a move detected before commit causes UNREADABLE_FILE.\",\"Any move after the ready report causes UNREADABLE_FILE, including one after the operation has otherwise completed.\"],\"default_guess\":\"Require the scanned file to remain at the path until its bytes have been completely read and validated; do not make later moves retroactively affect the result.\",\"witness\":{\"initial\":\"p.jpg has been reported ready by the placement's scan.\",\"events\":[\"The placement opens and completely reads p.jpg.\",\"Syncthing renames p.jpg after the read but before the placement record is committed.\",\"The placement attempts to finish.\"],\"outcomes\":[\"The placement succeeds because its source read completed successfully.\",\"The placement fails with UNREADABLE_FILE because the file left its path before commit.\"],\"observer\":\"The caller and the binary store/state backend.\"}},{\"subject\":\"A1 replacement at a listed path\",\"kind\":\"identity ambiguity\",\"text\":\"A file that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of = models.PlacementFailure (A3 rule 4).\",\"question\":\"If the scanned filesystem object leaves but another regular file with identical bytes immediately occupies the same path, must placement fail because the object changed, or may it succeed because source identity is content-based?\",\"options\":[\"Fail with UNREADABLE_FILE whenever the filesystem object at the path differs from the one scanned.\",\"Succeed when the replacement bytes produce the same source_id, because a delivered photo is identified by content.\",\"Use only the path and accept whatever regular file is present without confirming its source_id.\"],\"default_guess\":\"Re-read and verify source_id; accept an identical-content replacement and reject a different-content replacement.\",\"witness\":{\"initial\":\"p.jpg contains bytes B and the placement scan reports it ready with source_id hash(B).\",\"events\":[\"Syncthing renames the scanned file away.\",\"Another regular file containing the same bytes B is placed at p.jpg.\",\"Placement opens p.jpg.\"],\"outcomes\":[\"Placement succeeds because the content and source_id are unchanged.\",\"Placement fails with UNREADABLE_FILE because the particular scanned file left the path.\"],\"observer\":\"The placement caller.\"}},{\"subject\":\"A1 moved subfolder traversal\",\"kind\":\"uncovered race\",\"text\":\"Each folder is listed once, when the walk reaches it, and the listing holds what the operating system returns then.\",\"question\":\"When the same subfolder is moved between already-listed and not-yet-listed parents during the scan, does “once” apply to the folder's filesystem identity or separately to each listed path?\",\"options\":[\"Traverse every listed path, so the same directory may be listed twice after a move.\",\"Track directory identity and list the moved directory at most once.\",\"Treat a moved directory as unavailable at its old path and refuse the scan even if it appears at a new path.\"],\"default_guess\":\"Apply traversal to listed paths and prevent link following, without filesystem-identity deduplication.\",\"witness\":{\"initial\":\"Parents a and b exist; subfolder a/x contains p.jpg, and a is visited before b.\",\"events\":[\"The scan lists a and queues a/x.\",\"Syncthing moves a/x to b/x before b is listed.\",\"The scan reaches the queued old path and later the new path returned by b's listing.\"],\"outcomes\":[\"The directory is traversed at both listed paths or attempted twice.\",\"The directory is traversed only once because its filesystem identity is remembered.\"],\"observer\":\"The calling flow, through missing, duplicate, or differently named observations.\"}},{\"subject\":\"A1 subfolder race classification\",\"kind\":\"precedence ambiguity\",\"text\":\"A listed subfolder that has become a symbolic link is skipped, and one that can no longer be listed for any other reason refuses the operation as above.\",\"question\":\"At what observation is a failed descent classified as “became a symbolic link” rather than “can no longer be listed for any other reason,” especially if the path changes again between the failed no-follow open and a type check?\",\"options\":[\"Classify from the error produced by the no-follow descent attempt.\",\"Reinspect the path after failure and skip only if that later inspection sees a symbolic link.\",\"Remember the type from the parent listing and refuse every failed descent, regardless of the path's later type.\"],\"default_guess\":\"Use a no-follow descent operation whose result distinguishes a symbolic link from other failures; skip only the link-specific result and refuse all other failures.\",\"witness\":{\"initial\":\"The parent listing contains subfolder x.\",\"events\":[\"Before descent, x is replaced by a symbolic link.\",\"The no-follow descent fails.\",\"Before a separate reinspection, the link is removed, so the path is now absent.\"],\"outcomes\":[\"The scan skips x because the descent failure was caused by a symbolic link.\",\"The scan refuses with folder_unavailable because the later inspection sees an absent path.\"],\"observer\":\"The caller of the scan.\"}},{\"subject\":\"A1 photo-folder root failure\",\"kind\":\"missing refusal condition\",\"text\":\"Syncthing may change the folder during a scan, and a scan is not a view of one instant. Each folder is listed once, when the walk reaches it, and the listing holds what the operating system returns then.\",\"question\":\"What is the required outcome if the photo-folder root itself is absent, unreadable, or has become a symbolic link when its listing is attempted? The stated skip/refusal rules name only a listed subfolder.\",\"options\":[\"Refuse the whole operation with folder_unavailable for every root listing failure, including a root symbolic link.\",\"Treat a root symbolic link like other symbolic links and return a complete empty scan.\",\"Use a distinct connection or path error for failure of the root.\"],\"default_guess\":\"Refuse with folder_unavailable and never follow a root symbolic link.\",\"witness\":{\"initial\":\"A confirmed connection names an existing photo-folder root.\",\"events\":[\"Syncthing or an administrator replaces the root with a symbolic link before the scan lists it.\",\"The scan starts.\"],\"outcomes\":[\"The operation is refused with folder_unavailable.\",\"The symbolic-link rule skips the root and the operation returns an empty complete scan.\"],\"observer\":\"The caller of the scan.\"}}]}",
+ "set_aside": []
+}

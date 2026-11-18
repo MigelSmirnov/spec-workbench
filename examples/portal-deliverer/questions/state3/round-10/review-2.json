@@ -1,0 +1,181 @@
+{
+ "open_points": [
+  {
+   "subject": "prototype validation evidence",
+   "kind": "missing_result",
+   "text": "Evidence: `python3 -m pytest -q prototypes/portal_deliverer`,\n`python3 prototypes/portal_deliverer/e2e_local_portal.py` and\n`python3 prototypes/portal_deliverer/e2e_local_syncthing.py`, which runs two private Syncthing\ninstances.",
+   "question": "Must these commands merely have been run, must each pass, or must they produce a fixed number of tests and checks?",
+   "options": [
+    "All three commands must pass, with counts allowed to change",
+    "All three must pass with fixed expected counts",
+    "Invocation alone is evidence"
+   ],
+   "default_guess": "Require all three commands to pass, without fixing their counts.",
+   "witness": {
+    "initial": "A later prototype has a skipped or newly added test while all commands exit successfully.",
+    "events": [
+     "A validation agent runs the three named commands.",
+     "The agent decides whether the changed test/check totals still satisfy State 3."
+    ],
+    "outcomes": [
+     "The state remains accepted because every command passes.",
+     "The state is rejected because the former, now unstated, totals are not reproduced."
+    ],
+    "observer": "the validation agent and reviewer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "authoritative dependency surface",
+   "kind": "contradiction",
+   "text": "This table is the complete and minimal list of what each module names directly.\n\nThe table lists what the prototype names. The prototype writes enumeration values as text, and the\ngenerated service names these enumerations of `domain_models` as well:",
+   "question": "Is the first dependency table complete, or must the enumerations in the second table also be part of each consumer's direct dependency surface?",
+   "options": [
+    "Merge every listed enumeration into the corresponding `domain_models` Symbols row",
+    "Treat the two tables together as the authoritative dependency declaration",
+    "Keep only the first table authoritative and let generated code infer enums"
+   ],
+   "default_guess": "Merge the enumerations into the corresponding `domain_models` rows.",
+   "witness": {
+    "initial": "Strict import inference is disabled and `photo_delivery` directly names `PlacementFailure`.",
+    "events": [
+     "One generator reads only the table declared complete.",
+     "Another generator combines it with the Enumerations table."
+    ],
+    "outcomes": [
+     "`PlacementFailure` is absent from `photo_delivery` imports and generation or runtime fails.",
+     "`PlacementFailure` is imported from `domain_models` and the generated module works."
+    ],
+    "observer": "the generator, strict-import validator, and deployer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Dependencies enumeration table",
+   "kind": "standard_violation",
+   "text": "This table is the complete and minimal list of what each module names directly.",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "Make the table actually complete by adding every directly named enumeration to its consumer's `domain_models` symbol list, rather than declaring those imports separately.",
+   "unit": "?"
+  },
+  {
+   "subject": "translation of source read failures",
+   "kind": "vague_mapping",
+   "text": "`source_folder` signals a file that cannot be read through `Rejected` or the operating system's error, and\n`photo_delivery` turns either into its `PlacementFailure` member.",
+   "question": "For every `Rejected` reason and operating-system error from `read_source_bytes`, which exact `PlacementFailure` value must `photo_delivery` return?",
+   "options": [
+    "Map each `Rejected` reason to a corresponding `PlacementFailure` and map operating-system errors to `UNREADABLE_FILE`",
+    "Map every read-time rejection and operating-system error to `UNREADABLE_FILE`",
+    "Map successfully read changed bytes to `SOURCE_CHANGED` and specify separate mappings for all other failures"
+   ],
+   "default_guess": "Follow A3: use `SOURCE_CHANGED` only after bytes are read with the wrong hash, and map inability to read the requested bytes to `UNREADABLE_FILE`; explicitly define any other reason-specific mappings.",
+   "witness": {
+    "initial": "A file is `ready` during the placement scan and grows beyond the source limit before `read_source_bytes`.",
+    "events": [
+     "`source_folder` raises `Rejected` with reason `too_large`.",
+     "`photo_delivery` translates that signal."
+    ],
+    "outcomes": [
+     "The item fails with `TOO_LARGE`, treating `Rejected` as a reason-preserving mapping.",
+     "The item fails with `UNREADABLE_FILE`, treating the event as A3's read failure."
+    ],
+    "observer": "the API caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "file replacement after a ready scan",
+   "kind": "contradiction",
+   "text": "A file that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of\n= models.PlacementFailure (A3 rule 4).\n\nA source reported `ready` whose\n   bytes no longer have the requested hash when it is read for placing fails with `source_changed`.",
+   "question": "If the scanned file leaves its path and another readable file replaces it before the placement read, must the result be `unreadable_file` or `source_changed`?",
+   "options": [
+    "Return `source_changed` whenever replacement bytes can be read",
+    "Return `unreadable_file` whenever the originally scanned file left the path",
+    "Define identity checks that distinguish replacement from an in-place content change"
+   ],
+   "default_guess": "Return `source_changed` when bytes are successfully read and their hash differs; reserve `unreadable_file` for a failed read.",
+   "witness": {
+    "initial": "Path `p.jpg` contains content A and is reported `ready` for A's source id.",
+    "events": [
+     "Syncthing moves A away after the scan.",
+     "Syncthing creates a readable file with content B at `p.jpg`.",
+     "The placement reads `p.jpg` for A's source id."
+    ],
+    "outcomes": [
+     "The changed A1 passage yields `UNREADABLE_FILE` because A left its path.",
+     "A3 rule 3 yields `source_changed` because readable bytes have a different hash."
+    ],
+    "observer": "the API caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "PlacementFailure provider name",
+   "kind": "dependency_conflict",
+   "text": "the NOT_READY_OR_ABSENT member of = models.PlacementFailure\n\nthe UNREADABLE_FILE member of\n= models.PlacementFailure\n\nthe NOT_READY_OR_ABSENT member of = models.PlacementFailure\n\nthe UNREADABLE_FILE member of = models.PlacementFailure",
+   "question": "Do these references mean `domain_models.PlacementFailure`, an imported `PlacementFailure`, or a separate module named `models`?",
+   "options": [
+    "Use `domain_models.PlacementFailure`",
+    "Import and use bare `PlacementFailure`",
+    "Declare a `models` provider or alias"
+   ],
+   "default_guess": "Replace these references with the form established for the `domain_models` provider, preferably imported `PlacementFailure` members.",
+   "witness": {
+    "initial": "The generated project contains `domain_models` but no module or bound alias named `models`.",
+    "events": [
+     "A generator preserves the written `models.PlacementFailure` reference.",
+     "Another generator resolves it to the enumeration declared under `domain_models`."
+    ],
+    "outcomes": [
+     "The generated code references an unbound or nonexistent `models` module.",
+     "The generated code imports and uses `domain_models.PlacementFailure` successfully."
+    ],
+    "observer": "the generator and runtime operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "post-scan placement race ownership",
+   "kind": "two_owners",
+   "text": "| A1 | order 1 to 8, ignored names, walking order | `source_folder` |\n\n| A3 | rule 4, every other check and its order | `photo_delivery` |\n\nA file that leaves its listed path before the placement's own scan reads it is not reported as `ready`,\nso its placement fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure (A3 rule 3). A\nfile that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of\n= models.PlacementFailure (A3 rule 4).",
+   "question": "Which module owns the decision that classifies a file movement as `NOT_READY_OR_ABSENT`, `UNREADABLE_FILE`, or `SOURCE_CHANGED`: `source_folder` as part of A1, or `photo_delivery` as part of A3?",
+   "options": [
+    "`source_folder` owns observation only and `photo_delivery` owns every placement failure",
+    "`source_folder` owns and returns the final placement failure",
+    "Split the rule into an observation result owned by `source_folder` and a documented mapping owned by `photo_delivery`"
+   ],
+   "default_guess": "Split observation from mapping, with `photo_delivery` solely owning the final placement failure.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-18 ownership",
+   "kind": "owner_conflict",
+   "text": "| INV-01, INV-02, INV-18 | `source_folder` |\n\n- one placement per project and content, replay, and per-photo failure;\n- which checks and writes run inside the project lock;\n\n- INV-18: a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan, and placing content that has no placement and is held only by that copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and writes nothing",
+   "question": "Who owns the placement, replay, locking, and durable-write parts of INV-18 that are assigned to `source_folder` even though those mechanisms are owned by `photo_delivery` and `delivery_store`?",
+   "options": [
+    "Split INV-18 into a source-observation invariant and a delivery/write invariant with separate owners",
+    "Make `photo_delivery` the primary owner of all INV-18",
+    "Keep `source_folder` as trace owner but explicitly assign enforcement and tests to the lower owners"
+   ],
+   "default_guess": "Split INV-18, leaving conflict-name exclusion with `source_folder` and placement/write behavior with `photo_delivery`.",
+   "unit": "?"
+  },
+  {
+   "subject": "source_folder knowledge required by INV-18",
+   "kind": "missing_dependency",
+   "text": "### Knows\n\n- A1 rules in order 1 to 8, and rule 4 of A7.\n\n### Must not own\n\n- any write, in any folder;\n- whether a photo was placed or published;\n\n- INV-18: a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan, and placing content that has no placement and is held only by that copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and writes nothing",
+   "question": "How can `source_folder` own INV-18 when satisfying and verifying it requires A3 replay and failure rules, project-lock behavior, and binary/state-store writes that it neither knows nor may own?",
+   "options": [
+    "Narrow `source_folder`'s invariant to scan exclusion only",
+    "Add forbidden knowledge and dependencies to `source_folder`",
+    "Move the placement and write portions to `photo_delivery` and `delivery_store`"
+   ],
+   "default_guess": "Narrow the `source_folder` invariant and move the remaining obligations to `photo_delivery`, with storage guarantees supplied by `delivery_store`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"prototype validation evidence\",\"kind\":\"missing_result\",\"text\":\"Evidence: `python3 -m pytest -q prototypes/portal_deliverer`,\\n`python3 prototypes/portal_deliverer/e2e_local_portal.py` and\\n`python3 prototypes/portal_deliverer/e2e_local_syncthing.py`, which runs two private Syncthing\\ninstances.\",\"question\":\"Must these commands merely have been run, must each pass, or must they produce a fixed number of tests and checks?\",\"options\":[\"All three commands must pass, with counts allowed to change\",\"All three must pass with fixed expected counts\",\"Invocation alone is evidence\"],\"default_guess\":\"Require all three commands to pass, without fixing their counts.\",\"witness\":{\"initial\":\"A later prototype has a skipped or newly added test while all commands exit successfully.\",\"events\":[\"A validation agent runs the three named commands.\",\"The agent decides whether the changed test/check totals still satisfy State 3.\"],\"outcomes\":[\"The state remains accepted because every command passes.\",\"The state is rejected because the former, now unstated, totals are not reproduced.\"],\"observer\":\"the validation agent and reviewer\"}},{\"subject\":\"authoritative dependency surface\",\"kind\":\"contradiction\",\"text\":\"This table is the complete and minimal list of what each module names directly.\\n\\nThe table lists what the prototype names. The prototype writes enumeration values as text, and the\\ngenerated service names these enumerations of `domain_models` as well:\",\"question\":\"Is the first dependency table complete, or must the enumerations in the second table also be part of each consumer's direct dependency surface?\",\"options\":[\"Merge every listed enumeration into the corresponding `domain_models` Symbols row\",\"Treat the two tables together as the authoritative dependency declaration\",\"Keep only the first table authoritative and let generated code infer enums\"],\"default_guess\":\"Merge the enumerations into the corresponding `domain_models` rows.\",\"witness\":{\"initial\":\"Strict import inference is disabled and `photo_delivery` directly names `PlacementFailure`.\",\"events\":[\"One generator reads only the table declared complete.\",\"Another generator combines it with the Enumerations table.\"],\"outcomes\":[\"`PlacementFailure` is absent from `photo_delivery` imports and generation or runtime fails.\",\"`PlacementFailure` is imported from `domain_models` and the generated module works.\"],\"observer\":\"the generator, strict-import validator, and deployer\"}},{\"subject\":\"Dependencies enumeration table\",\"kind\":\"standard_violation\",\"text\":\"This table is the complete and minimal list of what each module names directly.\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"Make the table actually complete by adding every directly named enumeration to its consumer's `domain_models` symbol list, rather than declaring those imports separately.\"},{\"subject\":\"translation of source read failures\",\"kind\":\"vague_mapping\",\"text\":\"`source_folder` signals a file that cannot be read through `Rejected` or the operating system's error, and\\n`photo_delivery` turns either into its `PlacementFailure` member.\",\"question\":\"For every `Rejected` reason and operating-system error from `read_source_bytes`, which exact `PlacementFailure` value must `photo_delivery` return?\",\"options\":[\"Map each `Rejected` reason to a corresponding `PlacementFailure` and map operating-system errors to `UNREADABLE_FILE`\",\"Map every read-time rejection and operating-system error to `UNREADABLE_FILE`\",\"Map successfully read changed bytes to `SOURCE_CHANGED` and specify separate mappings for all other failures\"],\"default_guess\":\"Follow A3: use `SOURCE_CHANGED` only after bytes are read with the wrong hash, and map inability to read the requested bytes to `UNREADABLE_FILE`; explicitly define any other reason-specific mappings.\",\"witness\":{\"initial\":\"A file is `ready` during the placement scan and grows beyond the source limit before `read_source_bytes`.\",\"events\":[\"`source_folder` raises `Rejected` with reason `too_large`.\",\"`photo_delivery` translates that signal.\"],\"outcomes\":[\"The item fails with `TOO_LARGE`, treating `Rejected` as a reason-preserving mapping.\",\"The item fails with `UNREADABLE_FILE`, treating the event as A3's read failure.\"],\"observer\":\"the API caller\"}},{\"subject\":\"file replacement after a ready scan\",\"kind\":\"contradiction\",\"text\":\"A file that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of\\n= models.PlacementFailure (A3 rule 4).\\n\\nA source reported `ready` whose\\n   bytes no longer have the requested hash when it is read for placing fails with `source_changed`.\",\"question\":\"If the scanned file leaves its path and another readable file replaces it before the placement read, must the result be `unreadable_file` or `source_changed`?\",\"options\":[\"Return `source_changed` whenever replacement bytes can be read\",\"Return `unreadable_file` whenever the originally scanned file left the path\",\"Define identity checks that distinguish replacement from an in-place content change\"],\"default_guess\":\"Return `source_changed` when bytes are successfully read and their hash differs; reserve `unreadable_file` for a failed read.\",\"witness\":{\"initial\":\"Path `p.jpg` contains content A and is reported `ready` for A's source id.\",\"events\":[\"Syncthing moves A away after the scan.\",\"Syncthing creates a readable file with content B at `p.jpg`.\",\"The placement reads `p.jpg` for A's source id.\"],\"outcomes\":[\"The changed A1 passage yields `UNREADABLE_FILE` because A left its path.\",\"A3 rule 3 yields `source_changed` because readable bytes have a different hash.\"],\"observer\":\"the API caller\"}},{\"subject\":\"PlacementFailure provider name\",\"kind\":\"dependency_conflict\",\"text\":\"the NOT_READY_OR_ABSENT member of = models.PlacementFailure\\n\\nthe UNREADABLE_FILE member of\\n= models.PlacementFailure\\n\\nthe NOT_READY_OR_ABSENT member of = models.PlacementFailure\\n\\nthe UNREADABLE_FILE member of = models.PlacementFailure\",\"question\":\"Do these references mean `domain_models.PlacementFailure`, an imported `PlacementFailure`, or a separate module named `models`?\",\"options\":[\"Use `domain_models.PlacementFailure`\",\"Import and use bare `PlacementFailure`\",\"Declare a `models` provider or alias\"],\"default_guess\":\"Replace these references with the form established for the `domain_models` provider, preferably imported `PlacementFailure` members.\",\"witness\":{\"initial\":\"The generated project contains `domain_models` but no module or bound alias named `models`.\",\"events\":[\"A generator preserves the written `models.PlacementFailure` reference.\",\"Another generator resolves it to the enumeration declared under `domain_models`.\"],\"outcomes\":[\"The generated code references an unbound or nonexistent `models` module.\",\"The generated code imports and uses `domain_models.PlacementFailure` successfully.\"],\"observer\":\"the generator and runtime operator\"}},{\"subject\":\"post-scan placement race ownership\",\"kind\":\"two_owners\",\"text\":\"| A1 | order 1 to 8, ignored names, walking order | `source_folder` |\\n\\n| A3 | rule 4, every other check and its order | `photo_delivery` |\\n\\nA file that leaves its listed path before the placement's own scan reads it is not reported as `ready`,\\nso its placement fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure (A3 rule 3). A\\nfile that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of\\n= models.PlacementFailure (A3 rule 4).\",\"question\":\"Which module owns the decision that classifies a file movement as `NOT_READY_OR_ABSENT`, `UNREADABLE_FILE`, or `SOURCE_CHANGED`: `source_folder` as part of A1, or `photo_delivery` as part of A3?\",\"options\":[\"`source_folder` owns observation only and `photo_delivery` owns every placement failure\",\"`source_folder` owns and returns the final placement failure\",\"Split the rule into an observation result owned by `source_folder` and a documented mapping owned by `photo_delivery`\"],\"default_guess\":\"Split observation from mapping, with `photo_delivery` solely owning the final placement failure.\"},{\"subject\":\"INV-18 ownership\",\"kind\":\"owner_conflict\",\"text\":\"| INV-01, INV-02, INV-18 | `source_folder` |\\n\\n- one placement per project and content, replay, and per-photo failure;\\n- which checks and writes run inside the project lock;\\n\\n- INV-18: a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan, and placing content that has no placement and is held only by that copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and writes nothing\",\"question\":\"Who owns the placement, replay, locking, and durable-write parts of INV-18 that are assigned to `source_folder` even though those mechanisms are owned by `photo_delivery` and `delivery_store`?\",\"options\":[\"Split INV-18 into a source-observation invariant and a delivery/write invariant with separate owners\",\"Make `photo_delivery` the primary owner of all INV-18\",\"Keep `source_folder` as trace owner but explicitly assign enforcement and tests to the lower owners\"],\"default_guess\":\"Split INV-18, leaving conflict-name exclusion with `source_folder` and placement/write behavior with `photo_delivery`.\"},{\"subject\":\"source_folder knowledge required by INV-18\",\"kind\":\"missing_dependency\",\"text\":\"### Knows\\n\\n- A1 rules in order 1 to 8, and rule 4 of A7.\\n\\n### Must not own\\n\\n- any write, in any folder;\\n- whether a photo was placed or published;\\n\\n- INV-18: a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan, and placing content that has no placement and is held only by that copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and writes nothing\",\"question\":\"How can `source_folder` own INV-18 when satisfying and verifying it requires A3 replay and failure rules, project-lock behavior, and binary/state-store writes that it neither knows nor may own?\",\"options\":[\"Narrow `source_folder`'s invariant to scan exclusion only\",\"Add forbidden knowledge and dependencies to `source_folder`\",\"Move the placement and write portions to `photo_delivery` and `delivery_store`\"],\"default_guess\":\"Narrow the `source_folder` invariant and move the remaining obligations to `photo_delivery`, with storage guarantees supplied by `delivery_store`.\"}]}",
+ "set_aside": []
+}

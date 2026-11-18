@@ -1,0 +1,208 @@
+{
+ "open_points": [
+  {
+   "subject": "A1",
+   "kind": "time_source_and_read_count",
+   "text": "Syncthing may change the folder during a scan, and a scan is not a view of one instant.",
+   "question": "What clock supplies the instant used to calculate every file's age, in what datetime representation, and does one scan read that clock once or separately for each file?",
+   "options": [
+    "Read one aware UTC system-clock instant at the start of the scan and use it for every age comparison.",
+    "Read the system clock separately when each file is examined.",
+    "Use an injected monotonic or wall-clock authority with another specified representation and reading schedule."
+   ],
+   "default_guess": "Inject an aware UTC wall clock and read it once at the start of each scan.",
+   "witness": {
+    "initial": "Two files have the same modification time and cross the settling threshold while a long scan is running.",
+    "events": [
+     "The caller starts the scan while both files are still settling.",
+     "The scanner examines the first file before the threshold and the second file after it."
+    ],
+    "outcomes": [
+     "With one clock reading, both files are reported as settling.",
+     "With one reading per file, the first file is settling and the second is ready."
+    ],
+    "observer": "The calling flow reading the scan results"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "undefined_operation_boundary",
+   "text": "the placement's own scan",
+   "question": "Is this a complete new folder scan performed by every placement, a target-only eligibility check, or a previously returned scan result owned by the placement call?",
+   "options": [
+    "Every placement performs a complete new scan of the folder.",
+    "Placement performs a target-only rescan of the requested content or path.",
+    "Placement consumes a previously completed scan result without rescanning."
+   ],
+   "default_guess": "Every placement performs a fresh target-only eligibility scan using the same rules as a full scan.",
+   "witness": {
+    "initial": "A caller receives a ready observation, then the file is removed before requesting placement.",
+    "events": [
+     "The caller runs a folder scan and sees the file as ready.",
+     "Another actor removes the file.",
+     "The caller requests placement using the earlier observation."
+    ],
+    "outcomes": [
+     "A placement-owned rescan finds no ready file and returns NOT_READY_OR_ABSENT.",
+     "A placement that consumes the earlier scan proceeds to its read and returns UNREADABLE_FILE."
+    ],
+    "observer": "The caller requesting placement"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "uncovered_race_interval",
+   "text": "A file that leaves its listed path before the placement's own scan reads it is not reported as `ready`, so its placement fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure (A3 rule 3). A file that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of = models.PlacementFailure (A3 rule 4).",
+   "question": "Which result applies when the file leaves its path after the scan opens it or reads some or all bytes but before the scan reports `ready`?",
+   "options": [
+    "Any departure before the ready result is emitted produces NOT_READY_OR_ABSENT.",
+    "Once the scan has opened a stable file descriptor, it may finish and report ready; the later placement then produces UNREADABLE_FILE.",
+    "A departure during scanning makes the scan report rejected/unreadable, and placement maps that result as separately specified."
+   ],
+   "default_guess": "Treat every departure before the ready result is emitted as NOT_READY_OR_ABSENT.",
+   "witness": {
+    "initial": "A listed regular file is eligible for placement.",
+    "events": [
+     "The placement's scan opens the file.",
+     "Syncthing renames the file while the scanner still has the open descriptor.",
+     "The scanner successfully finishes reading through that descriptor before emitting its result."
+    ],
+    "outcomes": [
+     "The scan treats the departure as preceding readiness, so placement returns NOT_READY_OR_ABSENT.",
+     "The scan reports ready from the open descriptor, so the subsequent path read returns UNREADABLE_FILE."
+    ],
+    "observer": "The caller requesting placement"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "replacement_identity",
+   "text": "A file that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of = models.PlacementFailure (A3 rule 4).",
+   "question": "Does a file count as having left its path when another regular file atomically replaces it at the same pathname, and how must placement detect that replacement?",
+   "options": [
+    "Yes; placement must verify the scanned source identity or content and return UNREADABLE_FILE.",
+    "No; the pathname is authoritative and placement may process the replacement.",
+    "The replacement is rescanned as new content and the request returns NOT_READY_OR_ABSENT for the original source."
+   ],
+   "default_guess": "Treat replacement as the original file leaving; verify the requested source content and return UNREADABLE_FILE.",
+   "witness": {
+    "initial": "Path p contains ready content A, whose source identifier the caller requests for placement.",
+    "events": [
+     "The placement's scan reports A at p as ready.",
+     "Syncthing atomically replaces p with a regular file containing B.",
+     "Placement opens p."
+    ],
+    "outcomes": [
+     "Placement detects that A left the path and returns UNREADABLE_FILE.",
+     "Placement treats p as authoritative and places B under a request made for A."
+    ],
+    "observer": "The caller and the owner reviewing the placed photo"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "in_place_mutation",
+   "text": "A file that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of = models.PlacementFailure (A3 rule 4).",
+   "question": "What must happen when the file remains at the same path but its bytes, size, modification time, or file identity change after the ready result and before or during placement?",
+   "options": [
+    "Any mismatch from the scanned source fails with UNREADABLE_FILE.",
+    "Placement processes the bytes it actually reads, potentially creating a placement for new content.",
+    "Placement reruns readiness checks for the changed file and returns NOT_READY_OR_ABSENT until it settles."
+   ],
+   "default_guess": "Verify the scanned source identifier before committing and fail with UNREADABLE_FILE on any mismatch.",
+   "witness": {
+    "initial": "A scan reports a settled file with content A as ready.",
+    "events": [
+     "Syncthing truncates and rewrites the same pathname with content B without renaming it.",
+     "The caller requests placement for A."
+    ],
+    "outcomes": [
+     "Placement detects the changed content and returns UNREADABLE_FILE without writing.",
+     "Placement reads and stores B even though the request followed the observation of A."
+    ],
+    "observer": "The caller and the owner reviewing the stored image"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "missing_dependency_definition",
+   "text": "content that already has a placement replays under A3 rule 2 whatever name it has now.",
+   "question": "Does replay require finding or reading any current source file, and in particular does it succeed when the content now exists only in an ignored conflict copy?",
+   "options": [
+    "Replay is resolved solely from the existing placement and does not inspect the source folder.",
+    "Replay requires a current scan to find the content but may use an ignored conflict copy for identity only.",
+    "Replay requires an ordinary currently reportable file."
+   ],
+   "default_guess": "Resolve replay solely from the existing placement and never read the conflict copy.",
+   "witness": {
+    "initial": "Content A already has a placement, and the only remaining source file containing A is named as a Syncthing conflict copy.",
+    "events": [
+     "The caller requests placement of source identifier A.",
+     "The placement operation evaluates A1 and the referenced A3 rule 2."
+    ],
+    "outcomes": [
+     "The existing placement is replayed without reading the conflict copy.",
+     "The request fails because no ordinary ready source file is present."
+    ],
+    "observer": "The caller requesting the repeated placement"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "missing_model_definition",
+   "text": "the NOT_READY_OR_ABSENT member of = models.PlacementFailure",
+   "question": "What is the complete definition and emitted member naming of `models.PlacementFailure`, including whether NOT_READY_OR_ABSENT and UNREADABLE_FILE are distinct members with the meanings assigned here?",
+   "options": [
+    "Define the enum with the named members and the failure meanings used by A1.",
+    "Reference an existing model passage that defines those members.",
+    "Replace these references with the actual model and member names."
+   ],
+   "default_guess": "Define `PlacementFailure` with distinct NOT_READY_OR_ABSENT and UNREADABLE_FILE members matching these rules.",
+   "unit": "?"
+  },
+  {
+   "subject": "A10",
+   "kind": "security_coverage_conflict",
+   "text": "- concurrency: APPLICABLE; references: A3, A4, A5, A6; affected: M01, M04, M07",
+   "question": "After A1 explicitly permits concurrent Syncthing changes during listing, scanning, and placement, must the concurrency category reference A1 and include the affected scan observation and source-folder boundary?",
+   "options": [
+    "Add A1 to the references and add M02 and the source-folder scan boundary to the affected items.",
+    "State a rationale explaining why A1's races are not part of the security concurrency category.",
+    "Keep the entry unchanged and accept that the total review does not attribute these races to their owning decision."
+   ],
+   "default_guess": "Add A1 to the references and identify M02 and the source-folder scan boundary as affected.",
+   "witness": {
+    "initial": "A scan or placement is operating while Syncthing renames or replaces a source file.",
+    "events": [
+     "Syncthing mutates the folder concurrently.",
+     "A1 determines whether the result is skipped, refused, not ready, or unreadable.",
+     "A reviewer follows the A10 concurrency references to find the owning rules."
+    ],
+    "outcomes": [
+     "With A1 referenced, the reviewer reaches the rules governing the race.",
+     "With A10 unchanged, the applicable concurrency entry points only to A3, A4, A5 and A6 and omits the changed owning decision."
+    ],
+    "observer": "The security reviewer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "standard_violation",
+   "text": "A file that leaves its listed path before the placement's own scan reads it is not reported as `ready`,",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name `ready` by its emitted member name beside the `models.ScanStatus` address, for example `the READY member of = models.ScanStatus`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1\",\"kind\":\"time_source_and_read_count\",\"text\":\"Syncthing may change the folder during a scan, and a scan is not a view of one instant.\",\"question\":\"What clock supplies the instant used to calculate every file's age, in what datetime representation, and does one scan read that clock once or separately for each file?\",\"options\":[\"Read one aware UTC system-clock instant at the start of the scan and use it for every age comparison.\",\"Read the system clock separately when each file is examined.\",\"Use an injected monotonic or wall-clock authority with another specified representation and reading schedule.\"],\"default_guess\":\"Inject an aware UTC wall clock and read it once at the start of each scan.\",\"witness\":{\"initial\":\"Two files have the same modification time and cross the settling threshold while a long scan is running.\",\"events\":[\"The caller starts the scan while both files are still settling.\",\"The scanner examines the first file before the threshold and the second file after it.\"],\"outcomes\":[\"With one clock reading, both files are reported as settling.\",\"With one reading per file, the first file is settling and the second is ready.\"],\"observer\":\"The calling flow reading the scan results\"}},{\"subject\":\"A1\",\"kind\":\"undefined_operation_boundary\",\"text\":\"the placement's own scan\",\"question\":\"Is this a complete new folder scan performed by every placement, a target-only eligibility check, or a previously returned scan result owned by the placement call?\",\"options\":[\"Every placement performs a complete new scan of the folder.\",\"Placement performs a target-only rescan of the requested content or path.\",\"Placement consumes a previously completed scan result without rescanning.\"],\"default_guess\":\"Every placement performs a fresh target-only eligibility scan using the same rules as a full scan.\",\"witness\":{\"initial\":\"A caller receives a ready observation, then the file is removed before requesting placement.\",\"events\":[\"The caller runs a folder scan and sees the file as ready.\",\"Another actor removes the file.\",\"The caller requests placement using the earlier observation.\"],\"outcomes\":[\"A placement-owned rescan finds no ready file and returns NOT_READY_OR_ABSENT.\",\"A placement that consumes the earlier scan proceeds to its read and returns UNREADABLE_FILE.\"],\"observer\":\"The caller requesting placement\"}},{\"subject\":\"A1\",\"kind\":\"uncovered_race_interval\",\"text\":\"A file that leaves its listed path before the placement's own scan reads it is not reported as `ready`, so its placement fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure (A3 rule 3). A file that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of = models.PlacementFailure (A3 rule 4).\",\"question\":\"Which result applies when the file leaves its path after the scan opens it or reads some or all bytes but before the scan reports `ready`?\",\"options\":[\"Any departure before the ready result is emitted produces NOT_READY_OR_ABSENT.\",\"Once the scan has opened a stable file descriptor, it may finish and report ready; the later placement then produces UNREADABLE_FILE.\",\"A departure during scanning makes the scan report rejected/unreadable, and placement maps that result as separately specified.\"],\"default_guess\":\"Treat every departure before the ready result is emitted as NOT_READY_OR_ABSENT.\",\"witness\":{\"initial\":\"A listed regular file is eligible for placement.\",\"events\":[\"The placement's scan opens the file.\",\"Syncthing renames the file while the scanner still has the open descriptor.\",\"The scanner successfully finishes reading through that descriptor before emitting its result.\"],\"outcomes\":[\"The scan treats the departure as preceding readiness, so placement returns NOT_READY_OR_ABSENT.\",\"The scan reports ready from the open descriptor, so the subsequent path read returns UNREADABLE_FILE.\"],\"observer\":\"The caller requesting placement\"}},{\"subject\":\"A1\",\"kind\":\"replacement_identity\",\"text\":\"A file that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of = models.PlacementFailure (A3 rule 4).\",\"question\":\"Does a file count as having left its path when another regular file atomically replaces it at the same pathname, and how must placement detect that replacement?\",\"options\":[\"Yes; placement must verify the scanned source identity or content and return UNREADABLE_FILE.\",\"No; the pathname is authoritative and placement may process the replacement.\",\"The replacement is rescanned as new content and the request returns NOT_READY_OR_ABSENT for the original source.\"],\"default_guess\":\"Treat replacement as the original file leaving; verify the requested source content and return UNREADABLE_FILE.\",\"witness\":{\"initial\":\"Path p contains ready content A, whose source identifier the caller requests for placement.\",\"events\":[\"The placement's scan reports A at p as ready.\",\"Syncthing atomically replaces p with a regular file containing B.\",\"Placement opens p.\"],\"outcomes\":[\"Placement detects that A left the path and returns UNREADABLE_FILE.\",\"Placement treats p as authoritative and places B under a request made for A.\"],\"observer\":\"The caller and the owner reviewing the placed photo\"}},{\"subject\":\"A1\",\"kind\":\"in_place_mutation\",\"text\":\"A file that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of = models.PlacementFailure (A3 rule 4).\",\"question\":\"What must happen when the file remains at the same path but its bytes, size, modification time, or file identity change after the ready result and before or during placement?\",\"options\":[\"Any mismatch from the scanned source fails with UNREADABLE_FILE.\",\"Placement processes the bytes it actually reads, potentially creating a placement for new content.\",\"Placement reruns readiness checks for the changed file and returns NOT_READY_OR_ABSENT until it settles.\"],\"default_guess\":\"Verify the scanned source identifier before committing and fail with UNREADABLE_FILE on any mismatch.\",\"witness\":{\"initial\":\"A scan reports a settled file with content A as ready.\",\"events\":[\"Syncthing truncates and rewrites the same pathname with content B without renaming it.\",\"The caller requests placement for A.\"],\"outcomes\":[\"Placement detects the changed content and returns UNREADABLE_FILE without writing.\",\"Placement reads and stores B even though the request followed the observation of A.\"],\"observer\":\"The caller and the owner reviewing the stored image\"}},{\"subject\":\"A1\",\"kind\":\"missing_dependency_definition\",\"text\":\"content that already has a placement replays under A3 rule 2 whatever name it has now.\",\"question\":\"Does replay require finding or reading any current source file, and in particular does it succeed when the content now exists only in an ignored conflict copy?\",\"options\":[\"Replay is resolved solely from the existing placement and does not inspect the source folder.\",\"Replay requires a current scan to find the content but may use an ignored conflict copy for identity only.\",\"Replay requires an ordinary currently reportable file.\"],\"default_guess\":\"Resolve replay solely from the existing placement and never read the conflict copy.\",\"witness\":{\"initial\":\"Content A already has a placement, and the only remaining source file containing A is named as a Syncthing conflict copy.\",\"events\":[\"The caller requests placement of source identifier A.\",\"The placement operation evaluates A1 and the referenced A3 rule 2.\"],\"outcomes\":[\"The existing placement is replayed without reading the conflict copy.\",\"The request fails because no ordinary ready source file is present.\"],\"observer\":\"The caller requesting the repeated placement\"}},{\"subject\":\"A1\",\"kind\":\"missing_model_definition\",\"text\":\"the NOT_READY_OR_ABSENT member of = models.PlacementFailure\",\"question\":\"What is the complete definition and emitted member naming of `models.PlacementFailure`, including whether NOT_READY_OR_ABSENT and UNREADABLE_FILE are distinct members with the meanings assigned here?\",\"options\":[\"Define the enum with the named members and the failure meanings used by A1.\",\"Reference an existing model passage that defines those members.\",\"Replace these references with the actual model and member names.\"],\"default_guess\":\"Define `PlacementFailure` with distinct NOT_READY_OR_ABSENT and UNREADABLE_FILE members matching these rules.\"},{\"subject\":\"A10\",\"kind\":\"security_coverage_conflict\",\"text\":\"- concurrency: APPLICABLE; references: A3, A4, A5, A6; affected: M01, M04, M07\",\"question\":\"After A1 explicitly permits concurrent Syncthing changes during listing, scanning, and placement, must the concurrency category reference A1 and include the affected scan observation and source-folder boundary?\",\"options\":[\"Add A1 to the references and add M02 and the source-folder scan boundary to the affected items.\",\"State a rationale explaining why A1's races are not part of the security concurrency category.\",\"Keep the entry unchanged and accept that the total review does not attribute these races to their owning decision.\"],\"default_guess\":\"Add A1 to the references and identify M02 and the source-folder scan boundary as affected.\",\"witness\":{\"initial\":\"A scan or placement is operating while Syncthing renames or replaces a source file.\",\"events\":[\"Syncthing mutates the folder concurrently.\",\"A1 determines whether the result is skipped, refused, not ready, or unreadable.\",\"A reviewer follows the A10 concurrency references to find the owning rules.\"],\"outcomes\":[\"With A1 referenced, the reviewer reaches the rules governing the race.\",\"With A10 unchanged, the applicable concurrency entry points only to A3, A4, A5 and A6 and omits the changed owning decision.\"],\"observer\":\"The security reviewer\"}},{\"subject\":\"A1\",\"kind\":\"standard_violation\",\"text\":\"A file that leaves its listed path before the placement's own scan reads it is not reported as `ready`,\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name `ready` by its emitted member name beside the `models.ScanStatus` address, for example `the READY member of = models.ScanStatus`.\"}]}",
+ "set_aside": []
+}

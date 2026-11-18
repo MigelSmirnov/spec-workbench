@@ -24,33 +24,22 @@ cycles, and `domain_models` names no other module.
 
 | Consumer | Provider | Symbols |
 |---|---|---|
-| `object_connections` | `domain_models` | `DelivererError`, `ObjectConnection` |
-| `source_folder` | `domain_models` | `MIN_AGE_SECONDS`, `MAX_SOURCE_BYTES`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `CONFLICT_COPY_MARK`, `DelivererError`, `Rejected`, `SourceFile` |
-| `photo_preparation` | `domain_models` | `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_MAX_SIDE`, `PHOTO_QUALITY`, `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `PreparedPhoto`, `Rejected` |
-| `delivery_store` | `domain_models` | `Config`, `DelivererError` |
-| `photo_delivery` | `domain_models` | `SOURCE_ID_FORM`, `Config`, `DelivererError`, `Rejected`, `SourceFile` |
+| `object_connections` | `domain_models` | `DelivererError`, `ObjectConnection`, `RefusalCode` |
+| `source_folder` | `domain_models` | `MIN_AGE_SECONDS`, `MAX_SOURCE_BYTES`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `CONFLICT_COPY_MARK`, `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `ObservationReason`, `RefusalCode` |
+| `photo_preparation` | `domain_models` | `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_MAX_SIDE`, `PHOTO_QUALITY`, `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `PreparedPhoto`, `Rejected`, `DateSource`, `PlacementFailure` |
+| `delivery_store` | `domain_models` | `Config`, `DelivererError`, `RefusalCode` |
+| `photo_delivery` | `domain_models` | `SOURCE_ID_FORM`, `Config`, `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `PlacementStatus`, `PlacementFailure`, `MarkStatus`, `RefusalCode` |
 | `photo_delivery` | `object_connections` | `confirmed_connection`, `available_photo_folder` |
 | `photo_delivery` | `source_folder` | `observe_source_files`, `read_source_bytes` |
 | `photo_delivery` | `photo_preparation` | `prepare_photo`, `build_publication` |
 | `photo_delivery` | `delivery_store` | `project_lock`, `store_image`, `read_placement`, `write_placement`, `read_mark`, `write_mark` |
-| `deliverer_api` | `domain_models` | `MAX_PLACE_ITEMS`, `Config`, `DelivererError` |
+| `deliverer_api` | `domain_models` | `MAX_PLACE_ITEMS`, `Config`, `DelivererError`, `RefusalCode` |
 | `deliverer_api` | `object_connections` | `load_connections` |
 | `deliverer_api` | `photo_delivery` | `scan_project_photos`, `place_project_photos`, `mark_photo_published` |
 | `deliverer_api` | `system_clock` | `utc_now` |
 
-The table lists what the prototype names. The prototype writes enumeration values as text, and the
-generated service names these enumerations of `domain_models` as well:
-
-| Consumer | Enumerations |
-|---|---|
-| `object_connections`, `delivery_store` | `RefusalCode` |
-| `source_folder` | `ScanStatus`, `ObservationReason`, `RefusalCode` |
-| `photo_preparation` | `DateSource`, `PlacementFailure` |
-| `photo_delivery` | `ScanStatus`, `PlacementStatus`, `PlacementFailure`, `MarkStatus`, `RefusalCode` |
-| `deliverer_api` | `RefusalCode` |
-
-`source_folder` signals a file that cannot be read through `Rejected` or the operating system's error, and
-`photo_delivery` turns either into its `PlacementFailure` member.
+The prototype writes the values of the enumerations as text, so its import test compares the other
+symbols of this table.
 
 `deliverer_api` names `load_connections` only to refuse a start with a broken record. The operations
 read the record themselves through `confirmed_connection`, so no module keeps connections in memory.
@@ -115,7 +104,7 @@ names the owner of each rule.
 |---|---|
 | INV-01, INV-02, INV-18 | `source_folder` |
 | INV-03, INV-04, INV-05, INV-14 | `photo_preparation` |
-| INV-06, INV-07, INV-08, INV-12, INV-13 | `photo_delivery` |
+| INV-06, INV-07, INV-08, INV-12, INV-13, INV-19 | `photo_delivery` |
 | INV-09, INV-11 | `deliverer_api` |
 | INV-10 | `object_connections` |
 | INV-15 | deployment route (A9) |
@@ -347,6 +336,7 @@ write_mark
 - completing a scan with placed and published status;
 - one placement per project and content, replay, and per-photo failure;
 - comparing the bytes read for placing with the requested source id (`source_changed`);
+- turning a failure of the read for placing into the failure of that photo (A3 rule 4);
 - writing the stored image before the placement record;
 - one mark per placement, replay and `publication_conflict`;
 - which checks and writes run inside the project lock;
