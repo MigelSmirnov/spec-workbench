@@ -1,0 +1,140 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 — conflict-copy classification versus R0-12",
+   "kind": "contradiction",
+   "text": "A name is ignored, in any letter case and at every level of the path, when it begins with a dot or\nwith `~syncthing~`, ends in `.tmp` or `~`, or contains `.sync-conflict-`, the mark of a Syncthing\nconflict copy (R0-14).\n\nA scan covers the photo folder and all its subfolders. Subfolders carry no meaning for the Portal.",
+   "question": "Is every name containing `.sync-conflict-` ignored, including an ordinary user-named file, or is the exception limited to files actually created by Syncthing as conflict copies?",
+   "options": [
+    "Ignore every matching name syntactically.",
+    "Ignore only a verified Syncthing conflict copy; offer an ordinary matching file.",
+    "Declare that every matching name is treated as a conflict copy regardless of origin."
+   ],
+   "default_guess": "Treat the filename marker as the complete definition and ignore every matching name.",
+   "witness": {
+    "initial": "The photo folder contains an ordinary JPEG named `holiday.sync-conflict-notes.jpg`; Syncthing did not create it.",
+    "events": [
+     "The owner asks the calling flow to scan the photo folder."
+    ],
+    "outcomes": [
+     "R0-12 makes the ordinary file available for delivery because everything under the photo folder is delivered on choice.",
+     "A1 ignores the file because its name contains `.sync-conflict-`."
+    ],
+    "observer": "The owner, who either sees or does not see the photo in the scan."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 — placement identity for conflict copies",
+   "kind": "underdetermined_refusal",
+   "text": "INV-18: a conflict copy, in the folder or a subfolder and in either letter case, is absent from the scan and placing it by its hash fails with `not_ready_or_absent` (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "What happens when the same source hash belongs both to an ignored conflict-copy path and to a non-ignored ordinary path, given that the placement request identifies content by the hash rather than identifying a path?",
+   "options": [
+    "Placement succeeds because a non-ignored file with that hash exists.",
+    "Placement fails because any conflict-copy path with that hash poisons the hash.",
+    "Placement is refused as ambiguous.",
+    "The operation must receive an additional path or scan-observation identity."
+   ],
+   "default_guess": "Succeed when at least one non-ignored regular file with the requested hash is eligible.",
+   "witness": {
+    "initial": "`photo.jpg` and `photo.sync-conflict-20261118-device.jpg` contain identical bytes and therefore have the same source hash; the first is ordinary and the second is ignored.",
+    "events": [
+     "The calling flow scans the folder and receives the ordinary file with hash H.",
+     "The calling flow requests placement by H."
+    ],
+    "outcomes": [
+     "The ordinary file is eligible, so placement of H succeeds.",
+     "The request is described as placing the conflict copy by its hash, so it fails with `not_ready_or_absent`."
+    ],
+    "observer": "The calling flow receives either a placement or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 and M04 — conflict exclusion versus idempotent replay",
+   "kind": "contradiction",
+   "text": "INV-18: a conflict copy, in the folder or a subfolder and in either letter case, is absent from the scan and placing it by its hash fails with `not_ready_or_absent` (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\n\nA repeated placement returns it and writes nothing (P-06).\n\nContinuity: The same placement is returned after the source file has left the folder\n(`test_placing_again_returns_the_same_result_without_writing`).",
+   "question": "Does conflict-copy exclusion override replay of an existing placement, or must a repeated placement still return the existing M04 record when the requested hash is now present only under a conflict-copy name?",
+   "options": [
+    "Return the existing placement because replay does not place the current file.",
+    "Fail with `not_ready_or_absent` because the current source is a conflict copy.",
+    "Return an existing placement only when no conflict-copy file with that hash is present."
+   ],
+   "default_guess": "Return the existing placement without reading or placing the conflict copy.",
+   "witness": {
+    "initial": "An ordinary file with hash H was placed, creating an M04 record; afterward the ordinary path disappears and a Syncthing conflict-copy path with the same bytes and hash H remains.",
+    "events": [
+     "The calling flow requests placement for project P and hash H again."
+    ],
+    "outcomes": [
+     "M04 and P-06 return the existing placement and write nothing.",
+     "INV-18's Required tests wording requires placement by the conflict copy's hash to fail with `not_ready_or_absent`."
+    ],
+    "observer": "The calling flow receives either the existing placement or an error."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 — concurrent rename and placement",
+   "kind": "unspecified_check_time",
+   "text": "INV-18: a Syncthing conflict copy is neither reported by a scan nor placed.",
+   "question": "At what point during placement is the conflict-name condition evaluated, and what is the required result if a ready ordinary file is renamed to a conflict-copy name while placement is in progress?",
+   "options": [
+    "Classify the path once before opening it.",
+    "Recheck the path immediately before committing the placement.",
+    "Hold a stable file handle and classify the name captured when the operation began.",
+    "Define a linearization point that decides whether the file counts as ordinary or conflicting."
+   ],
+   "default_guess": "Recheck eligibility immediately before committing the placement and refuse if the current path is ignored.",
+   "witness": {
+    "initial": "A scan reported `photo.jpg` as ready with hash H.",
+    "events": [
+     "The calling flow starts placement of H.",
+     "After placement finds or opens the file but before it commits, Syncthing renames it to `photo.sync-conflict-20261118-device.jpg`."
+    ],
+    "outcomes": [
+     "Placement uses the eligibility observed when it opened the ordinary file and succeeds.",
+     "Placement rechecks the current name, treats it as a conflict copy, and fails with `not_ready_or_absent`."
+    ],
+    "observer": "The calling flow sees success or refusal, and the owner may see a stored image created from a now-ignored path."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "R0-14 and A1 — effect of renaming",
+   "kind": "vague_transition",
+   "text": "The file stays in the folder, and the owner who wants that\nversion renames it, after which it is an ordinary photo.",
+   "question": "What rename makes a conflict copy an ordinary photo: any rename, or only a rename whose resulting path no longer satisfies any ignored-name rule?",
+   "options": [
+    "Any rename makes it ordinary.",
+    "It becomes ordinary only when every path component no longer matches an ignored-name condition.",
+    "Only removal of the `.sync-conflict-` marker is required, even if another ignored-name condition remains."
+   ],
+   "default_guess": "Require the resulting path to satisfy none of A1's ignored-name conditions.",
+   "witness": {
+    "initial": "The folder contains `photo.sync-conflict-20261118-device.jpg`.",
+    "events": [
+     "The owner renames it to `PHOTO.SYNC-CONFLICT-20261118-DEVICE.JPG`, changing only letter case."
+    ],
+    "outcomes": [
+     "R0-14's unqualified rename makes it an ordinary photo and it is offered.",
+     "A1's case-insensitive rule continues to ignore it."
+    ],
+    "observer": "The owner either sees the renamed photo in the next scan or does not."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 — Syncthing conflict marker",
+   "kind": "standard_violation",
+   "text": "A name is ignored, in any letter case and at every level of the path, when it begins with a dot or\nwith `~syncthing~`, ends in `.tmp` or `~`, or contains `.sync-conflict-`, the mark of a Syncthing\nconflict copy (R0-14).",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\n\n| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "The `.sync-conflict-` marker and the other code-read ignored-name policy values must be placed in a provider constant and named to generated code as the imported constant, or remain design facts outside the specification instead of being supplied as literals.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 — conflict-copy classification versus R0-12\",\"kind\":\"contradiction\",\"text\":\"A name is ignored, in any letter case and at every level of the path, when it begins with a dot or\\nwith `~syncthing~`, ends in `.tmp` or `~`, or contains `.sync-conflict-`, the mark of a Syncthing\\nconflict copy (R0-14).\\n\\nA scan covers the photo folder and all its subfolders. Subfolders carry no meaning for the Portal.\",\"question\":\"Is every name containing `.sync-conflict-` ignored, including an ordinary user-named file, or is the exception limited to files actually created by Syncthing as conflict copies?\",\"options\":[\"Ignore every matching name syntactically.\",\"Ignore only a verified Syncthing conflict copy; offer an ordinary matching file.\",\"Declare that every matching name is treated as a conflict copy regardless of origin.\"],\"default_guess\":\"Treat the filename marker as the complete definition and ignore every matching name.\",\"witness\":{\"initial\":\"The photo folder contains an ordinary JPEG named `holiday.sync-conflict-notes.jpg`; Syncthing did not create it.\",\"events\":[\"The owner asks the calling flow to scan the photo folder.\"],\"outcomes\":[\"R0-12 makes the ordinary file available for delivery because everything under the photo folder is delivered on choice.\",\"A1 ignores the file because its name contains `.sync-conflict-`.\"],\"observer\":\"The owner, who either sees or does not see the photo in the scan.\"}},{\"subject\":\"A1 — placement identity for conflict copies\",\"kind\":\"underdetermined_refusal\",\"text\":\"INV-18: a conflict copy, in the folder or a subfolder and in either letter case, is absent from the scan and placing it by its hash fails with `not_ready_or_absent` (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"What happens when the same source hash belongs both to an ignored conflict-copy path and to a non-ignored ordinary path, given that the placement request identifies content by the hash rather than identifying a path?\",\"options\":[\"Placement succeeds because a non-ignored file with that hash exists.\",\"Placement fails because any conflict-copy path with that hash poisons the hash.\",\"Placement is refused as ambiguous.\",\"The operation must receive an additional path or scan-observation identity.\"],\"default_guess\":\"Succeed when at least one non-ignored regular file with the requested hash is eligible.\",\"witness\":{\"initial\":\"`photo.jpg` and `photo.sync-conflict-20261118-device.jpg` contain identical bytes and therefore have the same source hash; the first is ordinary and the second is ignored.\",\"events\":[\"The calling flow scans the folder and receives the ordinary file with hash H.\",\"The calling flow requests placement by H.\"],\"outcomes\":[\"The ordinary file is eligible, so placement of H succeeds.\",\"The request is described as placing the conflict copy by its hash, so it fails with `not_ready_or_absent`.\"],\"observer\":\"The calling flow receives either a placement or a refusal.\"}},{\"subject\":\"A1 and M04 — conflict exclusion versus idempotent replay\",\"kind\":\"contradiction\",\"text\":\"INV-18: a conflict copy, in the folder or a subfolder and in either letter case, is absent from the scan and placing it by its hash fails with `not_ready_or_absent` (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\\n\\nA repeated placement returns it and writes nothing (P-06).\\n\\nContinuity: The same placement is returned after the source file has left the folder\\n(`test_placing_again_returns_the_same_result_without_writing`).\",\"question\":\"Does conflict-copy exclusion override replay of an existing placement, or must a repeated placement still return the existing M04 record when the requested hash is now present only under a conflict-copy name?\",\"options\":[\"Return the existing placement because replay does not place the current file.\",\"Fail with `not_ready_or_absent` because the current source is a conflict copy.\",\"Return an existing placement only when no conflict-copy file with that hash is present.\"],\"default_guess\":\"Return the existing placement without reading or placing the conflict copy.\",\"witness\":{\"initial\":\"An ordinary file with hash H was placed, creating an M04 record; afterward the ordinary path disappears and a Syncthing conflict-copy path with the same bytes and hash H remains.\",\"events\":[\"The calling flow requests placement for project P and hash H again.\"],\"outcomes\":[\"M04 and P-06 return the existing placement and write nothing.\",\"INV-18's Required tests wording requires placement by the conflict copy's hash to fail with `not_ready_or_absent`.\"],\"observer\":\"The calling flow receives either the existing placement or an error.\"}},{\"subject\":\"A1 — concurrent rename and placement\",\"kind\":\"unspecified_check_time\",\"text\":\"INV-18: a Syncthing conflict copy is neither reported by a scan nor placed.\",\"question\":\"At what point during placement is the conflict-name condition evaluated, and what is the required result if a ready ordinary file is renamed to a conflict-copy name while placement is in progress?\",\"options\":[\"Classify the path once before opening it.\",\"Recheck the path immediately before committing the placement.\",\"Hold a stable file handle and classify the name captured when the operation began.\",\"Define a linearization point that decides whether the file counts as ordinary or conflicting.\"],\"default_guess\":\"Recheck eligibility immediately before committing the placement and refuse if the current path is ignored.\",\"witness\":{\"initial\":\"A scan reported `photo.jpg` as ready with hash H.\",\"events\":[\"The calling flow starts placement of H.\",\"After placement finds or opens the file but before it commits, Syncthing renames it to `photo.sync-conflict-20261118-device.jpg`.\"],\"outcomes\":[\"Placement uses the eligibility observed when it opened the ordinary file and succeeds.\",\"Placement rechecks the current name, treats it as a conflict copy, and fails with `not_ready_or_absent`.\"],\"observer\":\"The calling flow sees success or refusal, and the owner may see a stored image created from a now-ignored path.\"}},{\"subject\":\"R0-14 and A1 — effect of renaming\",\"kind\":\"vague_transition\",\"text\":\"The file stays in the folder, and the owner who wants that\\nversion renames it, after which it is an ordinary photo.\",\"question\":\"What rename makes a conflict copy an ordinary photo: any rename, or only a rename whose resulting path no longer satisfies any ignored-name rule?\",\"options\":[\"Any rename makes it ordinary.\",\"It becomes ordinary only when every path component no longer matches an ignored-name condition.\",\"Only removal of the `.sync-conflict-` marker is required, even if another ignored-name condition remains.\"],\"default_guess\":\"Require the resulting path to satisfy none of A1's ignored-name conditions.\",\"witness\":{\"initial\":\"The folder contains `photo.sync-conflict-20261118-device.jpg`.\",\"events\":[\"The owner renames it to `PHOTO.SYNC-CONFLICT-20261118-DEVICE.JPG`, changing only letter case.\"],\"outcomes\":[\"R0-14's unqualified rename makes it an ordinary photo and it is offered.\",\"A1's case-insensitive rule continues to ignore it.\"],\"observer\":\"The owner either sees the renamed photo in the next scan or does not.\"}},{\"subject\":\"A1 — Syncthing conflict marker\",\"kind\":\"standard_violation\",\"text\":\"A name is ignored, in any letter case and at every level of the path, when it begins with a dot or\\nwith `~syncthing~`, ends in `.tmp` or `~`, or contains `.sync-conflict-`, the mark of a Syncthing\\nconflict copy (R0-14).\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь\\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\\n\\n| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"The `.sync-conflict-` marker and the other code-read ignored-name policy values must be placed in a provider constant and named to generated code as the imported constant, or remain design facts outside the specification instead of being supplied as literals.\"}]}",
+ "set_aside": []
+}

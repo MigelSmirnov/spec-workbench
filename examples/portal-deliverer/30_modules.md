@@ -4,7 +4,7 @@
 
 Written on 2026-11-18 from the accepted States 0 to 2. The prototype was split into exactly these
 modules to test the boundaries. Evidence: `python3 -m pytest -q prototypes/portal_deliverer`
-(72 tests), `python3 prototypes/portal_deliverer/e2e_local_portal.py` (26 checks) and
+(80 tests), `python3 prototypes/portal_deliverer/e2e_local_portal.py` (26 checks) and
 `python3 prototypes/portal_deliverer/e2e_local_syncthing.py` (19 checks on two private Syncthing
 instances). The tests `test_modules_name_exactly_the_declared_symbols`,
 `test_each_hidden_mechanism_stays_inside_its_module` and `test_no_module_can_call_the_portal` read
@@ -25,7 +25,7 @@ cycles, and `domain_models` names no other module.
 | Consumer | Provider | Symbols |
 |---|---|---|
 | `object_connections` | `domain_models` | `DelivererError`, `ObjectConnection` |
-| `source_folder` | `domain_models` | `MIN_AGE_SECONDS`, `MAX_SOURCE_BYTES`, `DelivererError`, `Rejected`, `SourceFile` |
+| `source_folder` | `domain_models` | `MIN_AGE_SECONDS`, `MAX_SOURCE_BYTES`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `CONFLICT_COPY_MARK`, `DelivererError`, `Rejected`, `SourceFile` |
 | `photo_preparation` | `domain_models` | `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_MAX_SIDE`, `PHOTO_QUALITY`, `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `PreparedPhoto`, `Rejected` |
 | `delivery_store` | `domain_models` | `Config`, `DelivererError` |
 | `photo_delivery` | `domain_models` | `SOURCE_ID_FORM`, `Config`, `DelivererError`, `Rejected`, `SourceFile` |

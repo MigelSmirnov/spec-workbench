@@ -42,11 +42,18 @@ Files are visited folder by folder: the files of a folder in order of their name
 subfolders in order of their names, compared by Unicode code point. The earlier file of rule 8 is
 the first file with that content in this order that reached rule 8.
 
-A name is ignored, in any letter case and at every level of the path, when it begins with a dot or
-with `~syncthing~`, ends in `.tmp` or `~`, or contains `.sync-conflict-`, the mark of a Syncthing
-conflict copy (R0-14). Names beginning with a dot include Syncthing's
+A name is ignored at every level of the path when, after the letters A to Z are lowered and no other
+character is changed, it begins with an item of the imported `IGNORED_NAME_PREFIXES` constant, ends with
+an item of the imported `IGNORED_NAME_SUFFIXES` constant, or contains the imported `CONFLICT_COPY_MARK`
+constant, the mark of a Syncthing conflict copy (R0-14). Names beginning with a dot include Syncthing's
 `.syncthing.*`, `.stfolder` and `.stversions` and the phone's `.trashed-*` files. Ignored names are
 not reported, ignored folders are not entered, and symbolic links are neither reported nor followed.
+
+A name is judged when the folder is observed. R0-14 concerns files, not content: a conflict copy is
+never a source of a new placement, an ordinary file with the same content as a conflict copy is placed
+as usual, and content that already has a placement replays under A3 rule 2 whatever name it has now. A
+file renamed after the observation is no longer at the observed path, so reading it for placing fails
+with `unreadable_file` (A3 rule 4).
 
 A scan only reads the source folder. A signature
 does not prove that an image can be decoded: a `ready` file may still fail when it is placed.
@@ -55,13 +62,13 @@ does not prove that an image can be decoded: a `ready` file may still fail when 
 
 - INV-01: no operation creates, changes, moves or deletes anything in a source folder.
 - INV-02: a file that changed less than the settling time ago is never placed.
-- INV-18: a Syncthing conflict copy is neither reported by a scan nor placed.
+- INV-18: a Syncthing conflict copy is neither reported by a scan nor the source of a new placement.
 
 ### Required tests
 
 - INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).
 - INV-02: placing a file still inside the settling time fails with `not_ready_or_absent` (`test_a_file_still_arriving_is_not_placed`).
-- INV-18: a conflict copy, in the folder or a subfolder and in either letter case, is absent from the scan and placing it by its hash fails with `not_ready_or_absent` (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). A real Syncthing conflict leaves its copy unreported while the photo itself is still reported (`e2e_local_syncthing.py`, `a real Syncthing conflict copy is not offered`).
+- INV-18: a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan and placing it by its hash fails with `not_ready_or_absent` (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Only the letters A to Z are folded (`test_only_ascii_letters_fold_in_the_conflict_mark`). Placed content replays when only a conflict copy still holds it (`test_placed_content_replays_when_only_a_conflict_copy_still_holds_it`), an ordinary file with the content of a conflict copy is placed (`test_an_ordinary_file_is_placed_when_a_conflict_copy_has_the_same_content`), and a file renamed to a conflict copy after the observation fails with `unreadable_file` and writes nothing (`test_a_file_renamed_to_a_conflict_copy_after_the_scan_is_not_placed`). A real Syncthing conflict leaves its copy unreported while the photo itself is still reported (`e2e_local_syncthing.py`, `a real Syncthing conflict copy is not offered`).
 
 ### Consequence
 
@@ -326,6 +333,9 @@ Policy values are constants of the data provider:
 | `MAX_PLACE_ITEMS` | `int` | 50 |
 | `INTAKE_ID_PREFIX` | `str` | `deliverer-photo-` |
 | `INTAKE_SOURCE` | `str` | `syncthing` |
+| `IGNORED_NAME_PREFIXES` | `tuple[str, ...]` | `.`, `~syncthing~` |
+| `IGNORED_NAME_SUFFIXES` | `tuple[str, ...]` | `.tmp`, `~` |
+| `CONFLICT_COPY_MARK` | `str` | `.sync-conflict-` |
 
 Closed lists are enumerations: `= models.ScanStatus`, `= models.ObservationReason`,
 `= models.DateSource`, `= models.PlacementStatus`, `= models.PlacementFailure`,
