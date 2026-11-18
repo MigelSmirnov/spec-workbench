@@ -277,7 +277,8 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
    or mark exists and its writing happen inside that lock.
 5. A record is absent only when its file does not exist. A placement or mark record that exists but cannot
    be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent
-   record: the operation is refused with the STATE_UNAVAILABLE member of = models.RefusalCode and changes nothing. The same refusal answers a
+   record: the operation is refused with the STATE_UNAVAILABLE member of = models.RefusalCode, whose value is
+   `state_unavailable`, and changes nothing. The same refusal answers a
    failure to open or lock the lock file, which waiting for another holder is not, and a mark that cannot be
    written.
 
@@ -289,7 +290,7 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 ### Required tests
 
 - INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).
-- INV-20: with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).
+- INV-20: with a damaged placement or mark record, scan, delivery and mark each answer M08 with the STATE_UNAVAILABLE member of = models.RefusalCode and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).
 
 ### Consequence
 

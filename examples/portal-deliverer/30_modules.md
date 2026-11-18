@@ -292,8 +292,8 @@ build_publication
 - atomic writing of one file;
 - the reference of a stored image and its containment in the binary store;
 - the per-project lock across processes;
-- reading and writing placement and mark records, and refusing with `state_unavailable` as A6 rule 5
-  decides. A placement record that cannot be written is the failure of that photo (A3 rule 5).
+- reading and writing placement and mark records, and refusing with the STATE_UNAVAILABLE member of
+  = models.RefusalCode as A6 rule 5 decides. A placement record that cannot be written is the failure of that photo (A3 rule 5).
 
 ### Knows
 
