@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted by the owner on 2026-11-18, with decisions R0-06 to R0-14. Question OQ-07 stays
+Accepted by the owner on 2026-11-18, with decisions R0-06 to R0-15. Question OQ-07 stays
 open.
 
 This case is the first one authored through an experiment: each layer asks what is
@@ -40,7 +40,7 @@ backup of the Syncthing folders or a general file transfer service.
 | Boundary | What crosses it | Trust |
 |---|---|---|
 | Object folder → deliverer | file names and bytes | untrusted, read only |
-| Calling flow → deliverer | project id, source ids, Portal photo id | authenticated by the deliverer's own bearer token |
+| Calling flow → deliverer | project id, file name, source id, Portal photo id | authenticated by the deliverer's own bearer token |
 | Deliverer → Portal binary store | prepared image files | written by the deliverer, read by the Portal |
 | Deliverer → calling flow | statuses, file reference, publication body | no server path, no credential |
 
@@ -51,9 +51,9 @@ The deliverer holds no Portal credential (P-01).
 | Action | Observable result | Failure | Evidence |
 |---|---|---|---|
 | Connect an object to its folders (owner, through the agent) | a connection record the owner has confirmed; delivery becomes possible for that project | a connection whose subfolder is written to leave its root is refused, a photo folder linked outside the root is refused when it is used, and an unconfirmed connection delivers nothing | unit tests |
-| See what can be delivered for a project | each file with a status: ready, placed, published, settling, duplicate or rejected with a reason | unknown project, unconfirmed connection or unavailable folder is refused; nothing is changed | unit tests, E2E |
-| Place chosen photos | a prepared image in the Portal store, its reference and the publication body | a bad file is reported on its own and the others proceed; a file that changed since it was scanned is not placed | unit tests, E2E |
-| Place the same photo again | the first result, nothing written | none | unit tests, E2E |
+| See what can be delivered for a project | each file with its source id and a status: ready, placed, published or rejected with a reason | unknown project, unconfirmed connection or unavailable folder is refused; nothing is changed | unit tests, E2E |
+| Deliver one chosen photo | a prepared image in the Portal store, its reference and the publication body | a photo that cannot be delivered is reported with its reason and nothing is written; a file whose content differs from the chosen one is not placed | unit tests, E2E |
+| Deliver the same photo again | the first result, nothing written | none | unit tests, E2E |
 | Publish a placed photo (Portal operation, by the calling flow) | a photo record in the Portal, hidden from the client | the Portal's own refusal | E2E, real Portal |
 | Record the publication | the file is reported as published, with its Portal photo id | a photo that was not placed, or a different photo id for the same source, is refused and nothing is changed | unit tests, E2E |
 | Show the photo (Portal operation, by the owner) | the client sees and downloads exactly the placed image | the Portal's own refusal | E2E, real Portal |
@@ -63,7 +63,7 @@ run has used a live Syncthing folder, the kernel or the VPS.
 
 ## Inputs
 
-Image files in an object's folder; a project id; the source ids of the photos to place; the
+Image files in an object's folder; a project id; the file name and source id of a photo to deliver; the
 Portal photo id of a published photo.
 
 ## Persistent data
@@ -170,6 +170,15 @@ When one file was changed on two devices, Syncthing keeps the other version as a
 it. The deliverer does not offer such a copy. The file stays in the folder, and the owner who wants that
 version renames it, after which it is an ordinary photo.
 
+### R0-15 — The service offers primitives and the caller organises the work (owner, 2026-11-18)
+
+The deliverer offers three operations: scan a project's folder, deliver one photo, and record its
+publication. When to scan, what to deliver next, what to repeat and which failure to treat as temporary
+belong to the calling flow. The guarantees stay in the service: source folders are only read, metadata
+is removed, only a confirmed folder is used, a repeated delivery creates nothing new, and every
+operation needs the token. A run against real Syncthing showed that a file still arriving lies under a
+temporary name, so the two-minute wait of P-04 is withdrawn.
+
 ## Accepted from the experiment (owner, 2026-11-18)
 
 Each of these holds in the prototype and was accepted with this frame.
@@ -178,8 +187,8 @@ Each of these holds in the prototype and was accepted with this frame.
 - **P-02** Source folders are only read.
 - **P-03** A stored image carries no EXIF, GPS, XMP or comment, is upright and is at most
   2000 px on its longest side.
-- **P-04** A file is taken only after it has been unchanged for two minutes, and Syncthing's
-  temporary files and hidden names, which include the phone's `.trashed-` files, are ignored.
+- **P-04** Syncthing's temporary files and hidden names, which include the phone's `.trashed-` files,
+  are ignored. The two-minute wait accepted here first was withdrawn by R0-15.
 - **P-05** The photo date comes from the camera record, otherwise from the file's
   modification time, and is delivered as UTC without an offset.
 - **P-06** One placement exists per project and source content; repeating it changes nothing.

@@ -25,17 +25,17 @@ cycles, and `domain_models` names no other module.
 | Consumer | Provider | Symbols |
 |---|---|---|
 | `object_connections` | `domain_models` | `DelivererError`, `ObjectConnection`, `RefusalCode` |
-| `source_folder` | `domain_models` | `MIN_AGE_SECONDS`, `MAX_SOURCE_BYTES`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `CONFLICT_COPY_MARK`, `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `ObservationReason`, `RefusalCode` |
+| `source_folder` | `domain_models` | `MAX_SOURCE_BYTES`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `CONFLICT_COPY_MARK`, `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `ObservationReason`, `RefusalCode` |
 | `photo_preparation` | `domain_models` | `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_MAX_SIDE`, `PHOTO_QUALITY`, `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `PreparedPhoto`, `Rejected`, `DateSource`, `PlacementFailure` |
 | `delivery_store` | `domain_models` | `Config`, `DelivererError`, `RefusalCode` |
 | `photo_delivery` | `domain_models` | `SOURCE_ID_FORM`, `Config`, `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `PlacementStatus`, `PlacementFailure`, `MarkStatus`, `RefusalCode` |
 | `photo_delivery` | `object_connections` | `confirmed_connection`, `available_photo_folder` |
-| `photo_delivery` | `source_folder` | `observe_source_files`, `read_source_bytes` |
+| `photo_delivery` | `source_folder` | `observe_source_files`, `read_named_source` |
 | `photo_delivery` | `photo_preparation` | `prepare_photo`, `build_publication` |
 | `photo_delivery` | `delivery_store` | `project_lock`, `store_image`, `read_placement`, `write_placement`, `read_mark`, `write_mark` |
-| `deliverer_api` | `domain_models` | `MAX_PLACE_ITEMS`, `Config`, `DelivererError`, `RefusalCode` |
+| `deliverer_api` | `domain_models` | `Config`, `DelivererError`, `RefusalCode` |
 | `deliverer_api` | `object_connections` | `load_connections` |
-| `deliverer_api` | `photo_delivery` | `scan_project_photos`, `place_project_photos`, `mark_photo_published` |
+| `deliverer_api` | `photo_delivery` | `scan_project_photos`, `deliver_project_photo`, `mark_photo_published` |
 | `deliverer_api` | `system_clock` | `utc_now` |
 
 The prototype writes the values of the enumerations as text, so its import test compares the other
@@ -53,21 +53,20 @@ it receives without naming the module.
 `deliverer_api` performs the steps marked API and then calls `photo_delivery`, which performs the
 rest in the order shown. Only `photo_delivery` takes the project lock.
 
-| Step | Scan | Placement | Mark |
+| Step | Scan | Delivery | Mark |
 |---|---|---|---|
 | 1, API | token | token | token |
 | 2, API | project id | request form, project id | request form, project id, `photo_id` |
-| 3 | clock | clock | source id |
-| 4 | connection | connection | clock |
-| 5 | photo folder | photo folder | connection |
-| 6 | observe the folder, read records | every source id | take the lock |
-| 7 | | take the lock | placement exists |
-| 8 | | observe the folder once | existing mark, or write the mark |
-| 9 | | each photo in request order: replay, or read, verify, prepare, store the image, write the record | release the lock |
-| 10 | | release the lock | |
+| 3 | connection | connection | source id |
+| 4 | photo folder | photo folder | clock |
+| 5 | observe the folder, read records | source id | connection |
+| 6 | | take the lock | take the lock |
+| 7 | | existing placement: replay | placement exists |
+| 8 | | read the named file once, check it, prepare, store the image, write the record | existing mark, or write the mark |
+| 9 | | release the lock | release the lock |
 
-A scan takes no lock. The source ids of a placement are items of its body and are checked at step 6, as
-A3 rule 4 and A7 rule 2 decide. The connections file is read once, at the connection step.
+A scan takes no lock. Only a mark reads the clock. The connections file is read once, at the connection
+step.
 
 ## Rules decided across modules
 
@@ -76,11 +75,11 @@ names the owner of each rule.
 
 | Decision | Rule | Owner |
 |---|---|---|
-| A1 | order 1 to 8, ignored names, walking order | `source_folder` |
-| A1 | order 9 to 11, placed and published status | `photo_delivery` |
+| A1 | orders 1 to 6, ignored names, walking order | `source_folder` |
+| A1 | orders 7 to 9, placed and published status | `photo_delivery` |
 | A5 | rules 1 to 4, token and listening address | `deliverer_api` |
 | A3 | rule 4, the request form of a placement | `deliverer_api` |
-| A3 | rule 4, every other check and its order | `photo_delivery` |
+| A3 | rule 4, every other check and its order; rules 2, 3 and 5 to 10 | `photo_delivery` |
 | A4 | rule 2, the form of `photo_id` and its lowercase hyphenated spelling | `deliverer_api` |
 | A4 | every other rule | `photo_delivery` |
 | A5 | rule 5, the single principal | `deliverer_api` |
@@ -199,15 +198,15 @@ available_photo_folder
 ### Owns
 
 - walking the photo folder in the decided order;
-- ignored names, links, the settling time, source limits and file signatures;
+- ignored names, links, source limits and file signatures;
 - computing the SHA-256 source id of each file it reads;
-- detecting a file with the same content as an earlier file of the scan;
-- reading the bytes of one source file without following a link;
+- deciding whether a requested name is a file a scan could report, and reading it once without following
+  a link;
 - the modification time of a file in the service's time form.
 
 ### Knows
 
-- A1 rules in order 1 to 8, and rule 4 of A7.
+- A1 orders 1 to 6, condition 1 of A3 rule 5, and rule 4 of A7.
 
 ### Hides
 
@@ -225,7 +224,7 @@ available_photo_folder
 
 ```text
 observe_source_files
-read_source_bytes
+read_named_source
 ```
 
 ### Trace inputs
@@ -335,8 +334,8 @@ write_mark
 - when an operation reads the clock;
 - completing a scan with placed and published status;
 - one placement per project and content, replay, and per-photo failure;
-- comparing the bytes read for placing with the requested source id (`source_changed`);
-- turning a failure of the read for placing into the failure of that photo (A3 rule 4);
+- comparing the hash of the bytes read with the requested source id (`source_changed`);
+- turning a rejected file or a failed preparation into the failure of that photo (A3 rule 5);
 - writing the stored image before the placement record;
 - one mark per placement, replay and `publication_conflict`;
 - which checks and writes run inside the project lock;
@@ -345,7 +344,7 @@ write_mark
 ### Knows
 
 - A3 and A4 without the two request forms given to `deliverer_api` above, rule 4 of A6, rule 2 of A7,
-  order 9 to 11 of A1, and the parts of rules 9 and 10 of A5 given to it above.
+  orders 7 to 9 of A1, and the parts of rules 9 and 10 of A5 given to it above.
 
 ### Hides
 
@@ -362,7 +361,7 @@ write_mark
 
 ```text
 scan_project_photos
-place_project_photos
+deliver_project_photo
 mark_photo_published
 ```
 

@@ -7,10 +7,10 @@ states what the prototype proved.
 
 Every identity is decided; the identity of a delivered photo is decision R0-10.
 
-Evidence for every model: `python3 -m pytest -q prototypes/portal_deliverer` (41 tests) and
-`python3 prototypes/portal_deliverer/e2e_local_portal.py` (24 checks against a real Client
-Portal process and a stub Registry). No run has used a live Syncthing folder, the kernel or
-the VPS.
+Evidence for every model: `python3 -m pytest -q prototypes/portal_deliverer`,
+`python3 prototypes/portal_deliverer/e2e_local_portal.py` (a real Client Portal process and a stub
+Registry) and `python3 prototypes/portal_deliverer/e2e_local_syncthing.py` (two private Syncthing
+instances). No run has used the owner's own devices, the kernel or the VPS.
 
 ## Model M01 — ObjectConnection
 
@@ -62,16 +62,15 @@ record (R0-09) needs a mapping to the Registry project id. That step does not ch
 ### Meaning
 
 What one scan saw for one file of the photo folder. A placed file adds its `file_ref`, a published
-file adds its Portal `photo_id`, and a duplicate names the earlier file with the same content. The
+file adds its Portal `photo_id`, and files with the same content carry the same `source_id`. The
 deliverer computes it on each scan; the calling flow reads it. A server path is never part of it.
 
 **Fields:** `name: str` (the path relative to the photo folder, with `/` separators), `size: int`,
 `source_id: str | None`, `status: ScanStatus`, `reason: ObservationReason | None`,
-`duplicate_of: str | None`, `file_ref: str | None`, `photo_id: UUID | None`.
+`file_ref: str | None`, `photo_id: UUID | None`.
 
-**Enumerations:** `ScanStatus` is `ready`, `placed`, `published`, `settling`, `duplicate`,
-`rejected`. `ObservationReason` is `empty`, `too_large`, `not_a_regular_file`, `unreadable_file`,
-`unsupported_format`, `duplicate_content`.
+**Enumerations:** `ScanStatus` is `ready`, `placed`, `published`, `rejected`. `ObservationReason` is
+`empty`, `too_large`, `not_a_regular_file`, `unreadable_file`, `unsupported_format`.
 
 ### Identity
 
@@ -221,16 +220,15 @@ None.
 
 ### Meaning
 
-The answer for one requested photo of a placement call. It holds the placement facts when there is
-a placement, and the Portal `photo_id` when the photo is already marked as published. One failed
-photo does not stop the others.
+The answer to one delivery. It holds the placement facts when there is a placement, and the Portal
+`photo_id` when the photo is already marked as published.
 
 **Fields:** `source_id: str`, `status: PlacementStatus`, `reason: PlacementFailure | None`,
 `placement: PhotoPlacement | None`, `photo_id: UUID | None`.
 
 **Enumerations:** `PlacementStatus` is `placed`, `replayed`, `failed`. `PlacementFailure` is
-`not_ready_or_absent`, `source_changed`, `too_many_pixels`, `unreadable_image`, `too_large`,
-`not_a_regular_file`, `unreadable_file`.
+`not_ready_or_absent`, `source_changed`, `empty`, `unsupported_format`, `too_many_pixels`,
+`unreadable_image`, `too_large`, `not_a_regular_file`, `unreadable_file`.
 
 ### Identity
 
@@ -239,11 +237,11 @@ value
 ### Identity evidence
 
 - Substitution: Two equal outcomes tell the caller the same thing.
-- Continuity: An outcome belongs to one call and does not continue after it.
+- Continuity: An outcome belongs to one delivery and does not continue after it.
 
 ### Source of truth
 
-Calculated by the placement call.
+Calculated by the delivery.
 
 ### Lifecycle candidate
 
