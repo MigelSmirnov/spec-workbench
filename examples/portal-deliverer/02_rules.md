@@ -43,7 +43,8 @@ subfolders in order of their names, compared by Unicode code point. The earlier 
 the first file with that content in this order that reached rule 8.
 
 A name is ignored, in any letter case and at every level of the path, when it begins with a dot or
-with `~syncthing~`, or ends in `.tmp` or `~`. Names beginning with a dot include Syncthing's
+with `~syncthing~`, ends in `.tmp` or `~`, or contains `.sync-conflict-`, the mark of a Syncthing
+conflict copy (R0-14). Names beginning with a dot include Syncthing's
 `.syncthing.*`, `.stfolder` and `.stversions` and the phone's `.trashed-*` files. Ignored names are
 not reported, ignored folders are not entered, and symbolic links are neither reported nor followed.
 
@@ -54,11 +55,13 @@ does not prove that an image can be decoded: a `ready` file may still fail when 
 
 - INV-01: no operation creates, changes, moves or deletes anything in a source folder.
 - INV-02: a file that changed less than the settling time ago is never placed.
+- INV-18: a Syncthing conflict copy is neither reported by a scan nor placed.
 
 ### Required tests
 
 - INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).
 - INV-02: placing a file still inside the settling time fails with `not_ready_or_absent` (`test_a_file_still_arriving_is_not_placed`).
+- INV-18: a conflict copy, in the folder or a subfolder and in either letter case, is absent from the scan and placing it by its hash fails with `not_ready_or_absent` (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). A real Syncthing conflict leaves its copy unreported while the photo itself is still reported (`e2e_local_syncthing.py`, `a real Syncthing conflict copy is not offered`).
 
 ### Consequence
 

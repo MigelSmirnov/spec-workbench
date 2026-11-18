@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted by the owner on 2026-11-18, with decisions R0-06 to R0-13. Question OQ-07 stays
+Accepted by the owner on 2026-11-18, with decisions R0-06 to R0-14. Question OQ-07 stays
 open.
 
 This case is the first one authored through an experiment: each layer asks what is
@@ -163,6 +163,12 @@ The deliverer sends no section and no caption; the owner sets them in the Portal
 The agent repairs one project at a time, with a backup and the owner's permission for that project.
 Before a delivery the calling flow reads the project's photos in the Portal. If a date still carries
 an offset, it stops, places and publishes nothing, and tells the owner.
+
+### R0-14 — A Syncthing conflict copy is not offered (owner, 2026-11-18)
+
+When one file was changed on two devices, Syncthing keeps the other version as a conflict copy beside
+it. The deliverer does not offer such a copy. The file stays in the folder, and the owner who wants that
+version renames it, after which it is an ordinary photo.
 
 ## Accepted from the experiment (owner, 2026-11-18)
 

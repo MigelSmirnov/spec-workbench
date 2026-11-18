@@ -4,8 +4,8 @@
 
 Written on 2026-11-18 from the accepted States 0 to 2. The prototype was split into exactly these
 modules to test the boundaries. Evidence: `python3 -m pytest -q prototypes/portal_deliverer`
-(70 tests), `python3 prototypes/portal_deliverer/e2e_local_portal.py` (26 checks) and
-`python3 prototypes/portal_deliverer/e2e_local_syncthing.py` (18 checks on two private Syncthing
+(72 tests), `python3 prototypes/portal_deliverer/e2e_local_portal.py` (26 checks) and
+`python3 prototypes/portal_deliverer/e2e_local_syncthing.py` (19 checks on two private Syncthing
 instances). The tests `test_modules_name_exactly_the_declared_symbols`,
 `test_each_hidden_mechanism_stays_inside_its_module` and `test_no_module_can_call_the_portal` read
 the imports of the prototype and fail when a boundary below is broken.
@@ -99,7 +99,7 @@ names the owner of each rule.
 
 | Invariant | Owner |
 |---|---|
-| INV-01, INV-02 | `source_folder` |
+| INV-01, INV-02, INV-18 | `source_folder` |
 | INV-03, INV-04, INV-05, INV-14 | `photo_preparation` |
 | INV-06, INV-07, INV-08, INV-12, INV-13 | `photo_delivery` |
 | INV-09, INV-11 | `deliverer_api` |
