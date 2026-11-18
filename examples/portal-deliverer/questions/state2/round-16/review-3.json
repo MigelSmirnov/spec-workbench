@@ -1,0 +1,346 @@
+{
+ "open_points": [
+  {
+   "subject": "A8",
+   "kind": "model_contradiction",
+   "text": "Closed lists are enumerations: `= models.ScanStatus`, `= models.ObservationReason`, `= models.DateSource`, `= models.PlacementStatus`, `= models.PlacementFailure`, `= models.MarkStatus` and `= models.RefusalCode`.",
+   "question": "Where is `RefusalCode` defined as a model enumeration, including the added `state_unavailable` member, given that State 1 defines no such enumeration?",
+   "options": [
+    "Add `RefusalCode` to the models with the listed members",
+    "Use an existing outcome enumeration instead",
+    "Treat refusal codes as untyped strings"
+   ],
+   "default_guess": "Add a `RefusalCode` model enumeration with uppercase generated member names and the listed string values.",
+   "witness": {
+    "initial": "A confirmed project has a damaged placement record.",
+    "events": [
+     "The calling flow asks to deliver the affected source.",
+     "The deliverer must construct the documented `state_unavailable` answer."
+    ],
+    "outcomes": [
+     "The implementation returns a typed operation-level `RefusalCode.STATE_UNAVAILABLE`.",
+     "The implementation returns `PlacementStatus.failed` with an ad hoc string or extends `PlacementFailure`."
+    ],
+    "observer": "The calling flow sees a different response shape and type."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "missing_precedence",
+   "text": "The operation is refused with `state_unavailable` and changes nothing.",
+   "question": "At what precedence is damaged or unavailable state checked against `unknown_project`, `connection_not_confirmed`, `folder_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed`, `publication_conflict`, and ordinary placement failures?",
+   "options": [
+    "State availability wins whenever the operation could access the record",
+    "Validate project, connection and request first, then inspect state",
+    "Use a different precedence for scan, delivery and mark"
+   ],
+   "default_guess": "Validate the project, connection and request sufficiently to locate the state safely, then let `state_unavailable` take precedence over content and publication results.",
+   "witness": {
+    "initial": "A confirmed project has a damaged mark record, and the caller supplies an invalid source id.",
+    "events": [
+     "The calling flow requests delivery using that source id."
+    ],
+    "outcomes": [
+     "The call answers `invalid_source_id` because request validation runs first.",
+     "The call answers `state_unavailable` because project state is inspected first."
+    ],
+    "observer": "The calling flow sees a different refusal code."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "ambiguous_absence",
+   "text": "A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken for an absent record.",
+   "question": "How is a genuinely absent record distinguished from an unreadable record, including `ENOENT` after an existence check and disappearance during an open?",
+   "options": [
+    "A direct open returning `ENOENT` means absent",
+    "Only an earlier authoritative directory snapshot may establish absence",
+    "Any read-time `ENOENT` is `state_unavailable`"
+   ],
+   "default_guess": "Treat a direct atomic open returning `ENOENT` as absence and every other read error as `state_unavailable`.",
+   "witness": {
+    "initial": "No placement exists for a valid source in a confirmed project.",
+    "events": [
+     "The calling flow requests delivery.",
+     "The attempted record open returns `ENOENT`."
+    ],
+    "outcomes": [
+     "The record is absent, so the deliverer creates the first placement.",
+     "The record cannot be read, so the deliverer refuses with `state_unavailable`."
+    ],
+    "observer": "The owner sees either a successful delivery or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "undefined_damage",
+   "text": "A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken for an absent record.",
+   "question": "What happens when the JSON is an object but has missing fields, wrong field types, unknown enumeration values, invalid UUIDs, or inconsistent placement/mark identities?",
+   "options": [
+    "Every schema or semantic validation failure is damaged state and returns `state_unavailable`",
+    "Only syntax and top-level-object failures return `state_unavailable`; later validation errors propagate",
+    "Specify separate refusal codes for structural and semantic corruption"
+   ],
+   "default_guess": "Treat every failure to decode the object into the exact persisted model, including identity inconsistencies, as damaged state and return `state_unavailable`.",
+   "witness": {
+    "initial": "The placement file contains the valid JSON object `{}`.",
+    "events": [
+     "The calling flow scans the project."
+    ],
+    "outcomes": [
+     "The scan refuses with `state_unavailable` because the object is not a valid placement.",
+     "The decoder raises an unclassified validation error or the implementation treats it as absent."
+    ],
+    "observer": "The calling flow sees either the documented refusal or a different failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "uncovered_write_failure",
+   "text": "The same refusal answers a project lock that cannot be taken and a mark that cannot be written.",
+   "question": "What response and state guarantee apply when a new placement record cannot be written?",
+   "options": [
+    "Return `state_unavailable` and leave neither a placement nor a stored image",
+    "Return `state_unavailable` but allow an unreferenced stored image",
+    "Return an existing placement failure such as `folder_unavailable` or `not_ready_or_absent`"
+   ],
+   "default_guess": "Return `state_unavailable`, remove any newly written image if safely possible, and leave no placement.",
+   "witness": {
+    "initial": "The binary store is writable, but the placement-record destination is not writable.",
+    "events": [
+     "The owner selects a valid photo for delivery.",
+     "The deliverer prepares and writes the image.",
+     "Writing the placement record fails."
+    ],
+    "outcomes": [
+     "The call returns `state_unavailable` and rolls back the newly stored image.",
+     "The call returns another failure or leaves an unreferenced image because only mark-write failure is specified."
+    ],
+    "observer": "The calling flow sees a different refusal, and an operator can observe different binary-store contents."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "uncovered_storage_failure",
+   "text": "Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none.",
+   "question": "Which refusal is returned when creating, writing, synchronising, renaming, or directory-synchronising a prepared image fails, and which temporary or renamed files may remain?",
+   "options": [
+    "Every binary-store write failure is `folder_unavailable`",
+    "Every persistence write failure is `state_unavailable`",
+    "Map failures differently by stage and define cleanup at each stage"
+   ],
+   "default_guess": "Use `folder_unavailable` for binary-store failures, remove temporary files, and regard the image as committed only after the directory synchronisation succeeds.",
+   "witness": {
+    "initial": "A valid photo is being delivered and the image rename succeeds, but synchronising its folder fails.",
+    "events": [
+     "The deliverer attempts the required directory synchronisation."
+    ],
+    "outcomes": [
+     "The operation refuses and removes the renamed image because the placement has not committed.",
+     "The operation refuses but leaves the complete renamed image because per-file visibility has already been achieved."
+    ],
+    "observer": "An operator and a later delivery observe different binary-store state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "ambiguous_lock_failure",
+   "text": "A caller waits for the lock without a time limit, and the lock is released when its holder ends.",
+   "question": "What exactly counts as a project lock that “cannot be taken” rather than ordinary contention that must wait without a time limit?",
+   "options": [
+    "Only immediate operating-system errors such as permission, invalid path or unsupported locking",
+    "Contention may become `state_unavailable` after an implementation-selected timeout",
+    "All lock acquisition failures, including interruption, return `state_unavailable`"
+   ],
+   "default_guess": "Wait indefinitely for contention; return `state_unavailable` only for a definitive operating-system acquisition error, with interruption explicitly classified.",
+   "witness": {
+    "initial": "Another process holds the project lock.",
+    "events": [
+     "A second caller starts a delivery.",
+     "The lock API reports a busy/nonblocking result or an interruption."
+    ],
+    "outcomes": [
+     "The second caller continues waiting until the holder ends.",
+     "The second caller treats the acquisition result as inability to take the lock and returns `state_unavailable`."
+    ],
+    "observer": "The second caller sees either a delayed normal result or an immediate refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "ambiguous_scan_scope",
+   "text": "with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable`",
+   "question": "For a scan, does any damaged placement or mark in the project refuse the whole scan, or only damage associated with a currently scanned source, and what happens to otherwise healthy observations?",
+   "options": [
+    "Any damaged project record refuses the entire scan and returns no observations",
+    "Only a damaged record reached for a scanned source causes refusal",
+    "Return healthy observations and represent the damaged source separately"
+   ],
+   "default_guess": "Refuse the entire scan with `state_unavailable` and return no partial observation list.",
+   "witness": {
+    "initial": "A project contains one healthy ready file and one orphaned damaged mark record for another source.",
+    "events": [
+     "The calling flow scans the project."
+    ],
+    "outcomes": [
+     "The complete scan refuses with `state_unavailable`.",
+     "The scan returns the healthy file because the damaged orphan is irrelevant or is skipped."
+    ],
+    "observer": "The owner either sees no scan results or sees the healthy photo."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "ambiguous_no_change",
+   "text": "The operation is refused with `state_unavailable` and changes nothing.",
+   "question": "What is included in “changes nothing”: only placement and mark records, or also prepared images, temporary files, lock files, directory metadata and other observable persistence?",
+   "options": [
+    "No product record or stored image may change; temporary and lock artifacts may change",
+    "No filesystem artifact may be created, modified or left behind",
+    "Only the damaged record itself must remain byte-for-byte unchanged"
+   ],
+   "default_guess": "Require all product records and stored images to remain unchanged and require best-effort cleanup of temporary files, while allowing the stable lock file and transient metadata effects.",
+   "witness": {
+    "initial": "A damaged mark exists and no stored image exists for a newly encountered source.",
+    "events": [
+     "A delivery begins and creates a temporary prepared image before reading the mark.",
+     "The damaged mark causes `state_unavailable`."
+    ],
+    "outcomes": [
+     "The temporary image is removed because the refusal changes no product state.",
+     "The temporary image remains because only placement and mark records are protected."
+    ],
+    "observer": "An operator inspecting the store sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "commit_point_ambiguity",
+   "text": "The same refusal answers a project lock that cannot be taken and a mark that cannot be written.",
+   "question": "At which write stage is a mark considered written, and what must happen if rename succeeds but file or directory synchronisation fails?",
+   "options": [
+    "The mark commits only after directory synchronisation; any earlier visible file must be rolled back",
+    "Rename commits the mark; a later synchronisation failure may still return success",
+    "Return `state_unavailable` while retaining the visible mark for recovery"
+   ],
+   "default_guess": "Commit only after directory synchronisation; on a later-stage failure, return `state_unavailable` and restore the pre-call state when possible.",
+   "witness": {
+    "initial": "No mark exists and the state folder permits rename but its directory synchronisation fails.",
+    "events": [
+     "The calling flow records a Portal photo id.",
+     "The temporary mark is synchronised and renamed.",
+     "Synchronising the directory fails.",
+     "The caller retries the same request."
+    ],
+    "outcomes": [
+     "The first call refuses and the retry creates the mark because rollback restored absence.",
+     "The first call refuses but the retry reports `replayed` because the renamed mark remained visible."
+    ],
+    "observer": "The calling flow sees a different retry result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "invariant_test_gap",
+   "text": "and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).",
+   "question": "What must the INV-20 test assert for an unwritable mark: the exact `state_unavailable` code, absence of a new mark, preservation of existing state, and absence of other writes?",
+   "options": [
+    "Assert `state_unavailable` and that all product state is unchanged",
+    "Assert only that the call is not `marked`",
+    "Assert the refusal code and mark absence but not other filesystem effects"
+   ],
+   "default_guess": "Require the test to assert `state_unavailable`, no new mark, unchanged placement and existing records, and no new stored image.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "invariant_test_gap",
+   "text": "with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was",
+   "question": "What must be asserted to show INV-20's full claim that damage never leads to a new placement or a new mark, beyond preserving the already damaged record?",
+   "options": [
+    "Assert that no placement, mark, stored image or publication data is newly created by each operation",
+    "Preserving the damaged file alone is sufficient",
+    "Assert only the absence of the counterpart record named by the particular operation"
+   ],
+   "default_guess": "For every damaged-record and operation combination, assert both the refusal and that no placement, mark or stored image was newly created.",
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "missing_time_source",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "What authority supplies the fresh instant written to `PublicationMark.marked_at`?",
+   "options": [
+    "An injected system-clock port",
+    "A datetime parameter supplied by the caller",
+    "A declared authority module backed by the operating-system clock"
+   ],
+   "default_guess": "Use an injected clock port whose backend reads the operating-system clock.",
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "missing_time_representation",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "What representation and meaning does `marked_at` have: timezone-aware UTC, naive UTC, local `Europe/Madrid` time, or another form?",
+   "options": [
+    "Timezone-aware UTC datetime",
+    "Naive UTC datetime",
+    "Timezone-aware `Europe/Madrid` datetime"
+   ],
+   "default_guess": "Use a timezone-aware UTC datetime internally and define any persistence encoding explicitly.",
+   "witness": {
+    "initial": "A mark is created during the repeated hour when Europe/Madrid leaves daylight-saving time.",
+    "events": [
+     "The calling flow records a publication.",
+     "A later component reads and compares `marked_at`."
+    ],
+    "outcomes": [
+     "The stored instant is unambiguous UTC and comparisons preserve chronology.",
+     "The stored value is an ambiguous naive Europe/Madrid wall time and can denote either of two instants."
+    ],
+    "observer": "A later service, test or operator comparing mark times sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "undefined_timezone_semantics",
+   "text": "| `timezone` | `str` | `Europe/Madrid` |",
+   "question": "Which timestamps use this setting, especially how offsetless camera timestamps are interpreted and how ambiguous or nonexistent local times are resolved before producing UTC without an offset?",
+   "options": [
+    "Interpret offsetless camera times in Europe/Madrid with an explicit DST fold/gap policy",
+    "Use Europe/Madrid only for display and interpret camera times as UTC",
+    "Use file metadata or another source to infer an offset"
+   ],
+   "default_guess": "Interpret offsetless camera timestamps in Europe/Madrid, choose an explicitly documented fold policy, and reject nonexistent local times or fall back to file modification time.",
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "missing_clock_read_count",
+   "text": "The deliverer creates it once when placing a photo.",
+   "question": "How many readings of the time source may each operation take, particularly the operation that creates `marked_at`, and must replay paths avoid reading it?",
+   "options": [
+    "Exactly one reading on a successful fresh timestamp write and none on replay or refusal",
+    "One reading at operation start for every call",
+    "Any number of readings provided only the persisted value is stable"
+   ],
+   "default_guess": "Read the clock exactly once only when committing a fresh mark; replayed and refused calls do not read it.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A8\",\"kind\":\"model_contradiction\",\"text\":\"Closed lists are enumerations: `= models.ScanStatus`, `= models.ObservationReason`, `= models.DateSource`, `= models.PlacementStatus`, `= models.PlacementFailure`, `= models.MarkStatus` and `= models.RefusalCode`.\",\"question\":\"Where is `RefusalCode` defined as a model enumeration, including the added `state_unavailable` member, given that State 1 defines no such enumeration?\",\"options\":[\"Add `RefusalCode` to the models with the listed members\",\"Use an existing outcome enumeration instead\",\"Treat refusal codes as untyped strings\"],\"default_guess\":\"Add a `RefusalCode` model enumeration with uppercase generated member names and the listed string values.\",\"witness\":{\"initial\":\"A confirmed project has a damaged placement record.\",\"events\":[\"The calling flow asks to deliver the affected source.\",\"The deliverer must construct the documented `state_unavailable` answer.\"],\"outcomes\":[\"The implementation returns a typed operation-level `RefusalCode.STATE_UNAVAILABLE`.\",\"The implementation returns `PlacementStatus.failed` with an ad hoc string or extends `PlacementFailure`.\"],\"observer\":\"The calling flow sees a different response shape and type.\"}},{\"subject\":\"A6\",\"kind\":\"missing_precedence\",\"text\":\"The operation is refused with `state_unavailable` and changes nothing.\",\"question\":\"At what precedence is damaged or unavailable state checked against `unknown_project`, `connection_not_confirmed`, `folder_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed`, `publication_conflict`, and ordinary placement failures?\",\"options\":[\"State availability wins whenever the operation could access the record\",\"Validate project, connection and request first, then inspect state\",\"Use a different precedence for scan, delivery and mark\"],\"default_guess\":\"Validate the project, connection and request sufficiently to locate the state safely, then let `state_unavailable` take precedence over content and publication results.\",\"witness\":{\"initial\":\"A confirmed project has a damaged mark record, and the caller supplies an invalid source id.\",\"events\":[\"The calling flow requests delivery using that source id.\"],\"outcomes\":[\"The call answers `invalid_source_id` because request validation runs first.\",\"The call answers `state_unavailable` because project state is inspected first.\"],\"observer\":\"The calling flow sees a different refusal code.\"}},{\"subject\":\"A6\",\"kind\":\"ambiguous_absence\",\"text\":\"A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken for an absent record.\",\"question\":\"How is a genuinely absent record distinguished from an unreadable record, including `ENOENT` after an existence check and disappearance during an open?\",\"options\":[\"A direct open returning `ENOENT` means absent\",\"Only an earlier authoritative directory snapshot may establish absence\",\"Any read-time `ENOENT` is `state_unavailable`\"],\"default_guess\":\"Treat a direct atomic open returning `ENOENT` as absence and every other read error as `state_unavailable`.\",\"witness\":{\"initial\":\"No placement exists for a valid source in a confirmed project.\",\"events\":[\"The calling flow requests delivery.\",\"The attempted record open returns `ENOENT`.\"],\"outcomes\":[\"The record is absent, so the deliverer creates the first placement.\",\"The record cannot be read, so the deliverer refuses with `state_unavailable`.\"],\"observer\":\"The owner sees either a successful delivery or a refusal.\"}},{\"subject\":\"A6\",\"kind\":\"undefined_damage\",\"text\":\"A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken for an absent record.\",\"question\":\"What happens when the JSON is an object but has missing fields, wrong field types, unknown enumeration values, invalid UUIDs, or inconsistent placement/mark identities?\",\"options\":[\"Every schema or semantic validation failure is damaged state and returns `state_unavailable`\",\"Only syntax and top-level-object failures return `state_unavailable`; later validation errors propagate\",\"Specify separate refusal codes for structural and semantic corruption\"],\"default_guess\":\"Treat every failure to decode the object into the exact persisted model, including identity inconsistencies, as damaged state and return `state_unavailable`.\",\"witness\":{\"initial\":\"The placement file contains the valid JSON object `{}`.\",\"events\":[\"The calling flow scans the project.\"],\"outcomes\":[\"The scan refuses with `state_unavailable` because the object is not a valid placement.\",\"The decoder raises an unclassified validation error or the implementation treats it as absent.\"],\"observer\":\"The calling flow sees either the documented refusal or a different failure.\"}},{\"subject\":\"A6\",\"kind\":\"uncovered_write_failure\",\"text\":\"The same refusal answers a project lock that cannot be taken and a mark that cannot be written.\",\"question\":\"What response and state guarantee apply when a new placement record cannot be written?\",\"options\":[\"Return `state_unavailable` and leave neither a placement nor a stored image\",\"Return `state_unavailable` but allow an unreferenced stored image\",\"Return an existing placement failure such as `folder_unavailable` or `not_ready_or_absent`\"],\"default_guess\":\"Return `state_unavailable`, remove any newly written image if safely possible, and leave no placement.\",\"witness\":{\"initial\":\"The binary store is writable, but the placement-record destination is not writable.\",\"events\":[\"The owner selects a valid photo for delivery.\",\"The deliverer prepares and writes the image.\",\"Writing the placement record fails.\"],\"outcomes\":[\"The call returns `state_unavailable` and rolls back the newly stored image.\",\"The call returns another failure or leaves an unreferenced image because only mark-write failure is specified.\"],\"observer\":\"The calling flow sees a different refusal, and an operator can observe different binary-store contents.\"}},{\"subject\":\"A6\",\"kind\":\"uncovered_storage_failure\",\"text\":\"Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none.\",\"question\":\"Which refusal is returned when creating, writing, synchronising, renaming, or directory-synchronising a prepared image fails, and which temporary or renamed files may remain?\",\"options\":[\"Every binary-store write failure is `folder_unavailable`\",\"Every persistence write failure is `state_unavailable`\",\"Map failures differently by stage and define cleanup at each stage\"],\"default_guess\":\"Use `folder_unavailable` for binary-store failures, remove temporary files, and regard the image as committed only after the directory synchronisation succeeds.\",\"witness\":{\"initial\":\"A valid photo is being delivered and the image rename succeeds, but synchronising its folder fails.\",\"events\":[\"The deliverer attempts the required directory synchronisation.\"],\"outcomes\":[\"The operation refuses and removes the renamed image because the placement has not committed.\",\"The operation refuses but leaves the complete renamed image because per-file visibility has already been achieved.\"],\"observer\":\"An operator and a later delivery observe different binary-store state.\"}},{\"subject\":\"A6\",\"kind\":\"ambiguous_lock_failure\",\"text\":\"A caller waits for the lock without a time limit, and the lock is released when its holder ends.\",\"question\":\"What exactly counts as a project lock that “cannot be taken” rather than ordinary contention that must wait without a time limit?\",\"options\":[\"Only immediate operating-system errors such as permission, invalid path or unsupported locking\",\"Contention may become `state_unavailable` after an implementation-selected timeout\",\"All lock acquisition failures, including interruption, return `state_unavailable`\"],\"default_guess\":\"Wait indefinitely for contention; return `state_unavailable` only for a definitive operating-system acquisition error, with interruption explicitly classified.\",\"witness\":{\"initial\":\"Another process holds the project lock.\",\"events\":[\"A second caller starts a delivery.\",\"The lock API reports a busy/nonblocking result or an interruption.\"],\"outcomes\":[\"The second caller continues waiting until the holder ends.\",\"The second caller treats the acquisition result as inability to take the lock and returns `state_unavailable`.\"],\"observer\":\"The second caller sees either a delayed normal result or an immediate refusal.\"}},{\"subject\":\"A6\",\"kind\":\"ambiguous_scan_scope\",\"text\":\"with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable`\",\"question\":\"For a scan, does any damaged placement or mark in the project refuse the whole scan, or only damage associated with a currently scanned source, and what happens to otherwise healthy observations?\",\"options\":[\"Any damaged project record refuses the entire scan and returns no observations\",\"Only a damaged record reached for a scanned source causes refusal\",\"Return healthy observations and represent the damaged source separately\"],\"default_guess\":\"Refuse the entire scan with `state_unavailable` and return no partial observation list.\",\"witness\":{\"initial\":\"A project contains one healthy ready file and one orphaned damaged mark record for another source.\",\"events\":[\"The calling flow scans the project.\"],\"outcomes\":[\"The complete scan refuses with `state_unavailable`.\",\"The scan returns the healthy file because the damaged orphan is irrelevant or is skipped.\"],\"observer\":\"The owner either sees no scan results or sees the healthy photo.\"}},{\"subject\":\"A6\",\"kind\":\"ambiguous_no_change\",\"text\":\"The operation is refused with `state_unavailable` and changes nothing.\",\"question\":\"What is included in “changes nothing”: only placement and mark records, or also prepared images, temporary files, lock files, directory metadata and other observable persistence?\",\"options\":[\"No product record or stored image may change; temporary and lock artifacts may change\",\"No filesystem artifact may be created, modified or left behind\",\"Only the damaged record itself must remain byte-for-byte unchanged\"],\"default_guess\":\"Require all product records and stored images to remain unchanged and require best-effort cleanup of temporary files, while allowing the stable lock file and transient metadata effects.\",\"witness\":{\"initial\":\"A damaged mark exists and no stored image exists for a newly encountered source.\",\"events\":[\"A delivery begins and creates a temporary prepared image before reading the mark.\",\"The damaged mark causes `state_unavailable`.\"],\"outcomes\":[\"The temporary image is removed because the refusal changes no product state.\",\"The temporary image remains because only placement and mark records are protected.\"],\"observer\":\"An operator inspecting the store sees the difference.\"}},{\"subject\":\"A6\",\"kind\":\"commit_point_ambiguity\",\"text\":\"The same refusal answers a project lock that cannot be taken and a mark that cannot be written.\",\"question\":\"At which write stage is a mark considered written, and what must happen if rename succeeds but file or directory synchronisation fails?\",\"options\":[\"The mark commits only after directory synchronisation; any earlier visible file must be rolled back\",\"Rename commits the mark; a later synchronisation failure may still return success\",\"Return `state_unavailable` while retaining the visible mark for recovery\"],\"default_guess\":\"Commit only after directory synchronisation; on a later-stage failure, return `state_unavailable` and restore the pre-call state when possible.\",\"witness\":{\"initial\":\"No mark exists and the state folder permits rename but its directory synchronisation fails.\",\"events\":[\"The calling flow records a Portal photo id.\",\"The temporary mark is synchronised and renamed.\",\"Synchronising the directory fails.\",\"The caller retries the same request.\"],\"outcomes\":[\"The first call refuses and the retry creates the mark because rollback restored absence.\",\"The first call refuses but the retry reports `replayed` because the renamed mark remained visible.\"],\"observer\":\"The calling flow sees a different retry result.\"}},{\"subject\":\"A6\",\"kind\":\"invariant_test_gap\",\"text\":\"and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).\",\"question\":\"What must the INV-20 test assert for an unwritable mark: the exact `state_unavailable` code, absence of a new mark, preservation of existing state, and absence of other writes?\",\"options\":[\"Assert `state_unavailable` and that all product state is unchanged\",\"Assert only that the call is not `marked`\",\"Assert the refusal code and mark absence but not other filesystem effects\"],\"default_guess\":\"Require the test to assert `state_unavailable`, no new mark, unchanged placement and existing records, and no new stored image.\"},{\"subject\":\"A6\",\"kind\":\"invariant_test_gap\",\"text\":\"with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was\",\"question\":\"What must be asserted to show INV-20's full claim that damage never leads to a new placement or a new mark, beyond preserving the already damaged record?\",\"options\":[\"Assert that no placement, mark, stored image or publication data is newly created by each operation\",\"Preserving the damaged file alone is sufficient\",\"Assert only the absence of the counterpart record named by the particular operation\"],\"default_guess\":\"For every damaged-record and operation combination, assert both the refusal and that no placement, mark or stored image was newly created.\"},{\"subject\":\"A8\",\"kind\":\"missing_time_source\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"What authority supplies the fresh instant written to `PublicationMark.marked_at`?\",\"options\":[\"An injected system-clock port\",\"A datetime parameter supplied by the caller\",\"A declared authority module backed by the operating-system clock\"],\"default_guess\":\"Use an injected clock port whose backend reads the operating-system clock.\"},{\"subject\":\"A8\",\"kind\":\"missing_time_representation\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"What representation and meaning does `marked_at` have: timezone-aware UTC, naive UTC, local `Europe/Madrid` time, or another form?\",\"options\":[\"Timezone-aware UTC datetime\",\"Naive UTC datetime\",\"Timezone-aware `Europe/Madrid` datetime\"],\"default_guess\":\"Use a timezone-aware UTC datetime internally and define any persistence encoding explicitly.\",\"witness\":{\"initial\":\"A mark is created during the repeated hour when Europe/Madrid leaves daylight-saving time.\",\"events\":[\"The calling flow records a publication.\",\"A later component reads and compares `marked_at`.\"],\"outcomes\":[\"The stored instant is unambiguous UTC and comparisons preserve chronology.\",\"The stored value is an ambiguous naive Europe/Madrid wall time and can denote either of two instants.\"],\"observer\":\"A later service, test or operator comparing mark times sees the difference.\"}},{\"subject\":\"A8\",\"kind\":\"undefined_timezone_semantics\",\"text\":\"| `timezone` | `str` | `Europe/Madrid` |\",\"question\":\"Which timestamps use this setting, especially how offsetless camera timestamps are interpreted and how ambiguous or nonexistent local times are resolved before producing UTC without an offset?\",\"options\":[\"Interpret offsetless camera times in Europe/Madrid with an explicit DST fold/gap policy\",\"Use Europe/Madrid only for display and interpret camera times as UTC\",\"Use file metadata or another source to infer an offset\"],\"default_guess\":\"Interpret offsetless camera timestamps in Europe/Madrid, choose an explicitly documented fold policy, and reject nonexistent local times or fall back to file modification time.\"},{\"subject\":\"A8\",\"kind\":\"missing_clock_read_count\",\"text\":\"The deliverer creates it once when placing a photo.\",\"question\":\"How many readings of the time source may each operation take, particularly the operation that creates `marked_at`, and must replay paths avoid reading it?\",\"options\":[\"Exactly one reading on a successful fresh timestamp write and none on replay or refusal\",\"One reading at operation start for every call\",\"Any number of readings provided only the persisted value is stable\"],\"default_guess\":\"Read the clock exactly once only when committing a fresh mark; replayed and refused calls do not read it.\"}]}",
+ "set_aside": []
+}

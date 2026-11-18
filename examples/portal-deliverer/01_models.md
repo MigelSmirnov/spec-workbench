@@ -302,3 +302,40 @@ Durable persistence candidate.
 
 None. If the Portal gains removal of a
 hidden photo (client-portal Q27), the mark of a removed photo must be reconsidered there.
+
+## Model M08 — Refusal
+
+### Meaning
+
+The answer to an operation the service refuses as a whole. `code` says why, and `detail` is a fixed sentence for
+people that holds no server path and no credential. A failure of one photo is M06, not a refusal.
+
+**Fields:** `code: RefusalCode`, `detail: str`.
+
+**Enumeration:** `RefusalCode` is `unknown_project`, `connection_not_confirmed`, `folder_unavailable`,
+`state_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed`, `publication_conflict`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two refusals with equal facts tell the caller the same thing.
+- Continuity: A refusal belongs to one request and does not continue after it.
+
+### Source of truth
+
+Calculated by the refused operation.
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Calculated on demand.
+
+### Open questions
+
+None.

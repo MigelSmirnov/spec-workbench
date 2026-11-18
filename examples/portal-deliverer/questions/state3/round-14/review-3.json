@@ -1,0 +1,225 @@
+{
+ "open_points": [
+  {
+   "subject": "30_modules.md:Invariant owners",
+   "kind": "missing_rule_owner",
+   "text": "A decision has one primary owner in `30_trace.json`. Where its rules reach other modules, this table\nnames the owner of each rule.\n\n| A6 | rules 1 to 3, stored names, modes, atomic writes, the lock itself | `delivery_store` |\n| A6 | rule 4, which checks and writes run inside the lock | `photo_delivery` |",
+   "question": "Which module is the primary owner of A6 rule 5, which is absent from the rule-owner table although INV-20 is assigned to `delivery_store`?",
+   "options": [
+    "`delivery_store` owns all of A6 rule 5",
+    "`photo_delivery` owns the refusal decision while `delivery_store` owns storage failures",
+    "Split A6 rule 5 into separately owned rules"
+   ],
+   "default_guess": "Split the rule: `delivery_store` owns detection and signalling of storage and lock failures, while `photo_delivery` owns the operation-level refusal and propagation.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`delivery_store`",
+   "kind": "ownership_contradiction",
+   "text": "- reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the\n  lock or a mark cannot be used (A6 rule 5).\n\n- whether a placement or mark may be written;",
+   "question": "Does `delivery_store` decide that damage prevents a placement or mark from being written, despite being forbidden to own whether either may be written, or does it only report a storage fault for `photo_delivery` to decide?",
+   "options": [
+    "`delivery_store` returns a storage fault and `photo_delivery` decides the refusal",
+    "`delivery_store` directly returns `state_unavailable` and blocks the write",
+    "Narrow the prohibition so A6 safety refusals belong to `delivery_store`"
+   ],
+   "default_guess": "Have `delivery_store` report a typed storage fault and make `photo_delivery` own the decision to refuse and perform no subsequent write.",
+   "witness": {
+    "initial": "The requested source has no placement, but its placement-record path contains damaged JSON.",
+    "events": [
+     "The caller asks `photo_delivery` to deliver the source.",
+     "`delivery_store` detects the damaged record.",
+     "The implementation must decide whether the store itself refuses or returns an error to `photo_delivery`."
+    ],
+    "outcomes": [
+     "`delivery_store` returns an operation refusal with `state_unavailable`.",
+     "`delivery_store` returns a storage error and `photo_delivery` converts it to `state_unavailable`."
+    ],
+    "observer": "The module contracts, dependency graph and tests that substitute either module see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "absence_boundary",
+   "text": "A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken\n   for an absent record.",
+   "question": "How is the normal absence of a placement or mark distinguished from a record that “cannot be read,” especially when opening its expected path returns a not-found error?",
+   "options": [
+    "A not-found result means the record is absent; all other read failures mean `state_unavailable`",
+    "Every failed open, including not found, means `state_unavailable`",
+    "A prior existence check distinguishes absence from later read failure"
+   ],
+   "default_guess": "Treat a not-found result from the atomic record read as normal absence and every other open, read or decode failure as `state_unavailable`.",
+   "witness": {
+    "initial": "This is the first delivery for a source, so no placement or mark file has ever existed.",
+    "events": [
+     "The caller requests delivery.",
+     "`delivery_store` opens the expected placement-record path and receives a not-found error."
+    ],
+    "outcomes": [
+     "The missing record is normal absence and delivery can create the first placement.",
+     "The failed read is `state_unavailable`, making every first placement impossible."
+    ],
+    "observer": "The caller sees `placed` in one implementation and `state_unavailable` in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "record_validation_gap",
+   "text": "A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken\n   for an absent record.",
+   "question": "What happens when the JSON is an object but does not conform to M04 or M07, such as having missing, extra, wrongly typed or inconsistent fields?",
+   "options": [
+    "Any failure to validate the complete record model is `state_unavailable`",
+    "Only JSON syntax and top-level object shape are checked",
+    "Some malformed fields are ignored or defaulted"
+   ],
+   "default_guess": "Validate the complete persisted M04 or M07 form and return `state_unavailable` for any validation failure.",
+   "witness": {
+    "initial": "A placement file contains the valid JSON object `{}`.",
+    "events": [
+     "A scan reaches the source corresponding to that placement file.",
+     "The store parses the file successfully as a JSON object.",
+     "The implementation attempts to interpret it as a placement."
+    ],
+    "outcomes": [
+     "Model validation treats it as damaged and the scan answers `state_unavailable`.",
+     "The top-level-object test passes, after which fields are defaulted, treated as absent or cause an unclassified failure."
+    ],
+    "observer": "The scan caller sees either the specified refusal or a result, crash or different error."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "contradictory_failure_mapping",
+   "text": "reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the\n  lock or a mark cannot be used (A6 rule 5).\n\n| 5 | writing the stored image or the record fails | `UNREADABLE_FILE` |",
+   "question": "When writing a placement record fails, is that the existing per-photo `failed` result with `UNREADABLE_FILE`, or does the new phrase “a record ... cannot be used” make it a whole-operation `state_unavailable` refusal?",
+   "options": [
+    "Placement-record write failure remains `failed` with `UNREADABLE_FILE`; only mark-write failure is `state_unavailable`",
+    "Every state-record write failure is `state_unavailable`",
+    "Replace the two mappings with one newly specified mapping"
+   ],
+   "default_guess": "Preserve A3 rule 5 for placement-record writes and use `state_unavailable` only for damaged record reads, lock acquisition failures and mark-write failures.",
+   "witness": {
+    "initial": "The source is valid, its stored image is written successfully, and writing the new placement record then fails.",
+    "events": [
+     "The caller requests delivery.",
+     "`photo_delivery` prepares the photo and `delivery_store` writes the image.",
+     "`delivery_store` cannot write the placement record."
+    ],
+    "outcomes": [
+     "The photo result is `failed` with `UNREADABLE_FILE`, as A3 rule 5 says.",
+     "The whole operation is refused with `state_unavailable`, from the changed `delivery_store` ownership text."
+    ],
+    "observer": "The delivery caller sees different result shapes and codes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "damage_scope",
+   "text": "INV-20: with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).",
+   "question": "Must an operation refuse for any damaged record in the project, or only for a record belonging to the source or placement that the operation would otherwise read?",
+   "options": [
+    "Only a record directly consulted for the requested or scanned source blocks the operation",
+    "Any damaged record for the project blocks every scan, delivery and mark",
+    "Scans check all project records, while delivery and mark check only their requested source"
+   ],
+   "default_guess": "Scans refuse on damage encountered for any source they report; delivery and mark inspect and are blocked only by the requested source's placement and mark records.",
+   "witness": {
+    "initial": "Project P has a valid ready source A and a damaged placement record for absent source B.",
+    "events": [
+     "The caller requests delivery of A.",
+     "The implementation either reads only A's expected records or audits every record of P."
+    ],
+    "outcomes": [
+     "A is placed because B's unrelated record is not consulted.",
+     "The delivery is refused with `state_unavailable` because some record in P is damaged."
+    ],
+    "observer": "The delivery caller sees `placed` or `state_unavailable`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "check_order_gap",
+   "text": "Checks run in this order: token, request form and project id, connection, photo folder, source id,\n   project lock, existing placement, named file.\n\nA placement or mark record that cannot be read, is not valid JSON or is not an object is never taken\n   for an absent record.",
+   "question": "Where are placement-record and mark-record damage checks inserted into the established delivery and mark check orders, and which result wins when record damage and a later request or file failure coexist?",
+   "options": [
+    "Check each record at the existing step where that record is logically consulted",
+    "Check both placement and mark records immediately after acquiring the project lock",
+    "Audit records before the existing operation-specific checks"
+   ],
+   "default_guess": "After acquiring the lock, read and validate the requested source's placement record at the existing-placement step and its mark immediately when a valid placement is found; do not audit unrelated records.",
+   "witness": {
+    "initial": "The requested source has a valid placement, its mark record is damaged, and the request name no longer identifies a file.",
+    "events": [
+     "The caller repeats delivery with the same source id.",
+     "The operation acquires the project lock.",
+     "One implementation validates the mark as part of replay before considering the name; another delays mark handling until after validating the named file."
+    ],
+    "outcomes": [
+     "The operation answers `state_unavailable`.",
+     "The operation answers a per-photo `NOT_READY_OR_ABSENT` failure."
+    ],
+    "observer": "The delivery caller sees which failure has precedence."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "undefined_lock_failure",
+   "text": "A caller waits for the lock\n   without a time limit, and the lock is released when its holder ends.\n\nThe same\n   refusal answers a project lock that cannot be taken and a mark that cannot be written.",
+   "question": "Which lock-acquisition conditions mean “cannot be taken” and return `state_unavailable`, as distinct from contention that must wait without a time limit?",
+   "options": [
+    "Contention always waits; filesystem, permission and unsupported-lock errors refuse",
+    "Any unsuccessful immediate acquisition refuses",
+    "Retry transient or interrupted acquisitions, but refuse permanent operating-system errors"
+   ],
+   "default_guess": "Wait indefinitely for ordinary contention, retry interrupted acquisition, and return `state_unavailable` only for permanent operating-system or filesystem errors.",
+   "witness": {
+    "initial": "Another process holds the project's valid lock.",
+    "events": [
+     "A delivery attempts to acquire the same lock.",
+     "The first acquisition attempt reports that the lock is busy."
+    ],
+    "outcomes": [
+     "The caller waits until the holder releases the lock, as rule 4 requires.",
+     "The busy result is treated as a lock that cannot be taken and the caller receives `state_unavailable`."
+    ],
+    "observer": "The caller sees waiting followed by a normal result or an immediate refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "atomic_failure_cleanup",
+   "text": "The operation is refused with `state_unavailable` and changes nothing. The same\n   refusal answers a project lock that cannot be taken and a mark that cannot be written.",
+   "question": "For a failed mark write, does “changes nothing” require removal of any temporary file created before the failure, or only that no visible mark record and no domain state change occur?",
+   "options": [
+    "No temporary or final filesystem artifact may remain",
+    "Only the final mark record and domain state must remain unchanged",
+    "Temporary artifacts may remain only when their cleanup also fails"
+   ],
+   "default_guess": "Require best-effort cleanup and define the guarantee as no new final record or observable domain state; specify separately whether an unremovable temporary artifact is permitted.",
+   "witness": {
+    "initial": "No mark exists, and the state directory permits creation of a temporary file but the final rename fails.",
+    "events": [
+     "The calling flow records a Portal photo id.",
+     "`write_mark` writes or partially writes its temporary file.",
+     "The rename fails and the operation returns `state_unavailable`."
+    ],
+    "outcomes": [
+     "The temporary file is removed, leaving the state folder unchanged.",
+     "The temporary file remains although no final mark exists."
+    ],
+    "observer": "An operator, cleanup process or later store operation inspecting the state folder sees the difference."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"30_modules.md:Invariant owners\",\"kind\":\"missing_rule_owner\",\"text\":\"A decision has one primary owner in `30_trace.json`. Where its rules reach other modules, this table\\nnames the owner of each rule.\\n\\n| A6 | rules 1 to 3, stored names, modes, atomic writes, the lock itself | `delivery_store` |\\n| A6 | rule 4, which checks and writes run inside the lock | `photo_delivery` |\",\"question\":\"Which module is the primary owner of A6 rule 5, which is absent from the rule-owner table although INV-20 is assigned to `delivery_store`?\",\"options\":[\"`delivery_store` owns all of A6 rule 5\",\"`photo_delivery` owns the refusal decision while `delivery_store` owns storage failures\",\"Split A6 rule 5 into separately owned rules\"],\"default_guess\":\"Split the rule: `delivery_store` owns detection and signalling of storage and lock failures, while `photo_delivery` owns the operation-level refusal and propagation.\"},{\"subject\":\"30_modules.md:`delivery_store`\",\"kind\":\"ownership_contradiction\",\"text\":\"- reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the\\n  lock or a mark cannot be used (A6 rule 5).\\n\\n- whether a placement or mark may be written;\",\"question\":\"Does `delivery_store` decide that damage prevents a placement or mark from being written, despite being forbidden to own whether either may be written, or does it only report a storage fault for `photo_delivery` to decide?\",\"options\":[\"`delivery_store` returns a storage fault and `photo_delivery` decides the refusal\",\"`delivery_store` directly returns `state_unavailable` and blocks the write\",\"Narrow the prohibition so A6 safety refusals belong to `delivery_store`\"],\"default_guess\":\"Have `delivery_store` report a typed storage fault and make `photo_delivery` own the decision to refuse and perform no subsequent write.\",\"witness\":{\"initial\":\"The requested source has no placement, but its placement-record path contains damaged JSON.\",\"events\":[\"The caller asks `photo_delivery` to deliver the source.\",\"`delivery_store` detects the damaged record.\",\"The implementation must decide whether the store itself refuses or returns an error to `photo_delivery`.\"],\"outcomes\":[\"`delivery_store` returns an operation refusal with `state_unavailable`.\",\"`delivery_store` returns a storage error and `photo_delivery` converts it to `state_unavailable`.\"],\"observer\":\"The module contracts, dependency graph and tests that substitute either module see the difference.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"absence_boundary\",\"text\":\"A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken\\n   for an absent record.\",\"question\":\"How is the normal absence of a placement or mark distinguished from a record that “cannot be read,” especially when opening its expected path returns a not-found error?\",\"options\":[\"A not-found result means the record is absent; all other read failures mean `state_unavailable`\",\"Every failed open, including not found, means `state_unavailable`\",\"A prior existence check distinguishes absence from later read failure\"],\"default_guess\":\"Treat a not-found result from the atomic record read as normal absence and every other open, read or decode failure as `state_unavailable`.\",\"witness\":{\"initial\":\"This is the first delivery for a source, so no placement or mark file has ever existed.\",\"events\":[\"The caller requests delivery.\",\"`delivery_store` opens the expected placement-record path and receives a not-found error.\"],\"outcomes\":[\"The missing record is normal absence and delivery can create the first placement.\",\"The failed read is `state_unavailable`, making every first placement impossible.\"],\"observer\":\"The caller sees `placed` in one implementation and `state_unavailable` in the other.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"record_validation_gap\",\"text\":\"A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken\\n   for an absent record.\",\"question\":\"What happens when the JSON is an object but does not conform to M04 or M07, such as having missing, extra, wrongly typed or inconsistent fields?\",\"options\":[\"Any failure to validate the complete record model is `state_unavailable`\",\"Only JSON syntax and top-level object shape are checked\",\"Some malformed fields are ignored or defaulted\"],\"default_guess\":\"Validate the complete persisted M04 or M07 form and return `state_unavailable` for any validation failure.\",\"witness\":{\"initial\":\"A placement file contains the valid JSON object `{}`.\",\"events\":[\"A scan reaches the source corresponding to that placement file.\",\"The store parses the file successfully as a JSON object.\",\"The implementation attempts to interpret it as a placement.\"],\"outcomes\":[\"Model validation treats it as damaged and the scan answers `state_unavailable`.\",\"The top-level-object test passes, after which fields are defaulted, treated as absent or cause an unclassified failure.\"],\"observer\":\"The scan caller sees either the specified refusal or a result, crash or different error.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"contradictory_failure_mapping\",\"text\":\"reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the\\n  lock or a mark cannot be used (A6 rule 5).\\n\\n| 5 | writing the stored image or the record fails | `UNREADABLE_FILE` |\",\"question\":\"When writing a placement record fails, is that the existing per-photo `failed` result with `UNREADABLE_FILE`, or does the new phrase “a record ... cannot be used” make it a whole-operation `state_unavailable` refusal?\",\"options\":[\"Placement-record write failure remains `failed` with `UNREADABLE_FILE`; only mark-write failure is `state_unavailable`\",\"Every state-record write failure is `state_unavailable`\",\"Replace the two mappings with one newly specified mapping\"],\"default_guess\":\"Preserve A3 rule 5 for placement-record writes and use `state_unavailable` only for damaged record reads, lock acquisition failures and mark-write failures.\",\"witness\":{\"initial\":\"The source is valid, its stored image is written successfully, and writing the new placement record then fails.\",\"events\":[\"The caller requests delivery.\",\"`photo_delivery` prepares the photo and `delivery_store` writes the image.\",\"`delivery_store` cannot write the placement record.\"],\"outcomes\":[\"The photo result is `failed` with `UNREADABLE_FILE`, as A3 rule 5 says.\",\"The whole operation is refused with `state_unavailable`, from the changed `delivery_store` ownership text.\"],\"observer\":\"The delivery caller sees different result shapes and codes.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"damage_scope\",\"text\":\"INV-20: with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).\",\"question\":\"Must an operation refuse for any damaged record in the project, or only for a record belonging to the source or placement that the operation would otherwise read?\",\"options\":[\"Only a record directly consulted for the requested or scanned source blocks the operation\",\"Any damaged record for the project blocks every scan, delivery and mark\",\"Scans check all project records, while delivery and mark check only their requested source\"],\"default_guess\":\"Scans refuse on damage encountered for any source they report; delivery and mark inspect and are blocked only by the requested source's placement and mark records.\",\"witness\":{\"initial\":\"Project P has a valid ready source A and a damaged placement record for absent source B.\",\"events\":[\"The caller requests delivery of A.\",\"The implementation either reads only A's expected records or audits every record of P.\"],\"outcomes\":[\"A is placed because B's unrelated record is not consulted.\",\"The delivery is refused with `state_unavailable` because some record in P is damaged.\"],\"observer\":\"The delivery caller sees `placed` or `state_unavailable`.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"check_order_gap\",\"text\":\"Checks run in this order: token, request form and project id, connection, photo folder, source id,\\n   project lock, existing placement, named file.\\n\\nA placement or mark record that cannot be read, is not valid JSON or is not an object is never taken\\n   for an absent record.\",\"question\":\"Where are placement-record and mark-record damage checks inserted into the established delivery and mark check orders, and which result wins when record damage and a later request or file failure coexist?\",\"options\":[\"Check each record at the existing step where that record is logically consulted\",\"Check both placement and mark records immediately after acquiring the project lock\",\"Audit records before the existing operation-specific checks\"],\"default_guess\":\"After acquiring the lock, read and validate the requested source's placement record at the existing-placement step and its mark immediately when a valid placement is found; do not audit unrelated records.\",\"witness\":{\"initial\":\"The requested source has a valid placement, its mark record is damaged, and the request name no longer identifies a file.\",\"events\":[\"The caller repeats delivery with the same source id.\",\"The operation acquires the project lock.\",\"One implementation validates the mark as part of replay before considering the name; another delays mark handling until after validating the named file.\"],\"outcomes\":[\"The operation answers `state_unavailable`.\",\"The operation answers a per-photo `NOT_READY_OR_ABSENT` failure.\"],\"observer\":\"The delivery caller sees which failure has precedence.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"undefined_lock_failure\",\"text\":\"A caller waits for the lock\\n   without a time limit, and the lock is released when its holder ends.\\n\\nThe same\\n   refusal answers a project lock that cannot be taken and a mark that cannot be written.\",\"question\":\"Which lock-acquisition conditions mean “cannot be taken” and return `state_unavailable`, as distinct from contention that must wait without a time limit?\",\"options\":[\"Contention always waits; filesystem, permission and unsupported-lock errors refuse\",\"Any unsuccessful immediate acquisition refuses\",\"Retry transient or interrupted acquisitions, but refuse permanent operating-system errors\"],\"default_guess\":\"Wait indefinitely for ordinary contention, retry interrupted acquisition, and return `state_unavailable` only for permanent operating-system or filesystem errors.\",\"witness\":{\"initial\":\"Another process holds the project's valid lock.\",\"events\":[\"A delivery attempts to acquire the same lock.\",\"The first acquisition attempt reports that the lock is busy.\"],\"outcomes\":[\"The caller waits until the holder releases the lock, as rule 4 requires.\",\"The busy result is treated as a lock that cannot be taken and the caller receives `state_unavailable`.\"],\"observer\":\"The caller sees waiting followed by a normal result or an immediate refusal.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"atomic_failure_cleanup\",\"text\":\"The operation is refused with `state_unavailable` and changes nothing. The same\\n   refusal answers a project lock that cannot be taken and a mark that cannot be written.\",\"question\":\"For a failed mark write, does “changes nothing” require removal of any temporary file created before the failure, or only that no visible mark record and no domain state change occur?\",\"options\":[\"No temporary or final filesystem artifact may remain\",\"Only the final mark record and domain state must remain unchanged\",\"Temporary artifacts may remain only when their cleanup also fails\"],\"default_guess\":\"Require best-effort cleanup and define the guarantee as no new final record or observable domain state; specify separately whether an unremovable temporary artifact is permitted.\",\"witness\":{\"initial\":\"No mark exists, and the state directory permits creation of a temporary file but the final rename fails.\",\"events\":[\"The calling flow records a Portal photo id.\",\"`write_mark` writes or partially writes its temporary file.\",\"The rename fails and the operation returns `state_unavailable`.\"],\"outcomes\":[\"The temporary file is removed, leaving the state folder unchanged.\",\"The temporary file remains although no final mark exists.\"],\"observer\":\"An operator, cleanup process or later store operation inspecting the state folder sees the difference.\"}}]}",
+ "set_aside": []
+}

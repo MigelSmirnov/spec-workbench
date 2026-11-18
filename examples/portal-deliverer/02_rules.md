@@ -275,9 +275,11 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
    system lock on one lock file of that project in the state folder. A caller waits for the lock
    without a time limit, and the lock is released when its holder ends. The check that a placement
    or mark exists and its writing happen inside that lock.
-5. A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken
-   for an absent record. The operation is refused with `state_unavailable` and changes nothing. The same
-   refusal answers a project lock that cannot be taken and a mark that cannot be written.
+5. A record is absent only when its file does not exist. A placement or mark record that exists but cannot
+   be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent
+   record: the operation is refused with `state_unavailable` and changes nothing. The same refusal answers a
+   failure to open or lock the lock file, which waiting for another holder is not, and a mark that cannot be
+   written.
 
 ### Formal invariants
 

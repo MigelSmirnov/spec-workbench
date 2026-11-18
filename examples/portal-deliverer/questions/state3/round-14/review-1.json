@@ -1,0 +1,169 @@
+{
+ "open_points": [
+  {
+   "subject": "A6 rule 5 ownership",
+   "kind": "missing_owner",
+   "text": "A decision has one primary owner in `30_trace.json`. Where its rules reach other modules, this table\nnames the owner of each rule.",
+   "question": "Which module is the primary owner of A6 rule 5? The table assigns A6 rules 1 to 3 to `delivery_store` and rule 4 to `photo_delivery`, but contains no assignment for rule 5.",
+   "options": [
+    "`delivery_store` owns all of A6 rule 5",
+    "`photo_delivery` owns the refusal decision while `delivery_store` owns storage-failure detection",
+    "Split rule 5 explicitly by damaged-record reads, lock acquisition and writes"
+   ],
+   "default_guess": "Split the rule: `delivery_store` detects and reports storage or lock failures, while `photo_delivery` owns converting them into the operation-level `state_unavailable` outcome.",
+   "unit": "?"
+  },
+  {
+   "subject": "`delivery_store` refusal responsibility",
+   "kind": "contradictory_ownership",
+   "text": "- reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the\n  lock or a mark cannot be used (A6 rule 5).\n\n### Must not own\n\n- whether a placement or mark may be written;\n- the meaning of a replay or a conflict;",
+   "question": "Does `delivery_store` decide the operation refusal and whether writing is permitted, or does it only report a mechanical storage failure for `photo_delivery` to interpret?",
+   "options": [
+    "`delivery_store` returns a domain refusal carrying `state_unavailable`",
+    "`delivery_store` returns or raises a storage error and `photo_delivery` creates the refusal",
+    "`delivery_store` decides failures before writes, while `photo_delivery` decides failures during writes"
+   ],
+   "default_guess": "`delivery_store` reports typed storage failures without constructing operation refusals; `photo_delivery` decides the outcome.",
+   "unit": "?"
+  },
+  {
+   "subject": "`photo_delivery` dependency on A6 rule 5",
+   "kind": "missing_knowledge",
+   "text": "- A3 and A4 without the two request forms given to `deliverer_api` above, rule 4 of A6, rule 2 of A7,\n  orders 7 to 9 of A1, and the parts of rules 9 and 10 of A5 given to it above.",
+   "question": "How can `photo_delivery`, which combines the lower modules into scan, delivery and mark operations, produce the required `state_unavailable` answers without knowing A6 rule 5 or depending on a module that returns complete domain refusals?",
+   "options": [
+    "Add A6 rule 5 to what `photo_delivery` knows",
+    "Let `delivery_store` return complete refusal values transparently through `photo_delivery`",
+    "Introduce a storage-error contract known by both modules and map it in `photo_delivery`"
+   ],
+   "default_guess": "Add the storage-error contract and A6 rule 5 to `photo_delivery`'s knowledge, with a dependency from `photo_delivery` to `delivery_store` and `domain_models`.",
+   "unit": "?"
+  },
+  {
+   "subject": "placement-record write failure",
+   "kind": "failure_classification_contradiction",
+   "text": "- reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the\n  lock or a mark cannot be used (A6 rule 5).",
+   "question": "Does “a record ... cannot be used” include failure to write a placement record? If it does, this gives `state_unavailable`; A3 rule 5 instead gives the per-photo failure `UNREADABLE_FILE` and permits the stored image to remain.",
+   "options": [
+    "Placement-record write failure remains A3's per-photo `UNREADABLE_FILE`",
+    "Every placement-record write failure is now operation-level `state_unavailable`",
+    "Only reading or validating a placement record gives `state_unavailable`; writing it remains `UNREADABLE_FILE`"
+   ],
+   "default_guess": "Treat “record cannot be used” as a read or validation failure; preserve A3's `UNREADABLE_FILE` for a new placement-record write failure.",
+   "witness": {
+    "initial": "A source has no placement; its prepared image can be stored, but creation of its placement record will fail.",
+    "events": [
+     "The calling flow asks `photo_delivery` to deliver the source.",
+     "`delivery_store` writes the stored image and then cannot write the placement record."
+    ],
+    "outcomes": [
+     "A3 answers photo status `failed` with `UNREADABLE_FILE`; the unreferenced stored image may remain.",
+     "The changed `delivery_store` text answers the whole operation with `state_unavailable`, potentially under the statement that it changes nothing."
+    ],
+    "observer": "The calling flow sees a different answer, and an operator may see a different filesystem result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "validity boundary for placement and mark records",
+   "kind": "undefined_record_validity",
+   "text": "A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken\n   for an absent record.",
+   "question": "What happens when the file is a readable JSON object but does not satisfy the `PhotoPlacement` or `PublicationMark` field form, types, identifiers or cross-field constraints?",
+   "options": [
+    "It is a damaged record and causes `state_unavailable`",
+    "It is accepted with missing or malformed values handled individually",
+    "It is treated as absent, allowing a new placement or mark"
+   ],
+   "default_guess": "Validate the complete persisted model and return `state_unavailable` for every readable object that does not satisfy it.",
+   "witness": {
+    "initial": "The expected placement path contains `{}` or an object whose `source_id` or `file_ref` has the wrong type.",
+    "events": [
+     "The calling flow requests delivery for that project and source.",
+     "`delivery_store` parses the file successfully as a JSON object."
+    ],
+    "outcomes": [
+     "The object is considered damaged, so delivery answers `state_unavailable` and writes nothing.",
+     "The object is considered absent or unusable without being covered by rule 5, so delivery creates a new placement or fails through an implementation-specific path."
+    ],
+    "observer": "The calling flow and the operator inspecting durable state see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "scope of damaged-record refusal",
+   "kind": "ambiguous_scope",
+   "text": "A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken\n   for an absent record. The operation is refused with `state_unavailable` and changes nothing.",
+   "question": "Must an operation refuse only when a record it needs is damaged, or must it discover and refuse for any damaged placement or mark record in the project?",
+   "options": [
+    "Check only the placement and mark addressed by the operation",
+    "Validate every placement and mark record of the project before every operation",
+    "Scan validates all records it enumerates, while delivery and mark validate only records for their requested source"
+   ],
+   "default_guess": "Scan validates every record it must enumerate; delivery and mark validate only the records for their requested source.",
+   "witness": {
+    "initial": "Project P has a valid placement for source A and an unrelated damaged placement record for source B.",
+    "events": [
+     "The calling flow requests delivery of A."
+    ],
+    "outcomes": [
+     "Delivery of A replays because it reads only A's placement and mark.",
+     "Delivery of A answers `state_unavailable` because any damaged project record invalidates the operation."
+    ],
+    "observer": "The calling flow sees either a replay or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "usable placement references",
+   "kind": "undefined_state_corruption",
+   "text": "- the reference of a stored image and its containment in the binary store;\n- reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the\n  lock or a mark cannot be used (A6 rule 5).",
+   "question": "Is a syntactically valid placement record unusable when its `file_ref` escapes the binary store, names a missing image, or names an unreadable image, and if so is the answer `state_unavailable`, `unsafe_reference`, a replay, or a per-photo failure?",
+   "options": [
+    "All such persisted-state inconsistencies produce `state_unavailable`",
+    "An escaping reference produces `unsafe_reference`, while missing or unreadable images produce `state_unavailable`",
+    "A valid placement record always replays without checking its stored image"
+   ],
+   "default_guess": "Refuse with `state_unavailable` for missing or unreadable stored images and with `unsafe_reference` for a reference outside the binary store.",
+   "witness": {
+    "initial": "A placement record is valid JSON with the expected fields, but its `file_ref` names a missing image or a path outside the binary store.",
+    "events": [
+     "The calling flow repeats delivery for that placement."
+    ],
+    "outcomes": [
+     "The service returns `replayed` with the stored placement without checking the referenced image.",
+     "The service refuses because the record or its reference cannot safely be used."
+    ],
+    "observer": "The calling flow receives either a successful replay or a refusal; the Portal later also observes whether the reference works."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "meaning of “changes nothing” on storage failure",
+   "kind": "atomic_failure_boundary",
+   "text": "The operation is refused with `state_unavailable` and changes nothing. The same\n   refusal answers a project lock that cannot be taken and a mark that cannot be written.",
+   "question": "Does “changes nothing” require removal of temporary files and prevention of lock-file creation or metadata changes, or does it cover only placement and mark records and stored images?",
+   "options": [
+    "No filesystem artifact or metadata may change",
+    "Only committed domain files must remain unchanged; hidden temporary or lock artifacts may remain",
+    "The requirement differs for damaged-record, lock and mark-write failures"
+   ],
+   "default_guess": "Require all committed images, placements and marks to remain unchanged, while allowing an existing lock file and recoverable hidden temporary artifacts that are never interpreted as records.",
+   "witness": {
+    "initial": "Writing a mark creates and synchronises a temporary file, then fails before rename or during folder synchronisation.",
+    "events": [
+     "The calling flow records a Portal `photo_id`.",
+     "`delivery_store` encounters the write failure and answers `state_unavailable`."
+    ],
+    "outcomes": [
+     "The temporary file is removed because “changes nothing” covers every filesystem artifact.",
+     "The mark remains absent but the hidden temporary file remains because atomicity and domain state, not cleanup, are taken as the guarantee."
+    ],
+    "observer": "An operator or a later storage cleanup process sees the filesystem difference."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A6 rule 5 ownership\",\"kind\":\"missing_owner\",\"text\":\"A decision has one primary owner in `30_trace.json`. Where its rules reach other modules, this table\\nnames the owner of each rule.\",\"question\":\"Which module is the primary owner of A6 rule 5? The table assigns A6 rules 1 to 3 to `delivery_store` and rule 4 to `photo_delivery`, but contains no assignment for rule 5.\",\"options\":[\"`delivery_store` owns all of A6 rule 5\",\"`photo_delivery` owns the refusal decision while `delivery_store` owns storage-failure detection\",\"Split rule 5 explicitly by damaged-record reads, lock acquisition and writes\"],\"default_guess\":\"Split the rule: `delivery_store` detects and reports storage or lock failures, while `photo_delivery` owns converting them into the operation-level `state_unavailable` outcome.\"},{\"subject\":\"`delivery_store` refusal responsibility\",\"kind\":\"contradictory_ownership\",\"text\":\"- reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the\\n  lock or a mark cannot be used (A6 rule 5).\\n\\n### Must not own\\n\\n- whether a placement or mark may be written;\\n- the meaning of a replay or a conflict;\",\"question\":\"Does `delivery_store` decide the operation refusal and whether writing is permitted, or does it only report a mechanical storage failure for `photo_delivery` to interpret?\",\"options\":[\"`delivery_store` returns a domain refusal carrying `state_unavailable`\",\"`delivery_store` returns or raises a storage error and `photo_delivery` creates the refusal\",\"`delivery_store` decides failures before writes, while `photo_delivery` decides failures during writes\"],\"default_guess\":\"`delivery_store` reports typed storage failures without constructing operation refusals; `photo_delivery` decides the outcome.\"},{\"subject\":\"`photo_delivery` dependency on A6 rule 5\",\"kind\":\"missing_knowledge\",\"text\":\"- A3 and A4 without the two request forms given to `deliverer_api` above, rule 4 of A6, rule 2 of A7,\\n  orders 7 to 9 of A1, and the parts of rules 9 and 10 of A5 given to it above.\",\"question\":\"How can `photo_delivery`, which combines the lower modules into scan, delivery and mark operations, produce the required `state_unavailable` answers without knowing A6 rule 5 or depending on a module that returns complete domain refusals?\",\"options\":[\"Add A6 rule 5 to what `photo_delivery` knows\",\"Let `delivery_store` return complete refusal values transparently through `photo_delivery`\",\"Introduce a storage-error contract known by both modules and map it in `photo_delivery`\"],\"default_guess\":\"Add the storage-error contract and A6 rule 5 to `photo_delivery`'s knowledge, with a dependency from `photo_delivery` to `delivery_store` and `domain_models`.\"},{\"subject\":\"placement-record write failure\",\"kind\":\"failure_classification_contradiction\",\"text\":\"- reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the\\n  lock or a mark cannot be used (A6 rule 5).\",\"question\":\"Does “a record ... cannot be used” include failure to write a placement record? If it does, this gives `state_unavailable`; A3 rule 5 instead gives the per-photo failure `UNREADABLE_FILE` and permits the stored image to remain.\",\"options\":[\"Placement-record write failure remains A3's per-photo `UNREADABLE_FILE`\",\"Every placement-record write failure is now operation-level `state_unavailable`\",\"Only reading or validating a placement record gives `state_unavailable`; writing it remains `UNREADABLE_FILE`\"],\"default_guess\":\"Treat “record cannot be used” as a read or validation failure; preserve A3's `UNREADABLE_FILE` for a new placement-record write failure.\",\"witness\":{\"initial\":\"A source has no placement; its prepared image can be stored, but creation of its placement record will fail.\",\"events\":[\"The calling flow asks `photo_delivery` to deliver the source.\",\"`delivery_store` writes the stored image and then cannot write the placement record.\"],\"outcomes\":[\"A3 answers photo status `failed` with `UNREADABLE_FILE`; the unreferenced stored image may remain.\",\"The changed `delivery_store` text answers the whole operation with `state_unavailable`, potentially under the statement that it changes nothing.\"],\"observer\":\"The calling flow sees a different answer, and an operator may see a different filesystem result.\"}},{\"subject\":\"validity boundary for placement and mark records\",\"kind\":\"undefined_record_validity\",\"text\":\"A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken\\n   for an absent record.\",\"question\":\"What happens when the file is a readable JSON object but does not satisfy the `PhotoPlacement` or `PublicationMark` field form, types, identifiers or cross-field constraints?\",\"options\":[\"It is a damaged record and causes `state_unavailable`\",\"It is accepted with missing or malformed values handled individually\",\"It is treated as absent, allowing a new placement or mark\"],\"default_guess\":\"Validate the complete persisted model and return `state_unavailable` for every readable object that does not satisfy it.\",\"witness\":{\"initial\":\"The expected placement path contains `{}` or an object whose `source_id` or `file_ref` has the wrong type.\",\"events\":[\"The calling flow requests delivery for that project and source.\",\"`delivery_store` parses the file successfully as a JSON object.\"],\"outcomes\":[\"The object is considered damaged, so delivery answers `state_unavailable` and writes nothing.\",\"The object is considered absent or unusable without being covered by rule 5, so delivery creates a new placement or fails through an implementation-specific path.\"],\"observer\":\"The calling flow and the operator inspecting durable state see the difference.\"}},{\"subject\":\"scope of damaged-record refusal\",\"kind\":\"ambiguous_scope\",\"text\":\"A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken\\n   for an absent record. The operation is refused with `state_unavailable` and changes nothing.\",\"question\":\"Must an operation refuse only when a record it needs is damaged, or must it discover and refuse for any damaged placement or mark record in the project?\",\"options\":[\"Check only the placement and mark addressed by the operation\",\"Validate every placement and mark record of the project before every operation\",\"Scan validates all records it enumerates, while delivery and mark validate only records for their requested source\"],\"default_guess\":\"Scan validates every record it must enumerate; delivery and mark validate only the records for their requested source.\",\"witness\":{\"initial\":\"Project P has a valid placement for source A and an unrelated damaged placement record for source B.\",\"events\":[\"The calling flow requests delivery of A.\"],\"outcomes\":[\"Delivery of A replays because it reads only A's placement and mark.\",\"Delivery of A answers `state_unavailable` because any damaged project record invalidates the operation.\"],\"observer\":\"The calling flow sees either a replay or a refusal.\"}},{\"subject\":\"usable placement references\",\"kind\":\"undefined_state_corruption\",\"text\":\"- the reference of a stored image and its containment in the binary store;\\n- reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the\\n  lock or a mark cannot be used (A6 rule 5).\",\"question\":\"Is a syntactically valid placement record unusable when its `file_ref` escapes the binary store, names a missing image, or names an unreadable image, and if so is the answer `state_unavailable`, `unsafe_reference`, a replay, or a per-photo failure?\",\"options\":[\"All such persisted-state inconsistencies produce `state_unavailable`\",\"An escaping reference produces `unsafe_reference`, while missing or unreadable images produce `state_unavailable`\",\"A valid placement record always replays without checking its stored image\"],\"default_guess\":\"Refuse with `state_unavailable` for missing or unreadable stored images and with `unsafe_reference` for a reference outside the binary store.\",\"witness\":{\"initial\":\"A placement record is valid JSON with the expected fields, but its `file_ref` names a missing image or a path outside the binary store.\",\"events\":[\"The calling flow repeats delivery for that placement.\"],\"outcomes\":[\"The service returns `replayed` with the stored placement without checking the referenced image.\",\"The service refuses because the record or its reference cannot safely be used.\"],\"observer\":\"The calling flow receives either a successful replay or a refusal; the Portal later also observes whether the reference works.\"}},{\"subject\":\"meaning of “changes nothing” on storage failure\",\"kind\":\"atomic_failure_boundary\",\"text\":\"The operation is refused with `state_unavailable` and changes nothing. The same\\n   refusal answers a project lock that cannot be taken and a mark that cannot be written.\",\"question\":\"Does “changes nothing” require removal of temporary files and prevention of lock-file creation or metadata changes, or does it cover only placement and mark records and stored images?\",\"options\":[\"No filesystem artifact or metadata may change\",\"Only committed domain files must remain unchanged; hidden temporary or lock artifacts may remain\",\"The requirement differs for damaged-record, lock and mark-write failures\"],\"default_guess\":\"Require all committed images, placements and marks to remain unchanged, while allowing an existing lock file and recoverable hidden temporary artifacts that are never interpreted as records.\",\"witness\":{\"initial\":\"Writing a mark creates and synchronises a temporary file, then fails before rename or during folder synchronisation.\",\"events\":[\"The calling flow records a Portal `photo_id`.\",\"`delivery_store` encounters the write failure and answers `state_unavailable`.\"],\"outcomes\":[\"The temporary file is removed because “changes nothing” covers every filesystem artifact.\",\"The mark remains absent but the hidden temporary file remains because atomicity and domain state, not cleanup, are taken as the guarantee.\"],\"observer\":\"An operator or a later storage cleanup process sees the filesystem difference.\"}}]}",
+ "set_aside": []
+}

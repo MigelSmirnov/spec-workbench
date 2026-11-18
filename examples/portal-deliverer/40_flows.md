@@ -27,7 +27,7 @@ connections file. Nothing crosses to a caller until the start has succeeded.
    `capability:object_connections.load_connections` once, to judge the connections file whole.
 2. `capability:deliverer_api.read_token` reads the token and checks its file permissions and length.
 3. `capability:deliverer_api.create_app` builds the HTTP surface with the token and the clock.
-4. The entry point of `module:deliverer_api` runs that surface in the web server, on the loopback interface.
+4. `capability:deliverer_api.run_service` runs that surface in the web server, on the loopback interface.
 
 ### Outcomes
 
@@ -53,7 +53,7 @@ reports `SourceFile` values and `module:delivery_store` supplies the records. M0
 
 ### Steps
 
-1. `module:deliverer_api` checks the token and the project id.
+1. The scan route that `capability:deliverer_api.create_app` built checks the token and the project id.
 2. `capability:photo_delivery.scan_project_photos` asks `capability:object_connections.confirmed_connection` for
    the project's connection, reading the connections file once.
 3. `capability:object_connections.available_photo_folder` checks the photo folder.
@@ -87,7 +87,8 @@ crosses back to the caller.
 
 ### Steps
 
-1. `module:deliverer_api` checks the token, the request form and the project id.
+1. The delivery route that `capability:deliverer_api.create_app` built checks the token, the request form and the
+   project id.
 2. `capability:photo_delivery.deliver_project_photo` asks `capability:object_connections.confirmed_connection`
    and `capability:object_connections.available_photo_folder`, then checks the form of the source id.
 3. It takes `capability:delivery_store.project_lock`.
@@ -127,7 +128,8 @@ the connection and `module:delivery_store` keeps the mark. M07 crosses back to t
 
 ### Steps
 
-1. `module:deliverer_api` checks the token, the request form, the project id and the `photo_id`.
+1. The mark route that `capability:deliverer_api.create_app` built checks the token, the request form, the project id
+   and the `photo_id`.
 2. `capability:photo_delivery.mark_photo_published` checks the form of the source id.
 3. It reads the clock once through the function it received, which is `capability:system_clock.utc_now`.
 4. `capability:object_connections.confirmed_connection` checks the connection.
@@ -171,14 +173,14 @@ action of the owner in the Portal and is not part of this flow.
 3. It shows the owner the files with status `ready` or `placed`, and the owner chooses. A `placed` file was delivered
    earlier and is not yet recorded as published.
 4. For each chosen file it asks the delivery route, which runs `capability:photo_delivery.deliver_project_photo`.
-5. A refused delivery ends the run: the remaining files are reported as not delivered, with that refusal.
-6. A `failed` delivery becomes the failure of that photo, and the agent goes on with the next one.
-7. A delivery that carries a `photo_id` is already published, and the agent does not publish it again.
-8. Otherwise the agent sends the publication body to the Portal's `photo.publish`. A refusal or a lost answer becomes
+5. A refused or `failed` delivery becomes the failure of that photo, with its reason, and the agent goes on with the
+   next one.
+6. A delivery that carries a `photo_id` is already published, and the agent does not publish it again.
+7. Otherwise the agent sends the publication body to the Portal's `photo.publish`. A refusal or a lost answer becomes
    the failure of that photo, and the agent goes on with the next one.
-9. It reports the Portal's `photo_id` to the mark route, which runs `capability:photo_delivery.mark_photo_published`. A
+8. It reports the Portal's `photo_id` to the mark route, which runs `capability:photo_delivery.mark_photo_published`. A
    refused mark becomes the failure of that photo, named as published but not recorded.
-10. It tells the owner the result of each chosen photo.
+9. It tells the owner the result of each chosen photo.
 
 ### Outcomes
 

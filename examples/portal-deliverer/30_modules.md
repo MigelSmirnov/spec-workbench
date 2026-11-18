@@ -93,6 +93,7 @@ names the owner of each rule.
 | A5 | rule 10, what a refusal answer holds | `deliverer_api` |
 | A6 | rules 1 to 3, stored names, modes, atomic writes, the lock itself | `delivery_store` |
 | A6 | rule 4, which checks and writes run inside the lock | `photo_delivery` |
+| A6 | rule 5, damaged records, a failed lock and a mark that cannot be written | `delivery_store` |
 | A7 | rules 1 and 3, the clock and the form of its reading | `system_clock` |
 | A7 | rule 2, when an operation reads the clock | `photo_delivery` |
 | A7 | rule 4, a file's modification time | `source_folder` |
@@ -291,8 +292,8 @@ build_publication
 - atomic writing of one file;
 - the reference of a stored image and its containment in the binary store;
 - the per-project lock across processes;
-- reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the
-  lock or a mark cannot be used (A6 rule 5).
+- reading and writing placement and mark records, and refusing with `state_unavailable` as A6 rule 5
+  decides. A placement record that cannot be written is the failure of that photo (A3 rule 5).
 
 ### Knows
 
@@ -417,6 +418,7 @@ mark_photo_published
 create_app
 read_token
 load_config
+run_service
 ```
 
 ### Trace inputs

@@ -1,0 +1,160 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:`flow:service_start`",
+   "subject": "starting the web server",
+   "kind": "missing operation",
+   "text": "The entry point of `module:deliverer_api` runs that surface in the web server, on the loopback interface.",
+   "question": "Which named capability runs the HTTP surface, and what operation offered by `module:deliverer_api` implements it?",
+   "options": [
+    "Add a `deliverer_api.run_server` capability executed by the entry point.",
+    "Make `deliverer_api.create_app` also run the server.",
+    "Declare a separately owned deployment or web-server operation that receives the created app."
+   ],
+   "default_guess": "Add `capability:deliverer_api.run_server` and have the entry point call it."
+  },
+  {
+   "unit": "40_flows.md:`flow:scan_project_photos`",
+   "subject": "API validation before a scan",
+   "kind": "unnamed capability",
+   "text": "`module:deliverer_api` checks the token and the project id.",
+   "question": "Which `deliverer_api` capability performs these checks and delegates to `scan_project_photos`?",
+   "options": [
+    "A named scan-route capability performs validation and delegation.",
+    "`create_app` installs an unnamed route handler that performs them.",
+    "The calling agent invokes a separate validation capability before the scan capability."
+   ],
+   "default_guess": "Name a scan-route handler capability owned by `deliverer_api`."
+  },
+  {
+   "unit": "40_flows.md:`flow:deliver_one_photo`",
+   "subject": "API validation before delivery",
+   "kind": "unnamed capability",
+   "text": "`module:deliverer_api` checks the token, the request form and the project id.",
+   "question": "Which `deliverer_api` capability performs these checks and delegates to `deliver_project_photo`?",
+   "options": [
+    "A named delivery-route capability performs validation and delegation.",
+    "`create_app` installs an unnamed route handler that performs them.",
+    "Separate validation capabilities run before the delivery capability."
+   ],
+   "default_guess": "Name a delivery-route handler capability owned by `deliverer_api`."
+  },
+  {
+   "unit": "40_flows.md:`flow:deliver_one_photo`",
+   "subject": "failed placement-record write",
+   "kind": "contradictory failure outcome",
+   "text": "`module:delivery_store` refuses with `state_unavailable` when the lock or a record cannot be used. `module:photo_delivery` turns every condition of A3 rule 5 into a `failed` M06.",
+   "question": "When `write_placement` cannot write the placement record, is the request refused with `state_unavailable`, or does it return a `failed` M06 with reason `unreadable_file` as A3 rule 5 requires?",
+   "options": [
+    "Return a `failed` M06 with `unreadable_file`; reserve `state_unavailable` for lock failures and unreadable existing records.",
+    "Refuse the whole request with `state_unavailable`.",
+    "Distinguish particular placement-write failures between the two outcomes."
+   ],
+   "default_guess": "Return a `failed` M06 with `unreadable_file` and narrow the `state_unavailable` sentence accordingly.",
+   "witness": {
+    "initial": "A confirmed project has no placement for the requested source, and storing the image succeeds, but the placement record cannot be written.",
+    "events": [
+     "The calling agent asks the delivery route to deliver the source.",
+     "`module:photo_delivery` prepares and stores the image.",
+     "`capability:delivery_store.write_placement` fails while writing the placement record."
+    ],
+    "outcomes": [
+     "The caller receives M06 with status `failed` and reason `unreadable_file`, and the unrecorded image may remain for a later repeat.",
+     "The caller receives a request refusal with `state_unavailable`."
+    ],
+    "observer": "The calling agent sees either a per-photo M06 failure or a whole-request refusal."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:record_publication`",
+   "subject": "API validation before recording publication",
+   "kind": "unnamed capability",
+   "text": "`module:deliverer_api` checks the token, the request form, the project id and the `photo_id`.",
+   "question": "Which `deliverer_api` capability performs these checks, supplies the clock function and delegates to `mark_photo_published`?",
+   "options": [
+    "A named mark-route capability performs validation, clock injection and delegation.",
+    "`create_app` installs an unnamed route handler that performs them.",
+    "Separate validation and clock-wiring capabilities run before the mark capability."
+   ],
+   "default_guess": "Name a mark-route handler capability owned by `deliverer_api`."
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "whether a refused delivery stops later chosen photos",
+   "kind": "contradiction",
+   "text": "A refused delivery ends the run: the remaining files are reported as not delivered, with that refusal.",
+   "question": "Does a request-level refusal for one chosen photo stop the run, or must the agent continue with later chosen photos as required by R0-07: “A failed photo does not stop the others”?",
+   "options": [
+    "Continue with the next chosen photo and record the refusal as the current photo's failure.",
+    "End the run and report every remaining photo as failed with the same refusal.",
+    "End only for a defined subset of systemic refusals, and continue for the others."
+   ],
+   "default_guess": "Continue with later chosen photos, because R0-07 unconditionally says a failed photo does not stop the others.",
+   "witness": {
+    "initial": "The owner chooses photos A and B; A's delivery request is refused, while B is otherwise deliverable.",
+    "events": [
+     "The agent asks the delivery route for A and receives a refusal.",
+     "The agent applies either step 5 or R0-07 to decide whether to attempt B."
+    ],
+    "outcomes": [
+     "Under step 5, the run ends and B is not attempted.",
+     "Under R0-07, A fails but the agent attempts and can deliver B."
+    ],
+    "observer": "The owner sees whether B was attempted and delivered."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "result assigned to files remaining after a refused delivery",
+   "kind": "undefined outcome",
+   "text": "the remaining files are reported as not delivered, with that refusal",
+   "question": "Are the unattempted remaining files reported as `failed` with the refusal as their reason, or is `not delivered` a third result despite the outcome saying every chosen photo is either delivered or failed?",
+   "options": [
+    "Report each remaining chosen photo as `failed` with the refusal as its reason.",
+    "Introduce `not delivered` as a distinct result.",
+    "Do not assign per-photo results to unattempted files and instead report a run-level refusal."
+   ],
+   "default_guess": "Report each remaining chosen photo as `failed` with the refusal as its reason.",
+   "witness": {
+    "initial": "The owner chooses photos A and B, and A's delivery is refused before B is attempted.",
+    "events": [
+     "The agent ends the run after A's refusal.",
+     "The agent reports the result for chosen photo B."
+    ],
+    "outcomes": [
+     "B is reported as `failed` with A's refusal as its reason, satisfying the two-result outcome.",
+     "B is reported as `not delivered`, creating a third observable result."
+    ],
+    "observer": "The owner sees different result labels for B."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "delivery-store handling of an unwritable placement record",
+   "kind": "contradiction",
+   "text": "reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the lock or a mark cannot be used (A6 rule 5).",
+   "question": "Does “a record ... cannot be used” include failure to write a placement record, producing `state_unavailable`, or does A3 rule 5 govern that failure as a `failed` M06 with `unreadable_file`?",
+   "options": [
+    "Limit `state_unavailable` to unreadable or damaged existing records, an unavailable lock, and an unwritable mark; placement-write failure remains an M06 failure.",
+    "Use `state_unavailable` for every placement-record write failure.",
+    "State an explicit split between storage failures that produce the two outcomes."
+   ],
+   "default_guess": "Narrow this passage so a placement-record write failure remains a `failed` M06 with `unreadable_file`.",
+   "witness": {
+    "initial": "A delivery has stored its image, but the new placement record cannot be written.",
+    "events": [
+     "`module:photo_delivery` calls `capability:delivery_store.write_placement`.",
+     "The store cannot complete the placement-record write."
+    ],
+    "outcomes": [
+     "A3 rule 5 yields M06 status `failed` with reason `unreadable_file`.",
+     "The changed module responsibility yields a `state_unavailable` refusal because the record cannot be used."
+    ],
+    "observer": "The calling agent sees a per-photo failure in one implementation and a request refusal in the other."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:`flow:service_start`\",\"subject\":\"starting the web server\",\"kind\":\"missing operation\",\"text\":\"The entry point of `module:deliverer_api` runs that surface in the web server, on the loopback interface.\",\"question\":\"Which named capability runs the HTTP surface, and what operation offered by `module:deliverer_api` implements it?\",\"options\":[\"Add a `deliverer_api.run_server` capability executed by the entry point.\",\"Make `deliverer_api.create_app` also run the server.\",\"Declare a separately owned deployment or web-server operation that receives the created app.\"],\"default_guess\":\"Add `capability:deliverer_api.run_server` and have the entry point call it.\"},{\"unit\":\"40_flows.md:`flow:scan_project_photos`\",\"subject\":\"API validation before a scan\",\"kind\":\"unnamed capability\",\"text\":\"`module:deliverer_api` checks the token and the project id.\",\"question\":\"Which `deliverer_api` capability performs these checks and delegates to `scan_project_photos`?\",\"options\":[\"A named scan-route capability performs validation and delegation.\",\"`create_app` installs an unnamed route handler that performs them.\",\"The calling agent invokes a separate validation capability before the scan capability.\"],\"default_guess\":\"Name a scan-route handler capability owned by `deliverer_api`.\"},{\"unit\":\"40_flows.md:`flow:deliver_one_photo`\",\"subject\":\"API validation before delivery\",\"kind\":\"unnamed capability\",\"text\":\"`module:deliverer_api` checks the token, the request form and the project id.\",\"question\":\"Which `deliverer_api` capability performs these checks and delegates to `deliver_project_photo`?\",\"options\":[\"A named delivery-route capability performs validation and delegation.\",\"`create_app` installs an unnamed route handler that performs them.\",\"Separate validation capabilities run before the delivery capability.\"],\"default_guess\":\"Name a delivery-route handler capability owned by `deliverer_api`.\"},{\"unit\":\"40_flows.md:`flow:deliver_one_photo`\",\"subject\":\"failed placement-record write\",\"kind\":\"contradictory failure outcome\",\"text\":\"`module:delivery_store` refuses with `state_unavailable` when the lock or a record cannot be used. `module:photo_delivery` turns every condition of A3 rule 5 into a `failed` M06.\",\"question\":\"When `write_placement` cannot write the placement record, is the request refused with `state_unavailable`, or does it return a `failed` M06 with reason `unreadable_file` as A3 rule 5 requires?\",\"options\":[\"Return a `failed` M06 with `unreadable_file`; reserve `state_unavailable` for lock failures and unreadable existing records.\",\"Refuse the whole request with `state_unavailable`.\",\"Distinguish particular placement-write failures between the two outcomes.\"],\"default_guess\":\"Return a `failed` M06 with `unreadable_file` and narrow the `state_unavailable` sentence accordingly.\",\"witness\":{\"initial\":\"A confirmed project has no placement for the requested source, and storing the image succeeds, but the placement record cannot be written.\",\"events\":[\"The calling agent asks the delivery route to deliver the source.\",\"`module:photo_delivery` prepares and stores the image.\",\"`capability:delivery_store.write_placement` fails while writing the placement record.\"],\"outcomes\":[\"The caller receives M06 with status `failed` and reason `unreadable_file`, and the unrecorded image may remain for a later repeat.\",\"The caller receives a request refusal with `state_unavailable`.\"],\"observer\":\"The calling agent sees either a per-photo M06 failure or a whole-request refusal.\"}},{\"unit\":\"40_flows.md:`flow:record_publication`\",\"subject\":\"API validation before recording publication\",\"kind\":\"unnamed capability\",\"text\":\"`module:deliverer_api` checks the token, the request form, the project id and the `photo_id`.\",\"question\":\"Which `deliverer_api` capability performs these checks, supplies the clock function and delegates to `mark_photo_published`?\",\"options\":[\"A named mark-route capability performs validation, clock injection and delegation.\",\"`create_app` installs an unnamed route handler that performs them.\",\"Separate validation and clock-wiring capabilities run before the mark capability.\"],\"default_guess\":\"Name a mark-route handler capability owned by `deliverer_api`.\"},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"whether a refused delivery stops later chosen photos\",\"kind\":\"contradiction\",\"text\":\"A refused delivery ends the run: the remaining files are reported as not delivered, with that refusal.\",\"question\":\"Does a request-level refusal for one chosen photo stop the run, or must the agent continue with later chosen photos as required by R0-07: “A failed photo does not stop the others”?\",\"options\":[\"Continue with the next chosen photo and record the refusal as the current photo's failure.\",\"End the run and report every remaining photo as failed with the same refusal.\",\"End only for a defined subset of systemic refusals, and continue for the others.\"],\"default_guess\":\"Continue with later chosen photos, because R0-07 unconditionally says a failed photo does not stop the others.\",\"witness\":{\"initial\":\"The owner chooses photos A and B; A's delivery request is refused, while B is otherwise deliverable.\",\"events\":[\"The agent asks the delivery route for A and receives a refusal.\",\"The agent applies either step 5 or R0-07 to decide whether to attempt B.\"],\"outcomes\":[\"Under step 5, the run ends and B is not attempted.\",\"Under R0-07, A fails but the agent attempts and can deliver B.\"],\"observer\":\"The owner sees whether B was attempted and delivered.\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"result assigned to files remaining after a refused delivery\",\"kind\":\"undefined outcome\",\"text\":\"the remaining files are reported as not delivered, with that refusal\",\"question\":\"Are the unattempted remaining files reported as `failed` with the refusal as their reason, or is `not delivered` a third result despite the outcome saying every chosen photo is either delivered or failed?\",\"options\":[\"Report each remaining chosen photo as `failed` with the refusal as its reason.\",\"Introduce `not delivered` as a distinct result.\",\"Do not assign per-photo results to unattempted files and instead report a run-level refusal.\"],\"default_guess\":\"Report each remaining chosen photo as `failed` with the refusal as its reason.\",\"witness\":{\"initial\":\"The owner chooses photos A and B, and A's delivery is refused before B is attempted.\",\"events\":[\"The agent ends the run after A's refusal.\",\"The agent reports the result for chosen photo B.\"],\"outcomes\":[\"B is reported as `failed` with A's refusal as its reason, satisfying the two-result outcome.\",\"B is reported as `not delivered`, creating a third observable result.\"],\"observer\":\"The owner sees different result labels for B.\"}},{\"unit\":\"context\",\"subject\":\"delivery-store handling of an unwritable placement record\",\"kind\":\"contradiction\",\"text\":\"reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the lock or a mark cannot be used (A6 rule 5).\",\"question\":\"Does “a record ... cannot be used” include failure to write a placement record, producing `state_unavailable`, or does A3 rule 5 govern that failure as a `failed` M06 with `unreadable_file`?\",\"options\":[\"Limit `state_unavailable` to unreadable or damaged existing records, an unavailable lock, and an unwritable mark; placement-write failure remains an M06 failure.\",\"Use `state_unavailable` for every placement-record write failure.\",\"State an explicit split between storage failures that produce the two outcomes.\"],\"default_guess\":\"Narrow this passage so a placement-record write failure remains a `failed` M06 with `unreadable_file`.\",\"witness\":{\"initial\":\"A delivery has stored its image, but the new placement record cannot be written.\",\"events\":[\"`module:photo_delivery` calls `capability:delivery_store.write_placement`.\",\"The store cannot complete the placement-record write.\"],\"outcomes\":[\"A3 rule 5 yields M06 status `failed` with reason `unreadable_file`.\",\"The changed module responsibility yields a `state_unavailable` refusal because the record cannot be used.\"],\"observer\":\"The calling agent sees a per-photo failure in one implementation and a request refusal in the other.\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,293 @@
+{
+ "open_points": [
+  {
+   "subject": "A8",
+   "kind": "missing_time_policy",
+   "text": "`marked_at: datetime`",
+   "question": "What clock supplies `marked_at`, is the stored datetime UTC-naive, UTC-aware, or in `Europe/Madrid`, and exactly how many clock readings may one mark operation take?",
+   "options": [
+    "An injected clock read exactly once, stored as UTC without an offset",
+    "An injected clock read exactly once, stored as offset-aware UTC",
+    "The operating-system clock, with representation derived from the `timezone` setting",
+    "A separately declared authority module supplies the instant"
+   ],
+   "default_guess": "Inject a clock, read it exactly once when creating a new mark, and store a UTC-naive datetime.",
+   "witness": {
+    "initial": "No publication mark exists and the clock advances across a representational boundary during one mark call.",
+    "events": [
+     "The calling flow records a publication.",
+     "The implementation obtains time while creating the mark and again while forming or persisting the result."
+    ],
+    "outcomes": [
+     "The persisted and returned mark use one identical UTC-naive instant.",
+     "Different readings or timezone conversions produce different `marked_at` values for the same operation."
+    ],
+    "observer": "The calling flow and a later reader of the stored mark"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "absent_vs_unreadable",
+   "text": "A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken for an absent record.",
+   "question": "Is a genuinely nonexistent record excluded from “cannot be read”, and if so, which missing-path conditions count as absence rather than `state_unavailable`?",
+   "options": [
+    "Only an ENOENT result for the exact expected record means absent; every other read failure means `state_unavailable`",
+    "Any missing path component means absent",
+    "Every failed open, including ENOENT, means `state_unavailable`"
+   ],
+   "default_guess": "Treat ENOENT for the expected record as absence and every other open or read error as `state_unavailable`.",
+   "witness": {
+    "initial": "A valid project has no placement or mark record for a selected source.",
+    "events": [
+     "The owner asks the calling flow to deliver that source.",
+     "The deliverer attempts to open the expected placement record and receives ENOENT."
+    ],
+    "outcomes": [
+     "The record is absent, so a new placement may be created.",
+     "The record “cannot be read”, so the call is refused with `state_unavailable`."
+    ],
+    "observer": "The owner and calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "damaged_record_boundary",
+   "text": "A placement or mark record that cannot be read, is not valid JSON or is not an object",
+   "question": "How must a readable JSON object that fails the record schema—missing fields, wrong field types, unknown enum values, or inconsistent identity—be handled?",
+   "options": [
+    "Every schema-invalid record is damaged and causes `state_unavailable`",
+    "Only unreadable, syntactically invalid, or non-object JSON is damaged; schema errors use another refusal",
+    "Some schema errors are repaired or treated as absence"
+   ],
+   "default_guess": "Treat every object that cannot be validated as the expected record model as damaged and refuse with `state_unavailable`.",
+   "witness": {
+    "initial": "The expected placement file contains the valid JSON object `{}`.",
+    "events": [
+     "The calling flow asks to deliver the corresponding source."
+    ],
+    "outcomes": [
+     "Validation classifies the object as damaged and returns `state_unavailable` without changes.",
+     "Because it is valid JSON and an object, the implementation handles it as absent, raises an internal error, or applies field defaults."
+    ],
+    "observer": "The calling flow and the operator inspecting state"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "record_scope",
+   "text": "with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable`",
+   "question": "Which damaged records must block each operation: only the record for the addressed source, every record the operation encounters, or every placement and mark record anywhere in the project?",
+   "options": [
+    "Only a damaged record required for the addressed source blocks delivery or mark; scan is blocked by any damaged record it traverses",
+    "Any damaged placement or mark in the project blocks every scan, delivery, and mark for that project",
+    "Each operation has an explicit placement/mark lookup matrix"
+   ],
+   "default_guess": "Block an operation only when it encounters a damaged record it must read; define the exact lookup matrix for scan, delivery, and mark.",
+   "witness": {
+    "initial": "Project P has a damaged mark for source A and a valid unplaced source B.",
+    "events": [
+     "The owner requests delivery of source B."
+    ],
+    "outcomes": [
+     "Delivery of B succeeds because its operation does not need A's mark.",
+     "Delivery of B is refused with `state_unavailable` because any damaged project record blocks the project."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "check_precedence",
+   "text": "The operation is refused with `state_unavailable` and changes nothing.",
+   "question": "What is the precedence between `state_unavailable` and other applicable refusals or failures, including `unknown_project`, `folder_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed`, `publication_conflict`, and placement failures?",
+   "options": [
+    "Acquire the project lock and validate relevant state before all source- and publication-specific checks",
+    "Validate request and project first, then acquire the lock and read state, then apply placement or publication conflicts",
+    "Specify a different ordered sequence for scan, delivery, and mark"
+   ],
+   "default_guess": "Validate request shape and project identity first; then acquire the lock and validate required state before source, placement, or publication decisions.",
+   "witness": {
+    "initial": "A valid project contains a damaged mark for a placed source.",
+    "events": [
+     "The calling flow submits another `photo_id` for that source."
+    ],
+    "outcomes": [
+     "The damaged mark takes precedence and the response is `state_unavailable`.",
+     "The differing photo id takes precedence and the response is `publication_conflict`."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "undefined_write_failure",
+   "text": "The same refusal answers a project lock that cannot be taken and a mark that cannot be written.",
+   "question": "What must a delivery answer when its image or placement record cannot be written, synchronised, or renamed?",
+   "options": [
+    "Return `state_unavailable` and leave all state unchanged",
+    "Return a `PlacementFailure` value",
+    "Use `folder_unavailable` for image-store failures and `state_unavailable` for state-record failures",
+    "Treat it as an unmodelled internal error"
+   ],
+   "default_guess": "Use `folder_unavailable` for an unavailable binary store and `state_unavailable` for an unavailable placement-state write, with no committed artifacts in either case.",
+   "witness": {
+    "initial": "The source is valid, but the placement-record directory is not writable.",
+    "events": [
+     "The owner requests delivery.",
+     "Image preparation succeeds and the implementation attempts to persist the placement."
+    ],
+    "outcomes": [
+     "The operation is refused with `state_unavailable` and leaves no image or placement.",
+     "The operation returns another failure or an internal error, possibly leaving the image behind."
+    ],
+    "observer": "The owner, calling flow, and Portal-store operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "lock_failure_conditions",
+   "text": "A caller waits for the lock without a time limit, and the lock is released when its holder ends.",
+   "question": "Exactly which lock-acquisition results mean “wait” and which mean “cannot be taken” and therefore return `state_unavailable`?",
+   "options": [
+    "Contention waits indefinitely; permission, invalid-path, unsupported-locking, and I/O errors immediately return `state_unavailable`",
+    "Every acquisition failure is retried indefinitely",
+    "A defined subset of transient errors is retried and all permanent errors are refused"
+   ],
+   "default_guess": "Wait indefinitely only for ordinary contention; immediately return `state_unavailable` for permanent open or locking errors.",
+   "witness": {
+    "initial": "The project lock file exists but its directory permissions prevent the service from opening it.",
+    "events": [
+     "The calling flow starts a delivery."
+    ],
+    "outcomes": [
+     "The call promptly returns `state_unavailable`.",
+     "The call retries or waits forever because every failure is interpreted as lock contention."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "atomic_failure_semantics",
+   "text": "The same refusal answers a project lock that cannot be taken and a mark that cannot be written.",
+   "question": "At which commit point is a mark considered written, and what response and recovery are required if rename succeeds but file or folder synchronisation subsequently fails?",
+   "options": [
+    "Rename is the commit point; after it succeeds the call returns success even if later durability work fails",
+    "Full file and folder synchronisation is required for success, and a post-rename failure must roll back the mark",
+    "Full synchronisation is required, but a post-rename failure returns `state_unavailable` while the recoverable mark may remain"
+   ],
+   "default_guess": "Define successful rename plus successful folder synchronisation as the commit; on an ambiguous post-rename failure, preserve the valid mark and make retries deterministically replay it rather than claiming that nothing changed.",
+   "witness": {
+    "initial": "No mark exists; the state folder allows rename but its directory synchronisation fails.",
+    "events": [
+     "The calling flow records a publication.",
+     "The temporary mark is synchronised and renamed.",
+     "Synchronising the containing folder fails."
+    ],
+    "outcomes": [
+     "The call is refused with `state_unavailable`, yet the renamed mark remains and a retry is replayed.",
+     "The implementation removes the renamed mark so the refusal truly changes nothing."
+    ],
+    "observer": "The calling flow and a later mark or scan call"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "refusal_shape",
+   "text": "scan, delivery and mark each answer `state_unavailable`",
+   "question": "For each operation, is `state_unavailable` an operation-level `RefusalCode`, a normal operation result, or—for delivery—a `PlacementOutcome` with `status = failed`; and what fields accompany it?",
+   "options": [
+    "All three operations use one common operation-level refusal envelope containing `RefusalCode.STATE_UNAVAILABLE`",
+    "Each operation embeds the code in its own result model",
+    "Delivery uses `PlacementOutcome.failed` while scan and mark use an outer refusal"
+   ],
+   "default_guess": "Use one common operation-level refusal envelope with the `STATE_UNAVAILABLE` member of `models.RefusalCode`, outside normal scan, placement, and mark outcomes.",
+   "witness": {
+    "initial": "The selected source has a damaged placement record.",
+    "events": [
+     "The calling flow calls delivery."
+    ],
+    "outcomes": [
+     "It receives an operation-level refusal whose code is `state_unavailable`.",
+     "It receives a `PlacementOutcome` with `status = failed`, requiring an unlisted `PlacementFailure` or another mapping."
+    ],
+    "observer": "The calling flow and generated API client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "missing_formal_invariant",
+   "text": "The same refusal answers a project lock that cannot be taken and a mark that cannot be written.",
+   "question": "What formal invariant covers the normative promise that lock-acquisition and mark-write failures change nothing, and what Required tests item demonstrates that invariant?",
+   "options": [
+    "Extend INV-20 to cover lock and write failures and require complete before/after state equality",
+    "Add a separate invariant for failed state mutations",
+    "State explicitly that the no-change promise is not a formal invariant"
+   ],
+   "default_guess": "Add a separate invariant stating that failure to acquire the project lock or durably write a mark commits no state, with tests for both failure paths.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "insufficient_invariant_test",
+   "text": "INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).",
+   "question": "Must the INV-12 tests assert the persisted result—exactly one placement record, one stored image, and one mark with the winning photo id—in addition to checking returned statuses?",
+   "options": [
+    "Require explicit assertions of exactly one persisted placement, image, and mark",
+    "Returned statuses alone are sufficient evidence",
+    "Require persisted-state assertions plus replay after all processes exit"
+   ],
+   "default_guess": "Require returned-status assertions, exactly one persisted placement/image/mark, the winning mark value, and a replay check after all processes exit.",
+   "witness": {
+    "initial": "No placement or mark exists for a source.",
+    "events": [
+     "Two processes concurrently place the source and later submit marks.",
+     "A faulty implementation writes duplicate artifacts but returns the prescribed statuses."
+    ],
+    "outcomes": [
+     "The named status assertions pass even though duplicate persistent artifacts exist.",
+     "A test that inspects persistent state fails and therefore actually demonstrates INV-12."
+    ],
+    "observer": "The test suite and a later state reader"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "insufficient_invariant_test",
+   "text": "INV-20: with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).",
+   "question": "Which damage forms, record kinds, and operation combinations must the INV-20 witness exercise, and must it assert that no image, temporary file, alternate placement, or mark was created—not merely that the damaged record is unchanged?",
+   "options": [
+    "Exercise every listed damage class for both record kinds across every operation that reads it, asserting complete state equality",
+    "One representative damaged record and one operation are sufficient",
+    "Define an explicit minimal matrix and assert all persistent directories are unchanged"
+   ],
+   "default_guess": "Define the applicable operation/record matrix, cover unreadable, invalid-JSON, non-object, and schema-invalid records, and assert complete persistent-state equality including absence of new images, temporary files, placements, and marks.",
+   "witness": {
+    "initial": "A damaged placement record exists and no stored image exists for a selected source.",
+    "events": [
+     "Delivery returns `state_unavailable`.",
+     "A faulty implementation leaves a prepared image or an alternate record while preserving the damaged record byte-for-byte."
+    ],
+    "outcomes": [
+     "The stated check that “the record stays as it was” passes despite an unintended new artifact.",
+     "A complete before/after state comparison detects the mutation and demonstrates INV-20 and the no-change rule."
+    ],
+    "observer": "The test suite and storage operator"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A8\",\"kind\":\"missing_time_policy\",\"text\":\"`marked_at: datetime`\",\"question\":\"What clock supplies `marked_at`, is the stored datetime UTC-naive, UTC-aware, or in `Europe/Madrid`, and exactly how many clock readings may one mark operation take?\",\"options\":[\"An injected clock read exactly once, stored as UTC without an offset\",\"An injected clock read exactly once, stored as offset-aware UTC\",\"The operating-system clock, with representation derived from the `timezone` setting\",\"A separately declared authority module supplies the instant\"],\"default_guess\":\"Inject a clock, read it exactly once when creating a new mark, and store a UTC-naive datetime.\",\"witness\":{\"initial\":\"No publication mark exists and the clock advances across a representational boundary during one mark call.\",\"events\":[\"The calling flow records a publication.\",\"The implementation obtains time while creating the mark and again while forming or persisting the result.\"],\"outcomes\":[\"The persisted and returned mark use one identical UTC-naive instant.\",\"Different readings or timezone conversions produce different `marked_at` values for the same operation.\"],\"observer\":\"The calling flow and a later reader of the stored mark\"}},{\"subject\":\"A6\",\"kind\":\"absent_vs_unreadable\",\"text\":\"A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken for an absent record.\",\"question\":\"Is a genuinely nonexistent record excluded from “cannot be read”, and if so, which missing-path conditions count as absence rather than `state_unavailable`?\",\"options\":[\"Only an ENOENT result for the exact expected record means absent; every other read failure means `state_unavailable`\",\"Any missing path component means absent\",\"Every failed open, including ENOENT, means `state_unavailable`\"],\"default_guess\":\"Treat ENOENT for the expected record as absence and every other open or read error as `state_unavailable`.\",\"witness\":{\"initial\":\"A valid project has no placement or mark record for a selected source.\",\"events\":[\"The owner asks the calling flow to deliver that source.\",\"The deliverer attempts to open the expected placement record and receives ENOENT.\"],\"outcomes\":[\"The record is absent, so a new placement may be created.\",\"The record “cannot be read”, so the call is refused with `state_unavailable`.\"],\"observer\":\"The owner and calling flow\"}},{\"subject\":\"A6\",\"kind\":\"damaged_record_boundary\",\"text\":\"A placement or mark record that cannot be read, is not valid JSON or is not an object\",\"question\":\"How must a readable JSON object that fails the record schema—missing fields, wrong field types, unknown enum values, or inconsistent identity—be handled?\",\"options\":[\"Every schema-invalid record is damaged and causes `state_unavailable`\",\"Only unreadable, syntactically invalid, or non-object JSON is damaged; schema errors use another refusal\",\"Some schema errors are repaired or treated as absence\"],\"default_guess\":\"Treat every object that cannot be validated as the expected record model as damaged and refuse with `state_unavailable`.\",\"witness\":{\"initial\":\"The expected placement file contains the valid JSON object `{}`.\",\"events\":[\"The calling flow asks to deliver the corresponding source.\"],\"outcomes\":[\"Validation classifies the object as damaged and returns `state_unavailable` without changes.\",\"Because it is valid JSON and an object, the implementation handles it as absent, raises an internal error, or applies field defaults.\"],\"observer\":\"The calling flow and the operator inspecting state\"}},{\"subject\":\"A6\",\"kind\":\"record_scope\",\"text\":\"with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable`\",\"question\":\"Which damaged records must block each operation: only the record for the addressed source, every record the operation encounters, or every placement and mark record anywhere in the project?\",\"options\":[\"Only a damaged record required for the addressed source blocks delivery or mark; scan is blocked by any damaged record it traverses\",\"Any damaged placement or mark in the project blocks every scan, delivery, and mark for that project\",\"Each operation has an explicit placement/mark lookup matrix\"],\"default_guess\":\"Block an operation only when it encounters a damaged record it must read; define the exact lookup matrix for scan, delivery, and mark.\",\"witness\":{\"initial\":\"Project P has a damaged mark for source A and a valid unplaced source B.\",\"events\":[\"The owner requests delivery of source B.\"],\"outcomes\":[\"Delivery of B succeeds because its operation does not need A's mark.\",\"Delivery of B is refused with `state_unavailable` because any damaged project record blocks the project.\"],\"observer\":\"The owner\"}},{\"subject\":\"A6\",\"kind\":\"check_precedence\",\"text\":\"The operation is refused with `state_unavailable` and changes nothing.\",\"question\":\"What is the precedence between `state_unavailable` and other applicable refusals or failures, including `unknown_project`, `folder_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed`, `publication_conflict`, and placement failures?\",\"options\":[\"Acquire the project lock and validate relevant state before all source- and publication-specific checks\",\"Validate request and project first, then acquire the lock and read state, then apply placement or publication conflicts\",\"Specify a different ordered sequence for scan, delivery, and mark\"],\"default_guess\":\"Validate request shape and project identity first; then acquire the lock and validate required state before source, placement, or publication decisions.\",\"witness\":{\"initial\":\"A valid project contains a damaged mark for a placed source.\",\"events\":[\"The calling flow submits another `photo_id` for that source.\"],\"outcomes\":[\"The damaged mark takes precedence and the response is `state_unavailable`.\",\"The differing photo id takes precedence and the response is `publication_conflict`.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A6\",\"kind\":\"undefined_write_failure\",\"text\":\"The same refusal answers a project lock that cannot be taken and a mark that cannot be written.\",\"question\":\"What must a delivery answer when its image or placement record cannot be written, synchronised, or renamed?\",\"options\":[\"Return `state_unavailable` and leave all state unchanged\",\"Return a `PlacementFailure` value\",\"Use `folder_unavailable` for image-store failures and `state_unavailable` for state-record failures\",\"Treat it as an unmodelled internal error\"],\"default_guess\":\"Use `folder_unavailable` for an unavailable binary store and `state_unavailable` for an unavailable placement-state write, with no committed artifacts in either case.\",\"witness\":{\"initial\":\"The source is valid, but the placement-record directory is not writable.\",\"events\":[\"The owner requests delivery.\",\"Image preparation succeeds and the implementation attempts to persist the placement.\"],\"outcomes\":[\"The operation is refused with `state_unavailable` and leaves no image or placement.\",\"The operation returns another failure or an internal error, possibly leaving the image behind.\"],\"observer\":\"The owner, calling flow, and Portal-store operator\"}},{\"subject\":\"A6\",\"kind\":\"lock_failure_conditions\",\"text\":\"A caller waits for the lock without a time limit, and the lock is released when its holder ends.\",\"question\":\"Exactly which lock-acquisition results mean “wait” and which mean “cannot be taken” and therefore return `state_unavailable`?\",\"options\":[\"Contention waits indefinitely; permission, invalid-path, unsupported-locking, and I/O errors immediately return `state_unavailable`\",\"Every acquisition failure is retried indefinitely\",\"A defined subset of transient errors is retried and all permanent errors are refused\"],\"default_guess\":\"Wait indefinitely only for ordinary contention; immediately return `state_unavailable` for permanent open or locking errors.\",\"witness\":{\"initial\":\"The project lock file exists but its directory permissions prevent the service from opening it.\",\"events\":[\"The calling flow starts a delivery.\"],\"outcomes\":[\"The call promptly returns `state_unavailable`.\",\"The call retries or waits forever because every failure is interpreted as lock contention.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A6\",\"kind\":\"atomic_failure_semantics\",\"text\":\"The same refusal answers a project lock that cannot be taken and a mark that cannot be written.\",\"question\":\"At which commit point is a mark considered written, and what response and recovery are required if rename succeeds but file or folder synchronisation subsequently fails?\",\"options\":[\"Rename is the commit point; after it succeeds the call returns success even if later durability work fails\",\"Full file and folder synchronisation is required for success, and a post-rename failure must roll back the mark\",\"Full synchronisation is required, but a post-rename failure returns `state_unavailable` while the recoverable mark may remain\"],\"default_guess\":\"Define successful rename plus successful folder synchronisation as the commit; on an ambiguous post-rename failure, preserve the valid mark and make retries deterministically replay it rather than claiming that nothing changed.\",\"witness\":{\"initial\":\"No mark exists; the state folder allows rename but its directory synchronisation fails.\",\"events\":[\"The calling flow records a publication.\",\"The temporary mark is synchronised and renamed.\",\"Synchronising the containing folder fails.\"],\"outcomes\":[\"The call is refused with `state_unavailable`, yet the renamed mark remains and a retry is replayed.\",\"The implementation removes the renamed mark so the refusal truly changes nothing.\"],\"observer\":\"The calling flow and a later mark or scan call\"}},{\"subject\":\"A6\",\"kind\":\"refusal_shape\",\"text\":\"scan, delivery and mark each answer `state_unavailable`\",\"question\":\"For each operation, is `state_unavailable` an operation-level `RefusalCode`, a normal operation result, or—for delivery—a `PlacementOutcome` with `status = failed`; and what fields accompany it?\",\"options\":[\"All three operations use one common operation-level refusal envelope containing `RefusalCode.STATE_UNAVAILABLE`\",\"Each operation embeds the code in its own result model\",\"Delivery uses `PlacementOutcome.failed` while scan and mark use an outer refusal\"],\"default_guess\":\"Use one common operation-level refusal envelope with the `STATE_UNAVAILABLE` member of `models.RefusalCode`, outside normal scan, placement, and mark outcomes.\",\"witness\":{\"initial\":\"The selected source has a damaged placement record.\",\"events\":[\"The calling flow calls delivery.\"],\"outcomes\":[\"It receives an operation-level refusal whose code is `state_unavailable`.\",\"It receives a `PlacementOutcome` with `status = failed`, requiring an unlisted `PlacementFailure` or another mapping.\"],\"observer\":\"The calling flow and generated API client\"}},{\"subject\":\"A6\",\"kind\":\"missing_formal_invariant\",\"text\":\"The same refusal answers a project lock that cannot be taken and a mark that cannot be written.\",\"question\":\"What formal invariant covers the normative promise that lock-acquisition and mark-write failures change nothing, and what Required tests item demonstrates that invariant?\",\"options\":[\"Extend INV-20 to cover lock and write failures and require complete before/after state equality\",\"Add a separate invariant for failed state mutations\",\"State explicitly that the no-change promise is not a formal invariant\"],\"default_guess\":\"Add a separate invariant stating that failure to acquire the project lock or durably write a mark commits no state, with tests for both failure paths.\"},{\"subject\":\"A6\",\"kind\":\"insufficient_invariant_test\",\"text\":\"INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).\",\"question\":\"Must the INV-12 tests assert the persisted result—exactly one placement record, one stored image, and one mark with the winning photo id—in addition to checking returned statuses?\",\"options\":[\"Require explicit assertions of exactly one persisted placement, image, and mark\",\"Returned statuses alone are sufficient evidence\",\"Require persisted-state assertions plus replay after all processes exit\"],\"default_guess\":\"Require returned-status assertions, exactly one persisted placement/image/mark, the winning mark value, and a replay check after all processes exit.\",\"witness\":{\"initial\":\"No placement or mark exists for a source.\",\"events\":[\"Two processes concurrently place the source and later submit marks.\",\"A faulty implementation writes duplicate artifacts but returns the prescribed statuses.\"],\"outcomes\":[\"The named status assertions pass even though duplicate persistent artifacts exist.\",\"A test that inspects persistent state fails and therefore actually demonstrates INV-12.\"],\"observer\":\"The test suite and a later state reader\"}},{\"subject\":\"A6\",\"kind\":\"insufficient_invariant_test\",\"text\":\"INV-20: with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).\",\"question\":\"Which damage forms, record kinds, and operation combinations must the INV-20 witness exercise, and must it assert that no image, temporary file, alternate placement, or mark was created—not merely that the damaged record is unchanged?\",\"options\":[\"Exercise every listed damage class for both record kinds across every operation that reads it, asserting complete state equality\",\"One representative damaged record and one operation are sufficient\",\"Define an explicit minimal matrix and assert all persistent directories are unchanged\"],\"default_guess\":\"Define the applicable operation/record matrix, cover unreadable, invalid-JSON, non-object, and schema-invalid records, and assert complete persistent-state equality including absence of new images, temporary files, placements, and marks.\",\"witness\":{\"initial\":\"A damaged placement record exists and no stored image exists for a selected source.\",\"events\":[\"Delivery returns `state_unavailable`.\",\"A faulty implementation leaves a prepared image or an alternate record while preserving the damaged record byte-for-byte.\"],\"outcomes\":[\"The stated check that “the record stays as it was” passes despite an unintended new artifact.\",\"A complete before/after state comparison detects the mutation and demonstrates INV-20 and the no-change rule.\"],\"observer\":\"The test suite and storage operator\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,206 @@
+{
+ "open_points": [
+  {
+   "subject": "A6 rule 5 ownership",
+   "kind": "missing_owner",
+   "text": "A decision has one primary owner in `30_trace.json`. Where its rules reach other modules, this table\nnames the owner of each rule.",
+   "question": "Which module is the primary owner of A6 rule 5, which has no row in the ownership table?",
+   "options": [
+    "`delivery_store` owns all of A6 rule 5",
+    "`delivery_store` owns detection and `photo_delivery` owns the operation refusal",
+    "A6 rule 5 is split into separately owned record, lock and mark-write rules"
+   ],
+   "default_guess": "Make `delivery_store` the owner of storage-failure detection and `photo_delivery` the owner of translating it into `state_unavailable`.",
+   "unit": "?"
+  },
+  {
+   "subject": "storage failure decision boundary",
+   "kind": "overlapping_ownership",
+   "text": "- reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the\n  lock or a mark cannot be used (A6 rule 5).",
+   "question": "Does `delivery_store` itself choose and return the operation-level refusal, or does it report a storage failure that `photo_delivery` converts to `state_unavailable`, given that `photo_delivery` combines the operation and `delivery_store` must not own whether a placement or mark may be written?",
+   "options": [
+    "`delivery_store` returns a `state_unavailable` refusal",
+    "`delivery_store` raises or returns a storage error and `photo_delivery` creates the refusal",
+    "Responsibility is split differently for reads, locks and writes"
+   ],
+   "default_guess": "Have `delivery_store` expose typed storage errors and let `photo_delivery` create the operation refusal.",
+   "unit": "?"
+  },
+  {
+   "subject": "delivery_store failure contracts",
+   "kind": "missing_contract",
+   "text": "project_lock\nstore_image\nread_placement\nwrite_placement\nread_mark\nwrite_mark",
+   "question": "How do these capabilities distinguish an absent record from an unreadable or damaged record, and how do `project_lock` and `write_mark` report the failures that must become `state_unavailable`?",
+   "options": [
+    "Typed exceptions for unavailable state",
+    "Explicit result variants such as absent, present and unavailable",
+    "The capabilities directly return operation refusals"
+   ],
+   "default_guess": "Use typed storage exceptions, with absence returned normally and corruption, lock failure and mark-write failure reported distinctly.",
+   "unit": "?"
+  },
+  {
+   "subject": "validity of placement and mark records",
+   "kind": "undefined_validation",
+   "text": "A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken\n   for an absent record.",
+   "question": "Is a JSON object with missing fields, extra fields, wrong field types, invalid enum values or inconsistent identifiers also a damaged record that causes `state_unavailable`, and which module validates that form?",
+   "options": [
+    "Every object must fully validate as M04 or M07",
+    "Only JSON syntax and top-level object shape are checked here",
+    "Structural validation failures use another outcome"
+   ],
+   "default_guess": "Require full model validation and treat every invalid record object as `state_unavailable`, with `delivery_store` detecting it.",
+   "unit": "?"
+  },
+  {
+   "subject": "project lock acquisition",
+   "kind": "vague_failure_boundary",
+   "text": "The same\n   refusal answers a project lock that cannot be taken",
+   "question": "What distinguishes a lock that is merely held, for which the caller waits without a time limit, from a lock that cannot be taken and must immediately answer `state_unavailable`?",
+   "options": [
+    "Contention always waits; only operating-system acquisition errors refuse",
+    "A timeout or interruption may refuse",
+    "Any unsuccessful immediate acquisition refuses"
+   ],
+   "default_guess": "Wait indefinitely for ordinary contention and return `state_unavailable` only for a definitive operating-system or lock-file error.",
+   "witness": {
+    "initial": "Another process holds the valid project lock.",
+    "events": [
+     "A caller starts a delivery for the same project.",
+     "The first process continues holding the lock."
+    ],
+    "outcomes": [
+     "The caller waits until the lock is released.",
+     "The caller treats the currently unavailable lock as one that cannot be taken and immediately receives `state_unavailable`."
+    ],
+    "observer": "The calling flow sees either a pending operation or an immediate refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "mark check ordering with lock failure",
+   "kind": "unclear_precedence",
+   "text": "Checks run in this order: token, request form and identifiers, connection, placement.",
+   "question": "Where does project-lock acquisition occur in the mark check order, and therefore which answer wins when the placement is absent but the lock cannot be taken?",
+   "options": [
+    "Check placement first and answer `not_placed` without taking the lock",
+    "Take the lock before checking placement and answer `state_unavailable` if acquisition fails",
+    "Check placement outside the lock, then lock only the mark read and write"
+   ],
+   "default_guess": "Check the placement first as A4 states, then acquire the lock for checking and writing the mark.",
+   "witness": {
+    "initial": "The requested placement does not exist and the project's lock file cannot be used.",
+    "events": [
+     "The calling flow submits an otherwise valid mark request."
+    ],
+    "outcomes": [
+     "The service checks placement first and returns `not_placed`.",
+     "The service tries to lock the mark operation first and returns `state_unavailable`."
+    ],
+    "observer": "The calling flow sees a different refusal code."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "placement-record write failure",
+   "kind": "contradictory_outcome",
+   "text": "writing the stored image or the record fails | `UNREADABLE_FILE`",
+   "question": "Does failure to write a placement record remain the per-photo `UNREADABLE_FILE` failure required by A3 rule 5, or does the new statement that an unusable record is refused with `state_unavailable` include placement-record write failures?",
+   "options": [
+    "Placement-record write failure is `UNREADABLE_FILE`; only mark-write failure is `state_unavailable`",
+    "Every record-write failure is `state_unavailable`",
+    "The outcome depends on the particular write failure"
+   ],
+   "default_guess": "Keep placement-record write failure as `UNREADABLE_FILE`, because A6 rule 5 explicitly changes only mark-write failure.",
+   "witness": {
+    "initial": "A valid source has been prepared and its stored image can be written, but the placement record cannot be written.",
+    "events": [
+     "The calling flow requests delivery.",
+     "`delivery_store` writes the image and fails while writing the placement record."
+    ],
+    "outcomes": [
+     "A3 rule 5 produces a per-photo `failed` result with `UNREADABLE_FILE`.",
+     "The changed `delivery_store` responsibility treats the unusable record as an operation refusal with `state_unavailable`."
+    ],
+    "observer": "The calling flow sees a per-photo failure in one implementation and a whole-operation refusal in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "scope of damaged-record refusal",
+   "kind": "unclear_scope",
+   "text": "with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable`",
+   "question": "Must an operation refuse for any damaged record in the project, only for the record keyed by its requested source, or only for records the operation naturally encounters, including what a scan must do with a damaged record for a source no longer in the folder?",
+   "options": [
+    "Any damaged placement or mark in the project poisons every scan, delivery and mark",
+    "Only the target source's records affect delivery and mark, while scan checks records for listed sources",
+    "Every operation enumerates and validates every project record"
+   ],
+   "default_guess": "Delivery and mark validate only the target source's records; scan validates only records needed for files it reports.",
+   "witness": {
+    "initial": "A project contains a damaged mark for source A, while a valid unplaced source B is present in the photo folder.",
+    "events": [
+     "The calling flow requests delivery of source B."
+    ],
+    "outcomes": [
+     "Delivery B succeeds because its own placement and mark records are unaffected.",
+     "Delivery B is refused with `state_unavailable` because the project contains a damaged mark."
+    ],
+    "observer": "The calling flow sees either a placement for B or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "state_unavailable API response",
+   "kind": "missing_mapping",
+   "text": "`connection_not_confirmed`, `folder_unavailable`, `state_unavailable`, `invalid_source_id`,\n`unsafe_reference`, `not_placed` and `publication_conflict`.",
+   "question": "What HTTP status and fixed message must `deliverer_api` use for the new `state_unavailable` refusal?",
+   "options": [
+    "HTTP 503 with a fixed temporary-unavailability message",
+    "HTTP 500 with a fixed internal-state message",
+    "The same status family and message policy as `folder_unavailable`"
+   ],
+   "default_guess": "Return HTTP 503 with a fixed path-free message indicating that delivery state is unavailable.",
+   "witness": {
+    "initial": "A placement record contains invalid JSON.",
+    "events": [
+     "A caller invokes scan through the HTTP API."
+    ],
+    "outcomes": [
+     "The API returns `state_unavailable` with HTTP 503 and a temporary-unavailability message.",
+     "The API returns `state_unavailable` with HTTP 500 or another fixed message."
+    ],
+    "observer": "The HTTP caller sees a different status and message and may retry differently."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "no-change guarantee on storage failure",
+   "kind": "unclear_atomicity",
+   "text": "The operation is refused with `state_unavailable` and changes nothing.",
+   "question": "Does “changes nothing” prohibit creation or modification of the project lock file and temporary files, and must a failed atomic mark write remove any temporary file it created?",
+   "options": [
+    "No filesystem entry, including lock and temporary files, may change",
+    "Only durable images and state records must remain unchanged",
+    "The damaged record alone must remain byte-for-byte unchanged"
+   ],
+   "default_guess": "Require all durable domain state and existing records to remain unchanged, while permitting the persistent project lock file and cleanup of implementation-private temporary files.",
+   "witness": {
+    "initial": "No project lock file exists, and the target mark record is damaged.",
+    "events": [
+     "A mark operation creates or opens the project lock file.",
+     "It reads the damaged mark and returns `state_unavailable`."
+    ],
+    "outcomes": [
+     "The newly created lock file may remain because only domain records are covered.",
+     "The lock file must be removed because the operation must change nothing."
+    ],
+    "observer": "An operator or later process inspecting the state directory sees different filesystem contents."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A6 rule 5 ownership\",\"kind\":\"missing_owner\",\"text\":\"A decision has one primary owner in `30_trace.json`. Where its rules reach other modules, this table\\nnames the owner of each rule.\",\"question\":\"Which module is the primary owner of A6 rule 5, which has no row in the ownership table?\",\"options\":[\"`delivery_store` owns all of A6 rule 5\",\"`delivery_store` owns detection and `photo_delivery` owns the operation refusal\",\"A6 rule 5 is split into separately owned record, lock and mark-write rules\"],\"default_guess\":\"Make `delivery_store` the owner of storage-failure detection and `photo_delivery` the owner of translating it into `state_unavailable`.\"},{\"subject\":\"storage failure decision boundary\",\"kind\":\"overlapping_ownership\",\"text\":\"- reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the\\n  lock or a mark cannot be used (A6 rule 5).\",\"question\":\"Does `delivery_store` itself choose and return the operation-level refusal, or does it report a storage failure that `photo_delivery` converts to `state_unavailable`, given that `photo_delivery` combines the operation and `delivery_store` must not own whether a placement or mark may be written?\",\"options\":[\"`delivery_store` returns a `state_unavailable` refusal\",\"`delivery_store` raises or returns a storage error and `photo_delivery` creates the refusal\",\"Responsibility is split differently for reads, locks and writes\"],\"default_guess\":\"Have `delivery_store` expose typed storage errors and let `photo_delivery` create the operation refusal.\"},{\"subject\":\"delivery_store failure contracts\",\"kind\":\"missing_contract\",\"text\":\"project_lock\\nstore_image\\nread_placement\\nwrite_placement\\nread_mark\\nwrite_mark\",\"question\":\"How do these capabilities distinguish an absent record from an unreadable or damaged record, and how do `project_lock` and `write_mark` report the failures that must become `state_unavailable`?\",\"options\":[\"Typed exceptions for unavailable state\",\"Explicit result variants such as absent, present and unavailable\",\"The capabilities directly return operation refusals\"],\"default_guess\":\"Use typed storage exceptions, with absence returned normally and corruption, lock failure and mark-write failure reported distinctly.\"},{\"subject\":\"validity of placement and mark records\",\"kind\":\"undefined_validation\",\"text\":\"A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken\\n   for an absent record.\",\"question\":\"Is a JSON object with missing fields, extra fields, wrong field types, invalid enum values or inconsistent identifiers also a damaged record that causes `state_unavailable`, and which module validates that form?\",\"options\":[\"Every object must fully validate as M04 or M07\",\"Only JSON syntax and top-level object shape are checked here\",\"Structural validation failures use another outcome\"],\"default_guess\":\"Require full model validation and treat every invalid record object as `state_unavailable`, with `delivery_store` detecting it.\"},{\"subject\":\"project lock acquisition\",\"kind\":\"vague_failure_boundary\",\"text\":\"The same\\n   refusal answers a project lock that cannot be taken\",\"question\":\"What distinguishes a lock that is merely held, for which the caller waits without a time limit, from a lock that cannot be taken and must immediately answer `state_unavailable`?\",\"options\":[\"Contention always waits; only operating-system acquisition errors refuse\",\"A timeout or interruption may refuse\",\"Any unsuccessful immediate acquisition refuses\"],\"default_guess\":\"Wait indefinitely for ordinary contention and return `state_unavailable` only for a definitive operating-system or lock-file error.\",\"witness\":{\"initial\":\"Another process holds the valid project lock.\",\"events\":[\"A caller starts a delivery for the same project.\",\"The first process continues holding the lock.\"],\"outcomes\":[\"The caller waits until the lock is released.\",\"The caller treats the currently unavailable lock as one that cannot be taken and immediately receives `state_unavailable`.\"],\"observer\":\"The calling flow sees either a pending operation or an immediate refusal.\"}},{\"subject\":\"mark check ordering with lock failure\",\"kind\":\"unclear_precedence\",\"text\":\"Checks run in this order: token, request form and identifiers, connection, placement.\",\"question\":\"Where does project-lock acquisition occur in the mark check order, and therefore which answer wins when the placement is absent but the lock cannot be taken?\",\"options\":[\"Check placement first and answer `not_placed` without taking the lock\",\"Take the lock before checking placement and answer `state_unavailable` if acquisition fails\",\"Check placement outside the lock, then lock only the mark read and write\"],\"default_guess\":\"Check the placement first as A4 states, then acquire the lock for checking and writing the mark.\",\"witness\":{\"initial\":\"The requested placement does not exist and the project's lock file cannot be used.\",\"events\":[\"The calling flow submits an otherwise valid mark request.\"],\"outcomes\":[\"The service checks placement first and returns `not_placed`.\",\"The service tries to lock the mark operation first and returns `state_unavailable`.\"],\"observer\":\"The calling flow sees a different refusal code.\"}},{\"subject\":\"placement-record write failure\",\"kind\":\"contradictory_outcome\",\"text\":\"writing the stored image or the record fails | `UNREADABLE_FILE`\",\"question\":\"Does failure to write a placement record remain the per-photo `UNREADABLE_FILE` failure required by A3 rule 5, or does the new statement that an unusable record is refused with `state_unavailable` include placement-record write failures?\",\"options\":[\"Placement-record write failure is `UNREADABLE_FILE`; only mark-write failure is `state_unavailable`\",\"Every record-write failure is `state_unavailable`\",\"The outcome depends on the particular write failure\"],\"default_guess\":\"Keep placement-record write failure as `UNREADABLE_FILE`, because A6 rule 5 explicitly changes only mark-write failure.\",\"witness\":{\"initial\":\"A valid source has been prepared and its stored image can be written, but the placement record cannot be written.\",\"events\":[\"The calling flow requests delivery.\",\"`delivery_store` writes the image and fails while writing the placement record.\"],\"outcomes\":[\"A3 rule 5 produces a per-photo `failed` result with `UNREADABLE_FILE`.\",\"The changed `delivery_store` responsibility treats the unusable record as an operation refusal with `state_unavailable`.\"],\"observer\":\"The calling flow sees a per-photo failure in one implementation and a whole-operation refusal in the other.\"}},{\"subject\":\"scope of damaged-record refusal\",\"kind\":\"unclear_scope\",\"text\":\"with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable`\",\"question\":\"Must an operation refuse for any damaged record in the project, only for the record keyed by its requested source, or only for records the operation naturally encounters, including what a scan must do with a damaged record for a source no longer in the folder?\",\"options\":[\"Any damaged placement or mark in the project poisons every scan, delivery and mark\",\"Only the target source's records affect delivery and mark, while scan checks records for listed sources\",\"Every operation enumerates and validates every project record\"],\"default_guess\":\"Delivery and mark validate only the target source's records; scan validates only records needed for files it reports.\",\"witness\":{\"initial\":\"A project contains a damaged mark for source A, while a valid unplaced source B is present in the photo folder.\",\"events\":[\"The calling flow requests delivery of source B.\"],\"outcomes\":[\"Delivery B succeeds because its own placement and mark records are unaffected.\",\"Delivery B is refused with `state_unavailable` because the project contains a damaged mark.\"],\"observer\":\"The calling flow sees either a placement for B or a refusal.\"}},{\"subject\":\"state_unavailable API response\",\"kind\":\"missing_mapping\",\"text\":\"`connection_not_confirmed`, `folder_unavailable`, `state_unavailable`, `invalid_source_id`,\\n`unsafe_reference`, `not_placed` and `publication_conflict`.\",\"question\":\"What HTTP status and fixed message must `deliverer_api` use for the new `state_unavailable` refusal?\",\"options\":[\"HTTP 503 with a fixed temporary-unavailability message\",\"HTTP 500 with a fixed internal-state message\",\"The same status family and message policy as `folder_unavailable`\"],\"default_guess\":\"Return HTTP 503 with a fixed path-free message indicating that delivery state is unavailable.\",\"witness\":{\"initial\":\"A placement record contains invalid JSON.\",\"events\":[\"A caller invokes scan through the HTTP API.\"],\"outcomes\":[\"The API returns `state_unavailable` with HTTP 503 and a temporary-unavailability message.\",\"The API returns `state_unavailable` with HTTP 500 or another fixed message.\"],\"observer\":\"The HTTP caller sees a different status and message and may retry differently.\"}},{\"subject\":\"no-change guarantee on storage failure\",\"kind\":\"unclear_atomicity\",\"text\":\"The operation is refused with `state_unavailable` and changes nothing.\",\"question\":\"Does “changes nothing” prohibit creation or modification of the project lock file and temporary files, and must a failed atomic mark write remove any temporary file it created?\",\"options\":[\"No filesystem entry, including lock and temporary files, may change\",\"Only durable images and state records must remain unchanged\",\"The damaged record alone must remain byte-for-byte unchanged\"],\"default_guess\":\"Require all durable domain state and existing records to remain unchanged, while permitting the persistent project lock file and cleanup of implementation-private temporary files.\",\"witness\":{\"initial\":\"No project lock file exists, and the target mark record is damaged.\",\"events\":[\"A mark operation creates or opens the project lock file.\",\"It reads the damaged mark and returns `state_unavailable`.\"],\"outcomes\":[\"The newly created lock file may remain because only domain records are covered.\",\"The lock file must be removed because the operation must change nothing.\"],\"observer\":\"An operator or later process inspecting the state directory sees different filesystem contents.\"}}]}",
+ "set_aside": []
+}
