@@ -1,0 +1,374 @@
+{
+ "open_points": [
+  {
+   "subject": "30_modules.md:Dependencies",
+   "kind": "standard_violation",
+   "text": "A module may know only the modules listed for it. There are no cycles.\n\n| Module | May know |\n|---|---|\n| `domain_models` | none |\n| `object_connections` | `domain_models` |\n| `source_folder` | `domain_models` |\n| `photo_preparation` | `domain_models` |\n| `delivery_store` | `domain_models` |\n| `photo_delivery` | `domain_models`, `object_connections`, `source_folder`, `photo_preparation`, `delivery_store` |\n| `deliverer_api` | `domain_models`, `object_connections`, `photo_delivery` |",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "Replace the module-level permission table with the complete minimal consumer → provider → directly imported symbols graph.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`domain_models`",
+   "kind": "contradictory_owner",
+   "text": "- the form of a source id;",
+   "question": "Does `domain_models` own the source-id form, or does `photo_delivery` own it as stated by the A5 rule-8 row?",
+   "options": [
+    "`domain_models` owns the form and `photo_delivery` only validates it",
+    "`photo_delivery` owns the form and `domain_models` only declares its value type",
+    "Split syntax ownership from validation ownership explicitly"
+   ],
+   "default_guess": "`domain_models` declares the constrained source-id type and `photo_delivery` applies it to placement requests.",
+   "witness": {
+    "initial": "A placement request contains a 64-character string that is not lowercase hexadecimal.",
+    "events": [
+     "`deliverer_api` accepts the request form and passes it onward.",
+     "The implementation reaches the source-id check."
+    ],
+    "outcomes": [
+     "A `domain_models` validator rejects the value before `photo_delivery` begins its operation.",
+     "`photo_delivery` accepts a plain string from `domain_models` and performs its own rejection."
+    ],
+    "observer": "The clock, connection loader, and caller can observe when and where the request is refused."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`photo_delivery`",
+   "kind": "owner_without_knowledge",
+   "text": "- A3, A4, rule 4 of A6, rule 2 of A7, and order 9 to 11 of A1.",
+   "question": "How can `photo_delivery` own A5 rule 8 for source ids and A5 rule 9 for answers when A5 is absent from what it knows?",
+   "options": [
+    "Add the owned parts of A5 to what `photo_delivery` knows",
+    "Move both A5 rules to `deliverer_api`",
+    "Split the rules into domain validation, delivery outcomes, and HTTP serialization"
+   ],
+   "default_guess": "Add only A5 rule 8's source-id validation and the delivery-result part of rule 9 to `photo_delivery`, leaving HTTP serialization with `deliverer_api`.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Invariant owners",
+   "kind": "unimplementable_owner_scope",
+   "text": "| INV-06, INV-07, INV-08, INV-11, INV-12, INV-13 | `photo_delivery` |",
+   "question": "Who owns each service-wide part of INV-11, including absence of Portal credentials or calls and paths in API refusals, when `photo_delivery` may not know `deliverer_api` and does not own the HTTP boundary?",
+   "options": [
+    "Split INV-11 among `photo_delivery`, `deliverer_api`, and deployment/configuration",
+    "Make `deliverer_api` the primary owner and lower modules supporting owners",
+    "Introduce a service-composition owner"
+   ],
+   "default_guess": "Split it: `deliverer_api` owns answer and credential exposure, service composition owns absence of a Portal client, and `photo_delivery` owns path-free delivery results.",
+   "witness": {
+    "initial": "A lower delivery result contains no path, but an API-level connection refusal contains an exception message with the connection-file path.",
+    "events": [
+     "A caller requests an unknown or invalid project.",
+     "`deliverer_api` converts the lower failure or exception into an HTTP answer."
+    ],
+    "outcomes": [
+     "INV-11 is considered satisfied because `photo_delivery` returned no path.",
+     "INV-11 is considered violated because every service answer, including API refusals, must be path-free."
+    ],
+    "observer": "The authenticated caller sees the server path only under the second ownership interpretation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`photo_delivery`",
+   "kind": "incomplete_trace",
+   "text": "### Trace inputs\n\n- A3\n- A4\n- A7",
+   "question": "Must the trace inputs also include A1 orders 9–11, A5 rules 8–9, and A6 rule 4, all assigned to or known by this module elsewhere in State 3?",
+   "options": [
+    "Add A1, A5, and A6",
+    "Remove those ownership assignments",
+    "Declare that Trace inputs is intentionally non-exhaustive"
+   ],
+   "default_guess": "Add A1, A5, and A6 and identify the applicable rules.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`photo_preparation`",
+   "kind": "incomplete_trace",
+   "text": "### Trace inputs\n\n- A2",
+   "question": "Must the trace inputs include A7 rule 5 and A8/INV-14, which this module knows or owns elsewhere in State 3?",
+   "options": [
+    "Add A7 and A8",
+    "Move A7 rule 5 and INV-14 elsewhere",
+    "Declare that Trace inputs omits supporting decisions"
+   ],
+   "default_guess": "Add A7 and A8.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Dependencies",
+   "kind": "lifecycle_ambiguity",
+   "text": "`deliverer_api` knows `object_connections` only to load the connections when the service starts.",
+   "question": "Are connection-file changes visible only after restart, reloaded for every operation, or watched and atomically refreshed?",
+   "options": [
+    "Startup snapshot; every agent change requires restart",
+    "Reload and validate for every operation",
+    "Watch the file and replace an in-memory snapshot"
+   ],
+   "default_guess": "Load a validated snapshot at startup and require a restart after any connection change.",
+   "witness": {
+    "initial": "The service starts with a project's connection unconfirmed.",
+    "events": [
+     "The owner confirms the folders.",
+     "The agent updates the connection record without restarting the service.",
+     "The owner starts a scan."
+    ],
+    "outcomes": [
+     "The startup snapshot still refuses `connection_not_confirmed`.",
+     "A refreshed view accepts the connection and scans the folder."
+    ],
+    "observer": "The owner and calling flow see refusal versus a scan result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`source_folder`",
+   "kind": "missing_intermediate_model",
+   "text": "- detecting a file with the same content as an earlier file of the scan;",
+   "question": "What path-free value does `source_folder` return so `photo_delivery` can add placed/published status while retaining traversal order, duplicate relationships, source identity, modification time, and a safe way to read the selected file?",
+   "options": [
+    "Define an internal source-observation model with an opaque read handle",
+    "Return relative names and require a second safe lookup",
+    "Return final M02 values and let `source_folder` query placement state"
+   ],
+   "default_guess": "Define an internal immutable observation containing plain relative name, source hash, size, normalized modification time, preliminary status, duplicate reference, and an opaque source handle.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`source_folder`",
+   "kind": "missing_owner",
+   "text": "- detecting a file with the same content as an earlier file of the scan;",
+   "question": "Which module computes and verifies the SHA-256 `source_id` used for duplicate detection, requests, placement identity, and the changed-source check?",
+   "options": [
+    "`source_folder` computes and re-verifies it while safely reading bytes",
+    "`photo_delivery` hashes bytes supplied by `source_folder`",
+    "Split initial hashing and placement-time verification between the modules"
+   ],
+   "default_guess": "`source_folder` owns hashing and safe re-verification; `photo_delivery` owns the decision made from the returned hashes.",
+   "witness": {
+    "initial": "A ready file is scanned and then replaced with different bytes under the same relative name.",
+    "events": [
+     "The scan computes the requested source id.",
+     "The owner requests that source id.",
+     "The file is read again for placement."
+    ],
+    "outcomes": [
+     "`source_folder` verifies the second hash and reports a changed source.",
+     "`photo_delivery` hashes returned bytes and independently reports `source_changed`."
+    ],
+    "observer": "Tests and maintainers observe different module responsibilities and dependency surfaces even though the caller may receive the same failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`photo_preparation`",
+   "kind": "missing_data_flow",
+   "text": "- choosing the photo moment and converting it to UTC without an offset;",
+   "question": "How does `photo_preparation` receive the normalized file modification time owned by `source_folder`, given that it may not know `source_folder`?",
+   "options": [
+    "`photo_delivery` passes the normalized modification time explicitly",
+    "`photo_delivery` passes an internal source observation",
+    "`photo_preparation` reads file metadata itself"
+   ],
+   "default_guess": "`photo_delivery` passes the normalized modification time explicitly with the source bytes.",
+   "witness": {
+    "initial": "A PNG has no usable camera time and its modification time contains sub-microsecond precision.",
+    "events": [
+     "`source_folder` observes the file and applies A7 rule 4.",
+     "`photo_preparation` falls back to the modification time."
+    ],
+    "outcomes": [
+     "The already-normalized time is passed into preparation and becomes the photo date.",
+     "Preparation reads or converts the time independently and may round differently."
+    ],
+    "observer": "The Portal and INV-04/INV-14 tests see a different `photo_date`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`deliverer_api`",
+   "kind": "missing_input",
+   "text": "- the HTTP surface declared in the manifest;",
+   "question": "What manifest and exact routes, methods, request bodies, response bodies, and health answer does this module own, since no manifest is present in the supplied states?",
+   "options": [
+    "Define the HTTP contract in State 3",
+    "Include the referenced manifest as an authoritative input",
+    "Remove the manifest reference and defer the HTTP contract explicitly"
+   ],
+   "default_guess": "Define explicit health, scan, place, and mark routes with their complete wire contracts in this state.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`deliverer_api`",
+   "kind": "unspecified_mapping",
+   "text": "- the HTTP status of every refusal;",
+   "question": "What HTTP status corresponds to every `RefusalCode`, validation failure, per-operation failure, and unexpected storage or file failure?",
+   "options": [
+    "Provide an exhaustive refusal-to-status table",
+    "Use one status for every authenticated refusal",
+    "Let the web framework choose statuses from exception classes"
+   ],
+   "default_guess": "Provide an exhaustive table, retaining 401 for authentication and assigning explicit 4xx/5xx statuses to every other whole-operation refusal.",
+   "witness": {
+    "initial": "A confirmed project requests a validly formed source id for which no placement exists when marking.",
+    "events": [
+     "`photo_delivery` returns or raises `not_placed`.",
+     "`deliverer_api` turns it into an HTTP response."
+    ],
+    "outcomes": [
+     "The API returns 404 because the placement does not exist.",
+     "The API returns 409 because the requested state transition is invalid."
+    ],
+    "observer": "The calling flow sees a different HTTP status and may retry or report it differently."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`domain_models`",
+   "kind": "undefined_record",
+   "text": "- the two refusal types: a refusal of the whole operation and a refusal of one file.",
+   "question": "What are the complete fields and variants of these two types, and how do they relate to `RefusalCode`, `PlacementFailure`, HTTP status, and path-free error details?",
+   "options": [
+    "Define two explicit discriminated models",
+    "Use `RefusalCode` for whole calls and M06 directly for per-file failures",
+    "Represent whole-call refusals as exceptions outside the domain models"
+   ],
+   "default_guess": "Define a path-free whole-operation refusal carrying `RefusalCode` and a per-file outcome represented by M06 with `PlacementFailure`.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`photo_delivery`",
+   "kind": "lock_boundary_ambiguity",
+   "text": "- which checks and writes run inside the project lock;",
+   "question": "Exactly which scan, connection, folder, replay, source-read, preparation, store, placement, and mark steps occur before, inside, or after the project lock?",
+   "options": [
+    "Lock immediately after clock and hold through all project checks and work",
+    "Check connection and folder before locking, then recheck mutable state inside",
+    "Lock only record existence checks and writes"
+   ],
+   "default_guess": "Check request syntax and read the clock first, then acquire the project lock for connection revalidation, scan/replay decisions, source verification, storage, and record writes.",
+   "witness": {
+    "initial": "Two processes place the same ready source while the folder or connection changes between their preliminary checks.",
+    "events": [
+     "Both calls pass request validation and read the clock.",
+     "One call changes durable placement state while the other waits or continues."
+    ],
+    "outcomes": [
+     "A broad lock makes the second call re-evaluate under the lock and answer `replayed`.",
+     "A narrow lock lets both prepare or store independently before record serialization."
+    ],
+    "observer": "The caller, filesystem, and concurrency tests see different work, orphan images, or outcomes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`object_connections`",
+   "kind": "provisional_public_surface",
+   "text": "### Candidate public capabilities\n\n```text\nload_connections\nconfirmed_connection\navailable_photo_folder\n```",
+   "question": "Are these exactly the exported capabilities, and what are their inputs, outputs, refusal behavior, and startup-versus-operation lifetimes?",
+   "options": [
+    "Adopt all three as the complete public surface",
+    "Change or combine the capabilities before contracts are written",
+    "Keep some operations module-private"
+   ],
+   "default_guess": "Adopt all three, with explicit typed contracts and `load_connections` returning an immutable validated repository.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`source_folder`",
+   "kind": "provisional_public_surface",
+   "text": "### Candidate public capabilities\n\n```text\nobserve_source_files\nread_source_bytes\n```",
+   "question": "Are these exactly the exported capabilities, and does `read_source_bytes` consume a relative name, an opaque scan handle, or a source id?",
+   "options": [
+    "Adopt both with an opaque scan handle",
+    "Adopt both with relative names",
+    "Combine observation and byte reading into one capability"
+   ],
+   "default_guess": "Adopt both and make byte reading consume an opaque handle issued by the observation capability.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`photo_preparation`",
+   "kind": "provisional_public_surface",
+   "text": "### Candidate public capabilities\n\n```text\nprepare_photo\nbuild_publication\n```",
+   "question": "Are these two separate exports, and which one owns applying the file modification-time fallback, output-size failure, file reference, and intake-id construction?",
+   "options": [
+    "Keep two exports with preparation and publication contracts separated",
+    "Combine them into one placement-preparation operation",
+    "Move publication construction to `photo_delivery`"
+   ],
+   "default_guess": "Keep two exports: `prepare_photo` produces M03 and `build_publication` consumes project/source identity, file reference, and the prepared moment.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`delivery_store`",
+   "kind": "provisional_public_surface",
+   "text": "### Candidate public capabilities\n\n```text\nproject_lock\nstore_image\nread_placement\nwrite_placement\nread_mark\nwrite_mark\n```",
+   "question": "Are these exactly the exports, and do write operations enforce create-once semantics or merely perform atomic replacement as instructed by `photo_delivery`?",
+   "options": [
+    "Writes are low-level atomic replacements and delivery logic enforces create-once",
+    "Writes are create-once compare-and-set operations",
+    "Expose one transactional repository instead of six capabilities"
+   ],
+   "default_guess": "Keep the six capabilities, with create-only record writes that fail if an existing unequal record is present.",
+   "witness": {
+    "initial": "A placement record already exists when a second process reaches `write_placement`.",
+    "events": [
+     "The second process attempts to persist its computed record.",
+     "The store handles the existing target."
+    ],
+    "outcomes": [
+     "A low-level replacement overwrites the record unless `photo_delivery` prevented the call.",
+     "A create-once store refuses the write and preserves the first record."
+    ],
+    "observer": "Concurrent callers and the durable state see whether the first placement is immutable."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`photo_delivery`",
+   "kind": "provisional_public_surface",
+   "text": "### Candidate public capabilities\n\n```text\nscan_project_photos\nplace_project_photos\nmark_photo_published\n```",
+   "question": "Are these exactly the exports, and what complete operation-level result and refusal contracts do they return?",
+   "options": [
+    "Adopt all three with explicit typed request/result contracts",
+    "Expose a single delivery service object",
+    "Rename or split orchestration from decision functions"
+   ],
+   "default_guess": "Adopt all three as the complete public surface with explicit path-free result and whole-operation refusal types.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`deliverer_api`",
+   "kind": "provisional_public_surface",
+   "text": "### Candidate public capabilities\n\n```text\ncreate_app\nread_token\nload_config\n```",
+   "question": "Are these exactly the exports, and which capability loads connections, constructs lower modules, injects the clock, and performs startup refusal?",
+   "options": [
+    "`create_app` is the composition root",
+    "Add a separate service/bootstrap capability",
+    "Let module import side effects perform startup work"
+   ],
+   "default_guess": "Make `create_app` the explicit composition root and keep `read_token` and `load_config` as its path-free helpers.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`domain_models`",
+   "kind": "incomplete_public_surface",
+   "text": "Exports types and constants only.",
+   "question": "Which exact model, enumeration, interface, settings type, refusal type, and constant names form the complete public export surface?",
+   "options": [
+    "Export every M01–M07 type, all listed enums, settings, refusal types, and A8 constants",
+    "Export only types directly used across module boundaries",
+    "Split constants and settings into a separate provider module"
+   ],
+   "default_guess": "Export M01–M07, every enumeration named by States 1–2, explicit settings and refusal models, and all A8 policy constants.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"30_modules.md:Dependencies\",\"kind\":\"standard_violation\",\"text\":\"A module may know only the modules listed for it. There are no cycles.\\n\\n| Module | May know |\\n|---|---|\\n| `domain_models` | none |\\n| `object_connections` | `domain_models` |\\n| `source_folder` | `domain_models` |\\n| `photo_preparation` | `domain_models` |\\n| `delivery_store` | `domain_models` |\\n| `photo_delivery` | `domain_models`, `object_connections`, `source_folder`, `photo_preparation`, `delivery_store` |\\n| `deliverer_api` | `domain_models`, `object_connections`, `photo_delivery` |\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"Replace the module-level permission table with the complete minimal consumer → provider → directly imported symbols graph.\"},{\"subject\":\"30_modules.md:`domain_models`\",\"kind\":\"contradictory_owner\",\"text\":\"- the form of a source id;\",\"question\":\"Does `domain_models` own the source-id form, or does `photo_delivery` own it as stated by the A5 rule-8 row?\",\"options\":[\"`domain_models` owns the form and `photo_delivery` only validates it\",\"`photo_delivery` owns the form and `domain_models` only declares its value type\",\"Split syntax ownership from validation ownership explicitly\"],\"default_guess\":\"`domain_models` declares the constrained source-id type and `photo_delivery` applies it to placement requests.\",\"witness\":{\"initial\":\"A placement request contains a 64-character string that is not lowercase hexadecimal.\",\"events\":[\"`deliverer_api` accepts the request form and passes it onward.\",\"The implementation reaches the source-id check.\"],\"outcomes\":[\"A `domain_models` validator rejects the value before `photo_delivery` begins its operation.\",\"`photo_delivery` accepts a plain string from `domain_models` and performs its own rejection.\"],\"observer\":\"The clock, connection loader, and caller can observe when and where the request is refused.\"}},{\"subject\":\"30_modules.md:`photo_delivery`\",\"kind\":\"owner_without_knowledge\",\"text\":\"- A3, A4, rule 4 of A6, rule 2 of A7, and order 9 to 11 of A1.\",\"question\":\"How can `photo_delivery` own A5 rule 8 for source ids and A5 rule 9 for answers when A5 is absent from what it knows?\",\"options\":[\"Add the owned parts of A5 to what `photo_delivery` knows\",\"Move both A5 rules to `deliverer_api`\",\"Split the rules into domain validation, delivery outcomes, and HTTP serialization\"],\"default_guess\":\"Add only A5 rule 8's source-id validation and the delivery-result part of rule 9 to `photo_delivery`, leaving HTTP serialization with `deliverer_api`.\"},{\"subject\":\"30_modules.md:Invariant owners\",\"kind\":\"unimplementable_owner_scope\",\"text\":\"| INV-06, INV-07, INV-08, INV-11, INV-12, INV-13 | `photo_delivery` |\",\"question\":\"Who owns each service-wide part of INV-11, including absence of Portal credentials or calls and paths in API refusals, when `photo_delivery` may not know `deliverer_api` and does not own the HTTP boundary?\",\"options\":[\"Split INV-11 among `photo_delivery`, `deliverer_api`, and deployment/configuration\",\"Make `deliverer_api` the primary owner and lower modules supporting owners\",\"Introduce a service-composition owner\"],\"default_guess\":\"Split it: `deliverer_api` owns answer and credential exposure, service composition owns absence of a Portal client, and `photo_delivery` owns path-free delivery results.\",\"witness\":{\"initial\":\"A lower delivery result contains no path, but an API-level connection refusal contains an exception message with the connection-file path.\",\"events\":[\"A caller requests an unknown or invalid project.\",\"`deliverer_api` converts the lower failure or exception into an HTTP answer.\"],\"outcomes\":[\"INV-11 is considered satisfied because `photo_delivery` returned no path.\",\"INV-11 is considered violated because every service answer, including API refusals, must be path-free.\"],\"observer\":\"The authenticated caller sees the server path only under the second ownership interpretation.\"}},{\"subject\":\"30_modules.md:`photo_delivery`\",\"kind\":\"incomplete_trace\",\"text\":\"### Trace inputs\\n\\n- A3\\n- A4\\n- A7\",\"question\":\"Must the trace inputs also include A1 orders 9–11, A5 rules 8–9, and A6 rule 4, all assigned to or known by this module elsewhere in State 3?\",\"options\":[\"Add A1, A5, and A6\",\"Remove those ownership assignments\",\"Declare that Trace inputs is intentionally non-exhaustive\"],\"default_guess\":\"Add A1, A5, and A6 and identify the applicable rules.\"},{\"subject\":\"30_modules.md:`photo_preparation`\",\"kind\":\"incomplete_trace\",\"text\":\"### Trace inputs\\n\\n- A2\",\"question\":\"Must the trace inputs include A7 rule 5 and A8/INV-14, which this module knows or owns elsewhere in State 3?\",\"options\":[\"Add A7 and A8\",\"Move A7 rule 5 and INV-14 elsewhere\",\"Declare that Trace inputs omits supporting decisions\"],\"default_guess\":\"Add A7 and A8.\"},{\"subject\":\"30_modules.md:Dependencies\",\"kind\":\"lifecycle_ambiguity\",\"text\":\"`deliverer_api` knows `object_connections` only to load the connections when the service starts.\",\"question\":\"Are connection-file changes visible only after restart, reloaded for every operation, or watched and atomically refreshed?\",\"options\":[\"Startup snapshot; every agent change requires restart\",\"Reload and validate for every operation\",\"Watch the file and replace an in-memory snapshot\"],\"default_guess\":\"Load a validated snapshot at startup and require a restart after any connection change.\",\"witness\":{\"initial\":\"The service starts with a project's connection unconfirmed.\",\"events\":[\"The owner confirms the folders.\",\"The agent updates the connection record without restarting the service.\",\"The owner starts a scan.\"],\"outcomes\":[\"The startup snapshot still refuses `connection_not_confirmed`.\",\"A refreshed view accepts the connection and scans the folder.\"],\"observer\":\"The owner and calling flow see refusal versus a scan result.\"}},{\"subject\":\"30_modules.md:`source_folder`\",\"kind\":\"missing_intermediate_model\",\"text\":\"- detecting a file with the same content as an earlier file of the scan;\",\"question\":\"What path-free value does `source_folder` return so `photo_delivery` can add placed/published status while retaining traversal order, duplicate relationships, source identity, modification time, and a safe way to read the selected file?\",\"options\":[\"Define an internal source-observation model with an opaque read handle\",\"Return relative names and require a second safe lookup\",\"Return final M02 values and let `source_folder` query placement state\"],\"default_guess\":\"Define an internal immutable observation containing plain relative name, source hash, size, normalized modification time, preliminary status, duplicate reference, and an opaque source handle.\"},{\"subject\":\"30_modules.md:`source_folder`\",\"kind\":\"missing_owner\",\"text\":\"- detecting a file with the same content as an earlier file of the scan;\",\"question\":\"Which module computes and verifies the SHA-256 `source_id` used for duplicate detection, requests, placement identity, and the changed-source check?\",\"options\":[\"`source_folder` computes and re-verifies it while safely reading bytes\",\"`photo_delivery` hashes bytes supplied by `source_folder`\",\"Split initial hashing and placement-time verification between the modules\"],\"default_guess\":\"`source_folder` owns hashing and safe re-verification; `photo_delivery` owns the decision made from the returned hashes.\",\"witness\":{\"initial\":\"A ready file is scanned and then replaced with different bytes under the same relative name.\",\"events\":[\"The scan computes the requested source id.\",\"The owner requests that source id.\",\"The file is read again for placement.\"],\"outcomes\":[\"`source_folder` verifies the second hash and reports a changed source.\",\"`photo_delivery` hashes returned bytes and independently reports `source_changed`.\"],\"observer\":\"Tests and maintainers observe different module responsibilities and dependency surfaces even though the caller may receive the same failure.\"}},{\"subject\":\"30_modules.md:`photo_preparation`\",\"kind\":\"missing_data_flow\",\"text\":\"- choosing the photo moment and converting it to UTC without an offset;\",\"question\":\"How does `photo_preparation` receive the normalized file modification time owned by `source_folder`, given that it may not know `source_folder`?\",\"options\":[\"`photo_delivery` passes the normalized modification time explicitly\",\"`photo_delivery` passes an internal source observation\",\"`photo_preparation` reads file metadata itself\"],\"default_guess\":\"`photo_delivery` passes the normalized modification time explicitly with the source bytes.\",\"witness\":{\"initial\":\"A PNG has no usable camera time and its modification time contains sub-microsecond precision.\",\"events\":[\"`source_folder` observes the file and applies A7 rule 4.\",\"`photo_preparation` falls back to the modification time.\"],\"outcomes\":[\"The already-normalized time is passed into preparation and becomes the photo date.\",\"Preparation reads or converts the time independently and may round differently.\"],\"observer\":\"The Portal and INV-04/INV-14 tests see a different `photo_date`.\"}},{\"subject\":\"30_modules.md:`deliverer_api`\",\"kind\":\"missing_input\",\"text\":\"- the HTTP surface declared in the manifest;\",\"question\":\"What manifest and exact routes, methods, request bodies, response bodies, and health answer does this module own, since no manifest is present in the supplied states?\",\"options\":[\"Define the HTTP contract in State 3\",\"Include the referenced manifest as an authoritative input\",\"Remove the manifest reference and defer the HTTP contract explicitly\"],\"default_guess\":\"Define explicit health, scan, place, and mark routes with their complete wire contracts in this state.\"},{\"subject\":\"30_modules.md:`deliverer_api`\",\"kind\":\"unspecified_mapping\",\"text\":\"- the HTTP status of every refusal;\",\"question\":\"What HTTP status corresponds to every `RefusalCode`, validation failure, per-operation failure, and unexpected storage or file failure?\",\"options\":[\"Provide an exhaustive refusal-to-status table\",\"Use one status for every authenticated refusal\",\"Let the web framework choose statuses from exception classes\"],\"default_guess\":\"Provide an exhaustive table, retaining 401 for authentication and assigning explicit 4xx/5xx statuses to every other whole-operation refusal.\",\"witness\":{\"initial\":\"A confirmed project requests a validly formed source id for which no placement exists when marking.\",\"events\":[\"`photo_delivery` returns or raises `not_placed`.\",\"`deliverer_api` turns it into an HTTP response.\"],\"outcomes\":[\"The API returns 404 because the placement does not exist.\",\"The API returns 409 because the requested state transition is invalid.\"],\"observer\":\"The calling flow sees a different HTTP status and may retry or report it differently.\"}},{\"subject\":\"30_modules.md:`domain_models`\",\"kind\":\"undefined_record\",\"text\":\"- the two refusal types: a refusal of the whole operation and a refusal of one file.\",\"question\":\"What are the complete fields and variants of these two types, and how do they relate to `RefusalCode`, `PlacementFailure`, HTTP status, and path-free error details?\",\"options\":[\"Define two explicit discriminated models\",\"Use `RefusalCode` for whole calls and M06 directly for per-file failures\",\"Represent whole-call refusals as exceptions outside the domain models\"],\"default_guess\":\"Define a path-free whole-operation refusal carrying `RefusalCode` and a per-file outcome represented by M06 with `PlacementFailure`.\"},{\"subject\":\"30_modules.md:`photo_delivery`\",\"kind\":\"lock_boundary_ambiguity\",\"text\":\"- which checks and writes run inside the project lock;\",\"question\":\"Exactly which scan, connection, folder, replay, source-read, preparation, store, placement, and mark steps occur before, inside, or after the project lock?\",\"options\":[\"Lock immediately after clock and hold through all project checks and work\",\"Check connection and folder before locking, then recheck mutable state inside\",\"Lock only record existence checks and writes\"],\"default_guess\":\"Check request syntax and read the clock first, then acquire the project lock for connection revalidation, scan/replay decisions, source verification, storage, and record writes.\",\"witness\":{\"initial\":\"Two processes place the same ready source while the folder or connection changes between their preliminary checks.\",\"events\":[\"Both calls pass request validation and read the clock.\",\"One call changes durable placement state while the other waits or continues.\"],\"outcomes\":[\"A broad lock makes the second call re-evaluate under the lock and answer `replayed`.\",\"A narrow lock lets both prepare or store independently before record serialization.\"],\"observer\":\"The caller, filesystem, and concurrency tests see different work, orphan images, or outcomes.\"}},{\"subject\":\"30_modules.md:`object_connections`\",\"kind\":\"provisional_public_surface\",\"text\":\"### Candidate public capabilities\\n\\n```text\\nload_connections\\nconfirmed_connection\\navailable_photo_folder\\n```\",\"question\":\"Are these exactly the exported capabilities, and what are their inputs, outputs, refusal behavior, and startup-versus-operation lifetimes?\",\"options\":[\"Adopt all three as the complete public surface\",\"Change or combine the capabilities before contracts are written\",\"Keep some operations module-private\"],\"default_guess\":\"Adopt all three, with explicit typed contracts and `load_connections` returning an immutable validated repository.\"},{\"subject\":\"30_modules.md:`source_folder`\",\"kind\":\"provisional_public_surface\",\"text\":\"### Candidate public capabilities\\n\\n```text\\nobserve_source_files\\nread_source_bytes\\n```\",\"question\":\"Are these exactly the exported capabilities, and does `read_source_bytes` consume a relative name, an opaque scan handle, or a source id?\",\"options\":[\"Adopt both with an opaque scan handle\",\"Adopt both with relative names\",\"Combine observation and byte reading into one capability\"],\"default_guess\":\"Adopt both and make byte reading consume an opaque handle issued by the observation capability.\"},{\"subject\":\"30_modules.md:`photo_preparation`\",\"kind\":\"provisional_public_surface\",\"text\":\"### Candidate public capabilities\\n\\n```text\\nprepare_photo\\nbuild_publication\\n```\",\"question\":\"Are these two separate exports, and which one owns applying the file modification-time fallback, output-size failure, file reference, and intake-id construction?\",\"options\":[\"Keep two exports with preparation and publication contracts separated\",\"Combine them into one placement-preparation operation\",\"Move publication construction to `photo_delivery`\"],\"default_guess\":\"Keep two exports: `prepare_photo` produces M03 and `build_publication` consumes project/source identity, file reference, and the prepared moment.\"},{\"subject\":\"30_modules.md:`delivery_store`\",\"kind\":\"provisional_public_surface\",\"text\":\"### Candidate public capabilities\\n\\n```text\\nproject_lock\\nstore_image\\nread_placement\\nwrite_placement\\nread_mark\\nwrite_mark\\n```\",\"question\":\"Are these exactly the exports, and do write operations enforce create-once semantics or merely perform atomic replacement as instructed by `photo_delivery`?\",\"options\":[\"Writes are low-level atomic replacements and delivery logic enforces create-once\",\"Writes are create-once compare-and-set operations\",\"Expose one transactional repository instead of six capabilities\"],\"default_guess\":\"Keep the six capabilities, with create-only record writes that fail if an existing unequal record is present.\",\"witness\":{\"initial\":\"A placement record already exists when a second process reaches `write_placement`.\",\"events\":[\"The second process attempts to persist its computed record.\",\"The store handles the existing target.\"],\"outcomes\":[\"A low-level replacement overwrites the record unless `photo_delivery` prevented the call.\",\"A create-once store refuses the write and preserves the first record.\"],\"observer\":\"Concurrent callers and the durable state see whether the first placement is immutable.\"}},{\"subject\":\"30_modules.md:`photo_delivery`\",\"kind\":\"provisional_public_surface\",\"text\":\"### Candidate public capabilities\\n\\n```text\\nscan_project_photos\\nplace_project_photos\\nmark_photo_published\\n```\",\"question\":\"Are these exactly the exports, and what complete operation-level result and refusal contracts do they return?\",\"options\":[\"Adopt all three with explicit typed request/result contracts\",\"Expose a single delivery service object\",\"Rename or split orchestration from decision functions\"],\"default_guess\":\"Adopt all three as the complete public surface with explicit path-free result and whole-operation refusal types.\"},{\"subject\":\"30_modules.md:`deliverer_api`\",\"kind\":\"provisional_public_surface\",\"text\":\"### Candidate public capabilities\\n\\n```text\\ncreate_app\\nread_token\\nload_config\\n```\",\"question\":\"Are these exactly the exports, and which capability loads connections, constructs lower modules, injects the clock, and performs startup refusal?\",\"options\":[\"`create_app` is the composition root\",\"Add a separate service/bootstrap capability\",\"Let module import side effects perform startup work\"],\"default_guess\":\"Make `create_app` the explicit composition root and keep `read_token` and `load_config` as its path-free helpers.\"},{\"subject\":\"30_modules.md:`domain_models`\",\"kind\":\"incomplete_public_surface\",\"text\":\"Exports types and constants only.\",\"question\":\"Which exact model, enumeration, interface, settings type, refusal type, and constant names form the complete public export surface?\",\"options\":[\"Export every M01–M07 type, all listed enums, settings, refusal types, and A8 constants\",\"Export only types directly used across module boundaries\",\"Split constants and settings into a separate provider module\"],\"default_guess\":\"Export M01–M07, every enumeration named by States 1–2, explicit settings and refusal models, and all A8 policy constants.\"}]}",
+ "set_aside": []
+}

@@ -4,31 +4,64 @@
 
 Written on 2026-11-18 from the accepted States 0 to 2. The prototype was split into exactly these
 modules to test the boundaries. Evidence: `python3 -m pytest -q prototypes/portal_deliverer`
-(46 tests) and `python3 prototypes/portal_deliverer/e2e_local_portal.py` (26 checks). The tests
-`test_modules_depend_only_in_the_declared_direction` and
-`test_each_hidden_mechanism_stays_inside_its_module` read the imports of the prototype and fail when
-a boundary below is broken.
+(51 tests), `python3 prototypes/portal_deliverer/e2e_local_portal.py` (26 checks) and
+`python3 prototypes/portal_deliverer/e2e_local_syncthing.py` (18 checks on two private Syncthing
+instances). The tests `test_modules_name_exactly_the_declared_symbols`,
+`test_each_hidden_mechanism_stays_inside_its_module` and `test_no_module_can_call_the_portal` read
+the imports of the prototype and fail when a boundary below is broken.
 
-The split found one defect of the prototype. A mark with a malformed source id was answered
-`unknown_project` after reading the clock, against A4 rule 2 and A7 rule 2. One module now owns the
-order of checks, and `test_a_mark_with_a_malformed_source_id_is_refused_before_the_connection_and_the_clock`
-holds that order.
+The split found two defects of the prototype. A mark with a malformed source id was answered
+`unknown_project` after reading the clock, against A4 rule 2 and A7 rule 2; the section "Order of one
+operation" now decides that order, and
+`test_a_mark_with_a_malformed_source_id_is_refused_before_the_connection_and_the_clock` holds it. A
+confirmation cleared while the service ran did not stop delivery, against R0-11; A5 rule 6 now has
+the record read at each operation.
 
 ## Dependencies
 
-A module may know only the modules listed for it. There are no cycles.
+This table is the complete and minimal list of what each module names directly. There are no
+cycles, and `domain_models` names no other module.
 
-| Module | May know |
-|---|---|
-| `domain_models` | none |
-| `object_connections` | `domain_models` |
-| `source_folder` | `domain_models` |
-| `photo_preparation` | `domain_models` |
-| `delivery_store` | `domain_models` |
-| `photo_delivery` | `domain_models`, `object_connections`, `source_folder`, `photo_preparation`, `delivery_store` |
-| `deliverer_api` | `domain_models`, `object_connections`, `photo_delivery` |
+| Consumer | Provider | Symbols |
+|---|---|---|
+| `object_connections` | `domain_models` | `DelivererError`, `ObjectConnection` |
+| `source_folder` | `domain_models` | `MIN_AGE_SECONDS`, `MAX_SOURCE_BYTES`, `DelivererError`, `Rejected`, `SourceFile` |
+| `photo_preparation` | `domain_models` | `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_MAX_SIDE`, `PHOTO_QUALITY`, `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `PreparedPhoto`, `Rejected` |
+| `delivery_store` | `domain_models` | `Config`, `DelivererError` |
+| `photo_delivery` | `domain_models` | `SOURCE_ID_FORM`, `Config`, `DelivererError`, `Rejected`, `SourceFile` |
+| `photo_delivery` | `object_connections` | `confirmed_connection`, `available_photo_folder` |
+| `photo_delivery` | `source_folder` | `observe_source_files`, `read_source_bytes` |
+| `photo_delivery` | `photo_preparation` | `prepare_photo`, `build_publication` |
+| `photo_delivery` | `delivery_store` | `project_lock`, `store_image`, `read_placement`, `write_placement`, `read_mark`, `write_mark` |
+| `deliverer_api` | `domain_models` | `MAX_PLACE_ITEMS`, `Config`, `DelivererError` |
+| `deliverer_api` | `object_connections` | `load_connections` |
+| `deliverer_api` | `photo_delivery` | `scan_project_photos`, `place_project_photos`, `mark_photo_published` |
 
-`deliverer_api` knows `object_connections` only to load the connections when the service starts.
+`deliverer_api` names `load_connections` only to refuse a start with a broken record. The operations
+read the record themselves through `confirmed_connection`, so no module keeps connections in memory.
+
+`deliverer_api` alone reaches `system_clock_backend`. It hands `utc_now` to an operation as a function,
+and `photo_delivery` calls that function.
+
+## Order of one operation
+
+`deliverer_api` performs the steps marked API and then calls `photo_delivery`, which performs the
+rest in the order shown. Only `photo_delivery` takes the project lock.
+
+| Step | Scan | Placement | Mark |
+|---|---|---|---|
+| 1, API | token | token | token |
+| 2, API | project id | request form, project id | request form, project id, `photo_id` |
+| 3 | clock | clock | source id |
+| 4 | connection | connection | clock |
+| 5 | photo folder | photo folder | connection |
+| 6 | observe the folder, read records | every source id | take the lock |
+| 7 | | take the lock | placement exists |
+| 8 | | observe the folder once | existing mark, or write the mark |
+| 9 | | each photo in request order: replay, or read, verify, prepare, store the image, write the record | release the lock |
+| 10 | | release the lock | |
+
+A scan takes no lock.
 
 ## Rules decided across modules
 
@@ -41,10 +74,13 @@ names the owner of each rule.
 | A1 | order 9 to 11, placed and published status | `photo_delivery` |
 | A5 | rules 1 to 4, token and listening address | `deliverer_api` |
 | A5 | rule 5, the single principal | `deliverer_api` |
-| A5 | rules 6 and 7, connection and photo folder | `object_connections` |
+| A5 | rule 6, the write that clears a confirmation | the agent, outside this service (R0-11) |
+| A5 | rule 6, reading the record at each operation and refusing; rule 7 | `object_connections` |
 | A5 | rule 8, project id form | `deliverer_api` |
-| A5 | rule 8, source id form, and no received text in a stored path | `photo_delivery` |
-| A5 | rule 9, what an answer holds | `photo_delivery` |
+| A5 | rule 8, checking a source id against `SOURCE_ID_FORM` | `photo_delivery` |
+| A5 | rule 8, stored names built only from checked identifiers | `delivery_store` |
+| A5 | rule 9, what a delivery result holds | `photo_delivery` |
+| A5 | rule 9, what a refusal answer holds | `deliverer_api` |
 | A6 | rules 1 to 3, stored names, modes, atomic writes, the lock itself | `delivery_store` |
 | A6 | rule 4, which checks and writes run inside the lock | `photo_delivery` |
 | A7 | rules 1 and 3, the clock and the form of its reading | `deliverer_api` |
@@ -58,12 +94,16 @@ names the owner of each rule.
 |---|---|
 | INV-01, INV-02 | `source_folder` |
 | INV-03, INV-04, INV-05, INV-14 | `photo_preparation` |
-| INV-06, INV-07, INV-08, INV-11, INV-12, INV-13 | `photo_delivery` |
-| INV-09 | `deliverer_api` |
+| INV-06, INV-07, INV-08, INV-12, INV-13 | `photo_delivery` |
+| INV-09, INV-11 | `deliverer_api` |
 | INV-10 | `object_connections` |
 | INV-15 | deployment route (A9) |
 | INV-16 | security review record (A10) |
 | INV-17 | calling flow (A11), outside this service |
+
+`deliverer_api` owns INV-11 because every answer leaves through it: a refusal carries only its code and
+a fixed message. `photo_delivery` supplies path-free results, and no module holds a client for any
+outbound call.
 
 ## `domain_models`
 
@@ -71,7 +111,8 @@ names the owner of each rule.
 
 - the models M01 to M07 and their enumerations;
 - the policy constants and the run settings of A8;
-- the form of a source id;
+- the constant `SOURCE_ID_FORM`, which no model applies by itself: a source id stays plain text until
+  `photo_delivery` checks it;
 - the two refusal types: a refusal of the whole operation and a refusal of one file.
 
 ### Knows
@@ -144,6 +185,7 @@ available_photo_folder
 
 - walking the photo folder in the decided order;
 - ignored names, links, the settling time, source limits and file signatures;
+- computing the SHA-256 source id of each file it reads;
 - detecting a file with the same content as an earlier file of the scan;
 - reading the bytes of one source file without following a link;
 - the modification time of a file in the service's time form.
@@ -216,6 +258,8 @@ build_publication
 ### Trace inputs
 
 - A2
+- A7
+- A8
 
 ### Depth assessment
 
@@ -272,10 +316,11 @@ write_mark
 
 ### Owns
 
-- the order of checks of scan, placement and mark, after the request form is accepted;
+- steps 3 and later of "Order of one operation";
 - when an operation reads the clock;
 - completing a scan with placed and published status;
 - one placement per project and content, replay, and per-photo failure;
+- comparing the bytes read for placing with the requested source id (`source_changed`);
 - writing the stored image before the placement record;
 - one mark per placement, replay and `publication_conflict`;
 - which checks and writes run inside the project lock;
@@ -283,7 +328,8 @@ write_mark
 
 ### Knows
 
-- A3, A4, rule 4 of A6, rule 2 of A7, and order 9 to 11 of A1.
+- A3, A4, rule 4 of A6, rule 2 of A7, order 9 to 11 of A1, and the parts of rules 8 and 9 of A5 given to
+  it above.
 
 ### Hides
 
@@ -306,8 +352,11 @@ mark_photo_published
 
 ### Trace inputs
 
+- A1
 - A3
 - A4
+- A5
+- A6
 - A7
 
 ### Depth assessment
@@ -321,15 +370,15 @@ mark_photo_published
 
 - the HTTP surface declared in the manifest;
 - the bearer token: reading its file, the start refusal and the constant-time comparison;
-- the request form and the project id form;
-- the HTTP status of every refusal;
-- the system clock given to the operations;
+- steps 1 and 2 of "Order of one operation";
+- the HTTP status and the content of every refusal answer;
+- the system clock handed to the operations;
 - reading the run settings when the service starts;
 - listening on the loopback interface only.
 
 ### Knows
 
-- rules 1 to 5 and the project id part of rule 8 of A5, and rules 1 and 3 of A7.
+- rules 1 to 5, the project id part of rule 8 and the refusal part of rule 9 of A5, and rules 1 and 3 of A7.
 
 ### Hides
 

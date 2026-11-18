@@ -191,7 +191,9 @@ A published photo is recognised without any change to the Portal.
 6. A change of an object's root or subfolder writes `assignment_confirmed` false (R0-11). An
    operation on a project with no connection is refused with `unknown_project`, and one with an
    unconfirmed connection with `connection_not_confirmed`. This is decided by the service, not by
-   the caller.
+   the caller. The service reads the connection record at each scan, placement and mark, so a change
+   applies from the next operation without a restart. A record that cannot be read or breaks rule 7
+   refuses the operation with `folder_unavailable`.
 7. The photo and invoice subfolders are non-empty relative paths without `..` and are not the root
    itself. The service does not start with a connection that breaks this. On each scan and placement
    the photo folder must be a folder whose resolved path is strictly below the resolved root,
@@ -210,7 +212,7 @@ A published photo is recognised without any change to the Portal.
 ### Required tests
 
 - INV-09: every declared route except the health answer refuses a request without the token (`test_every_route_except_health_requires_the_token`), and a wrong token or one without the `Bearer` prefix is refused (`test_the_api_requires_the_token`).
-- INV-10: scan, place and mark are refused for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`), a connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).
+- INV-10: scan, place and mark are refused for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`), a connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`), a confirmation cleared while the service runs stops the next operation (`test_a_cleared_confirmation_stops_the_running_service`), and an unreadable record delivers nothing (`test_unreadable_connections_deliver_nothing`).
 - INV-11: answers of scan, place, mark and a refusal contain neither the folder path, the store path nor the state path (`test_the_api_scans_and_places_without_showing_server_paths`), and the generated service has no Portal client, no outbound HTTP dependency and no Portal credential setting.
 
 ### Consequence
