@@ -1,0 +1,252 @@
+{
+ "open_points": [
+  {
+   "subject": "context",
+   "kind": "path containment semantics",
+   "text": "a connection whose subfolder is written to leave its root is refused",
+   "question": "What exact path syntax, normalization, platform rules, and containment comparison determine that a written subfolder leaves the root?",
+   "options": [
+    "Require a relative subfolder and reject absolute paths, `..` after lexical normalization, and every normalized path outside the normalized root.",
+    "Resolve the written root and subfolder using filesystem path semantics and decide containment from their resolved absolute paths.",
+    "Treat the subfolder as an opaque relative string and reject only explicit parent components."
+   ],
+   "default_guess": "Require a relative subfolder, lexically normalize it without following links, and reject absolute paths or any result outside the normalized root.",
+   "witness": {
+    "initial": "The root is `/srv/project` and the agent writes `photo_subfolder` as `photos/../outside`.",
+    "events": [
+     "The agent submits the connection after owner confirmation."
+    ],
+    "outcomes": [
+     "Lexical normalization produces `/srv/project/outside`, so the connection is accepted.",
+     "The presence of a parent component is itself forbidden, so the connection is refused."
+    ],
+    "observer": "The agent and owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "link scope",
+   "text": "a photo folder linked outside the root is refused when it is used",
+   "question": "Which links count: a link at the final photo-folder path, a link in any ancestor or descendant component, a linked root, or a linked file inside the folder; and relative to which resolved root is “outside” decided?",
+   "options": [
+    "Resolve the root and every component of the selected file path, requiring the final target to remain beneath the resolved root.",
+    "Check only whether the final photo-folder entry itself is a symbolic link whose target is outside the written root.",
+    "Forbid every symbolic link anywhere below the written root, even when its target remains inside."
+   ],
+   "default_guess": "Resolve the root and every component used to reach a photo, and require the resolved folder and file to remain under the resolved root.",
+   "witness": {
+    "initial": "`root` is `/srv/object`; `photo_subfolder` is `photos`; `/srv/object/photos` is a real directory containing `shot.jpg`, which is a symbolic link to `/etc/secret`.",
+    "events": [
+     "The owner requests that `shot.jpg` be placed."
+    ],
+    "outcomes": [
+     "The request is refused because the file reached through the photo folder resolves outside the root.",
+     "The request proceeds because the photo folder itself is not linked outside the root."
+    ],
+    "observer": "The owner and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "undefined use boundary",
+   "text": "a photo folder linked outside the root is refused when it is used",
+   "question": "Which operations count as using the photo folder, and at what point in each operation must the link be checked?",
+   "options": [
+    "Check during listing, placement, and every later filesystem read.",
+    "Check only when bytes are opened for placement.",
+    "Check when the connection is written as well as whenever delivery reads the folder."
+   ],
+   "default_guess": "Check on every operation that enumerates, stats, hashes, or opens a path in the photo folder, immediately before the relevant access.",
+   "witness": {
+    "initial": "A confirmed connection's written photo path is inside the root but currently links outside it.",
+    "events": [
+     "The owner asks to see what can be delivered.",
+     "No placement is requested."
+    ],
+    "outcomes": [
+     "The listing is refused because enumeration uses the linked folder.",
+     "The listing succeeds and the link is checked only if a photo is later placed."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "check timing race",
+   "text": "a photo folder linked outside the root is refused when it is used",
+   "question": "How must an operation prevent the folder or a path component from being exchanged for an outside link between the containment check and the actual read?",
+   "options": [
+    "Use descriptor-relative or equivalent race-resistant access so the checked object is the object read.",
+    "Resolve and check the path once, then open it by pathname.",
+    "Check again after opening and refuse if the opened object is outside."
+   ],
+   "default_guess": "Use descriptor-relative, no-follow access or an equivalent mechanism that binds validation and reading to the same filesystem objects.",
+   "witness": {
+    "initial": "The photo folder is inside the root when an operation begins.",
+    "events": [
+     "The deliverer checks the folder path.",
+     "Another actor replaces the folder with a link to an outside directory.",
+     "The deliverer opens the previously checked pathname."
+    ],
+    "outcomes": [
+     "The operation refuses or cannot read outside because validation and access are bound to the same object.",
+     "The operation reads the outside directory because the pathname was opened after the check."
+    ],
+    "observer": "The owner and anyone whose outside files become visible"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "refusal atomicity",
+   "text": "a connection whose subfolder is written to leave its root is refused",
+   "question": "When an agent attempts to replace an existing connection with one containing an escaping subfolder, must the entire write leave the old record unchanged, or may the new record be stored unconfirmed or partially updated?",
+   "options": [
+    "Reject the whole write and preserve the existing connection exactly.",
+    "Store the new paths with `assignment_confirmed` cleared.",
+    "Apply valid fields while refusing only the invalid subfolder."
+   ],
+   "default_guess": "Reject the whole write atomically and preserve the existing record.",
+   "witness": {
+    "initial": "A project has a confirmed connection to valid folders.",
+    "events": [
+     "The agent submits a changed label, root, and an escaping photo subfolder."
+    ],
+    "outcomes": [
+     "Nothing is written and the former confirmed connection remains usable.",
+     "The new connection is stored with confirmation cleared, stopping delivery."
+    ],
+    "observer": "The agent and owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "runtime state effect",
+   "text": "a photo folder linked outside the root is refused when it is used",
+   "question": "Does discovering an outside link merely refuse the current operation, or must it also clear confirmation, modify the connection, quarantine files, or affect later operations?",
+   "options": [
+    "Refuse the current operation without changing the connection or confirmation.",
+    "Clear `assignment_confirmed` and stop all delivery until reconfirmation.",
+    "Record a transient failure while leaving confirmation intact, with later operations retrying."
+   ],
+   "default_guess": "Refuse the current operation without mutating the owner-confirmed record; retry the safety check on every later use.",
+   "witness": {
+    "initial": "A confirmed photo folder is replaced by a link outside the root.",
+    "events": [
+     "The owner requests a listing and it is refused.",
+     "The folder is restored inside the root.",
+     "The owner requests another listing."
+    ],
+    "outcomes": [
+     "The second listing proceeds because the first refusal did not change confirmation.",
+     "The second listing is refused because discovery cleared confirmation and requires the owner to confirm again."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "failure precedence",
+   "text": "unknown project, unconfirmed connection or unavailable folder is refused; nothing is changed",
+   "question": "When a connection is both unconfirmed and its photo folder is linked outside the root, which condition is checked first, which refusal is exposed, and may the filesystem be inspected before confirmation is established?",
+   "options": [
+    "Check project existence and confirmation before any filesystem access, then check folder availability and containment.",
+    "Check containment first and report the unsafe link even for an unconfirmed connection.",
+    "Return one generic refusal without distinguishing the conditions, while still defining a safe check order."
+   ],
+   "default_guess": "Check project existence and confirmation first without touching the filesystem, then check availability and resolved containment.",
+   "witness": {
+    "initial": "The project exists; its connection is unconfirmed; its photo folder links outside the root.",
+    "events": [
+     "The owner asks to see what can be delivered."
+    ],
+    "outcomes": [
+     "The caller receives an unconfirmed-connection refusal and the outside target is never inspected.",
+     "The caller receives an outside-folder refusal after the filesystem is inspected."
+    ],
+    "observer": "The owner and operators observing filesystem access or errors"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "batch refusal scope",
+   "text": "a photo folder linked outside the root is refused when it is used",
+   "question": "During placement of multiple chosen photos, is an outside-link finding a refusal of the whole operation, a failure only for affected files while others proceed, or a refusal of all files reached through that folder?",
+   "options": [
+    "Refuse the entire placement request before writing anything.",
+    "Report each affected file separately and continue with files whose resolved paths remain inside the root.",
+    "Refuse every file from the unsafe folder but continue with files from other safe roots or folders."
+   ],
+   "default_guess": "Report affected files separately only if each file can be accessed independently and safely; otherwise refuse the batch before any placement writes.",
+   "witness": {
+    "initial": "Two photos were listed as ready; before placement, one path or directory is changed to link outside the root while the other remains safely accessible.",
+    "events": [
+     "The owner selects both photos for placement."
+    ],
+    "outcomes": [
+     "Both placements are refused because use of the photo folder fails its containment condition.",
+     "The unsafe photo is reported on its own and the safe photo is placed because bad files do not stop the others."
+    ],
+    "observer": "The owner and the Portal store"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "invariant test obligation",
+   "text": "INV-16: `python tools/design_lint.py examples/portal-deliverer --state 2` reports no security finding. The closed list of categories is `SECURITY_REVIEW_EVIDENCE.md`.",
+   "question": "What observable assertions must this Required tests item make to demonstrate INV-16, including category completeness, allowed outcome values, and resolution of every applicable category?",
+   "options": [
+    "Assert that every category in the closed list occurs exactly once with an allowed explicit outcome and every applicable category names an owning decision.",
+    "Treat a zero-exit or no-finding lint run as sufficient without specifying what the lint checks.",
+    "Assert only that the displayed Security review entries have either `APPLICABLE` or `NOT_APPLICABLE`."
+   ],
+   "default_guess": "Require the test to assert exact coverage of the closed category list, one allowed outcome per category, rationale for each not-applicable category, and an existing owning decision for each applicable category.",
+   "witness": {
+    "initial": "The lint command emits no finding even though a category is absent or an applicable category references no existing decision.",
+    "events": [
+     "A reviewer runs the Required tests command."
+    ],
+    "outcomes": [
+     "The test passes because only the absence of lint findings is required.",
+     "The test fails because it must directly demonstrate completeness and ownership for INV-16."
+    ],
+    "observer": "The State 2 reviewer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "undefined invariant terms",
+   "text": "INV-16: every security category has an explicit outcome.",
+   "question": "What is the closed set meant by “every security category,” what values qualify as an “explicit outcome,” and does `APPLICABLE` count as resolved only when its referenced decision actually exists and covers the affected surface?",
+   "options": [
+    "Use exactly the categories in `SECURITY_REVIEW_EVIDENCE.md`; accept only `APPLICABLE` and `NOT_APPLICABLE`; validate ownership or rationale respectively.",
+    "Treat the categories printed in this State 2 section as the set, regardless of the evidence file.",
+    "Treat classification alone as an explicit outcome without validating referenced decisions or rationales."
+   ],
+   "default_guess": "Use the evidence file as the exact closed set and require each applicable entry to resolve to an existing covering decision and each not-applicable entry to carry a rationale.",
+   "witness": {
+    "initial": "A category is marked `APPLICABLE` and names `A5`, but `A5` does not address the newly distinguished lexical escape and outside-link cases.",
+    "events": [
+     "State 2 is checked for completion."
+    ],
+    "outcomes": [
+     "INV-16 holds because the category has the explicit word `APPLICABLE`.",
+     "INV-16 fails because the claimed owning decision does not resolve the affected security case."
+    ],
+    "observer": "The State 2 reviewer and later implementers"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context\",\"kind\":\"path containment semantics\",\"text\":\"a connection whose subfolder is written to leave its root is refused\",\"question\":\"What exact path syntax, normalization, platform rules, and containment comparison determine that a written subfolder leaves the root?\",\"options\":[\"Require a relative subfolder and reject absolute paths, `..` after lexical normalization, and every normalized path outside the normalized root.\",\"Resolve the written root and subfolder using filesystem path semantics and decide containment from their resolved absolute paths.\",\"Treat the subfolder as an opaque relative string and reject only explicit parent components.\"],\"default_guess\":\"Require a relative subfolder, lexically normalize it without following links, and reject absolute paths or any result outside the normalized root.\",\"witness\":{\"initial\":\"The root is `/srv/project` and the agent writes `photo_subfolder` as `photos/../outside`.\",\"events\":[\"The agent submits the connection after owner confirmation.\"],\"outcomes\":[\"Lexical normalization produces `/srv/project/outside`, so the connection is accepted.\",\"The presence of a parent component is itself forbidden, so the connection is refused.\"],\"observer\":\"The agent and owner\"}},{\"subject\":\"context\",\"kind\":\"link scope\",\"text\":\"a photo folder linked outside the root is refused when it is used\",\"question\":\"Which links count: a link at the final photo-folder path, a link in any ancestor or descendant component, a linked root, or a linked file inside the folder; and relative to which resolved root is “outside” decided?\",\"options\":[\"Resolve the root and every component of the selected file path, requiring the final target to remain beneath the resolved root.\",\"Check only whether the final photo-folder entry itself is a symbolic link whose target is outside the written root.\",\"Forbid every symbolic link anywhere below the written root, even when its target remains inside.\"],\"default_guess\":\"Resolve the root and every component used to reach a photo, and require the resolved folder and file to remain under the resolved root.\",\"witness\":{\"initial\":\"`root` is `/srv/object`; `photo_subfolder` is `photos`; `/srv/object/photos` is a real directory containing `shot.jpg`, which is a symbolic link to `/etc/secret`.\",\"events\":[\"The owner requests that `shot.jpg` be placed.\"],\"outcomes\":[\"The request is refused because the file reached through the photo folder resolves outside the root.\",\"The request proceeds because the photo folder itself is not linked outside the root.\"],\"observer\":\"The owner and the calling flow\"}},{\"subject\":\"context\",\"kind\":\"undefined use boundary\",\"text\":\"a photo folder linked outside the root is refused when it is used\",\"question\":\"Which operations count as using the photo folder, and at what point in each operation must the link be checked?\",\"options\":[\"Check during listing, placement, and every later filesystem read.\",\"Check only when bytes are opened for placement.\",\"Check when the connection is written as well as whenever delivery reads the folder.\"],\"default_guess\":\"Check on every operation that enumerates, stats, hashes, or opens a path in the photo folder, immediately before the relevant access.\",\"witness\":{\"initial\":\"A confirmed connection's written photo path is inside the root but currently links outside it.\",\"events\":[\"The owner asks to see what can be delivered.\",\"No placement is requested.\"],\"outcomes\":[\"The listing is refused because enumeration uses the linked folder.\",\"The listing succeeds and the link is checked only if a photo is later placed.\"],\"observer\":\"The owner\"}},{\"subject\":\"context\",\"kind\":\"check timing race\",\"text\":\"a photo folder linked outside the root is refused when it is used\",\"question\":\"How must an operation prevent the folder or a path component from being exchanged for an outside link between the containment check and the actual read?\",\"options\":[\"Use descriptor-relative or equivalent race-resistant access so the checked object is the object read.\",\"Resolve and check the path once, then open it by pathname.\",\"Check again after opening and refuse if the opened object is outside.\"],\"default_guess\":\"Use descriptor-relative, no-follow access or an equivalent mechanism that binds validation and reading to the same filesystem objects.\",\"witness\":{\"initial\":\"The photo folder is inside the root when an operation begins.\",\"events\":[\"The deliverer checks the folder path.\",\"Another actor replaces the folder with a link to an outside directory.\",\"The deliverer opens the previously checked pathname.\"],\"outcomes\":[\"The operation refuses or cannot read outside because validation and access are bound to the same object.\",\"The operation reads the outside directory because the pathname was opened after the check.\"],\"observer\":\"The owner and anyone whose outside files become visible\"}},{\"subject\":\"context\",\"kind\":\"refusal atomicity\",\"text\":\"a connection whose subfolder is written to leave its root is refused\",\"question\":\"When an agent attempts to replace an existing connection with one containing an escaping subfolder, must the entire write leave the old record unchanged, or may the new record be stored unconfirmed or partially updated?\",\"options\":[\"Reject the whole write and preserve the existing connection exactly.\",\"Store the new paths with `assignment_confirmed` cleared.\",\"Apply valid fields while refusing only the invalid subfolder.\"],\"default_guess\":\"Reject the whole write atomically and preserve the existing record.\",\"witness\":{\"initial\":\"A project has a confirmed connection to valid folders.\",\"events\":[\"The agent submits a changed label, root, and an escaping photo subfolder.\"],\"outcomes\":[\"Nothing is written and the former confirmed connection remains usable.\",\"The new connection is stored with confirmation cleared, stopping delivery.\"],\"observer\":\"The agent and owner\"}},{\"subject\":\"context\",\"kind\":\"runtime state effect\",\"text\":\"a photo folder linked outside the root is refused when it is used\",\"question\":\"Does discovering an outside link merely refuse the current operation, or must it also clear confirmation, modify the connection, quarantine files, or affect later operations?\",\"options\":[\"Refuse the current operation without changing the connection or confirmation.\",\"Clear `assignment_confirmed` and stop all delivery until reconfirmation.\",\"Record a transient failure while leaving confirmation intact, with later operations retrying.\"],\"default_guess\":\"Refuse the current operation without mutating the owner-confirmed record; retry the safety check on every later use.\",\"witness\":{\"initial\":\"A confirmed photo folder is replaced by a link outside the root.\",\"events\":[\"The owner requests a listing and it is refused.\",\"The folder is restored inside the root.\",\"The owner requests another listing.\"],\"outcomes\":[\"The second listing proceeds because the first refusal did not change confirmation.\",\"The second listing is refused because discovery cleared confirmation and requires the owner to confirm again.\"],\"observer\":\"The owner\"}},{\"subject\":\"context\",\"kind\":\"failure precedence\",\"text\":\"unknown project, unconfirmed connection or unavailable folder is refused; nothing is changed\",\"question\":\"When a connection is both unconfirmed and its photo folder is linked outside the root, which condition is checked first, which refusal is exposed, and may the filesystem be inspected before confirmation is established?\",\"options\":[\"Check project existence and confirmation before any filesystem access, then check folder availability and containment.\",\"Check containment first and report the unsafe link even for an unconfirmed connection.\",\"Return one generic refusal without distinguishing the conditions, while still defining a safe check order.\"],\"default_guess\":\"Check project existence and confirmation first without touching the filesystem, then check availability and resolved containment.\",\"witness\":{\"initial\":\"The project exists; its connection is unconfirmed; its photo folder links outside the root.\",\"events\":[\"The owner asks to see what can be delivered.\"],\"outcomes\":[\"The caller receives an unconfirmed-connection refusal and the outside target is never inspected.\",\"The caller receives an outside-folder refusal after the filesystem is inspected.\"],\"observer\":\"The owner and operators observing filesystem access or errors\"}},{\"subject\":\"context\",\"kind\":\"batch refusal scope\",\"text\":\"a photo folder linked outside the root is refused when it is used\",\"question\":\"During placement of multiple chosen photos, is an outside-link finding a refusal of the whole operation, a failure only for affected files while others proceed, or a refusal of all files reached through that folder?\",\"options\":[\"Refuse the entire placement request before writing anything.\",\"Report each affected file separately and continue with files whose resolved paths remain inside the root.\",\"Refuse every file from the unsafe folder but continue with files from other safe roots or folders.\"],\"default_guess\":\"Report affected files separately only if each file can be accessed independently and safely; otherwise refuse the batch before any placement writes.\",\"witness\":{\"initial\":\"Two photos were listed as ready; before placement, one path or directory is changed to link outside the root while the other remains safely accessible.\",\"events\":[\"The owner selects both photos for placement.\"],\"outcomes\":[\"Both placements are refused because use of the photo folder fails its containment condition.\",\"The unsafe photo is reported on its own and the safe photo is placed because bad files do not stop the others.\"],\"observer\":\"The owner and the Portal store\"}},{\"subject\":\"context\",\"kind\":\"invariant test obligation\",\"text\":\"INV-16: `python tools/design_lint.py examples/portal-deliverer --state 2` reports no security finding. The closed list of categories is `SECURITY_REVIEW_EVIDENCE.md`.\",\"question\":\"What observable assertions must this Required tests item make to demonstrate INV-16, including category completeness, allowed outcome values, and resolution of every applicable category?\",\"options\":[\"Assert that every category in the closed list occurs exactly once with an allowed explicit outcome and every applicable category names an owning decision.\",\"Treat a zero-exit or no-finding lint run as sufficient without specifying what the lint checks.\",\"Assert only that the displayed Security review entries have either `APPLICABLE` or `NOT_APPLICABLE`.\"],\"default_guess\":\"Require the test to assert exact coverage of the closed category list, one allowed outcome per category, rationale for each not-applicable category, and an existing owning decision for each applicable category.\",\"witness\":{\"initial\":\"The lint command emits no finding even though a category is absent or an applicable category references no existing decision.\",\"events\":[\"A reviewer runs the Required tests command.\"],\"outcomes\":[\"The test passes because only the absence of lint findings is required.\",\"The test fails because it must directly demonstrate completeness and ownership for INV-16.\"],\"observer\":\"The State 2 reviewer\"}},{\"subject\":\"context\",\"kind\":\"undefined invariant terms\",\"text\":\"INV-16: every security category has an explicit outcome.\",\"question\":\"What is the closed set meant by “every security category,” what values qualify as an “explicit outcome,” and does `APPLICABLE` count as resolved only when its referenced decision actually exists and covers the affected surface?\",\"options\":[\"Use exactly the categories in `SECURITY_REVIEW_EVIDENCE.md`; accept only `APPLICABLE` and `NOT_APPLICABLE`; validate ownership or rationale respectively.\",\"Treat the categories printed in this State 2 section as the set, regardless of the evidence file.\",\"Treat classification alone as an explicit outcome without validating referenced decisions or rationales.\"],\"default_guess\":\"Use the evidence file as the exact closed set and require each applicable entry to resolve to an existing covering decision and each not-applicable entry to carry a rationale.\",\"witness\":{\"initial\":\"A category is marked `APPLICABLE` and names `A5`, but `A5` does not address the newly distinguished lexical escape and outside-link cases.\",\"events\":[\"State 2 is checked for completion.\"],\"outcomes\":[\"INV-16 holds because the category has the explicit word `APPLICABLE`.\",\"INV-16 fails because the claimed owning decision does not resolve the affected security case.\"],\"observer\":\"The State 2 reviewer and later implementers\"}}]}",
+ "set_aside": []
+}
