@@ -1,0 +1,180 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 settling-time clock",
+   "kind": "missing_time_source",
+   "text": "its age is below the settling time, which includes a modification time in the future",
+   "question": "What clock supplies the current instant used to calculate file age?",
+   "options": [
+    "wall-clock time from the operating system",
+    "an injected clock shared by the whole scan",
+    "a filesystem-provided observation time"
+   ],
+   "default_guess": "Inject a UTC wall clock because filesystem modification times cannot be compared directly with a monotonic clock.",
+   "witness": {
+    "initial": "A file has a modification time close to the settling boundary and the system wall clock is adjusted during the scan.",
+    "events": [
+     "The scanner reads the file modification time.",
+     "The system wall clock moves backward.",
+     "The scanner evaluates the file's age."
+    ],
+    "outcomes": [
+     "A wall-clock implementation classifies the file as settling.",
+     "An implementation using a stable operation instant classifies the file as ready."
+    ],
+    "observer": "the caller receiving the scan status"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 settling-time representation",
+   "kind": "unspecified_time_representation",
+   "text": "A file exactly at the settling time or exactly at the source limit passes that rule.",
+   "question": "In what representation and precision are the modification time, current instant and settling duration compared, and how is equality determined after conversion?",
+   "options": [
+    "timezone-aware UTC datetime values at filesystem precision",
+    "integer Unix nanoseconds",
+    "the filesystem's native timestamp representation converted with a specified rounding rule"
+   ],
+   "default_guess": "Compare integer Unix nanoseconds without rounding.",
+   "witness": {
+    "initial": "A filesystem records a modification time whose precision is coarser than the application's clock, placing the calculated age fractionally on opposite sides of two minutes depending on conversion.",
+    "events": [
+     "The filesystem returns the stored modification time.",
+     "The scanner converts it and compares it with the settling duration."
+    ],
+    "outcomes": [
+     "Truncation makes the file exactly old enough and it passes.",
+     "Rounding preserves an age below the boundary and it remains settling."
+    ],
+    "observer": "the caller receiving the scan status"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 scan clock readings",
+   "kind": "unspecified_read_count",
+   "text": "A scan gives each regular file of the photo folder exactly one status.",
+   "question": "Does one scan capture one current instant for all age checks, or read the clock separately for each file?",
+   "options": [
+    "one instant captured at the start of the scan",
+    "one instant captured after directory enumeration",
+    "a fresh instant for each file"
+   ],
+   "default_guess": "Capture one instant at the start of the scan.",
+   "witness": {
+    "initial": "Two files have the same modification time and cross the settling boundary while a slow scan is running.",
+    "events": [
+     "The scan starts just before both files reach the settling time.",
+     "The first file is evaluated.",
+     "The settling boundary passes.",
+     "The second file is evaluated."
+    ],
+    "outcomes": [
+     "With one scan instant, both files are settling.",
+     "With per-file readings, the first file is settling and the second is ready."
+    ],
+    "observer": "the caller receiving the two observations"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 directory-listing snapshot",
+   "kind": "unspecified_observation_boundary",
+   "text": "A name is judged as the directory listing returns it, and that judgement holds for the whole scan.",
+   "question": "Are all directory listings captured as one scan snapshot, or is each directory listed only when traversal reaches it, allowing names created meanwhile to enter the same scan?",
+   "options": [
+    "capture every directory listing at the start",
+    "list each directory when traversal reaches it",
+    "exclude every entry created after the scan-start instant even if a later listing returns it"
+   ],
+   "default_guess": "List each directory when traversal reaches it and judge the entries returned by that listing.",
+   "witness": {
+    "initial": "The photo folder contains subfolder `b`; no photo is initially inside it.",
+    "events": [
+     "The scanner lists and processes an earlier subfolder `a`.",
+     "Another process creates `b/new.jpg`.",
+     "The scanner reaches subfolder `b`."
+    ],
+    "outcomes": [
+     "A scan-wide snapshot excludes `b/new.jpg`.",
+     "A per-directory listing includes and reports `b/new.jpg`."
+    ],
+    "observer": "the caller receiving the scan results"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 listed-path replacement",
+   "kind": "unspecified_race_identity",
+   "text": "A file renamed after the listing is no longer at the listed path, so reading it for placing fails with `unreadable_file` (A3 rule 4).",
+   "question": "If the listed file is renamed but another regular file appears at the same listed path before it is opened, must placement reject the stale observation or may it read and place the replacement?",
+   "options": [
+    "bind the observation to file identity and reject any replacement",
+    "bind only to the listed path and read the replacement",
+    "rehash the replacement and continue only if its content matches the observed source id"
+   ],
+   "default_guess": "Reject unless the opened file can be proven to be the same filesystem object that was listed.",
+   "witness": {
+    "initial": "`photo.jpg` is listed as an ordinary regular file.",
+    "events": [
+     "Another actor renames the listed file to `old.jpg`.",
+     "The actor creates a different regular file at `photo.jpg`.",
+     "The owner requests placement of the listed observation."
+    ],
+    "outcomes": [
+     "An identity-bound implementation returns `unreadable_file` and writes nothing.",
+     "A path-bound implementation reads and may place the new `photo.jpg`."
+    ],
+    "observer": "the owner and the binary-store operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-18 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "And a file renamed to a conflict copy after the listing fails with `unreadable_file` and writes nothing (`test_a_file_renamed_to_a_conflict_copy_after_the_scan_is_not_placed`).",
+   "question": "What Required tests item shows the converse case required by the listing-time judgment: a conflict-copy name returned by the listing remains ignored if it is renamed to an ordinary name during that scan?",
+   "options": [
+    "add a test that renames a listed conflict copy before it would be read and proves it remains absent",
+    "state that the judgment is retained only for names accepted by the listing",
+    "remove the whole-scan persistence rule and judge the current name when opened"
+   ],
+   "default_guess": "Add the converse test and require the listed conflict copy to remain absent until a later scan.",
+   "witness": {
+    "initial": "A conflict copy exists when its directory is listed.",
+    "events": [
+     "The listing returns its conflict-copy name and it is judged ignored.",
+     "The owner renames it to an ordinary photo name before traversal finishes."
+    ],
+    "outcomes": [
+     "A listing-bound implementation keeps it absent for this scan.",
+     "A current-name implementation reports it as an ordinary photo in this scan."
+    ],
+    "observer": "the owner reading the scan results"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 renamed-file refusal",
+   "kind": "standard_violation",
+   "text": "A file renamed after the listing is no longer at the listed path, so reading it for placing fails\nwith `unreadable_file` (A3 rule 4).",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The refusal code must be named through its models enumeration, an imported policy constant, or a config field, as appropriate, rather than supplied as an unbound literal value.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-18 conflict-substitution test",
+   "kind": "standard_violation",
+   "text": "When that ordinary file disappears before it is read for placing, the conflict copy is not read in its place: the photo fails with `unreadable_file` and nothing is written (`test_a_conflict_copy_is_never_read_in_place_of_the_ordinary_file`).",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The required refusal code must be named through its declared value path rather than supplied as an unbound literal value.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 settling-time clock\",\"kind\":\"missing_time_source\",\"text\":\"its age is below the settling time, which includes a modification time in the future\",\"question\":\"What clock supplies the current instant used to calculate file age?\",\"options\":[\"wall-clock time from the operating system\",\"an injected clock shared by the whole scan\",\"a filesystem-provided observation time\"],\"default_guess\":\"Inject a UTC wall clock because filesystem modification times cannot be compared directly with a monotonic clock.\",\"witness\":{\"initial\":\"A file has a modification time close to the settling boundary and the system wall clock is adjusted during the scan.\",\"events\":[\"The scanner reads the file modification time.\",\"The system wall clock moves backward.\",\"The scanner evaluates the file's age.\"],\"outcomes\":[\"A wall-clock implementation classifies the file as settling.\",\"An implementation using a stable operation instant classifies the file as ready.\"],\"observer\":\"the caller receiving the scan status\"}},{\"subject\":\"A1 settling-time representation\",\"kind\":\"unspecified_time_representation\",\"text\":\"A file exactly at the settling time or exactly at the source limit passes that rule.\",\"question\":\"In what representation and precision are the modification time, current instant and settling duration compared, and how is equality determined after conversion?\",\"options\":[\"timezone-aware UTC datetime values at filesystem precision\",\"integer Unix nanoseconds\",\"the filesystem's native timestamp representation converted with a specified rounding rule\"],\"default_guess\":\"Compare integer Unix nanoseconds without rounding.\",\"witness\":{\"initial\":\"A filesystem records a modification time whose precision is coarser than the application's clock, placing the calculated age fractionally on opposite sides of two minutes depending on conversion.\",\"events\":[\"The filesystem returns the stored modification time.\",\"The scanner converts it and compares it with the settling duration.\"],\"outcomes\":[\"Truncation makes the file exactly old enough and it passes.\",\"Rounding preserves an age below the boundary and it remains settling.\"],\"observer\":\"the caller receiving the scan status\"}},{\"subject\":\"A1 scan clock readings\",\"kind\":\"unspecified_read_count\",\"text\":\"A scan gives each regular file of the photo folder exactly one status.\",\"question\":\"Does one scan capture one current instant for all age checks, or read the clock separately for each file?\",\"options\":[\"one instant captured at the start of the scan\",\"one instant captured after directory enumeration\",\"a fresh instant for each file\"],\"default_guess\":\"Capture one instant at the start of the scan.\",\"witness\":{\"initial\":\"Two files have the same modification time and cross the settling boundary while a slow scan is running.\",\"events\":[\"The scan starts just before both files reach the settling time.\",\"The first file is evaluated.\",\"The settling boundary passes.\",\"The second file is evaluated.\"],\"outcomes\":[\"With one scan instant, both files are settling.\",\"With per-file readings, the first file is settling and the second is ready.\"],\"observer\":\"the caller receiving the two observations\"}},{\"subject\":\"A1 directory-listing snapshot\",\"kind\":\"unspecified_observation_boundary\",\"text\":\"A name is judged as the directory listing returns it, and that judgement holds for the whole scan.\",\"question\":\"Are all directory listings captured as one scan snapshot, or is each directory listed only when traversal reaches it, allowing names created meanwhile to enter the same scan?\",\"options\":[\"capture every directory listing at the start\",\"list each directory when traversal reaches it\",\"exclude every entry created after the scan-start instant even if a later listing returns it\"],\"default_guess\":\"List each directory when traversal reaches it and judge the entries returned by that listing.\",\"witness\":{\"initial\":\"The photo folder contains subfolder `b`; no photo is initially inside it.\",\"events\":[\"The scanner lists and processes an earlier subfolder `a`.\",\"Another process creates `b/new.jpg`.\",\"The scanner reaches subfolder `b`.\"],\"outcomes\":[\"A scan-wide snapshot excludes `b/new.jpg`.\",\"A per-directory listing includes and reports `b/new.jpg`.\"],\"observer\":\"the caller receiving the scan results\"}},{\"subject\":\"A1 listed-path replacement\",\"kind\":\"unspecified_race_identity\",\"text\":\"A file renamed after the listing is no longer at the listed path, so reading it for placing fails with `unreadable_file` (A3 rule 4).\",\"question\":\"If the listed file is renamed but another regular file appears at the same listed path before it is opened, must placement reject the stale observation or may it read and place the replacement?\",\"options\":[\"bind the observation to file identity and reject any replacement\",\"bind only to the listed path and read the replacement\",\"rehash the replacement and continue only if its content matches the observed source id\"],\"default_guess\":\"Reject unless the opened file can be proven to be the same filesystem object that was listed.\",\"witness\":{\"initial\":\"`photo.jpg` is listed as an ordinary regular file.\",\"events\":[\"Another actor renames the listed file to `old.jpg`.\",\"The actor creates a different regular file at `photo.jpg`.\",\"The owner requests placement of the listed observation.\"],\"outcomes\":[\"An identity-bound implementation returns `unreadable_file` and writes nothing.\",\"A path-bound implementation reads and may place the new `photo.jpg`.\"],\"observer\":\"the owner and the binary-store operator\"}},{\"subject\":\"INV-18 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"And a file renamed to a conflict copy after the listing fails with `unreadable_file` and writes nothing (`test_a_file_renamed_to_a_conflict_copy_after_the_scan_is_not_placed`).\",\"question\":\"What Required tests item shows the converse case required by the listing-time judgment: a conflict-copy name returned by the listing remains ignored if it is renamed to an ordinary name during that scan?\",\"options\":[\"add a test that renames a listed conflict copy before it would be read and proves it remains absent\",\"state that the judgment is retained only for names accepted by the listing\",\"remove the whole-scan persistence rule and judge the current name when opened\"],\"default_guess\":\"Add the converse test and require the listed conflict copy to remain absent until a later scan.\",\"witness\":{\"initial\":\"A conflict copy exists when its directory is listed.\",\"events\":[\"The listing returns its conflict-copy name and it is judged ignored.\",\"The owner renames it to an ordinary photo name before traversal finishes.\"],\"outcomes\":[\"A listing-bound implementation keeps it absent for this scan.\",\"A current-name implementation reports it as an ordinary photo in this scan.\"],\"observer\":\"the owner reading the scan results\"}},{\"subject\":\"A1 renamed-file refusal\",\"kind\":\"standard_violation\",\"text\":\"A file renamed after the listing is no longer at the listed path, so reading it for placing fails\\nwith `unreadable_file` (A3 rule 4).\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The refusal code must be named through its models enumeration, an imported policy constant, or a config field, as appropriate, rather than supplied as an unbound literal value.\"},{\"subject\":\"INV-18 conflict-substitution test\",\"kind\":\"standard_violation\",\"text\":\"When that ordinary file disappears before it is read for placing, the conflict copy is not read in its place: the photo fails with `unreadable_file` and nothing is written (`test_a_conflict_copy_is_never_read_in_place_of_the_ordinary_file`).\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The required refusal code must be named through its declared value path rather than supplied as an unbound literal value.\"}]}",
+ "set_aside": []
+}

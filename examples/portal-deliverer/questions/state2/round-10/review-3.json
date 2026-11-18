@@ -1,0 +1,96 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 directory-listing judgement",
+   "kind": "observation_boundary",
+   "text": "A name is judged as the directory listing returns it, and that judgement holds for the whole scan.",
+   "question": "For a listing API that yields entries incrementally, at what exact boundary is a name fixed: when the listing call starts, when each entry is yielded, or when the complete listing has been materialized?",
+   "options": [
+    "Fix every name when its individual entry is yielded.",
+    "Fix all names when the complete listing successfully returns.",
+    "Require a snapshot listing fixed when the listing call starts."
+   ],
+   "default_guess": "Materialize each directory listing once and fix all judgements from the names in that completed result.",
+   "witness": {
+    "initial": "A directory contains an ordinary file named `photo.jpg`.",
+    "events": [
+     "The scanner starts enumerating the directory with an API that yields entries lazily.",
+     "After the entry has been observed internally but before enumeration completes, Syncthing renames it to a conflict-copy name.",
+     "The scanner completes the scan."
+    ],
+    "outcomes": [
+     "The entry is fixed when yielded as `photo.jpg` and is processed as an ordinary file.",
+     "The entry is fixed at completion under its conflict-copy name and is omitted."
+    ],
+    "observer": "The caller of the scan sees either an observation for the file or no observation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 placement after rename",
+   "kind": "path_replacement_race",
+   "text": "A file renamed after the listing is no longer at the listed path, so reading it for placing fails with `unreadable_file` (A3 rule 4).",
+   "question": "What happens when the listed file is renamed away but another regular file occupies the listed path before placement reads it, especially when the replacement has the same content?",
+   "options": [
+    "Reject with `unreadable_file` because the originally listed filesystem object is gone.",
+    "Read the replacement and place it if its content has the requested source hash.",
+    "Treat the replacement as a newly observed file and refuse this placement with `not_ready_or_absent`."
+   ],
+   "default_guess": "Reject with `unreadable_file` unless the implementation can establish that the filesystem object listed by the scan is the one being read.",
+   "witness": {
+    "initial": "A completed scan reported `photo.jpg` with source hash H.",
+    "events": [
+     "Syncthing renames the reported file away from `photo.jpg`.",
+     "Another actor creates a regular file at `photo.jpg` with the same bytes and hash H.",
+     "The owner requests placement of H."
+    ],
+    "outcomes": [
+     "The placement is refused with `unreadable_file` because the listed object disappeared.",
+     "The replacement is accepted because photo identity is content-based and its hash is H."
+    ],
+    "observer": "The placement caller and the Portal binary store see whether a new placement is created."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 INV-18 Required tests",
+   "kind": "undefined_write_boundary",
+   "text": "placing it by its hash fails with `not_ready_or_absent` and writes nothing",
+   "question": "Which writes must the INV-18 checks prove absent: only durable placement and binary-store changes, every call to a persistence or binary write port, or also temporary files, audit records and diagnostic logs?",
+   "options": [
+    "Prohibit only durable domain-state and binary-store changes.",
+    "Prohibit every invocation of a domain or binary write port, including temporary writes later removed.",
+    "Prohibit all externally observable writes, including audit and diagnostic output."
+   ],
+   "default_guess": "Assert that no binary-store, PhotoPlacement, or PublicationMark write port is called; allow ordinary diagnostic logging.",
+   "witness": {
+    "initial": "Only a conflict copy with source hash H remains, and H has no existing placement.",
+    "events": [
+     "The owner requests placement of H.",
+     "The operation refuses it with `not_ready_or_absent`."
+    ],
+    "outcomes": [
+     "The implementation performs no storage write calls.",
+     "The implementation writes a temporary binary and removes it before returning, leaving the same final durable state."
+    ],
+    "observer": "A storage spy or audit observer sees the difference although the caller receives the same refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A10 concurrency security review",
+   "kind": "security_review_reference",
+   "text": "- concurrency: APPLICABLE; references: A3, A4, A5, A6; affected: M01, M04, M07",
+   "question": "Must the concurrency category now reference A1 because A1 defines behavior across a directory-listing/rename race, or is that race intentionally covered only by A1's existing `files_artifacts` reference?",
+   "options": [
+    "Add A1 to the concurrency references.",
+    "Keep the list unchanged because A1's race is owned only by the files/artifacts category."
+   ],
+   "default_guess": "Add A1 to the concurrency references so the security evidence explicitly owns the newly specified race.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 directory-listing judgement\",\"kind\":\"observation_boundary\",\"text\":\"A name is judged as the directory listing returns it, and that judgement holds for the whole scan.\",\"question\":\"For a listing API that yields entries incrementally, at what exact boundary is a name fixed: when the listing call starts, when each entry is yielded, or when the complete listing has been materialized?\",\"options\":[\"Fix every name when its individual entry is yielded.\",\"Fix all names when the complete listing successfully returns.\",\"Require a snapshot listing fixed when the listing call starts.\"],\"default_guess\":\"Materialize each directory listing once and fix all judgements from the names in that completed result.\",\"witness\":{\"initial\":\"A directory contains an ordinary file named `photo.jpg`.\",\"events\":[\"The scanner starts enumerating the directory with an API that yields entries lazily.\",\"After the entry has been observed internally but before enumeration completes, Syncthing renames it to a conflict-copy name.\",\"The scanner completes the scan.\"],\"outcomes\":[\"The entry is fixed when yielded as `photo.jpg` and is processed as an ordinary file.\",\"The entry is fixed at completion under its conflict-copy name and is omitted.\"],\"observer\":\"The caller of the scan sees either an observation for the file or no observation.\"}},{\"subject\":\"A1 placement after rename\",\"kind\":\"path_replacement_race\",\"text\":\"A file renamed after the listing is no longer at the listed path, so reading it for placing fails with `unreadable_file` (A3 rule 4).\",\"question\":\"What happens when the listed file is renamed away but another regular file occupies the listed path before placement reads it, especially when the replacement has the same content?\",\"options\":[\"Reject with `unreadable_file` because the originally listed filesystem object is gone.\",\"Read the replacement and place it if its content has the requested source hash.\",\"Treat the replacement as a newly observed file and refuse this placement with `not_ready_or_absent`.\"],\"default_guess\":\"Reject with `unreadable_file` unless the implementation can establish that the filesystem object listed by the scan is the one being read.\",\"witness\":{\"initial\":\"A completed scan reported `photo.jpg` with source hash H.\",\"events\":[\"Syncthing renames the reported file away from `photo.jpg`.\",\"Another actor creates a regular file at `photo.jpg` with the same bytes and hash H.\",\"The owner requests placement of H.\"],\"outcomes\":[\"The placement is refused with `unreadable_file` because the listed object disappeared.\",\"The replacement is accepted because photo identity is content-based and its hash is H.\"],\"observer\":\"The placement caller and the Portal binary store see whether a new placement is created.\"}},{\"subject\":\"A1 INV-18 Required tests\",\"kind\":\"undefined_write_boundary\",\"text\":\"placing it by its hash fails with `not_ready_or_absent` and writes nothing\",\"question\":\"Which writes must the INV-18 checks prove absent: only durable placement and binary-store changes, every call to a persistence or binary write port, or also temporary files, audit records and diagnostic logs?\",\"options\":[\"Prohibit only durable domain-state and binary-store changes.\",\"Prohibit every invocation of a domain or binary write port, including temporary writes later removed.\",\"Prohibit all externally observable writes, including audit and diagnostic output.\"],\"default_guess\":\"Assert that no binary-store, PhotoPlacement, or PublicationMark write port is called; allow ordinary diagnostic logging.\",\"witness\":{\"initial\":\"Only a conflict copy with source hash H remains, and H has no existing placement.\",\"events\":[\"The owner requests placement of H.\",\"The operation refuses it with `not_ready_or_absent`.\"],\"outcomes\":[\"The implementation performs no storage write calls.\",\"The implementation writes a temporary binary and removes it before returning, leaving the same final durable state.\"],\"observer\":\"A storage spy or audit observer sees the difference although the caller receives the same refusal.\"}},{\"subject\":\"A10 concurrency security review\",\"kind\":\"security_review_reference\",\"text\":\"- concurrency: APPLICABLE; references: A3, A4, A5, A6; affected: M01, M04, M07\",\"question\":\"Must the concurrency category now reference A1 because A1 defines behavior across a directory-listing/rename race, or is that race intentionally covered only by A1's existing `files_artifacts` reference?\",\"options\":[\"Add A1 to the concurrency references.\",\"Keep the list unchanged because A1's race is owned only by the files/artifacts category.\"],\"default_guess\":\"Add A1 to the concurrency references so the security evidence explicitly owns the newly specified race.\"}]}",
+ "set_aside": []
+}
