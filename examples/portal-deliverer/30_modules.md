@@ -142,13 +142,16 @@ Exports types and constants only.
 
 ### Owns
 
-- reading the connection records and refusing to start with a subfolder that leaves its root;
-- deciding whether a project has a confirmed connection;
+- reading the connection record at each operation, and refusing a start with a subfolder that leaves
+  its root;
+- refusing an operation when the record cannot be read;
+- deciding from the record as it stands whether a project has a confirmed connection;
 - deciding whether the photo folder is available and strictly below the resolved root.
 
 ### Knows
 
-- M01 and rules 6 and 7 of A5.
+- M01, rule 7 of A5, and the part of rule 6 of A5 that reads the record and refuses. The agent writes
+  the record and clears its confirmation.
 
 ### Hides
 
