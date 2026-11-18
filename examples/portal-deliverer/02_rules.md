@@ -33,7 +33,9 @@ applies decides:
 | 10 | placed | `placed` | none |
 | 11 | anything else | `ready` | none |
 
-A scan covers the photo folder and all its subfolders (R0-12). A file exactly at the settling time or exactly at the source limit passes that rule. A file that
+A scan covers the photo folder and all its subfolders (R0-12). When a subfolder that is not ignored
+cannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is
+never reported as complete. A file exactly at the settling time or exactly at the source limit passes that rule. A file that
 disappears before its metadata is read is not reported.
 
 Files are visited folder by folder: the files of a folder in order of their names, then its
@@ -73,9 +75,10 @@ A replaced file is scanned again by its new content (A3).
    limit (width times height) fails with `too_many_pixels`, a source that cannot be decoded with
    `unreadable_image`, and a result above the Portal's read limit with `too_large`. A value equal
    to a limit passes. Only the first frame of an animated image is delivered.
-3. The photo moment is the first usable value of: EXIF `DateTimeOriginal` with
-   `OffsetTimeOriginal` when that offset has the form `+HH:MM` or `-HH:MM`, EXIF `DateTime`, then
-   the file's modification time. A camera value is unusable when it is malformed, when its UTC year
+3. The photo moment is the first usable value of: EXIF `DateTimeOriginal`, EXIF `DateTime`, then
+   the file's modification time. `DateTimeOriginal` uses `OffsetTimeOriginal` when that offset has
+   the form `+HH:MM` or `-HH:MM`; otherwise it is read in the configured time zone, and so is
+   `DateTime`. A camera value is unusable when it is malformed, when its UTC year
    is before 2000, or when it is more than 24 hours after the file's modification time.
 4. The photo date is delivered as UTC without an offset, as the Client Portal stores it. A camera
    time with no offset is read in the configured time zone. A local time that occurs twice is the
@@ -189,9 +192,10 @@ A published photo is recognised without any change to the Portal.
    operation on a project with no connection is refused with `unknown_project`, and one with an
    unconfirmed connection with `connection_not_confirmed`. This is decided by the service, not by
    the caller.
-7. The photo and invoice subfolders are non-empty relative paths without `..`. The service does
-   not start with a connection that breaks this. On each scan and placement the photo folder must
-   be a folder whose resolved path is inside the resolved root, otherwise the operation is refused
+7. The photo and invoice subfolders are non-empty relative paths without `..` and are not the root
+   itself. The service does not start with a connection that breaks this. On each scan and placement
+   the photo folder must be a folder whose resolved path is strictly below the resolved root,
+   otherwise the operation is refused
    with `folder_unavailable`.
 8. A project id must be a UUID and a source id 64 lowercase hexadecimal characters. Neither a file
    name nor any other received text becomes part of a stored path.
@@ -225,8 +229,9 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 3. Each file is written to a temporary name in its folder, synchronised to disk and renamed, and
    its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. A3
    decides what a crash between the image and the record means.
-4. Placements and marks of one project run one at a time, across processes, under an operating
-   system lock on one lock file of that project in the state folder. A caller waits for the lock
+4. Placement calls and marks of one project run one at a time, across processes, under an operating
+   system lock on one lock file of that project in the state folder. One placement call holds the
+   lock for its whole list of photos. A caller waits for the lock
    without a time limit, and the lock is released when its holder ends. The check that a placement
    or mark exists and its writing happen inside that lock.
 
@@ -248,17 +253,19 @@ A repeated action from the workplace cannot duplicate a delivery.
 
 1. The system clock is the one source of the current time, declared as `rules.time_source_policy`
    and reaching code through `system_clock_backend` as the operation `utc_now`.
-2. Scan, placement and mark each read it once, after the request is accepted and before any file is
-   examined. The health answer and a refused request do not read it. A replayed mark reads it and
-   writes nothing.
+2. Scan, placement and mark each read it once, after the token, the request form and the path
+   identifiers are accepted and before the project lock is taken or any connection, file or record is
+   examined. A request refused before that point and the health answer do not read it. A request
+   refused after it, and a replayed mark, have read it and write nothing.
 3. The current time is a `datetime` in UTC without an offset, with microsecond precision and no
    rounding, written in ISO 8601 form. It decides the settling status and sets `marked_at`.
-4. A file's modification time is converted to the same form before it is compared or delivered.
+4. A file's modification time is converted to the same form before it is compared or delivered,
+   dropping any fraction finer than a microsecond toward the earlier instant.
 5. The photo moment comes from the file, as A2 decides, and never from the service clock.
 
 ### Formal invariants
 
-- INV-13: one operation uses one reading of the service clock.
+- INV-13: one operation reads the service clock at most once.
 
 ### Required tests
 
@@ -276,7 +283,6 @@ Run settings are fields of the settings object:
 
 | Field | Type | Decided |
 |---|---|---|
-| `min_age_seconds` | `int` | 120 |
 | `timezone` | `str` | `Europe/Madrid` |
 | `binary_root` | `Path` | per installation |
 | `state_dir` | `Path` | per installation |
@@ -287,6 +293,7 @@ Policy values are constants of the data provider:
 
 | Constant | Type | Value |
 |---|---|---|
+| `MIN_AGE_SECONDS` | `int` | 120 |
 | `MAX_SOURCE_BYTES` | `int` | 41 943 040 |
 | `MAX_OUTPUT_BYTES` | `int` | 26 214 400 |
 | `MAX_PIXELS` | `int` | 80 000 000 |
@@ -324,8 +331,8 @@ A stored image can always be read back by the Portal.
 1. The direct libraries are pinned to exact versions: pillow, fastapi, pydantic and uvicorn. The
    libraries they require are resolved when the deployment image is built and are covered by rule 2.
 2. The image library decodes untrusted files. Before each deployment every distribution installed
-   in the image is checked against a snapshot of the OSV database, ecosystem PyPI, no older than the
-   deploy route's maximum snapshot age. Any known vulnerability listed for an installed version
+   in the image is checked against a snapshot of the OSV database, ecosystem PyPI, that the deployment route accepts
+   as current. That route owns the age limit, and no code of this service reads it. Any known vulnerability listed for an installed version
    blocks the deployment, whatever its severity, and a check that cannot complete does not pass.
    This is the policy the Client Portal already follows.
 

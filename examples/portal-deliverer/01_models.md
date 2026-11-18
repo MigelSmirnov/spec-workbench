@@ -7,7 +7,7 @@ states what the prototype proved.
 
 Every identity is decided; the identity of a delivered photo is decision R0-10.
 
-Evidence for every model: `python3 -m pytest -q prototypes/portal_deliverer` (38 tests) and
+Evidence for every model: `python3 -m pytest -q prototypes/portal_deliverer` (41 tests) and
 `python3 prototypes/portal_deliverer/e2e_local_portal.py` (24 checks against a real Client
 Portal process and a stub Registry). No run has used a live Syncthing folder, the kernel or
 the VPS.
@@ -16,10 +16,14 @@ the VPS.
 
 ### Meaning
 
-One renovation object and its folders on the VPS (R0-09). `assignment_confirmed` is the owner's
-confirmation that these folders belong to this object. Both subfolders stay inside the root.
-Nothing is delivered for an unconfirmed connection. The agent writes the connection for a project
-the Registry already issued, after the owner confirms it (R0-11); the deliverer only reads it.
+One renovation object and its folders on the VPS (R0-09). `assignment_confirmed` records that the owner confirmed
+these exact folders for this object. Both subfolders stay inside the root. Nothing is delivered for
+an unconfirmed connection. The agent writes the connection for a project the Registry already
+issued, and sets the confirmation only for the folders the owner confirmed. When the agent later
+changes the root or a subfolder it clears the confirmation in the same write, and sets it again
+after the owner confirms the new folders (R0-11). `label` is a name for people, written by the
+agent; changing it affects neither the identity nor the confirmation. The deliverer only reads the
+connection.
 
 **Fields:** `project_id: UUID`, `label: str`, `root: path`, `photo_subfolder: str`,
 `invoice_subfolder: str`, `assignment_confirmed: bool`.
@@ -138,7 +142,8 @@ None.
 
 The record that one source photo of one project was placed in the Portal binary store. The
 deliverer creates it once when placing a photo. A repeated placement returns it and writes nothing
-(P-06).
+(P-06). `name` is the source's relative path when it was placed and is not updated later. `sha256`,
+`size` and `media_type` describe the stored image, while `source_id` is the hash of the source.
 
 **Fields:** `project_id: UUID`, `source_id: str`, `name: str`, `file_ref: str`, `sha256: str`,
 `size: int`, `media_type: str`, `date_source: DateSource`, `publication: PhotoPublication`.
@@ -178,7 +183,7 @@ None. A delivered photo is identified by its content (R0-10).
 
 The body the calling flow sends to the Portal's `photo.publish`. `intake_id` identifies the
 delivery of one source photo to one project: the deliverer derives it from the placement identity
-as `deliverer-photo-<project_id>-<first 32 characters of source_id>`, so a repeated publication is
+as `deliverer-photo-<project_id>-<source_id>`, so a repeated publication is
 recognised by the Portal. `intake_source` states where the photo entered the system and is always
 `syncthing`. `client_visible` is always false (R0-06). The deliverer builds the body once within
 M04.
@@ -263,7 +268,8 @@ returns the first mark; another `photo_id` is refused.
 
 **Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.
 
-**Enumeration:** `MarkStatus` is `marked`, `replayed`.
+**Enumeration:** `MarkStatus` is `marked` for the call that created the mark and `replayed` for a
+later call with the same `photo_id`. It is part of the answer to that call and is not stored.
 It is kept apart from M04 because the Portal's answer arrives after the placement, from another actor.
 
 ### Identity
