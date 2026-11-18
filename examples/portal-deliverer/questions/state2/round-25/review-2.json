@@ -1,0 +1,238 @@
+{
+ "open_points": [
+  {
+   "subject": "source_id representation and digest comparison",
+   "kind": "representation",
+   "text": "A placement is identified by the project and the SHA-256 of the source content (R0-10).",
+   "question": "Which textual representation of SHA-256 is source_id, and is the comparison with the imported SOURCE_ID_PATTERN-matching request exact or normalized?",
+   "options": [
+    "lowercase hexadecimal and exact comparison",
+    "uppercase hexadecimal and exact comparison",
+    "another encoding selected by SOURCE_ID_PATTERN",
+    "normalize every accepted representation before comparison"
+   ],
+   "default_guess": "Use the 64-character lowercase hexadecimal digest and compare it exactly.",
+   "witness": {
+    "initial": "SOURCE_ID_PATTERN accepts both uppercase and lowercase hexadecimal, and the requested source_id is the uppercase spelling of the file's digest.",
+    "events": [
+     "The caller requests placement with the uppercase source_id.",
+     "The deliverer reads and hashes the matching file."
+    ],
+    "outcomes": [
+     "An implementation compares against lowercase hexdigest and returns SOURCE_CHANGED.",
+     "An implementation normalizes hexadecimal case and places the photo."
+    ],
+    "observer": "the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto taken_at",
+   "kind": "time_source",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "Which camera metadata field or ordered set of fields is the camera record, and which missing, malformed, impossible or conflicting values cause fallback to the file modification time?",
+   "options": [
+    "use only EXIF DateTimeOriginal and fall back for every unusable value",
+    "use an ordered list such as DateTimeOriginal, DateTimeDigitized and DateTime",
+    "choose any valid camera-date field",
+    "refuse the photo when camera metadata is present but unusable"
+   ],
+   "default_guess": "Use EXIF DateTimeOriginal first and fall back to the file modification time whenever it is absent or cannot be parsed.",
+   "witness": {
+    "initial": "A valid image has conflicting valid DateTimeOriginal and DateTimeDigitized values.",
+    "events": [
+     "The caller delivers the image.",
+     "The deliverer prepares M03 and M05."
+    ],
+    "outcomes": [
+     "The stored publication uses DateTimeOriginal.",
+     "The stored publication uses DateTimeDigitized."
+    ],
+    "observer": "the owner reading the photo date in the Portal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto taken_at",
+   "kind": "time_zone",
+   "text": "with the moment the photo was taken as UTC without an offset",
+   "question": "How is a camera date that has no UTC offset converted into a UTC instant, and how are EXIF offset fields associated with the selected camera-date field?",
+   "options": [
+    "interpret an offset-less camera value as UTC",
+    "use its matching EXIF offset field and fall back to UTC when absent",
+    "use the VPS local time zone",
+    "fall back to the file modification time when no offset is available"
+   ],
+   "default_guess": "Use the matching EXIF offset when present; otherwise interpret the camera wall time as UTC, then store a naive UTC datetime.",
+   "witness": {
+    "initial": "An image says DateTimeOriginal 2026-07-01 12:00:00 and contains no offset.",
+    "events": [
+     "The caller delivers the image while the VPS is configured for Europe/Madrid.",
+     "The deliverer creates the publication body."
+    ],
+    "outcomes": [
+     "photo_date is 2026-07-01 12:00:00 UTC.",
+     "photo_date is converted from Madrid time and becomes 2026-07-01 10:00:00 UTC."
+    ],
+    "observer": "the owner reading the photo date in the Portal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto taken_at from file modification time",
+   "kind": "time_reading",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time",
+   "question": "At what step and from which object is the modification-time instant read, in which precision, and how many times may one placement operation read it?",
+   "options": [
+    "read it once from the opened file descriptor before reading bytes",
+    "read it once from the opened file descriptor after reading bytes",
+    "use the earlier path-metadata reading",
+    "read it again whenever preparation needs it"
+   ],
+   "default_guess": "Read it exactly once with fstat from the opened source descriptor immediately after opening, retain its full available precision, and reuse that value throughout the placement.",
+   "witness": {
+    "initial": "An image has no usable camera date and its modification time changes after path metadata is checked but before its bytes are read.",
+    "events": [
+     "The caller starts placement.",
+     "Another actor changes the file's modification time without changing its bytes.",
+     "The deliverer prepares and records the photo."
+    ],
+    "outcomes": [
+     "The publication records the earlier path-metadata time.",
+     "The publication records the time obtained from the opened file descriptor."
+    ],
+    "observer": "the owner reading the photo date in the Portal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark marked_at",
+   "kind": "time_source",
+   "text": "Fields: `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "Which clock supplies marked_at, when is it read relative to conflict checking and the durable write, how many readings does one mark operation take, and is the stored datetime naive UTC, offset-aware UTC or another representation?",
+   "options": [
+    "one system UTC-clock reading immediately before constructing the new record, stored as naive UTC",
+    "one system UTC-clock reading after the durable write, stored as offset-aware UTC",
+    "a timestamp supplied by the caller",
+    "the file-system timestamp of the mark record"
+   ],
+   "default_guess": "Read an injected system UTC clock exactly once inside the project lock after all checks and immediately before constructing the record; store naive UTC for consistency with the other product datetimes.",
+   "witness": {
+    "initial": "No mark exists and the system clock advances across the mark write.",
+    "events": [
+     "The calling flow reports a photo_id.",
+     "The deliverer validates the request and writes the mark."
+    ],
+    "outcomes": [
+     "marked_at is the instant sampled before the durable write and is stored as naive UTC.",
+     "marked_at is a later instant sampled after the write and is stored as offset-aware UTC."
+    ],
+    "observer": "a later scan or inspection of the publication mark"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-01 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).",
+   "question": "What must the test show about source directories, empty directories, directory modes and timestamps, names and symbolic links so that it demonstrates that no operation creates, changes, moves or deletes anything in the source folder?",
+   "options": [
+    "snapshot and compare the complete directory tree and metadata of every entry",
+    "limit INV-01 explicitly to regular-file contents and metadata",
+    "instrument all filesystem mutations directed at the source tree"
+   ],
+   "default_guess": "Snapshot and compare the complete tree, entry types, names, link targets, bytes, modes and modification times before and after every listed operation.",
+   "witness": {
+    "initial": "The source tree contains an empty subfolder and one unchanged regular file.",
+    "events": [
+     "A placement implementation changes the empty subfolder's mode.",
+     "The required test compares only the files, their bytes, modification times and modes."
+    ],
+    "outcomes": [
+     "The stated test passes although INV-01 is violated.",
+     "A complete-tree test fails because the directory changed."
+    ],
+    "observer": "the invariant test suite"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What observation must the test make to prove that delivery opens no path failing A3 rule 5 condition 1, rather than merely proving the response and absence of output files?",
+   "options": [
+    "instrument source-path open calls and assert none occurs",
+    "define opens narrowly as opening the final source file and assert that call is absent",
+    "replace the invariant with the response-and-no-write property currently tested"
+   ],
+   "default_guess": "Instrument opening of the final source file and assert it never occurs for every condition-1 case, while allowing non-opening metadata checks of path components.",
+   "witness": {
+    "initial": "The request names a path through a symbolic link and has no existing placement.",
+    "events": [
+     "The caller requests placement.",
+     "The implementation opens the final source and then rejects it without writing output."
+    ],
+    "outcomes": [
+     "The stated response-and-files test passes even though the source was opened.",
+     "A test observing open calls fails and exposes the INV-02 violation."
+    ],
+    "observer": "the invariant test suite or a filesystem audit hook"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "What must the test observe to demonstrate that a new placement never reads a conflict copy, rather than only that the call fails and leaves durable files unchanged?",
+   "options": [
+    "instrument reads and assert that no conflict-copy content is opened or read",
+    "assert only that no complete placement is produced",
+    "replace the invariant with the refusal-and-no-write behavior currently tested"
+   ],
+   "default_guess": "Instrument source opens and reads and assert that the conflict copy is rejected from its name before its content is opened.",
+   "witness": {
+    "initial": "A conflict copy contains valid image bytes and has no placement.",
+    "events": [
+     "The caller requests placement using the conflict-copy name.",
+     "The implementation reads the entire file, recognizes the name afterward and returns NOT_READY_OR_ABSENT without writing."
+    ],
+    "outcomes": [
+     "The stated refusal-and-files test passes although INV-19 is violated.",
+     "A read-observing test fails because conflict-copy bytes were read."
+    ],
+    "observer": "the invariant test suite or a filesystem audit hook"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-10 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "INV-10: scan, placement and mark each answer `connection_not_confirmed` for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`).",
+   "question": "What must the Required tests assert to show that nothing is scanned, placed or marked before a valid confirmed connection is established, rather than only checking the refusal answer and durable writes?",
+   "options": [
+    "assert no source-folder, placement-store or mark-record access occurs after the connection refusal is determined",
+    "assert only that no durable write occurs",
+    "narrow the invariant to successful results and durable state changes"
+   ],
+   "default_guess": "Instrument the source folder and state/store backends and assert that an invalid, absent or unconfirmed connection causes no project data access beyond reading the connections file.",
+   "witness": {
+    "initial": "The connection is unconfirmed and the photo folder contains a readable image.",
+    "events": [
+     "The caller requests a scan.",
+     "The implementation scans the folder first, then checks confirmation and returns connection_not_confirmed without writing."
+    ],
+    "outcomes": [
+     "A response-and-no-write test passes despite the forbidden scan.",
+     "An access-observing test fails when the folder is read before the connection check."
+    ],
+    "observer": "the invariant test suite and the VPS filesystem audit log"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"source_id representation and digest comparison\",\"kind\":\"representation\",\"text\":\"A placement is identified by the project and the SHA-256 of the source content (R0-10).\",\"question\":\"Which textual representation of SHA-256 is source_id, and is the comparison with the imported SOURCE_ID_PATTERN-matching request exact or normalized?\",\"options\":[\"lowercase hexadecimal and exact comparison\",\"uppercase hexadecimal and exact comparison\",\"another encoding selected by SOURCE_ID_PATTERN\",\"normalize every accepted representation before comparison\"],\"default_guess\":\"Use the 64-character lowercase hexadecimal digest and compare it exactly.\",\"witness\":{\"initial\":\"SOURCE_ID_PATTERN accepts both uppercase and lowercase hexadecimal, and the requested source_id is the uppercase spelling of the file's digest.\",\"events\":[\"The caller requests placement with the uppercase source_id.\",\"The deliverer reads and hashes the matching file.\"],\"outcomes\":[\"An implementation compares against lowercase hexdigest and returns SOURCE_CHANGED.\",\"An implementation normalizes hexadecimal case and places the photo.\"],\"observer\":\"the calling flow\"}},{\"subject\":\"M03 PreparedPhoto taken_at\",\"kind\":\"time_source\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"Which camera metadata field or ordered set of fields is the camera record, and which missing, malformed, impossible or conflicting values cause fallback to the file modification time?\",\"options\":[\"use only EXIF DateTimeOriginal and fall back for every unusable value\",\"use an ordered list such as DateTimeOriginal, DateTimeDigitized and DateTime\",\"choose any valid camera-date field\",\"refuse the photo when camera metadata is present but unusable\"],\"default_guess\":\"Use EXIF DateTimeOriginal first and fall back to the file modification time whenever it is absent or cannot be parsed.\",\"witness\":{\"initial\":\"A valid image has conflicting valid DateTimeOriginal and DateTimeDigitized values.\",\"events\":[\"The caller delivers the image.\",\"The deliverer prepares M03 and M05.\"],\"outcomes\":[\"The stored publication uses DateTimeOriginal.\",\"The stored publication uses DateTimeDigitized.\"],\"observer\":\"the owner reading the photo date in the Portal\"}},{\"subject\":\"M03 PreparedPhoto taken_at\",\"kind\":\"time_zone\",\"text\":\"with the moment the photo was taken as UTC without an offset\",\"question\":\"How is a camera date that has no UTC offset converted into a UTC instant, and how are EXIF offset fields associated with the selected camera-date field?\",\"options\":[\"interpret an offset-less camera value as UTC\",\"use its matching EXIF offset field and fall back to UTC when absent\",\"use the VPS local time zone\",\"fall back to the file modification time when no offset is available\"],\"default_guess\":\"Use the matching EXIF offset when present; otherwise interpret the camera wall time as UTC, then store a naive UTC datetime.\",\"witness\":{\"initial\":\"An image says DateTimeOriginal 2026-07-01 12:00:00 and contains no offset.\",\"events\":[\"The caller delivers the image while the VPS is configured for Europe/Madrid.\",\"The deliverer creates the publication body.\"],\"outcomes\":[\"photo_date is 2026-07-01 12:00:00 UTC.\",\"photo_date is converted from Madrid time and becomes 2026-07-01 10:00:00 UTC.\"],\"observer\":\"the owner reading the photo date in the Portal\"}},{\"subject\":\"M03 PreparedPhoto taken_at from file modification time\",\"kind\":\"time_reading\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time\",\"question\":\"At what step and from which object is the modification-time instant read, in which precision, and how many times may one placement operation read it?\",\"options\":[\"read it once from the opened file descriptor before reading bytes\",\"read it once from the opened file descriptor after reading bytes\",\"use the earlier path-metadata reading\",\"read it again whenever preparation needs it\"],\"default_guess\":\"Read it exactly once with fstat from the opened source descriptor immediately after opening, retain its full available precision, and reuse that value throughout the placement.\",\"witness\":{\"initial\":\"An image has no usable camera date and its modification time changes after path metadata is checked but before its bytes are read.\",\"events\":[\"The caller starts placement.\",\"Another actor changes the file's modification time without changing its bytes.\",\"The deliverer prepares and records the photo.\"],\"outcomes\":[\"The publication records the earlier path-metadata time.\",\"The publication records the time obtained from the opened file descriptor.\"],\"observer\":\"the owner reading the photo date in the Portal\"}},{\"subject\":\"M07 PublicationMark marked_at\",\"kind\":\"time_source\",\"text\":\"Fields: `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"Which clock supplies marked_at, when is it read relative to conflict checking and the durable write, how many readings does one mark operation take, and is the stored datetime naive UTC, offset-aware UTC or another representation?\",\"options\":[\"one system UTC-clock reading immediately before constructing the new record, stored as naive UTC\",\"one system UTC-clock reading after the durable write, stored as offset-aware UTC\",\"a timestamp supplied by the caller\",\"the file-system timestamp of the mark record\"],\"default_guess\":\"Read an injected system UTC clock exactly once inside the project lock after all checks and immediately before constructing the record; store naive UTC for consistency with the other product datetimes.\",\"witness\":{\"initial\":\"No mark exists and the system clock advances across the mark write.\",\"events\":[\"The calling flow reports a photo_id.\",\"The deliverer validates the request and writes the mark.\"],\"outcomes\":[\"marked_at is the instant sampled before the durable write and is stored as naive UTC.\",\"marked_at is a later instant sampled after the write and is stored as offset-aware UTC.\"],\"observer\":\"a later scan or inspection of the publication mark\"}},{\"subject\":\"INV-01 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).\",\"question\":\"What must the test show about source directories, empty directories, directory modes and timestamps, names and symbolic links so that it demonstrates that no operation creates, changes, moves or deletes anything in the source folder?\",\"options\":[\"snapshot and compare the complete directory tree and metadata of every entry\",\"limit INV-01 explicitly to regular-file contents and metadata\",\"instrument all filesystem mutations directed at the source tree\"],\"default_guess\":\"Snapshot and compare the complete tree, entry types, names, link targets, bytes, modes and modification times before and after every listed operation.\",\"witness\":{\"initial\":\"The source tree contains an empty subfolder and one unchanged regular file.\",\"events\":[\"A placement implementation changes the empty subfolder's mode.\",\"The required test compares only the files, their bytes, modification times and modes.\"],\"outcomes\":[\"The stated test passes although INV-01 is violated.\",\"A complete-tree test fails because the directory changed.\"],\"observer\":\"the invariant test suite\"}},{\"subject\":\"INV-02 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What observation must the test make to prove that delivery opens no path failing A3 rule 5 condition 1, rather than merely proving the response and absence of output files?\",\"options\":[\"instrument source-path open calls and assert none occurs\",\"define opens narrowly as opening the final source file and assert that call is absent\",\"replace the invariant with the response-and-no-write property currently tested\"],\"default_guess\":\"Instrument opening of the final source file and assert it never occurs for every condition-1 case, while allowing non-opening metadata checks of path components.\",\"witness\":{\"initial\":\"The request names a path through a symbolic link and has no existing placement.\",\"events\":[\"The caller requests placement.\",\"The implementation opens the final source and then rejects it without writing output.\"],\"outcomes\":[\"The stated response-and-files test passes even though the source was opened.\",\"A test observing open calls fails and exposes the INV-02 violation.\"],\"observer\":\"the invariant test suite or a filesystem audit hook\"}},{\"subject\":\"INV-19 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"What must the test observe to demonstrate that a new placement never reads a conflict copy, rather than only that the call fails and leaves durable files unchanged?\",\"options\":[\"instrument reads and assert that no conflict-copy content is opened or read\",\"assert only that no complete placement is produced\",\"replace the invariant with the refusal-and-no-write behavior currently tested\"],\"default_guess\":\"Instrument source opens and reads and assert that the conflict copy is rejected from its name before its content is opened.\",\"witness\":{\"initial\":\"A conflict copy contains valid image bytes and has no placement.\",\"events\":[\"The caller requests placement using the conflict-copy name.\",\"The implementation reads the entire file, recognizes the name afterward and returns NOT_READY_OR_ABSENT without writing.\"],\"outcomes\":[\"The stated refusal-and-files test passes although INV-19 is violated.\",\"A read-observing test fails because conflict-copy bytes were read.\"],\"observer\":\"the invariant test suite or a filesystem audit hook\"}},{\"subject\":\"INV-10 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-10: scan, placement and mark each answer `connection_not_confirmed` for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`).\",\"question\":\"What must the Required tests assert to show that nothing is scanned, placed or marked before a valid confirmed connection is established, rather than only checking the refusal answer and durable writes?\",\"options\":[\"assert no source-folder, placement-store or mark-record access occurs after the connection refusal is determined\",\"assert only that no durable write occurs\",\"narrow the invariant to successful results and durable state changes\"],\"default_guess\":\"Instrument the source folder and state/store backends and assert that an invalid, absent or unconfirmed connection causes no project data access beyond reading the connections file.\",\"witness\":{\"initial\":\"The connection is unconfirmed and the photo folder contains a readable image.\",\"events\":[\"The caller requests a scan.\",\"The implementation scans the folder first, then checks confirmation and returns connection_not_confirmed without writing.\"],\"outcomes\":[\"A response-and-no-write test passes despite the forbidden scan.\",\"An access-observing test fails when the folder is read before the connection check.\"],\"observer\":\"the invariant test suite and the VPS filesystem audit log\"}}]}",
+ "set_aside": []
+}

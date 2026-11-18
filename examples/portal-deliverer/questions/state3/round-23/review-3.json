@@ -1,0 +1,139 @@
+{
+ "open_points": [
+  {
+   "subject": "Config",
+   "kind": "undefined_model",
+   "text": "the type of the run settings, and `Config`, the context of the operations that `deliverer_api` builds from them:\n  binary store, state folder, time zone and connections file;",
+   "question": "What are the exact fields and types of `Config`, including whether its paths are strings or resolved path values and whether its time zone is a name or a validated time-zone object?",
+   "options": [
+    "`binary_root: str`, `state_dir: str`, `timezone: str`, `connections_file: str` copied from the run settings",
+    "Path-valued roots and connections file plus a validated time-zone object",
+    "A context containing configured storage and connection service objects rather than values"
+   ],
+   "default_guess": "Use a frozen value type with Path-valued `binary_root`, `state_dir` and `connections_file`, and a validated time-zone object.",
+   "unit": "?"
+  },
+  {
+   "subject": "Config access",
+   "kind": "unclear_dependency",
+   "text": "`Config`, the context of the operations that `deliverer_api` builds from them",
+   "question": "Which operation modules receive `Config`, and may each receive the whole context or only the fields it actually uses?",
+   "options": [
+    "`photo_delivery` receives the whole `Config` and passes values to lower modules",
+    "Each lower module receives only its required configured value",
+    "`deliverer_api` constructs configured lower-module objects and operations never receive `Config`"
+   ],
+   "default_guess": "Have `deliverer_api` construct configured lower-module objects so each module receives only what it uses.",
+   "unit": "?"
+  },
+  {
+   "subject": "required run settings",
+   "kind": "undefined_validation",
+   "text": "the default of each optional setting, and the refusal of a missing required setting or an invalid port.",
+   "question": "Does a required environment variable whose value is empty or only whitespace count as missing, invalid, or as a valid path string?",
+   "options": [
+    "Treat empty and whitespace-only values as missing",
+    "Treat only absence as missing and accept any present string",
+    "Treat them as invalid under a separately owned path-value rule"
+   ],
+   "default_guess": "Treat empty and whitespace-only required values as missing.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_BINARY_ROOT` is present with the empty string",
+    "events": [
+     "The operator starts the service",
+     "`runtime_settings` reads the environment"
+    ],
+    "outcomes": [
+     "Startup is refused because the required setting has no usable value",
+     "Startup continues and the empty path is passed into `Config`, where it may denote the current directory"
+    ],
+    "observer": "the operator and any caller of the running service"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "port validation",
+   "kind": "vague_rule",
+   "text": "the default of each optional setting, and the refusal of a missing required setting or an invalid port.",
+   "question": "Exactly which environment values make the port invalid: only values that cannot be parsed as an integer, or also integers outside a stated range, including zero?",
+   "options": [
+    "Require a decimal integer from 1 through 65535",
+    "Require a decimal integer from 0 through 65535",
+    "Reject only values that cannot be converted to an integer and leave range checking to the web server"
+   ],
+   "default_guess": "Require a decimal integer from 1 through 65535.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_PORT` is `0`",
+    "events": [
+     "The operator starts the service",
+     "`runtime_settings` parses the port"
+    ],
+    "outcomes": [
+     "Startup is refused because zero is outside the accepted listening-port range",
+     "The service starts and asks the operating system to choose an ephemeral port"
+    ],
+    "observer": "the operator and the reverse proxy"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "time-zone validation",
+   "kind": "no_owner",
+   "text": "the default of each optional setting, and the refusal of a missing required setting or an invalid port.",
+   "question": "Which module validates `PORTAL_DELIVERER_TIMEZONE`, when does it do so, and what happens when the configured name cannot identify a time zone?",
+   "options": [
+    "`runtime_settings` validates it and refuses startup",
+    "`deliverer_api` validates it while building `Config` and refuses startup",
+    "The value remains a string until photo preparation uses it, so only an affected delivery fails"
+   ],
+   "default_guess": "`runtime_settings` should validate the time-zone name and refuse startup.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_TIMEZONE` is `No/Such_Zone`, and a source photo has a camera time without an offset",
+    "events": [
+     "The operator starts the service",
+     "A caller later delivers the photo"
+    ],
+    "outcomes": [
+     "The service refuses to start because the configured time zone is invalid",
+     "The service starts, then the delivery fails when its local camera time must be interpreted"
+    ],
+    "observer": "the operator and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "SOURCE_ID_PATTERN",
+   "kind": "missing_owner_and_edge",
+   "text": "| A5 | rule 9, checking a source id against `SOURCE_ID_PATTERN` | `photo_delivery` |",
+   "question": "Which module owns and exports `SOURCE_ID_PATTERN`, and what explicit consumer-to-provider dependency lets `photo_delivery` import it?",
+   "options": [
+    "`domain_models` owns the constant and `photo_delivery` imports it from `domain_models`",
+    "A separate data-provider module owns the constant and `photo_delivery` imports it from there",
+    "`photo_delivery` owns a private copy of the pattern"
+   ],
+   "default_guess": "Make `domain_models` the provider and declare a `photo_delivery` → `domain_models` import of `SOURCE_ID_PATTERN`.",
+   "unit": "?"
+  },
+  {
+   "subject": "Config import",
+   "kind": "standard_violation",
+   "text": "- the type of the run settings, and `Config`, the context of the operations that `deliverer_api` builds from them:\n  binary store, state folder, time zone and connections file;",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "Declare `Config` in the explicit `module_internal` edge from `deliverer_api` to `domain_models`, or rewrite the design so `deliverer_api` does not directly construct or name that type.",
+   "unit": "?"
+  },
+  {
+   "subject": "SOURCE_ID_PATTERN import",
+   "kind": "standard_violation",
+   "text": "| A5 | rule 9, checking a source id against `SOURCE_ID_PATTERN` | `photo_delivery` |",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "Name the provider and declare `SOURCE_ID_PATTERN` in `photo_delivery`'s explicit `module_internal` import surface.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Config\",\"kind\":\"undefined_model\",\"text\":\"the type of the run settings, and `Config`, the context of the operations that `deliverer_api` builds from them:\\n  binary store, state folder, time zone and connections file;\",\"question\":\"What are the exact fields and types of `Config`, including whether its paths are strings or resolved path values and whether its time zone is a name or a validated time-zone object?\",\"options\":[\"`binary_root: str`, `state_dir: str`, `timezone: str`, `connections_file: str` copied from the run settings\",\"Path-valued roots and connections file plus a validated time-zone object\",\"A context containing configured storage and connection service objects rather than values\"],\"default_guess\":\"Use a frozen value type with Path-valued `binary_root`, `state_dir` and `connections_file`, and a validated time-zone object.\"},{\"subject\":\"Config access\",\"kind\":\"unclear_dependency\",\"text\":\"`Config`, the context of the operations that `deliverer_api` builds from them\",\"question\":\"Which operation modules receive `Config`, and may each receive the whole context or only the fields it actually uses?\",\"options\":[\"`photo_delivery` receives the whole `Config` and passes values to lower modules\",\"Each lower module receives only its required configured value\",\"`deliverer_api` constructs configured lower-module objects and operations never receive `Config`\"],\"default_guess\":\"Have `deliverer_api` construct configured lower-module objects so each module receives only what it uses.\"},{\"subject\":\"required run settings\",\"kind\":\"undefined_validation\",\"text\":\"the default of each optional setting, and the refusal of a missing required setting or an invalid port.\",\"question\":\"Does a required environment variable whose value is empty or only whitespace count as missing, invalid, or as a valid path string?\",\"options\":[\"Treat empty and whitespace-only values as missing\",\"Treat only absence as missing and accept any present string\",\"Treat them as invalid under a separately owned path-value rule\"],\"default_guess\":\"Treat empty and whitespace-only required values as missing.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_BINARY_ROOT` is present with the empty string\",\"events\":[\"The operator starts the service\",\"`runtime_settings` reads the environment\"],\"outcomes\":[\"Startup is refused because the required setting has no usable value\",\"Startup continues and the empty path is passed into `Config`, where it may denote the current directory\"],\"observer\":\"the operator and any caller of the running service\"}},{\"subject\":\"port validation\",\"kind\":\"vague_rule\",\"text\":\"the default of each optional setting, and the refusal of a missing required setting or an invalid port.\",\"question\":\"Exactly which environment values make the port invalid: only values that cannot be parsed as an integer, or also integers outside a stated range, including zero?\",\"options\":[\"Require a decimal integer from 1 through 65535\",\"Require a decimal integer from 0 through 65535\",\"Reject only values that cannot be converted to an integer and leave range checking to the web server\"],\"default_guess\":\"Require a decimal integer from 1 through 65535.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_PORT` is `0`\",\"events\":[\"The operator starts the service\",\"`runtime_settings` parses the port\"],\"outcomes\":[\"Startup is refused because zero is outside the accepted listening-port range\",\"The service starts and asks the operating system to choose an ephemeral port\"],\"observer\":\"the operator and the reverse proxy\"}},{\"subject\":\"time-zone validation\",\"kind\":\"no_owner\",\"text\":\"the default of each optional setting, and the refusal of a missing required setting or an invalid port.\",\"question\":\"Which module validates `PORTAL_DELIVERER_TIMEZONE`, when does it do so, and what happens when the configured name cannot identify a time zone?\",\"options\":[\"`runtime_settings` validates it and refuses startup\",\"`deliverer_api` validates it while building `Config` and refuses startup\",\"The value remains a string until photo preparation uses it, so only an affected delivery fails\"],\"default_guess\":\"`runtime_settings` should validate the time-zone name and refuse startup.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_TIMEZONE` is `No/Such_Zone`, and a source photo has a camera time without an offset\",\"events\":[\"The operator starts the service\",\"A caller later delivers the photo\"],\"outcomes\":[\"The service refuses to start because the configured time zone is invalid\",\"The service starts, then the delivery fails when its local camera time must be interpreted\"],\"observer\":\"the operator and the calling flow\"}},{\"subject\":\"SOURCE_ID_PATTERN\",\"kind\":\"missing_owner_and_edge\",\"text\":\"| A5 | rule 9, checking a source id against `SOURCE_ID_PATTERN` | `photo_delivery` |\",\"question\":\"Which module owns and exports `SOURCE_ID_PATTERN`, and what explicit consumer-to-provider dependency lets `photo_delivery` import it?\",\"options\":[\"`domain_models` owns the constant and `photo_delivery` imports it from `domain_models`\",\"A separate data-provider module owns the constant and `photo_delivery` imports it from there\",\"`photo_delivery` owns a private copy of the pattern\"],\"default_guess\":\"Make `domain_models` the provider and declare a `photo_delivery` → `domain_models` import of `SOURCE_ID_PATTERN`.\"},{\"subject\":\"Config import\",\"kind\":\"standard_violation\",\"text\":\"- the type of the run settings, and `Config`, the context of the operations that `deliverer_api` builds from them:\\n  binary store, state folder, time zone and connections file;\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"Declare `Config` in the explicit `module_internal` edge from `deliverer_api` to `domain_models`, or rewrite the design so `deliverer_api` does not directly construct or name that type.\"},{\"subject\":\"SOURCE_ID_PATTERN import\",\"kind\":\"standard_violation\",\"text\":\"| A5 | rule 9, checking a source id against `SOURCE_ID_PATTERN` | `photo_delivery` |\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"Name the provider and declare `SOURCE_ID_PATTERN` in `photo_delivery`'s explicit `module_internal` import surface.\"}]}",
+ "set_aside": []
+}
