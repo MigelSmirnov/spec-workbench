@@ -23,11 +23,12 @@ connections file. Nothing crosses to a caller until the start has succeeded.
 
 ### Steps
 
-1. `capability:deliverer_api.load_config` reads the run settings and calls
+1. The deployment launches `capability:deliverer_api.run_service`, which owns the remaining steps.
+2. `capability:deliverer_api.load_config` reads the run settings and calls
    `capability:object_connections.load_connections` once, to judge the connections file whole.
-2. `capability:deliverer_api.read_token` reads the token and checks its file permissions and length.
-3. `capability:deliverer_api.create_app` builds the HTTP surface with the token and the clock.
-4. `capability:deliverer_api.run_service` runs that surface in the web server, on the loopback interface.
+3. `capability:deliverer_api.read_token` reads the token and checks its file permissions and length.
+4. `capability:deliverer_api.create_app` builds the HTTP surface with the settings, the token and the clock.
+5. `capability:deliverer_api.run_service` serves that surface in the web server, on the loopback interface.
 
 ### Outcomes
 

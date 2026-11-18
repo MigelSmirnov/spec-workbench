@@ -1,0 +1,179 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:deliverer_api.create_app",
+   "kind": "contradiction",
+   "text": "The health route answers without a token.",
+   "question": "Is the health route exempt from authentication, despite R0-15 saying that every operation needs the token?",
+   "options": [
+    "The health route is the sole unauthenticated exception, as A5 rule 1 and this passage state.",
+    "The health route requires the token, as R0-15 states."
+   ],
+   "default_guess": "Treat the health route as the sole unauthenticated exception.",
+   "witness": {
+    "initial": "The service is listening and the caller has no token.",
+    "events": [
+     "A monitoring caller requests the health route without an Authorization header."
+    ],
+    "outcomes": [
+     "The route answers successfully without authentication.",
+     "The route refuses the request with 401 because every operation requires the token."
+    ],
+    "observer": "The monitoring caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.create_app",
+   "kind": "output_unspecified",
+   "text": "The health route answers without a token.",
+   "question": "What HTTP status and response body must the unauthenticated health route return?",
+   "options": [
+    "200 with a fixed JSON health document.",
+    "204 with no body.",
+    "200 with an empty or plain-text body."
+   ],
+   "default_guess": "Return 200 with a fixed JSON health document.",
+   "witness": {
+    "initial": "The service has started successfully.",
+    "events": [
+     "A health-check client requests the health route without a token.",
+     "The client validates the status and response representation."
+    ],
+    "outcomes": [
+     "The client receives 200 and a JSON document.",
+     "The client receives 204 with no body."
+    ],
+    "observer": "The health-check client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.create_app",
+   "kind": "input_unspecified",
+   "text": "Every other route checks the token, the request form and the project id, calls one operation of `module:photo_delivery` and turns its refusal into an answer.",
+   "question": "What request form does the scan route validate, and must it reject an otherwise valid scan request that carries an unexpected body or fields?",
+   "options": [
+    "The scan route has no body form and ignores any body.",
+    "The scan route requires an empty body and rejects supplied content.",
+    "The scan route has a defined request model that must be stated."
+   ],
+   "default_guess": "Define the scan route as having no body and reject unexpected body fields consistently with the other strict request forms.",
+   "witness": {
+    "initial": "A confirmed project has one ready photo.",
+    "events": [
+     "An authenticated caller requests the scan route with a valid project id and an extra JSON field."
+    ],
+    "outcomes": [
+     "The scan succeeds because the route has no request body to validate.",
+     "The route refuses the request as malformed because every non-health route checks a request form."
+    ],
+    "observer": "The authenticated caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.run_service",
+   "kind": "contradiction",
+   "text": "Calls `public_op:deliverer_api.load_config`, `public_op:deliverer_api.read_token` and `public_op:deliverer_api.create_app` in that order, then serves the surface on the loopback interface until it is stopped.",
+   "question": "Does `run_service` own the complete startup sequence, or does `boundary:service_entry` call those three operations before invoking `run_service` only to serve the already-built surface, as `flow:service_start` states?",
+   "options": [
+    "`run_service` performs configuration, token reading, app creation and serving.",
+    "`boundary:service_entry` performs the first three steps and passes an already-built surface to a server-only `run_service`.",
+    "Both layers perform the sequence, causing initialization to run twice."
+   ],
+   "default_guess": "Make `run_service` the single top-level startup orchestrator and revise the flow and `create_app` caller accordingly.",
+   "witness": {
+    "initial": "The connections file is valid for the first configuration read and is replaced with an invalid file immediately afterward.",
+    "events": [
+     "The deployment starts the service.",
+     "The service-entry implementation performs the three startup operations described by `flow:service_start`.",
+     "Control reaches `run_service`."
+    ],
+    "outcomes": [
+     "A server-only `run_service` serves the surface already built from the valid first read.",
+     "A self-initializing `run_service` reads configuration again and exits without listening because the replacement file is invalid."
+    ],
+    "observer": "The deployment process and its health checker"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.scan_project_photos",
+   "kind": "output_contradiction",
+   "text": "One M02 for each reported file, in the walking order of A1, and the count of each status that occurs.",
+   "question": "Must the count result contain only statuses that occur, or all ScanStatus values with zero counts for absent statuses as `flow:scan_project_photos` can be read to require?",
+   "options": [
+    "Include only statuses whose count is nonzero.",
+    "Include every ScanStatus with zero for statuses that do not occur."
+   ],
+   "default_guess": "Include every ScanStatus with an explicit integer count, including zero.",
+   "witness": {
+    "initial": "The photo folder contains one ready file and no placed, published or rejected files.",
+    "events": [
+     "An authenticated caller scans the confirmed project."
+    ],
+    "outcomes": [
+     "The counts contain only `ready: 1`.",
+     "The counts contain `ready: 1`, `placed: 0`, `published: 0` and `rejected: 0`."
+    ],
+    "observer": "The scan caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.mark_photo_published",
+   "kind": "output_shape_unspecified",
+   "text": "M07 together with its `MarkStatus`, `marked` or `replayed`.",
+   "question": "What concrete return type and serialization combine M07 with MarkStatus?",
+   "options": [
+    "A response object with separate `mark` and `status` fields.",
+    "A flat response containing all M07 fields plus `status`.",
+    "A two-item tuple of M07 and MarkStatus."
+   ],
+   "default_guess": "Define a response object with explicit `mark: M07` and `status: MarkStatus` fields.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The authenticated caller reports a valid Portal photo id.",
+     "The service creates the mark and serializes the operation result."
+    ],
+    "outcomes": [
+     "The caller receives `{status: \"marked\", mark: {...M07 fields...}}`.",
+     "The caller receives a flat object containing the M07 fields and `status: \"marked\"`."
+    ],
+    "observer": "The API caller and generated client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:system_clock.utc_now",
+   "kind": "caller_contradiction",
+   "text": "Reads the host clock at each call. `module:deliverer_api` passes this function to a mark, and `module:photo_delivery` calls it once, after the source id is accepted (A7 rule 2).",
+   "question": "Is the runtime caller of `utc_now` `module:photo_delivery`, as this passage and A7 state, or `module:deliverer_api`, as the operation's Callers section states; and does Callers mean runtime invocation or only the module that imports and passes the function?",
+   "options": [
+    "`module:photo_delivery` invokes the injected function; `module:deliverer_api` only imports and passes it.",
+    "`module:deliverer_api` invokes `utc_now` and passes the resulting time to `module:photo_delivery`.",
+    "The Callers field separately distinguishes the importing module from the runtime invoking module."
+   ],
+   "default_guess": "Have `module:deliverer_api` import and inject the function and `module:photo_delivery` invoke it; revise Callers to state that distinction explicitly.",
+   "witness": {
+    "initial": "A valid mark request has passed token, request-form, identifier and source-id checks.",
+    "events": [
+     "The API passes the clock dependency to the mark operation.",
+     "The mark operation reaches the clock-read step.",
+     "A tracing clock records its immediate runtime caller."
+    ],
+    "outcomes": [
+     "The trace records `module:photo_delivery` as the caller.",
+     "The trace records `module:deliverer_api` as the caller."
+    ],
+    "observer": "The clock test or runtime tracer"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:deliverer_api.create_app\",\"kind\":\"contradiction\",\"text\":\"The health route answers without a token.\",\"question\":\"Is the health route exempt from authentication, despite R0-15 saying that every operation needs the token?\",\"options\":[\"The health route is the sole unauthenticated exception, as A5 rule 1 and this passage state.\",\"The health route requires the token, as R0-15 states.\"],\"default_guess\":\"Treat the health route as the sole unauthenticated exception.\",\"witness\":{\"initial\":\"The service is listening and the caller has no token.\",\"events\":[\"A monitoring caller requests the health route without an Authorization header.\"],\"outcomes\":[\"The route answers successfully without authentication.\",\"The route refuses the request with 401 because every operation requires the token.\"],\"observer\":\"The monitoring caller\"}},{\"subject\":\"public_op:deliverer_api.create_app\",\"kind\":\"output_unspecified\",\"text\":\"The health route answers without a token.\",\"question\":\"What HTTP status and response body must the unauthenticated health route return?\",\"options\":[\"200 with a fixed JSON health document.\",\"204 with no body.\",\"200 with an empty or plain-text body.\"],\"default_guess\":\"Return 200 with a fixed JSON health document.\",\"witness\":{\"initial\":\"The service has started successfully.\",\"events\":[\"A health-check client requests the health route without a token.\",\"The client validates the status and response representation.\"],\"outcomes\":[\"The client receives 200 and a JSON document.\",\"The client receives 204 with no body.\"],\"observer\":\"The health-check client\"}},{\"subject\":\"public_op:deliverer_api.create_app\",\"kind\":\"input_unspecified\",\"text\":\"Every other route checks the token, the request form and the project id, calls one operation of `module:photo_delivery` and turns its refusal into an answer.\",\"question\":\"What request form does the scan route validate, and must it reject an otherwise valid scan request that carries an unexpected body or fields?\",\"options\":[\"The scan route has no body form and ignores any body.\",\"The scan route requires an empty body and rejects supplied content.\",\"The scan route has a defined request model that must be stated.\"],\"default_guess\":\"Define the scan route as having no body and reject unexpected body fields consistently with the other strict request forms.\",\"witness\":{\"initial\":\"A confirmed project has one ready photo.\",\"events\":[\"An authenticated caller requests the scan route with a valid project id and an extra JSON field.\"],\"outcomes\":[\"The scan succeeds because the route has no request body to validate.\",\"The route refuses the request as malformed because every non-health route checks a request form.\"],\"observer\":\"The authenticated caller\"}},{\"subject\":\"public_op:deliverer_api.run_service\",\"kind\":\"contradiction\",\"text\":\"Calls `public_op:deliverer_api.load_config`, `public_op:deliverer_api.read_token` and `public_op:deliverer_api.create_app` in that order, then serves the surface on the loopback interface until it is stopped.\",\"question\":\"Does `run_service` own the complete startup sequence, or does `boundary:service_entry` call those three operations before invoking `run_service` only to serve the already-built surface, as `flow:service_start` states?\",\"options\":[\"`run_service` performs configuration, token reading, app creation and serving.\",\"`boundary:service_entry` performs the first three steps and passes an already-built surface to a server-only `run_service`.\",\"Both layers perform the sequence, causing initialization to run twice.\"],\"default_guess\":\"Make `run_service` the single top-level startup orchestrator and revise the flow and `create_app` caller accordingly.\",\"witness\":{\"initial\":\"The connections file is valid for the first configuration read and is replaced with an invalid file immediately afterward.\",\"events\":[\"The deployment starts the service.\",\"The service-entry implementation performs the three startup operations described by `flow:service_start`.\",\"Control reaches `run_service`.\"],\"outcomes\":[\"A server-only `run_service` serves the surface already built from the valid first read.\",\"A self-initializing `run_service` reads configuration again and exits without listening because the replacement file is invalid.\"],\"observer\":\"The deployment process and its health checker\"}},{\"subject\":\"public_op:photo_delivery.scan_project_photos\",\"kind\":\"output_contradiction\",\"text\":\"One M02 for each reported file, in the walking order of A1, and the count of each status that occurs.\",\"question\":\"Must the count result contain only statuses that occur, or all ScanStatus values with zero counts for absent statuses as `flow:scan_project_photos` can be read to require?\",\"options\":[\"Include only statuses whose count is nonzero.\",\"Include every ScanStatus with zero for statuses that do not occur.\"],\"default_guess\":\"Include every ScanStatus with an explicit integer count, including zero.\",\"witness\":{\"initial\":\"The photo folder contains one ready file and no placed, published or rejected files.\",\"events\":[\"An authenticated caller scans the confirmed project.\"],\"outcomes\":[\"The counts contain only `ready: 1`.\",\"The counts contain `ready: 1`, `placed: 0`, `published: 0` and `rejected: 0`.\"],\"observer\":\"The scan caller\"}},{\"subject\":\"public_op:photo_delivery.mark_photo_published\",\"kind\":\"output_shape_unspecified\",\"text\":\"M07 together with its `MarkStatus`, `marked` or `replayed`.\",\"question\":\"What concrete return type and serialization combine M07 with MarkStatus?\",\"options\":[\"A response object with separate `mark` and `status` fields.\",\"A flat response containing all M07 fields plus `status`.\",\"A two-item tuple of M07 and MarkStatus.\"],\"default_guess\":\"Define a response object with explicit `mark: M07` and `status: MarkStatus` fields.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The authenticated caller reports a valid Portal photo id.\",\"The service creates the mark and serializes the operation result.\"],\"outcomes\":[\"The caller receives `{status: \\\"marked\\\", mark: {...M07 fields...}}`.\",\"The caller receives a flat object containing the M07 fields and `status: \\\"marked\\\"`.\"],\"observer\":\"The API caller and generated client\"}},{\"subject\":\"public_op:system_clock.utc_now\",\"kind\":\"caller_contradiction\",\"text\":\"Reads the host clock at each call. `module:deliverer_api` passes this function to a mark, and `module:photo_delivery` calls it once, after the source id is accepted (A7 rule 2).\",\"question\":\"Is the runtime caller of `utc_now` `module:photo_delivery`, as this passage and A7 state, or `module:deliverer_api`, as the operation's Callers section states; and does Callers mean runtime invocation or only the module that imports and passes the function?\",\"options\":[\"`module:photo_delivery` invokes the injected function; `module:deliverer_api` only imports and passes it.\",\"`module:deliverer_api` invokes `utc_now` and passes the resulting time to `module:photo_delivery`.\",\"The Callers field separately distinguishes the importing module from the runtime invoking module.\"],\"default_guess\":\"Have `module:deliverer_api` import and inject the function and `module:photo_delivery` invoke it; revise Callers to state that distinction explicitly.\",\"witness\":{\"initial\":\"A valid mark request has passed token, request-form, identifier and source-id checks.\",\"events\":[\"The API passes the clock dependency to the mark operation.\",\"The mark operation reaches the clock-read step.\",\"A tracing clock records its immediate runtime caller.\"],\"outcomes\":[\"The trace records `module:photo_delivery` as the caller.\",\"The trace records `module:deliverer_api` as the caller.\"],\"observer\":\"The clock test or runtime tracer\"}}]}",
+ "set_aside": []
+}

@@ -176,7 +176,7 @@ The deliverer offers three operations: scan a project's folder, deliver one phot
 publication. When to scan, what to deliver next, what to repeat and which failure to treat as temporary
 belong to the calling flow. The guarantees stay in the service: source folders are only read, metadata
 is removed, only a confirmed folder is used, a repeated delivery creates nothing new, and every
-operation needs the token. A run against real Syncthing showed that a file still arriving lies under a
+operation on a project needs the token. A run against real Syncthing showed that a file still arriving lies under a
 temporary name, so the two-minute wait of P-04 is withdrawn.
 
 ## Accepted from the experiment (owner, 2026-11-18)

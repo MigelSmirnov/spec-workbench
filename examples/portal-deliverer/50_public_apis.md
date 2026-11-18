@@ -98,7 +98,7 @@ The HTTP surface with the health, scan, delivery and mark routes.
 
 ### Observable effect
 
-None until the surface is served. The health route answers without a token. Every other route checks the token, the request form and the project id, calls one operation of `module:photo_delivery` and turns its refusal into an answer.
+None until the surface is served. The health route answers without a token. Every other route checks the token, the project id and the form of its body when it has one, calls one operation of `module:photo_delivery` and turns its refusal into an answer.
 
 ### Enforces
 

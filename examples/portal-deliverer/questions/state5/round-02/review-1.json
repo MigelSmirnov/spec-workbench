@@ -1,0 +1,172 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:deliverer_api.create_app",
+   "kind": "unspecified_output",
+   "text": "The health route answers without a token.",
+   "question": "What method and path identify the health route, and what HTTP status and response body does it return?",
+   "options": [
+    "Return 200 with a fixed JSON health body.",
+    "Return 204 with no body.",
+    "Return another fixed status and representation."
+   ],
+   "default_guess": "Return 200 with a fixed path-free JSON body.",
+   "witness": {
+    "initial": "The service has started and the caller has no token.",
+    "events": [
+     "An unauthenticated caller requests the health route."
+    ],
+    "outcomes": [
+     "The caller receives 200 with a fixed JSON body.",
+     "The caller receives 204 with no body."
+    ],
+    "observer": "The health-check caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.create_app",
+   "kind": "contradictory_validation",
+   "text": "Every other route checks the token, the request form and the project id, calls one operation of `module:photo_delivery` and turns its refusal into an answer.",
+   "question": "Does the scan route validate a request form, despite `flow:scan_project_photos` specifying only token and project-id checks, and if so what is that form?",
+   "options": [
+    "The scan route has no request form and checks only the token and project id.",
+    "The scan route requires an empty or otherwise defined request form.",
+    "The phrase applies request-form validation only to routes that have a body."
+   ],
+   "default_guess": "Treat request-form validation as applying only to delivery and mark routes.",
+   "witness": {
+    "initial": "The token and project id are valid, and the scan URL is requested with an unexpected request body.",
+    "events": [
+     "The calling flow sends the scan request.",
+     "The scan route performs its boundary validation."
+    ],
+    "outcomes": [
+     "The route ignores the body and runs `scan_project_photos`, as the scan flow's checks imply.",
+     "The route rejects the request because every non-health route checks a request form."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.run_service",
+   "kind": "unspecified_wiring",
+   "text": "Calls `public_op:deliverer_api.load_config`, `public_op:deliverer_api.read_token` and `public_op:deliverer_api.create_app` in that order, then serves the surface on the loopback interface until it is stopped.",
+   "question": "Which returned values and clock function are passed to `create_app`, and does `run_service` itself own all four startup steps or receive the already-created surface described by `flow:service_start`?",
+   "options": [
+    "`run_service` passes the loaded settings, read token and `utc_now` to `create_app`, then serves its result.",
+    "The deployment performs the first three startup steps and passes their result to `run_service`.",
+    "`run_service` calls the operations but obtains one or more `create_app` arguments by another mechanism."
+   ],
+   "default_guess": "Have `run_service` pass the loaded settings, token and `utc_now` to `create_app`, then serve the returned surface.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.deliver_project_photo",
+   "kind": "state_contradiction",
+   "text": "Creates at most one placement of a project and content, and the project lock file on first use. After a failed record write a stored image may remain without a record (A3 rule 5).",
+   "question": "When the first delivery creates the lock file and then refuses a damaged record, does that lock-file creation remain, or must the operation change nothing as A6 rule 5 states?",
+   "options": [
+    "The newly created lock file remains despite the refusal.",
+    "The lock file is removed so the refused operation changes nothing.",
+    "A6's “changes nothing” excludes creation of the project lock file."
+   ],
+   "default_guess": "Let the per-project lock file remain and explicitly exempt it from the no-change statement.",
+   "witness": {
+    "initial": "A confirmed project has a damaged placement record and no project lock file.",
+    "events": [
+     "The caller requests delivery with valid boundary inputs.",
+     "`deliver_project_photo` creates and acquires the project lock.",
+     "Reading the damaged placement record produces `state_unavailable`."
+    ],
+    "outcomes": [
+     "The request is refused and the newly created project lock file remains, as the State 5 state impact says.",
+     "The request is refused with no filesystem change, as A6 rule 5 says."
+    ],
+    "observer": "An operator inspecting the state folder"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.mark_photo_published",
+   "kind": "unspecified_output_shape",
+   "text": "M07 together with its `MarkStatus`, `marked` or `replayed`.",
+   "question": "What exact return type and serialized shape combine M07 with the non-stored `MarkStatus`?",
+   "options": [
+    "Return a wrapper object with separate `mark` and `status` fields.",
+    "Return a tuple of M07 and `MarkStatus`.",
+    "Add a response-only status field to the returned M07 representation."
+   ],
+   "default_guess": "Return a dedicated wrapper containing `mark: M07` and `status: MarkStatus`.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The caller records a `photo_id`.",
+     "The service creates M07 and returns the result."
+    ],
+    "outcomes": [
+     "The caller receives `{mark: <M07>, status: \"marked\"}`.",
+     "The caller receives the M07 fields with an additional top-level `status` field."
+    ],
+    "observer": "The API caller and response serializer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.mark_photo_published",
+   "kind": "state_contradiction",
+   "text": "Creates at most one mark of a placement, and the project lock file on first use.",
+   "question": "When a first mark attempt is refused after acquiring the lock, does the new lock file remain, or does the refused mark write nothing as `flow:record_publication` states?",
+   "options": [
+    "The lock file remains even though the mark is refused.",
+    "The lock file is removed so the refused mark writes nothing.",
+    "The flow's “writes nothing” excludes the project lock file."
+   ],
+   "default_guess": "Let the per-project lock file remain and explicitly exclude it from the flow's no-write statement.",
+   "witness": {
+    "initial": "A confirmed project has no placement and no project lock file.",
+    "events": [
+     "The caller submits a valid mark request.",
+     "The service reads the clock and confirms the connection.",
+     "The service creates and acquires the project lock.",
+     "The absent placement causes `not_placed`."
+    ],
+    "outcomes": [
+     "The request is refused but the project lock file remains, as the State 5 state impact says.",
+     "The request is refused and no file is created, as the flow says."
+    ],
+    "observer": "The caller through filesystem-side effects, or an operator inspecting the state folder"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:system_clock.utc_now",
+   "kind": "caller_contradiction",
+   "text": "`module:deliverer_api` passes this function to a mark, and `module:photo_delivery` calls it once, after the source id is accepted (A7 rule 2).",
+   "question": "Is the caller of `utc_now` the injecting `module:deliverer_api` named under Callers, or the invoking `module:photo_delivery` named here, and what precise meaning does the Callers field use for injected functions?",
+   "options": [
+    "Callers lists the module that imports and injects the function, even though another module invokes it.",
+    "Callers lists the module that actually invokes the function and must therefore name `module:photo_delivery`.",
+    "Both the injector and runtime invoker must be listed."
+   ],
+   "default_guess": "Define Callers as runtime invokers and list `module:photo_delivery`, while retaining `deliverer_api` as the importing and injecting module.",
+   "witness": {
+    "initial": "The app was built with `utc_now` as its clock function.",
+    "events": [
+     "A valid mark request reaches `mark_photo_published`.",
+     "`photo_delivery` invokes the received clock function once."
+    ],
+    "outcomes": [
+     "The Callers passage attributes the operation to `module:deliverer_api`.",
+     "The observable-effect passage attributes the call to `module:photo_delivery`."
+    ],
+    "observer": "Tracing, dependency inspection, or a test recording the call stack"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:deliverer_api.create_app\",\"kind\":\"unspecified_output\",\"text\":\"The health route answers without a token.\",\"question\":\"What method and path identify the health route, and what HTTP status and response body does it return?\",\"options\":[\"Return 200 with a fixed JSON health body.\",\"Return 204 with no body.\",\"Return another fixed status and representation.\"],\"default_guess\":\"Return 200 with a fixed path-free JSON body.\",\"witness\":{\"initial\":\"The service has started and the caller has no token.\",\"events\":[\"An unauthenticated caller requests the health route.\"],\"outcomes\":[\"The caller receives 200 with a fixed JSON body.\",\"The caller receives 204 with no body.\"],\"observer\":\"The health-check caller\"}},{\"subject\":\"public_op:deliverer_api.create_app\",\"kind\":\"contradictory_validation\",\"text\":\"Every other route checks the token, the request form and the project id, calls one operation of `module:photo_delivery` and turns its refusal into an answer.\",\"question\":\"Does the scan route validate a request form, despite `flow:scan_project_photos` specifying only token and project-id checks, and if so what is that form?\",\"options\":[\"The scan route has no request form and checks only the token and project id.\",\"The scan route requires an empty or otherwise defined request form.\",\"The phrase applies request-form validation only to routes that have a body.\"],\"default_guess\":\"Treat request-form validation as applying only to delivery and mark routes.\",\"witness\":{\"initial\":\"The token and project id are valid, and the scan URL is requested with an unexpected request body.\",\"events\":[\"The calling flow sends the scan request.\",\"The scan route performs its boundary validation.\"],\"outcomes\":[\"The route ignores the body and runs `scan_project_photos`, as the scan flow's checks imply.\",\"The route rejects the request because every non-health route checks a request form.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"public_op:deliverer_api.run_service\",\"kind\":\"unspecified_wiring\",\"text\":\"Calls `public_op:deliverer_api.load_config`, `public_op:deliverer_api.read_token` and `public_op:deliverer_api.create_app` in that order, then serves the surface on the loopback interface until it is stopped.\",\"question\":\"Which returned values and clock function are passed to `create_app`, and does `run_service` itself own all four startup steps or receive the already-created surface described by `flow:service_start`?\",\"options\":[\"`run_service` passes the loaded settings, read token and `utc_now` to `create_app`, then serves its result.\",\"The deployment performs the first three startup steps and passes their result to `run_service`.\",\"`run_service` calls the operations but obtains one or more `create_app` arguments by another mechanism.\"],\"default_guess\":\"Have `run_service` pass the loaded settings, token and `utc_now` to `create_app`, then serve the returned surface.\"},{\"subject\":\"public_op:photo_delivery.deliver_project_photo\",\"kind\":\"state_contradiction\",\"text\":\"Creates at most one placement of a project and content, and the project lock file on first use. After a failed record write a stored image may remain without a record (A3 rule 5).\",\"question\":\"When the first delivery creates the lock file and then refuses a damaged record, does that lock-file creation remain, or must the operation change nothing as A6 rule 5 states?\",\"options\":[\"The newly created lock file remains despite the refusal.\",\"The lock file is removed so the refused operation changes nothing.\",\"A6's “changes nothing” excludes creation of the project lock file.\"],\"default_guess\":\"Let the per-project lock file remain and explicitly exempt it from the no-change statement.\",\"witness\":{\"initial\":\"A confirmed project has a damaged placement record and no project lock file.\",\"events\":[\"The caller requests delivery with valid boundary inputs.\",\"`deliver_project_photo` creates and acquires the project lock.\",\"Reading the damaged placement record produces `state_unavailable`.\"],\"outcomes\":[\"The request is refused and the newly created project lock file remains, as the State 5 state impact says.\",\"The request is refused with no filesystem change, as A6 rule 5 says.\"],\"observer\":\"An operator inspecting the state folder\"}},{\"subject\":\"public_op:photo_delivery.mark_photo_published\",\"kind\":\"unspecified_output_shape\",\"text\":\"M07 together with its `MarkStatus`, `marked` or `replayed`.\",\"question\":\"What exact return type and serialized shape combine M07 with the non-stored `MarkStatus`?\",\"options\":[\"Return a wrapper object with separate `mark` and `status` fields.\",\"Return a tuple of M07 and `MarkStatus`.\",\"Add a response-only status field to the returned M07 representation.\"],\"default_guess\":\"Return a dedicated wrapper containing `mark: M07` and `status: MarkStatus`.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The caller records a `photo_id`.\",\"The service creates M07 and returns the result.\"],\"outcomes\":[\"The caller receives `{mark: <M07>, status: \\\"marked\\\"}`.\",\"The caller receives the M07 fields with an additional top-level `status` field.\"],\"observer\":\"The API caller and response serializer\"}},{\"subject\":\"public_op:photo_delivery.mark_photo_published\",\"kind\":\"state_contradiction\",\"text\":\"Creates at most one mark of a placement, and the project lock file on first use.\",\"question\":\"When a first mark attempt is refused after acquiring the lock, does the new lock file remain, or does the refused mark write nothing as `flow:record_publication` states?\",\"options\":[\"The lock file remains even though the mark is refused.\",\"The lock file is removed so the refused mark writes nothing.\",\"The flow's “writes nothing” excludes the project lock file.\"],\"default_guess\":\"Let the per-project lock file remain and explicitly exclude it from the flow's no-write statement.\",\"witness\":{\"initial\":\"A confirmed project has no placement and no project lock file.\",\"events\":[\"The caller submits a valid mark request.\",\"The service reads the clock and confirms the connection.\",\"The service creates and acquires the project lock.\",\"The absent placement causes `not_placed`.\"],\"outcomes\":[\"The request is refused but the project lock file remains, as the State 5 state impact says.\",\"The request is refused and no file is created, as the flow says.\"],\"observer\":\"The caller through filesystem-side effects, or an operator inspecting the state folder\"}},{\"subject\":\"public_op:system_clock.utc_now\",\"kind\":\"caller_contradiction\",\"text\":\"`module:deliverer_api` passes this function to a mark, and `module:photo_delivery` calls it once, after the source id is accepted (A7 rule 2).\",\"question\":\"Is the caller of `utc_now` the injecting `module:deliverer_api` named under Callers, or the invoking `module:photo_delivery` named here, and what precise meaning does the Callers field use for injected functions?\",\"options\":[\"Callers lists the module that imports and injects the function, even though another module invokes it.\",\"Callers lists the module that actually invokes the function and must therefore name `module:photo_delivery`.\",\"Both the injector and runtime invoker must be listed.\"],\"default_guess\":\"Define Callers as runtime invokers and list `module:photo_delivery`, while retaining `deliverer_api` as the importing and injecting module.\",\"witness\":{\"initial\":\"The app was built with `utc_now` as its clock function.\",\"events\":[\"A valid mark request reaches `mark_photo_published`.\",\"`photo_delivery` invokes the received clock function once.\"],\"outcomes\":[\"The Callers passage attributes the operation to `module:deliverer_api`.\",\"The observable-effect passage attributes the call to `module:photo_delivery`.\"],\"observer\":\"Tracing, dependency inspection, or a test recording the call stack\"}}]}",
+ "set_aside": []
+}
