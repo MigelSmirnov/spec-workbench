@@ -1,0 +1,136 @@
+{
+ "open_points": [
+  {
+   "subject": "Config and RuntimeSettings",
+   "kind": "missing model owner",
+   "text": "| `deliverer_api` | `domain_models` | `Config`, `DelivererError`, `RuntimeSettings`, `RefusalCode` |",
+   "question": "What is `Config`, which module owns its definition, what fields and types does it have, and how does it differ from `RuntimeSettings`?",
+   "options": [
+    "`Config` is a separate normalized operation-context model owned by `domain_models`",
+    "`Config` is an alias or replacement name for `RuntimeSettings`",
+    "Remove `Config` and pass `RuntimeSettings` or individual values to the lower modules"
+   ],
+   "default_guess": "Define an immutable `Config` in `domain_models`, containing validated operational values derived from `RuntimeSettings`, and document that relationship.",
+   "witness": {
+    "initial": "All required environment variables contain strings naming valid filesystem locations.",
+    "events": [
+     "`runtime_settings` constructs `RuntimeSettings`.",
+     "`deliverer_api` turns it into the context of the operations.",
+     "`photo_delivery` and `delivery_store` use the imported `Config`."
+    ],
+    "outcomes": [
+     "`Config` contains normalized path values and other operation-ready values distinct from the raw environment-shaped `RuntimeSettings`.",
+     "`Config` is treated as the same raw string-valued object as `RuntimeSettings`."
+    ],
+    "observer": "Implementers of `deliverer_api`, `photo_delivery` and `delivery_store`, and an operator when relative or differently normalized paths select different files."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "run-setting validity",
+   "kind": "undefined validation",
+   "text": "- the default of each optional setting and the refusal of a missing or invalid one.",
+   "question": "For each environment variable, what counts as absent or invalid, including empty or whitespace values, path syntax, timezone identifiers, integer syntax and the permitted port range?",
+   "options": [
+    "Treat only an unset required variable as missing and validate values strictly without trimming",
+    "Trim values, treat an empty optional value as absent, and treat an empty required value as missing",
+    "Leave path strings unrestricted but validate the timezone and require the port to be an integer from 1 through 65535"
+   ],
+   "default_guess": "Do not trim path values; treat unset or empty required values as missing, require a valid IANA timezone, and require a decimal port from 1 through 65535.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_PORT` is present with an empty value.",
+    "events": [
+     "The operator starts the service.",
+     "`load_runtime_settings` reads the process environment."
+    ],
+    "outcomes": [
+     "The empty value is treated as absence and the service listens on port 8850.",
+     "The empty value is invalid and startup is refused."
+    ],
+    "observer": "The service operator."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "load_runtime_settings failure contract",
+   "kind": "missing error contract",
+   "text": "- the default of each optional setting and the refusal of a missing or invalid one.",
+   "question": "How does `load_runtime_settings` report a startup refusal, and which module owns the error type, stable code and operator-visible detail?",
+   "options": [
+    "Raise a dedicated configuration exception owned by `runtime_settings`",
+    "Return a result or refusal value defined in `domain_models`",
+    "Raise a built-in exception such as `ValueError`",
+    "Terminate the process inside `runtime_settings`"
+   ],
+   "default_guess": "Raise a dedicated configuration exception from `runtime_settings`; let `deliverer_api` turn it into a failed service start.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_BINARY_ROOT` is absent.",
+    "events": [
+     "`deliverer_api` starts the service.",
+     "It calls `load_runtime_settings`."
+    ],
+    "outcomes": [
+     "The loader raises an exception that `deliverer_api` handles as startup failure.",
+     "The loader returns a refusal value that `deliverer_api` must inspect."
+    ],
+    "observer": "The `deliverer_api` implementer, tests and the service operator."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "load_config and load_runtime_settings",
+   "kind": "overlapping capability",
+   "text": "load_config",
+   "question": "What does `deliverer_api.load_config` do after `runtime_settings.load_runtime_settings` becomes the owner of environment reading: is it the context conversion, a delegating compatibility facade, a different loader, or should it be removed?",
+   "options": [
+    "`load_config` calls `load_runtime_settings` and converts `RuntimeSettings` into `Config`",
+    "`load_config` accepts an already loaded `RuntimeSettings` and performs conversion only",
+    "Remove `load_config` and perform conversion inside `create_app` or `run_service`",
+    "Keep both functions as independent environment readers"
+   ],
+   "default_guess": "Make `load_config` accept or obtain one `RuntimeSettings` value and produce the operation `Config`, with only `load_runtime_settings` reading the environment.",
+   "witness": {
+    "initial": "The environment has valid settings when the application object is created and is changed before `run_service` is called.",
+    "events": [
+     "A caller invokes `create_app`.",
+     "The caller later invokes `run_service`."
+    ],
+    "outcomes": [
+     "`load_config` delegates to the settings loader during application creation, so the original values are retained.",
+     "`load_config` is an independent loader or is invoked by `run_service`, so the changed values are used."
+    ],
+    "observer": "The service operator and tests that construct an app separately from running it."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "operation context construction",
+   "kind": "vague responsibility",
+   "text": "- turning the run settings into the context of the operations when the service starts;",
+   "question": "Which values constitute the operation context, what conversions are performed, which capability constructs it, and how is each lower module given the settings it needs without reading the environment itself?",
+   "options": [
+    "Construct one `Config` containing all normalized settings and pass it through operation calls",
+    "Construct module-specific contexts for connections, preparation and storage",
+    "Pass individual settings as explicit arguments to each lower capability"
+   ],
+   "default_guess": "Construct one immutable `Config` once at startup and pass it explicitly through `photo_delivery` to lower capabilities that need its values.",
+   "witness": {
+    "initial": "The settings contain a timezone, connections-file location, binary root and state directory.",
+    "events": [
+     "`deliverer_api` starts.",
+     "A placement operation reaches `photo_delivery`.",
+     "`photo_delivery` invokes `object_connections`, `photo_preparation` and `delivery_store`."
+    ],
+    "outcomes": [
+     "One shared context is passed through the operation and supplies every lower-module setting.",
+     "Each lower module receives separately converted values or reconstructs its own context."
+    ],
+    "observer": "Implementers testing module boundaries and dependency injection."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Config and RuntimeSettings\",\"kind\":\"missing model owner\",\"text\":\"| `deliverer_api` | `domain_models` | `Config`, `DelivererError`, `RuntimeSettings`, `RefusalCode` |\",\"question\":\"What is `Config`, which module owns its definition, what fields and types does it have, and how does it differ from `RuntimeSettings`?\",\"options\":[\"`Config` is a separate normalized operation-context model owned by `domain_models`\",\"`Config` is an alias or replacement name for `RuntimeSettings`\",\"Remove `Config` and pass `RuntimeSettings` or individual values to the lower modules\"],\"default_guess\":\"Define an immutable `Config` in `domain_models`, containing validated operational values derived from `RuntimeSettings`, and document that relationship.\",\"witness\":{\"initial\":\"All required environment variables contain strings naming valid filesystem locations.\",\"events\":[\"`runtime_settings` constructs `RuntimeSettings`.\",\"`deliverer_api` turns it into the context of the operations.\",\"`photo_delivery` and `delivery_store` use the imported `Config`.\"],\"outcomes\":[\"`Config` contains normalized path values and other operation-ready values distinct from the raw environment-shaped `RuntimeSettings`.\",\"`Config` is treated as the same raw string-valued object as `RuntimeSettings`.\"],\"observer\":\"Implementers of `deliverer_api`, `photo_delivery` and `delivery_store`, and an operator when relative or differently normalized paths select different files.\"}},{\"subject\":\"run-setting validity\",\"kind\":\"undefined validation\",\"text\":\"- the default of each optional setting and the refusal of a missing or invalid one.\",\"question\":\"For each environment variable, what counts as absent or invalid, including empty or whitespace values, path syntax, timezone identifiers, integer syntax and the permitted port range?\",\"options\":[\"Treat only an unset required variable as missing and validate values strictly without trimming\",\"Trim values, treat an empty optional value as absent, and treat an empty required value as missing\",\"Leave path strings unrestricted but validate the timezone and require the port to be an integer from 1 through 65535\"],\"default_guess\":\"Do not trim path values; treat unset or empty required values as missing, require a valid IANA timezone, and require a decimal port from 1 through 65535.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_PORT` is present with an empty value.\",\"events\":[\"The operator starts the service.\",\"`load_runtime_settings` reads the process environment.\"],\"outcomes\":[\"The empty value is treated as absence and the service listens on port 8850.\",\"The empty value is invalid and startup is refused.\"],\"observer\":\"The service operator.\"}},{\"subject\":\"load_runtime_settings failure contract\",\"kind\":\"missing error contract\",\"text\":\"- the default of each optional setting and the refusal of a missing or invalid one.\",\"question\":\"How does `load_runtime_settings` report a startup refusal, and which module owns the error type, stable code and operator-visible detail?\",\"options\":[\"Raise a dedicated configuration exception owned by `runtime_settings`\",\"Return a result or refusal value defined in `domain_models`\",\"Raise a built-in exception such as `ValueError`\",\"Terminate the process inside `runtime_settings`\"],\"default_guess\":\"Raise a dedicated configuration exception from `runtime_settings`; let `deliverer_api` turn it into a failed service start.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_BINARY_ROOT` is absent.\",\"events\":[\"`deliverer_api` starts the service.\",\"It calls `load_runtime_settings`.\"],\"outcomes\":[\"The loader raises an exception that `deliverer_api` handles as startup failure.\",\"The loader returns a refusal value that `deliverer_api` must inspect.\"],\"observer\":\"The `deliverer_api` implementer, tests and the service operator.\"}},{\"subject\":\"load_config and load_runtime_settings\",\"kind\":\"overlapping capability\",\"text\":\"load_config\",\"question\":\"What does `deliverer_api.load_config` do after `runtime_settings.load_runtime_settings` becomes the owner of environment reading: is it the context conversion, a delegating compatibility facade, a different loader, or should it be removed?\",\"options\":[\"`load_config` calls `load_runtime_settings` and converts `RuntimeSettings` into `Config`\",\"`load_config` accepts an already loaded `RuntimeSettings` and performs conversion only\",\"Remove `load_config` and perform conversion inside `create_app` or `run_service`\",\"Keep both functions as independent environment readers\"],\"default_guess\":\"Make `load_config` accept or obtain one `RuntimeSettings` value and produce the operation `Config`, with only `load_runtime_settings` reading the environment.\",\"witness\":{\"initial\":\"The environment has valid settings when the application object is created and is changed before `run_service` is called.\",\"events\":[\"A caller invokes `create_app`.\",\"The caller later invokes `run_service`.\"],\"outcomes\":[\"`load_config` delegates to the settings loader during application creation, so the original values are retained.\",\"`load_config` is an independent loader or is invoked by `run_service`, so the changed values are used.\"],\"observer\":\"The service operator and tests that construct an app separately from running it.\"}},{\"subject\":\"operation context construction\",\"kind\":\"vague responsibility\",\"text\":\"- turning the run settings into the context of the operations when the service starts;\",\"question\":\"Which values constitute the operation context, what conversions are performed, which capability constructs it, and how is each lower module given the settings it needs without reading the environment itself?\",\"options\":[\"Construct one `Config` containing all normalized settings and pass it through operation calls\",\"Construct module-specific contexts for connections, preparation and storage\",\"Pass individual settings as explicit arguments to each lower capability\"],\"default_guess\":\"Construct one immutable `Config` once at startup and pass it explicitly through `photo_delivery` to lower capabilities that need its values.\",\"witness\":{\"initial\":\"The settings contain a timezone, connections-file location, binary root and state directory.\",\"events\":[\"`deliverer_api` starts.\",\"A placement operation reaches `photo_delivery`.\",\"`photo_delivery` invokes `object_connections`, `photo_preparation` and `delivery_store`.\"],\"outcomes\":[\"One shared context is passed through the operation and supplies every lower-module setting.\",\"Each lower module receives separately converted values or reconstructs its own context.\"],\"observer\":\"Implementers testing module boundaries and dependency injection.\"}}]}",
+ "set_aside": []
+}

@@ -123,7 +123,8 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
 4. Checks run in this order: token, request form and project id, connection, photo folder, source id,
    project lock, existing placement, named file. The request form is a body holding only `name` and
    `source_id`, both strings. A defect of that form or of the project id is refused as a whole request. A
-   `source_id` that is not 64 lowercase hexadecimal characters is refused with `invalid_source_id`.
+   `source_id` that does not match the imported `SOURCE_ID_PATTERN` constant in full is refused with
+   `invalid_source_id`.
 5. A photo that cannot be delivered is answered with status `failed` and one member of
    `= models.PlacementFailure`. Condition 1 is decided from the name and the metadata of its path before
    the file is opened, and conditions 2 to 4 from the opening on. Conditions 1 to 4 write nothing except the
@@ -240,7 +241,7 @@ A published photo is recognised without any change to the Portal.
    the start of the service or for other projects. The deliverer never opens the invoice folder, so
    the resolved path of that folder is checked by the Cabinet Inbox when it moves to this record
    (R0-09).
-9. A project id must be a UUID and a source id 64 lowercase hexadecimal characters. Neither a file
+9. A project id must be a UUID and a source id must match the imported `SOURCE_ID_PATTERN` constant in full. Neither a file
    name nor any other received text becomes part of a stored path.
 10. An answer never holds a server path or a credential. File names are returned as plain data.
 

@@ -129,7 +129,8 @@ outbound call.
 - the models M01 to M07 and their enumerations;
 - `SourceFile`, what `source_folder` reports about one file to `photo_delivery`. It holds the server path
   of the file and never leaves the service; M02 is the form a caller sees;
-- the type of the run settings;
+- the type of the run settings, and `Config`, the context of the operations that `deliverer_api` builds from them:
+  binary store, state folder, time zone and connections file;
 - the two refusal types: a refusal of the whole operation and a refusal of one file.
 
 ### Knows
@@ -203,7 +204,7 @@ SOURCE_ID_PATTERN
 ### Owns
 
 - reading the run settings of A8 from the environment of the process;
-- the default of each optional setting and the refusal of a missing or invalid one.
+- the default of each optional setting, and the refusal of a missing required setting or an invalid port.
 
 ### Knows
 

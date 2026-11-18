@@ -1,0 +1,234 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "required_value_semantics",
+   "text": "A missing required setting or an invalid port ends the start.",
+   "question": "Does a required environment variable count as present when its value is empty, or must every required value be non-empty?",
+   "options": [
+    "Presence of the variable is sufficient, including an empty value.",
+    "An empty value is treated as a missing required setting.",
+    "Validity is decided separately for each required setting."
+   ],
+   "default_guess": "Treat an empty required value as missing.",
+   "witness": {
+    "initial": "All required environment variables exist, but `PORTAL_DELIVERER_BINARY_ROOT` is the empty string.",
+    "events": [
+     "The deployment starts the service.",
+     "`module:runtime_settings` reads the environment.",
+     "The owner later asks to deliver a photo."
+    ],
+    "outcomes": [
+     "Startup is refused because a required setting is empty.",
+     "Startup succeeds and the empty path is interpreted as the current directory when storage is used."
+    ],
+    "observer": "The deployment and, if startup succeeds, the calling flow."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "integer_parsing",
+   "text": "A8: a required setting is present, an optional one takes its decided default, and the port is a positive integer.",
+   "question": "Which textual forms of `PORTAL_DELIVERER_PORT` are accepted as a positive integer, including whitespace, a leading plus sign, leading zeroes and non-ASCII digits?",
+   "options": [
+    "Accept every string the implementation's integer parser accepts when the result is positive.",
+    "Accept only non-empty ASCII decimal digits whose value is positive.",
+    "Accept ASCII digits with surrounding whitespace but no sign."
+   ],
+   "default_guess": "Accept only ASCII decimal digits with no sign or whitespace, and require a value greater than zero.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_PORT` is `+8850`; all other settings and files are valid.",
+    "events": [
+     "The deployment starts the service.",
+     "`public_op:runtime_settings.load_runtime_settings` parses the port."
+    ],
+    "outcomes": [
+     "The loader returns port 8850 and startup continues.",
+     "The loader treats the port as invalid and ends startup."
+    ],
+    "observer": "The deployment."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.load_config",
+   "kind": "path_interpretation",
+   "text": "The context of the operations: time zone, binary store, state folder and connections file.",
+   "question": "How are the string path settings converted into locations, particularly when they are relative: relative to the process working directory, resolved to absolute paths, or rejected unless absolute?",
+   "options": [
+    "Use each path verbatim, with relative paths interpreted from the process working directory when used.",
+    "Resolve relative paths against the process working directory while building the context.",
+    "Require absolute paths and end startup for a relative value."
+   ],
+   "default_guess": "Require absolute paths for all installation paths and preserve them without resolving symlinks.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_BINARY_ROOT` is `store`, the working directory is `/srv/deliverer`, and all other settings are valid.",
+    "events": [
+     "The deployment starts the service.",
+     "The owner requests a placement."
+    ],
+    "outcomes": [
+     "The image is stored below `/srv/deliverer/store`.",
+     "Startup is refused because the binary-store path is relative."
+    ],
+    "observer": "The deployment and the Portal process that reads the binary store."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "ownership_contradiction",
+   "text": "A missing required setting or an invalid port ends the start.",
+   "question": "Must `load_runtime_settings` also refuse an unknown time zone, as `module:runtime_settings` owns “the refusal of a missing or invalid one”, or must it return that value for `load_config` to refuse?",
+   "options": [
+    "`load_runtime_settings` validates the time zone and refuses it.",
+    "`load_runtime_settings` validates only presence and the port; `load_config` refuses an unknown time zone."
+   ],
+   "default_guess": "Validate presence and the port in `load_runtime_settings`, then validate the time zone in `load_config`, and revise the module-ownership passage accordingly.",
+   "witness": {
+    "initial": "The time-zone variable names an unknown zone; all required paths, the port and the connections file are valid.",
+    "events": [
+     "`module:deliverer_api` calls `public_op:runtime_settings.load_runtime_settings`.",
+     "If it returns, `module:deliverer_api` calls `public_op:deliverer_api.load_config`."
+    ],
+    "outcomes": [
+     "`load_runtime_settings` ends startup without returning run settings.",
+     "`load_runtime_settings` returns run settings and `load_config` ends startup."
+    ],
+    "observer": "`module:deliverer_api` and unit tests of the two public operations."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.load_config",
+   "kind": "timezone_recognition",
+   "text": "An unknown time zone or an invalid connections file ends the start.",
+   "question": "What authoritative set and spelling rules determine whether a time-zone value is known?",
+   "options": [
+    "Accept every name available through the host's IANA time-zone database, including its aliases.",
+    "Accept only canonical IANA names.",
+    "Accept only `Europe/Madrid`, despite allowing the environment variable to override it.",
+    "Use a bundled, version-fixed time-zone database."
+   ],
+   "default_guess": "Accept any exact name recognized by the runtime's IANA `ZoneInfo` database, including aliases.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_TIMEZONE` is `UTC`; all other settings and files are valid.",
+    "events": [
+     "The deployment starts the service.",
+     "`public_op:deliverer_api.load_config` validates the configured time zone."
+    ],
+    "outcomes": [
+     "`UTC` is accepted as a known IANA zone and startup continues.",
+     "Only the decided default or canonical region names are allowed, so startup ends."
+    ],
+    "observer": "The deployment."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.load_config",
+   "kind": "error_precedence",
+   "text": "Reads the connections file.",
+   "question": "When both the time zone and the connections file are invalid, does `load_config` validate the time zone before reading the file, or read and validate the connections file first?",
+   "options": [
+    "Validate and construct the time-zone value first; do not read the connections file if it is unknown.",
+    "Read and validate the connections file first; do not report the time-zone error if the file is invalid.",
+    "Always perform both checks and choose a specified error afterward."
+   ],
+   "default_guess": "Validate the time zone first, then call `load_connections` once.",
+   "witness": {
+    "initial": "The configured time zone is unknown and the connections file is malformed.",
+    "events": [
+     "The deployment calls `public_op:deliverer_api.load_config`.",
+     "The operation attempts its startup validations."
+    ],
+    "outcomes": [
+     "It refuses the unknown time zone without reading the connections file.",
+     "It reads the connections file and refuses that file before considering the time zone."
+    ],
+    "observer": "The deployment operator and a test or audit observing access to the connections file."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.run_service",
+   "kind": "unused_setting",
+   "text": "Calls `public_op:runtime_settings.load_runtime_settings`, `public_op:deliverer_api.load_config`, `public_op:deliverer_api.read_token` and `public_op:deliverer_api.create_app` in that order, then serves the surface on the loopback interface until it is stopped.",
+   "question": "Must the web server listen on the `port` returned by `load_runtime_settings`, and what happens if that port cannot be bound?",
+   "options": [
+    "Listen on the configured port and treat a bind failure as a startup failure.",
+    "Always listen on the default port 8850; the configured port is not connected to serving by this text.",
+    "Pass the configured port through the operation context or application even though that context currently excludes it."
+   ],
+   "default_guess": "Retain the returned run settings in `run_service`, listen on their `port`, and end startup with a failing exit status if binding fails.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_PORT` is 9000, port 9000 is free and port 8850 is also free.",
+    "events": [
+     "The deployment starts the service.",
+     "`load_runtime_settings` returns port 9000.",
+     "`run_service` starts the web server."
+    ],
+    "outcomes": [
+     "The service listens on loopback port 9000.",
+     "The service listens on loopback port 8850 because no passage connects the returned port to the server."
+    ],
+    "observer": "The deployment and the calling flow."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.create_app",
+   "kind": "input_contradiction",
+   "text": "The run settings and the project id.",
+   "question": "Should `public_op:photo_delivery.scan_project_photos` receive the context of the operations, like the changed delivery and mark operations, or the full run settings that `create_app` no longer receives?",
+   "options": [
+    "Change the scan input to the context of the operations.",
+    "Give `create_app` the full run settings again.",
+    "Define the context as retaining all run settings, despite `load_config` listing only four context values."
+   ],
+   "default_guess": "Change `scan_project_photos` to receive the context of the operations.",
+   "witness": {
+    "initial": "The service has started with valid run settings, and `create_app` was given only the context, token and clock.",
+    "events": [
+     "The calling flow invokes the scan route.",
+     "The route calls `public_op:photo_delivery.scan_project_photos`."
+    ],
+    "outcomes": [
+     "The route passes the context and scanning succeeds.",
+     "The scan requires the full run settings, which the application does not possess, so the route cannot make the specified call without reconstructing or retaining undeclared values."
+    ],
+    "observer": "The calling flow."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "pattern_matching",
+   "text": "| `SOURCE_ID_PATTERN` | `str` | `[0-9a-f]{64}` |",
+   "question": "Must source-id validation apply this expression as a full-string match, or may it use ordinary regex matching that accepts additional characters after the 64 hexadecimal characters?",
+   "options": [
+    "Use a full-string match.",
+    "Use a start match, allowing a suffix.",
+    "Change the constant itself to an explicitly anchored expression."
+   ],
+   "default_guess": "Use a full-string match, consistent with A5 rule 9.",
+   "witness": {
+    "initial": "A ready file has source id `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`; the caller sends that id followed by `x`.",
+    "events": [
+     "The calling flow asks to deliver the file.",
+     "`module:photo_delivery` checks the supplied source id against `SOURCE_ID_PATTERN`."
+    ],
+    "outcomes": [
+     "The request is refused with `invalid_source_id` before the project lock is taken.",
+     "A prefix match accepts the value; processing reaches the file comparison and answers `failed` with `source_changed`."
+    ],
+    "observer": "The calling flow."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"required_value_semantics\",\"text\":\"A missing required setting or an invalid port ends the start.\",\"question\":\"Does a required environment variable count as present when its value is empty, or must every required value be non-empty?\",\"options\":[\"Presence of the variable is sufficient, including an empty value.\",\"An empty value is treated as a missing required setting.\",\"Validity is decided separately for each required setting.\"],\"default_guess\":\"Treat an empty required value as missing.\",\"witness\":{\"initial\":\"All required environment variables exist, but `PORTAL_DELIVERER_BINARY_ROOT` is the empty string.\",\"events\":[\"The deployment starts the service.\",\"`module:runtime_settings` reads the environment.\",\"The owner later asks to deliver a photo.\"],\"outcomes\":[\"Startup is refused because a required setting is empty.\",\"Startup succeeds and the empty path is interpreted as the current directory when storage is used.\"],\"observer\":\"The deployment and, if startup succeeds, the calling flow.\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"integer_parsing\",\"text\":\"A8: a required setting is present, an optional one takes its decided default, and the port is a positive integer.\",\"question\":\"Which textual forms of `PORTAL_DELIVERER_PORT` are accepted as a positive integer, including whitespace, a leading plus sign, leading zeroes and non-ASCII digits?\",\"options\":[\"Accept every string the implementation's integer parser accepts when the result is positive.\",\"Accept only non-empty ASCII decimal digits whose value is positive.\",\"Accept ASCII digits with surrounding whitespace but no sign.\"],\"default_guess\":\"Accept only ASCII decimal digits with no sign or whitespace, and require a value greater than zero.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_PORT` is `+8850`; all other settings and files are valid.\",\"events\":[\"The deployment starts the service.\",\"`public_op:runtime_settings.load_runtime_settings` parses the port.\"],\"outcomes\":[\"The loader returns port 8850 and startup continues.\",\"The loader treats the port as invalid and ends startup.\"],\"observer\":\"The deployment.\"}},{\"subject\":\"public_op:deliverer_api.load_config\",\"kind\":\"path_interpretation\",\"text\":\"The context of the operations: time zone, binary store, state folder and connections file.\",\"question\":\"How are the string path settings converted into locations, particularly when they are relative: relative to the process working directory, resolved to absolute paths, or rejected unless absolute?\",\"options\":[\"Use each path verbatim, with relative paths interpreted from the process working directory when used.\",\"Resolve relative paths against the process working directory while building the context.\",\"Require absolute paths and end startup for a relative value.\"],\"default_guess\":\"Require absolute paths for all installation paths and preserve them without resolving symlinks.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_BINARY_ROOT` is `store`, the working directory is `/srv/deliverer`, and all other settings are valid.\",\"events\":[\"The deployment starts the service.\",\"The owner requests a placement.\"],\"outcomes\":[\"The image is stored below `/srv/deliverer/store`.\",\"Startup is refused because the binary-store path is relative.\"],\"observer\":\"The deployment and the Portal process that reads the binary store.\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"ownership_contradiction\",\"text\":\"A missing required setting or an invalid port ends the start.\",\"question\":\"Must `load_runtime_settings` also refuse an unknown time zone, as `module:runtime_settings` owns “the refusal of a missing or invalid one”, or must it return that value for `load_config` to refuse?\",\"options\":[\"`load_runtime_settings` validates the time zone and refuses it.\",\"`load_runtime_settings` validates only presence and the port; `load_config` refuses an unknown time zone.\"],\"default_guess\":\"Validate presence and the port in `load_runtime_settings`, then validate the time zone in `load_config`, and revise the module-ownership passage accordingly.\",\"witness\":{\"initial\":\"The time-zone variable names an unknown zone; all required paths, the port and the connections file are valid.\",\"events\":[\"`module:deliverer_api` calls `public_op:runtime_settings.load_runtime_settings`.\",\"If it returns, `module:deliverer_api` calls `public_op:deliverer_api.load_config`.\"],\"outcomes\":[\"`load_runtime_settings` ends startup without returning run settings.\",\"`load_runtime_settings` returns run settings and `load_config` ends startup.\"],\"observer\":\"`module:deliverer_api` and unit tests of the two public operations.\"}},{\"subject\":\"public_op:deliverer_api.load_config\",\"kind\":\"timezone_recognition\",\"text\":\"An unknown time zone or an invalid connections file ends the start.\",\"question\":\"What authoritative set and spelling rules determine whether a time-zone value is known?\",\"options\":[\"Accept every name available through the host's IANA time-zone database, including its aliases.\",\"Accept only canonical IANA names.\",\"Accept only `Europe/Madrid`, despite allowing the environment variable to override it.\",\"Use a bundled, version-fixed time-zone database.\"],\"default_guess\":\"Accept any exact name recognized by the runtime's IANA `ZoneInfo` database, including aliases.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_TIMEZONE` is `UTC`; all other settings and files are valid.\",\"events\":[\"The deployment starts the service.\",\"`public_op:deliverer_api.load_config` validates the configured time zone.\"],\"outcomes\":[\"`UTC` is accepted as a known IANA zone and startup continues.\",\"Only the decided default or canonical region names are allowed, so startup ends.\"],\"observer\":\"The deployment.\"}},{\"subject\":\"public_op:deliverer_api.load_config\",\"kind\":\"error_precedence\",\"text\":\"Reads the connections file.\",\"question\":\"When both the time zone and the connections file are invalid, does `load_config` validate the time zone before reading the file, or read and validate the connections file first?\",\"options\":[\"Validate and construct the time-zone value first; do not read the connections file if it is unknown.\",\"Read and validate the connections file first; do not report the time-zone error if the file is invalid.\",\"Always perform both checks and choose a specified error afterward.\"],\"default_guess\":\"Validate the time zone first, then call `load_connections` once.\",\"witness\":{\"initial\":\"The configured time zone is unknown and the connections file is malformed.\",\"events\":[\"The deployment calls `public_op:deliverer_api.load_config`.\",\"The operation attempts its startup validations.\"],\"outcomes\":[\"It refuses the unknown time zone without reading the connections file.\",\"It reads the connections file and refuses that file before considering the time zone.\"],\"observer\":\"The deployment operator and a test or audit observing access to the connections file.\"}},{\"subject\":\"public_op:deliverer_api.run_service\",\"kind\":\"unused_setting\",\"text\":\"Calls `public_op:runtime_settings.load_runtime_settings`, `public_op:deliverer_api.load_config`, `public_op:deliverer_api.read_token` and `public_op:deliverer_api.create_app` in that order, then serves the surface on the loopback interface until it is stopped.\",\"question\":\"Must the web server listen on the `port` returned by `load_runtime_settings`, and what happens if that port cannot be bound?\",\"options\":[\"Listen on the configured port and treat a bind failure as a startup failure.\",\"Always listen on the default port 8850; the configured port is not connected to serving by this text.\",\"Pass the configured port through the operation context or application even though that context currently excludes it.\"],\"default_guess\":\"Retain the returned run settings in `run_service`, listen on their `port`, and end startup with a failing exit status if binding fails.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_PORT` is 9000, port 9000 is free and port 8850 is also free.\",\"events\":[\"The deployment starts the service.\",\"`load_runtime_settings` returns port 9000.\",\"`run_service` starts the web server.\"],\"outcomes\":[\"The service listens on loopback port 9000.\",\"The service listens on loopback port 8850 because no passage connects the returned port to the server.\"],\"observer\":\"The deployment and the calling flow.\"}},{\"subject\":\"public_op:deliverer_api.create_app\",\"kind\":\"input_contradiction\",\"text\":\"The run settings and the project id.\",\"question\":\"Should `public_op:photo_delivery.scan_project_photos` receive the context of the operations, like the changed delivery and mark operations, or the full run settings that `create_app` no longer receives?\",\"options\":[\"Change the scan input to the context of the operations.\",\"Give `create_app` the full run settings again.\",\"Define the context as retaining all run settings, despite `load_config` listing only four context values.\"],\"default_guess\":\"Change `scan_project_photos` to receive the context of the operations.\",\"witness\":{\"initial\":\"The service has started with valid run settings, and `create_app` was given only the context, token and clock.\",\"events\":[\"The calling flow invokes the scan route.\",\"The route calls `public_op:photo_delivery.scan_project_photos`.\"],\"outcomes\":[\"The route passes the context and scanning succeeds.\",\"The scan requires the full run settings, which the application does not possess, so the route cannot make the specified call without reconstructing or retaining undeclared values.\"],\"observer\":\"The calling flow.\"}},{\"subject\":\"context\",\"kind\":\"pattern_matching\",\"text\":\"| `SOURCE_ID_PATTERN` | `str` | `[0-9a-f]{64}` |\",\"question\":\"Must source-id validation apply this expression as a full-string match, or may it use ordinary regex matching that accepts additional characters after the 64 hexadecimal characters?\",\"options\":[\"Use a full-string match.\",\"Use a start match, allowing a suffix.\",\"Change the constant itself to an explicitly anchored expression.\"],\"default_guess\":\"Use a full-string match, consistent with A5 rule 9.\",\"witness\":{\"initial\":\"A ready file has source id `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`; the caller sends that id followed by `x`.\",\"events\":[\"The calling flow asks to deliver the file.\",\"`module:photo_delivery` checks the supplied source id against `SOURCE_ID_PATTERN`.\"],\"outcomes\":[\"The request is refused with `invalid_source_id` before the project lock is taken.\",\"A prefix match accepts the value; processing reaches the file comparison and answers `failed` with `source_changed`.\"],\"observer\":\"The calling flow.\"}}]}",
+ "set_aside": []
+}

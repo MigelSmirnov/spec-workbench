@@ -1,0 +1,229 @@
+{
+ "open_points": [
+  {
+   "subject": "settings object construction",
+   "kind": "read timing and precedence",
+   "text": "Run settings are fields of the settings object, read from the environment of the process:",
+   "question": "When is the environment read, is it read once or again during operations, and can constructor arguments or another source override it?",
+   "options": [
+    "Read every field once when the single settings object is constructed; environment is the sole source.",
+    "Re-read environment variables when each field or operation is used.",
+    "Allow explicit settings-object arguments to override environment variables."
+   ],
+   "default_guess": "Read and validate the environment once at process startup, with no runtime rereads; explicit test construction may supply fields directly and takes precedence.",
+   "unit": "?"
+  },
+  {
+   "subject": "required run settings",
+   "kind": "missing-setting refusal",
+   "text": "required, per installation",
+   "question": "What exact result is required when any of PORTAL_DELIVERER_BINARY_ROOT, PORTAL_DELIVERER_STATE_DIR, PORTAL_DELIVERER_CONNECTIONS_FILE or PORTAL_DELIVERER_TOKEN_FILE is absent, empty or unusable, and at what point is that result produced?",
+   "options": [
+    "Reject settings construction and do not start the service.",
+    "Start the service and refuse only an operation that needs the setting.",
+    "Treat an empty value as a present path and let the filesystem operation determine the outcome."
+   ],
+   "default_guess": "Treat absent and empty values as configuration errors and fail before the service begins accepting requests.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_STATE_DIR is absent and all other required variables are valid.",
+    "events": [
+     "The operator starts the deliverer.",
+     "The calling flow requests a scan."
+    ],
+    "outcomes": [
+     "The process refuses to start because a required setting is absent.",
+     "The process starts and the scan later returns state_unavailable or fails during filesystem access."
+    ],
+    "observer": "The operator and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "optional run settings",
+   "kind": "absence semantics",
+   "text": "optional, `Europe/Madrid` when absent",
+   "question": "Does “absent” mean only that PORTAL_DELIVERER_TIMEZONE is undefined, or does an empty or whitespace-only value also select the default?",
+   "options": [
+    "Only an undefined variable selects Europe/Madrid; empty or whitespace-only values are invalid.",
+    "Undefined, empty and whitespace-only values all select Europe/Madrid.",
+    "Any present string, including an empty string, is the configured timezone."
+   ],
+   "default_guess": "Only an undefined variable selects the default; a present empty or whitespace-only value is invalid.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_TIMEZONE is present with the empty string.",
+    "events": [
+     "The operator starts the deliverer."
+    ],
+    "outcomes": [
+     "Settings validation fails.",
+     "The service starts using Europe/Madrid."
+    ],
+    "observer": "The operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "binary_root, state_dir, connections_file and token_file",
+   "kind": "path interpretation",
+   "text": "| `binary_root` | `str` | `PORTAL_DELIVERER_BINARY_ROOT` | required, per installation |",
+   "question": "How are the string-valued path settings interpreted: must they be absolute, what base resolves a relative value, are `~` and embedded environment variables expanded, and which existence, type, symlink and access checks occur at startup rather than at use?",
+   "options": [
+    "Require absolute paths, perform no shell-style expansion, and validate each path's required filesystem kind and access at startup.",
+    "Resolve relative paths against the process working directory and defer filesystem checks until use.",
+    "Resolve relative paths against state_dir or another configured root and expand `~` or environment references."
+   ],
+   "default_guess": "Require absolute paths, perform no `~` or variable expansion, and validate required directory/file kinds and access during startup.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_BINARY_ROOT is `data/binaries`, and the service can be launched with either `/srv/portal` or `/opt/deliverer` as its working directory.",
+    "events": [
+     "The operator launches the service from one of the two working directories.",
+     "The owner delivers a photo."
+    ],
+    "outcomes": [
+     "The image is written below `/srv/portal/data/binaries`.",
+     "The image is written below `/opt/deliverer/data/binaries`, or startup rejects the relative setting."
+    ],
+    "observer": "The Portal and the operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "timezone setting and photo_date",
+   "kind": "time interpretation",
+   "text": "| `timezone` | `str` | `PORTAL_DELIVERER_TIMEZONE` | optional, `Europe/Madrid` when absent |",
+   "question": "What does the timezone setting control, which identifiers are valid, and how are ambiguous or nonexistent local camera times converted to the required UTC-without-offset representation?",
+   "options": [
+    "Require an IANA timezone and use it to interpret offsetless camera timestamps, with an explicit DST ambiguity and gap policy.",
+    "Use it as the process-wide timezone, allowing platform-specific timezone strings and platform DST behavior.",
+    "Do not use it for photo timestamps; treat offsetless camera timestamps as UTC."
+   ],
+   "default_guess": "Require an IANA ZoneInfo name, use it only to interpret offsetless camera timestamps, reject nonexistent local times, choose the earlier occurrence for ambiguous times, then convert to UTC and remove the offset.",
+   "witness": {
+    "initial": "The configured timezone is Europe/Madrid and a photo has the offsetless camera time 2026-10-25 02:30, which occurs twice at the DST transition.",
+    "events": [
+     "The owner selects the photo for delivery.",
+     "The deliverer prepares its PhotoPublication."
+    ],
+    "outcomes": [
+     "photo_date represents the earlier occurrence, 2026-10-25 00:30 UTC without an offset.",
+     "photo_date represents the later occurrence, 2026-10-25 01:30 UTC without an offset, or treats 02:30 as UTC."
+    ],
+    "observer": "The owner and the Client Portal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "port setting",
+   "kind": "setting meaning",
+   "text": "| `port` | `int` | `PORTAL_DELIVERER_PORT` | optional, 8850 when absent |",
+   "question": "What component uses port: the service's listening socket, an advertised URL, or deployment routing, and on which interface is a listening socket bound?",
+   "options": [
+    "It is the HTTP server's local listening port; the bind host is decided separately at deployment.",
+    "It is only the externally advertised or reverse-proxy port.",
+    "It controls both the listening socket and the externally advertised route."
+   ],
+   "default_guess": "Use it as the HTTP server's listening port and leave bind host and external routing to deployment.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_PORT is 8851 and a reverse proxy exposes the service externally on 443.",
+    "events": [
+     "The operator starts the service.",
+     "The calling flow connects through the HTTPS route."
+    ],
+    "outcomes": [
+     "The service listens locally on 8851 and the proxy forwards 443 to it.",
+     "The service listens on another default port while 8851 is used only as advertised routing metadata."
+    ],
+    "observer": "The operator and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "PORTAL_DELIVERER_PORT decoding",
+   "kind": "validation and refusal",
+   "text": "optional, 8850 when absent",
+   "question": "Which environment strings are valid integer ports, what range is allowed, how are empty, signed, whitespace-padded or out-of-range values handled, and does invalid input prevent startup?",
+   "options": [
+    "Accept base-10 digits representing 1 through 65535 and reject every other present value at startup.",
+    "Use the language's ordinary integer conversion and defer range errors to socket binding.",
+    "For any invalid or out-of-range value, silently use 8850."
+   ],
+   "default_guess": "Accept a whitespace-trimmed base-10 integer from 1 through 65535 and fail settings construction for any other present value.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_PORT is `70000`.",
+    "events": [
+     "The operator starts the deliverer."
+    ],
+    "outcomes": [
+     "Startup fails with a configuration error.",
+     "Startup continues until socket binding fails, or the service silently listens on 8850."
+    ],
+    "observer": "The operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "SOURCE_ID_PATTERN and invalid_source_id",
+   "kind": "unbound refusal policy",
+   "text": "| `SOURCE_ID_PATTERN` | `str` | `[0-9a-f]{64}` |",
+   "question": "Which values are checked with SOURCE_ID_PATTERN, at which operation boundary, and does a mismatch necessarily produce the invalid_source_id refusal before any lookup or filesystem work?",
+   "options": [
+    "Validate every caller-supplied source_id before other work and return M08 invalid_source_id on mismatch.",
+    "Use the pattern only when generating or storing source IDs; malformed caller input proceeds to ordinary lookup.",
+    "Apply it only to the delivery operation, not publication marking or other operations carrying a source_id."
+   ],
+   "default_guess": "Validate every externally supplied source_id at the start of every operation that accepts one and return M08 invalid_source_id before lookup or filesystem access.",
+   "witness": {
+    "initial": "A confirmed project exists and the authenticated caller supplies source_id `not-a-sha256`.",
+    "events": [
+     "The calling flow requests delivery using that source_id."
+    ],
+    "outcomes": [
+     "The service immediately returns M08 with code invalid_source_id.",
+     "The service performs lookup and returns a placement failure such as not_ready_or_absent."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "SOURCE_ID_PATTERN matching",
+   "kind": "match semantics",
+   "text": "`[0-9a-f]{64}`",
+   "question": "Must the whole source_id match exactly 64 lowercase hexadecimal characters, or may the regex match a substring because the pattern itself has no anchors?",
+   "options": [
+    "Use full-match semantics: exactly 64 lowercase hexadecimal characters.",
+    "Use start-match semantics, permitting trailing characters.",
+    "Use search semantics, permitting leading and trailing characters around a 64-character match."
+   ],
+   "default_guess": "Use full-match semantics.",
+   "witness": {
+    "initial": "The caller supplies a source_id consisting of `x`, followed by 64 lowercase hexadecimal characters, followed by `y`.",
+    "events": [
+     "The calling flow invokes an operation that accepts source_id."
+    ],
+    "outcomes": [
+     "The value is refused as invalid_source_id because the entire string does not match.",
+     "The value passes validation because a 64-character hexadecimal substring matches."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A10 injection_interpreted_input outcome",
+   "kind": "security ownership mismatch",
+   "text": "- injection_interpreted_input: APPLICABLE; references: A5, A6; affected: project id, source id, file names, stored paths",
+   "question": "Now that A8 defines SOURCE_ID_PATTERN, must this security outcome reference A8 as an owner of source-id validation, or is the pattern unrelated to the source-id injection outcome and owned entirely by A5 and A6?",
+   "options": [
+    "Add A8 to the references because SOURCE_ID_PATTERN participates in the source-id security outcome.",
+    "Keep only A5 and A6 and state that A8's pattern is not the validating security rule.",
+    "Move the complete source-id validation rule to A8 and update the review accordingly."
+   ],
+   "default_guess": "Add A8 to the references and make A8 explicitly bind SOURCE_ID_PATTERN to invalid_source_id validation.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"settings object construction\",\"kind\":\"read timing and precedence\",\"text\":\"Run settings are fields of the settings object, read from the environment of the process:\",\"question\":\"When is the environment read, is it read once or again during operations, and can constructor arguments or another source override it?\",\"options\":[\"Read every field once when the single settings object is constructed; environment is the sole source.\",\"Re-read environment variables when each field or operation is used.\",\"Allow explicit settings-object arguments to override environment variables.\"],\"default_guess\":\"Read and validate the environment once at process startup, with no runtime rereads; explicit test construction may supply fields directly and takes precedence.\"},{\"subject\":\"required run settings\",\"kind\":\"missing-setting refusal\",\"text\":\"required, per installation\",\"question\":\"What exact result is required when any of PORTAL_DELIVERER_BINARY_ROOT, PORTAL_DELIVERER_STATE_DIR, PORTAL_DELIVERER_CONNECTIONS_FILE or PORTAL_DELIVERER_TOKEN_FILE is absent, empty or unusable, and at what point is that result produced?\",\"options\":[\"Reject settings construction and do not start the service.\",\"Start the service and refuse only an operation that needs the setting.\",\"Treat an empty value as a present path and let the filesystem operation determine the outcome.\"],\"default_guess\":\"Treat absent and empty values as configuration errors and fail before the service begins accepting requests.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_STATE_DIR is absent and all other required variables are valid.\",\"events\":[\"The operator starts the deliverer.\",\"The calling flow requests a scan.\"],\"outcomes\":[\"The process refuses to start because a required setting is absent.\",\"The process starts and the scan later returns state_unavailable or fails during filesystem access.\"],\"observer\":\"The operator and the calling flow\"}},{\"subject\":\"optional run settings\",\"kind\":\"absence semantics\",\"text\":\"optional, `Europe/Madrid` when absent\",\"question\":\"Does “absent” mean only that PORTAL_DELIVERER_TIMEZONE is undefined, or does an empty or whitespace-only value also select the default?\",\"options\":[\"Only an undefined variable selects Europe/Madrid; empty or whitespace-only values are invalid.\",\"Undefined, empty and whitespace-only values all select Europe/Madrid.\",\"Any present string, including an empty string, is the configured timezone.\"],\"default_guess\":\"Only an undefined variable selects the default; a present empty or whitespace-only value is invalid.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_TIMEZONE is present with the empty string.\",\"events\":[\"The operator starts the deliverer.\"],\"outcomes\":[\"Settings validation fails.\",\"The service starts using Europe/Madrid.\"],\"observer\":\"The operator\"}},{\"subject\":\"binary_root, state_dir, connections_file and token_file\",\"kind\":\"path interpretation\",\"text\":\"| `binary_root` | `str` | `PORTAL_DELIVERER_BINARY_ROOT` | required, per installation |\",\"question\":\"How are the string-valued path settings interpreted: must they be absolute, what base resolves a relative value, are `~` and embedded environment variables expanded, and which existence, type, symlink and access checks occur at startup rather than at use?\",\"options\":[\"Require absolute paths, perform no shell-style expansion, and validate each path's required filesystem kind and access at startup.\",\"Resolve relative paths against the process working directory and defer filesystem checks until use.\",\"Resolve relative paths against state_dir or another configured root and expand `~` or environment references.\"],\"default_guess\":\"Require absolute paths, perform no `~` or variable expansion, and validate required directory/file kinds and access during startup.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_BINARY_ROOT is `data/binaries`, and the service can be launched with either `/srv/portal` or `/opt/deliverer` as its working directory.\",\"events\":[\"The operator launches the service from one of the two working directories.\",\"The owner delivers a photo.\"],\"outcomes\":[\"The image is written below `/srv/portal/data/binaries`.\",\"The image is written below `/opt/deliverer/data/binaries`, or startup rejects the relative setting.\"],\"observer\":\"The Portal and the operator\"}},{\"subject\":\"timezone setting and photo_date\",\"kind\":\"time interpretation\",\"text\":\"| `timezone` | `str` | `PORTAL_DELIVERER_TIMEZONE` | optional, `Europe/Madrid` when absent |\",\"question\":\"What does the timezone setting control, which identifiers are valid, and how are ambiguous or nonexistent local camera times converted to the required UTC-without-offset representation?\",\"options\":[\"Require an IANA timezone and use it to interpret offsetless camera timestamps, with an explicit DST ambiguity and gap policy.\",\"Use it as the process-wide timezone, allowing platform-specific timezone strings and platform DST behavior.\",\"Do not use it for photo timestamps; treat offsetless camera timestamps as UTC.\"],\"default_guess\":\"Require an IANA ZoneInfo name, use it only to interpret offsetless camera timestamps, reject nonexistent local times, choose the earlier occurrence for ambiguous times, then convert to UTC and remove the offset.\",\"witness\":{\"initial\":\"The configured timezone is Europe/Madrid and a photo has the offsetless camera time 2026-10-25 02:30, which occurs twice at the DST transition.\",\"events\":[\"The owner selects the photo for delivery.\",\"The deliverer prepares its PhotoPublication.\"],\"outcomes\":[\"photo_date represents the earlier occurrence, 2026-10-25 00:30 UTC without an offset.\",\"photo_date represents the later occurrence, 2026-10-25 01:30 UTC without an offset, or treats 02:30 as UTC.\"],\"observer\":\"The owner and the Client Portal\"}},{\"subject\":\"port setting\",\"kind\":\"setting meaning\",\"text\":\"| `port` | `int` | `PORTAL_DELIVERER_PORT` | optional, 8850 when absent |\",\"question\":\"What component uses port: the service's listening socket, an advertised URL, or deployment routing, and on which interface is a listening socket bound?\",\"options\":[\"It is the HTTP server's local listening port; the bind host is decided separately at deployment.\",\"It is only the externally advertised or reverse-proxy port.\",\"It controls both the listening socket and the externally advertised route.\"],\"default_guess\":\"Use it as the HTTP server's listening port and leave bind host and external routing to deployment.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_PORT is 8851 and a reverse proxy exposes the service externally on 443.\",\"events\":[\"The operator starts the service.\",\"The calling flow connects through the HTTPS route.\"],\"outcomes\":[\"The service listens locally on 8851 and the proxy forwards 443 to it.\",\"The service listens on another default port while 8851 is used only as advertised routing metadata.\"],\"observer\":\"The operator and the calling flow\"}},{\"subject\":\"PORTAL_DELIVERER_PORT decoding\",\"kind\":\"validation and refusal\",\"text\":\"optional, 8850 when absent\",\"question\":\"Which environment strings are valid integer ports, what range is allowed, how are empty, signed, whitespace-padded or out-of-range values handled, and does invalid input prevent startup?\",\"options\":[\"Accept base-10 digits representing 1 through 65535 and reject every other present value at startup.\",\"Use the language's ordinary integer conversion and defer range errors to socket binding.\",\"For any invalid or out-of-range value, silently use 8850.\"],\"default_guess\":\"Accept a whitespace-trimmed base-10 integer from 1 through 65535 and fail settings construction for any other present value.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_PORT is `70000`.\",\"events\":[\"The operator starts the deliverer.\"],\"outcomes\":[\"Startup fails with a configuration error.\",\"Startup continues until socket binding fails, or the service silently listens on 8850.\"],\"observer\":\"The operator\"}},{\"subject\":\"SOURCE_ID_PATTERN and invalid_source_id\",\"kind\":\"unbound refusal policy\",\"text\":\"| `SOURCE_ID_PATTERN` | `str` | `[0-9a-f]{64}` |\",\"question\":\"Which values are checked with SOURCE_ID_PATTERN, at which operation boundary, and does a mismatch necessarily produce the invalid_source_id refusal before any lookup or filesystem work?\",\"options\":[\"Validate every caller-supplied source_id before other work and return M08 invalid_source_id on mismatch.\",\"Use the pattern only when generating or storing source IDs; malformed caller input proceeds to ordinary lookup.\",\"Apply it only to the delivery operation, not publication marking or other operations carrying a source_id.\"],\"default_guess\":\"Validate every externally supplied source_id at the start of every operation that accepts one and return M08 invalid_source_id before lookup or filesystem access.\",\"witness\":{\"initial\":\"A confirmed project exists and the authenticated caller supplies source_id `not-a-sha256`.\",\"events\":[\"The calling flow requests delivery using that source_id.\"],\"outcomes\":[\"The service immediately returns M08 with code invalid_source_id.\",\"The service performs lookup and returns a placement failure such as not_ready_or_absent.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"SOURCE_ID_PATTERN matching\",\"kind\":\"match semantics\",\"text\":\"`[0-9a-f]{64}`\",\"question\":\"Must the whole source_id match exactly 64 lowercase hexadecimal characters, or may the regex match a substring because the pattern itself has no anchors?\",\"options\":[\"Use full-match semantics: exactly 64 lowercase hexadecimal characters.\",\"Use start-match semantics, permitting trailing characters.\",\"Use search semantics, permitting leading and trailing characters around a 64-character match.\"],\"default_guess\":\"Use full-match semantics.\",\"witness\":{\"initial\":\"The caller supplies a source_id consisting of `x`, followed by 64 lowercase hexadecimal characters, followed by `y`.\",\"events\":[\"The calling flow invokes an operation that accepts source_id.\"],\"outcomes\":[\"The value is refused as invalid_source_id because the entire string does not match.\",\"The value passes validation because a 64-character hexadecimal substring matches.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A10 injection_interpreted_input outcome\",\"kind\":\"security ownership mismatch\",\"text\":\"- injection_interpreted_input: APPLICABLE; references: A5, A6; affected: project id, source id, file names, stored paths\",\"question\":\"Now that A8 defines SOURCE_ID_PATTERN, must this security outcome reference A8 as an owner of source-id validation, or is the pattern unrelated to the source-id injection outcome and owned entirely by A5 and A6?\",\"options\":[\"Add A8 to the references because SOURCE_ID_PATTERN participates in the source-id security outcome.\",\"Keep only A5 and A6 and state that A8's pattern is not the validating security rule.\",\"Move the complete source-id validation rule to A8 and update the review accordingly.\"],\"default_guess\":\"Add A8 to the references and make A8 explicitly bind SOURCE_ID_PATTERN to invalid_source_id validation.\"}]}",
+ "set_aside": []
+}

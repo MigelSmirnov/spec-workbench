@@ -1,0 +1,245 @@
+{
+ "open_points": [
+  {
+   "subject": "timezone run setting",
+   "kind": "validation",
+   "text": "`timezone` | `str` | `PORTAL_DELIVERER_TIMEZONE` | optional, `Europe/Madrid` when absent",
+   "question": "Which timezone strings are valid, which timezone database defines them, and what happens when the variable is empty or invalid?",
+   "options": [
+    "Require a valid IANA timezone name and fail settings construction otherwise",
+    "Accept any string and fail only when it is used",
+    "Treat an empty or invalid value as absent and use `Europe/Madrid`"
+   ],
+   "default_guess": "Require a non-empty IANA timezone name and fail settings construction on an invalid value.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_TIMEZONE=Not/AZone` is present when the service starts.",
+    "events": [
+     "The service constructs its settings.",
+     "The owner asks to deliver a photo whose camera timestamp has no offset."
+    ],
+    "outcomes": [
+     "Startup fails because the timezone is invalid.",
+     "Startup succeeds; delivery later fails or silently uses a fallback timezone."
+    ],
+    "observer": "the operator and the owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "interpretation of camera time",
+   "kind": "instant meaning",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "How is a camera timestamp without an offset converted to an instant using the `timezone` setting, including ambiguous and nonexistent local times, and does an offset present in camera metadata take precedence over that setting?",
+   "options": [
+    "Interpret offset-less camera time in the configured timezone, use an embedded offset when present, and define DST fold/gap handling",
+    "Always interpret camera time in the configured timezone even when metadata contains an offset",
+    "Reject ambiguous, nonexistent, or conflicting camera timestamps and fall back to file modification time"
+   ],
+   "default_guess": "Use a valid embedded offset when present; otherwise interpret the value in the configured IANA timezone, choose the earlier occurrence for an overlap, and reject a nonexistent local time in favor of file modification time.",
+   "witness": {
+    "initial": "The configured timezone is `Europe/Madrid`; a photo contains the offset-less camera time `2026-10-25 02:30:00`, which occurs twice during the DST transition.",
+    "events": [
+     "The owner selects the photo for delivery.",
+     "The deliverer prepares the publication body."
+    ],
+    "outcomes": [
+     "`photo_date` represents `2026-10-25 00:30:00` UTC.",
+     "`photo_date` represents `2026-10-25 01:30:00` UTC."
+    ],
+    "observer": "the owner and the Client Portal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "file modification time",
+   "kind": "instant reading",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "At which step is the file modification time read, how many times may one delivery read it, and which reading determines `taken_at` if the file metadata changes during the operation?",
+   "options": [
+    "Read it exactly once from the same accepted source snapshot used for preparation",
+    "Reuse the modification time observed by the preceding scan",
+    "Read it during preparation and permit later validation reads, with a specified reading authoritative"
+   ],
+   "default_guess": "Read it exactly once during preparation from the accepted source snapshot and use that value throughout the operation.",
+   "witness": {
+    "initial": "A source has no usable camera date and its modification time is T1.",
+    "events": [
+     "The calling flow scans the file.",
+     "Syncthing replaces or touches the file so its modification time becomes T2.",
+     "The owner requests delivery."
+    ],
+    "outcomes": [
+     "The publication body contains T1 because the scan reading is reused.",
+     "The publication body contains T2 because delivery reads the metadata again."
+    ],
+    "observer": "the owner and the Client Portal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "PublicationMark.marked_at",
+   "kind": "missing time source",
+   "text": "`project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "What clock supplies `marked_at`, in which timezone/offset representation is it stored and compared, and how many clock readings may one record-publication operation take?",
+   "options": [
+    "Inject a UTC clock, read it once for a newly created mark, and store naive UTC",
+    "Inject a UTC clock, read it once, and store an offset-aware datetime",
+    "Read the process wall clock directly when persistence writes the mark"
+   ],
+   "default_guess": "Use an injected UTC clock, read it exactly once only when creating a new mark, and store naive UTC consistently with the product's other persisted datetimes.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The calling flow reports a Portal photo id.",
+     "The deliverer creates the publication mark.",
+     "The same photo id is reported again later."
+    ],
+    "outcomes": [
+     "The first call reads an injected clock once and the replay preserves that instant in naive UTC.",
+     "Persistence reads the ambient clock, stores an offset-aware value, and a replay path may read the clock again even though it returns the first mark."
+    ],
+    "observer": "the calling flow, tests, and storage operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "required run settings",
+   "kind": "failure semantics",
+   "text": "`binary_root` | `str` | `PORTAL_DELIVERER_BINARY_ROOT` | required, per installation",
+   "question": "For each required setting, what counts as present, when is absence detected, and does absence or an empty value prevent startup or become an operation-level refusal?",
+   "options": [
+    "Reject missing, empty, or whitespace-only values while constructing settings and do not start",
+    "Start with incomplete settings and return `state_unavailable` when an affected operation is called",
+    "Accept empty strings as configured paths"
+   ],
+   "default_guess": "Reject missing, empty, or whitespace-only required variables during settings construction and do not start.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_STATE_DIR` is absent while the other required variables are present.",
+    "events": [
+     "The operator starts the service.",
+     "The owner requests a scan."
+    ],
+    "outcomes": [
+     "The service refuses to start because required configuration is missing.",
+     "The service starts and the scan returns `state_unavailable`."
+    ],
+    "observer": "the operator and the owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "filesystem run settings",
+   "kind": "path interpretation",
+   "text": "`binary_root` | `str` | `PORTAL_DELIVERER_BINARY_ROOT` | required, per installation",
+   "question": "How are the four string-valued filesystem settings converted to paths: must they be absolute, what base resolves relative paths, and when are normalization, existence, type, permission, and symlink checks performed?",
+   "options": [
+    "Require absolute paths and validate each path's required kind and access at startup",
+    "Resolve relative paths against the process working directory and validate on use",
+    "Resolve relative paths against a fixed installation directory"
+   ],
+   "default_guess": "Require absolute paths, normalize without silently changing the intended target, and validate the required file/directory kind and access at startup.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_BINARY_ROOT=store` and the service can be launched from `/srv/app` or `/tmp`.",
+    "events": [
+     "The operator launches the service from one of the two working directories.",
+     "The owner delivers a photo."
+    ],
+    "outcomes": [
+     "The image is written below `/srv/app/store`.",
+     "The image is written below `/tmp/store`."
+    ],
+    "observer": "the operator and the Client Portal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "port run setting",
+   "kind": "parsing and range",
+   "text": "`port` | `int` | `PORTAL_DELIVERER_PORT` | optional, 8850 when absent",
+   "question": "Which textual integer forms and port range are valid, and what happens for an empty, non-integer, zero, negative, or greater-than-65535 value?",
+   "options": [
+    "Accept decimal integers from 1 through 65535 and fail settings construction otherwise",
+    "Accept any integer and let server binding report an error",
+    "Treat an empty or invalid value as absent and use 8850"
+   ],
+   "default_guess": "Parse a base-10 integer, require 1 through 65535, and fail settings construction for every present invalid value.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_PORT=0` is present.",
+    "events": [
+     "The operator starts the service."
+    ],
+    "outcomes": [
+     "Settings validation rejects the port and startup stops.",
+     "The web server binds an operating-system-selected ephemeral port."
+    ],
+    "observer": "the operator and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "environment settings snapshot",
+   "kind": "read timing",
+   "text": "Run settings are fields of the settings object, read from the environment of the process:",
+   "question": "When is the environment read, and is one settings object an immutable snapshot or may later environment changes alter values used by operations?",
+   "options": [
+    "Read once while constructing an immutable settings object",
+    "Read once at process startup but permit the settings object to be rebuilt",
+    "Read the environment whenever a setting is accessed"
+   ],
+   "default_guess": "Read all variables once during startup into one immutable settings object.",
+   "witness": {
+    "initial": "The service has constructed settings with port 8850 and timezone `Europe/Madrid`.",
+    "events": [
+     "A test or hosting wrapper changes the process environment.",
+     "A later operation reads a setting."
+    ],
+    "outcomes": [
+     "The operation uses the original settings snapshot.",
+     "The operation observes the changed environment value."
+    ],
+    "observer": "the operator, caller, or test suite"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "SOURCE_ID_PATTERN",
+   "kind": "matching semantics",
+   "text": "`SOURCE_ID_PATTERN` | `str` | `[0-9a-f]{64}`",
+   "question": "Which inputs are tested against this pattern, whether matching is a full match or substring search, and whether normalization occurs before the `invalid_source_id` decision?",
+   "options": [
+    "Apply an exact full match to the caller-supplied source id with no normalization",
+    "Use regex search semantics",
+    "Normalize case or surrounding whitespace before an exact match"
+   ],
+   "default_guess": "Apply the imported pattern as a full match to the unmodified caller-supplied source id and return `invalid_source_id` on failure.",
+   "witness": {
+    "initial": "A placement exists for the 64-character lowercase hexadecimal source id H.",
+    "events": [
+     "The calling flow requests delivery using `x` followed by H."
+    ],
+    "outcomes": [
+     "The request is refused with `invalid_source_id` because the entire input does not match.",
+     "The substring H matches and the operation proceeds or looks up H."
+    ],
+    "observer": "the calling flow and the owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "SOURCE_ID_PATTERN enforcement",
+   "kind": "missing invariant test",
+   "text": "`SOURCE_ID_PATTERN` | `str` | `[0-9a-f]{64}`",
+   "question": "What formal invariant requires externally supplied source ids to satisfy this policy, and what Required tests item must show the exact acceptance and refusal boundary?",
+   "options": [
+    "Add an invariant and tests covering exact valid ids plus malformed length, alphabet, case, and surrounding characters",
+    "Make source-id validation part of an existing invariant and name its witness test",
+    "Declare the pattern descriptive only and remove it from code-read policy values"
+   ],
+   "default_guess": "Add a formal invariant that every caller-supplied source id is accepted only by an exact full match, with a Required tests item covering both the valid boundary and representative invalid forms.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"timezone run setting\",\"kind\":\"validation\",\"text\":\"`timezone` | `str` | `PORTAL_DELIVERER_TIMEZONE` | optional, `Europe/Madrid` when absent\",\"question\":\"Which timezone strings are valid, which timezone database defines them, and what happens when the variable is empty or invalid?\",\"options\":[\"Require a valid IANA timezone name and fail settings construction otherwise\",\"Accept any string and fail only when it is used\",\"Treat an empty or invalid value as absent and use `Europe/Madrid`\"],\"default_guess\":\"Require a non-empty IANA timezone name and fail settings construction on an invalid value.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_TIMEZONE=Not/AZone` is present when the service starts.\",\"events\":[\"The service constructs its settings.\",\"The owner asks to deliver a photo whose camera timestamp has no offset.\"],\"outcomes\":[\"Startup fails because the timezone is invalid.\",\"Startup succeeds; delivery later fails or silently uses a fallback timezone.\"],\"observer\":\"the operator and the owner\"}},{\"subject\":\"interpretation of camera time\",\"kind\":\"instant meaning\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"How is a camera timestamp without an offset converted to an instant using the `timezone` setting, including ambiguous and nonexistent local times, and does an offset present in camera metadata take precedence over that setting?\",\"options\":[\"Interpret offset-less camera time in the configured timezone, use an embedded offset when present, and define DST fold/gap handling\",\"Always interpret camera time in the configured timezone even when metadata contains an offset\",\"Reject ambiguous, nonexistent, or conflicting camera timestamps and fall back to file modification time\"],\"default_guess\":\"Use a valid embedded offset when present; otherwise interpret the value in the configured IANA timezone, choose the earlier occurrence for an overlap, and reject a nonexistent local time in favor of file modification time.\",\"witness\":{\"initial\":\"The configured timezone is `Europe/Madrid`; a photo contains the offset-less camera time `2026-10-25 02:30:00`, which occurs twice during the DST transition.\",\"events\":[\"The owner selects the photo for delivery.\",\"The deliverer prepares the publication body.\"],\"outcomes\":[\"`photo_date` represents `2026-10-25 00:30:00` UTC.\",\"`photo_date` represents `2026-10-25 01:30:00` UTC.\"],\"observer\":\"the owner and the Client Portal\"}},{\"subject\":\"file modification time\",\"kind\":\"instant reading\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"At which step is the file modification time read, how many times may one delivery read it, and which reading determines `taken_at` if the file metadata changes during the operation?\",\"options\":[\"Read it exactly once from the same accepted source snapshot used for preparation\",\"Reuse the modification time observed by the preceding scan\",\"Read it during preparation and permit later validation reads, with a specified reading authoritative\"],\"default_guess\":\"Read it exactly once during preparation from the accepted source snapshot and use that value throughout the operation.\",\"witness\":{\"initial\":\"A source has no usable camera date and its modification time is T1.\",\"events\":[\"The calling flow scans the file.\",\"Syncthing replaces or touches the file so its modification time becomes T2.\",\"The owner requests delivery.\"],\"outcomes\":[\"The publication body contains T1 because the scan reading is reused.\",\"The publication body contains T2 because delivery reads the metadata again.\"],\"observer\":\"the owner and the Client Portal\"}},{\"subject\":\"PublicationMark.marked_at\",\"kind\":\"missing time source\",\"text\":\"`project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"What clock supplies `marked_at`, in which timezone/offset representation is it stored and compared, and how many clock readings may one record-publication operation take?\",\"options\":[\"Inject a UTC clock, read it once for a newly created mark, and store naive UTC\",\"Inject a UTC clock, read it once, and store an offset-aware datetime\",\"Read the process wall clock directly when persistence writes the mark\"],\"default_guess\":\"Use an injected UTC clock, read it exactly once only when creating a new mark, and store naive UTC consistently with the product's other persisted datetimes.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The calling flow reports a Portal photo id.\",\"The deliverer creates the publication mark.\",\"The same photo id is reported again later.\"],\"outcomes\":[\"The first call reads an injected clock once and the replay preserves that instant in naive UTC.\",\"Persistence reads the ambient clock, stores an offset-aware value, and a replay path may read the clock again even though it returns the first mark.\"],\"observer\":\"the calling flow, tests, and storage operator\"}},{\"subject\":\"required run settings\",\"kind\":\"failure semantics\",\"text\":\"`binary_root` | `str` | `PORTAL_DELIVERER_BINARY_ROOT` | required, per installation\",\"question\":\"For each required setting, what counts as present, when is absence detected, and does absence or an empty value prevent startup or become an operation-level refusal?\",\"options\":[\"Reject missing, empty, or whitespace-only values while constructing settings and do not start\",\"Start with incomplete settings and return `state_unavailable` when an affected operation is called\",\"Accept empty strings as configured paths\"],\"default_guess\":\"Reject missing, empty, or whitespace-only required variables during settings construction and do not start.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_STATE_DIR` is absent while the other required variables are present.\",\"events\":[\"The operator starts the service.\",\"The owner requests a scan.\"],\"outcomes\":[\"The service refuses to start because required configuration is missing.\",\"The service starts and the scan returns `state_unavailable`.\"],\"observer\":\"the operator and the owner\"}},{\"subject\":\"filesystem run settings\",\"kind\":\"path interpretation\",\"text\":\"`binary_root` | `str` | `PORTAL_DELIVERER_BINARY_ROOT` | required, per installation\",\"question\":\"How are the four string-valued filesystem settings converted to paths: must they be absolute, what base resolves relative paths, and when are normalization, existence, type, permission, and symlink checks performed?\",\"options\":[\"Require absolute paths and validate each path's required kind and access at startup\",\"Resolve relative paths against the process working directory and validate on use\",\"Resolve relative paths against a fixed installation directory\"],\"default_guess\":\"Require absolute paths, normalize without silently changing the intended target, and validate the required file/directory kind and access at startup.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_BINARY_ROOT=store` and the service can be launched from `/srv/app` or `/tmp`.\",\"events\":[\"The operator launches the service from one of the two working directories.\",\"The owner delivers a photo.\"],\"outcomes\":[\"The image is written below `/srv/app/store`.\",\"The image is written below `/tmp/store`.\"],\"observer\":\"the operator and the Client Portal\"}},{\"subject\":\"port run setting\",\"kind\":\"parsing and range\",\"text\":\"`port` | `int` | `PORTAL_DELIVERER_PORT` | optional, 8850 when absent\",\"question\":\"Which textual integer forms and port range are valid, and what happens for an empty, non-integer, zero, negative, or greater-than-65535 value?\",\"options\":[\"Accept decimal integers from 1 through 65535 and fail settings construction otherwise\",\"Accept any integer and let server binding report an error\",\"Treat an empty or invalid value as absent and use 8850\"],\"default_guess\":\"Parse a base-10 integer, require 1 through 65535, and fail settings construction for every present invalid value.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_PORT=0` is present.\",\"events\":[\"The operator starts the service.\"],\"outcomes\":[\"Settings validation rejects the port and startup stops.\",\"The web server binds an operating-system-selected ephemeral port.\"],\"observer\":\"the operator and the calling flow\"}},{\"subject\":\"environment settings snapshot\",\"kind\":\"read timing\",\"text\":\"Run settings are fields of the settings object, read from the environment of the process:\",\"question\":\"When is the environment read, and is one settings object an immutable snapshot or may later environment changes alter values used by operations?\",\"options\":[\"Read once while constructing an immutable settings object\",\"Read once at process startup but permit the settings object to be rebuilt\",\"Read the environment whenever a setting is accessed\"],\"default_guess\":\"Read all variables once during startup into one immutable settings object.\",\"witness\":{\"initial\":\"The service has constructed settings with port 8850 and timezone `Europe/Madrid`.\",\"events\":[\"A test or hosting wrapper changes the process environment.\",\"A later operation reads a setting.\"],\"outcomes\":[\"The operation uses the original settings snapshot.\",\"The operation observes the changed environment value.\"],\"observer\":\"the operator, caller, or test suite\"}},{\"subject\":\"SOURCE_ID_PATTERN\",\"kind\":\"matching semantics\",\"text\":\"`SOURCE_ID_PATTERN` | `str` | `[0-9a-f]{64}`\",\"question\":\"Which inputs are tested against this pattern, whether matching is a full match or substring search, and whether normalization occurs before the `invalid_source_id` decision?\",\"options\":[\"Apply an exact full match to the caller-supplied source id with no normalization\",\"Use regex search semantics\",\"Normalize case or surrounding whitespace before an exact match\"],\"default_guess\":\"Apply the imported pattern as a full match to the unmodified caller-supplied source id and return `invalid_source_id` on failure.\",\"witness\":{\"initial\":\"A placement exists for the 64-character lowercase hexadecimal source id H.\",\"events\":[\"The calling flow requests delivery using `x` followed by H.\"],\"outcomes\":[\"The request is refused with `invalid_source_id` because the entire input does not match.\",\"The substring H matches and the operation proceeds or looks up H.\"],\"observer\":\"the calling flow and the owner\"}},{\"subject\":\"SOURCE_ID_PATTERN enforcement\",\"kind\":\"missing invariant test\",\"text\":\"`SOURCE_ID_PATTERN` | `str` | `[0-9a-f]{64}`\",\"question\":\"What formal invariant requires externally supplied source ids to satisfy this policy, and what Required tests item must show the exact acceptance and refusal boundary?\",\"options\":[\"Add an invariant and tests covering exact valid ids plus malformed length, alphabet, case, and surrounding characters\",\"Make source-id validation part of an existing invariant and name its witness test\",\"Declare the pattern descriptive only and remove it from code-read policy values\"],\"default_guess\":\"Add a formal invariant that every caller-supplied source id is accepted only by an exact full match, with a Required tests item covering both the valid boundary and representative invalid forms.\"}]}",
+ "set_aside": []
+}

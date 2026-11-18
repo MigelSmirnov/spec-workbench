@@ -1,0 +1,222 @@
+{
+ "open_points": [
+  {
+   "subject": "`delivery_store` dependency on `Config`",
+   "kind": "standard_violation",
+   "text": "| `delivery_store` | `domain_models` | `Config`, `DelivererError`, `RefusalCode` |",
+   "rule": "Имена consumer/provider — логические ключи из `module_functions`; каждый символ обязан принадлежать provider.",
+   "section": "7",
+   "question": "Make `Config` an explicitly owned and exported symbol of `domain_models`, or replace it with a symbol owned by the stated provider.",
+   "unit": "?"
+  },
+  {
+   "subject": "`photo_delivery` dependency on `Config`",
+   "kind": "standard_violation",
+   "text": "| `photo_delivery` | `domain_models` | `Config`, `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `PlacementStatus`, `PlacementFailure`, `MarkStatus`, `RefusalCode` |",
+   "rule": "Имена consumer/provider — логические ключи из `module_functions`; каждый символ обязан принадлежать provider.",
+   "section": "7",
+   "question": "Make `Config` an explicitly owned and exported symbol of `domain_models`, or replace it with a symbol owned by the stated provider.",
+   "unit": "?"
+  },
+  {
+   "subject": "`deliverer_api` dependency on `Config`",
+   "kind": "standard_violation",
+   "text": "| `deliverer_api` | `domain_models` | `Config`, `DelivererError`, `RuntimeSettings`, `RefusalCode` |",
+   "rule": "Имена consumer/provider — логические ключи из `module_functions`; каждый символ обязан принадлежать provider.",
+   "section": "7",
+   "question": "Make `Config` an explicitly owned and exported symbol of `domain_models`, or replace it with a symbol owned by the stated provider.",
+   "unit": "?"
+  },
+  {
+   "subject": "`Config` and `RuntimeSettings`",
+   "kind": "undefined transformation",
+   "text": "turning the run settings into the context of the operations when the service starts;",
+   "question": "What is the operation context, how is it constructed from `RuntimeSettings`, and is it the otherwise undefined `Config` imported by `deliverer_api`, `photo_delivery` and `delivery_store`?",
+   "options": [
+    "`deliverer_api` converts `RuntimeSettings` into a defined `Config` and passes it to operations",
+    "operations receive `RuntimeSettings` directly",
+    "each operation receives only the primitive setting values it needs"
+   ],
+   "default_guess": "Define `Config` as the validated runtime context, construct it in `deliverer_api`, and pass it to `photo_delivery`, which passes primitive values to lower modules.",
+   "unit": "?"
+  },
+  {
+   "subject": "run-setting validation",
+   "kind": "unspecified validity",
+   "text": "the default of each optional setting and the refusal of a missing or invalid one.",
+   "question": "What makes each environment value invalid, including empty required strings, relative path strings, an unknown timezone, a non-decimal port, and a port outside the usable range?",
+   "options": [
+    "require non-empty absolute paths, an available IANA timezone and a port from 1 through 65535",
+    "validate only conversion to the declared field type",
+    "accept all strings and defer every semantic failure to the using module"
+   ],
+   "default_guess": "Require non-empty absolute path strings, validate the timezone through the configured timezone database, and require a decimal port from 1 through 65535.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_TIMEZONE=Mars/Olympus` and all other environment variables are present",
+    "events": [
+     "the operator starts the service",
+     "`runtime_settings` loads the environment"
+    ],
+    "outcomes": [
+     "startup is refused because the timezone is invalid",
+     "startup succeeds and photo preparation fails only when it first uses the timezone"
+    ],
+    "observer": "the operator and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "`load_runtime_settings` failure contract",
+   "kind": "unclear refusal channel",
+   "text": "the refusal of a missing or invalid one.",
+   "question": "How does `load_runtime_settings` report this refusal, and which module owns its externally visible startup message and process result?",
+   "options": [
+    "raise a specified settings exception handled by `deliverer_api`",
+    "return a result containing either `RuntimeSettings` or a startup error",
+    "terminate startup directly inside `runtime_settings`"
+   ],
+   "default_guess": "Raise a settings-specific exception that `deliverer_api` converts into the service's startup failure.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_STATE_DIR` is absent",
+    "events": [
+     "the operator invokes `run_service`",
+     "`deliverer_api` calls `load_runtime_settings`"
+    ],
+    "outcomes": [
+     "`load_runtime_settings` returns or raises a structured error that `deliverer_api` presents",
+     "`load_runtime_settings` logs or terminates the process itself"
+    ],
+    "observer": "the operator and startup tests"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "distribution of run settings",
+   "kind": "unclear dependency direction",
+   "text": "turning the run settings into the context of the operations when the service starts;",
+   "question": "Which module receives each setting, in what form, and through which call boundary, especially `connections_file` for `object_connections`, `timezone` for `photo_preparation`, and the store roots for `delivery_store`?",
+   "options": [
+    "pass one shared context through `photo_delivery`",
+    "pass only individual primitive values to each owning lower module",
+    "let lower modules read the environment or global context themselves"
+   ],
+   "default_guess": "Keep environment access in `runtime_settings`; have `deliverer_api` inject only the values each operation or lower module needs.",
+   "unit": "?"
+  },
+  {
+   "subject": "path-setting interpretation",
+   "kind": "unspecified conversion",
+   "text": "`binary_root` | `str`",
+   "question": "How are the five path-valued strings interpreted and converted: must they be absolute, are they resolved against a directory, and which module owns that conversion?",
+   "options": [
+    "require absolute paths and convert them in `runtime_settings`",
+    "resolve relative paths against the service working directory",
+    "preserve strings until each using module converts them"
+   ],
+   "default_guess": "Require absolute paths and convert them once while constructing the operation context.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_BINARY_ROOT=store` and the service is started from `/srv/a`",
+    "events": [
+     "the service starts",
+     "the working directory later differs or another launcher starts it from `/srv/b`",
+     "a photo is delivered"
+    ],
+    "outcomes": [
+     "the image is written below `/srv/a/store` because the path was resolved at startup",
+     "the image is written below `/srv/b/store` because the relative string is resolved when used"
+    ],
+    "observer": "the operator and the Portal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "path existence checks",
+   "kind": "unclear owner and timing",
+   "text": "checking that a path exists, which the modules that use it do;",
+   "question": "For each path setting, which using module checks existence, at startup or per operation, and what failure results when the path is absent or has the wrong kind?",
+   "options": [
+    "all path checks run during startup",
+    "each module checks its path when an operation first uses it",
+    "token and connections are checked at startup while store paths are checked per operation"
+   ],
+   "default_guess": "Check the token and connections file at startup as their rules require, and let `delivery_store` check store paths per operation and return `state_unavailable`.",
+   "witness": {
+    "initial": "the settings name an absent `binary_root`",
+    "events": [
+     "the operator starts the service",
+     "the calling flow requests a placement"
+    ],
+    "outcomes": [
+     "the service refuses to start",
+     "the service starts and the placement is later refused with `state_unavailable`"
+    ],
+    "observer": "the operator and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "startup orchestration",
+   "kind": "unspecified order",
+   "text": "reading the run settings when the service starts;",
+   "question": "In what order are runtime settings loaded, the token checked, the connections record checked, and the application context created when more than one startup defect is present?",
+   "options": [
+    "settings, token, connections, context",
+    "settings, connections, token, context",
+    "no specified order because startup reports aggregate errors"
+   ],
+   "default_guess": "Load settings first, then validate the token, then validate connections, then construct the application context.",
+   "witness": {
+    "initial": "the token file is insecure and the connections file is absent",
+    "events": [
+     "the operator starts the service"
+    ],
+    "outcomes": [
+     "startup reports the insecure token first",
+     "startup reports the unavailable connections file first"
+    ],
+    "observer": "the operator and startup automation"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "`domain_models` knowledge boundary",
+   "kind": "ambiguous knowledge",
+   "text": "field structure and decided values;",
+   "question": "Does `domain_models` know only model and enumeration values, or also the A8 policy values and optional-setting defaults now owned by `data_provider` and `runtime_settings`?",
+   "options": [
+    "only model fields and enumeration values",
+    "all A8 values, including policy constants and defaults",
+    "run-setting defaults but not policy constants"
+   ],
+   "default_guess": "Restrict this statement to model field structure and enumeration values; keep policy constants and defaults out of `domain_models`.",
+   "witness": {
+    "initial": "`timezone` is omitted when a `RuntimeSettings` value is constructed",
+    "events": [
+     "a test constructs `RuntimeSettings` directly without calling `load_runtime_settings`"
+    ],
+    "outcomes": [
+     "the model supplies `Europe/Madrid`, so `domain_models` effectively owns the default",
+     "construction fails because only `runtime_settings` applies the default"
+    ],
+    "observer": "module consumers and boundary tests"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "`deliverer_api` trace inputs",
+   "kind": "missing trace ownership",
+   "text": "- A3\n- A4\n- A5\n- A7",
+   "question": "Must `deliverer_api` also trace A8 now that it imports `RuntimeSettings`, invokes `load_runtime_settings`, and owns creation of the operation context, or is A8 intentionally only a transitive input through `runtime_settings`?",
+   "options": [
+    "add A8 as a direct trace input",
+    "declare A8 transitive through `runtime_settings`",
+    "remove direct A8 knowledge from `deliverer_api`"
+   ],
+   "default_guess": "Add A8 as a direct trace input because `deliverer_api` directly constructs the runtime context from those settings.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"`delivery_store` dependency on `Config`\",\"kind\":\"standard_violation\",\"text\":\"| `delivery_store` | `domain_models` | `Config`, `DelivererError`, `RefusalCode` |\",\"rule\":\"Имена consumer/provider — логические ключи из `module_functions`; каждый символ обязан принадлежать provider.\",\"section\":\"7\",\"question\":\"Make `Config` an explicitly owned and exported symbol of `domain_models`, or replace it with a symbol owned by the stated provider.\"},{\"subject\":\"`photo_delivery` dependency on `Config`\",\"kind\":\"standard_violation\",\"text\":\"| `photo_delivery` | `domain_models` | `Config`, `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `PlacementStatus`, `PlacementFailure`, `MarkStatus`, `RefusalCode` |\",\"rule\":\"Имена consumer/provider — логические ключи из `module_functions`; каждый символ обязан принадлежать provider.\",\"section\":\"7\",\"question\":\"Make `Config` an explicitly owned and exported symbol of `domain_models`, or replace it with a symbol owned by the stated provider.\"},{\"subject\":\"`deliverer_api` dependency on `Config`\",\"kind\":\"standard_violation\",\"text\":\"| `deliverer_api` | `domain_models` | `Config`, `DelivererError`, `RuntimeSettings`, `RefusalCode` |\",\"rule\":\"Имена consumer/provider — логические ключи из `module_functions`; каждый символ обязан принадлежать provider.\",\"section\":\"7\",\"question\":\"Make `Config` an explicitly owned and exported symbol of `domain_models`, or replace it with a symbol owned by the stated provider.\"},{\"subject\":\"`Config` and `RuntimeSettings`\",\"kind\":\"undefined transformation\",\"text\":\"turning the run settings into the context of the operations when the service starts;\",\"question\":\"What is the operation context, how is it constructed from `RuntimeSettings`, and is it the otherwise undefined `Config` imported by `deliverer_api`, `photo_delivery` and `delivery_store`?\",\"options\":[\"`deliverer_api` converts `RuntimeSettings` into a defined `Config` and passes it to operations\",\"operations receive `RuntimeSettings` directly\",\"each operation receives only the primitive setting values it needs\"],\"default_guess\":\"Define `Config` as the validated runtime context, construct it in `deliverer_api`, and pass it to `photo_delivery`, which passes primitive values to lower modules.\"},{\"subject\":\"run-setting validation\",\"kind\":\"unspecified validity\",\"text\":\"the default of each optional setting and the refusal of a missing or invalid one.\",\"question\":\"What makes each environment value invalid, including empty required strings, relative path strings, an unknown timezone, a non-decimal port, and a port outside the usable range?\",\"options\":[\"require non-empty absolute paths, an available IANA timezone and a port from 1 through 65535\",\"validate only conversion to the declared field type\",\"accept all strings and defer every semantic failure to the using module\"],\"default_guess\":\"Require non-empty absolute path strings, validate the timezone through the configured timezone database, and require a decimal port from 1 through 65535.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_TIMEZONE=Mars/Olympus` and all other environment variables are present\",\"events\":[\"the operator starts the service\",\"`runtime_settings` loads the environment\"],\"outcomes\":[\"startup is refused because the timezone is invalid\",\"startup succeeds and photo preparation fails only when it first uses the timezone\"],\"observer\":\"the operator and the calling flow\"}},{\"subject\":\"`load_runtime_settings` failure contract\",\"kind\":\"unclear refusal channel\",\"text\":\"the refusal of a missing or invalid one.\",\"question\":\"How does `load_runtime_settings` report this refusal, and which module owns its externally visible startup message and process result?\",\"options\":[\"raise a specified settings exception handled by `deliverer_api`\",\"return a result containing either `RuntimeSettings` or a startup error\",\"terminate startup directly inside `runtime_settings`\"],\"default_guess\":\"Raise a settings-specific exception that `deliverer_api` converts into the service's startup failure.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_STATE_DIR` is absent\",\"events\":[\"the operator invokes `run_service`\",\"`deliverer_api` calls `load_runtime_settings`\"],\"outcomes\":[\"`load_runtime_settings` returns or raises a structured error that `deliverer_api` presents\",\"`load_runtime_settings` logs or terminates the process itself\"],\"observer\":\"the operator and startup tests\"}},{\"subject\":\"distribution of run settings\",\"kind\":\"unclear dependency direction\",\"text\":\"turning the run settings into the context of the operations when the service starts;\",\"question\":\"Which module receives each setting, in what form, and through which call boundary, especially `connections_file` for `object_connections`, `timezone` for `photo_preparation`, and the store roots for `delivery_store`?\",\"options\":[\"pass one shared context through `photo_delivery`\",\"pass only individual primitive values to each owning lower module\",\"let lower modules read the environment or global context themselves\"],\"default_guess\":\"Keep environment access in `runtime_settings`; have `deliverer_api` inject only the values each operation or lower module needs.\"},{\"subject\":\"path-setting interpretation\",\"kind\":\"unspecified conversion\",\"text\":\"`binary_root` | `str`\",\"question\":\"How are the five path-valued strings interpreted and converted: must they be absolute, are they resolved against a directory, and which module owns that conversion?\",\"options\":[\"require absolute paths and convert them in `runtime_settings`\",\"resolve relative paths against the service working directory\",\"preserve strings until each using module converts them\"],\"default_guess\":\"Require absolute paths and convert them once while constructing the operation context.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_BINARY_ROOT=store` and the service is started from `/srv/a`\",\"events\":[\"the service starts\",\"the working directory later differs or another launcher starts it from `/srv/b`\",\"a photo is delivered\"],\"outcomes\":[\"the image is written below `/srv/a/store` because the path was resolved at startup\",\"the image is written below `/srv/b/store` because the relative string is resolved when used\"],\"observer\":\"the operator and the Portal\"}},{\"subject\":\"path existence checks\",\"kind\":\"unclear owner and timing\",\"text\":\"checking that a path exists, which the modules that use it do;\",\"question\":\"For each path setting, which using module checks existence, at startup or per operation, and what failure results when the path is absent or has the wrong kind?\",\"options\":[\"all path checks run during startup\",\"each module checks its path when an operation first uses it\",\"token and connections are checked at startup while store paths are checked per operation\"],\"default_guess\":\"Check the token and connections file at startup as their rules require, and let `delivery_store` check store paths per operation and return `state_unavailable`.\",\"witness\":{\"initial\":\"the settings name an absent `binary_root`\",\"events\":[\"the operator starts the service\",\"the calling flow requests a placement\"],\"outcomes\":[\"the service refuses to start\",\"the service starts and the placement is later refused with `state_unavailable`\"],\"observer\":\"the operator and the calling flow\"}},{\"subject\":\"startup orchestration\",\"kind\":\"unspecified order\",\"text\":\"reading the run settings when the service starts;\",\"question\":\"In what order are runtime settings loaded, the token checked, the connections record checked, and the application context created when more than one startup defect is present?\",\"options\":[\"settings, token, connections, context\",\"settings, connections, token, context\",\"no specified order because startup reports aggregate errors\"],\"default_guess\":\"Load settings first, then validate the token, then validate connections, then construct the application context.\",\"witness\":{\"initial\":\"the token file is insecure and the connections file is absent\",\"events\":[\"the operator starts the service\"],\"outcomes\":[\"startup reports the insecure token first\",\"startup reports the unavailable connections file first\"],\"observer\":\"the operator and startup automation\"}},{\"subject\":\"`domain_models` knowledge boundary\",\"kind\":\"ambiguous knowledge\",\"text\":\"field structure and decided values;\",\"question\":\"Does `domain_models` know only model and enumeration values, or also the A8 policy values and optional-setting defaults now owned by `data_provider` and `runtime_settings`?\",\"options\":[\"only model fields and enumeration values\",\"all A8 values, including policy constants and defaults\",\"run-setting defaults but not policy constants\"],\"default_guess\":\"Restrict this statement to model field structure and enumeration values; keep policy constants and defaults out of `domain_models`.\",\"witness\":{\"initial\":\"`timezone` is omitted when a `RuntimeSettings` value is constructed\",\"events\":[\"a test constructs `RuntimeSettings` directly without calling `load_runtime_settings`\"],\"outcomes\":[\"the model supplies `Europe/Madrid`, so `domain_models` effectively owns the default\",\"construction fails because only `runtime_settings` applies the default\"],\"observer\":\"module consumers and boundary tests\"}},{\"subject\":\"`deliverer_api` trace inputs\",\"kind\":\"missing trace ownership\",\"text\":\"- A3\\n- A4\\n- A5\\n- A7\",\"question\":\"Must `deliverer_api` also trace A8 now that it imports `RuntimeSettings`, invokes `load_runtime_settings`, and owns creation of the operation context, or is A8 intentionally only a transitive input through `runtime_settings`?\",\"options\":[\"add A8 as a direct trace input\",\"declare A8 transitive through `runtime_settings`\",\"remove direct A8 knowledge from `deliverer_api`\"],\"default_guess\":\"Add A8 as a direct trace input because `deliverer_api` directly constructs the runtime context from those settings.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,168 @@
+{
+ "open_points": [
+  {
+   "subject": "A8",
+   "kind": "missing-setting behavior",
+   "text": "| `binary_root` | `str` | `PORTAL_DELIVERER_BINARY_ROOT` | required, per installation |",
+   "question": "When any required environment variable is absent or empty, must settings construction fail, must service startup fail, or may startup succeed and an affected operation later return a refusal; and is an empty value absent or present?",
+   "options": [
+    "Reject a missing or empty value while constructing settings and prevent startup",
+    "Reject only an absent variable; accept an empty string",
+    "Start successfully and refuse only operations that need the setting"
+   ],
+   "default_guess": "Treat absent and empty required variables alike, fail settings construction, and prevent startup.",
+   "witness": {
+    "initial": "The process environment omits PORTAL_DELIVERER_BINARY_ROOT while the other required variables are present.",
+    "events": [
+     "The operator starts the service.",
+     "The caller requests an operation that would access the binary store."
+    ],
+    "outcomes": [
+     "Startup fails because a required setting is missing.",
+     "Startup succeeds; the operation later returns state_unavailable or fails while using the path."
+    ],
+    "observer": "The operator and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "environment read timing",
+   "text": "Run settings are fields of the settings object, read from the environment of the process:",
+   "question": "At what instant is the environment read, and can changing an environment variable affect an already running process without reconstructing or restarting it?",
+   "options": [
+    "Read once when the settings object is constructed",
+    "Read once at process startup",
+    "Read the environment whenever a setting is used or settings are reconstructed"
+   ],
+   "default_guess": "Read once when a single settings object is constructed during startup; later environment changes have no effect until restart.",
+   "witness": {
+    "initial": "The service is running with PORTAL_DELIVERER_PORT=8850.",
+    "events": [
+     "The operator changes PORTAL_DELIVERER_PORT in the parent or managed process environment to 8851 without restarting the service.",
+     "A new request is made."
+    ],
+    "outcomes": [
+     "The running service remains on port 8850.",
+     "The service or a reconstructed settings consumer begins using 8851."
+    ],
+    "observer": "The operator and caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "timezone validation",
+   "text": "| `timezone` | `str` | `PORTAL_DELIVERER_TIMEZONE` | optional, `Europe/Madrid` when absent |",
+   "question": "Which present timezone strings are valid, and what exact behavior is required for an empty or invalid value?",
+   "options": [
+    "Require a valid IANA time-zone identifier and fail settings construction otherwise",
+    "Accept any string and fail only when it is used",
+    "Treat empty or invalid values as absent and use Europe/Madrid"
+   ],
+   "default_guess": "Require a nonempty valid IANA time-zone identifier and fail settings construction on an invalid present value.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_TIMEZONE is set to Not/AZone.",
+    "events": [
+     "The operator starts the service.",
+     "An operation interprets a photo date that needs the configured timezone."
+    ],
+    "outcomes": [
+     "Startup is refused because the timezone is invalid.",
+     "Startup succeeds and the operation later fails or silently uses a fallback timezone."
+    ],
+    "observer": "The operator and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "port validation",
+   "text": "| `port` | `int` | `PORTAL_DELIVERER_PORT` | optional, 8850 when absent |",
+   "question": "What textual integer syntax and numeric range are accepted, and what happens when the variable is empty, nonnumeric, zero, negative, or greater than 65535?",
+   "options": [
+    "Accept decimal integers from 1 through 65535 and fail settings construction otherwise",
+    "Accept any value parseable as an integer and let the server reject it",
+    "Treat an invalid value as absent and use 8850"
+   ],
+   "default_guess": "Accept only a base-10 integer from 1 through 65535 and fail settings construction for every other present value.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_PORT is set to 70000.",
+    "events": [
+     "The operator starts the service."
+    ],
+    "outcomes": [
+     "Settings validation rejects startup.",
+     "Settings accepts the integer and the web server later rejects it or fails to bind."
+    ],
+    "observer": "The operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "path interpretation",
+   "text": "| `state_dir` | `str` | `PORTAL_DELIVERER_STATE_DIR` | required, per installation |",
+   "question": "How are the four path-valued strings converted to paths: must they be absolute, what base resolves a relative value, is normalization required, and are existence, type, permissions, or symlink constraints checked at startup or use time?",
+   "options": [
+    "Require normalized absolute paths and validate the required filesystem properties at startup",
+    "Resolve relative paths against the process working directory and validate on use",
+    "Pass the strings unchanged to each filesystem consumer"
+   ],
+   "default_guess": "Convert with the platform path type, require absolute paths, and validate each path's role and accessibility during startup without resolving trusted symlink targets unless separately required.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_STATE_DIR is set to data and the service can be started from two different working directories.",
+    "events": [
+     "The operator starts one instance from /srv/portal-deliverer.",
+     "The operator starts another instance with the same environment from /tmp."
+    ],
+    "outcomes": [
+     "Both starts are refused because the configured path is not absolute.",
+     "The instances use /srv/portal-deliverer/data and /tmp/data respectively."
+    ],
+    "observer": "The operator and any caller observing different persistent state"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "pattern match semantics",
+   "text": "| `SOURCE_ID_PATTERN` | `str` | `[0-9a-f]{64}` |",
+   "question": "Must a source id match this pattern in full, or is a substring/search match sufficient, and which operation performs that validation before returning invalid_source_id?",
+   "options": [
+    "Require a full match of exactly 64 lowercase hexadecimal characters at every source-id input boundary",
+    "Use regular-expression search semantics",
+    "Require a full match only for delivery, while other operations accept different forms"
+   ],
+   "default_guess": "Use a full match at every operation boundary that accepts a source id, before storage lookup or filesystem work.",
+   "witness": {
+    "initial": "A placement exists for a valid 64-character lowercase hexadecimal source id.",
+    "events": [
+     "The calling flow requests delivery or publication marking with x followed by that source id followed by y."
+    ],
+    "outcomes": [
+     "The request is refused with invalid_source_id because the whole input does not match.",
+     "The request passes format validation because it contains a matching 64-character substring."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A10",
+   "kind": "security-review coverage",
+   "text": "- files_artifacts: APPLICABLE; references: A1, A2, A5, A6, A8; affected: M01, M02, M03, M04, connections file, source folders, Portal binary store",
+   "question": "Does the files/artifacts review cover the newly environment-controlled binary_root, state_dir, connections_file, and token_file path values, and what trust and validation outcome does the review assign to each one?",
+   "options": [
+    "Treat every environment-controlled path as configuration input covered by files_artifacts and record its validation requirements",
+    "Treat the process environment as trusted deployment input requiring no path validation",
+    "Cover only the listed resulting artifacts, leaving configuration-path validation to deployment"
+   ],
+   "default_guess": "Treat all environment-controlled paths as trusted only for authorization but still subject to explicit absolute-path, role, and accessibility validation, and list them in the files/artifacts outcome.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A8\",\"kind\":\"missing-setting behavior\",\"text\":\"| `binary_root` | `str` | `PORTAL_DELIVERER_BINARY_ROOT` | required, per installation |\",\"question\":\"When any required environment variable is absent or empty, must settings construction fail, must service startup fail, or may startup succeed and an affected operation later return a refusal; and is an empty value absent or present?\",\"options\":[\"Reject a missing or empty value while constructing settings and prevent startup\",\"Reject only an absent variable; accept an empty string\",\"Start successfully and refuse only operations that need the setting\"],\"default_guess\":\"Treat absent and empty required variables alike, fail settings construction, and prevent startup.\",\"witness\":{\"initial\":\"The process environment omits PORTAL_DELIVERER_BINARY_ROOT while the other required variables are present.\",\"events\":[\"The operator starts the service.\",\"The caller requests an operation that would access the binary store.\"],\"outcomes\":[\"Startup fails because a required setting is missing.\",\"Startup succeeds; the operation later returns state_unavailable or fails while using the path.\"],\"observer\":\"The operator and the calling flow\"}},{\"subject\":\"A8\",\"kind\":\"environment read timing\",\"text\":\"Run settings are fields of the settings object, read from the environment of the process:\",\"question\":\"At what instant is the environment read, and can changing an environment variable affect an already running process without reconstructing or restarting it?\",\"options\":[\"Read once when the settings object is constructed\",\"Read once at process startup\",\"Read the environment whenever a setting is used or settings are reconstructed\"],\"default_guess\":\"Read once when a single settings object is constructed during startup; later environment changes have no effect until restart.\",\"witness\":{\"initial\":\"The service is running with PORTAL_DELIVERER_PORT=8850.\",\"events\":[\"The operator changes PORTAL_DELIVERER_PORT in the parent or managed process environment to 8851 without restarting the service.\",\"A new request is made.\"],\"outcomes\":[\"The running service remains on port 8850.\",\"The service or a reconstructed settings consumer begins using 8851.\"],\"observer\":\"The operator and caller\"}},{\"subject\":\"A8\",\"kind\":\"timezone validation\",\"text\":\"| `timezone` | `str` | `PORTAL_DELIVERER_TIMEZONE` | optional, `Europe/Madrid` when absent |\",\"question\":\"Which present timezone strings are valid, and what exact behavior is required for an empty or invalid value?\",\"options\":[\"Require a valid IANA time-zone identifier and fail settings construction otherwise\",\"Accept any string and fail only when it is used\",\"Treat empty or invalid values as absent and use Europe/Madrid\"],\"default_guess\":\"Require a nonempty valid IANA time-zone identifier and fail settings construction on an invalid present value.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_TIMEZONE is set to Not/AZone.\",\"events\":[\"The operator starts the service.\",\"An operation interprets a photo date that needs the configured timezone.\"],\"outcomes\":[\"Startup is refused because the timezone is invalid.\",\"Startup succeeds and the operation later fails or silently uses a fallback timezone.\"],\"observer\":\"The operator and the calling flow\"}},{\"subject\":\"A8\",\"kind\":\"port validation\",\"text\":\"| `port` | `int` | `PORTAL_DELIVERER_PORT` | optional, 8850 when absent |\",\"question\":\"What textual integer syntax and numeric range are accepted, and what happens when the variable is empty, nonnumeric, zero, negative, or greater than 65535?\",\"options\":[\"Accept decimal integers from 1 through 65535 and fail settings construction otherwise\",\"Accept any value parseable as an integer and let the server reject it\",\"Treat an invalid value as absent and use 8850\"],\"default_guess\":\"Accept only a base-10 integer from 1 through 65535 and fail settings construction for every other present value.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_PORT is set to 70000.\",\"events\":[\"The operator starts the service.\"],\"outcomes\":[\"Settings validation rejects startup.\",\"Settings accepts the integer and the web server later rejects it or fails to bind.\"],\"observer\":\"The operator\"}},{\"subject\":\"A8\",\"kind\":\"path interpretation\",\"text\":\"| `state_dir` | `str` | `PORTAL_DELIVERER_STATE_DIR` | required, per installation |\",\"question\":\"How are the four path-valued strings converted to paths: must they be absolute, what base resolves a relative value, is normalization required, and are existence, type, permissions, or symlink constraints checked at startup or use time?\",\"options\":[\"Require normalized absolute paths and validate the required filesystem properties at startup\",\"Resolve relative paths against the process working directory and validate on use\",\"Pass the strings unchanged to each filesystem consumer\"],\"default_guess\":\"Convert with the platform path type, require absolute paths, and validate each path's role and accessibility during startup without resolving trusted symlink targets unless separately required.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_STATE_DIR is set to data and the service can be started from two different working directories.\",\"events\":[\"The operator starts one instance from /srv/portal-deliverer.\",\"The operator starts another instance with the same environment from /tmp.\"],\"outcomes\":[\"Both starts are refused because the configured path is not absolute.\",\"The instances use /srv/portal-deliverer/data and /tmp/data respectively.\"],\"observer\":\"The operator and any caller observing different persistent state\"}},{\"subject\":\"A8\",\"kind\":\"pattern match semantics\",\"text\":\"| `SOURCE_ID_PATTERN` | `str` | `[0-9a-f]{64}` |\",\"question\":\"Must a source id match this pattern in full, or is a substring/search match sufficient, and which operation performs that validation before returning invalid_source_id?\",\"options\":[\"Require a full match of exactly 64 lowercase hexadecimal characters at every source-id input boundary\",\"Use regular-expression search semantics\",\"Require a full match only for delivery, while other operations accept different forms\"],\"default_guess\":\"Use a full match at every operation boundary that accepts a source id, before storage lookup or filesystem work.\",\"witness\":{\"initial\":\"A placement exists for a valid 64-character lowercase hexadecimal source id.\",\"events\":[\"The calling flow requests delivery or publication marking with x followed by that source id followed by y.\"],\"outcomes\":[\"The request is refused with invalid_source_id because the whole input does not match.\",\"The request passes format validation because it contains a matching 64-character substring.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A10\",\"kind\":\"security-review coverage\",\"text\":\"- files_artifacts: APPLICABLE; references: A1, A2, A5, A6, A8; affected: M01, M02, M03, M04, connections file, source folders, Portal binary store\",\"question\":\"Does the files/artifacts review cover the newly environment-controlled binary_root, state_dir, connections_file, and token_file path values, and what trust and validation outcome does the review assign to each one?\",\"options\":[\"Treat every environment-controlled path as configuration input covered by files_artifacts and record its validation requirements\",\"Treat the process environment as trusted deployment input requiring no path validation\",\"Cover only the listed resulting artifacts, leaving configuration-path validation to deployment\"],\"default_guess\":\"Treat all environment-controlled paths as trusted only for authorization but still subject to explicit absolute-path, role, and accessibility validation, and list them in the files/artifacts outcome.\"}]}",
+ "set_aside": []
+}

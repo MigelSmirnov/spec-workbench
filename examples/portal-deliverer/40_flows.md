@@ -29,7 +29,8 @@ The deployment starts the service.
    `capability:object_connections.load_connections` once, to judge the connections file whole.
 4. `capability:deliverer_api.read_token` reads the token and checks its file permissions and length.
 5. `capability:deliverer_api.create_app` builds the HTTP surface with that context, the token and the clock.
-6. `capability:deliverer_api.run_service` serves that surface in the web server, on the loopback interface.
+6. `capability:deliverer_api.run_service` serves that surface in the web server, on the loopback interface and the `port` of the run
+   settings.
 
 ### Outcomes
 

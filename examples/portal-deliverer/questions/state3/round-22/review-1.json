@@ -1,0 +1,157 @@
+{
+ "open_points": [
+  {
+   "subject": "Config ownership",
+   "kind": "missing_owner",
+   "text": "| `deliverer_api` | `domain_models` | `Config`, `DelivererError`, `RuntimeSettings`, `RefusalCode` |",
+   "question": "Which module owns `Config`, what fields does it have, and why is it distinct from `RuntimeSettings`?",
+   "options": [
+    "`domain_models` owns a separate operation-context `Config` and must declare its fields",
+    "Eliminate `Config` and use `RuntimeSettings` as the context",
+    "Another module owns and constructs `Config`"
+   ],
+   "default_guess": "Make `domain_models` own a separate `Config` containing the validated, converted values operations need.",
+   "unit": "?"
+  },
+  {
+   "subject": "RuntimeSettings-to-operation context conversion",
+   "kind": "undefined_mapping",
+   "text": "- turning the run settings into the context of the operations when the service starts;",
+   "question": "What context is constructed, which settings enter it, which capability constructs it, and what conversions occur between `RuntimeSettings` and that context?",
+   "options": [
+    "`load_config` converts `RuntimeSettings` into `Config`",
+    "`RuntimeSettings` itself is passed as the operation context",
+    "Each operation receives separate primitive arguments"
+   ],
+   "default_guess": "Have `deliverer_api.load_config` construct a typed `Config` from `RuntimeSettings`, excluding server-only settings such as `port`.",
+   "witness": {
+    "initial": "All environment variables are valid, with filesystem values represented as strings.",
+    "events": [
+     "`deliverer_api` calls `load_runtime_settings` during startup.",
+     "A caller requests a placement.",
+     "`photo_delivery` and `delivery_store` consume the startup context."
+    ],
+    "outcomes": [
+     "The API converts the strings into a `Config` with filesystem path values and passes that context to the operation.",
+     "The API passes `RuntimeSettings` unchanged, leaving each operation to interpret its strings."
+    ],
+    "observer": "The implementers of `deliverer_api`, `photo_delivery`, and `delivery_store`, and an operator using relative path values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "filesystem setting interpretation",
+   "kind": "undefined_path_semantics",
+   "text": "| `binary_root` | `str` | `PORTAL_DELIVERER_BINARY_ROOT` | required, per installation |",
+   "question": "Must filesystem settings be absolute, and if relative values are allowed, relative to what are they resolved and by which module?",
+   "options": [
+    "Require absolute paths",
+    "Resolve relative paths against the process working directory",
+    "Resolve relative paths against a declared installation root"
+   ],
+   "default_guess": "Require absolute filesystem paths and convert them to path objects while constructing the operation context.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_BINARY_ROOT` is set to `portal-binaries`, and the service is started with a working directory different from the installation directory.",
+    "events": [
+     "The service loads the environment setting.",
+     "A photo is delivered and its stored image is written."
+    ],
+    "outcomes": [
+     "The image is written below the process working directory.",
+     "Startup or delivery refuses the relative setting instead of writing there."
+    ],
+    "observer": "The operator and the Portal process looking for the stored image."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "RuntimeSettings validation",
+   "kind": "undefined_validity",
+   "text": "- the default of each optional setting and the refusal of a missing or invalid one.",
+   "question": "What exactly makes each setting invalid, including empty path strings, time-zone names, integer syntax, whitespace, and the permitted range of `port`?",
+   "options": [
+    "Validate only the declared primitive type and required presence",
+    "Also require non-empty paths, a recognised IANA time zone, and a port from 1 through 65535",
+    "Let downstream consumers decide validity"
+   ],
+   "default_guess": "Require non-empty path strings, a recognised IANA time-zone name, and a base-10 port in the range 1 through 65535.",
+   "witness": {
+    "initial": "All required settings are present and `PORTAL_DELIVERER_PORT` is `0`.",
+    "events": [
+     "The service starts and `runtime_settings` loads the environment."
+    ],
+    "outcomes": [
+     "The value is accepted because it is an integer, and the server is asked to bind port 0.",
+     "The value is rejected as an invalid configured listening port and the service does not start."
+    ],
+    "observer": "The operator and the process supervisor."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "load_runtime_settings failure contract",
+   "kind": "undefined_failure_contract",
+   "text": "load_runtime_settings",
+   "question": "How does `load_runtime_settings` report a missing or invalid setting, what structured information does it expose, and how does `deliverer_api` turn that into a start refusal?",
+   "options": [
+    "Raise a dedicated configuration exception",
+    "Return a result containing either `RuntimeSettings` or a startup error",
+    "Raise a generic value or validation error"
+   ],
+   "default_guess": "Raise a dedicated configuration exception that identifies the setting without exposing sensitive values.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_STATE_DIR` is absent.",
+    "events": [
+     "`deliverer_api` calls `load_runtime_settings` while the service starts."
+    ],
+    "outcomes": [
+     "The loader raises a dedicated startup-configuration exception that the service runner reports.",
+     "The loader returns or raises an ordinary delivery refusal/error even though no operation exists yet."
+    ],
+    "observer": "The operator, process supervisor, and startup tests."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "existence and creation of configured paths",
+   "kind": "unclear_responsibility",
+   "text": "- checking that a path exists, which the modules that use it do;",
+   "question": "For each configured path, which consuming module checks existence, when does it check, may it create missing directories, and what startup or operation outcome follows when the path is absent?",
+   "options": [
+    "All configured paths must already exist and their consumer refuses when first used",
+    "Store modules may create missing state and binary directories, while input files must already exist",
+    "All paths are checked by `deliverer_api` during startup"
+   ],
+   "default_guess": "Require input files and configured roots to exist; allow `delivery_store` to create only documented per-project children beneath existing `state_dir` and `binary_root`.",
+   "witness": {
+    "initial": "The configured `state_dir` does not exist, while every other setting is valid.",
+    "events": [
+     "The service starts.",
+     "A placement attempts to acquire its project lock."
+    ],
+    "outcomes": [
+     "`delivery_store` creates the state directory and proceeds.",
+     "The service starts but the placement is refused with `state_unavailable` when the missing directory is first used."
+    ],
+    "observer": "The caller and the operator inspecting the filesystem."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "configured timezone dependency of photo_preparation",
+   "kind": "unclear_dependency_direction",
+   "text": "- choosing the photo moment and converting it to UTC without an offset;",
+   "question": "How does `photo_preparation` obtain the configured timezone without a declared dependency on `runtime_settings`, `RuntimeSettings`, or `Config`?",
+   "options": [
+    "`photo_delivery` reads it from `Config` and passes a primitive timezone value to `prepare_photo`",
+    "Add a direct `photo_preparation` dependency on `RuntimeSettings` or `Config`",
+    "Construct a configured photo-preparation capability at startup"
+   ],
+   "default_guess": "Have `photo_delivery` pass the validated timezone value explicitly to `prepare_photo`, keeping environment access inside `runtime_settings`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Config ownership\",\"kind\":\"missing_owner\",\"text\":\"| `deliverer_api` | `domain_models` | `Config`, `DelivererError`, `RuntimeSettings`, `RefusalCode` |\",\"question\":\"Which module owns `Config`, what fields does it have, and why is it distinct from `RuntimeSettings`?\",\"options\":[\"`domain_models` owns a separate operation-context `Config` and must declare its fields\",\"Eliminate `Config` and use `RuntimeSettings` as the context\",\"Another module owns and constructs `Config`\"],\"default_guess\":\"Make `domain_models` own a separate `Config` containing the validated, converted values operations need.\"},{\"subject\":\"RuntimeSettings-to-operation context conversion\",\"kind\":\"undefined_mapping\",\"text\":\"- turning the run settings into the context of the operations when the service starts;\",\"question\":\"What context is constructed, which settings enter it, which capability constructs it, and what conversions occur between `RuntimeSettings` and that context?\",\"options\":[\"`load_config` converts `RuntimeSettings` into `Config`\",\"`RuntimeSettings` itself is passed as the operation context\",\"Each operation receives separate primitive arguments\"],\"default_guess\":\"Have `deliverer_api.load_config` construct a typed `Config` from `RuntimeSettings`, excluding server-only settings such as `port`.\",\"witness\":{\"initial\":\"All environment variables are valid, with filesystem values represented as strings.\",\"events\":[\"`deliverer_api` calls `load_runtime_settings` during startup.\",\"A caller requests a placement.\",\"`photo_delivery` and `delivery_store` consume the startup context.\"],\"outcomes\":[\"The API converts the strings into a `Config` with filesystem path values and passes that context to the operation.\",\"The API passes `RuntimeSettings` unchanged, leaving each operation to interpret its strings.\"],\"observer\":\"The implementers of `deliverer_api`, `photo_delivery`, and `delivery_store`, and an operator using relative path values.\"}},{\"subject\":\"filesystem setting interpretation\",\"kind\":\"undefined_path_semantics\",\"text\":\"| `binary_root` | `str` | `PORTAL_DELIVERER_BINARY_ROOT` | required, per installation |\",\"question\":\"Must filesystem settings be absolute, and if relative values are allowed, relative to what are they resolved and by which module?\",\"options\":[\"Require absolute paths\",\"Resolve relative paths against the process working directory\",\"Resolve relative paths against a declared installation root\"],\"default_guess\":\"Require absolute filesystem paths and convert them to path objects while constructing the operation context.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_BINARY_ROOT` is set to `portal-binaries`, and the service is started with a working directory different from the installation directory.\",\"events\":[\"The service loads the environment setting.\",\"A photo is delivered and its stored image is written.\"],\"outcomes\":[\"The image is written below the process working directory.\",\"Startup or delivery refuses the relative setting instead of writing there.\"],\"observer\":\"The operator and the Portal process looking for the stored image.\"}},{\"subject\":\"RuntimeSettings validation\",\"kind\":\"undefined_validity\",\"text\":\"- the default of each optional setting and the refusal of a missing or invalid one.\",\"question\":\"What exactly makes each setting invalid, including empty path strings, time-zone names, integer syntax, whitespace, and the permitted range of `port`?\",\"options\":[\"Validate only the declared primitive type and required presence\",\"Also require non-empty paths, a recognised IANA time zone, and a port from 1 through 65535\",\"Let downstream consumers decide validity\"],\"default_guess\":\"Require non-empty path strings, a recognised IANA time-zone name, and a base-10 port in the range 1 through 65535.\",\"witness\":{\"initial\":\"All required settings are present and `PORTAL_DELIVERER_PORT` is `0`.\",\"events\":[\"The service starts and `runtime_settings` loads the environment.\"],\"outcomes\":[\"The value is accepted because it is an integer, and the server is asked to bind port 0.\",\"The value is rejected as an invalid configured listening port and the service does not start.\"],\"observer\":\"The operator and the process supervisor.\"}},{\"subject\":\"load_runtime_settings failure contract\",\"kind\":\"undefined_failure_contract\",\"text\":\"load_runtime_settings\",\"question\":\"How does `load_runtime_settings` report a missing or invalid setting, what structured information does it expose, and how does `deliverer_api` turn that into a start refusal?\",\"options\":[\"Raise a dedicated configuration exception\",\"Return a result containing either `RuntimeSettings` or a startup error\",\"Raise a generic value or validation error\"],\"default_guess\":\"Raise a dedicated configuration exception that identifies the setting without exposing sensitive values.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_STATE_DIR` is absent.\",\"events\":[\"`deliverer_api` calls `load_runtime_settings` while the service starts.\"],\"outcomes\":[\"The loader raises a dedicated startup-configuration exception that the service runner reports.\",\"The loader returns or raises an ordinary delivery refusal/error even though no operation exists yet.\"],\"observer\":\"The operator, process supervisor, and startup tests.\"}},{\"subject\":\"existence and creation of configured paths\",\"kind\":\"unclear_responsibility\",\"text\":\"- checking that a path exists, which the modules that use it do;\",\"question\":\"For each configured path, which consuming module checks existence, when does it check, may it create missing directories, and what startup or operation outcome follows when the path is absent?\",\"options\":[\"All configured paths must already exist and their consumer refuses when first used\",\"Store modules may create missing state and binary directories, while input files must already exist\",\"All paths are checked by `deliverer_api` during startup\"],\"default_guess\":\"Require input files and configured roots to exist; allow `delivery_store` to create only documented per-project children beneath existing `state_dir` and `binary_root`.\",\"witness\":{\"initial\":\"The configured `state_dir` does not exist, while every other setting is valid.\",\"events\":[\"The service starts.\",\"A placement attempts to acquire its project lock.\"],\"outcomes\":[\"`delivery_store` creates the state directory and proceeds.\",\"The service starts but the placement is refused with `state_unavailable` when the missing directory is first used.\"],\"observer\":\"The caller and the operator inspecting the filesystem.\"}},{\"subject\":\"configured timezone dependency of photo_preparation\",\"kind\":\"unclear_dependency_direction\",\"text\":\"- choosing the photo moment and converting it to UTC without an offset;\",\"question\":\"How does `photo_preparation` obtain the configured timezone without a declared dependency on `runtime_settings`, `RuntimeSettings`, or `Config`?\",\"options\":[\"`photo_delivery` reads it from `Config` and passes a primitive timezone value to `prepare_photo`\",\"Add a direct `photo_preparation` dependency on `RuntimeSettings` or `Config`\",\"Construct a configured photo-preparation capability at startup\"],\"default_guess\":\"Have `photo_delivery` pass the validated timezone value explicitly to `prepare_photo`, keeping environment access inside `runtime_settings`.\"}]}",
+ "set_aside": []
+}

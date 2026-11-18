@@ -1,0 +1,183 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "empty_required_value",
+   "text": "A8: a required setting is present, an optional one takes its decided default, and the port is a positive integer.",
+   "question": "Does an environment variable that exists with an empty string count as a present required setting, especially for binary_root and state_dir?",
+   "options": [
+    "Treat an empty value as missing and end the start",
+    "Accept an empty string and pass it through",
+    "Reject empty values only for selected settings"
+   ],
+   "default_guess": "Treat every empty required value as missing.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_BINARY_ROOT is set to an empty string and the other settings are valid.",
+    "events": [
+     "The deployment starts the service.",
+     "module:runtime_settings reads the environment."
+    ],
+    "outcomes": [
+     "The start ends because the required setting has no usable value.",
+     "RuntimeSettings is returned with an empty binary_root, which may later address the process working directory."
+    ],
+    "observer": "The deployment and the filesystem operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "integer_parse_form",
+   "text": "A8: a required setting is present, an optional one takes its decided default, and the port is a positive integer.",
+   "question": "Which textual forms of PORTAL_DELIVERER_PORT are accepted as an integer?",
+   "options": [
+    "Accept only ASCII decimal digits denoting a value greater than zero",
+    "Use the host language's integer parser, accepting surrounding whitespace or a leading plus sign",
+    "Define another explicit grammar"
+   ],
+   "default_guess": "Accept only ASCII decimal digits with a value greater than zero.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_PORT is ` 8850 ` and every other setting is valid.",
+    "events": [
+     "The deployment starts the service.",
+     "module:runtime_settings parses the port."
+    ],
+    "outcomes": [
+     "The whitespace is accepted and the service proceeds to start.",
+     "The port is invalid and the start ends."
+    ],
+    "observer": "The deployment"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "contradictory_validation_owner",
+   "text": "- the default of each optional setting and the refusal of a missing or invalid one.",
+   "question": "Does runtime_settings reject an unknown time zone, or does it return that setting for deliverer_api.load_config to reject?",
+   "options": [
+    "load_runtime_settings rejects an unknown time zone as an invalid setting",
+    "load_runtime_settings returns the string and load_config rejects an unknown time zone",
+    "Both operations validate it"
+   ],
+   "default_guess": "load_runtime_settings should reject it, because runtime_settings is assigned ownership of invalid run settings.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_TIMEZONE names no known time zone and every other setting is valid.",
+    "events": [
+     "module:deliverer_api calls public_op:runtime_settings.load_runtime_settings.",
+     "If it returns, module:deliverer_api calls public_op:deliverer_api.load_config."
+    ],
+    "outcomes": [
+     "load_runtime_settings ends the start as the owner of invalid-setting refusal.",
+     "load_runtime_settings succeeds and load_config ends the start with `An unknown time zone ... ends the start.`"
+    ],
+    "observer": "module:deliverer_api and tests of the two public operations"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.load_config",
+   "kind": "path_interpretation",
+   "text": "The context of the operations: time zone, binary store, state folder and connections file.",
+   "question": "How are the string path settings converted into the binary store, state folder and connections file in the operation context—must they be absolute, are relative paths resolved against the process working directory, and are they normalised or preserved?",
+   "options": [
+    "Require absolute paths and reject relative paths",
+    "Resolve relative paths against the process working directory",
+    "Preserve the strings and let each consuming module interpret them"
+   ],
+   "default_guess": "Require absolute paths and convert them to path values without checking that the binary or state directory exists.",
+   "witness": {
+    "initial": "binary_root is `data`, the process working directory is `/srv/deliverer`, and the connections file is otherwise valid.",
+    "events": [
+     "The deployment starts the service.",
+     "load_config constructs the operation context.",
+     "A photo is delivered."
+    ],
+    "outcomes": [
+     "The start is refused because `data` is not absolute.",
+     "The image is stored below `/srv/deliverer/data`.",
+     "A consumer interprets `data` under a different working directory or path convention."
+    ],
+    "observer": "The deployment and the Portal binary-store reader"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.load_config",
+   "kind": "vague_enforcement",
+   "text": "A8 and condition 1 of A5 rule 7: the service does not start with an invalid connections file.",
+   "question": "Which parts of A8 must load_config enforce after load_runtime_settings has already produced the run settings?",
+   "options": [
+    "Only validate and materialise the time zone, plus validate the connections file",
+    "Revalidate every run-setting requirement and default from A8",
+    "Validate path forms as well as the time zone and connections file"
+   ],
+   "default_guess": "Validate and materialise the time zone and validate the connections file; rely on load_runtime_settings for presence, defaults and port parsing.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.create_app",
+   "kind": "contradictory_operation_context",
+   "text": "The context of the operations, the token and the clock function.",
+   "question": "How can create_app call scan_project_photos, whose unchanged contract still requires the run settings, when create_app now receives only the operation context?",
+   "options": [
+    "Change scan_project_photos to accept the operation context",
+    "Pass the complete run settings to create_app instead",
+    "Define the operation context to be the complete RuntimeSettings despite load_config's four-field output"
+   ],
+   "default_guess": "Change scan_project_photos to accept the same operation context as delivery and mark.",
+   "witness": {
+    "initial": "The service has loaded RuntimeSettings and load_config has returned the four-field operation context.",
+    "events": [
+     "run_service passes the operation context to create_app.",
+     "A caller invokes the scan route.",
+     "create_app calls photo_delivery.scan_project_photos."
+    ],
+    "outcomes": [
+     "The scan receives the operation context, requiring its stated `The run settings` input to be changed.",
+     "The scan requires RuntimeSettings, so create_app must retain or receive data its stated input does not include."
+    ],
+    "observer": "module:deliverer_api, module:photo_delivery and the scan caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.run_service",
+   "kind": "unused_port_setting",
+   "text": "Calls `public_op:runtime_settings.load_runtime_settings`, `public_op:deliverer_api.load_config`, `public_op:deliverer_api.read_token` and `public_op:deliverer_api.create_app` in that order, then serves the surface on the loopback interface until it is stopped.",
+   "question": "Must run_service bind the server to the port returned by load_runtime_settings, and if so, which loaded value is passed to the server?",
+   "options": [
+    "Bind to RuntimeSettings.port",
+    "Always bind to the decided default 8850",
+    "Leave port selection to the web server's own configuration"
+   ],
+   "default_guess": "Bind to RuntimeSettings.port.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_PORT is 9999 and all other settings are valid.",
+    "events": [
+     "The deployment starts run_service.",
+     "load_runtime_settings returns port 9999.",
+     "run_service starts the web server."
+    ],
+    "outcomes": [
+     "The service listens on loopback port 9999.",
+     "The service listens on the web server default or on port 8850."
+    ],
+    "observer": "The deployment and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "standard_violation",
+   "text": "Exports types and constants only.",
+   "rule": "`internal` — модуль → список экспортируемых символов (функции, классы, константы)",
+   "section": "7",
+   "question": "Replace this indefinite domain_models public surface with the complete explicit list of exported symbols.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"empty_required_value\",\"text\":\"A8: a required setting is present, an optional one takes its decided default, and the port is a positive integer.\",\"question\":\"Does an environment variable that exists with an empty string count as a present required setting, especially for binary_root and state_dir?\",\"options\":[\"Treat an empty value as missing and end the start\",\"Accept an empty string and pass it through\",\"Reject empty values only for selected settings\"],\"default_guess\":\"Treat every empty required value as missing.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_BINARY_ROOT is set to an empty string and the other settings are valid.\",\"events\":[\"The deployment starts the service.\",\"module:runtime_settings reads the environment.\"],\"outcomes\":[\"The start ends because the required setting has no usable value.\",\"RuntimeSettings is returned with an empty binary_root, which may later address the process working directory.\"],\"observer\":\"The deployment and the filesystem operator\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"integer_parse_form\",\"text\":\"A8: a required setting is present, an optional one takes its decided default, and the port is a positive integer.\",\"question\":\"Which textual forms of PORTAL_DELIVERER_PORT are accepted as an integer?\",\"options\":[\"Accept only ASCII decimal digits denoting a value greater than zero\",\"Use the host language's integer parser, accepting surrounding whitespace or a leading plus sign\",\"Define another explicit grammar\"],\"default_guess\":\"Accept only ASCII decimal digits with a value greater than zero.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_PORT is ` 8850 ` and every other setting is valid.\",\"events\":[\"The deployment starts the service.\",\"module:runtime_settings parses the port.\"],\"outcomes\":[\"The whitespace is accepted and the service proceeds to start.\",\"The port is invalid and the start ends.\"],\"observer\":\"The deployment\"}},{\"subject\":\"context\",\"kind\":\"contradictory_validation_owner\",\"text\":\"- the default of each optional setting and the refusal of a missing or invalid one.\",\"question\":\"Does runtime_settings reject an unknown time zone, or does it return that setting for deliverer_api.load_config to reject?\",\"options\":[\"load_runtime_settings rejects an unknown time zone as an invalid setting\",\"load_runtime_settings returns the string and load_config rejects an unknown time zone\",\"Both operations validate it\"],\"default_guess\":\"load_runtime_settings should reject it, because runtime_settings is assigned ownership of invalid run settings.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_TIMEZONE names no known time zone and every other setting is valid.\",\"events\":[\"module:deliverer_api calls public_op:runtime_settings.load_runtime_settings.\",\"If it returns, module:deliverer_api calls public_op:deliverer_api.load_config.\"],\"outcomes\":[\"load_runtime_settings ends the start as the owner of invalid-setting refusal.\",\"load_runtime_settings succeeds and load_config ends the start with `An unknown time zone ... ends the start.`\"],\"observer\":\"module:deliverer_api and tests of the two public operations\"}},{\"subject\":\"public_op:deliverer_api.load_config\",\"kind\":\"path_interpretation\",\"text\":\"The context of the operations: time zone, binary store, state folder and connections file.\",\"question\":\"How are the string path settings converted into the binary store, state folder and connections file in the operation context—must they be absolute, are relative paths resolved against the process working directory, and are they normalised or preserved?\",\"options\":[\"Require absolute paths and reject relative paths\",\"Resolve relative paths against the process working directory\",\"Preserve the strings and let each consuming module interpret them\"],\"default_guess\":\"Require absolute paths and convert them to path values without checking that the binary or state directory exists.\",\"witness\":{\"initial\":\"binary_root is `data`, the process working directory is `/srv/deliverer`, and the connections file is otherwise valid.\",\"events\":[\"The deployment starts the service.\",\"load_config constructs the operation context.\",\"A photo is delivered.\"],\"outcomes\":[\"The start is refused because `data` is not absolute.\",\"The image is stored below `/srv/deliverer/data`.\",\"A consumer interprets `data` under a different working directory or path convention.\"],\"observer\":\"The deployment and the Portal binary-store reader\"}},{\"subject\":\"public_op:deliverer_api.load_config\",\"kind\":\"vague_enforcement\",\"text\":\"A8 and condition 1 of A5 rule 7: the service does not start with an invalid connections file.\",\"question\":\"Which parts of A8 must load_config enforce after load_runtime_settings has already produced the run settings?\",\"options\":[\"Only validate and materialise the time zone, plus validate the connections file\",\"Revalidate every run-setting requirement and default from A8\",\"Validate path forms as well as the time zone and connections file\"],\"default_guess\":\"Validate and materialise the time zone and validate the connections file; rely on load_runtime_settings for presence, defaults and port parsing.\"},{\"subject\":\"public_op:deliverer_api.create_app\",\"kind\":\"contradictory_operation_context\",\"text\":\"The context of the operations, the token and the clock function.\",\"question\":\"How can create_app call scan_project_photos, whose unchanged contract still requires the run settings, when create_app now receives only the operation context?\",\"options\":[\"Change scan_project_photos to accept the operation context\",\"Pass the complete run settings to create_app instead\",\"Define the operation context to be the complete RuntimeSettings despite load_config's four-field output\"],\"default_guess\":\"Change scan_project_photos to accept the same operation context as delivery and mark.\",\"witness\":{\"initial\":\"The service has loaded RuntimeSettings and load_config has returned the four-field operation context.\",\"events\":[\"run_service passes the operation context to create_app.\",\"A caller invokes the scan route.\",\"create_app calls photo_delivery.scan_project_photos.\"],\"outcomes\":[\"The scan receives the operation context, requiring its stated `The run settings` input to be changed.\",\"The scan requires RuntimeSettings, so create_app must retain or receive data its stated input does not include.\"],\"observer\":\"module:deliverer_api, module:photo_delivery and the scan caller\"}},{\"subject\":\"public_op:deliverer_api.run_service\",\"kind\":\"unused_port_setting\",\"text\":\"Calls `public_op:runtime_settings.load_runtime_settings`, `public_op:deliverer_api.load_config`, `public_op:deliverer_api.read_token` and `public_op:deliverer_api.create_app` in that order, then serves the surface on the loopback interface until it is stopped.\",\"question\":\"Must run_service bind the server to the port returned by load_runtime_settings, and if so, which loaded value is passed to the server?\",\"options\":[\"Bind to RuntimeSettings.port\",\"Always bind to the decided default 8850\",\"Leave port selection to the web server's own configuration\"],\"default_guess\":\"Bind to RuntimeSettings.port.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_PORT is 9999 and all other settings are valid.\",\"events\":[\"The deployment starts run_service.\",\"load_runtime_settings returns port 9999.\",\"run_service starts the web server.\"],\"outcomes\":[\"The service listens on loopback port 9999.\",\"The service listens on the web server default or on port 8850.\"],\"observer\":\"The deployment and the calling flow\"}},{\"subject\":\"context\",\"kind\":\"standard_violation\",\"text\":\"Exports types and constants only.\",\"rule\":\"`internal` — модуль → список экспортируемых символов (функции, классы, константы)\",\"section\":\"7\",\"question\":\"Replace this indefinite domain_models public surface with the complete explicit list of exported symbols.\"}]}",
+ "set_aside": []
+}

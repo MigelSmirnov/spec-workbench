@@ -166,7 +166,7 @@ The exit status of the process.
 
 ### Observable effect
 
-Calls `public_op:runtime_settings.load_runtime_settings`, `public_op:deliverer_api.load_config`, `public_op:deliverer_api.read_token` and `public_op:deliverer_api.create_app` in that order, then serves the surface on the loopback interface until it is stopped.
+Calls `public_op:runtime_settings.load_runtime_settings`, `public_op:deliverer_api.load_config`, `public_op:deliverer_api.read_token` and `public_op:deliverer_api.create_app` in that order, then serves the surface on the loopback interface and the `port` of the run settings until it is stopped.
 
 ### Enforces
 
@@ -634,7 +634,7 @@ Writes one mark record.
 
 ### Inputs
 
-The run settings and the project id.
+The context of the operations and the project id.
 
 ### Outputs
 
