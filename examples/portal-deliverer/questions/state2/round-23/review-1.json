@@ -1,0 +1,207 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 marked_at",
+   "kind": "missing_time_policy",
+   "text": "`marked_at: datetime`",
+   "question": "What authority supplies `marked_at`, what instant does it denote, what datetime representation is stored, and how many times may one mark operation read that authority?",
+   "options": [
+    "Read a system wall clock once when the mark is durably created and store a naive UTC datetime",
+    "Receive the instant from the caller",
+    "Use a clock port and store an offset-aware UTC datetime"
+   ],
+   "default_guess": "Read an injected wall clock once inside the project lock when creating the first mark, and store a naive UTC datetime; replay preserves that value.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The caller asks the deliverer to record a publication.",
+     "The operation lasts across two distinguishable clock instants."
+    ],
+    "outcomes": [
+     "The mark stores the instant read at the start of the operation.",
+     "The mark stores the instant read immediately before its record is written."
+    ],
+    "observer": "The caller or a later scan reading `marked_at`"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 taken_at and M05 photo_date",
+   "kind": "vague_time_source",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "Which camera metadata field is authoritative, how are multiple camera date fields ordered, and when is a camera value considered unavailable or invalid so that file modification time is used?",
+   "options": [
+    "Use EXIF DateTimeOriginal only and fall back for absence or parse failure",
+    "Use DateTimeOriginal, then DateTimeDigitized, then DateTime, before falling back",
+    "Treat any present but invalid camera date as a delivery failure"
+   ],
+   "default_guess": "Use EXIF DateTimeOriginal when it parses to a valid instant; otherwise use the file modification time.",
+   "witness": {
+    "initial": "A JPEG contains a valid DateTime field and a different valid DateTimeOriginal field.",
+    "events": [
+     "The caller delivers the JPEG."
+    ],
+    "outcomes": [
+     "The prepared photo uses DateTimeOriginal.",
+     "The prepared photo uses DateTime."
+    ],
+    "observer": "The Portal user seeing the photo date"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 taken_at and M05 photo_date",
+   "kind": "ambiguous_time_representation",
+   "text": "with the moment the photo was taken as UTC without an offset",
+   "question": "Does “UTC without an offset” require a timezone-naive UTC datetime, an offset-aware UTC datetime whose serialized form omits the offset, or some other exact representation?",
+   "options": [
+    "Timezone-naive datetime whose fields are UTC",
+    "Offset-aware UTC datetime",
+    "A specified UTC text representation without an offset suffix"
+   ],
+   "default_guess": "Use a timezone-naive datetime whose fields represent UTC.",
+   "witness": {
+    "initial": "A source date represents 2026-11-18T12:00:00Z.",
+    "events": [
+     "The deliverer prepares the photo and builds M05.",
+     "A serializer emits `photo_date`."
+    ],
+    "outcomes": [
+     "The value is a naive datetime serialized as `2026-11-18T12:00:00`.",
+     "The value is an aware UTC datetime serialized as `2026-11-18T12:00:00+00:00`."
+    ],
+    "observer": "The Portal receiving `photo_date`"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "file modification time fallback",
+   "kind": "missing_read_semantics",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time",
+   "question": "When EXIF time is unavailable, from which filesystem observation is the modification time taken, how many times is it read, and must it belong to the same opened file whose bytes are prepared?",
+   "options": [
+    "Read it once from the opened file descriptor used for the delivered bytes",
+    "Use the path metadata already checked before opening",
+    "Read the path again after image preparation"
+   ],
+   "default_guess": "Read modification time once from the opened file descriptor used to obtain the source bytes.",
+   "witness": {
+    "initial": "A source image has no usable camera date.",
+    "events": [
+     "The delivery reads path metadata.",
+     "Another actor replaces the path with a file having a different modification time.",
+     "The delivery opens or finishes reading the source bytes."
+    ],
+    "outcomes": [
+     "The prepared photo receives the original path observation's modification time.",
+     "The prepared photo receives the replacement or opened file's modification time."
+    ],
+    "observer": "The Portal user seeing the photo date"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 INV-06 recovery test",
+   "kind": "underspecified_required_test",
+   "text": "When no refusal of A6 rule 5 applies, a delivery repeated after a failed record write completes the placement (`test_a_delivery_repeated_after_a_failed_record_write_completes`).",
+   "question": "What exact pre-state proves that no A6 rule 5 refusal applies, which delivery status must the retry return, and which stored-image and placement-record assertions must the test make to show INV-06?",
+   "options": [
+    "Record absent; retry returns `placed`; exactly one valid record and one final stored image exist",
+    "Record may already be valid; retry returns `replayed`; durable files remain unchanged",
+    "Either status is allowed depending on the failure point, with both durable outcomes specified and tested"
+   ],
+   "default_guess": "Model a failure before the record becomes durable: the record is absent, the retry returns `placed`, and afterward exactly one valid placement record and its single final stored image exist.",
+   "witness": {
+    "initial": "The stored image was committed, but the first delivery reported failure while writing the placement record.",
+    "events": [
+     "The caller repeats the delivery with the same source.",
+     "The test observes only that the call “completes the placement”."
+    ],
+    "outcomes": [
+     "The implementation rewrites the image, creates the record and returns `placed`.",
+     "The implementation finds a valid record committed before the reported error and returns `replayed` without writing."
+    ],
+    "observer": "The caller and the test suite"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 5 record-write failure boundary",
+   "kind": "ambiguous_failure_commit",
+   "text": "After condition 5 a stored image may remain without a record: no caller has received its reference, and a repeated delivery of the same file writes it again and completes the placement, unless a refusal of A6 rule 5 applies.",
+   "question": "If writing the record reports an error after a complete valid record has already been renamed or synchronised, is the first call failed, and must the repeated call replay that record or create the placement again?",
+   "options": [
+    "Any reported write error makes the first call failed; a valid committed record is replayed on retry",
+    "A write is successful once the valid record is visible, even if a later synchronisation reports an error",
+    "The implementation must remove or disregard the record after any reported write error so retry creates it anew"
+   ],
+   "default_guess": "Return failure for the first call if durability was not confirmed, but preserve any valid visible record; the retry then follows A3 rule 2 and returns `replayed`.",
+   "witness": {
+    "initial": "No placement exists and the stored image has been written.",
+    "events": [
+     "The deliverer renames a complete placement record into place.",
+     "The following folder synchronisation reports an I/O error.",
+     "The caller repeats the delivery."
+    ],
+    "outcomes": [
+     "The existing valid record is accepted and the retry returns `replayed`.",
+     "The earlier error means the placement is treated as incomplete, so the retry writes again and returns `placed`."
+    ],
+    "observer": "The caller and an operator inspecting durable writes"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 5 applicability to A3 recovery",
+   "kind": "incomplete_refusal_conditions",
+   "text": "A placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record",
+   "question": "Does A6 rule 5 also refuse a record that has every field but contains a wrong field type, an invalid enumeration value, a malformed UUID or hash, or unexpected extra fields?",
+   "options": [
+    "Refuse every record that fails full model validation",
+    "Refuse only the defects explicitly listed and accept other field contents",
+    "Specify separate handling for wrong values and for extra fields"
+   ],
+   "default_guess": "Refuse any record that fails full model validation; allow extra fields only if the model's declared compatibility policy explicitly permits them.",
+   "witness": {
+    "initial": "A placement-record file is valid JSON and an object containing every required field, but `project_id` is not a UUID.",
+    "events": [
+     "The caller repeats a delivery after the earlier record-write problem.",
+     "The deliverer reads the record while deciding whether A6 rule 5 applies."
+    ],
+    "outcomes": [
+     "The operation returns M08 with STATE_UNAVAILABLE and changes nothing.",
+     "The record is treated as present because none of the listed structural defects applies, and processing continues or replays it."
+    ],
+    "observer": "The caller and the owner of the stored state"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-06 terminology",
+   "kind": "ambiguous_invariant_scope",
+   "text": "INV-06: at most one placement exists per project and source content, and a repeated placement writes nothing.",
+   "question": "Does “repeated placement” include a delivery repeated after the first delivery failed while writing its record, or only a delivery for which a placement already exists?",
+   "options": [
+    "Only a call made when a valid placement already exists",
+    "Any repeated delivery attempt for the same project and source content",
+    "Split successful replay and failed-write recovery into separately worded invariants"
+   ],
+   "default_guess": "It means only a call made when a valid placement already exists; failed-write recovery is not a repeated placement.",
+   "witness": {
+    "initial": "The first delivery wrote a stored image but failed before a placement record existed.",
+    "events": [
+     "The caller repeats the same delivery."
+    ],
+    "outcomes": [
+     "The retry may write because the failed call did not create a placement.",
+     "The retry must write nothing because it is a repeated attempt covered by INV-06."
+    ],
+    "observer": "The invariant test and an operator observing filesystem writes"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 marked_at\",\"kind\":\"missing_time_policy\",\"text\":\"`marked_at: datetime`\",\"question\":\"What authority supplies `marked_at`, what instant does it denote, what datetime representation is stored, and how many times may one mark operation read that authority?\",\"options\":[\"Read a system wall clock once when the mark is durably created and store a naive UTC datetime\",\"Receive the instant from the caller\",\"Use a clock port and store an offset-aware UTC datetime\"],\"default_guess\":\"Read an injected wall clock once inside the project lock when creating the first mark, and store a naive UTC datetime; replay preserves that value.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The caller asks the deliverer to record a publication.\",\"The operation lasts across two distinguishable clock instants.\"],\"outcomes\":[\"The mark stores the instant read at the start of the operation.\",\"The mark stores the instant read immediately before its record is written.\"],\"observer\":\"The caller or a later scan reading `marked_at`\"}},{\"subject\":\"M03 taken_at and M05 photo_date\",\"kind\":\"vague_time_source\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"Which camera metadata field is authoritative, how are multiple camera date fields ordered, and when is a camera value considered unavailable or invalid so that file modification time is used?\",\"options\":[\"Use EXIF DateTimeOriginal only and fall back for absence or parse failure\",\"Use DateTimeOriginal, then DateTimeDigitized, then DateTime, before falling back\",\"Treat any present but invalid camera date as a delivery failure\"],\"default_guess\":\"Use EXIF DateTimeOriginal when it parses to a valid instant; otherwise use the file modification time.\",\"witness\":{\"initial\":\"A JPEG contains a valid DateTime field and a different valid DateTimeOriginal field.\",\"events\":[\"The caller delivers the JPEG.\"],\"outcomes\":[\"The prepared photo uses DateTimeOriginal.\",\"The prepared photo uses DateTime.\"],\"observer\":\"The Portal user seeing the photo date\"}},{\"subject\":\"M03 taken_at and M05 photo_date\",\"kind\":\"ambiguous_time_representation\",\"text\":\"with the moment the photo was taken as UTC without an offset\",\"question\":\"Does “UTC without an offset” require a timezone-naive UTC datetime, an offset-aware UTC datetime whose serialized form omits the offset, or some other exact representation?\",\"options\":[\"Timezone-naive datetime whose fields are UTC\",\"Offset-aware UTC datetime\",\"A specified UTC text representation without an offset suffix\"],\"default_guess\":\"Use a timezone-naive datetime whose fields represent UTC.\",\"witness\":{\"initial\":\"A source date represents 2026-11-18T12:00:00Z.\",\"events\":[\"The deliverer prepares the photo and builds M05.\",\"A serializer emits `photo_date`.\"],\"outcomes\":[\"The value is a naive datetime serialized as `2026-11-18T12:00:00`.\",\"The value is an aware UTC datetime serialized as `2026-11-18T12:00:00+00:00`.\"],\"observer\":\"The Portal receiving `photo_date`\"}},{\"subject\":\"file modification time fallback\",\"kind\":\"missing_read_semantics\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time\",\"question\":\"When EXIF time is unavailable, from which filesystem observation is the modification time taken, how many times is it read, and must it belong to the same opened file whose bytes are prepared?\",\"options\":[\"Read it once from the opened file descriptor used for the delivered bytes\",\"Use the path metadata already checked before opening\",\"Read the path again after image preparation\"],\"default_guess\":\"Read modification time once from the opened file descriptor used to obtain the source bytes.\",\"witness\":{\"initial\":\"A source image has no usable camera date.\",\"events\":[\"The delivery reads path metadata.\",\"Another actor replaces the path with a file having a different modification time.\",\"The delivery opens or finishes reading the source bytes.\"],\"outcomes\":[\"The prepared photo receives the original path observation's modification time.\",\"The prepared photo receives the replacement or opened file's modification time.\"],\"observer\":\"The Portal user seeing the photo date\"}},{\"subject\":\"A3 INV-06 recovery test\",\"kind\":\"underspecified_required_test\",\"text\":\"When no refusal of A6 rule 5 applies, a delivery repeated after a failed record write completes the placement (`test_a_delivery_repeated_after_a_failed_record_write_completes`).\",\"question\":\"What exact pre-state proves that no A6 rule 5 refusal applies, which delivery status must the retry return, and which stored-image and placement-record assertions must the test make to show INV-06?\",\"options\":[\"Record absent; retry returns `placed`; exactly one valid record and one final stored image exist\",\"Record may already be valid; retry returns `replayed`; durable files remain unchanged\",\"Either status is allowed depending on the failure point, with both durable outcomes specified and tested\"],\"default_guess\":\"Model a failure before the record becomes durable: the record is absent, the retry returns `placed`, and afterward exactly one valid placement record and its single final stored image exist.\",\"witness\":{\"initial\":\"The stored image was committed, but the first delivery reported failure while writing the placement record.\",\"events\":[\"The caller repeats the delivery with the same source.\",\"The test observes only that the call “completes the placement”.\"],\"outcomes\":[\"The implementation rewrites the image, creates the record and returns `placed`.\",\"The implementation finds a valid record committed before the reported error and returns `replayed` without writing.\"],\"observer\":\"The caller and the test suite\"}},{\"subject\":\"A3 rule 5 record-write failure boundary\",\"kind\":\"ambiguous_failure_commit\",\"text\":\"After condition 5 a stored image may remain without a record: no caller has received its reference, and a repeated delivery of the same file writes it again and completes the placement, unless a refusal of A6 rule 5 applies.\",\"question\":\"If writing the record reports an error after a complete valid record has already been renamed or synchronised, is the first call failed, and must the repeated call replay that record or create the placement again?\",\"options\":[\"Any reported write error makes the first call failed; a valid committed record is replayed on retry\",\"A write is successful once the valid record is visible, even if a later synchronisation reports an error\",\"The implementation must remove or disregard the record after any reported write error so retry creates it anew\"],\"default_guess\":\"Return failure for the first call if durability was not confirmed, but preserve any valid visible record; the retry then follows A3 rule 2 and returns `replayed`.\",\"witness\":{\"initial\":\"No placement exists and the stored image has been written.\",\"events\":[\"The deliverer renames a complete placement record into place.\",\"The following folder synchronisation reports an I/O error.\",\"The caller repeats the delivery.\"],\"outcomes\":[\"The existing valid record is accepted and the retry returns `replayed`.\",\"The earlier error means the placement is treated as incomplete, so the retry writes again and returns `placed`.\"],\"observer\":\"The caller and an operator inspecting durable writes\"}},{\"subject\":\"A6 rule 5 applicability to A3 recovery\",\"kind\":\"incomplete_refusal_conditions\",\"text\":\"A placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record\",\"question\":\"Does A6 rule 5 also refuse a record that has every field but contains a wrong field type, an invalid enumeration value, a malformed UUID or hash, or unexpected extra fields?\",\"options\":[\"Refuse every record that fails full model validation\",\"Refuse only the defects explicitly listed and accept other field contents\",\"Specify separate handling for wrong values and for extra fields\"],\"default_guess\":\"Refuse any record that fails full model validation; allow extra fields only if the model's declared compatibility policy explicitly permits them.\",\"witness\":{\"initial\":\"A placement-record file is valid JSON and an object containing every required field, but `project_id` is not a UUID.\",\"events\":[\"The caller repeats a delivery after the earlier record-write problem.\",\"The deliverer reads the record while deciding whether A6 rule 5 applies.\"],\"outcomes\":[\"The operation returns M08 with STATE_UNAVAILABLE and changes nothing.\",\"The record is treated as present because none of the listed structural defects applies, and processing continues or replays it.\"],\"observer\":\"The caller and the owner of the stored state\"}},{\"subject\":\"INV-06 terminology\",\"kind\":\"ambiguous_invariant_scope\",\"text\":\"INV-06: at most one placement exists per project and source content, and a repeated placement writes nothing.\",\"question\":\"Does “repeated placement” include a delivery repeated after the first delivery failed while writing its record, or only a delivery for which a placement already exists?\",\"options\":[\"Only a call made when a valid placement already exists\",\"Any repeated delivery attempt for the same project and source content\",\"Split successful replay and failed-write recovery into separately worded invariants\"],\"default_guess\":\"It means only a call made when a valid placement already exists; failed-write recovery is not a repeated placement.\",\"witness\":{\"initial\":\"The first delivery wrote a stored image but failed before a placement record existed.\",\"events\":[\"The caller repeats the same delivery.\"],\"outcomes\":[\"The retry may write because the failed call did not create a placement.\",\"The retry must write nothing because it is a repeated attempt covered by INV-06.\"],\"observer\":\"The invariant test and an operator observing filesystem writes\"}}]}",
+ "set_aside": []
+}

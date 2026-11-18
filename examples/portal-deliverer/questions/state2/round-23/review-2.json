@@ -1,0 +1,244 @@
+{
+ "open_points": [
+  {
+   "subject": "M03 PreparedPhoto.taken_at",
+   "kind": "time_source_undefined",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "Which exact camera metadata field or ordered set of fields supplies taken_at, and how is a camera value without an offset converted to UTC?",
+   "options": [
+    "Use one specified EXIF datetime field and a specified timezone rule",
+    "Use an ordered fallback among EXIF datetime fields",
+    "Treat an offset-less camera value as already UTC",
+    "Fall back to file modification time when the camera value has no usable offset"
+   ],
+   "default_guess": "Use DateTimeOriginal first, apply an accompanying EXIF offset when present, and otherwise fall back to the file modification time.",
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto.taken_at",
+   "kind": "time_read_count",
+   "text": "The named file is read once, and the bytes that were read are the bytes judged, hashed and prepared.",
+   "question": "How many times may the operation read the camera timestamp or file modification time, and must that metadata belong to the same opened-file snapshot as the bytes?",
+   "options": [
+    "Read all date metadata exactly once from the opened file used for the bytes",
+    "Read metadata separately before opening the file",
+    "Read metadata again after decoding and use the later value"
+   ],
+   "default_guess": "Read the date metadata exactly once from the same opened file used to obtain and prepare the bytes.",
+   "witness": {
+    "initial": "A regular source file exists and another process can replace or modify it during delivery.",
+    "events": [
+     "The caller requests delivery with the current source_id.",
+     "The deliverer reads file metadata.",
+     "Syncthing replaces or modifies the file.",
+     "The deliverer opens and reads the file bytes."
+    ],
+    "outcomes": [
+     "taken_at is derived from the metadata read before replacement while content comes from the later bytes.",
+     "taken_at is derived from metadata associated with the opened file whose bytes were delivered."
+    ],
+    "observer": "The caller and Portal observe a different photo_date for the same stored image."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M05 PhotoPublication.photo_date",
+   "kind": "missing_mapping",
+   "text": "The deliverer owns the values it supplies.",
+   "question": "Must photo_date equal M03 taken_at exactly, or may publication construction derive or convert another value?",
+   "options": [
+    "Copy PreparedPhoto.taken_at exactly",
+    "Recompute the date from the source file",
+    "Convert PreparedPhoto.taken_at to another datetime representation"
+   ],
+   "default_guess": "Copy PreparedPhoto.taken_at exactly.",
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "time_source_undefined",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "What clock supplies marked_at, what datetime representation is stored, and how many readings does one mark operation take?",
+   "options": [
+    "One reading from an injected UTC system clock, stored as an aware UTC datetime",
+    "One reading from an injected UTC system clock, stored as naive UTC",
+    "Database or filesystem time",
+    "A fresh clock reading at each use within the operation"
+   ],
+   "default_guess": "Take one reading from an injected system clock and store an aware UTC datetime.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 2 and A6 rule 5",
+   "kind": "contradictory_outcome",
+   "text": "Delivering content that already has a placement answers `replayed` with the stored placement and the current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even when the source file has left the folder.\n\nA placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record: the operation is refused with the STATE_UNAVAILABLE member of = models.RefusalCode, whose value is `state_unavailable`, and changes no record and no stored image.",
+   "question": "When a valid placement exists but its mark record is damaged, does delivery replay the placement or refuse the whole operation with STATE_UNAVAILABLE?",
+   "options": [
+    "A6 rule 5 takes precedence and delivery is refused",
+    "A3 rule 2 takes precedence and delivery replays without a photo_id",
+    "Replay the placement but separately report the damaged mark"
+   ],
+   "default_guess": "A6 rule 5 takes precedence and the delivery is refused.",
+   "witness": {
+    "initial": "A valid placement record exists for a project and source_id, and the corresponding mark file exists but contains invalid JSON.",
+    "events": [
+     "The caller delivers the same source_id again."
+    ],
+    "outcomes": [
+     "A3 rule 2 returns replayed with the stored placement.",
+     "A6 rule 5 returns M08 with STATE_UNAVAILABLE."
+    ],
+    "observer": "The caller sees either a successful replay or a whole-operation refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 2 and A3 rule 5 recovery",
+   "kind": "contradictory_precedence",
+   "text": "After condition 5 a stored image may remain without a record: no caller has received its reference, and a repeated delivery of the same file writes it again and completes the placement, unless a refusal of A6 rule 5 applies.",
+   "question": "If a record-write call reports failure but nevertheless leaves a complete readable placement record, must the repeated delivery replay without writing under rule 2 or write the image again under rule 5?",
+   "options": [
+    "Existing-placement rule 2 takes precedence and the call replays",
+    "Recovery rule 5 takes precedence and rewrites the image",
+    "The original call is not considered a failed record write when a readable record became durable"
+   ],
+   "default_guess": "Inspect durable state under the project lock; if a valid placement record exists, replay without writing.",
+   "witness": {
+    "initial": "No placement exists, but the stored-image write can succeed and the placement-record rename can succeed before a later directory synchronisation reports failure.",
+    "events": [
+     "The caller delivers the photo.",
+     "The image and a complete placement record become visible.",
+     "A later record-write durability step fails and the call answers failed.",
+     "The caller repeats the delivery."
+    ],
+    "outcomes": [
+     "Rule 2 finds the existing record and returns replayed without writing.",
+     "Rule 5 treats this as repetition after a failed record write, writes the image again and completes the placement."
+    ],
+    "observer": "The caller sees a different status, and storage instrumentation sees either no write or another image write."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 INV-06 Required tests",
+   "kind": "test_obligation_vague",
+   "text": "When no refusal of A6 rule 5 applies, a delivery repeated after a failed record write completes the placement (`test_a_delivery_repeated_after_a_failed_record_write_completes`).",
+   "question": "What must this test assert: the returned status, whether the stored image is rewritten, the exact number and validity of records and images, and the state left by the first failed call?",
+   "options": [
+    "Assert placed, one valid placement record, one complete stored image, and the specified rewrite behavior",
+    "Assert only that some placement eventually exists",
+    "Permit replayed when the failed write left a valid record, with a separate recovery case for an absent record"
+   ],
+   "default_guess": "Define the failed-write fixture as leaving an image and no record, then assert a placed outcome, exactly one valid placement record, one complete image at the deterministic reference, and the required image rewrite.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 INV-06",
+   "kind": "invariant_scope_ambiguity",
+   "text": "INV-06: at most one placement exists per project and source content, and a repeated placement writes nothing.",
+   "question": "Does “a repeated placement writes nothing” include a delivery repeated after condition 5 failed, or only a repetition after a placement record was successfully created?",
+   "options": [
+    "Only calls made after a valid placement exists are repeated placements",
+    "Every repeated delivery attempt is a repeated placement",
+    "Recovery is an explicit exception to the invariant"
+   ],
+   "default_guess": "Use “repeated placement” only when a valid placement already exists; call the other case a repeated delivery attempt.",
+   "witness": {
+    "initial": "The first delivery writes the image but fails before creating a placement record.",
+    "events": [
+     "The caller repeats the same delivery while no A6 refusal applies."
+    ],
+    "outcomes": [
+     "The invariant forbids writes because the delivery is repeated.",
+     "A3 rule 5 requires another write because no placement yet exists."
+    ],
+    "observer": "Storage instrumentation sees whether the second call writes durable state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 status table",
+   "kind": "standard_violation",
+   "text": "| 1 | empty | `rejected` | `empty` |\n| 2 | larger than the source limit | `rejected` | `too_large` |\n| 3 | opened in non-blocking mode without following a link, what it finds is not a regular file | `rejected` | `not_a_regular_file` |\n| 4 | it grew past the source limit while being read | `rejected` | `too_large` |\n| 5 | opening or reading it fails, which includes a file that disappeared and a path that became a symbolic link after the listing | `rejected` | `unreadable_file` |\n| 6 | does not begin with a JPEG, PNG or WEBP signature | `rejected` | `unsupported_format` |\n| 7 | placed and marked | `published` | none |\n| 8 | placed | `placed` | none |\n| 9 | anything else | `ready` | none |",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Replace each bare status and reason value with its member name beside the address of = models.ScanStatus or = models.ObservationReason.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 folder refusal",
+   "kind": "standard_violation",
+   "text": "When a subfolder that is not ignored\ncannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is\nnever reported as complete.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the FOLDER_UNAVAILABLE member of = models.RefusalCode instead of naming only its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 ready status",
+   "kind": "standard_violation",
+   "text": "A signature does not prove that an image can be decoded: a `ready`\nfile may still fail when it is delivered.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the READY member of = models.ScanStatus instead of naming only its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 2",
+   "kind": "standard_violation",
+   "text": "Delivering content that already has a placement answers `replayed` with the stored placement and the\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\n   when the source file has left the folder.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the REPLAYED member of = models.PlacementStatus instead of naming only its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 4",
+   "kind": "standard_violation",
+   "text": "A\n   `source_id` that is not 64 lowercase hexadecimal characters is refused with `invalid_source_id`.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the INVALID_SOURCE_ID member of = models.RefusalCode instead of naming only its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 5",
+   "kind": "standard_violation",
+   "text": "A photo that cannot be delivered is answered with status `failed` and one member of\n   `= models.PlacementFailure`.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the FAILED member of = models.PlacementStatus instead of naming only its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 failure table",
+   "kind": "standard_violation",
+   "text": "| 1 | `name` is not non-empty segments joined by single `/` characters, or a segment is `.` or `..`, or a segment is ignored under A1, or a folder on its path is absent or a symbolic link, or the last segment is absent or is not a regular file, or the metadata of a segment cannot be read. Names are compared exactly, without Unicode normalisation | `NOT_READY_OR_ABSENT` |\n   | 2 | A1 orders 1 to 6 reject the file | `EMPTY` for order 1, `TOO_LARGE` for orders 2 and 4, `NOT_A_REGULAR_FILE` for order 3, `UNREADABLE_FILE` for order 5, `UNSUPPORTED_FORMAT` for order 6 |\n   | 3 | the hash of the bytes differs from `source_id` | `SOURCE_CHANGED` |\n   | 4 | A2 rule 2 fails | `TOO_MANY_PIXELS`, `UNREADABLE_IMAGE` or `TOO_LARGE`, as that rule decides |\n   | 5 | writing the stored image or the record fails | `UNREADABLE_FILE` |",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Place = models.PlacementFailure beside these member names so the enumeration that owns them is explicit.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 INV-07 Required tests",
+   "kind": "standard_violation",
+   "text": "INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the READY member of = models.ScanStatus instead of naming only its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 INV-12 Required tests",
+   "kind": "standard_violation",
+   "text": "INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Replace the bare values with the PLACED and REPLAYED members of = models.PlacementStatus, the MARKED and REPLAYED members of = models.MarkStatus, and the PUBLICATION_CONFLICT member of = models.RefusalCode.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M03 PreparedPhoto.taken_at\",\"kind\":\"time_source_undefined\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"Which exact camera metadata field or ordered set of fields supplies taken_at, and how is a camera value without an offset converted to UTC?\",\"options\":[\"Use one specified EXIF datetime field and a specified timezone rule\",\"Use an ordered fallback among EXIF datetime fields\",\"Treat an offset-less camera value as already UTC\",\"Fall back to file modification time when the camera value has no usable offset\"],\"default_guess\":\"Use DateTimeOriginal first, apply an accompanying EXIF offset when present, and otherwise fall back to the file modification time.\"},{\"subject\":\"M03 PreparedPhoto.taken_at\",\"kind\":\"time_read_count\",\"text\":\"The named file is read once, and the bytes that were read are the bytes judged, hashed and prepared.\",\"question\":\"How many times may the operation read the camera timestamp or file modification time, and must that metadata belong to the same opened-file snapshot as the bytes?\",\"options\":[\"Read all date metadata exactly once from the opened file used for the bytes\",\"Read metadata separately before opening the file\",\"Read metadata again after decoding and use the later value\"],\"default_guess\":\"Read the date metadata exactly once from the same opened file used to obtain and prepare the bytes.\",\"witness\":{\"initial\":\"A regular source file exists and another process can replace or modify it during delivery.\",\"events\":[\"The caller requests delivery with the current source_id.\",\"The deliverer reads file metadata.\",\"Syncthing replaces or modifies the file.\",\"The deliverer opens and reads the file bytes.\"],\"outcomes\":[\"taken_at is derived from the metadata read before replacement while content comes from the later bytes.\",\"taken_at is derived from metadata associated with the opened file whose bytes were delivered.\"],\"observer\":\"The caller and Portal observe a different photo_date for the same stored image.\"}},{\"subject\":\"M05 PhotoPublication.photo_date\",\"kind\":\"missing_mapping\",\"text\":\"The deliverer owns the values it supplies.\",\"question\":\"Must photo_date equal M03 taken_at exactly, or may publication construction derive or convert another value?\",\"options\":[\"Copy PreparedPhoto.taken_at exactly\",\"Recompute the date from the source file\",\"Convert PreparedPhoto.taken_at to another datetime representation\"],\"default_guess\":\"Copy PreparedPhoto.taken_at exactly.\"},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"time_source_undefined\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"What clock supplies marked_at, what datetime representation is stored, and how many readings does one mark operation take?\",\"options\":[\"One reading from an injected UTC system clock, stored as an aware UTC datetime\",\"One reading from an injected UTC system clock, stored as naive UTC\",\"Database or filesystem time\",\"A fresh clock reading at each use within the operation\"],\"default_guess\":\"Take one reading from an injected system clock and store an aware UTC datetime.\"},{\"subject\":\"A3 rule 2 and A6 rule 5\",\"kind\":\"contradictory_outcome\",\"text\":\"Delivering content that already has a placement answers `replayed` with the stored placement and the current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even when the source file has left the folder.\\n\\nA placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record: the operation is refused with the STATE_UNAVAILABLE member of = models.RefusalCode, whose value is `state_unavailable`, and changes no record and no stored image.\",\"question\":\"When a valid placement exists but its mark record is damaged, does delivery replay the placement or refuse the whole operation with STATE_UNAVAILABLE?\",\"options\":[\"A6 rule 5 takes precedence and delivery is refused\",\"A3 rule 2 takes precedence and delivery replays without a photo_id\",\"Replay the placement but separately report the damaged mark\"],\"default_guess\":\"A6 rule 5 takes precedence and the delivery is refused.\",\"witness\":{\"initial\":\"A valid placement record exists for a project and source_id, and the corresponding mark file exists but contains invalid JSON.\",\"events\":[\"The caller delivers the same source_id again.\"],\"outcomes\":[\"A3 rule 2 returns replayed with the stored placement.\",\"A6 rule 5 returns M08 with STATE_UNAVAILABLE.\"],\"observer\":\"The caller sees either a successful replay or a whole-operation refusal.\"}},{\"subject\":\"A3 rule 2 and A3 rule 5 recovery\",\"kind\":\"contradictory_precedence\",\"text\":\"After condition 5 a stored image may remain without a record: no caller has received its reference, and a repeated delivery of the same file writes it again and completes the placement, unless a refusal of A6 rule 5 applies.\",\"question\":\"If a record-write call reports failure but nevertheless leaves a complete readable placement record, must the repeated delivery replay without writing under rule 2 or write the image again under rule 5?\",\"options\":[\"Existing-placement rule 2 takes precedence and the call replays\",\"Recovery rule 5 takes precedence and rewrites the image\",\"The original call is not considered a failed record write when a readable record became durable\"],\"default_guess\":\"Inspect durable state under the project lock; if a valid placement record exists, replay without writing.\",\"witness\":{\"initial\":\"No placement exists, but the stored-image write can succeed and the placement-record rename can succeed before a later directory synchronisation reports failure.\",\"events\":[\"The caller delivers the photo.\",\"The image and a complete placement record become visible.\",\"A later record-write durability step fails and the call answers failed.\",\"The caller repeats the delivery.\"],\"outcomes\":[\"Rule 2 finds the existing record and returns replayed without writing.\",\"Rule 5 treats this as repetition after a failed record write, writes the image again and completes the placement.\"],\"observer\":\"The caller sees a different status, and storage instrumentation sees either no write or another image write.\"}},{\"subject\":\"A3 INV-06 Required tests\",\"kind\":\"test_obligation_vague\",\"text\":\"When no refusal of A6 rule 5 applies, a delivery repeated after a failed record write completes the placement (`test_a_delivery_repeated_after_a_failed_record_write_completes`).\",\"question\":\"What must this test assert: the returned status, whether the stored image is rewritten, the exact number and validity of records and images, and the state left by the first failed call?\",\"options\":[\"Assert placed, one valid placement record, one complete stored image, and the specified rewrite behavior\",\"Assert only that some placement eventually exists\",\"Permit replayed when the failed write left a valid record, with a separate recovery case for an absent record\"],\"default_guess\":\"Define the failed-write fixture as leaving an image and no record, then assert a placed outcome, exactly one valid placement record, one complete image at the deterministic reference, and the required image rewrite.\"},{\"subject\":\"A3 INV-06\",\"kind\":\"invariant_scope_ambiguity\",\"text\":\"INV-06: at most one placement exists per project and source content, and a repeated placement writes nothing.\",\"question\":\"Does “a repeated placement writes nothing” include a delivery repeated after condition 5 failed, or only a repetition after a placement record was successfully created?\",\"options\":[\"Only calls made after a valid placement exists are repeated placements\",\"Every repeated delivery attempt is a repeated placement\",\"Recovery is an explicit exception to the invariant\"],\"default_guess\":\"Use “repeated placement” only when a valid placement already exists; call the other case a repeated delivery attempt.\",\"witness\":{\"initial\":\"The first delivery writes the image but fails before creating a placement record.\",\"events\":[\"The caller repeats the same delivery while no A6 refusal applies.\"],\"outcomes\":[\"The invariant forbids writes because the delivery is repeated.\",\"A3 rule 5 requires another write because no placement yet exists.\"],\"observer\":\"Storage instrumentation sees whether the second call writes durable state.\"}},{\"subject\":\"A1 status table\",\"kind\":\"standard_violation\",\"text\":\"| 1 | empty | `rejected` | `empty` |\\n| 2 | larger than the source limit | `rejected` | `too_large` |\\n| 3 | opened in non-blocking mode without following a link, what it finds is not a regular file | `rejected` | `not_a_regular_file` |\\n| 4 | it grew past the source limit while being read | `rejected` | `too_large` |\\n| 5 | opening or reading it fails, which includes a file that disappeared and a path that became a symbolic link after the listing | `rejected` | `unreadable_file` |\\n| 6 | does not begin with a JPEG, PNG or WEBP signature | `rejected` | `unsupported_format` |\\n| 7 | placed and marked | `published` | none |\\n| 8 | placed | `placed` | none |\\n| 9 | anything else | `ready` | none |\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Replace each bare status and reason value with its member name beside the address of = models.ScanStatus or = models.ObservationReason.\"},{\"subject\":\"A1 folder refusal\",\"kind\":\"standard_violation\",\"text\":\"When a subfolder that is not ignored\\ncannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is\\nnever reported as complete.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the FOLDER_UNAVAILABLE member of = models.RefusalCode instead of naming only its value.\"},{\"subject\":\"A1 ready status\",\"kind\":\"standard_violation\",\"text\":\"A signature does not prove that an image can be decoded: a `ready`\\nfile may still fail when it is delivered.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the READY member of = models.ScanStatus instead of naming only its value.\"},{\"subject\":\"A3 rule 2\",\"kind\":\"standard_violation\",\"text\":\"Delivering content that already has a placement answers `replayed` with the stored placement and the\\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\\n   when the source file has left the folder.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the REPLAYED member of = models.PlacementStatus instead of naming only its value.\"},{\"subject\":\"A3 rule 4\",\"kind\":\"standard_violation\",\"text\":\"A\\n   `source_id` that is not 64 lowercase hexadecimal characters is refused with `invalid_source_id`.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the INVALID_SOURCE_ID member of = models.RefusalCode instead of naming only its value.\"},{\"subject\":\"A3 rule 5\",\"kind\":\"standard_violation\",\"text\":\"A photo that cannot be delivered is answered with status `failed` and one member of\\n   `= models.PlacementFailure`.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the FAILED member of = models.PlacementStatus instead of naming only its value.\"},{\"subject\":\"A3 failure table\",\"kind\":\"standard_violation\",\"text\":\"| 1 | `name` is not non-empty segments joined by single `/` characters, or a segment is `.` or `..`, or a segment is ignored under A1, or a folder on its path is absent or a symbolic link, or the last segment is absent or is not a regular file, or the metadata of a segment cannot be read. Names are compared exactly, without Unicode normalisation | `NOT_READY_OR_ABSENT` |\\n   | 2 | A1 orders 1 to 6 reject the file | `EMPTY` for order 1, `TOO_LARGE` for orders 2 and 4, `NOT_A_REGULAR_FILE` for order 3, `UNREADABLE_FILE` for order 5, `UNSUPPORTED_FORMAT` for order 6 |\\n   | 3 | the hash of the bytes differs from `source_id` | `SOURCE_CHANGED` |\\n   | 4 | A2 rule 2 fails | `TOO_MANY_PIXELS`, `UNREADABLE_IMAGE` or `TOO_LARGE`, as that rule decides |\\n   | 5 | writing the stored image or the record fails | `UNREADABLE_FILE` |\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Place = models.PlacementFailure beside these member names so the enumeration that owns them is explicit.\"},{\"subject\":\"A3 INV-07 Required tests\",\"kind\":\"standard_violation\",\"text\":\"INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the READY member of = models.ScanStatus instead of naming only its value.\"},{\"subject\":\"A6 INV-12 Required tests\",\"kind\":\"standard_violation\",\"text\":\"INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Replace the bare values with the PLACED and REPLAYED members of = models.PlacementStatus, the MARKED and REPLAYED members of = models.MarkStatus, and the PUBLICATION_CONFLICT member of = models.RefusalCode.\"}]}",
+ "set_aside": []
+}
