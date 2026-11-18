@@ -1,0 +1,217 @@
+{
+ "open_points": [
+  {
+   "subject": "A6",
+   "kind": "record_validity",
+   "text": "A placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record",
+   "question": "What happens when every field exists but a value has the wrong type, an invalid enumeration member, an invalid nested model, or an otherwise invalid value, and are unknown extra fields allowed?",
+   "options": [
+    "Refuse with state_unavailable for every model-validation failure and allow unknown fields",
+    "Refuse with state_unavailable for every model-validation failure including unknown fields",
+    "Apply the rule only to unreadable JSON, non-objects and missing fields; accept other values until their use fails"
+   ],
+   "default_guess": "Treat every schema-validation failure, including invalid nested values, as state_unavailable, while allowing unknown fields for forward compatibility.",
+   "witness": {
+    "initial": "A placement file exists as a JSON object with all M04 field names, but publication.photo_date has an invalid value.",
+    "events": [
+     "The calling flow asks to deliver the same source again."
+    ],
+    "outcomes": [
+     "The service treats the record as damaged and refuses with state_unavailable without writing.",
+     "The service accepts the object because no field is missing, then either replays it or fails later while decoding photo_date."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "absence_detection",
+   "text": "A record is absent only when its file does not exist.",
+   "question": "What result is required when the implementation cannot determine whether the file exists, for example because its parent directory cannot be searched or a metadata operation fails?",
+   "options": [
+    "Refuse with state_unavailable",
+    "Treat only an explicit not-found result as absence and propagate other I/O errors by an unspecified mechanism",
+    "Treat the record as absent"
+   ],
+   "default_guess": "Only an explicit not-found result means absent; every failure to determine existence produces state_unavailable.",
+   "witness": {
+    "initial": "The placement-record directory exists but cannot be searched, so the placement path cannot be statted or opened.",
+    "events": [
+     "The calling flow requests delivery for the source."
+    ],
+    "outcomes": [
+     "The operation refuses with state_unavailable and writes nothing.",
+     "The failed lookup is treated as absence and a new placement is attempted."
+    ],
+    "observer": "The calling flow and the filesystem owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "lock_failure_boundary",
+   "text": "The same refusal answers a failure to open or lock the lock file, which waiting for another holder is not",
+   "question": "Which lock-acquisition results count as a failure rather than continued waiting, especially interruption, cancellation, process shutdown, unsupported locking and transient operating-system errors?",
+   "options": [
+    "Retry interruptions and transient errors indefinitely; state_unavailable only for terminal open or lock errors",
+    "Return state_unavailable for every lock call error, including interruption",
+    "Allow cancellation or shutdown to end the request with a result distinct from state_unavailable"
+   ],
+   "default_guess": "Retry an interrupted wait, keep waiting while another holder owns the lock, and return state_unavailable for terminal open or locking errors; process cancellation may abort outside the service result contract.",
+   "witness": {
+    "initial": "Another process holds the project lock.",
+    "events": [
+     "The calling flow starts a mark operation and waits.",
+     "A signal interrupts the operating-system lock call while the other process still holds the lock."
+    ],
+    "outcomes": [
+     "The service retries and continues waiting without a time limit.",
+     "The service classifies the interruption as failure and returns state_unavailable."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "atomic_write_contradiction",
+   "text": "Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. A record is absent only when its file does not exist. A placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record: the operation is refused with `state_unavailable` and changes nothing. The same refusal answers a failure to open or lock the lock file, which waiting for another holder is not, and a mark that cannot be written.",
+   "question": "If writing a mark fails after the rename has made the complete mark visible but before the folder synchronization succeeds, must the operation return marked, return state_unavailable while leaving the mark, or remove the mark so that state_unavailable truly changes nothing?",
+   "options": [
+    "The rename commits the mark; return marked even if folder synchronization fails",
+    "Return state_unavailable and leave the visible mark, interpreting changes nothing as no further changes",
+    "Attempt to remove the mark and return state_unavailable",
+    "Define a recoverable indeterminate outcome distinct from both marked and state_unavailable"
+   ],
+   "default_guess": "Treat failure before rename as state_unavailable with no committed mark, but after rename regard the mark as committed and return marked; otherwise the required atomicity and changes-nothing guarantee cannot both be reliable.",
+   "witness": {
+    "initial": "A placement exists and no publication mark exists.",
+    "events": [
+     "The calling flow records a publication.",
+     "The service writes and synchronizes the temporary mark, renames it to the final path, and the directory synchronization then fails."
+    ],
+    "outcomes": [
+     "The operation returns marked because the final mark now exists.",
+     "The operation returns state_unavailable because the required write sequence did not finish, although the final mark is visible."
+    ],
+    "observer": "The calling flow immediately, and another process after reopening the state"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "damage_scope",
+   "text": "with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was",
+   "question": "Does one damaged record block every scan, delivery and mark operation for the project, or only an operation that must read that particular source's record?",
+   "options": [
+    "Any damaged record discovered in the project makes the whole project operation return state_unavailable",
+    "Only the operation for the damaged source returns state_unavailable; unrelated sources continue",
+    "Scan refuses for any discovered damaged record, while delivery and mark refuse only when their requested source is damaged"
+   ],
+   "default_guess": "Scan refuses if it encounters any damaged record; delivery and mark refuse only when the record needed for their requested source is damaged.",
+   "witness": {
+    "initial": "Project P has a damaged placement for source A and no placement for valid source B.",
+    "events": [
+     "The calling flow requests delivery of source B."
+    ],
+    "outcomes": [
+     "Delivery refuses with state_unavailable because project state contains a damaged record.",
+     "Delivery places source B because it never needs source A's record."
+    ],
+    "observer": "The calling flow and the Portal binary-store operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "invariant_test_gap",
+   "text": "INV-20: with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).",
+   "question": "What must the required tests assert to demonstrate the full invariant that a damaged record never leads to any new placement or mark, rather than merely showing that the damaged file itself stayed unchanged?",
+   "options": [
+    "Snapshot and compare all placement records, mark records and stored-image files before and after every operation",
+    "Assert only that the damaged record is byte-for-byte unchanged and no requested-source record is created",
+    "Assert returned state_unavailable only, relying on the implementation for absence of writes"
+   ],
+   "default_guess": "The tests should snapshot all placement records, marks and stored-image files for the project and show that none are added or changed by scan, delivery or mark.",
+   "witness": {
+    "initial": "A project contains a damaged mark for source A and no state for source B.",
+    "events": [
+     "A test invokes delivery while the damaged record exists.",
+     "The implementation returns state_unavailable but has already written a placement and image for source B."
+    ],
+    "outcomes": [
+     "The stated test passes if it checks only the refusal and that source A's damaged record stayed unchanged.",
+     "A test that asserts the invariant over all project state fails because a new placement was produced."
+    ],
+    "observer": "The test suite and, in production, the owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "refusal_precedence",
+   "text": "**Enumeration:** `RefusalCode` is `unknown_project`, `connection_not_confirmed`, `folder_unavailable`, `state_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed`, `publication_conflict`.",
+   "question": "When more than one refusal condition is true, in what order are checks performed and which RefusalCode wins, particularly between A6 state failures and project, connection, source or publication checks?",
+   "options": [
+    "Validate project and connection, then request identifiers and references, then acquire/read state, then apply operation-specific conflicts",
+    "Acquire the project lock and validate state before every other refusal check",
+    "Specify a different precedence separately for scan, delivery and mark"
+   ],
+   "default_guess": "Check unknown project and connection first, validate request identifiers and references next, then acquire and read state, and finally apply not_placed or publication_conflict.",
+   "witness": {
+    "initial": "The request names an unknown project and the state directory cannot open that project's lock file.",
+    "events": [
+     "The calling flow invokes delivery."
+    ],
+    "outcomes": [
+     "The operation returns unknown_project because project validation runs first.",
+     "The operation returns state_unavailable because lock acquisition runs first."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "contradictory_failure_classification",
+   "text": "A failure of one photo is M06, not a refusal. A placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record: the operation is refused with `state_unavailable` and changes nothing.",
+   "question": "For delivery of one selected photo whose placement or mark record is damaged, is the answer an M06 PlacementOutcome or an M08 Refusal?",
+   "options": [
+    "Return M08 with code state_unavailable because corrupt service state refuses the operation as a whole",
+    "Return M06 with status failed because the delivery concerns one photo",
+    "Define that 'failure of one photo' excludes state-storage failures and retain M08"
+   ],
+   "default_guess": "Define that per-photo content and readiness failures use M06, while inability to trust service state uses M08 state_unavailable even when the request names one photo.",
+   "witness": {
+    "initial": "The selected source has an existing placement record that is invalid JSON.",
+    "events": [
+     "The calling flow requests delivery of that one source."
+    ],
+    "outcomes": [
+     "A6 requires an M08 refusal with code state_unavailable.",
+     "M08's one-photo rule requires an M06 PlacementOutcome with status failed, although its failure enumeration has no state_unavailable member."
+    ],
+    "observer": "The calling flow and its response decoder"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "unspecified_fixed_value",
+   "text": "`code` says why, and `detail` is a fixed sentence for people that holds no server path and no credential.",
+   "question": "What exact detail sentence corresponds to each RefusalCode, is it one sentence per code or per operation-and-code pair, and through which models, imported policy constant or configuration field does generated code receive those fixed values?",
+   "options": [
+    "Define one imported constant mapping from every RefusalCode to one exact sentence",
+    "Define operation-specific imported mappings",
+    "Use one generic exact sentence for every refusal",
+    "Let each operation write its own sentence subject only to the no-path and no-credential restriction"
+   ],
+   "default_guess": "Define a supplier-owned imported constant mapping each RefusalCode to one exact, operation-independent sentence.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A6\",\"kind\":\"record_validity\",\"text\":\"A placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record\",\"question\":\"What happens when every field exists but a value has the wrong type, an invalid enumeration member, an invalid nested model, or an otherwise invalid value, and are unknown extra fields allowed?\",\"options\":[\"Refuse with state_unavailable for every model-validation failure and allow unknown fields\",\"Refuse with state_unavailable for every model-validation failure including unknown fields\",\"Apply the rule only to unreadable JSON, non-objects and missing fields; accept other values until their use fails\"],\"default_guess\":\"Treat every schema-validation failure, including invalid nested values, as state_unavailable, while allowing unknown fields for forward compatibility.\",\"witness\":{\"initial\":\"A placement file exists as a JSON object with all M04 field names, but publication.photo_date has an invalid value.\",\"events\":[\"The calling flow asks to deliver the same source again.\"],\"outcomes\":[\"The service treats the record as damaged and refuses with state_unavailable without writing.\",\"The service accepts the object because no field is missing, then either replays it or fails later while decoding photo_date.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A6\",\"kind\":\"absence_detection\",\"text\":\"A record is absent only when its file does not exist.\",\"question\":\"What result is required when the implementation cannot determine whether the file exists, for example because its parent directory cannot be searched or a metadata operation fails?\",\"options\":[\"Refuse with state_unavailable\",\"Treat only an explicit not-found result as absence and propagate other I/O errors by an unspecified mechanism\",\"Treat the record as absent\"],\"default_guess\":\"Only an explicit not-found result means absent; every failure to determine existence produces state_unavailable.\",\"witness\":{\"initial\":\"The placement-record directory exists but cannot be searched, so the placement path cannot be statted or opened.\",\"events\":[\"The calling flow requests delivery for the source.\"],\"outcomes\":[\"The operation refuses with state_unavailable and writes nothing.\",\"The failed lookup is treated as absence and a new placement is attempted.\"],\"observer\":\"The calling flow and the filesystem owner\"}},{\"subject\":\"A6\",\"kind\":\"lock_failure_boundary\",\"text\":\"The same refusal answers a failure to open or lock the lock file, which waiting for another holder is not\",\"question\":\"Which lock-acquisition results count as a failure rather than continued waiting, especially interruption, cancellation, process shutdown, unsupported locking and transient operating-system errors?\",\"options\":[\"Retry interruptions and transient errors indefinitely; state_unavailable only for terminal open or lock errors\",\"Return state_unavailable for every lock call error, including interruption\",\"Allow cancellation or shutdown to end the request with a result distinct from state_unavailable\"],\"default_guess\":\"Retry an interrupted wait, keep waiting while another holder owns the lock, and return state_unavailable for terminal open or locking errors; process cancellation may abort outside the service result contract.\",\"witness\":{\"initial\":\"Another process holds the project lock.\",\"events\":[\"The calling flow starts a mark operation and waits.\",\"A signal interrupts the operating-system lock call while the other process still holds the lock.\"],\"outcomes\":[\"The service retries and continues waiting without a time limit.\",\"The service classifies the interruption as failure and returns state_unavailable.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A6\",\"kind\":\"atomic_write_contradiction\",\"text\":\"Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. A record is absent only when its file does not exist. A placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record: the operation is refused with `state_unavailable` and changes nothing. The same refusal answers a failure to open or lock the lock file, which waiting for another holder is not, and a mark that cannot be written.\",\"question\":\"If writing a mark fails after the rename has made the complete mark visible but before the folder synchronization succeeds, must the operation return marked, return state_unavailable while leaving the mark, or remove the mark so that state_unavailable truly changes nothing?\",\"options\":[\"The rename commits the mark; return marked even if folder synchronization fails\",\"Return state_unavailable and leave the visible mark, interpreting changes nothing as no further changes\",\"Attempt to remove the mark and return state_unavailable\",\"Define a recoverable indeterminate outcome distinct from both marked and state_unavailable\"],\"default_guess\":\"Treat failure before rename as state_unavailable with no committed mark, but after rename regard the mark as committed and return marked; otherwise the required atomicity and changes-nothing guarantee cannot both be reliable.\",\"witness\":{\"initial\":\"A placement exists and no publication mark exists.\",\"events\":[\"The calling flow records a publication.\",\"The service writes and synchronizes the temporary mark, renames it to the final path, and the directory synchronization then fails.\"],\"outcomes\":[\"The operation returns marked because the final mark now exists.\",\"The operation returns state_unavailable because the required write sequence did not finish, although the final mark is visible.\"],\"observer\":\"The calling flow immediately, and another process after reopening the state\"}},{\"subject\":\"A6\",\"kind\":\"damage_scope\",\"text\":\"with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was\",\"question\":\"Does one damaged record block every scan, delivery and mark operation for the project, or only an operation that must read that particular source's record?\",\"options\":[\"Any damaged record discovered in the project makes the whole project operation return state_unavailable\",\"Only the operation for the damaged source returns state_unavailable; unrelated sources continue\",\"Scan refuses for any discovered damaged record, while delivery and mark refuse only when their requested source is damaged\"],\"default_guess\":\"Scan refuses if it encounters any damaged record; delivery and mark refuse only when the record needed for their requested source is damaged.\",\"witness\":{\"initial\":\"Project P has a damaged placement for source A and no placement for valid source B.\",\"events\":[\"The calling flow requests delivery of source B.\"],\"outcomes\":[\"Delivery refuses with state_unavailable because project state contains a damaged record.\",\"Delivery places source B because it never needs source A's record.\"],\"observer\":\"The calling flow and the Portal binary-store operator\"}},{\"subject\":\"A6\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-20: with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).\",\"question\":\"What must the required tests assert to demonstrate the full invariant that a damaged record never leads to any new placement or mark, rather than merely showing that the damaged file itself stayed unchanged?\",\"options\":[\"Snapshot and compare all placement records, mark records and stored-image files before and after every operation\",\"Assert only that the damaged record is byte-for-byte unchanged and no requested-source record is created\",\"Assert returned state_unavailable only, relying on the implementation for absence of writes\"],\"default_guess\":\"The tests should snapshot all placement records, marks and stored-image files for the project and show that none are added or changed by scan, delivery or mark.\",\"witness\":{\"initial\":\"A project contains a damaged mark for source A and no state for source B.\",\"events\":[\"A test invokes delivery while the damaged record exists.\",\"The implementation returns state_unavailable but has already written a placement and image for source B.\"],\"outcomes\":[\"The stated test passes if it checks only the refusal and that source A's damaged record stayed unchanged.\",\"A test that asserts the invariant over all project state fails because a new placement was produced.\"],\"observer\":\"The test suite and, in production, the owner\"}},{\"subject\":\"context\",\"kind\":\"refusal_precedence\",\"text\":\"**Enumeration:** `RefusalCode` is `unknown_project`, `connection_not_confirmed`, `folder_unavailable`, `state_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed`, `publication_conflict`.\",\"question\":\"When more than one refusal condition is true, in what order are checks performed and which RefusalCode wins, particularly between A6 state failures and project, connection, source or publication checks?\",\"options\":[\"Validate project and connection, then request identifiers and references, then acquire/read state, then apply operation-specific conflicts\",\"Acquire the project lock and validate state before every other refusal check\",\"Specify a different precedence separately for scan, delivery and mark\"],\"default_guess\":\"Check unknown project and connection first, validate request identifiers and references next, then acquire and read state, and finally apply not_placed or publication_conflict.\",\"witness\":{\"initial\":\"The request names an unknown project and the state directory cannot open that project's lock file.\",\"events\":[\"The calling flow invokes delivery.\"],\"outcomes\":[\"The operation returns unknown_project because project validation runs first.\",\"The operation returns state_unavailable because lock acquisition runs first.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"context\",\"kind\":\"contradictory_failure_classification\",\"text\":\"A failure of one photo is M06, not a refusal. A placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record: the operation is refused with `state_unavailable` and changes nothing.\",\"question\":\"For delivery of one selected photo whose placement or mark record is damaged, is the answer an M06 PlacementOutcome or an M08 Refusal?\",\"options\":[\"Return M08 with code state_unavailable because corrupt service state refuses the operation as a whole\",\"Return M06 with status failed because the delivery concerns one photo\",\"Define that 'failure of one photo' excludes state-storage failures and retain M08\"],\"default_guess\":\"Define that per-photo content and readiness failures use M06, while inability to trust service state uses M08 state_unavailable even when the request names one photo.\",\"witness\":{\"initial\":\"The selected source has an existing placement record that is invalid JSON.\",\"events\":[\"The calling flow requests delivery of that one source.\"],\"outcomes\":[\"A6 requires an M08 refusal with code state_unavailable.\",\"M08's one-photo rule requires an M06 PlacementOutcome with status failed, although its failure enumeration has no state_unavailable member.\"],\"observer\":\"The calling flow and its response decoder\"}},{\"subject\":\"context\",\"kind\":\"unspecified_fixed_value\",\"text\":\"`code` says why, and `detail` is a fixed sentence for people that holds no server path and no credential.\",\"question\":\"What exact detail sentence corresponds to each RefusalCode, is it one sentence per code or per operation-and-code pair, and through which models, imported policy constant or configuration field does generated code receive those fixed values?\",\"options\":[\"Define one imported constant mapping from every RefusalCode to one exact sentence\",\"Define operation-specific imported mappings\",\"Use one generic exact sentence for every refusal\",\"Let each operation write its own sentence subject only to the no-path and no-credential restriction\"],\"default_guess\":\"Define a supplier-owned imported constant mapping each RefusalCode to one exact, operation-independent sentence.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,222 @@
+{
+ "open_points": [
+  {
+   "subject": "A6 record validation",
+   "kind": "validation boundary",
+   "text": "A placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record",
+   "question": "What happens when every field is present but a value has the wrong type, an invalid enumeration value, an invalid nested model, or an unexpected extra field?",
+   "options": [
+    "Refuse with state_unavailable for any model-validation error",
+    "Accept extra fields but refuse invalid values",
+    "Accept or coerce anything not expressly listed"
+   ],
+   "default_guess": "Validate the complete model strictly, refusing invalid types, values, and nested fields with state_unavailable while ignoring extra fields only if model policy explicitly permits them.",
+   "witness": {
+    "initial": "A placement JSON object contains every M04 field, but size is the string \"10\".",
+    "events": [
+     "The calling flow requests delivery of that source.",
+     "The deliverer reads the existing placement record."
+    ],
+    "outcomes": [
+     "Strict model validation refuses the operation with state_unavailable and changes nothing.",
+     "Presence-only validation accepts or coerces the record and returns a replayed placement."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 record absence",
+   "kind": "existence semantics",
+   "text": "A record is absent only when its file does not exist.",
+   "question": "At what check is nonexistence determined, and how are a dangling symlink or a file removed between the existence check and the read classified?",
+   "options": [
+    "Treat any read-time ENOENT as absence",
+    "Treat an existing directory entry or earlier observation followed by read failure as state_unavailable",
+    "Use lstat semantics so a dangling symlink exists and is damaged"
+   ],
+   "default_guess": "Determine absence by opening the expected regular file under the project lock; a clean ENOENT is absence, while a symlink, non-regular entry, or other open failure is state_unavailable.",
+   "witness": {
+    "initial": "No placement is recorded elsewhere; the expected placement path initially has a directory entry.",
+    "events": [
+     "The service acquires the project lock.",
+     "An external actor removes the entry after an existence check but before it is opened.",
+     "The service attempts to read the record."
+    ],
+    "outcomes": [
+     "The record is treated as absent and a new placement may be created.",
+     "The failed read is treated as state_unavailable and no placement is created."
+    ],
+    "observer": "The calling flow and the Portal-store operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 lock acquisition",
+   "kind": "exact refusal conditions",
+   "text": "The same refusal answers a failure to open or lock the lock file, which waiting for another holder is not",
+   "question": "Which open or locking errors are immediately refused, and which transient errors must be retried?",
+   "options": [
+    "Every unsuccessful system call other than lock contention immediately returns state_unavailable",
+    "Retry interruptible or transient errors such as EINTR, then refuse only a terminal error",
+    "Retry all potentially transient open and lock failures without a limit"
+   ],
+   "default_guess": "Retry EINTR transparently, wait indefinitely for ordinary contention, and return state_unavailable for terminal open or locking errors.",
+   "witness": {
+    "initial": "The project lock is free and its lock file is accessible.",
+    "events": [
+     "The calling flow starts a delivery.",
+     "The operating-system lock call is interrupted once before acquiring the lock."
+    ],
+    "outcomes": [
+     "The service retries, acquires the lock, and continues the delivery.",
+     "The service treats the interrupted call as a locking failure and returns state_unavailable."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 lock wait",
+   "kind": "cancellation behavior",
+   "text": "A caller waits for the lock without a time limit",
+   "question": "May caller cancellation, disconnection, or service shutdown terminate this wait, and if so what observable answer or cleanup is required?",
+   "options": [
+    "Cancellation terminates the waiting operation without a refusal answer",
+    "The operation must continue waiting and may mutate state after the caller disconnects",
+    "Cancellation returns state_unavailable"
+   ],
+   "default_guess": "Honor explicit cancellation or shutdown, release all local resources, perform no mutation, and emit no refusal if the transport can no longer receive one.",
+   "witness": {
+    "initial": "One process holds the project lock and a second delivery is waiting for it.",
+    "events": [
+     "The second calling flow disconnects or cancels its request.",
+     "The first process later releases the lock."
+    ],
+    "outcomes": [
+     "The second operation has ended and never mutates state.",
+     "The second operation continues, acquires the lock, and performs the delivery after its caller has gone."
+    ],
+    "observer": "The calling flow and the service operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 refusal precedence",
+   "kind": "check precedence",
+   "text": "The same refusal answers a failure to open or lock the lock file, which waiting for another holder is not",
+   "question": "When a request also has another refusal condition, must request and connection validation happen before lock acquisition, or does a lock failure take precedence?",
+   "options": [
+    "Validate request and connection first, then acquire the lock",
+    "Acquire the project lock before all project-scoped validation",
+    "Define a per-operation precedence table"
+   ],
+   "default_guess": "Perform authentication and syntactic request validation first, resolve and validate the project connection next, then acquire the project lock before reading or changing placement and mark state.",
+   "witness": {
+    "initial": "A delivery request has an invalid source_id, and the project's lock file cannot be opened.",
+    "events": [
+     "The calling flow submits the delivery request."
+    ],
+    "outcomes": [
+     "Validation runs first and the caller receives invalid_source_id.",
+     "Lock acquisition runs first and the caller receives state_unavailable."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-20 required tests",
+   "kind": "underspecified test evidence",
+   "text": "INV-20: with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).",
+   "question": "Which damaged-record forms must the test exercise, especially the newly added case where a model field is missing, and must each form be exercised for both placement and mark records across all applicable operations?",
+   "options": [
+    "Test every listed corruption class for both record models and every applicable operation",
+    "Test the missing-field case for both models and retain one representative case for the other corruption classes",
+    "Allow any single damaged fixture to satisfy the item"
+   ],
+   "default_guess": "Require explicit missing-field cases for both M04 and M07, plus representative unreadable, invalid-JSON, and non-object cases, with assertions that no replacement record or new placement or mark is created.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 and M08 operation result",
+   "kind": "contradiction",
+   "text": "the operation is refused with `state_unavailable` and changes nothing",
+   "question": "For delivery of one chosen photo whose placement or mark record is damaged, does A6's whole-operation M08 refusal govern, or does M08's statement \"A failure of one photo is M06, not a refusal\" require an M06 PlacementOutcome?",
+   "options": [
+    "Return M08 Refusal with state_unavailable",
+    "Return M06 PlacementOutcome with failed status and add or select a PlacementFailure reason",
+    "Distinguish scan and mark as refusals but make delivery an M06 failure"
+   ],
+   "default_guess": "Treat backend state corruption as a whole-operation M08 refusal with state_unavailable, and narrow M08's one-photo sentence to source-content and preparation failures represented by M06.",
+   "witness": {
+    "initial": "A caller chooses one source for delivery, and that source's placement record is invalid JSON.",
+    "events": [
+     "The calling flow calls the one-photo delivery operation.",
+     "The service reads the damaged placement record."
+    ],
+    "outcomes": [
+     "A6 returns an M08 refusal with code state_unavailable.",
+     "The M08 meaning requires an M06 failed placement outcome, although M06 defines no state-unavailable failure reason."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M08 Refusal.detail",
+   "kind": "missing decided value",
+   "text": "`detail` is a fixed sentence for people that holds no server path and no credential.",
+   "question": "What exact fixed detail sentence accompanies state_unavailable, and is it identical for damaged records, lock-file failures, and mark-write failures?",
+   "options": [
+    "One fixed sentence per RefusalCode",
+    "A separate fixed sentence for each underlying cause",
+    "An implementation-selected sentence constrained only by secrecy"
+   ],
+   "default_guess": "Use one specified, stable, non-sensitive sentence per RefusalCode; all state_unavailable causes receive the same sentence.",
+   "witness": {
+    "initial": "Two installations encounter the same damaged placement record.",
+    "events": [
+     "Each installation refuses the delivery with code state_unavailable.",
+     "Each implementation constructs M08.detail."
+    ],
+    "outcomes": [
+     "One returns a single code-defined sentence such as \"Stored state is unavailable.\"",
+     "The other returns an implementation-chosen cause-specific sentence."
+    ],
+    "observer": "The calling flow and the owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 5",
+   "kind": "standard_violation",
+   "text": "A record is absent only when its file does not exist. A placement or mark record that exists but cannot\n   be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent\n   record: the operation is refused with `state_unavailable` and changes nothing. The same refusal answers a\n   failure to open or lock the lock file, which waiting for another holder is not, and a mark that cannot be\n   written.",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\n(`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Replace the value-only `state_unavailable` reference with the member name and model address, for example `the STATE_UNAVAILABLE member of = models.RefusalCode`.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-12 required tests",
+   "kind": "standard_violation",
+   "text": "- INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\n(`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Name PLACED and REPLAYED through models.PlacementStatus, MARKED and REPLAYED through models.MarkStatus, and PUBLICATION_CONFLICT through models.RefusalCode, using each member name beside its `= models.*` address.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-20 required tests",
+   "kind": "standard_violation",
+   "text": "- INV-20: with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\n(`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Replace the value-only `state_unavailable` reference with `the STATE_UNAVAILABLE member of = models.RefusalCode`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A6 record validation\",\"kind\":\"validation boundary\",\"text\":\"A placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record\",\"question\":\"What happens when every field is present but a value has the wrong type, an invalid enumeration value, an invalid nested model, or an unexpected extra field?\",\"options\":[\"Refuse with state_unavailable for any model-validation error\",\"Accept extra fields but refuse invalid values\",\"Accept or coerce anything not expressly listed\"],\"default_guess\":\"Validate the complete model strictly, refusing invalid types, values, and nested fields with state_unavailable while ignoring extra fields only if model policy explicitly permits them.\",\"witness\":{\"initial\":\"A placement JSON object contains every M04 field, but size is the string \\\"10\\\".\",\"events\":[\"The calling flow requests delivery of that source.\",\"The deliverer reads the existing placement record.\"],\"outcomes\":[\"Strict model validation refuses the operation with state_unavailable and changes nothing.\",\"Presence-only validation accepts or coerces the record and returns a replayed placement.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A6 record absence\",\"kind\":\"existence semantics\",\"text\":\"A record is absent only when its file does not exist.\",\"question\":\"At what check is nonexistence determined, and how are a dangling symlink or a file removed between the existence check and the read classified?\",\"options\":[\"Treat any read-time ENOENT as absence\",\"Treat an existing directory entry or earlier observation followed by read failure as state_unavailable\",\"Use lstat semantics so a dangling symlink exists and is damaged\"],\"default_guess\":\"Determine absence by opening the expected regular file under the project lock; a clean ENOENT is absence, while a symlink, non-regular entry, or other open failure is state_unavailable.\",\"witness\":{\"initial\":\"No placement is recorded elsewhere; the expected placement path initially has a directory entry.\",\"events\":[\"The service acquires the project lock.\",\"An external actor removes the entry after an existence check but before it is opened.\",\"The service attempts to read the record.\"],\"outcomes\":[\"The record is treated as absent and a new placement may be created.\",\"The failed read is treated as state_unavailable and no placement is created.\"],\"observer\":\"The calling flow and the Portal-store operator\"}},{\"subject\":\"A6 lock acquisition\",\"kind\":\"exact refusal conditions\",\"text\":\"The same refusal answers a failure to open or lock the lock file, which waiting for another holder is not\",\"question\":\"Which open or locking errors are immediately refused, and which transient errors must be retried?\",\"options\":[\"Every unsuccessful system call other than lock contention immediately returns state_unavailable\",\"Retry interruptible or transient errors such as EINTR, then refuse only a terminal error\",\"Retry all potentially transient open and lock failures without a limit\"],\"default_guess\":\"Retry EINTR transparently, wait indefinitely for ordinary contention, and return state_unavailable for terminal open or locking errors.\",\"witness\":{\"initial\":\"The project lock is free and its lock file is accessible.\",\"events\":[\"The calling flow starts a delivery.\",\"The operating-system lock call is interrupted once before acquiring the lock.\"],\"outcomes\":[\"The service retries, acquires the lock, and continues the delivery.\",\"The service treats the interrupted call as a locking failure and returns state_unavailable.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A6 lock wait\",\"kind\":\"cancellation behavior\",\"text\":\"A caller waits for the lock without a time limit\",\"question\":\"May caller cancellation, disconnection, or service shutdown terminate this wait, and if so what observable answer or cleanup is required?\",\"options\":[\"Cancellation terminates the waiting operation without a refusal answer\",\"The operation must continue waiting and may mutate state after the caller disconnects\",\"Cancellation returns state_unavailable\"],\"default_guess\":\"Honor explicit cancellation or shutdown, release all local resources, perform no mutation, and emit no refusal if the transport can no longer receive one.\",\"witness\":{\"initial\":\"One process holds the project lock and a second delivery is waiting for it.\",\"events\":[\"The second calling flow disconnects or cancels its request.\",\"The first process later releases the lock.\"],\"outcomes\":[\"The second operation has ended and never mutates state.\",\"The second operation continues, acquires the lock, and performs the delivery after its caller has gone.\"],\"observer\":\"The calling flow and the service operator\"}},{\"subject\":\"A6 refusal precedence\",\"kind\":\"check precedence\",\"text\":\"The same refusal answers a failure to open or lock the lock file, which waiting for another holder is not\",\"question\":\"When a request also has another refusal condition, must request and connection validation happen before lock acquisition, or does a lock failure take precedence?\",\"options\":[\"Validate request and connection first, then acquire the lock\",\"Acquire the project lock before all project-scoped validation\",\"Define a per-operation precedence table\"],\"default_guess\":\"Perform authentication and syntactic request validation first, resolve and validate the project connection next, then acquire the project lock before reading or changing placement and mark state.\",\"witness\":{\"initial\":\"A delivery request has an invalid source_id, and the project's lock file cannot be opened.\",\"events\":[\"The calling flow submits the delivery request.\"],\"outcomes\":[\"Validation runs first and the caller receives invalid_source_id.\",\"Lock acquisition runs first and the caller receives state_unavailable.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"INV-20 required tests\",\"kind\":\"underspecified test evidence\",\"text\":\"INV-20: with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).\",\"question\":\"Which damaged-record forms must the test exercise, especially the newly added case where a model field is missing, and must each form be exercised for both placement and mark records across all applicable operations?\",\"options\":[\"Test every listed corruption class for both record models and every applicable operation\",\"Test the missing-field case for both models and retain one representative case for the other corruption classes\",\"Allow any single damaged fixture to satisfy the item\"],\"default_guess\":\"Require explicit missing-field cases for both M04 and M07, plus representative unreadable, invalid-JSON, and non-object cases, with assertions that no replacement record or new placement or mark is created.\"},{\"subject\":\"A6 and M08 operation result\",\"kind\":\"contradiction\",\"text\":\"the operation is refused with `state_unavailable` and changes nothing\",\"question\":\"For delivery of one chosen photo whose placement or mark record is damaged, does A6's whole-operation M08 refusal govern, or does M08's statement \\\"A failure of one photo is M06, not a refusal\\\" require an M06 PlacementOutcome?\",\"options\":[\"Return M08 Refusal with state_unavailable\",\"Return M06 PlacementOutcome with failed status and add or select a PlacementFailure reason\",\"Distinguish scan and mark as refusals but make delivery an M06 failure\"],\"default_guess\":\"Treat backend state corruption as a whole-operation M08 refusal with state_unavailable, and narrow M08's one-photo sentence to source-content and preparation failures represented by M06.\",\"witness\":{\"initial\":\"A caller chooses one source for delivery, and that source's placement record is invalid JSON.\",\"events\":[\"The calling flow calls the one-photo delivery operation.\",\"The service reads the damaged placement record.\"],\"outcomes\":[\"A6 returns an M08 refusal with code state_unavailable.\",\"The M08 meaning requires an M06 failed placement outcome, although M06 defines no state-unavailable failure reason.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"M08 Refusal.detail\",\"kind\":\"missing decided value\",\"text\":\"`detail` is a fixed sentence for people that holds no server path and no credential.\",\"question\":\"What exact fixed detail sentence accompanies state_unavailable, and is it identical for damaged records, lock-file failures, and mark-write failures?\",\"options\":[\"One fixed sentence per RefusalCode\",\"A separate fixed sentence for each underlying cause\",\"An implementation-selected sentence constrained only by secrecy\"],\"default_guess\":\"Use one specified, stable, non-sensitive sentence per RefusalCode; all state_unavailable causes receive the same sentence.\",\"witness\":{\"initial\":\"Two installations encounter the same damaged placement record.\",\"events\":[\"Each installation refuses the delivery with code state_unavailable.\",\"Each implementation constructs M08.detail.\"],\"outcomes\":[\"One returns a single code-defined sentence such as \\\"Stored state is unavailable.\\\"\",\"The other returns an implementation-chosen cause-specific sentence.\"],\"observer\":\"The calling flow and the owner\"}},{\"subject\":\"A6 rule 5\",\"kind\":\"standard_violation\",\"text\":\"A record is absent only when its file does not exist. A placement or mark record that exists but cannot\\n   be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent\\n   record: the operation is refused with `state_unavailable` and changes nothing. The same refusal answers a\\n   failure to open or lock the lock file, which waiting for another holder is not, and a mark that cannot be\\n   written.\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\\n(`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Replace the value-only `state_unavailable` reference with the member name and model address, for example `the STATE_UNAVAILABLE member of = models.RefusalCode`.\"},{\"subject\":\"INV-12 required tests\",\"kind\":\"standard_violation\",\"text\":\"- INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\\n(`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Name PLACED and REPLAYED through models.PlacementStatus, MARKED and REPLAYED through models.MarkStatus, and PUBLICATION_CONFLICT through models.RefusalCode, using each member name beside its `= models.*` address.\"},{\"subject\":\"INV-20 required tests\",\"kind\":\"standard_violation\",\"text\":\"- INV-20: with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\\n(`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Replace the value-only `state_unavailable` reference with `the STATE_UNAVAILABLE member of = models.RefusalCode`.\"}]}",
+ "set_aside": []
+}

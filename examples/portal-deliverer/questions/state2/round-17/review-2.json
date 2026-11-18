@@ -1,0 +1,368 @@
+{
+ "open_points": [
+  {
+   "subject": "A6 record validation",
+   "kind": "uncovered record shape",
+   "text": "A placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record",
+   "question": "What happens when an existing object has every required field but a field has the wrong type, an invalid enum value, a malformed nested model, null where the model disallows it, or an unknown extra field?",
+   "options": [
+    "Refuse the operation with state_unavailable and change nothing",
+    "Accept any object containing all required field names",
+    "Validate types and nested values but ignore unknown extra fields"
+   ],
+   "default_guess": "Validate the complete model, ignore harmless extra fields, and refuse every other validation failure with state_unavailable without changing state.",
+   "witness": {
+    "initial": "A placement JSON object contains every M04 field, but size is a string instead of an integer.",
+    "events": [
+     "The calling flow scans the project."
+    ],
+    "outcomes": [
+     "The scan refuses with state_unavailable and leaves the record untouched.",
+     "The scan accepts the record because no field is absent and reports the placement."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 nested record fields",
+   "kind": "validation scope",
+   "text": "lacks a field of its model",
+   "question": "Does “its model” include every field of nested models such as M04.publication, or only the top-level placement or mark fields?",
+   "options": [
+    "Validate all nested model fields recursively",
+    "Check only top-level fields",
+    "Validate only fields the current operation reads"
+   ],
+   "default_guess": "Validate all nested model fields recursively.",
+   "witness": {
+    "initial": "An M04 record has a publication object with no photo_date field.",
+    "events": [
+     "The calling flow scans the project."
+    ],
+    "outcomes": [
+     "The scan refuses with state_unavailable because a nested model field is absent.",
+     "The scan accepts the placement because every top-level M04 field exists."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 lock-file creation",
+   "kind": "missing-file handling",
+   "text": "The same refusal answers a failure to open or lock the lock file",
+   "question": "Is a project lock file created on first use when it does not exist, or is its absence an open failure that must return state_unavailable?",
+   "options": [
+    "Create the missing lock file atomically and then lock it",
+    "Require the lock file to have been provisioned and refuse when it is absent"
+   ],
+   "default_guess": "Create the missing lock file in the state folder with a fixed safe mode, then acquire its operating-system lock.",
+   "witness": {
+    "initial": "A valid confirmed project has no lock file because no delivery or mark has run before.",
+    "events": [
+     "The calling flow requests the first delivery."
+    ],
+    "outcomes": [
+     "The service creates and locks the file, then performs the delivery.",
+     "The service refuses with state_unavailable because opening the absent file failed."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 project lock",
+   "kind": "unspecified identity",
+   "text": "one lock file of that project in the state folder",
+   "question": "What exact name and path derive the per-project lock file, and how is it guaranteed that distinct project identifiers cannot collide or escape the state folder?",
+   "options": [
+    "Use a specified canonical project-id filename directly under the state folder",
+    "Use a specified digest of the canonical project id",
+    "Leave the backend to choose any collision-free mapping"
+   ],
+   "default_guess": "Use the canonical UUID text plus a fixed .lock suffix directly under the state folder and reject any noncanonical project identifier before path construction.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 lock errors",
+   "kind": "error classification",
+   "text": "a failure to open or lock the lock file, which waiting for another holder is not",
+   "question": "Which operating-system results are retryable waiting or interruption, and which are final failures returning state_unavailable?",
+   "options": [
+    "Retry contention and interrupted system calls indefinitely; refuse other errors",
+    "Retry only contention and refuse interrupted calls",
+    "Treat cancellation or process shutdown as a distinct transport-level termination"
+   ],
+   "default_guess": "Retry contention and EINTR, allow process cancellation to terminate the request, and return state_unavailable for other open or lock errors.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 mark write atomicity",
+   "kind": "contradiction",
+   "text": "Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. A mark that cannot be written is refused with `state_unavailable` and changes nothing.",
+   "question": "If the mark has already been renamed into place but synchronising its folder fails, is the mark considered written, must it be rolled back, or may the call refuse despite the visible state change?",
+   "options": [
+    "Treat rename as the commit and return success despite the later directory-sync failure",
+    "Remove or restore the mark and return state_unavailable",
+    "Return state_unavailable while leaving the complete mark visible"
+   ],
+   "default_guess": "Treat the rename as commit for observable state and report success if the resulting mark can be read back; separately surface durability failure operationally.",
+   "witness": {
+    "initial": "No publication mark exists, and the temporary mark can be written and synchronised.",
+    "events": [
+     "The calling flow records publication.",
+     "The service renames the temporary mark into its final name.",
+     "Synchronising the containing folder fails."
+    ],
+    "outcomes": [
+     "The call refuses with state_unavailable although a new mark is now visible, contradicting “changes nothing.”",
+     "The call reports marked because the mark became visible, despite failure to complete the stated write protocol."
+    ],
+    "observer": "The calling flow on this call and on a later scan"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 placement write failures",
+   "kind": "uncovered failure",
+   "text": "The same refusal answers a failure to open or lock the lock file, which waiting for another holder is not, and a mark that cannot be written.",
+   "question": "What outcome and rollback are required when the prepared image or placement record, rather than a mark, cannot be written, synchronised, renamed, or followed by folder synchronisation?",
+   "options": [
+    "Refuse the whole operation with state_unavailable and leave no image or placement",
+    "Return an M06 failed outcome",
+    "Keep any completed file and allow a later call to repair the placement"
+   ],
+   "default_guess": "Refuse with state_unavailable and remove any newly visible image or placement so the operation leaves no new placement state.",
+   "witness": {
+    "initial": "No placement exists and the binary-store image can be written, but writing the placement record fails because the state filesystem is full.",
+    "events": [
+     "The calling flow requests delivery of a valid ready source."
+    ],
+    "outcomes": [
+     "The service returns an M08 state_unavailable refusal and removes the new image.",
+     "The service returns an M06 failure or leaves the image for a later retry because only an unwritable mark is assigned state_unavailable."
+    ],
+    "observer": "The calling flow and an operator inspecting the binary store"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 unsafe values in state records",
+   "kind": "refusal ambiguity",
+   "text": "The reference must stay inside the binary store. A placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record",
+   "question": "When a syntactically complete record contains an unsafe file_ref or another value that violates its model's semantic constraints, is the result state_unavailable, unsafe_reference, or another outcome?",
+   "options": [
+    "Treat the persisted record as damaged and refuse with state_unavailable",
+    "Return unsafe_reference",
+    "Accept the record but never dereference the unsafe value"
+   ],
+   "default_guess": "Treat an unsafe value in persisted state as damaged state and refuse with state_unavailable without dereferencing it.",
+   "witness": {
+    "initial": "An M04 JSON object has every field, but file_ref resolves outside the binary store.",
+    "events": [
+     "The calling flow scans the project."
+    ],
+    "outcomes": [
+     "The scan refuses with state_unavailable because trusted state is corrupt.",
+     "The scan refuses with unsafe_reference because the reference is unsafe."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-12 Required tests",
+   "kind": "incomplete invariant evidence",
+   "text": "concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other",
+   "question": "Must the tests also inspect persistent state and the binary store to show that exactly one placement and one mark were produced, rather than merely checking returned statuses?",
+   "options": [
+    "Assert one final placement record, one stored image, one final mark, and their winning identities",
+    "Check only the response statuses named here"
+   ],
+   "default_guess": "Assert both the responses and exactly one final placement, image, and mark with the expected identity.",
+   "witness": {
+    "initial": "No placement or mark exists.",
+    "events": [
+     "Two processes concurrently deliver the same source.",
+     "A faulty implementation writes two physical placement artifacts but returns placed to one caller and replayed to the other."
+    ],
+    "outcomes": [
+     "The required test passes because it checks only statuses.",
+     "The required test fails because it also asserts that only one placement and stored image exist."
+    ],
+    "observer": "The test suite and an operator inspecting persistent state"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-20 Required tests",
+   "kind": "ambiguous test coverage",
+   "text": "with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was",
+   "question": "Must this be demonstrated for every damage class listed by rule 5 and for both placement and mark records, or is one representative damaged record sufficient?",
+   "options": [
+    "Exercise unreadable, invalid JSON, non-object, and each missing-field case for both record kinds and applicable operations",
+    "Use one representative damaged placement and one representative damaged mark",
+    "Use a single damaged-record example"
+   ],
+   "default_guess": "Use parameterized tests covering every listed damage class for both record kinds and every applicable operation.",
+   "unit": "?"
+  },
+  {
+   "subject": "M07 marked_at",
+   "kind": "missing time source",
+   "text": "`marked_at: datetime`",
+   "question": "What authority supplies the instant written to marked_at?",
+   "options": [
+    "An injected system-clock backend decided by State 2",
+    "A datetime parameter supplied by the caller",
+    "The operating system clock read directly by the persistence code"
+   ],
+   "default_guess": "Use an injected system-clock backend owned by the service, with no direct ambient clock reads.",
+   "unit": "?"
+  },
+  {
+   "subject": "M07 marked_at",
+   "kind": "missing time representation",
+   "text": "`marked_at: datetime`",
+   "question": "In what representation is marked_at held in memory and serialized in the publication-mark record?",
+   "options": [
+    "Timezone-aware UTC datetime and a canonical offset-bearing JSON string",
+    "Naive UTC datetime and a canonical offset-free JSON string",
+    "Integer Unix time at a specified precision"
+   ],
+   "default_guess": "Use a timezone-aware UTC datetime in memory and canonical RFC 3339 UTC text with Z at microsecond precision in storage.",
+   "unit": "?"
+  },
+  {
+   "subject": "publication marking operation",
+   "kind": "missing clock-read count",
+   "text": "The first mark stands when it is sent again, and its `marked_at` does not change",
+   "question": "How many time-source readings does one marking operation take, and does a replay or publication conflict read the clock at all?",
+   "options": [
+    "Read exactly once only when creating the first mark",
+    "Read once at the start of every mark request but discard it on replay or conflict",
+    "Permit any number of readings as long as the stored first timestamp is unchanged"
+   ],
+   "default_guess": "Read exactly once after validation and immediately before creating a new mark; perform no clock read for replay or conflict.",
+   "witness": {
+    "initial": "A mark already exists with photo_id A and marked_at T1.",
+    "events": [
+     "The calling flow repeats A while the clock source is unavailable."
+    ],
+    "outcomes": [
+     "The request returns replayed without consulting the clock.",
+     "The request fails because every mark request reads the clock before discovering the replay."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M08 Refusal.detail",
+   "kind": "unspecified fixed values",
+   "text": "`detail` is a fixed sentence for people that holds no server path and no credential",
+   "question": "What exact fixed sentence corresponds to each RefusalCode, including language, punctuation, and whether any safe request values may be interpolated?",
+   "options": [
+    "Define one exact constant sentence per code with no interpolation",
+    "Allow implementations to choose any stable sentence satisfying the secrecy constraint",
+    "Return one common sentence for every refusal code"
+   ],
+   "default_guess": "Define one imported constant table mapping every RefusalCode member to an exact non-interpolated English sentence.",
+   "witness": {
+    "initial": "A request is refused with unknown_project.",
+    "events": [
+     "The service constructs M08."
+    ],
+    "outcomes": [
+     "The caller receives “Unknown project.”",
+     "The caller receives “The requested project is not connected.”"
+    ],
+    "observer": "The calling flow and the owner shown its message"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M08 RefusalCode",
+   "kind": "missing refusal conditions",
+   "text": "`RefusalCode` is `unknown_project`, `connection_not_confirmed`, `folder_unavailable`, `state_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed`, `publication_conflict`.",
+   "question": "For each operation, what exact condition selects invalid_source_id, unsafe_reference, and folder_unavailable, and which failures remain an M06 per-photo failure instead?",
+   "options": [
+    "Provide a closed operation-by-condition refusal table",
+    "Let each operation choose among semantically similar codes",
+    "Define the three codes globally and apply them wherever their predicates hold"
+   ],
+   "default_guess": "Provide a closed table for scan, delivery, and mark, with precise predicates and an explicit boundary between M08 and M06.",
+   "unit": "?"
+  },
+  {
+   "subject": "M08 refusal precedence",
+   "kind": "missing precedence",
+   "text": "The answer to an operation the service refuses as a whole. `code` says why",
+   "question": "When one request satisfies more than one whole-operation refusal condition, in what order are the conditions checked and which single code wins?",
+   "options": [
+    "Specify one global precedence order",
+    "Specify a separate ordered check list for each operation",
+    "Permit any applicable refusal code"
+   ],
+   "default_guess": "Specify an ordered check list per operation, beginning with authentication outside M08, then request syntax and safety, project and connection availability, state availability, and operation-specific conflicts.",
+   "witness": {
+    "initial": "A delivery request names an unknown project and has a syntactically invalid source_id.",
+    "events": [
+     "The calling flow submits the request."
+    ],
+    "outcomes": [
+     "The service returns invalid_source_id because request validation runs first.",
+     "The service returns unknown_project because project lookup runs first."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M08 and authenticated boundary",
+   "kind": "missing refusal representation",
+   "text": "The answer to an operation the service refuses as a whole. `RefusalCode` is `unknown_project`, `connection_not_confirmed`, `folder_unavailable`, `state_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed`, `publication_conflict`.",
+   "question": "How is a request with a missing or invalid bearer token represented, given that every operation needs the token but the closed RefusalCode list has no authentication code?",
+   "options": [
+    "Authentication failures are transport-level 401 responses outside M08",
+    "Add an authentication RefusalCode member",
+    "Map authentication failures to one existing code"
+   ],
+   "default_guess": "Return a transport-level 401 response with a fixed safe body outside the domain M08 model.",
+   "witness": {
+    "initial": "The service is running and the request has no valid bearer token.",
+    "events": [
+     "A caller invokes scan."
+    ],
+    "outcomes": [
+     "Authentication middleware returns a transport-level 401 without constructing M08.",
+     "The operation constructs an M08 refusal using an existing code or an implementation-added authentication code."
+    ],
+    "observer": "The unauthenticated caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 5",
+   "kind": "standard_violation",
+   "text": "the operation is refused with `state_unavailable` and changes nothing.",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена (`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note (`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Replace the value-only reference with the emitted member name beside the model address, for example `the STATE_UNAVAILABLE member of = models.RefusalCode`.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-20 Required tests",
+   "kind": "standard_violation",
+   "text": "with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена (`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note (`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Name the emitted STATE_UNAVAILABLE member together with `= models.RefusalCode` instead of naming the enum member only by its stored value.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A6 record validation\",\"kind\":\"uncovered record shape\",\"text\":\"A placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record\",\"question\":\"What happens when an existing object has every required field but a field has the wrong type, an invalid enum value, a malformed nested model, null where the model disallows it, or an unknown extra field?\",\"options\":[\"Refuse the operation with state_unavailable and change nothing\",\"Accept any object containing all required field names\",\"Validate types and nested values but ignore unknown extra fields\"],\"default_guess\":\"Validate the complete model, ignore harmless extra fields, and refuse every other validation failure with state_unavailable without changing state.\",\"witness\":{\"initial\":\"A placement JSON object contains every M04 field, but size is a string instead of an integer.\",\"events\":[\"The calling flow scans the project.\"],\"outcomes\":[\"The scan refuses with state_unavailable and leaves the record untouched.\",\"The scan accepts the record because no field is absent and reports the placement.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A6 nested record fields\",\"kind\":\"validation scope\",\"text\":\"lacks a field of its model\",\"question\":\"Does “its model” include every field of nested models such as M04.publication, or only the top-level placement or mark fields?\",\"options\":[\"Validate all nested model fields recursively\",\"Check only top-level fields\",\"Validate only fields the current operation reads\"],\"default_guess\":\"Validate all nested model fields recursively.\",\"witness\":{\"initial\":\"An M04 record has a publication object with no photo_date field.\",\"events\":[\"The calling flow scans the project.\"],\"outcomes\":[\"The scan refuses with state_unavailable because a nested model field is absent.\",\"The scan accepts the placement because every top-level M04 field exists.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A6 lock-file creation\",\"kind\":\"missing-file handling\",\"text\":\"The same refusal answers a failure to open or lock the lock file\",\"question\":\"Is a project lock file created on first use when it does not exist, or is its absence an open failure that must return state_unavailable?\",\"options\":[\"Create the missing lock file atomically and then lock it\",\"Require the lock file to have been provisioned and refuse when it is absent\"],\"default_guess\":\"Create the missing lock file in the state folder with a fixed safe mode, then acquire its operating-system lock.\",\"witness\":{\"initial\":\"A valid confirmed project has no lock file because no delivery or mark has run before.\",\"events\":[\"The calling flow requests the first delivery.\"],\"outcomes\":[\"The service creates and locks the file, then performs the delivery.\",\"The service refuses with state_unavailable because opening the absent file failed.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A6 project lock\",\"kind\":\"unspecified identity\",\"text\":\"one lock file of that project in the state folder\",\"question\":\"What exact name and path derive the per-project lock file, and how is it guaranteed that distinct project identifiers cannot collide or escape the state folder?\",\"options\":[\"Use a specified canonical project-id filename directly under the state folder\",\"Use a specified digest of the canonical project id\",\"Leave the backend to choose any collision-free mapping\"],\"default_guess\":\"Use the canonical UUID text plus a fixed .lock suffix directly under the state folder and reject any noncanonical project identifier before path construction.\"},{\"subject\":\"A6 lock errors\",\"kind\":\"error classification\",\"text\":\"a failure to open or lock the lock file, which waiting for another holder is not\",\"question\":\"Which operating-system results are retryable waiting or interruption, and which are final failures returning state_unavailable?\",\"options\":[\"Retry contention and interrupted system calls indefinitely; refuse other errors\",\"Retry only contention and refuse interrupted calls\",\"Treat cancellation or process shutdown as a distinct transport-level termination\"],\"default_guess\":\"Retry contention and EINTR, allow process cancellation to terminate the request, and return state_unavailable for other open or lock errors.\"},{\"subject\":\"A6 mark write atomicity\",\"kind\":\"contradiction\",\"text\":\"Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. A mark that cannot be written is refused with `state_unavailable` and changes nothing.\",\"question\":\"If the mark has already been renamed into place but synchronising its folder fails, is the mark considered written, must it be rolled back, or may the call refuse despite the visible state change?\",\"options\":[\"Treat rename as the commit and return success despite the later directory-sync failure\",\"Remove or restore the mark and return state_unavailable\",\"Return state_unavailable while leaving the complete mark visible\"],\"default_guess\":\"Treat the rename as commit for observable state and report success if the resulting mark can be read back; separately surface durability failure operationally.\",\"witness\":{\"initial\":\"No publication mark exists, and the temporary mark can be written and synchronised.\",\"events\":[\"The calling flow records publication.\",\"The service renames the temporary mark into its final name.\",\"Synchronising the containing folder fails.\"],\"outcomes\":[\"The call refuses with state_unavailable although a new mark is now visible, contradicting “changes nothing.”\",\"The call reports marked because the mark became visible, despite failure to complete the stated write protocol.\"],\"observer\":\"The calling flow on this call and on a later scan\"}},{\"subject\":\"A6 placement write failures\",\"kind\":\"uncovered failure\",\"text\":\"The same refusal answers a failure to open or lock the lock file, which waiting for another holder is not, and a mark that cannot be written.\",\"question\":\"What outcome and rollback are required when the prepared image or placement record, rather than a mark, cannot be written, synchronised, renamed, or followed by folder synchronisation?\",\"options\":[\"Refuse the whole operation with state_unavailable and leave no image or placement\",\"Return an M06 failed outcome\",\"Keep any completed file and allow a later call to repair the placement\"],\"default_guess\":\"Refuse with state_unavailable and remove any newly visible image or placement so the operation leaves no new placement state.\",\"witness\":{\"initial\":\"No placement exists and the binary-store image can be written, but writing the placement record fails because the state filesystem is full.\",\"events\":[\"The calling flow requests delivery of a valid ready source.\"],\"outcomes\":[\"The service returns an M08 state_unavailable refusal and removes the new image.\",\"The service returns an M06 failure or leaves the image for a later retry because only an unwritable mark is assigned state_unavailable.\"],\"observer\":\"The calling flow and an operator inspecting the binary store\"}},{\"subject\":\"A6 unsafe values in state records\",\"kind\":\"refusal ambiguity\",\"text\":\"The reference must stay inside the binary store. A placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record\",\"question\":\"When a syntactically complete record contains an unsafe file_ref or another value that violates its model's semantic constraints, is the result state_unavailable, unsafe_reference, or another outcome?\",\"options\":[\"Treat the persisted record as damaged and refuse with state_unavailable\",\"Return unsafe_reference\",\"Accept the record but never dereference the unsafe value\"],\"default_guess\":\"Treat an unsafe value in persisted state as damaged state and refuse with state_unavailable without dereferencing it.\",\"witness\":{\"initial\":\"An M04 JSON object has every field, but file_ref resolves outside the binary store.\",\"events\":[\"The calling flow scans the project.\"],\"outcomes\":[\"The scan refuses with state_unavailable because trusted state is corrupt.\",\"The scan refuses with unsafe_reference because the reference is unsafe.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"INV-12 Required tests\",\"kind\":\"incomplete invariant evidence\",\"text\":\"concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other\",\"question\":\"Must the tests also inspect persistent state and the binary store to show that exactly one placement and one mark were produced, rather than merely checking returned statuses?\",\"options\":[\"Assert one final placement record, one stored image, one final mark, and their winning identities\",\"Check only the response statuses named here\"],\"default_guess\":\"Assert both the responses and exactly one final placement, image, and mark with the expected identity.\",\"witness\":{\"initial\":\"No placement or mark exists.\",\"events\":[\"Two processes concurrently deliver the same source.\",\"A faulty implementation writes two physical placement artifacts but returns placed to one caller and replayed to the other.\"],\"outcomes\":[\"The required test passes because it checks only statuses.\",\"The required test fails because it also asserts that only one placement and stored image exist.\"],\"observer\":\"The test suite and an operator inspecting persistent state\"}},{\"subject\":\"INV-20 Required tests\",\"kind\":\"ambiguous test coverage\",\"text\":\"with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was\",\"question\":\"Must this be demonstrated for every damage class listed by rule 5 and for both placement and mark records, or is one representative damaged record sufficient?\",\"options\":[\"Exercise unreadable, invalid JSON, non-object, and each missing-field case for both record kinds and applicable operations\",\"Use one representative damaged placement and one representative damaged mark\",\"Use a single damaged-record example\"],\"default_guess\":\"Use parameterized tests covering every listed damage class for both record kinds and every applicable operation.\"},{\"subject\":\"M07 marked_at\",\"kind\":\"missing time source\",\"text\":\"`marked_at: datetime`\",\"question\":\"What authority supplies the instant written to marked_at?\",\"options\":[\"An injected system-clock backend decided by State 2\",\"A datetime parameter supplied by the caller\",\"The operating system clock read directly by the persistence code\"],\"default_guess\":\"Use an injected system-clock backend owned by the service, with no direct ambient clock reads.\"},{\"subject\":\"M07 marked_at\",\"kind\":\"missing time representation\",\"text\":\"`marked_at: datetime`\",\"question\":\"In what representation is marked_at held in memory and serialized in the publication-mark record?\",\"options\":[\"Timezone-aware UTC datetime and a canonical offset-bearing JSON string\",\"Naive UTC datetime and a canonical offset-free JSON string\",\"Integer Unix time at a specified precision\"],\"default_guess\":\"Use a timezone-aware UTC datetime in memory and canonical RFC 3339 UTC text with Z at microsecond precision in storage.\"},{\"subject\":\"publication marking operation\",\"kind\":\"missing clock-read count\",\"text\":\"The first mark stands when it is sent again, and its `marked_at` does not change\",\"question\":\"How many time-source readings does one marking operation take, and does a replay or publication conflict read the clock at all?\",\"options\":[\"Read exactly once only when creating the first mark\",\"Read once at the start of every mark request but discard it on replay or conflict\",\"Permit any number of readings as long as the stored first timestamp is unchanged\"],\"default_guess\":\"Read exactly once after validation and immediately before creating a new mark; perform no clock read for replay or conflict.\",\"witness\":{\"initial\":\"A mark already exists with photo_id A and marked_at T1.\",\"events\":[\"The calling flow repeats A while the clock source is unavailable.\"],\"outcomes\":[\"The request returns replayed without consulting the clock.\",\"The request fails because every mark request reads the clock before discovering the replay.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"M08 Refusal.detail\",\"kind\":\"unspecified fixed values\",\"text\":\"`detail` is a fixed sentence for people that holds no server path and no credential\",\"question\":\"What exact fixed sentence corresponds to each RefusalCode, including language, punctuation, and whether any safe request values may be interpolated?\",\"options\":[\"Define one exact constant sentence per code with no interpolation\",\"Allow implementations to choose any stable sentence satisfying the secrecy constraint\",\"Return one common sentence for every refusal code\"],\"default_guess\":\"Define one imported constant table mapping every RefusalCode member to an exact non-interpolated English sentence.\",\"witness\":{\"initial\":\"A request is refused with unknown_project.\",\"events\":[\"The service constructs M08.\"],\"outcomes\":[\"The caller receives “Unknown project.”\",\"The caller receives “The requested project is not connected.”\"],\"observer\":\"The calling flow and the owner shown its message\"}},{\"subject\":\"M08 RefusalCode\",\"kind\":\"missing refusal conditions\",\"text\":\"`RefusalCode` is `unknown_project`, `connection_not_confirmed`, `folder_unavailable`, `state_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed`, `publication_conflict`.\",\"question\":\"For each operation, what exact condition selects invalid_source_id, unsafe_reference, and folder_unavailable, and which failures remain an M06 per-photo failure instead?\",\"options\":[\"Provide a closed operation-by-condition refusal table\",\"Let each operation choose among semantically similar codes\",\"Define the three codes globally and apply them wherever their predicates hold\"],\"default_guess\":\"Provide a closed table for scan, delivery, and mark, with precise predicates and an explicit boundary between M08 and M06.\"},{\"subject\":\"M08 refusal precedence\",\"kind\":\"missing precedence\",\"text\":\"The answer to an operation the service refuses as a whole. `code` says why\",\"question\":\"When one request satisfies more than one whole-operation refusal condition, in what order are the conditions checked and which single code wins?\",\"options\":[\"Specify one global precedence order\",\"Specify a separate ordered check list for each operation\",\"Permit any applicable refusal code\"],\"default_guess\":\"Specify an ordered check list per operation, beginning with authentication outside M08, then request syntax and safety, project and connection availability, state availability, and operation-specific conflicts.\",\"witness\":{\"initial\":\"A delivery request names an unknown project and has a syntactically invalid source_id.\",\"events\":[\"The calling flow submits the request.\"],\"outcomes\":[\"The service returns invalid_source_id because request validation runs first.\",\"The service returns unknown_project because project lookup runs first.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"M08 and authenticated boundary\",\"kind\":\"missing refusal representation\",\"text\":\"The answer to an operation the service refuses as a whole. `RefusalCode` is `unknown_project`, `connection_not_confirmed`, `folder_unavailable`, `state_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed`, `publication_conflict`.\",\"question\":\"How is a request with a missing or invalid bearer token represented, given that every operation needs the token but the closed RefusalCode list has no authentication code?\",\"options\":[\"Authentication failures are transport-level 401 responses outside M08\",\"Add an authentication RefusalCode member\",\"Map authentication failures to one existing code\"],\"default_guess\":\"Return a transport-level 401 response with a fixed safe body outside the domain M08 model.\",\"witness\":{\"initial\":\"The service is running and the request has no valid bearer token.\",\"events\":[\"A caller invokes scan.\"],\"outcomes\":[\"Authentication middleware returns a transport-level 401 without constructing M08.\",\"The operation constructs an M08 refusal using an existing code or an implementation-added authentication code.\"],\"observer\":\"The unauthenticated caller\"}},{\"subject\":\"A6 rule 5\",\"kind\":\"standard_violation\",\"text\":\"the operation is refused with `state_unavailable` and changes nothing.\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена (`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note (`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Replace the value-only reference with the emitted member name beside the model address, for example `the STATE_UNAVAILABLE member of = models.RefusalCode`.\"},{\"subject\":\"INV-20 Required tests\",\"kind\":\"standard_violation\",\"text\":\"with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена (`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note (`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Name the emitted STATE_UNAVAILABLE member together with `= models.RefusalCode` instead of naming the enum member only by its stored value.\"}]}",
+ "set_aside": []
+}

@@ -277,7 +277,7 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
    or mark exists and its writing happen inside that lock.
 5. A record is absent only when its file does not exist. A placement or mark record that exists but cannot
    be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent
-   record: the operation is refused with `state_unavailable` and changes nothing. The same refusal answers a
+   record: the operation is refused with the STATE_UNAVAILABLE member of = models.RefusalCode and changes nothing. The same refusal answers a
    failure to open or lock the lock file, which waiting for another holder is not, and a mark that cannot be
    written.
 

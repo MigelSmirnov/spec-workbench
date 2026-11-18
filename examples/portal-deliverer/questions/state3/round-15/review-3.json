@@ -1,0 +1,142 @@
+{
+ "open_points": [
+  {
+   "subject": "Model M08 — Refusal",
+   "kind": "missing owner",
+   "text": "- the models M01 to M07 and their enumerations;",
+   "question": "Which module owns and exports M08 `Refusal`, and does `domain_models` own M01 through M08 rather than only M01 through M07?",
+   "options": [
+    "`domain_models` owns and exports M08 and `RefusalCode`",
+    "`deliverer_api` owns the refusal response model while `domain_models` owns only its code enum",
+    "M08 is not a runtime model and refusal answers are untyped dictionaries"
+   ],
+   "default_guess": "Make `domain_models` own and export M08 and `RefusalCode`.",
+   "witness": {
+    "initial": "A request must be refused with `state_unavailable`.",
+    "events": [
+     "`photo_delivery` reports the refusal to `deliverer_api`.",
+     "`deliverer_api` constructs the response."
+    ],
+    "outcomes": [
+     "`deliverer_api` imports and constructs the shared M08 `Refusal` from `domain_models`.",
+     "`deliverer_api` invents a local response class or returns an untyped dictionary because `domain_models` owns only M01 to M07."
+    ],
+    "observer": "The generated API schema, callers, and module-boundary tests"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M08 `detail`",
+   "kind": "unspecified value mapping",
+   "text": "`detail` is a fixed sentence for\npeople that holds no server path and no credential.",
+   "question": "What exact fixed sentence corresponds to each `RefusalCode`, and is the mapping owned by `deliverer_api`?",
+   "options": [
+    "Define one exact sentence per refusal code",
+    "Define one sentence shared by all refusal codes",
+    "Permit implementations to choose any stable path-free sentence"
+   ],
+   "default_guess": "Define one exact English sentence per refusal code in `deliverer_api`.",
+   "witness": {
+    "initial": "Two otherwise identical requests are refused with `state_unavailable`.",
+    "events": [
+     "One careful implementation maps the code to `State storage is unavailable.`",
+     "Another maps it to `The operation cannot access its state.`"
+    ],
+    "outcomes": [
+     "The caller receives `State storage is unavailable.`",
+     "The caller receives `The operation cannot access its state.`"
+    ],
+    "observer": "The calling flow and any exact-response tests"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "RefusalCode `unsafe_reference`",
+   "kind": "unassigned outcome",
+   "text": "`RefusalCode` is `unknown_project`, `connection_not_confirmed`, `folder_unavailable`,\n`state_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed`, `publication_conflict`.",
+   "question": "Which precise condition produces `unsafe_reference`, and how is it distinguished from a damaged record producing `state_unavailable`?",
+   "options": [
+    "Use `unsafe_reference` when a stored `file_ref` resolves outside the binary store",
+    "Treat an unsafe stored reference as a damaged record and return `state_unavailable`",
+    "Reserve `unsafe_reference` for a future condition and never emit it now"
+   ],
+   "default_guess": "Emit `unsafe_reference` when an otherwise readable placement contains a reference that does not stay inside the binary store.",
+   "witness": {
+    "initial": "A placement record exists and contains every required field, but its `file_ref` resolves outside the binary store.",
+    "events": [
+     "The caller scans the project or replays the placement.",
+     "`delivery_store` reads the record and checks containment."
+    ],
+    "outcomes": [
+     "The whole operation is refused with `unsafe_reference`.",
+     "The record is treated as damaged and the whole operation is refused with `state_unavailable`."
+    ],
+    "observer": "The authenticated calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 5 record validity",
+   "kind": "incomplete validity rule",
+   "text": "A placement or mark record that exists but cannot\n   be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent\n   record",
+   "question": "How must an object with all fields but a wrong field type, invalid enum value, malformed UUID, extra field, or violated model constraint be handled?",
+   "options": [
+    "Any failure to validate the complete model is `state_unavailable`",
+    "Only missing fields are damage; other invalid values follow separate rules",
+    "Validate field presence only and accept other values"
+   ],
+   "default_guess": "Treat every failure to validate the complete stored model as `state_unavailable`, while deciding explicitly whether extra fields are allowed.",
+   "witness": {
+    "initial": "A mark file is valid JSON and an object with every M07 field, but `photo_id` is not a UUID.",
+    "events": [
+     "The caller scans the project.",
+     "`delivery_store` reads the mark."
+    ],
+    "outcomes": [
+     "The scan is refused with `state_unavailable` and the record is unchanged.",
+     "The record passes the listed checks and is accepted, fails later, or is silently treated as absent."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "placement-record write failure boundary",
+   "kind": "split ownership",
+   "text": "reading and writing placement and mark records, and refusing with `state_unavailable` as A6 rule 5\n  decides. A placement record that cannot be written is the failure of that photo (A3 rule 5).",
+   "question": "Which module translates a low-level record-write error into M06 `failed` with `UNREADABLE_FILE`, while translating a mark-write error into the whole-operation refusal `state_unavailable`, and what error contract crosses the `delivery_store`–`photo_delivery` boundary?",
+   "options": [
+    "`delivery_store` returns a neutral write error and `photo_delivery` maps it by operation",
+    "`delivery_store` returns distinct placement-failure and refusal results",
+    "`delivery_store` raises method-specific exceptions that `photo_delivery` translates"
+   ],
+   "default_guess": "Have `delivery_store` expose neutral typed storage failures and let `photo_delivery`, which owns A3 rule 5, map placement writes to M06 and mark writes to `state_unavailable`.",
+   "unit": "?"
+  },
+  {
+   "subject": "run_service",
+   "kind": "undefined capability contract",
+   "text": "run_service",
+   "question": "What does `run_service` receive, return, validate, and orchestrate, and how is its responsibility divided among `load_config`, `read_token`, `load_connections`, `create_app`, and the web-server invocation?",
+   "options": [
+    "Top-level startup orchestrator that loads and validates everything, creates the app, and starts the loopback server",
+    "Thin web-server wrapper around an already-created app and settings",
+    "Application factory that performs startup validation but does not start the server"
+   ],
+   "default_guess": "Make it the top-level startup orchestrator: load settings and token, validate the connections file, create the app, and start the pinned server on loopback.",
+   "unit": "?"
+  },
+  {
+   "subject": "delivery_store dependency surface",
+   "kind": "standard_violation",
+   "text": "| `delivery_store` | `domain_models` | `Config`, `DelivererError`, `RefusalCode` |",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации. Само наличие символа в `models`, `imports.internal` или\n  `module_functions[provider]` зависимостью не является. Недостающий символ —\n  такая же ошибка спеки, как лишний: в строгом режиме импортов (ниже)\n  сгенерированный модуль без него отвергается",
+   "section": "7",
+   "question": "The dependency entry must include `PhotoPlacement` and `PublicationMark` if `delivery_store` validates, annotates, constructs, or directly serializes those models; otherwise the text must assign that model-aware work to a module that imports them and define `delivery_store` as model-agnostic.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Model M08 — Refusal\",\"kind\":\"missing owner\",\"text\":\"- the models M01 to M07 and their enumerations;\",\"question\":\"Which module owns and exports M08 `Refusal`, and does `domain_models` own M01 through M08 rather than only M01 through M07?\",\"options\":[\"`domain_models` owns and exports M08 and `RefusalCode`\",\"`deliverer_api` owns the refusal response model while `domain_models` owns only its code enum\",\"M08 is not a runtime model and refusal answers are untyped dictionaries\"],\"default_guess\":\"Make `domain_models` own and export M08 and `RefusalCode`.\",\"witness\":{\"initial\":\"A request must be refused with `state_unavailable`.\",\"events\":[\"`photo_delivery` reports the refusal to `deliverer_api`.\",\"`deliverer_api` constructs the response.\"],\"outcomes\":[\"`deliverer_api` imports and constructs the shared M08 `Refusal` from `domain_models`.\",\"`deliverer_api` invents a local response class or returns an untyped dictionary because `domain_models` owns only M01 to M07.\"],\"observer\":\"The generated API schema, callers, and module-boundary tests\"}},{\"subject\":\"M08 `detail`\",\"kind\":\"unspecified value mapping\",\"text\":\"`detail` is a fixed sentence for\\npeople that holds no server path and no credential.\",\"question\":\"What exact fixed sentence corresponds to each `RefusalCode`, and is the mapping owned by `deliverer_api`?\",\"options\":[\"Define one exact sentence per refusal code\",\"Define one sentence shared by all refusal codes\",\"Permit implementations to choose any stable path-free sentence\"],\"default_guess\":\"Define one exact English sentence per refusal code in `deliverer_api`.\",\"witness\":{\"initial\":\"Two otherwise identical requests are refused with `state_unavailable`.\",\"events\":[\"One careful implementation maps the code to `State storage is unavailable.`\",\"Another maps it to `The operation cannot access its state.`\"],\"outcomes\":[\"The caller receives `State storage is unavailable.`\",\"The caller receives `The operation cannot access its state.`\"],\"observer\":\"The calling flow and any exact-response tests\"}},{\"subject\":\"RefusalCode `unsafe_reference`\",\"kind\":\"unassigned outcome\",\"text\":\"`RefusalCode` is `unknown_project`, `connection_not_confirmed`, `folder_unavailable`,\\n`state_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed`, `publication_conflict`.\",\"question\":\"Which precise condition produces `unsafe_reference`, and how is it distinguished from a damaged record producing `state_unavailable`?\",\"options\":[\"Use `unsafe_reference` when a stored `file_ref` resolves outside the binary store\",\"Treat an unsafe stored reference as a damaged record and return `state_unavailable`\",\"Reserve `unsafe_reference` for a future condition and never emit it now\"],\"default_guess\":\"Emit `unsafe_reference` when an otherwise readable placement contains a reference that does not stay inside the binary store.\",\"witness\":{\"initial\":\"A placement record exists and contains every required field, but its `file_ref` resolves outside the binary store.\",\"events\":[\"The caller scans the project or replays the placement.\",\"`delivery_store` reads the record and checks containment.\"],\"outcomes\":[\"The whole operation is refused with `unsafe_reference`.\",\"The record is treated as damaged and the whole operation is refused with `state_unavailable`.\"],\"observer\":\"The authenticated calling flow\"}},{\"subject\":\"A6 rule 5 record validity\",\"kind\":\"incomplete validity rule\",\"text\":\"A placement or mark record that exists but cannot\\n   be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent\\n   record\",\"question\":\"How must an object with all fields but a wrong field type, invalid enum value, malformed UUID, extra field, or violated model constraint be handled?\",\"options\":[\"Any failure to validate the complete model is `state_unavailable`\",\"Only missing fields are damage; other invalid values follow separate rules\",\"Validate field presence only and accept other values\"],\"default_guess\":\"Treat every failure to validate the complete stored model as `state_unavailable`, while deciding explicitly whether extra fields are allowed.\",\"witness\":{\"initial\":\"A mark file is valid JSON and an object with every M07 field, but `photo_id` is not a UUID.\",\"events\":[\"The caller scans the project.\",\"`delivery_store` reads the mark.\"],\"outcomes\":[\"The scan is refused with `state_unavailable` and the record is unchanged.\",\"The record passes the listed checks and is accepted, fails later, or is silently treated as absent.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"placement-record write failure boundary\",\"kind\":\"split ownership\",\"text\":\"reading and writing placement and mark records, and refusing with `state_unavailable` as A6 rule 5\\n  decides. A placement record that cannot be written is the failure of that photo (A3 rule 5).\",\"question\":\"Which module translates a low-level record-write error into M06 `failed` with `UNREADABLE_FILE`, while translating a mark-write error into the whole-operation refusal `state_unavailable`, and what error contract crosses the `delivery_store`–`photo_delivery` boundary?\",\"options\":[\"`delivery_store` returns a neutral write error and `photo_delivery` maps it by operation\",\"`delivery_store` returns distinct placement-failure and refusal results\",\"`delivery_store` raises method-specific exceptions that `photo_delivery` translates\"],\"default_guess\":\"Have `delivery_store` expose neutral typed storage failures and let `photo_delivery`, which owns A3 rule 5, map placement writes to M06 and mark writes to `state_unavailable`.\"},{\"subject\":\"run_service\",\"kind\":\"undefined capability contract\",\"text\":\"run_service\",\"question\":\"What does `run_service` receive, return, validate, and orchestrate, and how is its responsibility divided among `load_config`, `read_token`, `load_connections`, `create_app`, and the web-server invocation?\",\"options\":[\"Top-level startup orchestrator that loads and validates everything, creates the app, and starts the loopback server\",\"Thin web-server wrapper around an already-created app and settings\",\"Application factory that performs startup validation but does not start the server\"],\"default_guess\":\"Make it the top-level startup orchestrator: load settings and token, validate the connections file, create the app, and start the pinned server on loopback.\"},{\"subject\":\"delivery_store dependency surface\",\"kind\":\"standard_violation\",\"text\":\"| `delivery_store` | `domain_models` | `Config`, `DelivererError`, `RefusalCode` |\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации. Само наличие символа в `models`, `imports.internal` или\\n  `module_functions[provider]` зависимостью не является. Недостающий символ —\\n  такая же ошибка спеки, как лишний: в строгом режиме импортов (ниже)\\n  сгенерированный модуль без него отвергается\",\"section\":\"7\",\"question\":\"The dependency entry must include `PhotoPlacement` and `PublicationMark` if `delivery_store` validates, annotates, constructs, or directly serializes those models; otherwise the text must assign that model-aware work to a module that imports them and define `delivery_store` as model-agnostic.\"}]}",
+ "set_aside": []
+}
