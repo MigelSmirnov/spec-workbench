@@ -1,0 +1,315 @@
+{
+ "open_points": [
+  {
+   "subject": "time source for settling checks",
+   "kind": "missing_time_source",
+   "text": "A file is taken only after it has been unchanged for two minutes",
+   "question": "What time source is compared with the file modification time to decide that two minutes have elapsed?",
+   "options": [
+    "A UTC wall clock supplied to the scan",
+    "A monotonic clock combined with a captured filesystem timestamp",
+    "An ambient system clock read by the scanner"
+   ],
+   "default_guess": "Use an injected UTC wall clock because filesystem modification times are wall-clock instants.",
+   "witness": {
+    "initial": "A file's modification time is 12:00 UTC and the system wall clock is adjusted backward while the service remains running.",
+    "events": [
+     "The owner starts a scan after two monotonic minutes have elapsed but while the wall clock reads 11:59.",
+     "The deliverer evaluates whether the file is settled."
+    ],
+    "outcomes": [
+     "The file is ready because two monotonic minutes elapsed.",
+     "The file remains settling because the wall-clock difference is negative."
+    ],
+    "observer": "The calling flow sees ready versus settling."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "PublicationMark.marked_at",
+   "kind": "missing_time_source",
+   "text": "`marked_at: datetime`",
+   "question": "Which authority supplies the fresh instant written to `marked_at`?",
+   "options": [
+    "A clock port passed to the mark operation or service",
+    "A datetime parameter supplied by the calling flow",
+    "A declared authority module",
+    "An ambient system-clock call inside the implementation"
+   ],
+   "default_guess": "Use a clock port owned by the deliverer and injected into the marking service.",
+   "unit": "?"
+  },
+  {
+   "subject": "photo and mark datetime representation",
+   "kind": "ambiguous_representation",
+   "text": "with the moment the photo was taken as UTC without an offset",
+   "question": "Does “UTC without an offset” mean a timezone-naive UTC `datetime`, an aware UTC `datetime` whose serialized form omits the offset, or a string, and must `marked_at` use the same representation?",
+   "options": [
+    "Timezone-naive UTC datetime in memory and serialization",
+    "Timezone-aware UTC datetime in memory, serialized without an offset",
+    "A canonical UTC string without an offset",
+    "Different representations for photo dates and marked_at"
+   ],
+   "default_guess": "Use timezone-naive UTC `datetime` values consistently because the models declare `datetime` and explicitly say without an offset.",
+   "witness": {
+    "initial": "An EXIF timestamp denotes 10:00 UTC and a mark is created at 12:00 UTC.",
+    "events": [
+     "The deliverer prepares the photo.",
+     "The calling flow marks the publication.",
+     "The values are persisted and later returned."
+    ],
+    "outcomes": [
+     "The service stores naive datetimes `10:00` and `12:00`.",
+     "The service stores aware UTC datetimes and merely strips offsets when serializing."
+    ],
+    "observer": "Persistence and API consumers see different datetime values or encodings."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "camera-record instant",
+   "kind": "ambiguous_instant_meaning",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "Which camera timestamp field is authoritative, how is a camera time with no zone interpreted as a UTC instant, and what makes a camera record unusable so that modification time is used?",
+   "options": [
+    "Use DateTimeOriginal and interpret an absent zone as UTC",
+    "Use DateTimeOriginal with its offset and reject or fall back when the offset is absent",
+    "Use a fixed deployment timezone for zone-less camera times",
+    "Use another ordered list of EXIF timestamp fields"
+   ],
+   "default_guess": "Use DateTimeOriginal with an explicit EXIF offset; if either is absent or invalid, fall back to file modification time.",
+   "witness": {
+    "initial": "A photo has EXIF DateTimeOriginal `2026:07:01 10:00:00` with no offset and a file modification time of 08:15 UTC.",
+    "events": [
+     "The owner places the file in the photo folder.",
+     "The deliverer prepares it."
+    ],
+    "outcomes": [
+     "The photo date is treated as 10:00 UTC.",
+     "The EXIF value is unusable and the photo date becomes 08:15 UTC."
+    ],
+    "observer": "The Portal and owner see a different photo date."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "number of time readings per operation",
+   "kind": "unspecified_read_count",
+   "text": "A file is taken only after it has been unchanged for two minutes",
+   "question": "How many readings of the decided time source does one scan, placement, or mark take, and is one captured instant shared by every time-dependent decision and write in that operation?",
+   "options": [
+    "Exactly one clock reading per operation",
+    "One reading per file or comparison",
+    "Separate readings for comparisons and fresh timestamps"
+   ],
+   "default_guess": "Capture exactly one instant at the start of each operation and reuse it throughout that operation.",
+   "witness": {
+    "initial": "Two files have identical modification times and the two-minute boundary occurs while a scan is iterating them.",
+    "events": [
+     "The calling flow starts one scan just before the boundary.",
+     "The deliverer evaluates the first file and then the second."
+    ],
+    "outcomes": [
+     "Both files are settling because the scan uses one captured instant.",
+     "The first file is settling and the second is ready because the clock is read per file."
+    ],
+    "observer": "The calling flow sees different observations from the same scan."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "unreadable ObjectConnection",
+   "kind": "vague_refusal_condition",
+   "text": "A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.",
+   "question": "Exactly which failures mean that a record “cannot be read”: absence, permission or I/O failure, invalid encoding, parse/schema failure, unsupported version, or a transient/partial concurrent write?",
+   "options": [
+    "Every storage, decoding, and validation failure after locating a record",
+    "Only filesystem I/O and permission failures",
+    "Only failures to deserialize an otherwise located record",
+    "A specified closed list of failures"
+   ],
+   "default_guess": "Treat every failure to load and validate a located record as unreadable, while a definitely absent record remains `unknown_project`.",
+   "unit": "?"
+  },
+  {
+   "subject": "connection reload boundary",
+   "kind": "ambiguous_operation_boundary",
+   "text": "The service reads the connection record at each scan, placement and mark, so a change applies from the next operation without a restart.",
+   "question": "When is the “next operation” determined for concurrent or queued requests, and must the connection be read exactly once into an immutable snapshot before any operation effects?",
+   "options": [
+    "At request admission, with one immutable snapshot",
+    "When execution begins, after waiting for any operation lock",
+    "Immediately before the first folder or persistence effect",
+    "Repeatedly during the operation"
+   ],
+   "default_guess": "Read and validate one immutable snapshot after acquiring the operation's lock and before any folder or persistence effect.",
+   "witness": {
+    "initial": "A placement request is accepted but waits before accessing the source; its connection is confirmed.",
+    "events": [
+     "The calling flow sends the placement request.",
+     "The agent clears `assignment_confirmed` while the request is waiting.",
+     "The placement resumes."
+    ],
+    "outcomes": [
+     "The placement succeeds because it was the operation already admitted before the change.",
+     "The placement is refused because execution and the connection read occur after the change."
+    ],
+    "observer": "The calling flow and owner see whether a photo was placed."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "connection refusal precedence",
+   "kind": "unspecified_precedence",
+   "text": "An operation on a project with no connection is refused with `unknown_project`, and one with an unconfirmed connection with `connection_not_confirmed`. This is decided by the service, not by the caller. The service reads the connection record at each scan, placement and mark, so a change applies from the next operation without a restart. A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.",
+   "question": "Which refusal wins when a located record is both unconfirmed and invalid under rule 7, or cannot be decoded well enough to determine its project or confirmation?",
+   "options": [
+    "Unreadable or rule-7-invalid takes precedence over confirmation",
+    "Unconfirmed takes precedence whenever that field can be read",
+    "Apply a specified validation order and return its first failure"
+   ],
+   "default_guess": "Authenticate first, locate and fully load the record next, validate rule 7 next, and check confirmation last; therefore `folder_unavailable` wins over `connection_not_confirmed`.",
+   "witness": {
+    "initial": "A project's record has `assignment_confirmed` false and a photo subfolder containing `..`.",
+    "events": [
+     "The calling flow invokes scan with the correct token.",
+     "The service loads the record."
+    ],
+    "outcomes": [
+     "The service returns `connection_not_confirmed`.",
+     "The service returns `folder_unavailable`."
+    ],
+    "observer": "The calling flow sees a different refusal code."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "rule 7 validation during mark",
+   "kind": "ambiguous_cross_rule_scope",
+   "text": "A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.",
+   "question": "For a mark operation, does “breaks rule 7” include the live resolved-photo-folder requirement that rule 7 states only for scan and placement, or only the record's non-empty relative-path constraints?",
+   "options": [
+    "Mark applies every lexical and live filesystem check in rule 7",
+    "Mark applies only rule 7's record-shape checks",
+    "Mark merely requires a readable confirmed connection because it does not access a folder"
+   ],
+   "default_guess": "For mark, apply the record-shape checks but not live photo-folder resolution, because rule 7 explicitly limits that filesystem check to scan and placement.",
+   "witness": {
+    "initial": "A confirmed connection has valid relative subfolders, but its photo-folder symlink has been changed to resolve outside the root after placement.",
+    "events": [
+     "The calling flow publishes the already placed photo in the Portal.",
+     "The calling flow sends mark with the returned `photo_id`."
+    ],
+    "outcomes": [
+     "Mark is refused with `folder_unavailable` because the live resolved folder breaks rule 7.",
+     "Mark succeeds because mark does not perform the scan-and-placement folder check."
+    ],
+    "observer": "The calling flow sees whether the publication mark is recorded."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "resolved folder containment",
+   "kind": "unspecified_check_use_invariant",
+   "text": "On each scan and placement the photo folder must be a folder whose resolved path is strictly below the resolved root, otherwise the operation is refused with `folder_unavailable`.",
+   "question": "Must containment remain true while files are accessed, and what mechanism prevents a symlink or mount change between the resolution check and the later read?",
+   "options": [
+    "Containment is checked once and the later path lookup may race",
+    "The operation uses directory handles or equivalent traversal that preserves containment",
+    "Containment is rechecked immediately before every file access"
+   ],
+   "default_guess": "Use root-relative directory handles with no-follow traversal so the checked containment remains true through use.",
+   "witness": {
+    "initial": "The photo folder is a symlink resolving below the root when placement begins.",
+    "events": [
+     "The service resolves and validates the photo folder.",
+     "Another local actor retargets the symlink outside the root.",
+     "The service opens the requested source file."
+    ],
+    "outcomes": [
+     "The placement reads the outside file because only the earlier resolution was checked.",
+     "The placement is refused or remains confined because the validated directory handle is used."
+    ],
+    "observer": "The owner sees whether content from outside the object root is placed."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-10 live-confirmation test",
+   "kind": "underspecified_required_test",
+   "text": "a confirmation cleared while the service runs stops the next operation (`test_a_cleared_confirmation_stops_the_running_service`)",
+   "question": "Must this test demonstrate the live reload and absence of effects for scan, placement, and mark separately, and must it assert `connection_not_confirmed` rather than only that an operation did not deliver?",
+   "options": [
+    "Exercise all three operations and assert the exact refusal plus no effects",
+    "Exercise one representative operation and rely on the earlier unconfirmed-connection test for the others",
+    "Assert only that no delivery effect occurs"
+   ],
+   "default_guess": "Exercise scan, placement, and mark after a runtime clear, asserting `connection_not_confirmed` and no folder, placement, or mark effects.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-10 unreadable-record test",
+   "kind": "underspecified_required_test",
+   "text": "an unreadable record delivers nothing (`test_unreadable_connections_deliver_nothing`)",
+   "question": "Which operations and unreadability cases must the check exercise, and must it assert `folder_unavailable`, no scanning, no placement, no mark, and no partial writes?",
+   "options": [
+    "Cover scan, placement, and mark for every specified unreadability class and assert exact refusal and no effects",
+    "Cover one representative operation and one unreadability case",
+    "Assert only absence of a delivered photo"
+   ],
+   "default_guess": "Cover scan, placement, and mark for a representative storage failure and a malformed record, asserting `folder_unavailable` and no observable side effects.",
+   "unit": "?"
+  },
+  {
+   "subject": "formal invariant for invalid or unreadable connections",
+   "kind": "missing_invariant_or_test_binding",
+   "text": "A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.",
+   "question": "Is this new safety requirement part of INV-10 or a new formal invariant, and which Required tests item states exactly what must be shown for unreadable records and every applicable rule-7 failure?",
+   "options": [
+    "Extend INV-10 to cover unreadable and invalid connections and make its tests explicit",
+    "Create a separate formal invariant with its own Required tests item",
+    "Treat it only as a normative behavior with no formal invariant"
+   ],
+   "default_guess": "Extend INV-10 to say that no scan, placement, or mark effect occurs unless the connection is readable, valid for that operation, and confirmed, then bind explicit tests to each condition.",
+   "unit": "?"
+  },
+  {
+   "subject": "A10 files_artifacts category",
+   "kind": "security_review_mismatch",
+   "text": "- files_artifacts: APPLICABLE; references: A1, A2, A6, A8; affected: M02, M03, M04, source folders, Portal binary store",
+   "question": "Must this category now reference A5 and cover unreadable connection records, resolved-root containment, and runtime folder-link changes introduced by A5?",
+   "options": [
+    "Add A5 and the connection record/path boundary to this category",
+    "Place the new A5 concerns in another explicitly named category",
+    "State why A5's new file and path rules do not affect this category"
+   ],
+   "default_guess": "Add A5 and ObjectConnection storage plus resolved-root containment to `files_artifacts`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A10 concurrency category",
+   "kind": "security_review_mismatch",
+   "text": "- concurrency: APPLICABLE; references: A3, A4, A6; affected: M04, M07",
+   "question": "Must the concurrency outcome now reference A5 and M01 because a connection can change while the running service is admitting or executing scan, placement, and mark operations?",
+   "options": [
+    "Add A5 and M01 and decide the read/snapshot boundary",
+    "State that connection updates and operations are serialized elsewhere and reference that decision",
+    "State why the new live-reload behavior creates no concurrency concern"
+   ],
+   "default_guess": "Add A5 and M01 and require one validated connection snapshot after acquiring the operation lock.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 refusal code",
+   "kind": "standard_violation",
+   "text": "A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Make `folder_unavailable` a member of a models enumeration used as the refusal-code type, or give it another applicable one of the three stated paths to generated code instead of leaving the generated implementation to obtain the literal from prose.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"time source for settling checks\",\"kind\":\"missing_time_source\",\"text\":\"A file is taken only after it has been unchanged for two minutes\",\"question\":\"What time source is compared with the file modification time to decide that two minutes have elapsed?\",\"options\":[\"A UTC wall clock supplied to the scan\",\"A monotonic clock combined with a captured filesystem timestamp\",\"An ambient system clock read by the scanner\"],\"default_guess\":\"Use an injected UTC wall clock because filesystem modification times are wall-clock instants.\",\"witness\":{\"initial\":\"A file's modification time is 12:00 UTC and the system wall clock is adjusted backward while the service remains running.\",\"events\":[\"The owner starts a scan after two monotonic minutes have elapsed but while the wall clock reads 11:59.\",\"The deliverer evaluates whether the file is settled.\"],\"outcomes\":[\"The file is ready because two monotonic minutes elapsed.\",\"The file remains settling because the wall-clock difference is negative.\"],\"observer\":\"The calling flow sees ready versus settling.\"}},{\"subject\":\"PublicationMark.marked_at\",\"kind\":\"missing_time_source\",\"text\":\"`marked_at: datetime`\",\"question\":\"Which authority supplies the fresh instant written to `marked_at`?\",\"options\":[\"A clock port passed to the mark operation or service\",\"A datetime parameter supplied by the calling flow\",\"A declared authority module\",\"An ambient system-clock call inside the implementation\"],\"default_guess\":\"Use a clock port owned by the deliverer and injected into the marking service.\"},{\"subject\":\"photo and mark datetime representation\",\"kind\":\"ambiguous_representation\",\"text\":\"with the moment the photo was taken as UTC without an offset\",\"question\":\"Does “UTC without an offset” mean a timezone-naive UTC `datetime`, an aware UTC `datetime` whose serialized form omits the offset, or a string, and must `marked_at` use the same representation?\",\"options\":[\"Timezone-naive UTC datetime in memory and serialization\",\"Timezone-aware UTC datetime in memory, serialized without an offset\",\"A canonical UTC string without an offset\",\"Different representations for photo dates and marked_at\"],\"default_guess\":\"Use timezone-naive UTC `datetime` values consistently because the models declare `datetime` and explicitly say without an offset.\",\"witness\":{\"initial\":\"An EXIF timestamp denotes 10:00 UTC and a mark is created at 12:00 UTC.\",\"events\":[\"The deliverer prepares the photo.\",\"The calling flow marks the publication.\",\"The values are persisted and later returned.\"],\"outcomes\":[\"The service stores naive datetimes `10:00` and `12:00`.\",\"The service stores aware UTC datetimes and merely strips offsets when serializing.\"],\"observer\":\"Persistence and API consumers see different datetime values or encodings.\"}},{\"subject\":\"camera-record instant\",\"kind\":\"ambiguous_instant_meaning\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"Which camera timestamp field is authoritative, how is a camera time with no zone interpreted as a UTC instant, and what makes a camera record unusable so that modification time is used?\",\"options\":[\"Use DateTimeOriginal and interpret an absent zone as UTC\",\"Use DateTimeOriginal with its offset and reject or fall back when the offset is absent\",\"Use a fixed deployment timezone for zone-less camera times\",\"Use another ordered list of EXIF timestamp fields\"],\"default_guess\":\"Use DateTimeOriginal with an explicit EXIF offset; if either is absent or invalid, fall back to file modification time.\",\"witness\":{\"initial\":\"A photo has EXIF DateTimeOriginal `2026:07:01 10:00:00` with no offset and a file modification time of 08:15 UTC.\",\"events\":[\"The owner places the file in the photo folder.\",\"The deliverer prepares it.\"],\"outcomes\":[\"The photo date is treated as 10:00 UTC.\",\"The EXIF value is unusable and the photo date becomes 08:15 UTC.\"],\"observer\":\"The Portal and owner see a different photo date.\"}},{\"subject\":\"number of time readings per operation\",\"kind\":\"unspecified_read_count\",\"text\":\"A file is taken only after it has been unchanged for two minutes\",\"question\":\"How many readings of the decided time source does one scan, placement, or mark take, and is one captured instant shared by every time-dependent decision and write in that operation?\",\"options\":[\"Exactly one clock reading per operation\",\"One reading per file or comparison\",\"Separate readings for comparisons and fresh timestamps\"],\"default_guess\":\"Capture exactly one instant at the start of each operation and reuse it throughout that operation.\",\"witness\":{\"initial\":\"Two files have identical modification times and the two-minute boundary occurs while a scan is iterating them.\",\"events\":[\"The calling flow starts one scan just before the boundary.\",\"The deliverer evaluates the first file and then the second.\"],\"outcomes\":[\"Both files are settling because the scan uses one captured instant.\",\"The first file is settling and the second is ready because the clock is read per file.\"],\"observer\":\"The calling flow sees different observations from the same scan.\"}},{\"subject\":\"unreadable ObjectConnection\",\"kind\":\"vague_refusal_condition\",\"text\":\"A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.\",\"question\":\"Exactly which failures mean that a record “cannot be read”: absence, permission or I/O failure, invalid encoding, parse/schema failure, unsupported version, or a transient/partial concurrent write?\",\"options\":[\"Every storage, decoding, and validation failure after locating a record\",\"Only filesystem I/O and permission failures\",\"Only failures to deserialize an otherwise located record\",\"A specified closed list of failures\"],\"default_guess\":\"Treat every failure to load and validate a located record as unreadable, while a definitely absent record remains `unknown_project`.\"},{\"subject\":\"connection reload boundary\",\"kind\":\"ambiguous_operation_boundary\",\"text\":\"The service reads the connection record at each scan, placement and mark, so a change applies from the next operation without a restart.\",\"question\":\"When is the “next operation” determined for concurrent or queued requests, and must the connection be read exactly once into an immutable snapshot before any operation effects?\",\"options\":[\"At request admission, with one immutable snapshot\",\"When execution begins, after waiting for any operation lock\",\"Immediately before the first folder or persistence effect\",\"Repeatedly during the operation\"],\"default_guess\":\"Read and validate one immutable snapshot after acquiring the operation's lock and before any folder or persistence effect.\",\"witness\":{\"initial\":\"A placement request is accepted but waits before accessing the source; its connection is confirmed.\",\"events\":[\"The calling flow sends the placement request.\",\"The agent clears `assignment_confirmed` while the request is waiting.\",\"The placement resumes.\"],\"outcomes\":[\"The placement succeeds because it was the operation already admitted before the change.\",\"The placement is refused because execution and the connection read occur after the change.\"],\"observer\":\"The calling flow and owner see whether a photo was placed.\"}},{\"subject\":\"connection refusal precedence\",\"kind\":\"unspecified_precedence\",\"text\":\"An operation on a project with no connection is refused with `unknown_project`, and one with an unconfirmed connection with `connection_not_confirmed`. This is decided by the service, not by the caller. The service reads the connection record at each scan, placement and mark, so a change applies from the next operation without a restart. A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.\",\"question\":\"Which refusal wins when a located record is both unconfirmed and invalid under rule 7, or cannot be decoded well enough to determine its project or confirmation?\",\"options\":[\"Unreadable or rule-7-invalid takes precedence over confirmation\",\"Unconfirmed takes precedence whenever that field can be read\",\"Apply a specified validation order and return its first failure\"],\"default_guess\":\"Authenticate first, locate and fully load the record next, validate rule 7 next, and check confirmation last; therefore `folder_unavailable` wins over `connection_not_confirmed`.\",\"witness\":{\"initial\":\"A project's record has `assignment_confirmed` false and a photo subfolder containing `..`.\",\"events\":[\"The calling flow invokes scan with the correct token.\",\"The service loads the record.\"],\"outcomes\":[\"The service returns `connection_not_confirmed`.\",\"The service returns `folder_unavailable`.\"],\"observer\":\"The calling flow sees a different refusal code.\"}},{\"subject\":\"rule 7 validation during mark\",\"kind\":\"ambiguous_cross_rule_scope\",\"text\":\"A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.\",\"question\":\"For a mark operation, does “breaks rule 7” include the live resolved-photo-folder requirement that rule 7 states only for scan and placement, or only the record's non-empty relative-path constraints?\",\"options\":[\"Mark applies every lexical and live filesystem check in rule 7\",\"Mark applies only rule 7's record-shape checks\",\"Mark merely requires a readable confirmed connection because it does not access a folder\"],\"default_guess\":\"For mark, apply the record-shape checks but not live photo-folder resolution, because rule 7 explicitly limits that filesystem check to scan and placement.\",\"witness\":{\"initial\":\"A confirmed connection has valid relative subfolders, but its photo-folder symlink has been changed to resolve outside the root after placement.\",\"events\":[\"The calling flow publishes the already placed photo in the Portal.\",\"The calling flow sends mark with the returned `photo_id`.\"],\"outcomes\":[\"Mark is refused with `folder_unavailable` because the live resolved folder breaks rule 7.\",\"Mark succeeds because mark does not perform the scan-and-placement folder check.\"],\"observer\":\"The calling flow sees whether the publication mark is recorded.\"}},{\"subject\":\"resolved folder containment\",\"kind\":\"unspecified_check_use_invariant\",\"text\":\"On each scan and placement the photo folder must be a folder whose resolved path is strictly below the resolved root, otherwise the operation is refused with `folder_unavailable`.\",\"question\":\"Must containment remain true while files are accessed, and what mechanism prevents a symlink or mount change between the resolution check and the later read?\",\"options\":[\"Containment is checked once and the later path lookup may race\",\"The operation uses directory handles or equivalent traversal that preserves containment\",\"Containment is rechecked immediately before every file access\"],\"default_guess\":\"Use root-relative directory handles with no-follow traversal so the checked containment remains true through use.\",\"witness\":{\"initial\":\"The photo folder is a symlink resolving below the root when placement begins.\",\"events\":[\"The service resolves and validates the photo folder.\",\"Another local actor retargets the symlink outside the root.\",\"The service opens the requested source file.\"],\"outcomes\":[\"The placement reads the outside file because only the earlier resolution was checked.\",\"The placement is refused or remains confined because the validated directory handle is used.\"],\"observer\":\"The owner sees whether content from outside the object root is placed.\"}},{\"subject\":\"INV-10 live-confirmation test\",\"kind\":\"underspecified_required_test\",\"text\":\"a confirmation cleared while the service runs stops the next operation (`test_a_cleared_confirmation_stops_the_running_service`)\",\"question\":\"Must this test demonstrate the live reload and absence of effects for scan, placement, and mark separately, and must it assert `connection_not_confirmed` rather than only that an operation did not deliver?\",\"options\":[\"Exercise all three operations and assert the exact refusal plus no effects\",\"Exercise one representative operation and rely on the earlier unconfirmed-connection test for the others\",\"Assert only that no delivery effect occurs\"],\"default_guess\":\"Exercise scan, placement, and mark after a runtime clear, asserting `connection_not_confirmed` and no folder, placement, or mark effects.\"},{\"subject\":\"INV-10 unreadable-record test\",\"kind\":\"underspecified_required_test\",\"text\":\"an unreadable record delivers nothing (`test_unreadable_connections_deliver_nothing`)\",\"question\":\"Which operations and unreadability cases must the check exercise, and must it assert `folder_unavailable`, no scanning, no placement, no mark, and no partial writes?\",\"options\":[\"Cover scan, placement, and mark for every specified unreadability class and assert exact refusal and no effects\",\"Cover one representative operation and one unreadability case\",\"Assert only absence of a delivered photo\"],\"default_guess\":\"Cover scan, placement, and mark for a representative storage failure and a malformed record, asserting `folder_unavailable` and no observable side effects.\"},{\"subject\":\"formal invariant for invalid or unreadable connections\",\"kind\":\"missing_invariant_or_test_binding\",\"text\":\"A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.\",\"question\":\"Is this new safety requirement part of INV-10 or a new formal invariant, and which Required tests item states exactly what must be shown for unreadable records and every applicable rule-7 failure?\",\"options\":[\"Extend INV-10 to cover unreadable and invalid connections and make its tests explicit\",\"Create a separate formal invariant with its own Required tests item\",\"Treat it only as a normative behavior with no formal invariant\"],\"default_guess\":\"Extend INV-10 to say that no scan, placement, or mark effect occurs unless the connection is readable, valid for that operation, and confirmed, then bind explicit tests to each condition.\"},{\"subject\":\"A10 files_artifacts category\",\"kind\":\"security_review_mismatch\",\"text\":\"- files_artifacts: APPLICABLE; references: A1, A2, A6, A8; affected: M02, M03, M04, source folders, Portal binary store\",\"question\":\"Must this category now reference A5 and cover unreadable connection records, resolved-root containment, and runtime folder-link changes introduced by A5?\",\"options\":[\"Add A5 and the connection record/path boundary to this category\",\"Place the new A5 concerns in another explicitly named category\",\"State why A5's new file and path rules do not affect this category\"],\"default_guess\":\"Add A5 and ObjectConnection storage plus resolved-root containment to `files_artifacts`.\"},{\"subject\":\"A10 concurrency category\",\"kind\":\"security_review_mismatch\",\"text\":\"- concurrency: APPLICABLE; references: A3, A4, A6; affected: M04, M07\",\"question\":\"Must the concurrency outcome now reference A5 and M01 because a connection can change while the running service is admitting or executing scan, placement, and mark operations?\",\"options\":[\"Add A5 and M01 and decide the read/snapshot boundary\",\"State that connection updates and operations are serialized elsewhere and reference that decision\",\"State why the new live-reload behavior creates no concurrency concern\"],\"default_guess\":\"Add A5 and M01 and require one validated connection snapshot after acquiring the operation lock.\"},{\"subject\":\"A5 refusal code\",\"kind\":\"standard_violation\",\"text\":\"A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Make `folder_unavailable` a member of a models enumeration used as the refusal-code type, or give it another applicable one of the three stated paths to generated code instead of leaving the generated implementation to obtain the literal from prose.\"}]}",
+ "set_aside": []
+}

@@ -191,28 +191,39 @@ A published photo is recognised without any change to the Portal.
 6. A change of an object's root or subfolder writes `assignment_confirmed` false (R0-11). An
    operation on a project with no connection is refused with `unknown_project`, and one with an
    unconfirmed connection with `connection_not_confirmed`. This is decided by the service, not by
-   the caller. The service reads the connection record at each scan, placement and mark, so a change
-   applies from the next operation without a restart. A record that cannot be read or breaks rule 7
-   refuses the operation with `folder_unavailable`.
-7. The photo and invoice subfolders are non-empty relative paths without `..` and are not the root
-   itself. The service does not start with a connection that breaks this. On each scan and placement
+   the caller.
+7. Each scan, placement and mark reads the connections file exactly once, at its connection check,
+   and uses that reading for the whole operation. A change written later applies from the next
+   operation without a restart, and an operation that has already read the file finishes on that
+   reading. The file is judged whole before any project is looked up, so the first condition that
+   applies decides:
+
+   | Order | Condition | Answer |
+   |---|---|---|
+   | 1 | the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or any record breaks rule 8 | `folder_unavailable` |
+   | 2 | the file holds no record for the project | `unknown_project` |
+   | 3 | the project's record is unconfirmed | `connection_not_confirmed` |
+
+   The service does not start when condition 1 applies.
+8. The photo and invoice subfolders are non-empty relative paths without `..` and are not the root
+   itself. On each scan and placement
    the photo folder must be a folder whose resolved path is strictly below the resolved root,
    otherwise the operation is refused
    with `folder_unavailable`.
-8. A project id must be a UUID and a source id 64 lowercase hexadecimal characters. Neither a file
+9. A project id must be a UUID and a source id 64 lowercase hexadecimal characters. Neither a file
    name nor any other received text becomes part of a stored path.
-9. An answer never holds a server path or a credential. File names are returned as plain data.
+10. An answer never holds a server path or a credential. File names are returned as plain data.
 
 ### Formal invariants
 
 - INV-09: no operation except the health answer succeeds without the deliverer's token.
-- INV-10: nothing is scanned, placed or marked for a project without a confirmed connection.
+- INV-10: nothing is scanned, placed or marked for a project unless the connections file read by that operation is valid and holds a confirmed connection for the project.
 - INV-11: the deliverer holds no Portal credential, never calls the Portal, and returns no server path.
 
 ### Required tests
 
 - INV-09: every declared route except the health answer refuses a request without the token (`test_every_route_except_health_requires_the_token`), and a wrong token or one without the `Bearer` prefix is refused (`test_the_api_requires_the_token`).
-- INV-10: scan, place and mark are refused for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`), a connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`), a confirmation cleared while the service runs stops the next operation (`test_a_cleared_confirmation_stops_the_running_service`), and an unreadable record delivers nothing (`test_unreadable_connections_deliver_nothing`).
+- INV-10: scan, placement and mark each answer `connection_not_confirmed` for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`). After a scan has succeeded on the running service, clearing the confirmation makes scan, placement and mark each answer `connection_not_confirmed` and write nothing (`test_a_cleared_confirmation_stops_the_running_service`). For an absent file, a file that is not UTF-8 or JSON, a file of another form and a record that breaks rule 8, also when that record is unconfirmed, scan, placement and mark each answer `folder_unavailable` and write nothing (`test_unreadable_connections_deliver_nothing`), and the service does not start (`test_the_service_does_not_start_with_an_unreadable_connection_record`). Each operation reads the file once (`test_each_operation_reads_the_connection_record_once`). A connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).
 - INV-11: answers of scan, place, mark and a refusal contain neither the folder path, the store path nor the state path (`test_the_api_scans_and_places_without_showing_server_paths`), and the generated service has no Portal client, no outbound HTTP dependency and no Portal credential setting.
 
 ### Consequence
@@ -257,7 +268,8 @@ A repeated action from the workplace cannot duplicate a delivery.
    and reaching code through `system_clock_backend` as the operation `utc_now`.
 2. Scan, placement and mark each read it once, after the token, the request form and the path
    identifiers are accepted and before the project lock is taken or any connection, file or record is
-   examined. A request refused before that point and the health answer do not read it. A request
+   examined. A source id in the body of a placement is not a path identifier: it is checked after the
+   clock, at the place A3 rule 4 gives it. A request refused before that point and the health answer do not read it. A request
    refused after it, and a replayed mark, have read it and write nothing.
 3. The current time is a `datetime` in UTC without an offset, with microsecond precision and no
    rounding, written in ISO 8601 form. It decides the settling status and sets `marked_at`.
@@ -403,6 +415,6 @@ Security review: PERFORMED
 - injection_interpreted_input: APPLICABLE; references: A5, A6; affected: project id, source id, file names, stored paths
 - external_callbacks_webhooks: NOT_APPLICABLE; rationale: no external system sends events to the deliverer, and the publication mark is an authenticated call of the owner's flow
 - browser_boundary: NOT_APPLICABLE; rationale: the service has no browser client, cookie, page or cross-origin surface, and a caller that displays a file name treats it as plain text
-- files_artifacts: APPLICABLE; references: A1, A2, A6, A8; affected: M02, M03, M04, source folders, Portal binary store
-- concurrency: APPLICABLE; references: A3, A4, A6; affected: M04, M07
+- files_artifacts: APPLICABLE; references: A1, A2, A5, A6, A8; affected: M01, M02, M03, M04, connections file, source folders, Portal binary store
+- concurrency: APPLICABLE; references: A3, A4, A5, A6; affected: M01, M04, M07
 - dependencies: APPLICABLE; references: A9; affected: image library, web framework, validation library, web server

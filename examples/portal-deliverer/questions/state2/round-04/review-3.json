@@ -1,0 +1,226 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_source",
+   "text": "`marked_at: datetime`",
+   "question": "Which authority supplies the instant written to `marked_at`?",
+   "options": [
+    "A wall-clock UTC reading supplied to the mark operation",
+    "A clock port read by the service",
+    "A database-generated timestamp",
+    "The caller supplies the instant"
+   ],
+   "default_guess": "Inject a UTC clock port and read it when the first mark is created.",
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_representation",
+   "text": "`marked_at: datetime`",
+   "question": "What exact representation and timezone semantics does `marked_at` use?",
+   "options": [
+    "Timezone-aware UTC datetime",
+    "Naive datetime interpreted as UTC",
+    "Integer Unix timestamp",
+    "Database-native timestamp with a specified precision"
+   ],
+   "default_guess": "Use a timezone-aware UTC datetime with explicitly fixed precision.",
+   "unit": "?"
+  },
+  {
+   "subject": "P-04 settling comparison",
+   "kind": "missing_time_semantics",
+   "text": "A file is taken only after it has been unchanged for two minutes",
+   "question": "What clock supplies the comparison instant, how is it represented, and how are wall-clock changes handled when comparing it with the file modification time?",
+   "options": [
+    "Compare one UTC wall-clock reading with the file's UTC modification time",
+    "Measure an observation interval with a monotonic clock",
+    "Require two scans separated by at least two minutes",
+    "Use storage or filesystem server time"
+   ],
+   "default_guess": "Take one timezone-aware UTC wall-clock reading per scan and compare it with the file modification instant.",
+   "unit": "?"
+  },
+  {
+   "subject": "operations that write or compare time",
+   "kind": "missing_read_count",
+   "text": "The deliverer creates it once when placing a photo.",
+   "question": "How many readings of the decided time source may each scan, placement, or mark operation take, and must all timestamps and comparisons within one operation share one captured instant?",
+   "options": [
+    "Exactly one captured instant per operation",
+    "One reading for each timestamp or comparison",
+    "One transaction-generated instant for writes and separate readings for comparisons"
+   ],
+   "default_guess": "Capture exactly one instant at the start of each operation that needs current time and reuse it throughout that operation.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 missing versus unreadable connection",
+   "kind": "contradictory_refusal",
+   "text": "An operation on a project with no connection is refused with `unknown_project`, and one with an unconfirmed connection with `connection_not_confirmed`. This is decided by the service, not by the caller. The service reads the connection record at each scan, placement and mark, so a change applies from the next operation without a restart. A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.",
+   "question": "When the connection lookup reports absence or otherwise cannot produce a record, which cases are `unknown_project` and which are `folder_unavailable`?",
+   "options": [
+    "Absence is always `unknown_project`; only failures reading an existing record are `folder_unavailable`",
+    "Every failed record read, including not-found, is `folder_unavailable`",
+    "Use `unknown_project` only when absence is conclusively established and `folder_unavailable` for indeterminate lookup failures"
+   ],
+   "default_guess": "Return `unknown_project` for a definitive not-found result and `folder_unavailable` for permission, I/O, decoding, or other lookup failures.",
+   "witness": {
+    "initial": "No connection record exists for a valid project id.",
+    "events": [
+     "The calling flow requests a scan for that project.",
+     "The service's connection repository returns not-found while attempting to read the record."
+    ],
+    "outcomes": [
+     "The request is refused with `unknown_project` because the project has no connection.",
+     "The request is refused with `folder_unavailable` because the record could not be read."
+    ],
+    "observer": "The calling flow sees a different refusal code."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 connection refusal precedence",
+   "kind": "missing_precedence",
+   "text": "one with an unconfirmed connection with `connection_not_confirmed`. This is decided by the service, not by the caller. The service reads the connection record at each scan, placement and mark, so a change applies from the next operation without a restart. A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.",
+   "question": "Which refusal wins when a readable connection is both unconfirmed and invalid under rule 7?",
+   "options": [
+    "`connection_not_confirmed` takes precedence",
+    "`folder_unavailable` takes precedence",
+    "The result depends on which validation is performed first"
+   ],
+   "default_guess": "Check confirmation first and return `connection_not_confirmed`.",
+   "witness": {
+    "initial": "A readable connection has `assignment_confirmed` false and a photo subfolder containing `..`.",
+    "events": [
+     "The calling flow requests a scan.",
+     "The service reads the connection record."
+    ],
+    "outcomes": [
+     "The operation is refused with `connection_not_confirmed` because the connection is unconfirmed.",
+     "The operation is refused with `folder_unavailable` because the record breaks rule 7."
+    ],
+    "observer": "The calling flow sees a different refusal code."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 mark validation",
+   "kind": "conflicting_scope",
+   "text": "The service reads the connection record at each scan, placement and mark, so a change applies from the next operation without a restart. A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.",
+   "question": "Must a mark validate the rule-7 folder constraints, even though rule 7 requires the resolved-folder check only \"On each scan and placement\"?",
+   "options": [
+    "Every mark validates all static and resolved-path requirements of rule 7",
+    "A mark validates only record readability and confirmation",
+    "A mark validates static subfolder syntax but performs no filesystem resolution"
+   ],
+   "default_guess": "For mark, validate readability, confirmation, and static record syntax, but do not resolve or inspect a folder it does not use.",
+   "witness": {
+    "initial": "A confirmed connection's photo subfolder is a symbolic link that now resolves outside the root, and a placement for the project already exists.",
+    "events": [
+     "The calling flow reports the placement's Portal photo id by invoking mark.",
+     "The service reads the connection record."
+    ],
+    "outcomes": [
+     "Mark is refused with `folder_unavailable` because the record breaks rule 7.",
+     "Mark succeeds because rule 7 requires resolved-path validation only for scan and placement."
+    ],
+    "observer": "The calling flow sees whether the publication mark was recorded."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 operation snapshot boundary",
+   "kind": "undefined_operation_boundary",
+   "text": "a change applies from the next operation without a restart",
+   "question": "What determines whether a concurrent connection change belongs to the current operation or the next one, and must the record be read exactly once as an immutable operation snapshot?",
+   "options": [
+    "The operation starts when its request is accepted and uses one record snapshot",
+    "The operation starts at the connection read",
+    "The latest record must be rechecked immediately before every side effect",
+    "Repository transaction ordering defines the boundary"
+   ],
+   "default_guess": "Define the connection read as the operation's linearization point and use that single immutable snapshot.",
+   "witness": {
+    "initial": "A project has a confirmed connection and a scan request has begun but has not yet read or delivered a file.",
+    "events": [
+     "The calling flow starts the scan.",
+     "The agent changes the subfolder and clears confirmation.",
+     "The scan reaches its connection check and possible placement work."
+    ],
+    "outcomes": [
+     "The scan uses the old confirmed connection because it was already the current operation.",
+     "The scan reads the changed record and is refused because the change applies before its connection-read boundary."
+    ],
+    "observer": "The owner sees whether the scan processes a file after confirmation was cleared."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 unreadable connection",
+   "kind": "vague_refusal_condition",
+   "text": "A record that cannot be read",
+   "question": "Which concrete failures count as an unreadable record: permission or I/O errors, transient lock or timeout, invalid encoding, parse/schema failure, unsupported revision, or not-found?",
+   "options": [
+    "Only filesystem or database read failures",
+    "Read failures plus decoding and schema failures",
+    "Every repository failure including not-found and timeout",
+    "A closed enumerated set of repository outcomes"
+   ],
+   "default_guess": "Use a closed set covering I/O, permission, decoding, schema, and unsupported-revision failures, while treating definitive not-found separately as `unknown_project`.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-10 required tests",
+   "kind": "underspecified_required_test",
+   "text": "an unreadable record delivers nothing (`test_unreadable_connections_deliver_nothing`)",
+   "question": "Must this check exercise scan, placement, and mark and assert the exact `folder_unavailable` refusal, or is showing that one delivery path has no side effect sufficient?",
+   "options": [
+    "Exercise all three operations and assert `folder_unavailable` plus no side effects",
+    "Exercise scan and placement only because mark does not deliver content",
+    "One representative operation with no resulting delivery is sufficient"
+   ],
+   "default_guess": "Exercise scan, placement, and mark; assert `folder_unavailable` and that no placement or publication mark is written.",
+   "unit": "?"
+  },
+  {
+   "subject": "A10 concurrency review",
+   "kind": "security_review_mismatch",
+   "text": "- concurrency: APPLICABLE; references: A3, A4, A6; affected: M04, M07",
+   "question": "Does the concurrency review also cover A5's newly introduced race between each operation and a live change to the connection record, and if so why is A5 not referenced?",
+   "options": [
+    "Add A5 and M01 to the concurrency category and state the operation boundary",
+    "Declare connection reads and updates serialized by another referenced decision",
+    "State explicitly that this race is outside the security category"
+   ],
+   "default_guess": "Add A5 and M01 to the concurrency category and define the connection-read linearization point.",
+   "unit": "?"
+  },
+  {
+   "subject": "A10 files and artifacts review",
+   "kind": "security_review_mismatch",
+   "text": "- files_artifacts: APPLICABLE; references: A1, A2, A6, A8; affected: M02, M03, M04, source folders, Portal binary store",
+   "question": "Does the newly fallible connection record count as a file or artifact requiring review, and if it does, should this outcome reference A5 and include M01 or its backing store?",
+   "options": [
+    "Add A5 and M01 or the connection store to this category",
+    "State that the connection store is not file-backed and belongs to another category",
+    "State that unreadability is availability behavior outside this security category"
+   ],
+   "default_guess": "Add A5 and the M01 connection store to the files/artifacts review.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 folder_unavailable refusal code",
+   "kind": "standard_violation",
+   "text": "A record that cannot be read or breaks rule 7\n   refuses the operation with `folder_unavailable`.",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Make `folder_unavailable` a member of a model enumeration and have the consuming note name that member, or route it through another permitted path appropriate to its value domain.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_source\",\"text\":\"`marked_at: datetime`\",\"question\":\"Which authority supplies the instant written to `marked_at`?\",\"options\":[\"A wall-clock UTC reading supplied to the mark operation\",\"A clock port read by the service\",\"A database-generated timestamp\",\"The caller supplies the instant\"],\"default_guess\":\"Inject a UTC clock port and read it when the first mark is created.\"},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_representation\",\"text\":\"`marked_at: datetime`\",\"question\":\"What exact representation and timezone semantics does `marked_at` use?\",\"options\":[\"Timezone-aware UTC datetime\",\"Naive datetime interpreted as UTC\",\"Integer Unix timestamp\",\"Database-native timestamp with a specified precision\"],\"default_guess\":\"Use a timezone-aware UTC datetime with explicitly fixed precision.\"},{\"subject\":\"P-04 settling comparison\",\"kind\":\"missing_time_semantics\",\"text\":\"A file is taken only after it has been unchanged for two minutes\",\"question\":\"What clock supplies the comparison instant, how is it represented, and how are wall-clock changes handled when comparing it with the file modification time?\",\"options\":[\"Compare one UTC wall-clock reading with the file's UTC modification time\",\"Measure an observation interval with a monotonic clock\",\"Require two scans separated by at least two minutes\",\"Use storage or filesystem server time\"],\"default_guess\":\"Take one timezone-aware UTC wall-clock reading per scan and compare it with the file modification instant.\"},{\"subject\":\"operations that write or compare time\",\"kind\":\"missing_read_count\",\"text\":\"The deliverer creates it once when placing a photo.\",\"question\":\"How many readings of the decided time source may each scan, placement, or mark operation take, and must all timestamps and comparisons within one operation share one captured instant?\",\"options\":[\"Exactly one captured instant per operation\",\"One reading for each timestamp or comparison\",\"One transaction-generated instant for writes and separate readings for comparisons\"],\"default_guess\":\"Capture exactly one instant at the start of each operation that needs current time and reuse it throughout that operation.\"},{\"subject\":\"A5 missing versus unreadable connection\",\"kind\":\"contradictory_refusal\",\"text\":\"An operation on a project with no connection is refused with `unknown_project`, and one with an unconfirmed connection with `connection_not_confirmed`. This is decided by the service, not by the caller. The service reads the connection record at each scan, placement and mark, so a change applies from the next operation without a restart. A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.\",\"question\":\"When the connection lookup reports absence or otherwise cannot produce a record, which cases are `unknown_project` and which are `folder_unavailable`?\",\"options\":[\"Absence is always `unknown_project`; only failures reading an existing record are `folder_unavailable`\",\"Every failed record read, including not-found, is `folder_unavailable`\",\"Use `unknown_project` only when absence is conclusively established and `folder_unavailable` for indeterminate lookup failures\"],\"default_guess\":\"Return `unknown_project` for a definitive not-found result and `folder_unavailable` for permission, I/O, decoding, or other lookup failures.\",\"witness\":{\"initial\":\"No connection record exists for a valid project id.\",\"events\":[\"The calling flow requests a scan for that project.\",\"The service's connection repository returns not-found while attempting to read the record.\"],\"outcomes\":[\"The request is refused with `unknown_project` because the project has no connection.\",\"The request is refused with `folder_unavailable` because the record could not be read.\"],\"observer\":\"The calling flow sees a different refusal code.\"}},{\"subject\":\"A5 connection refusal precedence\",\"kind\":\"missing_precedence\",\"text\":\"one with an unconfirmed connection with `connection_not_confirmed`. This is decided by the service, not by the caller. The service reads the connection record at each scan, placement and mark, so a change applies from the next operation without a restart. A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.\",\"question\":\"Which refusal wins when a readable connection is both unconfirmed and invalid under rule 7?\",\"options\":[\"`connection_not_confirmed` takes precedence\",\"`folder_unavailable` takes precedence\",\"The result depends on which validation is performed first\"],\"default_guess\":\"Check confirmation first and return `connection_not_confirmed`.\",\"witness\":{\"initial\":\"A readable connection has `assignment_confirmed` false and a photo subfolder containing `..`.\",\"events\":[\"The calling flow requests a scan.\",\"The service reads the connection record.\"],\"outcomes\":[\"The operation is refused with `connection_not_confirmed` because the connection is unconfirmed.\",\"The operation is refused with `folder_unavailable` because the record breaks rule 7.\"],\"observer\":\"The calling flow sees a different refusal code.\"}},{\"subject\":\"A5 mark validation\",\"kind\":\"conflicting_scope\",\"text\":\"The service reads the connection record at each scan, placement and mark, so a change applies from the next operation without a restart. A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.\",\"question\":\"Must a mark validate the rule-7 folder constraints, even though rule 7 requires the resolved-folder check only \\\"On each scan and placement\\\"?\",\"options\":[\"Every mark validates all static and resolved-path requirements of rule 7\",\"A mark validates only record readability and confirmation\",\"A mark validates static subfolder syntax but performs no filesystem resolution\"],\"default_guess\":\"For mark, validate readability, confirmation, and static record syntax, but do not resolve or inspect a folder it does not use.\",\"witness\":{\"initial\":\"A confirmed connection's photo subfolder is a symbolic link that now resolves outside the root, and a placement for the project already exists.\",\"events\":[\"The calling flow reports the placement's Portal photo id by invoking mark.\",\"The service reads the connection record.\"],\"outcomes\":[\"Mark is refused with `folder_unavailable` because the record breaks rule 7.\",\"Mark succeeds because rule 7 requires resolved-path validation only for scan and placement.\"],\"observer\":\"The calling flow sees whether the publication mark was recorded.\"}},{\"subject\":\"A5 operation snapshot boundary\",\"kind\":\"undefined_operation_boundary\",\"text\":\"a change applies from the next operation without a restart\",\"question\":\"What determines whether a concurrent connection change belongs to the current operation or the next one, and must the record be read exactly once as an immutable operation snapshot?\",\"options\":[\"The operation starts when its request is accepted and uses one record snapshot\",\"The operation starts at the connection read\",\"The latest record must be rechecked immediately before every side effect\",\"Repository transaction ordering defines the boundary\"],\"default_guess\":\"Define the connection read as the operation's linearization point and use that single immutable snapshot.\",\"witness\":{\"initial\":\"A project has a confirmed connection and a scan request has begun but has not yet read or delivered a file.\",\"events\":[\"The calling flow starts the scan.\",\"The agent changes the subfolder and clears confirmation.\",\"The scan reaches its connection check and possible placement work.\"],\"outcomes\":[\"The scan uses the old confirmed connection because it was already the current operation.\",\"The scan reads the changed record and is refused because the change applies before its connection-read boundary.\"],\"observer\":\"The owner sees whether the scan processes a file after confirmation was cleared.\"}},{\"subject\":\"A5 unreadable connection\",\"kind\":\"vague_refusal_condition\",\"text\":\"A record that cannot be read\",\"question\":\"Which concrete failures count as an unreadable record: permission or I/O errors, transient lock or timeout, invalid encoding, parse/schema failure, unsupported revision, or not-found?\",\"options\":[\"Only filesystem or database read failures\",\"Read failures plus decoding and schema failures\",\"Every repository failure including not-found and timeout\",\"A closed enumerated set of repository outcomes\"],\"default_guess\":\"Use a closed set covering I/O, permission, decoding, schema, and unsupported-revision failures, while treating definitive not-found separately as `unknown_project`.\"},{\"subject\":\"INV-10 required tests\",\"kind\":\"underspecified_required_test\",\"text\":\"an unreadable record delivers nothing (`test_unreadable_connections_deliver_nothing`)\",\"question\":\"Must this check exercise scan, placement, and mark and assert the exact `folder_unavailable` refusal, or is showing that one delivery path has no side effect sufficient?\",\"options\":[\"Exercise all three operations and assert `folder_unavailable` plus no side effects\",\"Exercise scan and placement only because mark does not deliver content\",\"One representative operation with no resulting delivery is sufficient\"],\"default_guess\":\"Exercise scan, placement, and mark; assert `folder_unavailable` and that no placement or publication mark is written.\"},{\"subject\":\"A10 concurrency review\",\"kind\":\"security_review_mismatch\",\"text\":\"- concurrency: APPLICABLE; references: A3, A4, A6; affected: M04, M07\",\"question\":\"Does the concurrency review also cover A5's newly introduced race between each operation and a live change to the connection record, and if so why is A5 not referenced?\",\"options\":[\"Add A5 and M01 to the concurrency category and state the operation boundary\",\"Declare connection reads and updates serialized by another referenced decision\",\"State explicitly that this race is outside the security category\"],\"default_guess\":\"Add A5 and M01 to the concurrency category and define the connection-read linearization point.\"},{\"subject\":\"A10 files and artifacts review\",\"kind\":\"security_review_mismatch\",\"text\":\"- files_artifacts: APPLICABLE; references: A1, A2, A6, A8; affected: M02, M03, M04, source folders, Portal binary store\",\"question\":\"Does the newly fallible connection record count as a file or artifact requiring review, and if it does, should this outcome reference A5 and include M01 or its backing store?\",\"options\":[\"Add A5 and M01 or the connection store to this category\",\"State that the connection store is not file-backed and belongs to another category\",\"State that unreadability is availability behavior outside this security category\"],\"default_guess\":\"Add A5 and the M01 connection store to the files/artifacts review.\"},{\"subject\":\"A5 folder_unavailable refusal code\",\"kind\":\"standard_violation\",\"text\":\"A record that cannot be read or breaks rule 7\\n   refuses the operation with `folder_unavailable`.\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Make `folder_unavailable` a member of a model enumeration and have the consuming note name that member, or route it through another permitted path appropriate to its value domain.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,174 @@
+{
+ "open_points": [
+  {
+   "subject": "placement validation order",
+   "kind": "contradictory_order",
+   "text": "| Step | Scan | Placement | Mark |\n|---|---|---|---|\n| 1, API | token | token | token |\n| 2, API | project id | request form, project id | request form, project id, `photo_id` |\n| 3 | clock | clock | source id |\n| 4 | connection | connection | clock |\n| 5 | photo folder | photo folder | connection |\n| 6 | observe the folder, read records | every source id | take the lock |",
+   "question": "Must every placement source id be validated before the clock and connection are read, as A7 rule 2 requires for path identifiers, or only at step 6 after those reads?",
+   "options": [
+    "Validate all source ids before reading the clock, then read the connection and folder",
+    "Read the clock, connection and folder before validating source ids as the table says"
+   ],
+   "default_guess": "Move placement source-id validation before the clock while retaining request-list cardinality validation in API step 2.",
+   "witness": {
+    "initial": "The token, request form and project id are valid, the project has a confirmed connection, and the placement list contains a malformed source id.",
+    "events": [
+     "The calling flow requests placement.",
+     "The service records whether its clock and connection store are read."
+    ],
+    "outcomes": [
+     "Following A7 rule 2, the service refuses `invalid_source_id` without reading the clock or connection.",
+     "Following the State 3 table, the service reads the clock and connection before refusing `invalid_source_id`."
+    ],
+    "observer": "The counting-clock and connection-store observers used by the service tests see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "startup connection validation",
+   "kind": "vague_failure_scope",
+   "text": "`deliverer_api` names `load_connections` only to refuse a start with a broken record.",
+   "question": "What exactly makes a connection record \"broken\" at startup, and does an unreadable or syntactically malformed connections file prevent startup or only cause later operations to return `folder_unavailable`?",
+   "options": [
+    "Fail startup for any unreadable, malformed or rule-7-invalid record",
+    "Fail startup only for a readable record that violates rule 7; defer read and parse failures to operations",
+    "Start whenever the file cannot be validated and let every affected operation refuse"
+   ],
+   "default_guess": "Fail startup for any unreadable, malformed or rule-7-invalid record.",
+   "witness": {
+    "initial": "The connections file exists but contains malformed data before the service starts.",
+    "events": [
+     "The operator starts the service.",
+     "The calling flow later attempts a scan if startup succeeds."
+    ],
+    "outcomes": [
+     "The process refuses to start because `load_connections` treats the malformed data as a broken record.",
+     "The process starts, and the scan is later refused with `folder_unavailable` when the operation reads the record."
+    ],
+    "observer": "The operator sees whether the service starts; the calling flow sees whether an operation can be attempted."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "connection-record read failure isolation",
+   "kind": "ambiguous_failure_isolation",
+   "text": "A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.",
+   "question": "Does one unreadable or invalid record refuse only operations for that project, or every operation whose implementation must parse the shared connections file?",
+   "options": [
+    "Refuse only the project whose record is unreadable or invalid",
+    "Refuse all project operations when the shared file cannot be parsed or validated as a whole"
+   ],
+   "default_guess": "Refuse only the affected project when records can be isolated; refuse all operations only when the shared file itself cannot be parsed.",
+   "witness": {
+    "initial": "Project A has a valid confirmed record; project B has a malformed record in the same connections file.",
+    "events": [
+     "The calling flow scans project A."
+    ],
+    "outcomes": [
+     "The scan of A proceeds because only B's record is broken.",
+     "The scan of A returns `folder_unavailable` because loading the shared file encounters B's broken record."
+    ],
+    "observer": "The calling flow for project A sees a scan result or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "refusal HTTP answers",
+   "kind": "undecided_mapping",
+   "text": "- the HTTP status and the content of every refusal answer;",
+   "question": "What HTTP status and exact fixed message correspond to each `RefusalCode`, and what response schema carries the code and message?",
+   "options": [
+    "Define a per-code status and message catalog",
+    "Use one common non-authentication status and one generic fixed message",
+    "Map statuses by broad class while retaining distinct fixed messages"
+   ],
+   "default_guess": "Define an explicit catalog and response schema, keeping 401 for authentication, 400 for malformed identifiers or forms, 404 for `unknown_project`, 409 for state conflicts, and 503 for `folder_unavailable`.",
+   "witness": {
+    "initial": "A valid authenticated scan names a project with no connection.",
+    "events": [
+     "The calling flow sends the scan request.",
+     "The API converts `unknown_project` into an HTTP answer."
+    ],
+    "outcomes": [
+     "One implementation returns 404 with a fixed `unknown_project` message.",
+     "Another implementation returns 400 or 422 with a different fixed message while still carrying `unknown_project`."
+    ],
+    "observer": "The calling flow and its error-handling logic see different status and body values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "scan consistency while records change",
+   "kind": "undefined_concurrency_semantics",
+   "text": "A scan takes no lock.",
+   "question": "When placements or marks are written concurrently, must a scan reflect one point-in-time snapshot, or may its statuses reflect separate atomic reads made at different times?",
+   "options": [
+    "Require a point-in-time snapshot of placement and mark state",
+    "Permit a weakly consistent result assembled from separate atomic reads",
+    "Retry when record state changes during the scan"
+   ],
+   "default_guess": "Permit separate atomic reads and explicitly specify that a scan can be weakly consistent across photos.",
+   "witness": {
+    "initial": "A project has a placement without a publication mark, and a scan is reading its records.",
+    "events": [
+     "The calling flow starts a scan.",
+     "A second calling flow records the publication mark while the scan is in progress.",
+     "The first scan finishes."
+    ],
+    "outcomes": [
+     "A snapshot scan reports the photo consistently as `placed` or `published` according to its snapshot point.",
+     "A live-read scan may report that photo as `placed` while later photos reflect marks committed during the same scan."
+    ],
+    "observer": "The caller receiving the scan sees different statuses for the same concurrent history."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "SourceFile shared model",
+   "kind": "missing_owner",
+   "text": "| `source_folder` | `domain_models` | `MIN_AGE_SECONDS`, `MAX_SOURCE_BYTES`, `DelivererError`, `Rejected`, `SourceFile` |",
+   "question": "What is `SourceFile`, what fields and invariants does it have, and is it an additional shared domain model, M02 under another symbol, or a private `source_folder` value that must not be exported through `domain_models`?",
+   "options": [
+    "Define and own `SourceFile` explicitly in `domain_models` as the handoff from observation to delivery",
+    "Use `SourcePhotoObservation` instead and remove `SourceFile`",
+    "Keep a private source-folder value and remove the `domain_models` import"
+   ],
+   "default_guess": "Define an explicit shared `SourceFile` handoff model in `domain_models`, including only relative-name, metadata and source-id data needed by `photo_delivery` and no server path.",
+   "unit": "?"
+  },
+  {
+   "subject": "PhotoPublication construction dependency",
+   "kind": "unclear_dependency_owner",
+   "text": "| `photo_preparation` | `domain_models` | `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_MAX_SIDE`, `PHOTO_QUALITY`, `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `PreparedPhoto`, `Rejected` |",
+   "question": "Which module constructs the M05 `PhotoPublication` returned by `build_publication`, and therefore which module must directly import `PhotoPublication`?",
+   "options": [
+    "`photo_preparation` constructs `PhotoPublication` and imports it",
+    "`photo_preparation` returns primitive values and `photo_delivery` constructs and imports `PhotoPublication`",
+    "A factory owned by `domain_models` constructs it"
+   ],
+   "default_guess": "Have `photo_preparation` construct `PhotoPublication` and add that symbol to its direct dependency surface.",
+   "unit": "?"
+  },
+  {
+   "subject": "source_folder dependency declaration",
+   "kind": "standard_violation",
+   "text": "| `source_folder` | `domain_models` | `MIN_AGE_SECONDS`, `MAX_SOURCE_BYTES`, `DelivererError`, `Rejected`, `SourceFile` |",
+   "rule": "Имена consumer/provider — логические ключи из `module_functions`; каждый символ обязан принадлежать provider.",
+   "section": "7",
+   "question": "The passage must either establish `SourceFile` as a symbol owned and exported by `domain_models`, or replace/remove it so every declared symbol belongs to its provider.",
+   "unit": "?"
+  },
+  {
+   "subject": "system_clock_backend dependency declaration",
+   "kind": "standard_violation",
+   "text": "`deliverer_api` alone reaches `system_clock_backend`. It hands `utc_now` to an operation as a function,\nand `photo_delivery` calls that function.",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\nruntime import surface consumer-модуля, а не копия публичного API\nprovider-а: ровно те символы, которые код consumer-а называет напрямую —\nвызывает, конструирует, проверяет (членство в enum, тип), пишет в\nаннотации.",
+   "section": "7",
+   "question": "The passage must be accompanied by a dependency entry declaring `deliverer_api` → `system_clock_backend` → `utc_now`, with `system_clock_backend` established as a provider, or it must stop describing this as a directly named internal dependency.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"placement validation order\",\"kind\":\"contradictory_order\",\"text\":\"| Step | Scan | Placement | Mark |\\n|---|---|---|---|\\n| 1, API | token | token | token |\\n| 2, API | project id | request form, project id | request form, project id, `photo_id` |\\n| 3 | clock | clock | source id |\\n| 4 | connection | connection | clock |\\n| 5 | photo folder | photo folder | connection |\\n| 6 | observe the folder, read records | every source id | take the lock |\",\"question\":\"Must every placement source id be validated before the clock and connection are read, as A7 rule 2 requires for path identifiers, or only at step 6 after those reads?\",\"options\":[\"Validate all source ids before reading the clock, then read the connection and folder\",\"Read the clock, connection and folder before validating source ids as the table says\"],\"default_guess\":\"Move placement source-id validation before the clock while retaining request-list cardinality validation in API step 2.\",\"witness\":{\"initial\":\"The token, request form and project id are valid, the project has a confirmed connection, and the placement list contains a malformed source id.\",\"events\":[\"The calling flow requests placement.\",\"The service records whether its clock and connection store are read.\"],\"outcomes\":[\"Following A7 rule 2, the service refuses `invalid_source_id` without reading the clock or connection.\",\"Following the State 3 table, the service reads the clock and connection before refusing `invalid_source_id`.\"],\"observer\":\"The counting-clock and connection-store observers used by the service tests see the difference.\"}},{\"subject\":\"startup connection validation\",\"kind\":\"vague_failure_scope\",\"text\":\"`deliverer_api` names `load_connections` only to refuse a start with a broken record.\",\"question\":\"What exactly makes a connection record \\\"broken\\\" at startup, and does an unreadable or syntactically malformed connections file prevent startup or only cause later operations to return `folder_unavailable`?\",\"options\":[\"Fail startup for any unreadable, malformed or rule-7-invalid record\",\"Fail startup only for a readable record that violates rule 7; defer read and parse failures to operations\",\"Start whenever the file cannot be validated and let every affected operation refuse\"],\"default_guess\":\"Fail startup for any unreadable, malformed or rule-7-invalid record.\",\"witness\":{\"initial\":\"The connections file exists but contains malformed data before the service starts.\",\"events\":[\"The operator starts the service.\",\"The calling flow later attempts a scan if startup succeeds.\"],\"outcomes\":[\"The process refuses to start because `load_connections` treats the malformed data as a broken record.\",\"The process starts, and the scan is later refused with `folder_unavailable` when the operation reads the record.\"],\"observer\":\"The operator sees whether the service starts; the calling flow sees whether an operation can be attempted.\"}},{\"subject\":\"connection-record read failure isolation\",\"kind\":\"ambiguous_failure_isolation\",\"text\":\"A record that cannot be read or breaks rule 7 refuses the operation with `folder_unavailable`.\",\"question\":\"Does one unreadable or invalid record refuse only operations for that project, or every operation whose implementation must parse the shared connections file?\",\"options\":[\"Refuse only the project whose record is unreadable or invalid\",\"Refuse all project operations when the shared file cannot be parsed or validated as a whole\"],\"default_guess\":\"Refuse only the affected project when records can be isolated; refuse all operations only when the shared file itself cannot be parsed.\",\"witness\":{\"initial\":\"Project A has a valid confirmed record; project B has a malformed record in the same connections file.\",\"events\":[\"The calling flow scans project A.\"],\"outcomes\":[\"The scan of A proceeds because only B's record is broken.\",\"The scan of A returns `folder_unavailable` because loading the shared file encounters B's broken record.\"],\"observer\":\"The calling flow for project A sees a scan result or a refusal.\"}},{\"subject\":\"refusal HTTP answers\",\"kind\":\"undecided_mapping\",\"text\":\"- the HTTP status and the content of every refusal answer;\",\"question\":\"What HTTP status and exact fixed message correspond to each `RefusalCode`, and what response schema carries the code and message?\",\"options\":[\"Define a per-code status and message catalog\",\"Use one common non-authentication status and one generic fixed message\",\"Map statuses by broad class while retaining distinct fixed messages\"],\"default_guess\":\"Define an explicit catalog and response schema, keeping 401 for authentication, 400 for malformed identifiers or forms, 404 for `unknown_project`, 409 for state conflicts, and 503 for `folder_unavailable`.\",\"witness\":{\"initial\":\"A valid authenticated scan names a project with no connection.\",\"events\":[\"The calling flow sends the scan request.\",\"The API converts `unknown_project` into an HTTP answer.\"],\"outcomes\":[\"One implementation returns 404 with a fixed `unknown_project` message.\",\"Another implementation returns 400 or 422 with a different fixed message while still carrying `unknown_project`.\"],\"observer\":\"The calling flow and its error-handling logic see different status and body values.\"}},{\"subject\":\"scan consistency while records change\",\"kind\":\"undefined_concurrency_semantics\",\"text\":\"A scan takes no lock.\",\"question\":\"When placements or marks are written concurrently, must a scan reflect one point-in-time snapshot, or may its statuses reflect separate atomic reads made at different times?\",\"options\":[\"Require a point-in-time snapshot of placement and mark state\",\"Permit a weakly consistent result assembled from separate atomic reads\",\"Retry when record state changes during the scan\"],\"default_guess\":\"Permit separate atomic reads and explicitly specify that a scan can be weakly consistent across photos.\",\"witness\":{\"initial\":\"A project has a placement without a publication mark, and a scan is reading its records.\",\"events\":[\"The calling flow starts a scan.\",\"A second calling flow records the publication mark while the scan is in progress.\",\"The first scan finishes.\"],\"outcomes\":[\"A snapshot scan reports the photo consistently as `placed` or `published` according to its snapshot point.\",\"A live-read scan may report that photo as `placed` while later photos reflect marks committed during the same scan.\"],\"observer\":\"The caller receiving the scan sees different statuses for the same concurrent history.\"}},{\"subject\":\"SourceFile shared model\",\"kind\":\"missing_owner\",\"text\":\"| `source_folder` | `domain_models` | `MIN_AGE_SECONDS`, `MAX_SOURCE_BYTES`, `DelivererError`, `Rejected`, `SourceFile` |\",\"question\":\"What is `SourceFile`, what fields and invariants does it have, and is it an additional shared domain model, M02 under another symbol, or a private `source_folder` value that must not be exported through `domain_models`?\",\"options\":[\"Define and own `SourceFile` explicitly in `domain_models` as the handoff from observation to delivery\",\"Use `SourcePhotoObservation` instead and remove `SourceFile`\",\"Keep a private source-folder value and remove the `domain_models` import\"],\"default_guess\":\"Define an explicit shared `SourceFile` handoff model in `domain_models`, including only relative-name, metadata and source-id data needed by `photo_delivery` and no server path.\"},{\"subject\":\"PhotoPublication construction dependency\",\"kind\":\"unclear_dependency_owner\",\"text\":\"| `photo_preparation` | `domain_models` | `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_MAX_SIDE`, `PHOTO_QUALITY`, `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `PreparedPhoto`, `Rejected` |\",\"question\":\"Which module constructs the M05 `PhotoPublication` returned by `build_publication`, and therefore which module must directly import `PhotoPublication`?\",\"options\":[\"`photo_preparation` constructs `PhotoPublication` and imports it\",\"`photo_preparation` returns primitive values and `photo_delivery` constructs and imports `PhotoPublication`\",\"A factory owned by `domain_models` constructs it\"],\"default_guess\":\"Have `photo_preparation` construct `PhotoPublication` and add that symbol to its direct dependency surface.\"},{\"subject\":\"source_folder dependency declaration\",\"kind\":\"standard_violation\",\"text\":\"| `source_folder` | `domain_models` | `MIN_AGE_SECONDS`, `MAX_SOURCE_BYTES`, `DelivererError`, `Rejected`, `SourceFile` |\",\"rule\":\"Имена consumer/provider — логические ключи из `module_functions`; каждый символ обязан принадлежать provider.\",\"section\":\"7\",\"question\":\"The passage must either establish `SourceFile` as a symbol owned and exported by `domain_models`, or replace/remove it so every declared symbol belongs to its provider.\"},{\"subject\":\"system_clock_backend dependency declaration\",\"kind\":\"standard_violation\",\"text\":\"`deliverer_api` alone reaches `system_clock_backend`. It hands `utc_now` to an operation as a function,\\nand `photo_delivery` calls that function.\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\nruntime import surface consumer-модуля, а не копия публичного API\\nprovider-а: ровно те символы, которые код consumer-а называет напрямую —\\nвызывает, конструирует, проверяет (членство в enum, тип), пишет в\\nаннотации.\",\"section\":\"7\",\"question\":\"The passage must be accompanied by a dependency entry declaring `deliverer_api` → `system_clock_backend` → `utc_now`, with `system_clock_backend` established as a provider, or it must stop describing this as a directly named internal dependency.\"}]}",
+ "set_aside": []
+}

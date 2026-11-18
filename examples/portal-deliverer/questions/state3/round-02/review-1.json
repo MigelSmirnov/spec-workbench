@@ -1,0 +1,198 @@
+{
+ "open_points": [
+  {
+   "subject": "placement validation and clock order",
+   "kind": "contradictory_order",
+   "text": "2. Scan, placement and mark each read it once, after the token, the request form and the path\n   identifiers are accepted and before the project lock is taken or any connection, file or record is\n   examined.",
+   "question": "For placement, must every source id be validated before the clock and connection as A7 requires, or after the connection and photo-folder checks as the operation table and A3 rule 4 require?",
+   "options": [
+    "Validate every source id before reading the clock or examining the connection",
+    "Read the clock and examine the connection and folder before validating source ids, making placement an explicit exception to A7",
+    "Change A3 and the operation table so all identifiers precede the clock while retaining a separately decided refusal precedence"
+   ],
+   "default_guess": "Validate every source id before reading the clock, because A7 expressly places path identifiers before the clock.",
+   "witness": {
+    "initial": "A placement request has a valid token, request form and project id, a malformed source id, and a confirmed connection whose photo folder is unavailable.",
+    "events": [
+     "The calling flow submits the placement request.",
+     "deliverer_api accepts the token, request form and project id and calls photo_delivery.",
+     "photo_delivery follows either A7 or the operation table."
+    ],
+    "outcomes": [
+     "Following A7, the malformed source id is refused as invalid_source_id before the clock, connection or folder is examined.",
+     "Following the operation table and A3 rule 4, the clock is read and the unavailable folder is refused as folder_unavailable before the malformed source id is examined."
+    ],
+    "observer": "The calling flow sees a different refusal, and a counting clock sees a different read count."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "system_clock_backend dependency",
+   "kind": "contradictory_dependency_graph",
+   "text": "`deliverer_api` alone reaches `system_clock_backend`. It hands `utc_now` to an operation as a function,\nand `photo_delivery` calls that function.",
+   "question": "How can the dependency table be complete when it omits the declared deliverer_api-to-system_clock_backend dependency, and which module owns and exports system_clock_backend and utc_now?",
+   "options": [
+    "Add system_clock_backend as a provider and utc_now as the symbol directly named by deliverer_api",
+    "Treat system_clock_backend as infrastructure outside the module graph and state the explicit exception and interface",
+    "Make utc_now an injected application-level capability owned by an existing listed module"
+   ],
+   "default_guess": "Add a system_clock_backend module and the deliverer_api → system_clock_backend dependency for utc_now.",
+   "unit": "?"
+  },
+  {
+   "subject": "SourceFile",
+   "kind": "unowned_model",
+   "text": "| `photo_delivery` | `domain_models` | `SOURCE_ID_FORM`, `Config`, `DelivererError`, `Rejected`, `SourceFile` |",
+   "question": "What is SourceFile, what fields and invariants does it have, and which module owns it, given that domain_models says it owns M01 to M07, their enumerations, settings, constants and two refusal types but does not name SourceFile?",
+   "options": [
+    "Define SourceFile as an additional domain_models value type returned by source_folder",
+    "Make SourceFile a private source_folder type and expose it structurally through the provider contract",
+    "Use SourcePhotoObservation instead and remove SourceFile"
+   ],
+   "default_guess": "Define SourceFile as a domain_models value type containing only the data needed across the source_folder boundary, with any server path kept private.",
+   "unit": "?"
+  },
+  {
+   "subject": "delivery_store use of checked identifiers",
+   "kind": "missing_capability",
+   "text": "| A5 | rule 8, stored names built only from checked identifiers | `delivery_store` |",
+   "question": "How does delivery_store distinguish a checked project/source identifier from unchecked plain text when it neither owns validation nor imports SOURCE_ID_FORM and no checked-identifier type is defined?",
+   "options": [
+    "Give delivery_store a validated identifier value type that photo_delivery must construct",
+    "Have delivery_store validate identifiers and add the required constants, changing the ownership split",
+    "State a precondition on every delivery_store capability that accepts identifiers and define how that precondition is enforced",
+    "Move stored-name construction to photo_delivery"
+   ],
+   "default_guess": "Introduce validated project-id and source-id value types and require delivery_store to accept only those types.",
+   "witness": {
+    "initial": "An internal caller supplies store_image with a valid Config and project id but the source-id text ../outside.",
+    "events": [
+     "The caller invokes delivery_store directly without first passing through photo_delivery validation.",
+     "delivery_store constructs or refuses the stored name according to its interpretation of its ownership and inputs."
+    ],
+    "outcomes": [
+     "An implementation that trusts photo_delivery's unstated precondition uses the received text in path construction and may address a path outside the intended source-id filename.",
+     "An implementation that treats ownership of safe stored names as requiring its own proof rejects the value before constructing a path."
+    ],
+    "observer": "The service operator or filesystem observer sees either an attempted unsafe write or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-11 and path-free answer ownership",
+   "kind": "dual_ownership",
+   "text": "`deliverer_api` owns INV-11 because every answer leaves through it: a refusal carries only its code and\na fixed message. `photo_delivery` supplies path-free results, and no module holds a client for any\noutbound call.",
+   "question": "Which module is finally responsible for enforcing that successful delivery answers contain no server path: must deliverer_api filter or validate them, or may it trust photo_delivery completely?",
+   "options": [
+    "photo_delivery exclusively guarantees path-free delivery results; deliverer_api only guarantees refusal serialization",
+    "deliverer_api validates or projects every result at the transport boundary, while photo_delivery merely avoids intentionally returning paths",
+    "Both enforce it, with explicit independent postconditions and failure behavior"
+   ],
+   "default_guess": "Make photo_delivery own the path-free delivery-result contract and deliverer_api validate the serialized response as defense in depth, with the primary ownership stated explicitly.",
+   "witness": {
+    "initial": "A placement succeeds, but a lower-layer result accidentally contains the stored image's server path.",
+    "events": [
+     "photo_delivery returns the result to deliverer_api.",
+     "deliverer_api serializes the result according to its interpretation of INV-11 ownership."
+    ],
+    "outcomes": [
+     "If deliverer_api relies on photo_delivery's guarantee, the calling flow receives the server path.",
+     "If deliverer_api treats its INV-11 ownership as an enforcement duty, it removes or refuses the path-bearing value."
+    ],
+    "observer": "The authenticated calling flow sees whether the server path is disclosed."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "refusal HTTP representation",
+   "kind": "undecided_mapping",
+   "text": "- the HTTP status and the content of every refusal answer;",
+   "question": "What exact HTTP status, refusal code, fixed message and response shape corresponds to each refusal, and does deliverer_api translate lower-layer refusals or expose their codes unchanged?",
+   "options": [
+    "Define one table mapping every refusal code and authentication/request failure to status and fixed body",
+    "Use one HTTP status and one generic fixed message for all domain refusals while retaining only a machine-readable code",
+    "Let framework defaults and exception types determine statuses and bodies"
+   ],
+   "default_guess": "Define an explicit exhaustive mapping table and prohibit framework-generated variable messages.",
+   "witness": {
+    "initial": "A caller with a valid token requests an unknown project.",
+    "events": [
+     "object_connections reports unknown_project.",
+     "deliverer_api converts the refusal into an HTTP answer."
+    ],
+    "outcomes": [
+     "One implementation returns 404 with a fixed unknown-project body.",
+     "Another implementation returns 400 or 409 with a different fixed body because no mapping is stated."
+    ],
+    "observer": "The calling flow sees a different status and response body and may branch differently."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "candidate public capabilities",
+   "kind": "unfinalized_interface",
+   "text": "### Candidate public capabilities",
+   "question": "Are the listed capability names mandatory exported interfaces, or may later implementation agents rename, merge or omit them despite the dependency table already naming many of them as symbols?",
+   "options": [
+    "Make every listed capability a required export and replace Candidate with Public capabilities",
+    "Keep them provisional and explicitly carry final interface selection to a named later state",
+    "Declare only symbols used in Dependencies as required exports and leave the remaining candidates optional"
+   ],
+   "default_guess": "Treat every symbol named in Dependencies as a required export and explicitly finalize the remaining candidate lists before code generation.",
+   "unit": "?"
+  },
+  {
+   "subject": "scan consistency with concurrent placement and marking",
+   "kind": "undefined_concurrency_semantics",
+   "text": "A scan takes no lock.",
+   "question": "What consistency is required when placement or mark records change while an unlocked scan is reading them: one snapshot, per-file current values, or any internally valid mixture?",
+   "options": [
+    "Read a snapshot of all placement and mark records for the scan",
+    "Allow per-file reads and document that one scan may reflect different instants",
+    "Retry when records change during the scan",
+    "Take the project lock while records are read"
+   ],
+   "default_guess": "Read a single snapshot of placement and mark records without holding the project lock for folder traversal.",
+   "witness": {
+    "initial": "A scan observes two ready source files while a concurrent placement-and-mark operation is completing both under the project lock.",
+    "events": [
+     "The scan observes the folder without taking the lock.",
+     "The concurrent operation writes placement and mark records between the scan's record reads.",
+     "The scan constructs both observations."
+    ],
+    "outcomes": [
+     "A snapshot implementation reports both files according to one pre-change or post-change record state.",
+     "A per-file implementation can report the first file ready and the second published, or another timing-dependent mixture."
+    ],
+    "observer": "The calling flow and owner see different statuses in the same scan."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "build_publication in placement order",
+   "kind": "missing_operation_step",
+   "text": "| 9 | | each photo in request order: replay, or read, verify, prepare, store the image, write the record | release the lock |",
+   "question": "Where is build_publication invoked, what inputs does it receive, and must it complete before or after store_image and before write_placement?",
+   "options": [
+    "Build the publication after preparation and before storing the image",
+    "Store the image, obtain its file_ref, then build the publication and write the placement",
+    "Have store_image return both the file_ref and completed publication data",
+    "Fold publication construction into prepare_photo or write_placement"
+   ],
+   "default_guess": "After store_image returns file_ref, call build_publication with the prepared photo, project/source identifiers and file_ref, then write the placement record.",
+   "unit": "?"
+  },
+  {
+   "subject": "Dependencies",
+   "kind": "standard_violation",
+   "text": "`deliverer_api` alone reaches `system_clock_backend`. It hands `utc_now` to an operation as a function,\nand `photo_delivery` calls that function.",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "The passage must become a structural dependency entry declaring system_clock_backend as deliverer_api's provider and utc_now as its directly named symbol, or it must explicitly redesign the clock handoff so no such direct runtime import exists.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"placement validation and clock order\",\"kind\":\"contradictory_order\",\"text\":\"2. Scan, placement and mark each read it once, after the token, the request form and the path\\n   identifiers are accepted and before the project lock is taken or any connection, file or record is\\n   examined.\",\"question\":\"For placement, must every source id be validated before the clock and connection as A7 requires, or after the connection and photo-folder checks as the operation table and A3 rule 4 require?\",\"options\":[\"Validate every source id before reading the clock or examining the connection\",\"Read the clock and examine the connection and folder before validating source ids, making placement an explicit exception to A7\",\"Change A3 and the operation table so all identifiers precede the clock while retaining a separately decided refusal precedence\"],\"default_guess\":\"Validate every source id before reading the clock, because A7 expressly places path identifiers before the clock.\",\"witness\":{\"initial\":\"A placement request has a valid token, request form and project id, a malformed source id, and a confirmed connection whose photo folder is unavailable.\",\"events\":[\"The calling flow submits the placement request.\",\"deliverer_api accepts the token, request form and project id and calls photo_delivery.\",\"photo_delivery follows either A7 or the operation table.\"],\"outcomes\":[\"Following A7, the malformed source id is refused as invalid_source_id before the clock, connection or folder is examined.\",\"Following the operation table and A3 rule 4, the clock is read and the unavailable folder is refused as folder_unavailable before the malformed source id is examined.\"],\"observer\":\"The calling flow sees a different refusal, and a counting clock sees a different read count.\"}},{\"subject\":\"system_clock_backend dependency\",\"kind\":\"contradictory_dependency_graph\",\"text\":\"`deliverer_api` alone reaches `system_clock_backend`. It hands `utc_now` to an operation as a function,\\nand `photo_delivery` calls that function.\",\"question\":\"How can the dependency table be complete when it omits the declared deliverer_api-to-system_clock_backend dependency, and which module owns and exports system_clock_backend and utc_now?\",\"options\":[\"Add system_clock_backend as a provider and utc_now as the symbol directly named by deliverer_api\",\"Treat system_clock_backend as infrastructure outside the module graph and state the explicit exception and interface\",\"Make utc_now an injected application-level capability owned by an existing listed module\"],\"default_guess\":\"Add a system_clock_backend module and the deliverer_api → system_clock_backend dependency for utc_now.\"},{\"subject\":\"SourceFile\",\"kind\":\"unowned_model\",\"text\":\"| `photo_delivery` | `domain_models` | `SOURCE_ID_FORM`, `Config`, `DelivererError`, `Rejected`, `SourceFile` |\",\"question\":\"What is SourceFile, what fields and invariants does it have, and which module owns it, given that domain_models says it owns M01 to M07, their enumerations, settings, constants and two refusal types but does not name SourceFile?\",\"options\":[\"Define SourceFile as an additional domain_models value type returned by source_folder\",\"Make SourceFile a private source_folder type and expose it structurally through the provider contract\",\"Use SourcePhotoObservation instead and remove SourceFile\"],\"default_guess\":\"Define SourceFile as a domain_models value type containing only the data needed across the source_folder boundary, with any server path kept private.\"},{\"subject\":\"delivery_store use of checked identifiers\",\"kind\":\"missing_capability\",\"text\":\"| A5 | rule 8, stored names built only from checked identifiers | `delivery_store` |\",\"question\":\"How does delivery_store distinguish a checked project/source identifier from unchecked plain text when it neither owns validation nor imports SOURCE_ID_FORM and no checked-identifier type is defined?\",\"options\":[\"Give delivery_store a validated identifier value type that photo_delivery must construct\",\"Have delivery_store validate identifiers and add the required constants, changing the ownership split\",\"State a precondition on every delivery_store capability that accepts identifiers and define how that precondition is enforced\",\"Move stored-name construction to photo_delivery\"],\"default_guess\":\"Introduce validated project-id and source-id value types and require delivery_store to accept only those types.\",\"witness\":{\"initial\":\"An internal caller supplies store_image with a valid Config and project id but the source-id text ../outside.\",\"events\":[\"The caller invokes delivery_store directly without first passing through photo_delivery validation.\",\"delivery_store constructs or refuses the stored name according to its interpretation of its ownership and inputs.\"],\"outcomes\":[\"An implementation that trusts photo_delivery's unstated precondition uses the received text in path construction and may address a path outside the intended source-id filename.\",\"An implementation that treats ownership of safe stored names as requiring its own proof rejects the value before constructing a path.\"],\"observer\":\"The service operator or filesystem observer sees either an attempted unsafe write or a refusal.\"}},{\"subject\":\"INV-11 and path-free answer ownership\",\"kind\":\"dual_ownership\",\"text\":\"`deliverer_api` owns INV-11 because every answer leaves through it: a refusal carries only its code and\\na fixed message. `photo_delivery` supplies path-free results, and no module holds a client for any\\noutbound call.\",\"question\":\"Which module is finally responsible for enforcing that successful delivery answers contain no server path: must deliverer_api filter or validate them, or may it trust photo_delivery completely?\",\"options\":[\"photo_delivery exclusively guarantees path-free delivery results; deliverer_api only guarantees refusal serialization\",\"deliverer_api validates or projects every result at the transport boundary, while photo_delivery merely avoids intentionally returning paths\",\"Both enforce it, with explicit independent postconditions and failure behavior\"],\"default_guess\":\"Make photo_delivery own the path-free delivery-result contract and deliverer_api validate the serialized response as defense in depth, with the primary ownership stated explicitly.\",\"witness\":{\"initial\":\"A placement succeeds, but a lower-layer result accidentally contains the stored image's server path.\",\"events\":[\"photo_delivery returns the result to deliverer_api.\",\"deliverer_api serializes the result according to its interpretation of INV-11 ownership.\"],\"outcomes\":[\"If deliverer_api relies on photo_delivery's guarantee, the calling flow receives the server path.\",\"If deliverer_api treats its INV-11 ownership as an enforcement duty, it removes or refuses the path-bearing value.\"],\"observer\":\"The authenticated calling flow sees whether the server path is disclosed.\"}},{\"subject\":\"refusal HTTP representation\",\"kind\":\"undecided_mapping\",\"text\":\"- the HTTP status and the content of every refusal answer;\",\"question\":\"What exact HTTP status, refusal code, fixed message and response shape corresponds to each refusal, and does deliverer_api translate lower-layer refusals or expose their codes unchanged?\",\"options\":[\"Define one table mapping every refusal code and authentication/request failure to status and fixed body\",\"Use one HTTP status and one generic fixed message for all domain refusals while retaining only a machine-readable code\",\"Let framework defaults and exception types determine statuses and bodies\"],\"default_guess\":\"Define an explicit exhaustive mapping table and prohibit framework-generated variable messages.\",\"witness\":{\"initial\":\"A caller with a valid token requests an unknown project.\",\"events\":[\"object_connections reports unknown_project.\",\"deliverer_api converts the refusal into an HTTP answer.\"],\"outcomes\":[\"One implementation returns 404 with a fixed unknown-project body.\",\"Another implementation returns 400 or 409 with a different fixed body because no mapping is stated.\"],\"observer\":\"The calling flow sees a different status and response body and may branch differently.\"}},{\"subject\":\"candidate public capabilities\",\"kind\":\"unfinalized_interface\",\"text\":\"### Candidate public capabilities\",\"question\":\"Are the listed capability names mandatory exported interfaces, or may later implementation agents rename, merge or omit them despite the dependency table already naming many of them as symbols?\",\"options\":[\"Make every listed capability a required export and replace Candidate with Public capabilities\",\"Keep them provisional and explicitly carry final interface selection to a named later state\",\"Declare only symbols used in Dependencies as required exports and leave the remaining candidates optional\"],\"default_guess\":\"Treat every symbol named in Dependencies as a required export and explicitly finalize the remaining candidate lists before code generation.\"},{\"subject\":\"scan consistency with concurrent placement and marking\",\"kind\":\"undefined_concurrency_semantics\",\"text\":\"A scan takes no lock.\",\"question\":\"What consistency is required when placement or mark records change while an unlocked scan is reading them: one snapshot, per-file current values, or any internally valid mixture?\",\"options\":[\"Read a snapshot of all placement and mark records for the scan\",\"Allow per-file reads and document that one scan may reflect different instants\",\"Retry when records change during the scan\",\"Take the project lock while records are read\"],\"default_guess\":\"Read a single snapshot of placement and mark records without holding the project lock for folder traversal.\",\"witness\":{\"initial\":\"A scan observes two ready source files while a concurrent placement-and-mark operation is completing both under the project lock.\",\"events\":[\"The scan observes the folder without taking the lock.\",\"The concurrent operation writes placement and mark records between the scan's record reads.\",\"The scan constructs both observations.\"],\"outcomes\":[\"A snapshot implementation reports both files according to one pre-change or post-change record state.\",\"A per-file implementation can report the first file ready and the second published, or another timing-dependent mixture.\"],\"observer\":\"The calling flow and owner see different statuses in the same scan.\"}},{\"subject\":\"build_publication in placement order\",\"kind\":\"missing_operation_step\",\"text\":\"| 9 | | each photo in request order: replay, or read, verify, prepare, store the image, write the record | release the lock |\",\"question\":\"Where is build_publication invoked, what inputs does it receive, and must it complete before or after store_image and before write_placement?\",\"options\":[\"Build the publication after preparation and before storing the image\",\"Store the image, obtain its file_ref, then build the publication and write the placement\",\"Have store_image return both the file_ref and completed publication data\",\"Fold publication construction into prepare_photo or write_placement\"],\"default_guess\":\"After store_image returns file_ref, call build_publication with the prepared photo, project/source identifiers and file_ref, then write the placement record.\"},{\"subject\":\"Dependencies\",\"kind\":\"standard_violation\",\"text\":\"`deliverer_api` alone reaches `system_clock_backend`. It hands `utc_now` to an operation as a function,\\nand `photo_delivery` calls that function.\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"The passage must become a structural dependency entry declaring system_clock_backend as deliverer_api's provider and utc_now as its directly named symbol, or it must explicitly redesign the clock handoff so no such direct runtime import exists.\"}]}",
+ "set_aside": []
+}

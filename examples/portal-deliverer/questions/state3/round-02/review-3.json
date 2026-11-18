@@ -1,0 +1,132 @@
+{
+ "open_points": [
+  {
+   "subject": "placement source-id validation order",
+   "kind": "contradictory_order",
+   "text": "| 2, API | project id | request form, project id | request form, project id, `photo_id` |\n| 3 | clock | clock | source id |\n| 4 | connection | connection | clock |\n| 5 | photo folder | photo folder | connection |\n| 6 | observe the folder, read records | every source id | take the lock |",
+   "question": "For placement, is the syntax of every source id checked as part of the request form before the clock and connection, or at step 6 after both? The order must reconcile A3 rule 4 with A7 rule 2 and state which refusal wins when the source id and connection are both invalid.",
+   "options": [
+    "Validate source-id syntax at step 2, then read the clock and connection",
+    "Read the clock and connection first, then validate every source id at step 6"
+   ],
+   "default_guess": "Validate source-id syntax at step 2 so every path identifier is accepted before the clock or connection is read.",
+   "witness": {
+    "initial": "The service has no connection for a project, and its counting clock has not been read.",
+    "events": [
+     "The authenticated calling flow requests placement with that project id and a malformed source id."
+    ],
+    "outcomes": [
+     "Reading the table and A3 literally, the service reads the clock, checks the connection, and answers `unknown_project` without reaching step 6.",
+     "Reading A7 rule 2 literally, the service rejects the malformed source id before reading the clock or examining the connection, so the refusal is `invalid_source_id` and the clock count stays zero."
+    ],
+    "observer": "The calling flow sees a different refusal, and the service's counting-clock test sees a different read count."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "refusal HTTP representation",
+   "kind": "owned_but_undecided",
+   "text": "- the HTTP status and the content of every refusal answer;",
+   "question": "What HTTP status, body shape, refusal code and fixed message must be returned for each authentication, request-form, identifier, connection, folder, placement and publication refusal?",
+   "options": [
+    "Define a status and fixed code/message body for every refusal",
+    "Use framework-native validation answers for form and identifier failures and defined bodies for domain refusals",
+    "Use one common HTTP status and body shape for all authenticated refusals"
+   ],
+   "default_guess": "Define one stable JSON body containing the refusal code and its specified fixed message, with an explicit HTTP-status mapping for every refusal.",
+   "witness": {
+    "initial": "A running service has no connection for the requested project.",
+    "events": [
+     "The authenticated calling flow requests a scan for that project."
+    ],
+    "outcomes": [
+     "One implementation returns HTTP 404 with a fixed JSON body such as a code and message for `unknown_project`.",
+     "Another implementation returns HTTP 400, or a framework-shaped error body, while still exposing no path or credential."
+    ],
+    "observer": "The calling flow must branch on different statuses and parse different response bodies."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "startup handling of an unreadable connection record",
+   "kind": "ambiguous_failure_phase",
+   "text": "`deliverer_api` names `load_connections` only to refuse a start with a broken record.",
+   "question": "Does “broken record” include an unreadable or syntactically malformed connections file, causing startup refusal, or are those conditions deferred to each operation and answered as `folder_unavailable`?",
+   "options": [
+    "Refuse service startup for every unreadable, malformed or rule-7-breaking record",
+    "Refuse startup only for a readable record that breaks rule 7; start with unreadable records and refuse operations",
+    "Start whenever configuration can be read and validate every connection only during operations"
+   ],
+   "default_guess": "Refuse startup for malformed or rule-7-breaking records, but the text must explicitly reconcile that choice with A5 rule 6's operation-time `folder_unavailable`.",
+   "witness": {
+    "initial": "Before the service starts, the connections file exists but cannot be read.",
+    "events": [
+     "The operator starts the service.",
+     "The calling flow probes health and then requests a scan."
+    ],
+    "outcomes": [
+     "If an unreadable file is a broken record, startup fails and no health or scan endpoint becomes available.",
+     "If unreadability is an operation-time condition, startup succeeds, health answers, and the scan is refused with `folder_unavailable`."
+    ],
+    "observer": "The operator sees different startup behavior, and the calling flow sees either no service or a defined refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "scan consistency with concurrent placement and mark writes",
+   "kind": "concurrency_semantics_missing",
+   "text": "A scan takes no lock.",
+   "question": "When records change during an unlocked scan, must all placed and published statuses come from one record snapshot, may each file observe records at a different time, or is either result permitted?",
+   "options": [
+    "Take a consistent read snapshot of placement and mark records without the project lock",
+    "Read each file's records independently and permit a mixed-time result",
+    "Retry the scan when relevant records change during it"
+   ],
+   "default_guess": "Permit per-file reads but explicitly state that an unlocked scan may report a mixed-time view and that a later scan converges.",
+   "witness": {
+    "initial": "Two ready sources already have placements but no marks.",
+    "events": [
+     "The calling flow starts a scan.",
+     "After the scan has read the first source's records, another calling-flow operation writes marks for both sources.",
+     "The scan completes."
+    ],
+    "outcomes": [
+     "A snapshot implementation reports both sources as `placed`.",
+     "A per-file implementation reports the first source as `placed` and the second as `published`."
+    ],
+    "observer": "The owner sees different status lists for the same ordered events."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "photo_delivery dependency on SourceFile",
+   "kind": "standard_violation",
+   "text": "| `photo_delivery` | `domain_models` | `SOURCE_ID_FORM`, `Config`, `DelivererError`, `Rejected`, `SourceFile` |",
+   "rule": "- `module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Either make `SourceFile` an explicitly owned and exported type of `domain_models`, or replace it in this dependency row with the provider-owned symbol actually imported.",
+   "unit": "?"
+  },
+  {
+   "subject": "source_folder dependency on SourceFile",
+   "kind": "standard_violation",
+   "text": "| `source_folder` | `domain_models` | `MIN_AGE_SECONDS`, `MAX_SOURCE_BYTES`, `DelivererError`, `Rejected`, `SourceFile` |",
+   "rule": "- `module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Either make `SourceFile` an explicitly owned and exported type of `domain_models`, or replace it in this dependency row with the provider-owned symbol actually imported.",
+   "unit": "?"
+  },
+  {
+   "subject": "deliverer_api clock-backend dependency",
+   "kind": "standard_violation",
+   "text": "`deliverer_api` alone reaches `system_clock_backend`. It hands `utc_now` to an operation as a function,\nand `photo_delivery` calls that function.",
+   "rule": "- `module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации. Само наличие символа в `models`, `imports.internal` или\n  `module_functions[provider]` зависимостью не является. Недостающий символ —\n  такая же ошибка спеки, как лишний: в строгом режиме импортов (ниже)\n  сгенерированный модуль без него отвергается",
+   "section": "7",
+   "question": "Add the direct `deliverer_api` → `system_clock_backend` dependency with symbol `utc_now` to the complete dependency table, or change the passage so `deliverer_api` does not directly name that provider or symbol.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"placement source-id validation order\",\"kind\":\"contradictory_order\",\"text\":\"| 2, API | project id | request form, project id | request form, project id, `photo_id` |\\n| 3 | clock | clock | source id |\\n| 4 | connection | connection | clock |\\n| 5 | photo folder | photo folder | connection |\\n| 6 | observe the folder, read records | every source id | take the lock |\",\"question\":\"For placement, is the syntax of every source id checked as part of the request form before the clock and connection, or at step 6 after both? The order must reconcile A3 rule 4 with A7 rule 2 and state which refusal wins when the source id and connection are both invalid.\",\"options\":[\"Validate source-id syntax at step 2, then read the clock and connection\",\"Read the clock and connection first, then validate every source id at step 6\"],\"default_guess\":\"Validate source-id syntax at step 2 so every path identifier is accepted before the clock or connection is read.\",\"witness\":{\"initial\":\"The service has no connection for a project, and its counting clock has not been read.\",\"events\":[\"The authenticated calling flow requests placement with that project id and a malformed source id.\"],\"outcomes\":[\"Reading the table and A3 literally, the service reads the clock, checks the connection, and answers `unknown_project` without reaching step 6.\",\"Reading A7 rule 2 literally, the service rejects the malformed source id before reading the clock or examining the connection, so the refusal is `invalid_source_id` and the clock count stays zero.\"],\"observer\":\"The calling flow sees a different refusal, and the service's counting-clock test sees a different read count.\"}},{\"subject\":\"refusal HTTP representation\",\"kind\":\"owned_but_undecided\",\"text\":\"- the HTTP status and the content of every refusal answer;\",\"question\":\"What HTTP status, body shape, refusal code and fixed message must be returned for each authentication, request-form, identifier, connection, folder, placement and publication refusal?\",\"options\":[\"Define a status and fixed code/message body for every refusal\",\"Use framework-native validation answers for form and identifier failures and defined bodies for domain refusals\",\"Use one common HTTP status and body shape for all authenticated refusals\"],\"default_guess\":\"Define one stable JSON body containing the refusal code and its specified fixed message, with an explicit HTTP-status mapping for every refusal.\",\"witness\":{\"initial\":\"A running service has no connection for the requested project.\",\"events\":[\"The authenticated calling flow requests a scan for that project.\"],\"outcomes\":[\"One implementation returns HTTP 404 with a fixed JSON body such as a code and message for `unknown_project`.\",\"Another implementation returns HTTP 400, or a framework-shaped error body, while still exposing no path or credential.\"],\"observer\":\"The calling flow must branch on different statuses and parse different response bodies.\"}},{\"subject\":\"startup handling of an unreadable connection record\",\"kind\":\"ambiguous_failure_phase\",\"text\":\"`deliverer_api` names `load_connections` only to refuse a start with a broken record.\",\"question\":\"Does “broken record” include an unreadable or syntactically malformed connections file, causing startup refusal, or are those conditions deferred to each operation and answered as `folder_unavailable`?\",\"options\":[\"Refuse service startup for every unreadable, malformed or rule-7-breaking record\",\"Refuse startup only for a readable record that breaks rule 7; start with unreadable records and refuse operations\",\"Start whenever configuration can be read and validate every connection only during operations\"],\"default_guess\":\"Refuse startup for malformed or rule-7-breaking records, but the text must explicitly reconcile that choice with A5 rule 6's operation-time `folder_unavailable`.\",\"witness\":{\"initial\":\"Before the service starts, the connections file exists but cannot be read.\",\"events\":[\"The operator starts the service.\",\"The calling flow probes health and then requests a scan.\"],\"outcomes\":[\"If an unreadable file is a broken record, startup fails and no health or scan endpoint becomes available.\",\"If unreadability is an operation-time condition, startup succeeds, health answers, and the scan is refused with `folder_unavailable`.\"],\"observer\":\"The operator sees different startup behavior, and the calling flow sees either no service or a defined refusal.\"}},{\"subject\":\"scan consistency with concurrent placement and mark writes\",\"kind\":\"concurrency_semantics_missing\",\"text\":\"A scan takes no lock.\",\"question\":\"When records change during an unlocked scan, must all placed and published statuses come from one record snapshot, may each file observe records at a different time, or is either result permitted?\",\"options\":[\"Take a consistent read snapshot of placement and mark records without the project lock\",\"Read each file's records independently and permit a mixed-time result\",\"Retry the scan when relevant records change during it\"],\"default_guess\":\"Permit per-file reads but explicitly state that an unlocked scan may report a mixed-time view and that a later scan converges.\",\"witness\":{\"initial\":\"Two ready sources already have placements but no marks.\",\"events\":[\"The calling flow starts a scan.\",\"After the scan has read the first source's records, another calling-flow operation writes marks for both sources.\",\"The scan completes.\"],\"outcomes\":[\"A snapshot implementation reports both sources as `placed`.\",\"A per-file implementation reports the first source as `placed` and the second as `published`.\"],\"observer\":\"The owner sees different status lists for the same ordered events.\"}},{\"subject\":\"photo_delivery dependency on SourceFile\",\"kind\":\"standard_violation\",\"text\":\"| `photo_delivery` | `domain_models` | `SOURCE_ID_FORM`, `Config`, `DelivererError`, `Rejected`, `SourceFile` |\",\"rule\":\"- `module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Either make `SourceFile` an explicitly owned and exported type of `domain_models`, or replace it in this dependency row with the provider-owned symbol actually imported.\"},{\"subject\":\"source_folder dependency on SourceFile\",\"kind\":\"standard_violation\",\"text\":\"| `source_folder` | `domain_models` | `MIN_AGE_SECONDS`, `MAX_SOURCE_BYTES`, `DelivererError`, `Rejected`, `SourceFile` |\",\"rule\":\"- `module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Either make `SourceFile` an explicitly owned and exported type of `domain_models`, or replace it in this dependency row with the provider-owned symbol actually imported.\"},{\"subject\":\"deliverer_api clock-backend dependency\",\"kind\":\"standard_violation\",\"text\":\"`deliverer_api` alone reaches `system_clock_backend`. It hands `utc_now` to an operation as a function,\\nand `photo_delivery` calls that function.\",\"rule\":\"- `module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации. Само наличие символа в `models`, `imports.internal` или\\n  `module_functions[provider]` зависимостью не является. Недостающий символ —\\n  такая же ошибка спеки, как лишний: в строгом режиме импортов (ниже)\\n  сгенерированный модуль без него отвергается\",\"section\":\"7\",\"question\":\"Add the direct `deliverer_api` → `system_clock_backend` dependency with symbol `utc_now` to the complete dependency table, or change the passage so `deliverer_api` does not directly name that provider or symbol.\"}]}",
+ "set_aside": []
+}
