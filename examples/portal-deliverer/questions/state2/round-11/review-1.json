@@ -1,0 +1,205 @@
+{
+ "open_points": [
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "listing_snapshot",
+   "text": "Each folder is listed once and completely when the walk reaches it.",
+   "question": "Does a listing represent one point-in-time snapshot, or may it include some names created or renamed while enumeration is in progress?",
+   "options": [
+    "Use an atomic snapshot of the folder at the instant listing begins.",
+    "Use exactly the entries returned by one filesystem enumeration, even if concurrent changes make them a mixed-time view.",
+    "Refuse the scan if the folder changes while it is being listed."
+   ],
+   "default_guess": "Use exactly one filesystem enumeration and retain the names it returns.",
+   "witness": {
+    "initial": "A folder contains a.jpg, and the walk has begun enumerating that folder.",
+    "events": [
+     "Another process creates b.jpg before the filesystem enumeration finishes.",
+     "The scan completes."
+    ],
+    "outcomes": [
+     "b.jpg is part of this scan because the enumeration returned it.",
+     "b.jpg is excluded because it did not exist at the instant the folder was reached."
+    ],
+    "observer": "The caller comparing the scan observations."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "listed_entry_identity",
+   "text": "A name is judged from that listing, and the judgement holds for the whole scan.",
+   "question": "After a listed pathname is replaced, is the scan bound only to the listed name or to the particular directory entry/file that occupied that name when listed?",
+   "options": [
+    "Open whatever object occupies the listed pathname later and apply the name judgement recorded at listing time.",
+    "Require the opened object to be the same file that was listed; otherwise report `unreadable_file`.",
+    "Refuse the entire scan when replacement is detected."
+   ],
+   "default_guess": "Bind the scan to the listed file identity and treat replacement as `unreadable_file`.",
+   "witness": {
+    "initial": "The listing contains an ordinary file a.jpg.",
+    "events": [
+     "Another actor removes a.jpg and puts different content at the same pathname.",
+     "The scanner opens the listed pathname."
+    ],
+    "outcomes": [
+     "The replacement content is scanned under the judgement made for a.jpg.",
+     "The replacement is rejected because it is not the file represented by the listing."
+    ],
+    "observer": "The caller and, if placement follows, the owner of the stored photo."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "cross_folder_move",
+   "text": "A scan gives each regular file of the photo folder exactly one status.",
+   "question": "How is the exactly-one-status rule preserved when a file moves from an already listed folder into a folder that has not yet been listed?",
+   "options": [
+    "Report both listed paths because traversal is name-based.",
+    "Track file identity and suppress the second occurrence.",
+    "Refuse or restart the scan when such movement is detected."
+   ],
+   "default_guess": "Treat each listed relative path as an observation and document that the same underlying file can appear twice during a concurrent move.",
+   "witness": {
+    "initial": "Folders a and b are ordinary subfolders; a is visited before b, and a/x.jpg has already been listed and scanned.",
+    "events": [
+     "Another actor moves a/x.jpg to b/x.jpg.",
+     "The walk reaches and lists b."
+    ],
+    "outcomes": [
+     "The scan reports both a/x.jpg and b/x.jpg.",
+     "The scan suppresses b/x.jpg so the underlying file receives only one status."
+    ],
+    "observer": "The caller receiving the scan."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "check_precedence",
+   "text": "when opened it is no longer a regular file",
+   "question": "If a file was regular when listed but is a symbolic link when opened, must it fail as `not_a_regular_file` under rule 4 or as `unreadable_file` under rule 6, and what atomic no-follow operation establishes that result?",
+   "options": [
+    "Open without following links; an open failure caused by the replacement is `unreadable_file`.",
+    "Open or inspect the entry without following links and classify the discovered link as `not_a_regular_file`.",
+    "Refuse the whole scan because the listing became stale."
+   ],
+   "default_guess": "Use an atomic no-follow open and return `unreadable_file` when the listed regular file has been replaced by a link.",
+   "witness": {
+    "initial": "The listing contains regular file a.jpg.",
+    "events": [
+     "Another actor replaces a.jpg with a symbolic link before it is opened.",
+     "The scanner performs its open/type check."
+    ],
+    "outcomes": [
+     "The no-follow open fails and rule 6 produces `unreadable_file`.",
+     "A no-follow inspection opens the entry and rule 4 produces `not_a_regular_file`."
+    ],
+    "observer": "The caller sees a different rejection reason."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "side_effect_scope",
+   "text": "Here \"writes nothing\" means that no file, temporary or final, is left in the binary store or the state folder other than the project lock file.",
+   "question": "Does this forbid every persistent-state change and every transient write, or only newly created temporary/final files that remain after the operation; and may an existing state file or the project lock file be created or modified?",
+   "options": [
+    "No persistent bytes or records may change; only normal lock acquisition and release are allowed.",
+    "Existing state files may be modified provided no additional file remains.",
+    "Transient files may be written and removed before return, and the lock file may be created or modified."
+   ],
+   "default_guess": "Require rollback of all persistent changes, allow transient artifacts that are removed, and allow only normal lock-file changes.",
+   "witness": {
+    "initial": "A placement attempt for a conflict copy starts with an existing state database and project lock file.",
+    "events": [
+     "The implementation records an attempted placement in the existing database, creates and deletes a temporary binary, then returns the required failure."
+    ],
+    "outcomes": [
+     "The operation violates `writes nothing` because persistent state was modified.",
+     "The operation satisfies the stated definition because no temporary or final file remains other than the lock file."
+    ],
+    "observer": "A later operation reading state, or an auditor inspecting the state database."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "definition_scope",
+   "text": "When that ordinary file disappears before it is read for placing, the conflict copy is not read in its place: the photo fails with `models.PlacementFailure.UNREADABLE_FILE` and nothing is written (`test_a_conflict_copy_is_never_read_in_place_of_the_ordinary_file`).",
+   "question": "Does the preceding explicit definition of \"writes nothing\" apply to this sentence and to the later renamed-file sentence, or do these unqualified occurrences require a stronger prohibition on all writes?",
+   "options": [
+    "The definition applies to every occurrence of `writes nothing` or `nothing is written` in INV-18.",
+    "The definition applies only to the first test sentence introduced by `Here`.",
+    "Replace every occurrence with its complete intended side-effect requirement."
+   ],
+   "default_guess": "Apply the same definition throughout INV-18 and repeat it or define it once for the entire item.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "contradiction",
+   "text": "a conflict copy renamed to an ordinary name after the listing stays out of that scan and is reported by the next one",
+   "question": "Must the next scan report it only if it still exists and is an eligible name when that scan reads metadata, or is reporting unconditionally required despite the rule that a file disappearing before metadata is read is not reported?",
+   "options": [
+    "Make reporting conditional on the renamed file still existing and remaining eligible.",
+    "Retain an obligation to report the remembered rename even if the file has disappeared.",
+    "Remove the claim about the next scan and specify only exclusion from the current scan."
+   ],
+   "default_guess": "Make the next-scan statement conditional on the file still existing under an eligible ordinary name.",
+   "witness": {
+    "initial": "A conflict copy is listed, then renamed to an ordinary name after that listing.",
+    "events": [
+     "Before the next scan, another actor deletes the renamed file.",
+     "The next scan reaches the folder."
+    ],
+    "outcomes": [
+     "The renamed conflict copy must be reported by the next scan.",
+     "It is not reported because it disappeared before its metadata could be read."
+    ],
+    "observer": "The caller receiving the next scan."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "standard_violation",
+   "text": "with `models.PlacementFailure.UNREADABLE_FILE` (A3 rule 4).",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must name `the UNREADABLE_FILE member of = models.PlacementFailure`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "standard_violation",
+   "text": "placing it by its hash fails with `models.PlacementFailure.NOT_READY_OR_ABSENT` and writes nothing",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must name `the NOT_READY_OR_ABSENT member of = models.PlacementFailure`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "standard_violation",
+   "text": "the photo fails with `models.PlacementFailure.UNREADABLE_FILE` and nothing is written",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must name `the UNREADABLE_FILE member of = models.PlacementFailure`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "standard_violation",
+   "text": "A file renamed to a conflict copy after the listing fails with `models.PlacementFailure.UNREADABLE_FILE` and writes nothing",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must name `the UNREADABLE_FILE member of = models.PlacementFailure`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"listing_snapshot\",\"text\":\"Each folder is listed once and completely when the walk reaches it.\",\"question\":\"Does a listing represent one point-in-time snapshot, or may it include some names created or renamed while enumeration is in progress?\",\"options\":[\"Use an atomic snapshot of the folder at the instant listing begins.\",\"Use exactly the entries returned by one filesystem enumeration, even if concurrent changes make them a mixed-time view.\",\"Refuse the scan if the folder changes while it is being listed.\"],\"default_guess\":\"Use exactly one filesystem enumeration and retain the names it returns.\",\"witness\":{\"initial\":\"A folder contains a.jpg, and the walk has begun enumerating that folder.\",\"events\":[\"Another process creates b.jpg before the filesystem enumeration finishes.\",\"The scan completes.\"],\"outcomes\":[\"b.jpg is part of this scan because the enumeration returned it.\",\"b.jpg is excluded because it did not exist at the instant the folder was reached.\"],\"observer\":\"The caller comparing the scan observations.\"}},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"listed_entry_identity\",\"text\":\"A name is judged from that listing, and the judgement holds for the whole scan.\",\"question\":\"After a listed pathname is replaced, is the scan bound only to the listed name or to the particular directory entry/file that occupied that name when listed?\",\"options\":[\"Open whatever object occupies the listed pathname later and apply the name judgement recorded at listing time.\",\"Require the opened object to be the same file that was listed; otherwise report `unreadable_file`.\",\"Refuse the entire scan when replacement is detected.\"],\"default_guess\":\"Bind the scan to the listed file identity and treat replacement as `unreadable_file`.\",\"witness\":{\"initial\":\"The listing contains an ordinary file a.jpg.\",\"events\":[\"Another actor removes a.jpg and puts different content at the same pathname.\",\"The scanner opens the listed pathname.\"],\"outcomes\":[\"The replacement content is scanned under the judgement made for a.jpg.\",\"The replacement is rejected because it is not the file represented by the listing.\"],\"observer\":\"The caller and, if placement follows, the owner of the stored photo.\"}},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"cross_folder_move\",\"text\":\"A scan gives each regular file of the photo folder exactly one status.\",\"question\":\"How is the exactly-one-status rule preserved when a file moves from an already listed folder into a folder that has not yet been listed?\",\"options\":[\"Report both listed paths because traversal is name-based.\",\"Track file identity and suppress the second occurrence.\",\"Refuse or restart the scan when such movement is detected.\"],\"default_guess\":\"Treat each listed relative path as an observation and document that the same underlying file can appear twice during a concurrent move.\",\"witness\":{\"initial\":\"Folders a and b are ordinary subfolders; a is visited before b, and a/x.jpg has already been listed and scanned.\",\"events\":[\"Another actor moves a/x.jpg to b/x.jpg.\",\"The walk reaches and lists b.\"],\"outcomes\":[\"The scan reports both a/x.jpg and b/x.jpg.\",\"The scan suppresses b/x.jpg so the underlying file receives only one status.\"],\"observer\":\"The caller receiving the scan.\"}},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"check_precedence\",\"text\":\"when opened it is no longer a regular file\",\"question\":\"If a file was regular when listed but is a symbolic link when opened, must it fail as `not_a_regular_file` under rule 4 or as `unreadable_file` under rule 6, and what atomic no-follow operation establishes that result?\",\"options\":[\"Open without following links; an open failure caused by the replacement is `unreadable_file`.\",\"Open or inspect the entry without following links and classify the discovered link as `not_a_regular_file`.\",\"Refuse the whole scan because the listing became stale.\"],\"default_guess\":\"Use an atomic no-follow open and return `unreadable_file` when the listed regular file has been replaced by a link.\",\"witness\":{\"initial\":\"The listing contains regular file a.jpg.\",\"events\":[\"Another actor replaces a.jpg with a symbolic link before it is opened.\",\"The scanner performs its open/type check.\"],\"outcomes\":[\"The no-follow open fails and rule 6 produces `unreadable_file`.\",\"A no-follow inspection opens the entry and rule 4 produces `not_a_regular_file`.\"],\"observer\":\"The caller sees a different rejection reason.\"}},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"side_effect_scope\",\"text\":\"Here \\\"writes nothing\\\" means that no file, temporary or final, is left in the binary store or the state folder other than the project lock file.\",\"question\":\"Does this forbid every persistent-state change and every transient write, or only newly created temporary/final files that remain after the operation; and may an existing state file or the project lock file be created or modified?\",\"options\":[\"No persistent bytes or records may change; only normal lock acquisition and release are allowed.\",\"Existing state files may be modified provided no additional file remains.\",\"Transient files may be written and removed before return, and the lock file may be created or modified.\"],\"default_guess\":\"Require rollback of all persistent changes, allow transient artifacts that are removed, and allow only normal lock-file changes.\",\"witness\":{\"initial\":\"A placement attempt for a conflict copy starts with an existing state database and project lock file.\",\"events\":[\"The implementation records an attempted placement in the existing database, creates and deletes a temporary binary, then returns the required failure.\"],\"outcomes\":[\"The operation violates `writes nothing` because persistent state was modified.\",\"The operation satisfies the stated definition because no temporary or final file remains other than the lock file.\"],\"observer\":\"A later operation reading state, or an auditor inspecting the state database.\"}},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"definition_scope\",\"text\":\"When that ordinary file disappears before it is read for placing, the conflict copy is not read in its place: the photo fails with `models.PlacementFailure.UNREADABLE_FILE` and nothing is written (`test_a_conflict_copy_is_never_read_in_place_of_the_ordinary_file`).\",\"question\":\"Does the preceding explicit definition of \\\"writes nothing\\\" apply to this sentence and to the later renamed-file sentence, or do these unqualified occurrences require a stronger prohibition on all writes?\",\"options\":[\"The definition applies to every occurrence of `writes nothing` or `nothing is written` in INV-18.\",\"The definition applies only to the first test sentence introduced by `Here`.\",\"Replace every occurrence with its complete intended side-effect requirement.\"],\"default_guess\":\"Apply the same definition throughout INV-18 and repeat it or define it once for the entire item.\"},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"contradiction\",\"text\":\"a conflict copy renamed to an ordinary name after the listing stays out of that scan and is reported by the next one\",\"question\":\"Must the next scan report it only if it still exists and is an eligible name when that scan reads metadata, or is reporting unconditionally required despite the rule that a file disappearing before metadata is read is not reported?\",\"options\":[\"Make reporting conditional on the renamed file still existing and remaining eligible.\",\"Retain an obligation to report the remembered rename even if the file has disappeared.\",\"Remove the claim about the next scan and specify only exclusion from the current scan.\"],\"default_guess\":\"Make the next-scan statement conditional on the file still existing under an eligible ordinary name.\",\"witness\":{\"initial\":\"A conflict copy is listed, then renamed to an ordinary name after that listing.\",\"events\":[\"Before the next scan, another actor deletes the renamed file.\",\"The next scan reaches the folder.\"],\"outcomes\":[\"The renamed conflict copy must be reported by the next scan.\",\"It is not reported because it disappeared before its metadata could be read.\"],\"observer\":\"The caller receiving the next scan.\"}},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"standard_violation\",\"text\":\"with `models.PlacementFailure.UNREADABLE_FILE` (A3 rule 4).\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must name `the UNREADABLE_FILE member of = models.PlacementFailure`.\"},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"standard_violation\",\"text\":\"placing it by its hash fails with `models.PlacementFailure.NOT_READY_OR_ABSENT` and writes nothing\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must name `the NOT_READY_OR_ABSENT member of = models.PlacementFailure`.\"},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"standard_violation\",\"text\":\"the photo fails with `models.PlacementFailure.UNREADABLE_FILE` and nothing is written\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must name `the UNREADABLE_FILE member of = models.PlacementFailure`.\"},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"standard_violation\",\"text\":\"A file renamed to a conflict copy after the listing fails with `models.PlacementFailure.UNREADABLE_FILE` and writes nothing\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must name `the UNREADABLE_FILE member of = models.PlacementFailure`.\"}]}",
+ "set_aside": []
+}

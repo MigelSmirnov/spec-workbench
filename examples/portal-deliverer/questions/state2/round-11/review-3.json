@@ -1,0 +1,247 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 scan time",
+   "kind": "missing_time_source",
+   "text": "its age is below the settling time, which includes a modification time in the future",
+   "question": "What clock supplies the comparison instant, in what datetime representation are that instant and the file modification time compared, and is the clock read once for the whole scan or separately for files and folders?",
+   "options": [
+    "Read one UTC instant from an injected clock at scan start and use it for every entry",
+    "Read the clock separately for each file when its metadata is evaluated",
+    "Use the host system clock or filesystem time implicitly"
+   ],
+   "default_guess": "Read one timezone-aware UTC instant from an injected clock at scan start and normalize modification times to the same representation.",
+   "witness": {
+    "initial": "Two files have modification times close to the settling boundary.",
+    "events": [
+     "The caller starts one scan just before the first file reaches the boundary.",
+     "The scan processes the first file and then the second after the boundary passes."
+    ],
+    "outcomes": [
+     "A single clock reading gives both files statuses relative to the same scan instant.",
+     "Per-file clock readings can leave the first file settling and make the second ready."
+    ],
+    "observer": "The caller reading the scan results"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto taken_at",
+   "kind": "missing_time_representation",
+   "text": "with the moment the photo was taken as UTC without an offset",
+   "question": "How is a camera timestamp that has no usable offset converted to UTC, and which camera timestamp fields and offset fields count as the camera record before falling back to the file modification time?",
+   "options": [
+    "Use only camera timestamps that carry a usable offset; otherwise use the file modification time",
+    "Interpret an offset-less camera timestamp in a declared project or server timezone",
+    "Treat an offset-less camera timestamp as already UTC"
+   ],
+   "default_guess": "Use a camera timestamp only when its UTC instant can be established from camera metadata; otherwise fall back to the file modification time.",
+   "witness": {
+    "initial": "A JPEG contains a local camera timestamp of 12:00 but no timezone or offset; its file modification time represents 10:00 UTC.",
+    "events": [
+     "The owner places the JPEG.",
+     "The prepared photo and publication body are created."
+    ],
+    "outcomes": [
+     "The camera value is rejected as an indeterminate instant and 10:00 UTC is used from the file modification time.",
+     "The camera value is assumed to be UTC or local time, producing a different photo date."
+    ],
+    "observer": "The owner viewing the photo date in the Portal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark marked_at",
+   "kind": "missing_time_source",
+   "text": "`project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`",
+   "question": "What supplies `marked_at`, what datetime representation is stored, and how many readings does one mark operation take, including replay and refusal paths?",
+   "options": [
+    "The mark operation reads an injected UTC clock once only when creating the first mark",
+    "The caller passes the timestamp as a datetime parameter",
+    "A declared authority module supplies the timestamp",
+    "Every mark call reads ambient system time, including replayed and refused calls"
+   ],
+   "default_guess": "Read an injected clock once when the first mark is created, store a timezone-aware UTC datetime, and take no fresh reading for replay or refusal.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 folder listing",
+   "kind": "concurrent_listing_semantics",
+   "text": "Each folder is listed once and completely when the walk reaches it.",
+   "question": "What set of entries is a complete listing when entries are added, removed, or renamed while the directory enumeration is in progress: a snapshot at a defined instant, every entry returned before enumeration ends, or grounds to refuse the scan?",
+   "options": [
+    "Use the entries returned by one enumeration to completion, without promising an atomic snapshot",
+    "Require a snapshot corresponding to the instant the folder is reached",
+    "Refuse the scan if concurrent mutation is detected"
+   ],
+   "default_guess": "Consume one directory enumeration to completion and freeze exactly the entries it returned for that scan.",
+   "witness": {
+    "initial": "A folder contains `a.jpg` when its enumeration begins.",
+    "events": [
+     "The scanner begins listing the folder.",
+     "Another actor adds `b.jpg` before the enumeration finishes."
+    ],
+    "outcomes": [
+     "`b.jpg` is included because the one enumeration returned it.",
+     "`b.jpg` is deferred because the listing is treated as a snapshot from when the folder was reached."
+    ],
+    "observer": "The caller comparing the scan's reported files"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 traversal of changed directory entries",
+   "kind": "check_precedence",
+   "text": "Ignored names are not reported, ignored folders are not entered, and symbolic links are neither reported nor followed.",
+   "question": "If an entry listed as a non-ignored folder is replaced by a symbolic link or ceases to be a directory before traversal, does the symbolic-link rule skip it, or does inability to list the originally observed folder refuse the whole scan with `folder_unavailable`?",
+   "options": [
+    "Recheck before traversal and skip it if it is now a symbolic link",
+    "Treat the listed folder as unavailable and refuse the whole scan",
+    "Refuse only for disappearance or access failure, but skip a replacement symbolic link"
+   ],
+   "default_guess": "Recheck without following links; skip a replacement symbolic link and refuse other failures to list a non-ignored directory.",
+   "witness": {
+    "initial": "The parent listing contains a non-ignored directory named `album`.",
+    "events": [
+     "The scanner completes the parent listing.",
+     "Another actor replaces `album` with a symbolic link before the scanner enters it.",
+     "The scanner reaches the listed `album` entry."
+    ],
+    "outcomes": [
+     "The scanner applies the symbolic-link rule, skips the entry, and completes.",
+     "The scanner applies the non-ignored-folder rule and refuses the scan with `folder_unavailable`."
+    ],
+    "observer": "The caller receiving either a complete scan or a refusal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 listed-file identity",
+   "kind": "exact_refusal_condition",
+   "text": "A file renamed after the listing is no longer at the listed path, so reading it for placing fails with `models.PlacementFailure.UNREADABLE_FILE` (A3 rule 4).",
+   "question": "If the listed file is renamed away and another regular file is created at the same path before opening, what observation establishes that the listed file is gone, and must placement refuse rather than read the replacement?",
+   "options": [
+    "Compare a stable file identity captured during listing and refuse if it changed",
+    "Open whatever occupies the listed path and treat its bytes as the scanned file",
+    "Detect only disappearance or a changed file type; a same-type replacement is read"
+   ],
+   "default_guess": "Capture and verify a stable filesystem identity and refuse when the path now names a different object.",
+   "witness": {
+    "initial": "The listing records an ordinary file `photo.jpg`.",
+    "events": [
+     "Another actor renames the listed file to `old.jpg`.",
+     "The actor creates a different regular file at `photo.jpg`.",
+     "The owner requests placement of the observation from the scan."
+    ],
+    "outcomes": [
+     "Placement refuses with `UNREADABLE_FILE` because the listed filesystem object is gone.",
+     "Placement opens the replacement at the same path and places its content."
+    ],
+    "observer": "The owner and the binary-store reader"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-18 write prohibition",
+   "kind": "vague_write_effect",
+   "text": "Here \"writes nothing\" means that no file, temporary or final, is left in the binary store or the state folder other than the project lock file.",
+   "question": "Does this prohibit transient writes that are later removed and changes to pre-existing state files, or does it assert only that no additional file remains at the end?",
+   "options": [
+    "Prohibit every persistent or transient write except activity required for the project lock",
+    "Permit transient files if removed and permit modification of existing state files because no additional file is left",
+    "Prohibit changes to existing files but permit temporary files that are removed before return"
+   ],
+   "default_guess": "Prohibit all changes to binary-store and state-folder contents except acquiring and releasing the project lock.",
+   "witness": {
+    "initial": "The state folder already contains a database file and the binary store contains no output for the requested hash.",
+    "events": [
+     "The caller attempts to place a conflict copy.",
+     "The implementation records the failed attempt in the existing database, or creates and deletes a temporary file, before returning the required failure."
+    ],
+    "outcomes": [
+     "The attempt is compliant because no additional file is left at return.",
+     "The attempt violates \"writes nothing\" because storage was modified during the operation."
+    ],
+    "observer": "A filesystem monitor, a later database reader, or recovery after a crash"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "models.PlacementFailure",
+   "kind": "undefined_model_reference",
+   "text": "`models.PlacementFailure.UNREADABLE_FILE`",
+   "question": "Where is `PlacementFailure` defined, what is its closed member set and serialized representation, and are `UNREADABLE_FILE` and `NOT_READY_OR_ABSENT` members of it?",
+   "options": [
+    "Add a `PlacementFailure` enumeration to State 1 with the named members and values",
+    "Use an already defined result or reason enumeration instead",
+    "Specify these outcomes as untyped string codes"
+   ],
+   "default_guess": "Define `PlacementFailure` in the models with `UNREADABLE_FILE` and `NOT_READY_OR_ABSENT` members whose values are the existing lowercase codes.",
+   "witness": {
+    "initial": "A listed ordinary file disappears before placement.",
+    "events": [
+     "The caller requests placement.",
+     "The implementation must construct the failure result."
+    ],
+    "outcomes": [
+     "The implementation returns a typed `PlacementFailure.UNREADABLE_FILE` member.",
+     "The implementation returns the string `unreadable_file` or cannot import the referenced type."
+    ],
+    "observer": "The calling flow and generated-code type checker"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 renamed conflict copy",
+   "kind": "missing_precondition",
+   "text": "a conflict copy renamed to an ordinary name after the listing stays out of that scan and is reported by the next one",
+   "question": "Under what continuing conditions must the next scan report it—must the renamed file still exist under the ordinary name, be a regular non-ignored file, be listable, and have reached the settling time?",
+   "options": [
+    "Report it on the next scan only if it then satisfies all ordinary scan rules",
+    "Report it on the next scan regardless of settling time and other status rules",
+    "Guarantee only that it is reconsidered by the next scan, not necessarily reported"
+   ],
+   "default_guess": "State that the next scan reconsiders it normally and reports it only if it still exists and satisfies the ordinary scan rules.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 renamed listed file failure",
+   "kind": "standard_violation",
+   "text": "A file renamed after the listing is no longer at the listed path, so reading it for placing fails\nwith `models.PlacementFailure.UNREADABLE_FILE` (A3 rule 4).",
+   "rule": "Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается\nвовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение\nсочинить. Обе формы невалидны для значения, которое читает генерируемый код.",
+   "section": "15.3.1",
+   "question": "Replace the backticked address with the prescribed enum-member form, naming `the UNREADABLE_FILE member of = models.PlacementFailure`.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-18 conflict-copy placement failure",
+   "kind": "standard_violation",
+   "text": "a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan and placing it by its hash fails with `models.PlacementFailure.NOT_READY_OR_ABSENT` and writes nothing (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "rule": "Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается\nвовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение\nсочинить. Обе формы невалидны для значения, которое читает генерируемый код.",
+   "section": "15.3.1",
+   "question": "Replace the backticked address with the prescribed enum-member form, naming `the NOT_READY_OR_ABSENT member of = models.PlacementFailure`.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-18 vanished ordinary file failure",
+   "kind": "standard_violation",
+   "text": "When that ordinary file disappears before it is read for placing, the conflict copy is not read in its place: the photo fails with `models.PlacementFailure.UNREADABLE_FILE` and nothing is written (`test_a_conflict_copy_is_never_read_in_place_of_the_ordinary_file`).",
+   "rule": "Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается\nвовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение\nсочинить. Обе формы невалидны для значения, которое читает генерируемый код.",
+   "section": "15.3.1",
+   "question": "Replace the backticked address with the prescribed enum-member form, naming `the UNREADABLE_FILE member of = models.PlacementFailure`.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-18 rename-to-conflict failure",
+   "kind": "standard_violation",
+   "text": "A file renamed to a conflict copy after the listing fails with `models.PlacementFailure.UNREADABLE_FILE` and writes nothing (`test_a_file_renamed_to_a_conflict_copy_after_the_scan_is_not_placed`), and a conflict copy renamed to an ordinary name after the listing stays out of that scan and is reported by the next one (`test_a_conflict_copy_renamed_after_the_listing_stays_out_of_that_scan`).",
+   "rule": "Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается\nвовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение\nсочинить. Обе формы невалидны для значения, которое читает генерируемый код.",
+   "section": "15.3.1",
+   "question": "Replace the backticked address with the prescribed enum-member form, naming `the UNREADABLE_FILE member of = models.PlacementFailure`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 scan time\",\"kind\":\"missing_time_source\",\"text\":\"its age is below the settling time, which includes a modification time in the future\",\"question\":\"What clock supplies the comparison instant, in what datetime representation are that instant and the file modification time compared, and is the clock read once for the whole scan or separately for files and folders?\",\"options\":[\"Read one UTC instant from an injected clock at scan start and use it for every entry\",\"Read the clock separately for each file when its metadata is evaluated\",\"Use the host system clock or filesystem time implicitly\"],\"default_guess\":\"Read one timezone-aware UTC instant from an injected clock at scan start and normalize modification times to the same representation.\",\"witness\":{\"initial\":\"Two files have modification times close to the settling boundary.\",\"events\":[\"The caller starts one scan just before the first file reaches the boundary.\",\"The scan processes the first file and then the second after the boundary passes.\"],\"outcomes\":[\"A single clock reading gives both files statuses relative to the same scan instant.\",\"Per-file clock readings can leave the first file settling and make the second ready.\"],\"observer\":\"The caller reading the scan results\"}},{\"subject\":\"M03 PreparedPhoto taken_at\",\"kind\":\"missing_time_representation\",\"text\":\"with the moment the photo was taken as UTC without an offset\",\"question\":\"How is a camera timestamp that has no usable offset converted to UTC, and which camera timestamp fields and offset fields count as the camera record before falling back to the file modification time?\",\"options\":[\"Use only camera timestamps that carry a usable offset; otherwise use the file modification time\",\"Interpret an offset-less camera timestamp in a declared project or server timezone\",\"Treat an offset-less camera timestamp as already UTC\"],\"default_guess\":\"Use a camera timestamp only when its UTC instant can be established from camera metadata; otherwise fall back to the file modification time.\",\"witness\":{\"initial\":\"A JPEG contains a local camera timestamp of 12:00 but no timezone or offset; its file modification time represents 10:00 UTC.\",\"events\":[\"The owner places the JPEG.\",\"The prepared photo and publication body are created.\"],\"outcomes\":[\"The camera value is rejected as an indeterminate instant and 10:00 UTC is used from the file modification time.\",\"The camera value is assumed to be UTC or local time, producing a different photo date.\"],\"observer\":\"The owner viewing the photo date in the Portal\"}},{\"subject\":\"M07 PublicationMark marked_at\",\"kind\":\"missing_time_source\",\"text\":\"`project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`\",\"question\":\"What supplies `marked_at`, what datetime representation is stored, and how many readings does one mark operation take, including replay and refusal paths?\",\"options\":[\"The mark operation reads an injected UTC clock once only when creating the first mark\",\"The caller passes the timestamp as a datetime parameter\",\"A declared authority module supplies the timestamp\",\"Every mark call reads ambient system time, including replayed and refused calls\"],\"default_guess\":\"Read an injected clock once when the first mark is created, store a timezone-aware UTC datetime, and take no fresh reading for replay or refusal.\"},{\"subject\":\"A1 folder listing\",\"kind\":\"concurrent_listing_semantics\",\"text\":\"Each folder is listed once and completely when the walk reaches it.\",\"question\":\"What set of entries is a complete listing when entries are added, removed, or renamed while the directory enumeration is in progress: a snapshot at a defined instant, every entry returned before enumeration ends, or grounds to refuse the scan?\",\"options\":[\"Use the entries returned by one enumeration to completion, without promising an atomic snapshot\",\"Require a snapshot corresponding to the instant the folder is reached\",\"Refuse the scan if concurrent mutation is detected\"],\"default_guess\":\"Consume one directory enumeration to completion and freeze exactly the entries it returned for that scan.\",\"witness\":{\"initial\":\"A folder contains `a.jpg` when its enumeration begins.\",\"events\":[\"The scanner begins listing the folder.\",\"Another actor adds `b.jpg` before the enumeration finishes.\"],\"outcomes\":[\"`b.jpg` is included because the one enumeration returned it.\",\"`b.jpg` is deferred because the listing is treated as a snapshot from when the folder was reached.\"],\"observer\":\"The caller comparing the scan's reported files\"}},{\"subject\":\"A1 traversal of changed directory entries\",\"kind\":\"check_precedence\",\"text\":\"Ignored names are not reported, ignored folders are not entered, and symbolic links are neither reported nor followed.\",\"question\":\"If an entry listed as a non-ignored folder is replaced by a symbolic link or ceases to be a directory before traversal, does the symbolic-link rule skip it, or does inability to list the originally observed folder refuse the whole scan with `folder_unavailable`?\",\"options\":[\"Recheck before traversal and skip it if it is now a symbolic link\",\"Treat the listed folder as unavailable and refuse the whole scan\",\"Refuse only for disappearance or access failure, but skip a replacement symbolic link\"],\"default_guess\":\"Recheck without following links; skip a replacement symbolic link and refuse other failures to list a non-ignored directory.\",\"witness\":{\"initial\":\"The parent listing contains a non-ignored directory named `album`.\",\"events\":[\"The scanner completes the parent listing.\",\"Another actor replaces `album` with a symbolic link before the scanner enters it.\",\"The scanner reaches the listed `album` entry.\"],\"outcomes\":[\"The scanner applies the symbolic-link rule, skips the entry, and completes.\",\"The scanner applies the non-ignored-folder rule and refuses the scan with `folder_unavailable`.\"],\"observer\":\"The caller receiving either a complete scan or a refusal\"}},{\"subject\":\"A1 listed-file identity\",\"kind\":\"exact_refusal_condition\",\"text\":\"A file renamed after the listing is no longer at the listed path, so reading it for placing fails with `models.PlacementFailure.UNREADABLE_FILE` (A3 rule 4).\",\"question\":\"If the listed file is renamed away and another regular file is created at the same path before opening, what observation establishes that the listed file is gone, and must placement refuse rather than read the replacement?\",\"options\":[\"Compare a stable file identity captured during listing and refuse if it changed\",\"Open whatever occupies the listed path and treat its bytes as the scanned file\",\"Detect only disappearance or a changed file type; a same-type replacement is read\"],\"default_guess\":\"Capture and verify a stable filesystem identity and refuse when the path now names a different object.\",\"witness\":{\"initial\":\"The listing records an ordinary file `photo.jpg`.\",\"events\":[\"Another actor renames the listed file to `old.jpg`.\",\"The actor creates a different regular file at `photo.jpg`.\",\"The owner requests placement of the observation from the scan.\"],\"outcomes\":[\"Placement refuses with `UNREADABLE_FILE` because the listed filesystem object is gone.\",\"Placement opens the replacement at the same path and places its content.\"],\"observer\":\"The owner and the binary-store reader\"}},{\"subject\":\"INV-18 write prohibition\",\"kind\":\"vague_write_effect\",\"text\":\"Here \\\"writes nothing\\\" means that no file, temporary or final, is left in the binary store or the state folder other than the project lock file.\",\"question\":\"Does this prohibit transient writes that are later removed and changes to pre-existing state files, or does it assert only that no additional file remains at the end?\",\"options\":[\"Prohibit every persistent or transient write except activity required for the project lock\",\"Permit transient files if removed and permit modification of existing state files because no additional file is left\",\"Prohibit changes to existing files but permit temporary files that are removed before return\"],\"default_guess\":\"Prohibit all changes to binary-store and state-folder contents except acquiring and releasing the project lock.\",\"witness\":{\"initial\":\"The state folder already contains a database file and the binary store contains no output for the requested hash.\",\"events\":[\"The caller attempts to place a conflict copy.\",\"The implementation records the failed attempt in the existing database, or creates and deletes a temporary file, before returning the required failure.\"],\"outcomes\":[\"The attempt is compliant because no additional file is left at return.\",\"The attempt violates \\\"writes nothing\\\" because storage was modified during the operation.\"],\"observer\":\"A filesystem monitor, a later database reader, or recovery after a crash\"}},{\"subject\":\"models.PlacementFailure\",\"kind\":\"undefined_model_reference\",\"text\":\"`models.PlacementFailure.UNREADABLE_FILE`\",\"question\":\"Where is `PlacementFailure` defined, what is its closed member set and serialized representation, and are `UNREADABLE_FILE` and `NOT_READY_OR_ABSENT` members of it?\",\"options\":[\"Add a `PlacementFailure` enumeration to State 1 with the named members and values\",\"Use an already defined result or reason enumeration instead\",\"Specify these outcomes as untyped string codes\"],\"default_guess\":\"Define `PlacementFailure` in the models with `UNREADABLE_FILE` and `NOT_READY_OR_ABSENT` members whose values are the existing lowercase codes.\",\"witness\":{\"initial\":\"A listed ordinary file disappears before placement.\",\"events\":[\"The caller requests placement.\",\"The implementation must construct the failure result.\"],\"outcomes\":[\"The implementation returns a typed `PlacementFailure.UNREADABLE_FILE` member.\",\"The implementation returns the string `unreadable_file` or cannot import the referenced type.\"],\"observer\":\"The calling flow and generated-code type checker\"}},{\"subject\":\"A1 renamed conflict copy\",\"kind\":\"missing_precondition\",\"text\":\"a conflict copy renamed to an ordinary name after the listing stays out of that scan and is reported by the next one\",\"question\":\"Under what continuing conditions must the next scan report it—must the renamed file still exist under the ordinary name, be a regular non-ignored file, be listable, and have reached the settling time?\",\"options\":[\"Report it on the next scan only if it then satisfies all ordinary scan rules\",\"Report it on the next scan regardless of settling time and other status rules\",\"Guarantee only that it is reconsidered by the next scan, not necessarily reported\"],\"default_guess\":\"State that the next scan reconsiders it normally and reports it only if it still exists and satisfies the ordinary scan rules.\"},{\"subject\":\"A1 renamed listed file failure\",\"kind\":\"standard_violation\",\"text\":\"A file renamed after the listing is no longer at the listed path, so reading it for placing fails\\nwith `models.PlacementFailure.UNREADABLE_FILE` (A3 rule 4).\",\"rule\":\"Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается\\nвовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение\\nсочинить. Обе формы невалидны для значения, которое читает генерируемый код.\",\"section\":\"15.3.1\",\"question\":\"Replace the backticked address with the prescribed enum-member form, naming `the UNREADABLE_FILE member of = models.PlacementFailure`.\"},{\"subject\":\"INV-18 conflict-copy placement failure\",\"kind\":\"standard_violation\",\"text\":\"a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan and placing it by its hash fails with `models.PlacementFailure.NOT_READY_OR_ABSENT` and writes nothing (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"rule\":\"Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается\\nвовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение\\nсочинить. Обе формы невалидны для значения, которое читает генерируемый код.\",\"section\":\"15.3.1\",\"question\":\"Replace the backticked address with the prescribed enum-member form, naming `the NOT_READY_OR_ABSENT member of = models.PlacementFailure`.\"},{\"subject\":\"INV-18 vanished ordinary file failure\",\"kind\":\"standard_violation\",\"text\":\"When that ordinary file disappears before it is read for placing, the conflict copy is not read in its place: the photo fails with `models.PlacementFailure.UNREADABLE_FILE` and nothing is written (`test_a_conflict_copy_is_never_read_in_place_of_the_ordinary_file`).\",\"rule\":\"Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается\\nвовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение\\nсочинить. Обе формы невалидны для значения, которое читает генерируемый код.\",\"section\":\"15.3.1\",\"question\":\"Replace the backticked address with the prescribed enum-member form, naming `the UNREADABLE_FILE member of = models.PlacementFailure`.\"},{\"subject\":\"INV-18 rename-to-conflict failure\",\"kind\":\"standard_violation\",\"text\":\"A file renamed to a conflict copy after the listing fails with `models.PlacementFailure.UNREADABLE_FILE` and writes nothing (`test_a_file_renamed_to_a_conflict_copy_after_the_scan_is_not_placed`), and a conflict copy renamed to an ordinary name after the listing stays out of that scan and is reported by the next one (`test_a_conflict_copy_renamed_after_the_listing_stays_out_of_that_scan`).\",\"rule\":\"Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается\\nвовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение\\nсочинить. Обе формы невалидны для значения, которое читает генерируемый код.\",\"section\":\"15.3.1\",\"question\":\"Replace the backticked address with the prescribed enum-member form, naming `the UNREADABLE_FILE member of = models.PlacementFailure`.\"}]}",
+ "set_aside": []
+}

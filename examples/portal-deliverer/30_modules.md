@@ -38,6 +38,20 @@ cycles, and `domain_models` names no other module.
 | `deliverer_api` | `photo_delivery` | `scan_project_photos`, `place_project_photos`, `mark_photo_published` |
 | `deliverer_api` | `system_clock` | `utc_now` |
 
+The table lists what the prototype names. The prototype writes enumeration values as text, and the
+generated service names these enumerations of `domain_models` as well:
+
+| Consumer | Enumerations |
+|---|---|
+| `object_connections`, `delivery_store` | `RefusalCode` |
+| `source_folder` | `ScanStatus`, `ObservationReason`, `RefusalCode` |
+| `photo_preparation` | `DateSource`, `PlacementFailure` |
+| `photo_delivery` | `ScanStatus`, `PlacementStatus`, `PlacementFailure`, `MarkStatus`, `RefusalCode` |
+| `deliverer_api` | `RefusalCode` |
+
+`source_folder` signals a file that cannot be read through `Rejected` or the operating system's error, and
+`photo_delivery` turns either into its `PlacementFailure` member.
+
 `deliverer_api` names `load_connections` only to refuse a start with a broken record. The operations
 read the record themselves through `confirmed_connection`, so no module keeps connections in memory.
 

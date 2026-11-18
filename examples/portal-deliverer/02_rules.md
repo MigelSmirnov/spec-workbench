@@ -24,9 +24,9 @@ applies decides:
 | 1 | its age is below the settling time, which includes a modification time in the future | `settling` | none |
 | 2 | empty | `rejected` | `empty` |
 | 3 | larger than the source limit | `rejected` | `too_large` |
-| 4 | when opened it is no longer a regular file | `rejected` | `not_a_regular_file` |
+| 4 | it opens, but what was opened is not a regular file | `rejected` | `not_a_regular_file` |
 | 5 | it grew past the source limit while being read | `rejected` | `too_large` |
-| 6 | opening or reading it fails, including a file that disappeared or became a link | `rejected` | `unreadable_file` |
+| 6 | opening or reading it fails, which includes a file that disappeared and a path that became a symbolic link, because links are not followed when opening | `rejected` | `unreadable_file` |
 | 7 | does not begin with a JPEG, PNG or WEBP signature | `rejected` | `unsupported_format` |
 | 8 | same content as an earlier file of this scan | `duplicate` | `duplicate_content`, with `duplicate_of` |
 | 9 | placed and marked | `published` | none |
@@ -49,12 +49,21 @@ constant, the mark of a Syncthing conflict copy (R0-14). Names beginning with a 
 `.syncthing.*`, `.stfolder` and `.stversions` and the phone's `.trashed-*` files. Ignored names are
 not reported, ignored folders are not entered, and symbolic links are neither reported nor followed.
 
-Each folder is listed once and completely when the walk reaches it. A name is judged from that listing,
-and the judgement holds for the whole scan. R0-14 concerns files, not content: a conflict copy is
-never a source of a new placement, an ordinary file with the same content as a conflict copy is placed
-as usual, and content that already has a placement replays under A3 rule 2 whatever name it has now. A
-file renamed after the listing is no longer at the listed path, so reading it for placing fails
-with `models.PlacementFailure.UNREADABLE_FILE` (A3 rule 4).
+A name is judged from the listing of its folder, and a conflict copy is judged by its name alone (R0-14).
+A conflict copy is never the source of a new placement, an ordinary file with the same content as a
+conflict copy is placed as usual, and content that already has a placement replays under A3 rule 2
+whatever name it has now.
+
+Syncthing may change the folder during a scan, and a scan is not a view of one instant. Each folder is
+listed once, when the walk reaches it, and the listing holds what the operating system returns then. A
+file moved between folders during the scan may be reported under both paths or under neither. A listed
+subfolder that has become a symbolic link is skipped, and one that can no longer be listed for any other
+reason refuses the operation as above. The next scan sees the folder as it then stands.
+
+A file that leaves its listed path before the placement's own scan reads it is not reported as `ready`,
+so its placement fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure (A3 rule 3). A
+file that leaves its path after that scan reported it as `ready` fails with the UNREADABLE_FILE member of
+= models.PlacementFailure (A3 rule 4).
 
 A scan only reads the source folder. A signature
 does not prove that an image can be decoded: a `ready` file may still fail when it is placed.
@@ -69,7 +78,7 @@ does not prove that an image can be decoded: a `ready` file may still fail when 
 
 - INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).
 - INV-02: placing a file still inside the settling time fails with `not_ready_or_absent` (`test_a_file_still_arriving_is_not_placed`).
-- INV-18: a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan and placing it by its hash fails with `models.PlacementFailure.NOT_READY_OR_ABSENT` and writes nothing (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Here "writes nothing" means that no file, temporary or final, is left in the binary store or the state folder other than the project lock file. Only the letters A to Z are folded (`test_only_ascii_letters_fold_in_the_conflict_mark`). Placed content replays when only a conflict copy still holds it (`test_placed_content_replays_when_only_a_conflict_copy_still_holds_it`), an ordinary file with the content of a conflict copy is placed (`test_an_ordinary_file_is_placed_when_a_conflict_copy_has_the_same_content`). When that ordinary file disappears before it is read for placing, the conflict copy is not read in its place: the photo fails with `models.PlacementFailure.UNREADABLE_FILE` and nothing is written (`test_a_conflict_copy_is_never_read_in_place_of_the_ordinary_file`). A file renamed to a conflict copy after the listing fails with `models.PlacementFailure.UNREADABLE_FILE` and writes nothing (`test_a_file_renamed_to_a_conflict_copy_after_the_scan_is_not_placed`), and a conflict copy renamed to an ordinary name after the listing stays out of that scan and is reported by the next one (`test_a_conflict_copy_renamed_after_the_listing_stays_out_of_that_scan`). A real Syncthing conflict leaves its copy unreported while the photo itself is still reported (`e2e_local_syncthing.py`, `a real Syncthing conflict copy is not offered`).
+- INV-18: a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan, and placing content that has no placement and is held only by that copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and writes nothing (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). "Writes nothing" means that the operation writes to the binary store and the state folder at most the project lock file, and every file already there stays unchanged. Only the letters A to Z are folded (`test_only_ascii_letters_fold_in_the_conflict_mark`). Placed content replays when only a conflict copy still holds it (`test_placed_content_replays_when_only_a_conflict_copy_still_holds_it`), and an ordinary file with the content of a conflict copy is placed (`test_an_ordinary_file_is_placed_when_a_conflict_copy_has_the_same_content`). When that ordinary file leaves its path after the placement's scan, the conflict copy is not read in its place: the photo fails with the UNREADABLE_FILE member of = models.PlacementFailure and writes nothing (`test_a_conflict_copy_is_never_read_in_place_of_the_ordinary_file`, `test_a_file_renamed_to_a_conflict_copy_after_the_scan_is_not_placed`). A conflict copy renamed to an ordinary name after the listing stays out of that scan, and the next scan reports the file under its new name while it is still there (`test_a_conflict_copy_renamed_after_the_listing_stays_out_of_that_scan`). A listed subfolder that became a link is skipped (`test_a_listed_subfolder_that_became_a_link_is_skipped`), and one that disappeared refuses the scan (`test_a_listed_subfolder_that_disappeared_refuses_the_scan`). A real Syncthing conflict leaves its copy unreported while the photo itself is still reported (`e2e_local_syncthing.py`, `a real Syncthing conflict copy is not offered`).
 
 ### Consequence
 

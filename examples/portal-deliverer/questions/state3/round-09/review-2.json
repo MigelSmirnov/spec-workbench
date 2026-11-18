@@ -1,0 +1,98 @@
+{
+ "open_points": [
+  {
+   "subject": "INV-18 ownership",
+   "kind": "split_ownership",
+   "text": "INV-18: a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan and placing it by its hash fails with `models.PlacementFailure.NOT_READY_OR_ABSENT` and writes nothing (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Here \"writes nothing\" means that no file, temporary or final, is left in the binary store or the state folder other than the project lock file.",
+   "question": "Does `source_folder` own only conflict-copy recognition and scan exclusion, with `photo_delivery` owning placement refusal and the no-write guarantee, or does `source_folder` own this cross-module invariant despite being forbidden to own writes or placement?",
+   "options": [
+    "Split INV-18 between `source_folder` and `photo_delivery`",
+    "Keep `source_folder` as owner of the whole invariant and give it knowledge of placement and store effects",
+    "Move ownership of the whole invariant to `photo_delivery`"
+   ],
+   "default_guess": "Split the invariant: `source_folder` owns recognition and exclusion; `photo_delivery` owns the placement result and absence of durable writes.",
+   "unit": "?"
+  },
+  {
+   "subject": "PlacementFailure model dependency",
+   "kind": "unclear_dependency",
+   "text": "with `models.PlacementFailure.UNREADABLE_FILE` (A3 rule 4).",
+   "question": "Which module directly names and imports `PlacementFailure`, and what value does `source_folder` return to `photo_delivery` when a listed source cannot be read?",
+   "options": [
+    "`source_folder` imports `PlacementFailure` and returns its enum members",
+    "`source_folder` returns its own observation/read failure and `photo_delivery` maps it to `PlacementFailure`",
+    "`source_folder` returns lowercase reason strings and `photo_delivery` passes them through"
+   ],
+   "default_guess": "Keep the placement model out of `source_folder`; return a source-read failure owned by `source_folder` and map it to `PlacementFailure` in `photo_delivery`.",
+   "unit": "?"
+  },
+  {
+   "subject": "PlacementFailure external representation",
+   "kind": "undefined_mapping",
+   "text": "the photo fails with `models.PlacementFailure.UNREADABLE_FILE` and nothing is written",
+   "question": "Is the observable failure value the enum member name `UNREADABLE_FILE`, its lowercase value `unreadable_file`, or another serialization, given that A1 and A3 specify the lowercase result?",
+   "options": [
+    "Serialize as `unreadable_file`",
+    "Expose `UNREADABLE_FILE`",
+    "Define an explicit enum-to-answer mapping"
+   ],
+   "default_guess": "Define `PlacementFailure.UNREADABLE_FILE` with the serialized value `unreadable_file`.",
+   "unit": "?"
+  },
+  {
+   "subject": "directory listing membership",
+   "kind": "concurrency_semantics",
+   "text": "Each folder is listed once and completely when the walk reaches it.",
+   "question": "At what instant is membership in that one complete listing fixed when entries are created or removed while the directory enumeration is running?",
+   "options": [
+    "Use the entries returned by one completed enumeration, including any concurrent entries the filesystem returns",
+    "Require a point-in-time snapshot at the start of listing",
+    "Require a point-in-time snapshot at the end of listing",
+    "Refuse the scan if mutation during listing is detected"
+   ],
+   "default_guess": "Use exactly the entries returned by one enumeration and defer entries not returned to the next scan.",
+   "witness": {
+    "initial": "A folder contains `a.jpg`; its enumeration has begun but has not completed.",
+    "events": [
+     "Syncthing creates `b.jpg` while `source_folder` is enumerating the folder.",
+     "`source_folder` completes the folder listing and the scan."
+    ],
+    "outcomes": [
+     "`b.jpg` belongs to this scan because the directory enumeration returned it before completion.",
+     "`b.jpg` does not belong to this scan because membership was fixed when listing began."
+    ],
+    "observer": "The owner sees `b.jpg` in this scan or only in the next scan."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "identity of a listed file after path reuse",
+   "kind": "race_semantics",
+   "text": "A name is judged from that listing, and the judgement holds for the whole scan.",
+   "question": "When the file at a listed ordinary path is removed and another ordinary file is moved to exactly that path before metadata or bytes are read, is the listed candidate the original directory entry or whatever file later occupies the listed pathname?",
+   "options": [
+    "Treat the original entry as the candidate; report it absent and defer the replacement",
+    "Treat the pathname as the candidate; examine the replacement under the listed name",
+    "Detect replacement and reject it as `unreadable_file`"
+   ],
+   "default_guess": "Bind the candidate to the listed entry; do not substitute a later occupant of the pathname, and consider the replacement on the next scan.",
+   "witness": {
+    "initial": "The completed listing contains ordinary file `a.jpg` with content A and ordinary file `b.jpg` with content B.",
+    "events": [
+     "Syncthing removes or renames `a.jpg`.",
+     "Syncthing renames `b.jpg` to `a.jpg` before the scanner reads metadata or bytes for the listed `a.jpg`.",
+     "`source_folder` processes the listed `a.jpg` entry."
+    ],
+    "outcomes": [
+     "The original listed entry is gone, so it is not reported; content B is deferred to the next scan.",
+     "The listed pathname still exists, so content B is reported under `a.jpg` in this scan."
+    ],
+    "observer": "The owner sees content B offered in the current scan or only in the next scan."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"INV-18 ownership\",\"kind\":\"split_ownership\",\"text\":\"INV-18: a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan and placing it by its hash fails with `models.PlacementFailure.NOT_READY_OR_ABSENT` and writes nothing (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Here \\\"writes nothing\\\" means that no file, temporary or final, is left in the binary store or the state folder other than the project lock file.\",\"question\":\"Does `source_folder` own only conflict-copy recognition and scan exclusion, with `photo_delivery` owning placement refusal and the no-write guarantee, or does `source_folder` own this cross-module invariant despite being forbidden to own writes or placement?\",\"options\":[\"Split INV-18 between `source_folder` and `photo_delivery`\",\"Keep `source_folder` as owner of the whole invariant and give it knowledge of placement and store effects\",\"Move ownership of the whole invariant to `photo_delivery`\"],\"default_guess\":\"Split the invariant: `source_folder` owns recognition and exclusion; `photo_delivery` owns the placement result and absence of durable writes.\"},{\"subject\":\"PlacementFailure model dependency\",\"kind\":\"unclear_dependency\",\"text\":\"with `models.PlacementFailure.UNREADABLE_FILE` (A3 rule 4).\",\"question\":\"Which module directly names and imports `PlacementFailure`, and what value does `source_folder` return to `photo_delivery` when a listed source cannot be read?\",\"options\":[\"`source_folder` imports `PlacementFailure` and returns its enum members\",\"`source_folder` returns its own observation/read failure and `photo_delivery` maps it to `PlacementFailure`\",\"`source_folder` returns lowercase reason strings and `photo_delivery` passes them through\"],\"default_guess\":\"Keep the placement model out of `source_folder`; return a source-read failure owned by `source_folder` and map it to `PlacementFailure` in `photo_delivery`.\"},{\"subject\":\"PlacementFailure external representation\",\"kind\":\"undefined_mapping\",\"text\":\"the photo fails with `models.PlacementFailure.UNREADABLE_FILE` and nothing is written\",\"question\":\"Is the observable failure value the enum member name `UNREADABLE_FILE`, its lowercase value `unreadable_file`, or another serialization, given that A1 and A3 specify the lowercase result?\",\"options\":[\"Serialize as `unreadable_file`\",\"Expose `UNREADABLE_FILE`\",\"Define an explicit enum-to-answer mapping\"],\"default_guess\":\"Define `PlacementFailure.UNREADABLE_FILE` with the serialized value `unreadable_file`.\"},{\"subject\":\"directory listing membership\",\"kind\":\"concurrency_semantics\",\"text\":\"Each folder is listed once and completely when the walk reaches it.\",\"question\":\"At what instant is membership in that one complete listing fixed when entries are created or removed while the directory enumeration is running?\",\"options\":[\"Use the entries returned by one completed enumeration, including any concurrent entries the filesystem returns\",\"Require a point-in-time snapshot at the start of listing\",\"Require a point-in-time snapshot at the end of listing\",\"Refuse the scan if mutation during listing is detected\"],\"default_guess\":\"Use exactly the entries returned by one enumeration and defer entries not returned to the next scan.\",\"witness\":{\"initial\":\"A folder contains `a.jpg`; its enumeration has begun but has not completed.\",\"events\":[\"Syncthing creates `b.jpg` while `source_folder` is enumerating the folder.\",\"`source_folder` completes the folder listing and the scan.\"],\"outcomes\":[\"`b.jpg` belongs to this scan because the directory enumeration returned it before completion.\",\"`b.jpg` does not belong to this scan because membership was fixed when listing began.\"],\"observer\":\"The owner sees `b.jpg` in this scan or only in the next scan.\"}},{\"subject\":\"identity of a listed file after path reuse\",\"kind\":\"race_semantics\",\"text\":\"A name is judged from that listing, and the judgement holds for the whole scan.\",\"question\":\"When the file at a listed ordinary path is removed and another ordinary file is moved to exactly that path before metadata or bytes are read, is the listed candidate the original directory entry or whatever file later occupies the listed pathname?\",\"options\":[\"Treat the original entry as the candidate; report it absent and defer the replacement\",\"Treat the pathname as the candidate; examine the replacement under the listed name\",\"Detect replacement and reject it as `unreadable_file`\"],\"default_guess\":\"Bind the candidate to the listed entry; do not substitute a later occupant of the pathname, and consider the replacement on the next scan.\",\"witness\":{\"initial\":\"The completed listing contains ordinary file `a.jpg` with content A and ordinary file `b.jpg` with content B.\",\"events\":[\"Syncthing removes or renames `a.jpg`.\",\"Syncthing renames `b.jpg` to `a.jpg` before the scanner reads metadata or bytes for the listed `a.jpg`.\",\"`source_folder` processes the listed `a.jpg` entry.\"],\"outcomes\":[\"The original listed entry is gone, so it is not reported; content B is deferred to the next scan.\",\"The listed pathname still exists, so content B is reported under `a.jpg` in this scan.\"],\"observer\":\"The owner sees content B offered in the current scan or only in the next scan.\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,194 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 settling-time decision",
+   "kind": "time_source",
+   "text": "its age is below the settling time, which includes a modification time in the future",
+   "question": "What clock supplies the comparison instant, in what datetime representation and precision are it and the modification time compared, and does one scan read that clock once or separately for each file?",
+   "options": [
+    "Read one UTC instant from an injected clock at the start of the scan and use it for every file.",
+    "Read the clock when each file is examined.",
+    "Use the host wall clock implicitly, with the filesystem timestamp's native representation and precision."
+   ],
+   "default_guess": "Read one timezone-aware UTC instant from an injected clock at the start of the scan, normalize modification times to UTC, and use that single instant throughout the scan.",
+   "witness": {
+    "initial": "Two files have the same modification time and are just inside the settling interval when a scan begins.",
+    "events": [
+     "The caller starts one scan.",
+     "The scanner examines the first file, then processing delays it until the settling interval has elapsed before it examines the second file."
+    ],
+    "outcomes": [
+     "With one clock reading for the scan, both files have status settling.",
+     "With a clock reading per file, the first file is settling and the second can be ready."
+    ],
+    "observer": "The caller reading the scan results."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 folder listing",
+   "kind": "listing_snapshot",
+   "text": "Each folder is listed once and completely when the walk reaches it.",
+   "question": "Which directory-entry set is the complete listing when names are created, removed or renamed while the operating-system listing call is in progress: the set at the start, the set at completion, or whatever entries the iterator happens to return?",
+   "options": [
+    "Use a snapshot of the names present when listing begins.",
+    "Use the names present when listing completes.",
+    "Use exactly the entries returned by one operating-system enumeration, even if concurrent mutation makes that set neither endpoint snapshot."
+   ],
+   "default_guess": "Materialize exactly one operating-system enumeration and treat the returned names as the scan's listing, while documenting that concurrent mutation may affect which names it returns.",
+   "witness": {
+    "initial": "A folder contains a.jpg, and the scanner has begun enumerating that folder.",
+    "events": [
+     "Another actor creates b.jpg before the enumeration finishes."
+    ],
+    "outcomes": [
+     "b.jpg belongs to this scan and is reported.",
+     "b.jpg is absent from this scan and can first be reported by the next scan."
+    ],
+    "observer": "The caller reading the scan results."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 listed-file identity",
+   "kind": "replacement_race",
+   "text": "A file renamed after the listing is no longer at the listed path, so reading it for placing fails with `models.PlacementFailure.UNREADABLE_FILE` (A3 rule 4).",
+   "question": "If the listed file is renamed but another regular file occupies the same listed path before it is opened, must placement reject because the originally listed file moved, or may it read and place the replacement now found at that path?",
+   "options": [
+    "Bind the listing to the original directory entry or file identity and reject the placement if that identity changed.",
+    "Bind only to the relative path and read whichever regular file occupies it when opened.",
+    "Accept a replacement only if its metadata still matches metadata captured during the listing."
+   ],
+   "default_guess": "Bind the operation to the listed file identity and reject if the path now resolves to a different file.",
+   "witness": {
+    "initial": "The listing contains ordinary file a.jpg.",
+    "events": [
+     "Another actor renames a.jpg to a Syncthing conflict-copy name.",
+     "The same actor creates a different regular file at a.jpg before placement opens the listed path.",
+     "The caller requests placement of the observation for the original a.jpg."
+    ],
+    "outcomes": [
+     "The operation detects that the listed file moved and returns UNREADABLE_FILE without writing.",
+     "The operation opens a.jpg by path and places the replacement file."
+    ],
+    "observer": "The caller and the owner inspecting the binary store."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 subfolder traversal",
+   "kind": "check_precedence",
+   "text": "When a subfolder that is not ignored cannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is never reported as complete.",
+   "question": "If a name listed as a subfolder becomes a symbolic link or non-directory before the walk reaches it, does the symbolic-link rule silently omit it, or does the failed attempt to list the previously listed subfolder refuse the whole scan with folder_unavailable?",
+   "options": [
+    "Recheck its type first and omit it as a symbolic link or non-folder.",
+    "Treat the listed subfolder as unavailable and refuse the whole scan.",
+    "Distinguish a replacement by a symbolic link from other replacements and define a separate outcome."
+   ],
+   "default_guess": "Recheck without following links and refuse with folder_unavailable because a non-ignored subfolder from the listing can no longer be listed.",
+   "witness": {
+    "initial": "The parent-folder listing contains regular subfolder album.",
+    "events": [
+     "Another actor replaces album with a symbolic link before the walker reaches it.",
+     "The walker reaches the listed album entry."
+    ],
+    "outcomes": [
+     "The link is neither followed nor reported, and the scan completes.",
+     "The listed subfolder cannot be listed, so the entire scan is refused with folder_unavailable."
+    ],
+    "observer": "The caller awaiting the scan result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "models.PlacementFailure",
+   "kind": "missing_model",
+   "text": "`models.PlacementFailure.UNREADABLE_FILE`",
+   "question": "Where is PlacementFailure defined, what is its closed member set and serialized representation, and are UNREADABLE_FILE and NOT_READY_OR_ABSENT members of it?",
+   "options": [
+    "Add a PlacementFailure enumeration to the models with these members.",
+    "Use existing string failure codes instead of a model enumeration.",
+    "Define these failures in another already-owned result or exception model and name that model here."
+   ],
+   "default_guess": "Add a models.PlacementFailure enumeration whose values serialize as unreadable_file and not_ready_or_absent.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 placement failure assertions",
+   "kind": "representation_conflict",
+   "text": "placing a file still inside the settling time fails with `not_ready_or_absent` (`test_a_file_still_arriving_is_not_placed`).",
+   "question": "Must placement tests and callers observe serialized string codes such as not_ready_or_absent, PlacementFailure enum members such as NOT_READY_OR_ABSENT, or an object containing both forms?",
+   "options": [
+    "The observable failure is the string not_ready_or_absent.",
+    "The observable failure is models.PlacementFailure.NOT_READY_OR_ABSENT.",
+    "The contract returns an error object whose typed member serializes to not_ready_or_absent."
+   ],
+   "default_guess": "Use a typed PlacementFailure member internally and serialize its value as not_ready_or_absent at the external boundary.",
+   "witness": {
+    "initial": "One placement request targets a settling file and another targets an excluded conflict copy.",
+    "events": [
+     "The caller makes the settling-file request covered by INV-02.",
+     "The caller makes the conflict-copy request covered by INV-18."
+    ],
+    "outcomes": [
+     "Both failures are asserted and exposed as lowercase string codes.",
+     "INV-02 is asserted as a lowercase string while INV-18 is asserted as a PlacementFailure enum member."
+    ],
+    "observer": "The caller and the test author."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 renamed conflict-copy test",
+   "kind": "test_expectation",
+   "text": "a conflict copy renamed to an ordinary name after the listing stays out of that scan and is reported by the next one (`test_a_conflict_copy_renamed_after_the_listing_stays_out_of_that_scan`)",
+   "question": "What must the named test assert about the next scan beyond presence: which status and reason are required, and what preconditions ensure that the file still exists, is not ignored, and is old enough to pass the settling rule?",
+   "options": [
+    "Assert only that an observation with the ordinary name exists, whatever its status.",
+    "Require ready with no reason under explicit readable, supported, nonempty, within-limit and settled preconditions.",
+    "Require the status selected by the normal ordered rules and state all fixture facts needed to determine it."
+   ],
+   "default_guess": "State fixture preconditions that make the renamed file settled and otherwise valid, then require ready with no reason.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 normative placement failure",
+   "kind": "standard_violation",
+   "text": "with `models.PlacementFailure.UNREADABLE_FILE` (A3 rule 4).",
+   "rule": "Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается вовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение сочинить. Обе формы невалидны для значения, которое читает генерируемый код.",
+   "section": "15.3.1",
+   "question": "Replace the bare code-style address with the required enum-member form, such as `the UNREADABLE_FILE member of = models.PlacementFailure`, after that enumeration exists in models.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-18 conflict-copy placement test",
+   "kind": "standard_violation",
+   "text": "fails with `models.PlacementFailure.NOT_READY_OR_ABSENT` and writes nothing",
+   "rule": "Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается вовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение сочинить. Обе формы невалидны для значения, которое читает генерируемый код.",
+   "section": "15.3.1",
+   "question": "Replace the bare code-style address with the required enum-member form, such as `fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and writes nothing`.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-18 vanished ordinary-file test",
+   "kind": "standard_violation",
+   "text": "the photo fails with `models.PlacementFailure.UNREADABLE_FILE` and nothing is written",
+   "rule": "Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается вовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение сочинить. Обе формы невалидны для значения, которое читает генерируемый код.",
+   "section": "15.3.1",
+   "question": "Replace the bare code-style address with the required enum-member form, such as `the photo fails with the UNREADABLE_FILE member of = models.PlacementFailure and nothing is written`.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-18 renamed ordinary-file test",
+   "kind": "standard_violation",
+   "text": "A file renamed to a conflict copy after the listing fails with `models.PlacementFailure.UNREADABLE_FILE` and writes nothing",
+   "rule": "Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается вовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение сочинить. Обе формы невалидны для значения, которое читает генерируемый код.",
+   "section": "15.3.1",
+   "question": "Replace the bare code-style address with the required enum-member form, such as `A file renamed to a conflict copy after the listing fails with the UNREADABLE_FILE member of = models.PlacementFailure and writes nothing`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 settling-time decision\",\"kind\":\"time_source\",\"text\":\"its age is below the settling time, which includes a modification time in the future\",\"question\":\"What clock supplies the comparison instant, in what datetime representation and precision are it and the modification time compared, and does one scan read that clock once or separately for each file?\",\"options\":[\"Read one UTC instant from an injected clock at the start of the scan and use it for every file.\",\"Read the clock when each file is examined.\",\"Use the host wall clock implicitly, with the filesystem timestamp's native representation and precision.\"],\"default_guess\":\"Read one timezone-aware UTC instant from an injected clock at the start of the scan, normalize modification times to UTC, and use that single instant throughout the scan.\",\"witness\":{\"initial\":\"Two files have the same modification time and are just inside the settling interval when a scan begins.\",\"events\":[\"The caller starts one scan.\",\"The scanner examines the first file, then processing delays it until the settling interval has elapsed before it examines the second file.\"],\"outcomes\":[\"With one clock reading for the scan, both files have status settling.\",\"With a clock reading per file, the first file is settling and the second can be ready.\"],\"observer\":\"The caller reading the scan results.\"}},{\"subject\":\"A1 folder listing\",\"kind\":\"listing_snapshot\",\"text\":\"Each folder is listed once and completely when the walk reaches it.\",\"question\":\"Which directory-entry set is the complete listing when names are created, removed or renamed while the operating-system listing call is in progress: the set at the start, the set at completion, or whatever entries the iterator happens to return?\",\"options\":[\"Use a snapshot of the names present when listing begins.\",\"Use the names present when listing completes.\",\"Use exactly the entries returned by one operating-system enumeration, even if concurrent mutation makes that set neither endpoint snapshot.\"],\"default_guess\":\"Materialize exactly one operating-system enumeration and treat the returned names as the scan's listing, while documenting that concurrent mutation may affect which names it returns.\",\"witness\":{\"initial\":\"A folder contains a.jpg, and the scanner has begun enumerating that folder.\",\"events\":[\"Another actor creates b.jpg before the enumeration finishes.\"],\"outcomes\":[\"b.jpg belongs to this scan and is reported.\",\"b.jpg is absent from this scan and can first be reported by the next scan.\"],\"observer\":\"The caller reading the scan results.\"}},{\"subject\":\"A1 listed-file identity\",\"kind\":\"replacement_race\",\"text\":\"A file renamed after the listing is no longer at the listed path, so reading it for placing fails with `models.PlacementFailure.UNREADABLE_FILE` (A3 rule 4).\",\"question\":\"If the listed file is renamed but another regular file occupies the same listed path before it is opened, must placement reject because the originally listed file moved, or may it read and place the replacement now found at that path?\",\"options\":[\"Bind the listing to the original directory entry or file identity and reject the placement if that identity changed.\",\"Bind only to the relative path and read whichever regular file occupies it when opened.\",\"Accept a replacement only if its metadata still matches metadata captured during the listing.\"],\"default_guess\":\"Bind the operation to the listed file identity and reject if the path now resolves to a different file.\",\"witness\":{\"initial\":\"The listing contains ordinary file a.jpg.\",\"events\":[\"Another actor renames a.jpg to a Syncthing conflict-copy name.\",\"The same actor creates a different regular file at a.jpg before placement opens the listed path.\",\"The caller requests placement of the observation for the original a.jpg.\"],\"outcomes\":[\"The operation detects that the listed file moved and returns UNREADABLE_FILE without writing.\",\"The operation opens a.jpg by path and places the replacement file.\"],\"observer\":\"The caller and the owner inspecting the binary store.\"}},{\"subject\":\"A1 subfolder traversal\",\"kind\":\"check_precedence\",\"text\":\"When a subfolder that is not ignored cannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is never reported as complete.\",\"question\":\"If a name listed as a subfolder becomes a symbolic link or non-directory before the walk reaches it, does the symbolic-link rule silently omit it, or does the failed attempt to list the previously listed subfolder refuse the whole scan with folder_unavailable?\",\"options\":[\"Recheck its type first and omit it as a symbolic link or non-folder.\",\"Treat the listed subfolder as unavailable and refuse the whole scan.\",\"Distinguish a replacement by a symbolic link from other replacements and define a separate outcome.\"],\"default_guess\":\"Recheck without following links and refuse with folder_unavailable because a non-ignored subfolder from the listing can no longer be listed.\",\"witness\":{\"initial\":\"The parent-folder listing contains regular subfolder album.\",\"events\":[\"Another actor replaces album with a symbolic link before the walker reaches it.\",\"The walker reaches the listed album entry.\"],\"outcomes\":[\"The link is neither followed nor reported, and the scan completes.\",\"The listed subfolder cannot be listed, so the entire scan is refused with folder_unavailable.\"],\"observer\":\"The caller awaiting the scan result.\"}},{\"subject\":\"models.PlacementFailure\",\"kind\":\"missing_model\",\"text\":\"`models.PlacementFailure.UNREADABLE_FILE`\",\"question\":\"Where is PlacementFailure defined, what is its closed member set and serialized representation, and are UNREADABLE_FILE and NOT_READY_OR_ABSENT members of it?\",\"options\":[\"Add a PlacementFailure enumeration to the models with these members.\",\"Use existing string failure codes instead of a model enumeration.\",\"Define these failures in another already-owned result or exception model and name that model here.\"],\"default_guess\":\"Add a models.PlacementFailure enumeration whose values serialize as unreadable_file and not_ready_or_absent.\"},{\"subject\":\"A1 placement failure assertions\",\"kind\":\"representation_conflict\",\"text\":\"placing a file still inside the settling time fails with `not_ready_or_absent` (`test_a_file_still_arriving_is_not_placed`).\",\"question\":\"Must placement tests and callers observe serialized string codes such as not_ready_or_absent, PlacementFailure enum members such as NOT_READY_OR_ABSENT, or an object containing both forms?\",\"options\":[\"The observable failure is the string not_ready_or_absent.\",\"The observable failure is models.PlacementFailure.NOT_READY_OR_ABSENT.\",\"The contract returns an error object whose typed member serializes to not_ready_or_absent.\"],\"default_guess\":\"Use a typed PlacementFailure member internally and serialize its value as not_ready_or_absent at the external boundary.\",\"witness\":{\"initial\":\"One placement request targets a settling file and another targets an excluded conflict copy.\",\"events\":[\"The caller makes the settling-file request covered by INV-02.\",\"The caller makes the conflict-copy request covered by INV-18.\"],\"outcomes\":[\"Both failures are asserted and exposed as lowercase string codes.\",\"INV-02 is asserted as a lowercase string while INV-18 is asserted as a PlacementFailure enum member.\"],\"observer\":\"The caller and the test author.\"}},{\"subject\":\"A1 renamed conflict-copy test\",\"kind\":\"test_expectation\",\"text\":\"a conflict copy renamed to an ordinary name after the listing stays out of that scan and is reported by the next one (`test_a_conflict_copy_renamed_after_the_listing_stays_out_of_that_scan`)\",\"question\":\"What must the named test assert about the next scan beyond presence: which status and reason are required, and what preconditions ensure that the file still exists, is not ignored, and is old enough to pass the settling rule?\",\"options\":[\"Assert only that an observation with the ordinary name exists, whatever its status.\",\"Require ready with no reason under explicit readable, supported, nonempty, within-limit and settled preconditions.\",\"Require the status selected by the normal ordered rules and state all fixture facts needed to determine it.\"],\"default_guess\":\"State fixture preconditions that make the renamed file settled and otherwise valid, then require ready with no reason.\"},{\"subject\":\"A1 normative placement failure\",\"kind\":\"standard_violation\",\"text\":\"with `models.PlacementFailure.UNREADABLE_FILE` (A3 rule 4).\",\"rule\":\"Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается вовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение сочинить. Обе формы невалидны для значения, которое читает генерируемый код.\",\"section\":\"15.3.1\",\"question\":\"Replace the bare code-style address with the required enum-member form, such as `the UNREADABLE_FILE member of = models.PlacementFailure`, after that enumeration exists in models.\"},{\"subject\":\"INV-18 conflict-copy placement test\",\"kind\":\"standard_violation\",\"text\":\"fails with `models.PlacementFailure.NOT_READY_OR_ABSENT` and writes nothing\",\"rule\":\"Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается вовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение сочинить. Обе формы невалидны для значения, которое читает генерируемый код.\",\"section\":\"15.3.1\",\"question\":\"Replace the bare code-style address with the required enum-member form, such as `fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and writes nothing`.\"},{\"subject\":\"INV-18 vanished ordinary-file test\",\"kind\":\"standard_violation\",\"text\":\"the photo fails with `models.PlacementFailure.UNREADABLE_FILE` and nothing is written\",\"rule\":\"Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается вовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение сочинить. Обе формы невалидны для значения, которое читает генерируемый код.\",\"section\":\"15.3.1\",\"question\":\"Replace the bare code-style address with the required enum-member form, such as `the photo fails with the UNREADABLE_FILE member of = models.PlacementFailure and nothing is written`.\"},{\"subject\":\"INV-18 renamed ordinary-file test\",\"kind\":\"standard_violation\",\"text\":\"A file renamed to a conflict copy after the listing fails with `models.PlacementFailure.UNREADABLE_FILE` and writes nothing\",\"rule\":\"Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается вовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение сочинить. Обе формы невалидны для значения, которое читает генерируемый код.\",\"section\":\"15.3.1\",\"question\":\"Replace the bare code-style address with the required enum-member form, such as `A file renamed to a conflict copy after the listing fails with the UNREADABLE_FILE member of = models.PlacementFailure and writes nothing`.\"}]}",
+ "set_aside": []
+}

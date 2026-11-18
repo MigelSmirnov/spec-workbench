@@ -1,0 +1,117 @@
+{
+ "open_points": [
+  {
+   "subject": "INV-18 placement of previously placed conflict-copy content",
+   "kind": "contradiction",
+   "text": "placing it by its hash fails with `models.PlacementFailure.NOT_READY_OR_ABSENT`",
+   "question": "When the conflict copy is the only remaining file with content that already has a placement, must placement fail or replay the existing placement?",
+   "options": [
+    "Always fail with NOT_READY_OR_ABSENT because the only source is a conflict copy",
+    "Replay the existing placement because A1 and A3 make replay independent of the current file name"
+   ],
+   "default_guess": "Replay the existing placement; reject only when no placement already exists.",
+   "witness": {
+    "initial": "Project P has a durable placement for source hash H; the ordinary source has disappeared and only a Syncthing conflict copy with hash H remains.",
+    "events": [
+     "The calling flow requests placement of H for P."
+    ],
+    "outcomes": [
+     "The request fails with NOT_READY_OR_ABSENT under the first sentence of INV-18.",
+     "The request answers replayed with the stored placement under A1's replay sentence and A3 rule 2."
+    ],
+    "observer": "The authenticated calling flow sees a failure instead of a replayed placement."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-18 meaning of writes nothing",
+   "kind": "scope_contradiction",
+   "text": "Here \"writes nothing\" means that no file, temporary or final, is left in the binary store or the state folder other than the project lock file.",
+   "question": "Does this mean the failed operation creates no new file while preserving existing durable state, or that those folders must contain no pre-existing files after the failure?",
+   "options": [
+    "Preserve every pre-existing image and record and leave no artifact attributable to this attempt",
+    "Remove or forbid every file other than the project lock file"
+   ],
+   "default_guess": "Preserve all pre-existing state and leave no new temporary or final artifact from the failed attempt.",
+   "witness": {
+    "initial": "The binary store and state folder already contain a valid placement and stored image for another source.",
+    "events": [
+     "The calling flow attempts to place an unplaced conflict copy.",
+     "The attempt fails with NOT_READY_OR_ABSENT."
+    ],
+    "outcomes": [
+     "The existing placement and image remain because the operation writes nothing and A3 says earlier state stays.",
+     "All non-lock files must be absent to satisfy the literal definition that no file is left."
+    ],
+    "observer": "A later replay and the operator inspecting durable state see whether the earlier placement survived."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "source_folder directory-listing instant",
+   "kind": "temporal_ambiguity",
+   "text": "Each folder is listed once and completely when the walk reaches it.",
+   "question": "What instant determines the complete set and spelling of names when another program adds, removes, or renames entries while that one listing is being obtained?",
+   "options": [
+    "Use one atomic snapshot taken when listing starts",
+    "Use exactly the entries and spellings returned by the filesystem enumeration, including concurrent changes it exposes",
+    "Refuse the scan if mutation during listing can be detected"
+   ],
+   "default_guess": "Use the completed result returned by one filesystem listing call as the folder's snapshot.",
+   "witness": {
+    "initial": "A folder contains a conflict-copy name while Syncthing is concurrently renaming it to an ordinary name.",
+    "events": [
+     "source_folder starts listing the folder.",
+     "Syncthing renames the entry before the listing operation finishes.",
+     "source_folder completes the scan."
+    ],
+    "outcomes": [
+     "The start-of-listing snapshot keeps the entry ignored for this scan.",
+     "A filesystem enumeration that observes the new spelling reports the ordinary name in this scan."
+    ],
+    "observer": "The owner sees the photo either in the current scan or only in the next scan."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "identity of a listed source after path reuse",
+   "kind": "identity_ambiguity",
+   "text": "A file renamed after the listing is no longer at the listed path, so reading it for placing fails with `models.PlacementFailure.UNREADABLE_FILE` (A3 rule 4).",
+   "question": "If another regular file appears at the same listed path before the read, is placement tied to the originally listed filesystem object or may it read the current occupant of that path and apply the hash check?",
+   "options": [
+    "Reject because the originally listed file identity is gone, even if the path has been reused",
+    "Read the current occupant; place it if its hash matches and otherwise return SOURCE_CHANGED"
+   ],
+   "default_guess": "Treat the listing entry as identifying the observed file and reject path reuse as UNREADABLE_FILE.",
+   "witness": {
+    "initial": "The scan lists `a.jpg` with source hash H.",
+    "events": [
+     "Syncthing renames the listed file away.",
+     "Another regular file with the same bytes and hash H is created as `a.jpg`.",
+     "The calling flow places H."
+    ],
+    "outcomes": [
+     "An identity-preserving implementation returns UNREADABLE_FILE because the listed object moved.",
+     "A path-based implementation reads the replacement and places H successfully."
+    ],
+    "observer": "The calling flow sees a per-photo failure or a successful placement."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "PlacementFailure mapping between source_folder and photo_delivery",
+   "kind": "ownership_dependency",
+   "text": "- reading the bytes of one source file without following a link;",
+   "question": "Which module owns converting disappearance or read failure during placement into `models.PlacementFailure.UNREADABLE_FILE`, and therefore which module directly imports and names `PlacementFailure`?",
+   "options": [
+    "source_folder returns PlacementFailure.UNREADABLE_FILE directly and depends on models",
+    "source_folder returns a source-read result or lower-level error and photo_delivery maps it to PlacementFailure.UNREADABLE_FILE"
+   ],
+   "default_guess": "source_folder returns a source-read result without placement semantics; photo_delivery owns the per-photo PlacementFailure mapping and imports the enum.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"INV-18 placement of previously placed conflict-copy content\",\"kind\":\"contradiction\",\"text\":\"placing it by its hash fails with `models.PlacementFailure.NOT_READY_OR_ABSENT`\",\"question\":\"When the conflict copy is the only remaining file with content that already has a placement, must placement fail or replay the existing placement?\",\"options\":[\"Always fail with NOT_READY_OR_ABSENT because the only source is a conflict copy\",\"Replay the existing placement because A1 and A3 make replay independent of the current file name\"],\"default_guess\":\"Replay the existing placement; reject only when no placement already exists.\",\"witness\":{\"initial\":\"Project P has a durable placement for source hash H; the ordinary source has disappeared and only a Syncthing conflict copy with hash H remains.\",\"events\":[\"The calling flow requests placement of H for P.\"],\"outcomes\":[\"The request fails with NOT_READY_OR_ABSENT under the first sentence of INV-18.\",\"The request answers replayed with the stored placement under A1's replay sentence and A3 rule 2.\"],\"observer\":\"The authenticated calling flow sees a failure instead of a replayed placement.\"}},{\"subject\":\"INV-18 meaning of writes nothing\",\"kind\":\"scope_contradiction\",\"text\":\"Here \\\"writes nothing\\\" means that no file, temporary or final, is left in the binary store or the state folder other than the project lock file.\",\"question\":\"Does this mean the failed operation creates no new file while preserving existing durable state, or that those folders must contain no pre-existing files after the failure?\",\"options\":[\"Preserve every pre-existing image and record and leave no artifact attributable to this attempt\",\"Remove or forbid every file other than the project lock file\"],\"default_guess\":\"Preserve all pre-existing state and leave no new temporary or final artifact from the failed attempt.\",\"witness\":{\"initial\":\"The binary store and state folder already contain a valid placement and stored image for another source.\",\"events\":[\"The calling flow attempts to place an unplaced conflict copy.\",\"The attempt fails with NOT_READY_OR_ABSENT.\"],\"outcomes\":[\"The existing placement and image remain because the operation writes nothing and A3 says earlier state stays.\",\"All non-lock files must be absent to satisfy the literal definition that no file is left.\"],\"observer\":\"A later replay and the operator inspecting durable state see whether the earlier placement survived.\"}},{\"subject\":\"source_folder directory-listing instant\",\"kind\":\"temporal_ambiguity\",\"text\":\"Each folder is listed once and completely when the walk reaches it.\",\"question\":\"What instant determines the complete set and spelling of names when another program adds, removes, or renames entries while that one listing is being obtained?\",\"options\":[\"Use one atomic snapshot taken when listing starts\",\"Use exactly the entries and spellings returned by the filesystem enumeration, including concurrent changes it exposes\",\"Refuse the scan if mutation during listing can be detected\"],\"default_guess\":\"Use the completed result returned by one filesystem listing call as the folder's snapshot.\",\"witness\":{\"initial\":\"A folder contains a conflict-copy name while Syncthing is concurrently renaming it to an ordinary name.\",\"events\":[\"source_folder starts listing the folder.\",\"Syncthing renames the entry before the listing operation finishes.\",\"source_folder completes the scan.\"],\"outcomes\":[\"The start-of-listing snapshot keeps the entry ignored for this scan.\",\"A filesystem enumeration that observes the new spelling reports the ordinary name in this scan.\"],\"observer\":\"The owner sees the photo either in the current scan or only in the next scan.\"}},{\"subject\":\"identity of a listed source after path reuse\",\"kind\":\"identity_ambiguity\",\"text\":\"A file renamed after the listing is no longer at the listed path, so reading it for placing fails with `models.PlacementFailure.UNREADABLE_FILE` (A3 rule 4).\",\"question\":\"If another regular file appears at the same listed path before the read, is placement tied to the originally listed filesystem object or may it read the current occupant of that path and apply the hash check?\",\"options\":[\"Reject because the originally listed file identity is gone, even if the path has been reused\",\"Read the current occupant; place it if its hash matches and otherwise return SOURCE_CHANGED\"],\"default_guess\":\"Treat the listing entry as identifying the observed file and reject path reuse as UNREADABLE_FILE.\",\"witness\":{\"initial\":\"The scan lists `a.jpg` with source hash H.\",\"events\":[\"Syncthing renames the listed file away.\",\"Another regular file with the same bytes and hash H is created as `a.jpg`.\",\"The calling flow places H.\"],\"outcomes\":[\"An identity-preserving implementation returns UNREADABLE_FILE because the listed object moved.\",\"A path-based implementation reads the replacement and places H successfully.\"],\"observer\":\"The calling flow sees a per-photo failure or a successful placement.\"}},{\"subject\":\"PlacementFailure mapping between source_folder and photo_delivery\",\"kind\":\"ownership_dependency\",\"text\":\"- reading the bytes of one source file without following a link;\",\"question\":\"Which module owns converting disappearance or read failure during placement into `models.PlacementFailure.UNREADABLE_FILE`, and therefore which module directly imports and names `PlacementFailure`?\",\"options\":[\"source_folder returns PlacementFailure.UNREADABLE_FILE directly and depends on models\",\"source_folder returns a source-read result or lower-level error and photo_delivery maps it to PlacementFailure.UNREADABLE_FILE\"],\"default_guess\":\"source_folder returns a source-read result without placement semantics; photo_delivery owns the per-photo PlacementFailure mapping and imports the enum.\"}]}",
+ "set_aside": []
+}
