@@ -1,0 +1,158 @@
+{
+ "open_points": [
+  {
+   "subject": "A1",
+   "kind": "undefined_observation_point",
+   "text": "A name is judged when the folder is observed.",
+   "question": "At which exact event is a name considered observed: directory enumeration, metadata read, opening, or another defined step?",
+   "options": [
+    "Judge the name returned by directory enumeration once and retain that decision",
+    "Judge the current path name immediately before metadata is read",
+    "Judge the current path name immediately before the file is opened"
+   ],
+   "default_guess": "Judge the name returned by directory enumeration once and retain that decision for the operation.",
+   "witness": {
+    "initial": "An ordinary file `photo.jpg` exists in the photo folder.",
+    "events": [
+     "The deliverer enumerates the folder and sees `photo.jpg`.",
+     "Syncthing renames it to a name containing `.sync-conflict-` before the deliverer reads metadata or opens it.",
+     "The deliverer continues the scan."
+    ],
+    "outcomes": [
+     "The enumeration was the observation, so the file is processed at the observed path and reported as `unreadable_file` when that path is gone.",
+     "The later metadata read or open was the observation, so the conflict-copy name is ignored and no observation is reported."
+    ],
+    "observer": "The calling flow comparing the scan results."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "missing_time_source",
+   "text": "its age is below the settling time, which includes a modification time in the future",
+   "question": "Which clock supplies the current instant used to calculate file age during scans and placement checks?",
+   "options": [
+    "An injected wall-clock port returning UTC instants",
+    "A datetime supplied as an operation parameter",
+    "An ambient system-clock call made by the implementation"
+   ],
+   "default_guess": "Use one injected wall-clock port returning UTC instants.",
+   "witness": {
+    "initial": "A file's modification time is close to the settling-time boundary and the host wall clock differs from an injected/test clock.",
+    "events": [
+     "The calling flow scans or requests placement.",
+     "The deliverer compares the file modification time with its chosen current-time source."
+    ],
+    "outcomes": [
+     "Using the injected/test clock classifies the file as `settling` or refuses placement with `not_ready_or_absent`.",
+     "Using the host clock classifies the file as `ready` or permits placement."
+    ],
+    "observer": "The owner through the calling flow."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "unspecified_clock_read_count",
+   "text": "A scan gives each regular file of the photo folder exactly one status.",
+   "question": "Does a scan or multi-item placement read the clock once for the entire operation, once per file, or at some other specified points?",
+   "options": [
+    "Read once at the start of each operation and use that instant for every item",
+    "Read once per file when that file is evaluated",
+    "Read separately for each time-dependent check"
+   ],
+   "default_guess": "Read once at the start of each operation and use that instant for all items in it.",
+   "witness": {
+    "initial": "Two files have the same modification time and are just below the two-minute threshold when an operation starts.",
+    "events": [
+     "The calling flow starts one scan containing both files.",
+     "The first file is evaluated.",
+     "Enough time passes for the threshold to expire before the second file is evaluated."
+    ],
+    "outcomes": [
+     "With one reading for the scan, both files are `settling`.",
+     "With one reading per file, the first file is `settling` and the second is `ready`."
+    ],
+    "observer": "The calling flow receiving the scan."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M03 — PreparedPhoto",
+   "kind": "ambiguous_time_interpretation",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "How is a camera-record time converted to UTC when it has no offset, has an offset, or falls in an ambiguous or nonexistent local time, and what role does the `timezone` setting play?",
+   "options": [
+    "Honor a camera offset when present and otherwise interpret the value in the configured timezone with a defined DST fold/gap policy",
+    "Always interpret the camera value in the configured timezone and ignore embedded offsets",
+    "Treat an offsetless or DST-invalid camera value as unusable and fall back to file modification time"
+   ],
+   "default_guess": "Honor an embedded offset; otherwise interpret the value in `Europe/Madrid`, choose the earlier occurrence in a DST fold, advance through a DST gap, and then store naive UTC.",
+   "witness": {
+    "initial": "A photo has an offsetless camera time of `2026-10-25 02:30:00`, which occurs twice in Europe/Madrid.",
+    "events": [
+     "The owner requests placement.",
+     "The deliverer prepares the photo and converts its camera time to UTC without an offset."
+    ],
+    "outcomes": [
+     "Choosing the summer-time occurrence produces `2026-10-25 00:30:00`.",
+     "Choosing the standard-time occurrence produces `2026-10-25 01:30:00`."
+    ],
+    "observer": "The owner and client seeing the published photo date."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M07 — PublicationMark",
+   "kind": "undefined_timestamp",
+   "text": "`project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "What source supplies `marked_at`, what datetime representation is stored, and is a replay required to return the original stored instant without reading the clock again?",
+   "options": [
+    "Store naive UTC from the injected clock when the mark is first created and reuse it on replay",
+    "Store an offset-aware UTC datetime from the injected clock and reuse it on replay",
+    "Use the ambient system clock and the host's local datetime representation"
+   ],
+   "default_guess": "Store naive UTC from the injected clock on first creation and return that unchanged on every replay.",
+   "witness": {
+    "initial": "No publication mark exists for a placed photo, and the host timezone is Europe/Madrid.",
+    "events": [
+     "The calling flow records a publication.",
+     "It later records the same `photo_id` again."
+    ],
+    "outcomes": [
+     "The implementation stores and returns a naive UTC creation instant on both calls.",
+     "The implementation stores local time or refreshes `marked_at` on replay, producing a different value."
+    ],
+    "observer": "The calling flow and any reader of the persisted publication mark."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "contradictory_required_outcome",
+   "text": "a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan and placing it by its hash fails with `not_ready_or_absent` (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Only the letters A to Z are folded (`test_only_ascii_letters_fold_in_the_conflict_mark`). Placed content replays when only a conflict copy still holds it (`test_placed_content_replays_when_only_a_conflict_copy_still_holds_it`)",
+   "question": "When the requested hash already has a placement and only a conflict copy contains that content, must placement replay the stored result or fail with `not_ready_or_absent`?",
+   "options": [
+    "Replay whenever the project and source hash already have a placement, regardless of the remaining filename",
+    "Fail with `not_ready_or_absent` whenever the only remaining source file is a conflict copy",
+    "Qualify the failure requirement as applying only when no placement already exists"
+   ],
+   "default_guess": "Replay an existing placement; qualify the `not_ready_or_absent` requirement as applying only to content without an existing placement.",
+   "witness": {
+    "initial": "A normal file was placed successfully; afterward it was renamed to a Syncthing conflict-copy name, leaving that conflict copy as the only file with the placed source hash.",
+    "events": [
+     "The calling flow requests placement again by the same source hash."
+    ],
+    "outcomes": [
+     "The statement that placing a conflict copy by its hash fails yields `failed/not_ready_or_absent`.",
+     "The statement that placed content replays when only a conflict copy holds it yields the original placement with status `replayed`."
+    ],
+    "observer": "The calling flow and owner receiving the placement outcome."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1\",\"kind\":\"undefined_observation_point\",\"text\":\"A name is judged when the folder is observed.\",\"question\":\"At which exact event is a name considered observed: directory enumeration, metadata read, opening, or another defined step?\",\"options\":[\"Judge the name returned by directory enumeration once and retain that decision\",\"Judge the current path name immediately before metadata is read\",\"Judge the current path name immediately before the file is opened\"],\"default_guess\":\"Judge the name returned by directory enumeration once and retain that decision for the operation.\",\"witness\":{\"initial\":\"An ordinary file `photo.jpg` exists in the photo folder.\",\"events\":[\"The deliverer enumerates the folder and sees `photo.jpg`.\",\"Syncthing renames it to a name containing `.sync-conflict-` before the deliverer reads metadata or opens it.\",\"The deliverer continues the scan.\"],\"outcomes\":[\"The enumeration was the observation, so the file is processed at the observed path and reported as `unreadable_file` when that path is gone.\",\"The later metadata read or open was the observation, so the conflict-copy name is ignored and no observation is reported.\"],\"observer\":\"The calling flow comparing the scan results.\"}},{\"subject\":\"A1\",\"kind\":\"missing_time_source\",\"text\":\"its age is below the settling time, which includes a modification time in the future\",\"question\":\"Which clock supplies the current instant used to calculate file age during scans and placement checks?\",\"options\":[\"An injected wall-clock port returning UTC instants\",\"A datetime supplied as an operation parameter\",\"An ambient system-clock call made by the implementation\"],\"default_guess\":\"Use one injected wall-clock port returning UTC instants.\",\"witness\":{\"initial\":\"A file's modification time is close to the settling-time boundary and the host wall clock differs from an injected/test clock.\",\"events\":[\"The calling flow scans or requests placement.\",\"The deliverer compares the file modification time with its chosen current-time source.\"],\"outcomes\":[\"Using the injected/test clock classifies the file as `settling` or refuses placement with `not_ready_or_absent`.\",\"Using the host clock classifies the file as `ready` or permits placement.\"],\"observer\":\"The owner through the calling flow.\"}},{\"subject\":\"A1\",\"kind\":\"unspecified_clock_read_count\",\"text\":\"A scan gives each regular file of the photo folder exactly one status.\",\"question\":\"Does a scan or multi-item placement read the clock once for the entire operation, once per file, or at some other specified points?\",\"options\":[\"Read once at the start of each operation and use that instant for every item\",\"Read once per file when that file is evaluated\",\"Read separately for each time-dependent check\"],\"default_guess\":\"Read once at the start of each operation and use that instant for all items in it.\",\"witness\":{\"initial\":\"Two files have the same modification time and are just below the two-minute threshold when an operation starts.\",\"events\":[\"The calling flow starts one scan containing both files.\",\"The first file is evaluated.\",\"Enough time passes for the threshold to expire before the second file is evaluated.\"],\"outcomes\":[\"With one reading for the scan, both files are `settling`.\",\"With one reading per file, the first file is `settling` and the second is `ready`.\"],\"observer\":\"The calling flow receiving the scan.\"}},{\"subject\":\"Model M03 — PreparedPhoto\",\"kind\":\"ambiguous_time_interpretation\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"How is a camera-record time converted to UTC when it has no offset, has an offset, or falls in an ambiguous or nonexistent local time, and what role does the `timezone` setting play?\",\"options\":[\"Honor a camera offset when present and otherwise interpret the value in the configured timezone with a defined DST fold/gap policy\",\"Always interpret the camera value in the configured timezone and ignore embedded offsets\",\"Treat an offsetless or DST-invalid camera value as unusable and fall back to file modification time\"],\"default_guess\":\"Honor an embedded offset; otherwise interpret the value in `Europe/Madrid`, choose the earlier occurrence in a DST fold, advance through a DST gap, and then store naive UTC.\",\"witness\":{\"initial\":\"A photo has an offsetless camera time of `2026-10-25 02:30:00`, which occurs twice in Europe/Madrid.\",\"events\":[\"The owner requests placement.\",\"The deliverer prepares the photo and converts its camera time to UTC without an offset.\"],\"outcomes\":[\"Choosing the summer-time occurrence produces `2026-10-25 00:30:00`.\",\"Choosing the standard-time occurrence produces `2026-10-25 01:30:00`.\"],\"observer\":\"The owner and client seeing the published photo date.\"}},{\"subject\":\"Model M07 — PublicationMark\",\"kind\":\"undefined_timestamp\",\"text\":\"`project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"What source supplies `marked_at`, what datetime representation is stored, and is a replay required to return the original stored instant without reading the clock again?\",\"options\":[\"Store naive UTC from the injected clock when the mark is first created and reuse it on replay\",\"Store an offset-aware UTC datetime from the injected clock and reuse it on replay\",\"Use the ambient system clock and the host's local datetime representation\"],\"default_guess\":\"Store naive UTC from the injected clock on first creation and return that unchanged on every replay.\",\"witness\":{\"initial\":\"No publication mark exists for a placed photo, and the host timezone is Europe/Madrid.\",\"events\":[\"The calling flow records a publication.\",\"It later records the same `photo_id` again.\"],\"outcomes\":[\"The implementation stores and returns a naive UTC creation instant on both calls.\",\"The implementation stores local time or refreshes `marked_at` on replay, producing a different value.\"],\"observer\":\"The calling flow and any reader of the persisted publication mark.\"}},{\"subject\":\"A1\",\"kind\":\"contradictory_required_outcome\",\"text\":\"a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan and placing it by its hash fails with `not_ready_or_absent` (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Only the letters A to Z are folded (`test_only_ascii_letters_fold_in_the_conflict_mark`). Placed content replays when only a conflict copy still holds it (`test_placed_content_replays_when_only_a_conflict_copy_still_holds_it`)\",\"question\":\"When the requested hash already has a placement and only a conflict copy contains that content, must placement replay the stored result or fail with `not_ready_or_absent`?\",\"options\":[\"Replay whenever the project and source hash already have a placement, regardless of the remaining filename\",\"Fail with `not_ready_or_absent` whenever the only remaining source file is a conflict copy\",\"Qualify the failure requirement as applying only when no placement already exists\"],\"default_guess\":\"Replay an existing placement; qualify the `not_ready_or_absent` requirement as applying only to content without an existing placement.\",\"witness\":{\"initial\":\"A normal file was placed successfully; afterward it was renamed to a Syncthing conflict-copy name, leaving that conflict copy as the only file with the placed source hash.\",\"events\":[\"The calling flow requests placement again by the same source hash.\"],\"outcomes\":[\"The statement that placing a conflict copy by its hash fails yields `failed/not_ready_or_absent`.\",\"The statement that placed content replays when only a conflict copy holds it yields the original placement with status `replayed`.\"],\"observer\":\"The calling flow and owner receiving the placement outcome.\"}}]}",
+ "set_aside": []
+}

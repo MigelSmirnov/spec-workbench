@@ -49,10 +49,10 @@ constant, the mark of a Syncthing conflict copy (R0-14). Names beginning with a 
 `.syncthing.*`, `.stfolder` and `.stversions` and the phone's `.trashed-*` files. Ignored names are
 not reported, ignored folders are not entered, and symbolic links are neither reported nor followed.
 
-A name is judged when the folder is observed. R0-14 concerns files, not content: a conflict copy is
+A name is judged as the directory listing returns it, and that judgement holds for the whole scan. R0-14 concerns files, not content: a conflict copy is
 never a source of a new placement, an ordinary file with the same content as a conflict copy is placed
 as usual, and content that already has a placement replays under A3 rule 2 whatever name it has now. A
-file renamed after the observation is no longer at the observed path, so reading it for placing fails
+file renamed after the listing is no longer at the listed path, so reading it for placing fails
 with `unreadable_file` (A3 rule 4).
 
 A scan only reads the source folder. A signature
@@ -68,7 +68,7 @@ does not prove that an image can be decoded: a `ready` file may still fail when 
 
 - INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).
 - INV-02: placing a file still inside the settling time fails with `not_ready_or_absent` (`test_a_file_still_arriving_is_not_placed`).
-- INV-18: a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan and placing it by its hash fails with `not_ready_or_absent` (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Only the letters A to Z are folded (`test_only_ascii_letters_fold_in_the_conflict_mark`). Placed content replays when only a conflict copy still holds it (`test_placed_content_replays_when_only_a_conflict_copy_still_holds_it`), an ordinary file with the content of a conflict copy is placed (`test_an_ordinary_file_is_placed_when_a_conflict_copy_has_the_same_content`), and a file renamed to a conflict copy after the observation fails with `unreadable_file` and writes nothing (`test_a_file_renamed_to_a_conflict_copy_after_the_scan_is_not_placed`). A real Syncthing conflict leaves its copy unreported while the photo itself is still reported (`e2e_local_syncthing.py`, `a real Syncthing conflict copy is not offered`).
+- INV-18: a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan and placing it by its hash fails with `not_ready_or_absent` and writes nothing (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Only the letters A to Z are folded (`test_only_ascii_letters_fold_in_the_conflict_mark`). Placed content replays when only a conflict copy still holds it (`test_placed_content_replays_when_only_a_conflict_copy_still_holds_it`), an ordinary file with the content of a conflict copy is placed (`test_an_ordinary_file_is_placed_when_a_conflict_copy_has_the_same_content`). When that ordinary file disappears before it is read for placing, the conflict copy is not read in its place: the photo fails with `unreadable_file` and nothing is written (`test_a_conflict_copy_is_never_read_in_place_of_the_ordinary_file`). And a file renamed to a conflict copy after the listing fails with `unreadable_file` and writes nothing (`test_a_file_renamed_to_a_conflict_copy_after_the_scan_is_not_placed`). A real Syncthing conflict leaves its copy unreported while the photo itself is still reported (`e2e_local_syncthing.py`, `a real Syncthing conflict copy is not offered`).
 
 ### Consequence
 
