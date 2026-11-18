@@ -275,14 +275,19 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
    system lock on one lock file of that project in the state folder. A caller waits for the lock
    without a time limit, and the lock is released when its holder ends. The check that a placement
    or mark exists and its writing happen inside that lock.
+5. A placement or mark record that cannot be read, is not valid JSON or is not an object is never taken
+   for an absent record. The operation is refused with `state_unavailable` and changes nothing. The same
+   refusal answers a project lock that cannot be taken and a mark that cannot be written.
 
 ### Formal invariants
 
 - INV-12: concurrent calls for one project never produce two placements or two marks for one source.
+- INV-20: a damaged record never leads to a new placement or a new mark.
 
 ### Required tests
 
 - INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).
+- INV-20: with a damaged placement or mark record, scan, delivery and mark each answer `state_unavailable` and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).
 
 ### Consequence
 
@@ -348,8 +353,8 @@ Policy values are constants of the data provider:
 Closed lists are enumerations: `= models.ScanStatus`, `= models.ObservationReason`,
 `= models.DateSource`, `= models.PlacementStatus`, `= models.PlacementFailure`,
 `= models.MarkStatus` and `= models.RefusalCode`. `RefusalCode` is `unknown_project`,
-`connection_not_confirmed`, `folder_unavailable`, `invalid_source_id`, `unsafe_reference`,
-`not_placed` and `publication_conflict`.
+`connection_not_confirmed`, `folder_unavailable`, `state_unavailable`, `invalid_source_id`,
+`unsafe_reference`, `not_placed` and `publication_conflict`.
 
 `MAX_OUTPUT_BYTES` equals the Portal's `BINARY_MAX_READ_BYTES`. A change of that Portal value is
 released together with a change of this constant. The deliverer does not ask the Portal for it.

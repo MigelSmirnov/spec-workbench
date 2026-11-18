@@ -1,0 +1,468 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:`flow:service_start`",
+   "subject": "service listener startup",
+   "kind": "missing capability",
+   "text": "`capability:deliverer_api.create_app` builds the HTTP surface with the token and the clock, and the service listens on the loopback interface.",
+   "question": "Which owner and capability start and supervise the listener after `create_app` returns?",
+   "options": [
+    "`create_app` also starts the listener and blocks",
+    "A deployment/runtime operation receives the app and starts the listener",
+    "A separate `deliverer_api` serving capability starts the listener"
+   ],
+   "default_guess": "The deployment runtime receives the created app and starts the loopback listener.",
+   "witness": {
+    "initial": "The settings, connections file and token are valid, and no service process is listening.",
+    "events": [
+     "The deployment invokes the documented service-start flow.",
+     "`deliverer_api.create_app` returns an HTTP application."
+    ],
+    "outcomes": [
+     "The flow starts a loopback listener and remains running.",
+     "The flow ends with an application object but no listener because `create_app` only builds the surface."
+    ],
+    "observer": "The deployment and any caller of the health route"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:scan_project_photos`",
+   "subject": "scan API checks",
+   "kind": "missing steps",
+   "text": "`module:deliverer_api` accepts the token and the project id and calls `module:photo_delivery`",
+   "question": "Which steps perform the token and project-id checks, and what does each failure produce before `scan_project_photos` is called?",
+   "options": [
+    "Add explicit `deliverer_api` authentication and project-id-validation steps with refusal answers",
+    "Treat acceptance as an implicit route operation whose checks and failures are defined outside this flow"
+   ],
+   "default_guess": "Add explicit API steps before the `photo_delivery` call, in the order required by State 3.",
+   "witness": {
+    "initial": "The service is running and the caller sends a scan request with a bad bearer token or malformed project id.",
+    "events": [
+     "The request reaches `deliverer_api`.",
+     "The written Steps begin with `photo_delivery.scan_project_photos` and contain no API validation step."
+    ],
+    "outcomes": [
+     "The API rejects the request before any connection read.",
+     "The implementation follows only the listed steps and enters the scan operation or invents its own validation order."
+    ],
+    "observer": "The caller and the connections-file operator"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:scan_project_photos`",
+   "subject": "placement and mark reads during a scan",
+   "kind": "unstated failure outcome",
+   "text": "For each `ready` file, `capability:delivery_store.read_placement` and `capability:delivery_store.read_mark` complete its status by A1 orders 7 to 9.",
+   "question": "What does the scan return if a placement or mark record cannot be read or decoded?",
+   "options": [
+    "Refuse the whole scan with a named refusal",
+    "Return that file as `rejected` with a named reason",
+    "Ignore the unreadable record and report `ready` or `placed`",
+    "Treat unreadable durable state as an internal error with a specified API answer"
+   ],
+   "default_guess": "Refuse the whole scan with a path-free internal-state failure answer.",
+   "witness": {
+    "initial": "A source file is readable, but its placement or mark record is unreadable.",
+    "events": [
+     "The caller requests a scan.",
+     "`observe_source_files` reports the source as ready.",
+     "`delivery_store.read_placement` or `read_mark` fails."
+    ],
+    "outcomes": [
+     "The entire scan is refused and no M02 list is returned.",
+     "The file is reported as ready or rejected and the scan appears complete."
+    ],
+    "observer": "The calling agent and owner"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:deliver_one_photo`",
+   "subject": "delivery API checks",
+   "kind": "missing steps",
+   "text": "`module:deliverer_api` accepts the token, the request form and the project id.",
+   "question": "Which flow steps perform token authentication and validation of the request form and project id, in what order, and what does each failure produce?",
+   "options": [
+    "Add the explicit `deliverer_api` steps required by A3 rule 4 and State 3",
+    "Treat the checks as implicit route behavior outside the listed flow"
+   ],
+   "default_guess": "Add explicit API steps before `photo_delivery.deliver_project_photo`, preserving token, request-form and project-id order.",
+   "witness": {
+    "initial": "The service is running and receives a delivery request with an invalid token or malformed body.",
+    "events": [
+     "The request reaches `deliverer_api`.",
+     "The listed delivery Steps begin with connection lookup inside `photo_delivery`."
+    ],
+    "outcomes": [
+     "The API refuses before reading the connections file.",
+     "The implementation calls the delivery operation or chooses an undocumented validation order."
+    ],
+    "observer": "The caller and the connections-file operator"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ownership of whole-request delivery refusals",
+   "kind": "contradiction",
+   "text": "State 4: \"`module:object_connections` and `module:photo_delivery` refuse the whole request as A3 rule 4 orders it.\" State 3: \"`deliverer_api` performs the steps marked API\" and \"request form, project id\" are Step 2, API.",
+   "question": "Does `deliverer_api` or the named domain modules own refusal of malformed delivery requests and project identifiers?",
+   "options": [
+    "`deliverer_api` owns token, request-form and project-id refusals; lower modules own later refusals",
+    "`object_connections` and `photo_delivery` also validate and refuse the whole HTTP request"
+   ],
+   "default_guess": "Follow State 3: `deliverer_api` owns the API-level checks and their refusal answers.",
+   "witness": {
+    "initial": "A delivery request has a malformed project id and otherwise plausible body.",
+    "events": [
+     "The request reaches `deliverer_api`.",
+     "Validation is assigned according to one of the two passages."
+    ],
+    "outcomes": [
+     "`deliverer_api` refuses it before calling `photo_delivery`.",
+     "A lower module receives the malformed identifier and produces the refusal."
+    ],
+    "observer": "The caller, logs and module-level tests"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:deliver_one_photo`",
+   "subject": "existing placement and mark reads",
+   "kind": "unstated failure outcome",
+   "text": "`capability:delivery_store.read_placement` finds an existing placement. If there is one, `capability:delivery_store.read_mark` supplies its `photo_id`",
+   "question": "What outcome is produced if an existing placement or mark record cannot be read or decoded?",
+   "options": [
+    "Refuse the whole request with a named refusal",
+    "Return a `failed` M06 with a named `PlacementFailure`",
+    "Treat the record as absent and attempt a new placement",
+    "Return a specified internal-error answer"
+   ],
+   "default_guess": "Return a specified path-free internal error and do not write or replace durable state.",
+   "witness": {
+    "initial": "A placement record exists but is unreadable.",
+    "events": [
+     "The caller requests delivery of the same source.",
+     "The flow acquires the project lock.",
+     "`read_placement` fails."
+    ],
+    "outcomes": [
+     "The call fails without changing the image or records.",
+     "The unreadable record is treated as absent and the flow attempts to place the content again."
+    ],
+    "observer": "The caller and the Portal binary-store operator"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:deliver_one_photo`",
+   "subject": "project lock acquisition",
+   "kind": "unstated failure outcome",
+   "text": "It takes `capability:delivery_store.project_lock`.",
+   "question": "What does the delivery produce if the lock cannot be opened or acquired because of an operating-system or state-directory error?",
+   "options": [
+    "Refuse the whole request with a named refusal",
+    "Return a `failed` M06 with a named reason",
+    "Return a specified internal-error answer"
+   ],
+   "default_guess": "Return a path-free internal-error answer and perform no placement writes."
+  },
+  {
+   "unit": "40_flows.md:`flow:record_publication`",
+   "subject": "mark API checks",
+   "kind": "missing steps",
+   "text": "`module:deliverer_api` accepts the token, the request form, the project id and the `photo_id`",
+   "question": "Which steps validate the token, request form, project id and `photo_id`, in what order, and what does each failure produce before `mark_photo_published` runs?",
+   "options": [
+    "Add explicit `deliverer_api` steps in the order fixed by A4 and State 3",
+    "Treat all acceptance checks as implicit route behavior outside this flow"
+   ],
+   "default_guess": "Add explicit API validation steps before source-id checking and the clock read.",
+   "witness": {
+    "initial": "A mark request has a malformed `photo_id`.",
+    "events": [
+     "The request reaches `deliverer_api`.",
+     "The listed Steps begin with `photo_delivery.mark_photo_published` checking the source id."
+    ],
+    "outcomes": [
+     "The API refuses the malformed `photo_id` before the clock or connections file is read.",
+     "The clock or lower modules are reached before an implementation-specific validation occurs."
+    ],
+    "observer": "The caller and a clock-reading test"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:record_publication`",
+   "subject": "mark-store operations",
+   "kind": "unstated failure outcome",
+   "text": "`capability:delivery_store.read_placement` requires a placement of this project. `capability:delivery_store.read_mark` finds an existing mark. The same `photo_id` answers `replayed`. Without a mark, `capability:delivery_store.write_mark` writes it",
+   "question": "What does the operation return if `read_placement`, `read_mark`, or `write_mark` fails for reasons other than the logical `not_placed` or `publication_conflict` cases?",
+   "options": [
+    "Refuse with a named refusal code",
+    "Return a specified internal-error answer",
+    "Map the failure to `not_placed` or `publication_conflict`",
+    "Retry the store operation inside the service"
+   ],
+   "default_guess": "Return a specified path-free internal-error answer, write no mark on a read failure, and preserve atomic-write guarantees on a write failure.",
+   "witness": {
+    "initial": "The Portal photo was published, the placement exists, and the state directory becomes unwritable.",
+    "events": [
+     "The agent calls `mark_photo_published`.",
+     "The placement and absence of a mark are established.",
+     "`write_mark` fails."
+    ],
+    "outcomes": [
+     "The caller receives a defined failure and can safely decide whether to repeat.",
+     "The route emits an implementation-specific error or is mistaken for a logical refusal."
+    ],
+    "observer": "The calling agent and owner"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:record_publication`",
+   "subject": "project lock acquisition for marking",
+   "kind": "unstated failure outcome",
+   "text": "It takes `capability:delivery_store.project_lock`.",
+   "question": "What does the mark operation produce if its project lock cannot be opened or acquired because of a state-directory or operating-system error?",
+   "options": [
+    "Refuse with a named refusal",
+    "Return a specified internal-error answer",
+    "Retry indefinitely even for non-contention errors"
+   ],
+   "default_guess": "Return a path-free internal-error answer without reading or writing placement and mark records."
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "Portal staff-photo-list read",
+   "kind": "unnamed operation",
+   "text": "The agent reads the project's staff photo list in the Portal.",
+   "question": "Which Portal operation does the agent call, what inputs and pagination does it use, and what exact result counts as a list it can read?",
+   "options": [
+    "Name an existing Portal staff-list operation and its complete-list semantics",
+    "Add a calling-agent capability that obtains and validates the complete staff photo list",
+    "Leave the agent to select an available Portal read operation"
+   ],
+   "default_guess": "Name the Portal's authenticated staff photo-list operation and require the agent to obtain the complete list before continuing.",
+   "witness": {
+    "initial": "The project has more photos than one Portal response page, and an old offset-bearing date is on a later page.",
+    "events": [
+     "The owner starts delivery.",
+     "The agent performs the unspecified staff-list read.",
+     "The agent checks only what that read returned."
+    ],
+    "outcomes": [
+     "The operation reads all pages, finds the old date and stops before placement.",
+     "The operation reads one page, misses the old date and proceeds to place and publish."
+    ],
+    "observer": "The owner and client"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "service operation caller",
+   "kind": "contradiction",
+   "text": "Boundary: \"calls `module:deliverer_api`, which delegates to `module:photo_delivery`.\" Steps: \"It calls `capability:photo_delivery.scan_project_photos`\", \"it calls `capability:photo_delivery.deliver_project_photo`\", and \"through `capability:photo_delivery.mark_photo_published`.\"",
+   "question": "Does the external agent call authenticated `deliverer_api` operations or call `photo_delivery` capabilities directly?",
+   "options": [
+    "The agent calls API routes, whose delegates invoke the three `photo_delivery` capabilities",
+    "The agent is in-process and calls `photo_delivery` directly",
+    "The flow text names logical capabilities, but must explicitly say the calls cross through API route delegates"
+   ],
+   "default_guess": "The agent calls authenticated API routes and the routes delegate to `photo_delivery`.",
+   "witness": {
+    "initial": "The calling agent runs outside the service.",
+    "events": [
+     "The agent starts an owner-delivery run.",
+     "It follows either the Boundary or the literal Steps."
+    ],
+    "outcomes": [
+     "Every service operation crosses the bearer-token HTTP boundary through `deliverer_api`.",
+     "The agent invokes internal `photo_delivery` functions and bypasses the HTTP authentication boundary."
+    ],
+    "observer": "The service operator and security tests"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "scan refusal in owner delivery",
+   "kind": "unstated failure outcome",
+   "text": "It calls `capability:photo_delivery.scan_project_photos` and shows the owner what can be delivered. The owner chooses.",
+   "question": "What does the owner-delivery flow do when the scan is refused or otherwise fails and there is no list to show?",
+   "options": [
+    "Stop the project run and tell the owner the refusal reason",
+    "Retry selected refusal classes",
+    "Show an empty list and allow no choices",
+    "Hand control to the owner for manual resolution"
+   ],
+   "default_guess": "Stop the project run and tell the owner the refusal reason without delivering anything.",
+   "witness": {
+    "initial": "The project connection becomes unconfirmed before the scan.",
+    "events": [
+     "The owner starts delivery.",
+     "The old-date precheck succeeds.",
+     "The scan returns `connection_not_confirmed`."
+    ],
+    "outcomes": [
+     "The run stops and reports that refusal to the owner.",
+     "The agent treats the missing scan result as an empty list, retries, or continues by an implementation-specific path."
+    ],
+    "observer": "The owner"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "whole-request delivery refusal",
+   "kind": "unstated failure outcome",
+   "text": "A failed photo is noted and the agent goes on with the next one.",
+   "question": "Does this rule cover only a `failed` M06, or also a whole-request refusal, and what happens to later chosen photos after such a refusal?",
+   "options": [
+    "Continue only after per-photo `failed`; stop the run on a whole-request refusal",
+    "Record either kind of failure for that photo and continue",
+    "Classify refusal codes into stop, retry and continue cases"
+   ],
+   "default_guess": "Continue after a `failed` M06, but stop the project run on authentication, connection or malformed-request refusals.",
+   "witness": {
+    "initial": "Two files were chosen and the connection is cleared before the first delivery call.",
+    "events": [
+     "The agent calls delivery for the first file.",
+     "The service refuses the whole request with `connection_not_confirmed`."
+    ],
+    "outcomes": [
+     "The agent stops because the same project-level refusal necessarily affects the remaining file.",
+     "The agent records one failed photo and calls delivery for the second file."
+    ],
+    "observer": "The owner and service operator"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "Portal publication failure",
+   "kind": "unstated failure outcome",
+   "text": "Otherwise the agent sends the publication body to the Portal's `photo.publish`.",
+   "question": "What happens for each Portal refusal or transport failure other than the specifically described 409 after the photo has been shown?",
+   "options": [
+    "Mark that photo failed with the Portal reason and continue",
+    "Retry selected temporary failures before continuing",
+    "Stop the whole project run",
+    "Hand the photo to the owner for every indeterminate publication result"
+   ],
+   "default_guess": "Do not mark the photo; report a per-photo failure, continue with the next choice, and leave retry policy explicit by failure class.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The agent calls `photo.publish`.",
+     "The Portal times out without revealing whether it created the hidden photo."
+    ],
+    "outcomes": [
+     "The agent treats the result as indeterminate and uses the specified safe repeat procedure.",
+     "The agent treats it as a definite failure or success and either skips a created photo or creates an unnecessary retry."
+    ],
+    "observer": "The owner and Portal staff-photo list"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "failure to record a successful publication",
+   "kind": "unstated failure outcome",
+   "text": "It reports the Portal's `photo_id` through `capability:photo_delivery.mark_photo_published`.",
+   "question": "What does the agent do if marking is refused or fails after the Portal has successfully published the hidden photo?",
+   "options": [
+    "Report an unmarked publication and retry marking without republishing",
+    "Classify logical mark refusals separately from transient failures",
+    "Repeat the whole publish-and-mark pair",
+    "Hand the case to the owner immediately"
+   ],
+   "default_guess": "Keep the known `photo_id`, retry only the mark, and report or hand off the case if the mark cannot be recorded.",
+   "witness": {
+    "initial": "The photo has just been published hidden in the Portal and the agent knows its `photo_id`.",
+    "events": [
+     "The connection file is changed or the deliverer state becomes unavailable.",
+     "The agent calls `mark_photo_published`.",
+     "The mark call is refused or fails."
+    ],
+    "outcomes": [
+     "The agent preserves the known id and later repeats only the mark.",
+     "The agent repeats publication, labels the photo simply failed, or loses the id."
+    ],
+    "observer": "The owner and subsequent scans"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "retry policy",
+   "kind": "vague decision",
+   "text": "The agent decides what to repeat.",
+   "question": "For every scan, delivery, Portal-publication and mark failure or indeterminate result, which operation is repeated, under what conditions, and when does the agent stop or hand off?",
+   "options": [
+    "Define a deterministic retry table by operation and failure",
+    "Permit the agent to ask the owner on every retry decision",
+    "Declare that this first version never retries automatically except the stated publish-after-interruption case"
+   ],
+   "default_guess": "Define a deterministic table: retry only explicitly transient or indeterminate operations, never repeat a known successful publication when its `photo_id` is available, and stop on project-wide refusals.",
+   "witness": {
+    "initial": "A delivery run encounters a temporary Portal timeout and later a mark-store failure.",
+    "events": [
+     "The agent reaches each error.",
+     "Two careful implementations interpret \"decides\" differently."
+    ],
+    "outcomes": [
+     "One retries the affected operation and completes both photos.",
+     "The other stops, repeats the whole publish sequence, or skips the affected photo."
+    ],
+    "observer": "The owner and Portal"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "manual handoff after an unrecoverable 409",
+   "kind": "undefined outcome",
+   "text": "the agent hands that photo to the owner",
+   "question": "What information or action is handed to the owner, what status is reported, and how can the unmarked placement be reconciled when the Portal `photo_id` cannot be recovered?",
+   "options": [
+    "Report an explicit manual-intervention result containing the project and source identity but no recoverable `photo_id`",
+    "Treat it as a failed photo with a fixed reason",
+    "Provide a separate owner operation that supplies the existing Portal `photo_id`",
+    "Leave the placement permanently unmarked"
+   ],
+   "default_guess": "Return an explicit manual-intervention result and provide a controlled way for the owner to supply the existing Portal `photo_id`.",
+   "witness": {
+    "initial": "The agent published a hidden photo, lost the response, and the owner showed the photo before the retry.",
+    "events": [
+     "The agent repeats `photo.publish`.",
+     "The Portal returns 409.",
+     "The flow \"hands that photo to the owner\"."
+    ],
+    "outcomes": [
+     "The owner receives a defined reconciliation task and the placement can later be marked.",
+     "The owner receives only a vague failure and the placement remains forever indistinguishable from an unpublished placement."
+    ],
+    "observer": "The owner and future delivery runs"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "owner-visible result categories",
+   "kind": "outcome mismatch",
+   "text": "State 0: \"The owner sees the result of each photo: delivered, or failed with its reason.\" State 4: \"Each chosen photo ends as delivered and hidden from the client, already published, failed with its reason, or handed to the owner.\"",
+   "question": "How do `already published` and `handed to the owner` map to the earlier closed result contract of `delivered` or `failed with its reason`?",
+   "options": [
+    "`already published` is a delivered result and handoff is a failed result with a fixed reason",
+    "Expand the owner-visible result enumeration to four outcomes",
+    "Keep two top-level outcomes with explicit substatuses"
+   ],
+   "default_guess": "Keep the earlier two top-level outcomes: `already published` is delivered, and manual handoff is failed with a specific reconciliation-required reason.",
+   "witness": {
+    "initial": "One chosen photo is already marked and another reaches the unrecoverable post-show 409 case.",
+    "events": [
+     "The owner-delivery flow finishes.",
+     "The workplace renders results using either State 0 or State 4 as its contract."
+    ],
+    "outcomes": [
+     "The workplace shows delivered/failed results with defined substatuses.",
+     "The workplace exposes four unrelated statuses or cannot represent the handoff result."
+    ],
+    "observer": "The owner"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:`flow:service_start`\",\"subject\":\"service listener startup\",\"kind\":\"missing capability\",\"text\":\"`capability:deliverer_api.create_app` builds the HTTP surface with the token and the clock, and the service listens on the loopback interface.\",\"question\":\"Which owner and capability start and supervise the listener after `create_app` returns?\",\"options\":[\"`create_app` also starts the listener and blocks\",\"A deployment/runtime operation receives the app and starts the listener\",\"A separate `deliverer_api` serving capability starts the listener\"],\"default_guess\":\"The deployment runtime receives the created app and starts the loopback listener.\",\"witness\":{\"initial\":\"The settings, connections file and token are valid, and no service process is listening.\",\"events\":[\"The deployment invokes the documented service-start flow.\",\"`deliverer_api.create_app` returns an HTTP application.\"],\"outcomes\":[\"The flow starts a loopback listener and remains running.\",\"The flow ends with an application object but no listener because `create_app` only builds the surface.\"],\"observer\":\"The deployment and any caller of the health route\"}},{\"unit\":\"40_flows.md:`flow:scan_project_photos`\",\"subject\":\"scan API checks\",\"kind\":\"missing steps\",\"text\":\"`module:deliverer_api` accepts the token and the project id and calls `module:photo_delivery`\",\"question\":\"Which steps perform the token and project-id checks, and what does each failure produce before `scan_project_photos` is called?\",\"options\":[\"Add explicit `deliverer_api` authentication and project-id-validation steps with refusal answers\",\"Treat acceptance as an implicit route operation whose checks and failures are defined outside this flow\"],\"default_guess\":\"Add explicit API steps before the `photo_delivery` call, in the order required by State 3.\",\"witness\":{\"initial\":\"The service is running and the caller sends a scan request with a bad bearer token or malformed project id.\",\"events\":[\"The request reaches `deliverer_api`.\",\"The written Steps begin with `photo_delivery.scan_project_photos` and contain no API validation step.\"],\"outcomes\":[\"The API rejects the request before any connection read.\",\"The implementation follows only the listed steps and enters the scan operation or invents its own validation order.\"],\"observer\":\"The caller and the connections-file operator\"}},{\"unit\":\"40_flows.md:`flow:scan_project_photos`\",\"subject\":\"placement and mark reads during a scan\",\"kind\":\"unstated failure outcome\",\"text\":\"For each `ready` file, `capability:delivery_store.read_placement` and `capability:delivery_store.read_mark` complete its status by A1 orders 7 to 9.\",\"question\":\"What does the scan return if a placement or mark record cannot be read or decoded?\",\"options\":[\"Refuse the whole scan with a named refusal\",\"Return that file as `rejected` with a named reason\",\"Ignore the unreadable record and report `ready` or `placed`\",\"Treat unreadable durable state as an internal error with a specified API answer\"],\"default_guess\":\"Refuse the whole scan with a path-free internal-state failure answer.\",\"witness\":{\"initial\":\"A source file is readable, but its placement or mark record is unreadable.\",\"events\":[\"The caller requests a scan.\",\"`observe_source_files` reports the source as ready.\",\"`delivery_store.read_placement` or `read_mark` fails.\"],\"outcomes\":[\"The entire scan is refused and no M02 list is returned.\",\"The file is reported as ready or rejected and the scan appears complete.\"],\"observer\":\"The calling agent and owner\"}},{\"unit\":\"40_flows.md:`flow:deliver_one_photo`\",\"subject\":\"delivery API checks\",\"kind\":\"missing steps\",\"text\":\"`module:deliverer_api` accepts the token, the request form and the project id.\",\"question\":\"Which flow steps perform token authentication and validation of the request form and project id, in what order, and what does each failure produce?\",\"options\":[\"Add the explicit `deliverer_api` steps required by A3 rule 4 and State 3\",\"Treat the checks as implicit route behavior outside the listed flow\"],\"default_guess\":\"Add explicit API steps before `photo_delivery.deliver_project_photo`, preserving token, request-form and project-id order.\",\"witness\":{\"initial\":\"The service is running and receives a delivery request with an invalid token or malformed body.\",\"events\":[\"The request reaches `deliverer_api`.\",\"The listed delivery Steps begin with connection lookup inside `photo_delivery`.\"],\"outcomes\":[\"The API refuses before reading the connections file.\",\"The implementation calls the delivery operation or chooses an undocumented validation order.\"],\"observer\":\"The caller and the connections-file operator\"}},{\"unit\":\"context\",\"subject\":\"ownership of whole-request delivery refusals\",\"kind\":\"contradiction\",\"text\":\"State 4: \\\"`module:object_connections` and `module:photo_delivery` refuse the whole request as A3 rule 4 orders it.\\\" State 3: \\\"`deliverer_api` performs the steps marked API\\\" and \\\"request form, project id\\\" are Step 2, API.\",\"question\":\"Does `deliverer_api` or the named domain modules own refusal of malformed delivery requests and project identifiers?\",\"options\":[\"`deliverer_api` owns token, request-form and project-id refusals; lower modules own later refusals\",\"`object_connections` and `photo_delivery` also validate and refuse the whole HTTP request\"],\"default_guess\":\"Follow State 3: `deliverer_api` owns the API-level checks and their refusal answers.\",\"witness\":{\"initial\":\"A delivery request has a malformed project id and otherwise plausible body.\",\"events\":[\"The request reaches `deliverer_api`.\",\"Validation is assigned according to one of the two passages.\"],\"outcomes\":[\"`deliverer_api` refuses it before calling `photo_delivery`.\",\"A lower module receives the malformed identifier and produces the refusal.\"],\"observer\":\"The caller, logs and module-level tests\"}},{\"unit\":\"40_flows.md:`flow:deliver_one_photo`\",\"subject\":\"existing placement and mark reads\",\"kind\":\"unstated failure outcome\",\"text\":\"`capability:delivery_store.read_placement` finds an existing placement. If there is one, `capability:delivery_store.read_mark` supplies its `photo_id`\",\"question\":\"What outcome is produced if an existing placement or mark record cannot be read or decoded?\",\"options\":[\"Refuse the whole request with a named refusal\",\"Return a `failed` M06 with a named `PlacementFailure`\",\"Treat the record as absent and attempt a new placement\",\"Return a specified internal-error answer\"],\"default_guess\":\"Return a specified path-free internal error and do not write or replace durable state.\",\"witness\":{\"initial\":\"A placement record exists but is unreadable.\",\"events\":[\"The caller requests delivery of the same source.\",\"The flow acquires the project lock.\",\"`read_placement` fails.\"],\"outcomes\":[\"The call fails without changing the image or records.\",\"The unreadable record is treated as absent and the flow attempts to place the content again.\"],\"observer\":\"The caller and the Portal binary-store operator\"}},{\"unit\":\"40_flows.md:`flow:deliver_one_photo`\",\"subject\":\"project lock acquisition\",\"kind\":\"unstated failure outcome\",\"text\":\"It takes `capability:delivery_store.project_lock`.\",\"question\":\"What does the delivery produce if the lock cannot be opened or acquired because of an operating-system or state-directory error?\",\"options\":[\"Refuse the whole request with a named refusal\",\"Return a `failed` M06 with a named reason\",\"Return a specified internal-error answer\"],\"default_guess\":\"Return a path-free internal-error answer and perform no placement writes.\"},{\"unit\":\"40_flows.md:`flow:record_publication`\",\"subject\":\"mark API checks\",\"kind\":\"missing steps\",\"text\":\"`module:deliverer_api` accepts the token, the request form, the project id and the `photo_id`\",\"question\":\"Which steps validate the token, request form, project id and `photo_id`, in what order, and what does each failure produce before `mark_photo_published` runs?\",\"options\":[\"Add explicit `deliverer_api` steps in the order fixed by A4 and State 3\",\"Treat all acceptance checks as implicit route behavior outside this flow\"],\"default_guess\":\"Add explicit API validation steps before source-id checking and the clock read.\",\"witness\":{\"initial\":\"A mark request has a malformed `photo_id`.\",\"events\":[\"The request reaches `deliverer_api`.\",\"The listed Steps begin with `photo_delivery.mark_photo_published` checking the source id.\"],\"outcomes\":[\"The API refuses the malformed `photo_id` before the clock or connections file is read.\",\"The clock or lower modules are reached before an implementation-specific validation occurs.\"],\"observer\":\"The caller and a clock-reading test\"}},{\"unit\":\"40_flows.md:`flow:record_publication`\",\"subject\":\"mark-store operations\",\"kind\":\"unstated failure outcome\",\"text\":\"`capability:delivery_store.read_placement` requires a placement of this project. `capability:delivery_store.read_mark` finds an existing mark. The same `photo_id` answers `replayed`. Without a mark, `capability:delivery_store.write_mark` writes it\",\"question\":\"What does the operation return if `read_placement`, `read_mark`, or `write_mark` fails for reasons other than the logical `not_placed` or `publication_conflict` cases?\",\"options\":[\"Refuse with a named refusal code\",\"Return a specified internal-error answer\",\"Map the failure to `not_placed` or `publication_conflict`\",\"Retry the store operation inside the service\"],\"default_guess\":\"Return a specified path-free internal-error answer, write no mark on a read failure, and preserve atomic-write guarantees on a write failure.\",\"witness\":{\"initial\":\"The Portal photo was published, the placement exists, and the state directory becomes unwritable.\",\"events\":[\"The agent calls `mark_photo_published`.\",\"The placement and absence of a mark are established.\",\"`write_mark` fails.\"],\"outcomes\":[\"The caller receives a defined failure and can safely decide whether to repeat.\",\"The route emits an implementation-specific error or is mistaken for a logical refusal.\"],\"observer\":\"The calling agent and owner\"}},{\"unit\":\"40_flows.md:`flow:record_publication`\",\"subject\":\"project lock acquisition for marking\",\"kind\":\"unstated failure outcome\",\"text\":\"It takes `capability:delivery_store.project_lock`.\",\"question\":\"What does the mark operation produce if its project lock cannot be opened or acquired because of a state-directory or operating-system error?\",\"options\":[\"Refuse with a named refusal\",\"Return a specified internal-error answer\",\"Retry indefinitely even for non-contention errors\"],\"default_guess\":\"Return a path-free internal-error answer without reading or writing placement and mark records.\"},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"Portal staff-photo-list read\",\"kind\":\"unnamed operation\",\"text\":\"The agent reads the project's staff photo list in the Portal.\",\"question\":\"Which Portal operation does the agent call, what inputs and pagination does it use, and what exact result counts as a list it can read?\",\"options\":[\"Name an existing Portal staff-list operation and its complete-list semantics\",\"Add a calling-agent capability that obtains and validates the complete staff photo list\",\"Leave the agent to select an available Portal read operation\"],\"default_guess\":\"Name the Portal's authenticated staff photo-list operation and require the agent to obtain the complete list before continuing.\",\"witness\":{\"initial\":\"The project has more photos than one Portal response page, and an old offset-bearing date is on a later page.\",\"events\":[\"The owner starts delivery.\",\"The agent performs the unspecified staff-list read.\",\"The agent checks only what that read returned.\"],\"outcomes\":[\"The operation reads all pages, finds the old date and stops before placement.\",\"The operation reads one page, misses the old date and proceeds to place and publish.\"],\"observer\":\"The owner and client\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"service operation caller\",\"kind\":\"contradiction\",\"text\":\"Boundary: \\\"calls `module:deliverer_api`, which delegates to `module:photo_delivery`.\\\" Steps: \\\"It calls `capability:photo_delivery.scan_project_photos`\\\", \\\"it calls `capability:photo_delivery.deliver_project_photo`\\\", and \\\"through `capability:photo_delivery.mark_photo_published`.\\\"\",\"question\":\"Does the external agent call authenticated `deliverer_api` operations or call `photo_delivery` capabilities directly?\",\"options\":[\"The agent calls API routes, whose delegates invoke the three `photo_delivery` capabilities\",\"The agent is in-process and calls `photo_delivery` directly\",\"The flow text names logical capabilities, but must explicitly say the calls cross through API route delegates\"],\"default_guess\":\"The agent calls authenticated API routes and the routes delegate to `photo_delivery`.\",\"witness\":{\"initial\":\"The calling agent runs outside the service.\",\"events\":[\"The agent starts an owner-delivery run.\",\"It follows either the Boundary or the literal Steps.\"],\"outcomes\":[\"Every service operation crosses the bearer-token HTTP boundary through `deliverer_api`.\",\"The agent invokes internal `photo_delivery` functions and bypasses the HTTP authentication boundary.\"],\"observer\":\"The service operator and security tests\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"scan refusal in owner delivery\",\"kind\":\"unstated failure outcome\",\"text\":\"It calls `capability:photo_delivery.scan_project_photos` and shows the owner what can be delivered. The owner chooses.\",\"question\":\"What does the owner-delivery flow do when the scan is refused or otherwise fails and there is no list to show?\",\"options\":[\"Stop the project run and tell the owner the refusal reason\",\"Retry selected refusal classes\",\"Show an empty list and allow no choices\",\"Hand control to the owner for manual resolution\"],\"default_guess\":\"Stop the project run and tell the owner the refusal reason without delivering anything.\",\"witness\":{\"initial\":\"The project connection becomes unconfirmed before the scan.\",\"events\":[\"The owner starts delivery.\",\"The old-date precheck succeeds.\",\"The scan returns `connection_not_confirmed`.\"],\"outcomes\":[\"The run stops and reports that refusal to the owner.\",\"The agent treats the missing scan result as an empty list, retries, or continues by an implementation-specific path.\"],\"observer\":\"The owner\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"whole-request delivery refusal\",\"kind\":\"unstated failure outcome\",\"text\":\"A failed photo is noted and the agent goes on with the next one.\",\"question\":\"Does this rule cover only a `failed` M06, or also a whole-request refusal, and what happens to later chosen photos after such a refusal?\",\"options\":[\"Continue only after per-photo `failed`; stop the run on a whole-request refusal\",\"Record either kind of failure for that photo and continue\",\"Classify refusal codes into stop, retry and continue cases\"],\"default_guess\":\"Continue after a `failed` M06, but stop the project run on authentication, connection or malformed-request refusals.\",\"witness\":{\"initial\":\"Two files were chosen and the connection is cleared before the first delivery call.\",\"events\":[\"The agent calls delivery for the first file.\",\"The service refuses the whole request with `connection_not_confirmed`.\"],\"outcomes\":[\"The agent stops because the same project-level refusal necessarily affects the remaining file.\",\"The agent records one failed photo and calls delivery for the second file.\"],\"observer\":\"The owner and service operator\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"Portal publication failure\",\"kind\":\"unstated failure outcome\",\"text\":\"Otherwise the agent sends the publication body to the Portal's `photo.publish`.\",\"question\":\"What happens for each Portal refusal or transport failure other than the specifically described 409 after the photo has been shown?\",\"options\":[\"Mark that photo failed with the Portal reason and continue\",\"Retry selected temporary failures before continuing\",\"Stop the whole project run\",\"Hand the photo to the owner for every indeterminate publication result\"],\"default_guess\":\"Do not mark the photo; report a per-photo failure, continue with the next choice, and leave retry policy explicit by failure class.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The agent calls `photo.publish`.\",\"The Portal times out without revealing whether it created the hidden photo.\"],\"outcomes\":[\"The agent treats the result as indeterminate and uses the specified safe repeat procedure.\",\"The agent treats it as a definite failure or success and either skips a created photo or creates an unnecessary retry.\"],\"observer\":\"The owner and Portal staff-photo list\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"failure to record a successful publication\",\"kind\":\"unstated failure outcome\",\"text\":\"It reports the Portal's `photo_id` through `capability:photo_delivery.mark_photo_published`.\",\"question\":\"What does the agent do if marking is refused or fails after the Portal has successfully published the hidden photo?\",\"options\":[\"Report an unmarked publication and retry marking without republishing\",\"Classify logical mark refusals separately from transient failures\",\"Repeat the whole publish-and-mark pair\",\"Hand the case to the owner immediately\"],\"default_guess\":\"Keep the known `photo_id`, retry only the mark, and report or hand off the case if the mark cannot be recorded.\",\"witness\":{\"initial\":\"The photo has just been published hidden in the Portal and the agent knows its `photo_id`.\",\"events\":[\"The connection file is changed or the deliverer state becomes unavailable.\",\"The agent calls `mark_photo_published`.\",\"The mark call is refused or fails.\"],\"outcomes\":[\"The agent preserves the known id and later repeats only the mark.\",\"The agent repeats publication, labels the photo simply failed, or loses the id.\"],\"observer\":\"The owner and subsequent scans\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"retry policy\",\"kind\":\"vague decision\",\"text\":\"The agent decides what to repeat.\",\"question\":\"For every scan, delivery, Portal-publication and mark failure or indeterminate result, which operation is repeated, under what conditions, and when does the agent stop or hand off?\",\"options\":[\"Define a deterministic retry table by operation and failure\",\"Permit the agent to ask the owner on every retry decision\",\"Declare that this first version never retries automatically except the stated publish-after-interruption case\"],\"default_guess\":\"Define a deterministic table: retry only explicitly transient or indeterminate operations, never repeat a known successful publication when its `photo_id` is available, and stop on project-wide refusals.\",\"witness\":{\"initial\":\"A delivery run encounters a temporary Portal timeout and later a mark-store failure.\",\"events\":[\"The agent reaches each error.\",\"Two careful implementations interpret \\\"decides\\\" differently.\"],\"outcomes\":[\"One retries the affected operation and completes both photos.\",\"The other stops, repeats the whole publish sequence, or skips the affected photo.\"],\"observer\":\"The owner and Portal\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"manual handoff after an unrecoverable 409\",\"kind\":\"undefined outcome\",\"text\":\"the agent hands that photo to the owner\",\"question\":\"What information or action is handed to the owner, what status is reported, and how can the unmarked placement be reconciled when the Portal `photo_id` cannot be recovered?\",\"options\":[\"Report an explicit manual-intervention result containing the project and source identity but no recoverable `photo_id`\",\"Treat it as a failed photo with a fixed reason\",\"Provide a separate owner operation that supplies the existing Portal `photo_id`\",\"Leave the placement permanently unmarked\"],\"default_guess\":\"Return an explicit manual-intervention result and provide a controlled way for the owner to supply the existing Portal `photo_id`.\",\"witness\":{\"initial\":\"The agent published a hidden photo, lost the response, and the owner showed the photo before the retry.\",\"events\":[\"The agent repeats `photo.publish`.\",\"The Portal returns 409.\",\"The flow \\\"hands that photo to the owner\\\".\"],\"outcomes\":[\"The owner receives a defined reconciliation task and the placement can later be marked.\",\"The owner receives only a vague failure and the placement remains forever indistinguishable from an unpublished placement.\"],\"observer\":\"The owner and future delivery runs\"}},{\"unit\":\"context\",\"subject\":\"owner-visible result categories\",\"kind\":\"outcome mismatch\",\"text\":\"State 0: \\\"The owner sees the result of each photo: delivered, or failed with its reason.\\\" State 4: \\\"Each chosen photo ends as delivered and hidden from the client, already published, failed with its reason, or handed to the owner.\\\"\",\"question\":\"How do `already published` and `handed to the owner` map to the earlier closed result contract of `delivered` or `failed with its reason`?\",\"options\":[\"`already published` is a delivered result and handoff is a failed result with a fixed reason\",\"Expand the owner-visible result enumeration to four outcomes\",\"Keep two top-level outcomes with explicit substatuses\"],\"default_guess\":\"Keep the earlier two top-level outcomes: `already published` is delivered, and manual handoff is failed with a specific reconciliation-required reason.\",\"witness\":{\"initial\":\"One chosen photo is already marked and another reaches the unrecoverable post-show 409 case.\",\"events\":[\"The owner-delivery flow finishes.\",\"The workplace renders results using either State 0 or State 4 as its contract.\"],\"outcomes\":[\"The workplace shows delivered/failed results with defined substatuses.\",\"The workplace exposes four unrelated statuses or cannot represent the handoff result.\"],\"observer\":\"The owner\"}}]}",
+ "set_aside": []
+}

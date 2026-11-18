@@ -1,0 +1,363 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:`flow:service_start`",
+   "subject": "service listening operation",
+   "kind": "missing capability",
+   "text": "`capability:deliverer_api.create_app` builds the HTTP surface with the token and the clock, and the service listens on the loopback interface.",
+   "question": "Which capability starts and owns the listening server after `create_app` builds the application?",
+   "options": [
+    "`create_app` also binds and serves",
+    "a deployment or web-server capability receives the app and serves it",
+    "a separate `deliverer_api` capability binds and serves"
+   ],
+   "default_guess": "Have the deployment's web server receive the app from `create_app` and bind it to loopback.",
+   "witness": {
+    "initial": "The configuration, token and connections file are valid, but the loopback port is already occupied.",
+    "events": [
+     "The deployment calls `load_config` and `read_token`.",
+     "It calls `create_app`.",
+     "The implementation reaches the phrase that the service listens."
+    ],
+    "outcomes": [
+     "`create_app` attempts the bind and fails, so startup ends.",
+     "`create_app` succeeds and returns an app; a separate server operation attempts the bind and reports the failure."
+    ],
+    "observer": "the deployment operator and startup supervisor"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:scan_project_photos`",
+   "subject": "placement and mark record reads during a scan",
+   "kind": "unstated failure",
+   "text": "For each `ready` file, `capability:delivery_store.read_placement` and `capability:delivery_store.read_mark` complete its status by A1 orders 7 to 9.",
+   "question": "What does the scan return when a placement or mark record cannot be read, is malformed, or contains an unsafe reference?",
+   "options": [
+    "refuse the whole scan with `unsafe_reference`",
+    "refuse the whole scan with another stated refusal",
+    "report the affected file as `rejected`",
+    "treat the unreadable record as absent",
+    "fail outside the designed answer model"
+   ],
+   "default_guess": "Refuse the whole scan with `unsafe_reference` and return no partial scan.",
+   "witness": {
+    "initial": "The source folder contains one valid photo, and its placement record exists but contains a file reference outside the binary store.",
+    "events": [
+     "The calling agent requests a scan.",
+     "`observe_source_files` reports the photo as a candidate.",
+     "`read_placement` reads the unsafe record."
+    ],
+    "outcomes": [
+     "The whole scan is refused with `unsafe_reference`.",
+     "The record is treated as absent and the photo is reported `ready`."
+    ],
+    "observer": "the calling agent and owner"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:deliver_one_photo`",
+   "subject": "existing placement and mark record reads",
+   "kind": "unstated failure",
+   "text": "`capability:delivery_store.read_placement` finds an existing placement. If there is one, `capability:delivery_store.read_mark` supplies its `photo_id` and the flow answers `replayed`.",
+   "question": "What outcome and failure member result when `read_placement` or `read_mark` cannot read or validate its record?",
+   "options": [
+    "refuse the whole request with `unsafe_reference`",
+    "return a `failed` M06 with a specified `PlacementFailure`",
+    "treat the record as absent and attempt a new placement or publication",
+    "fail outside the designed answer model"
+   ],
+   "default_guess": "Refuse the whole request with `unsafe_reference`; do not overwrite or reinterpret the existing state.",
+   "witness": {
+    "initial": "A placement record for the requested source exists but is malformed or refers outside the binary store.",
+    "events": [
+     "The calling agent requests delivery of the same source.",
+     "The flow takes the project lock.",
+     "`read_placement` encounters the invalid record."
+    ],
+    "outcomes": [
+     "The request is refused and the record is left untouched.",
+     "The record is treated as absent and the flow writes or returns a new placement."
+    ],
+    "observer": "the calling agent and the operator inspecting durable state"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ownership of delivery request validation",
+   "kind": "contradiction",
+   "text": "State 4 says, \"`module:object_connections` and `module:photo_delivery` refuse the whole request as A3 rule 4 orders it.\" State 3 says, \"A3 | rule 4, the request form of a placement | `deliverer_api`\" and assigns the source-id check to `photo_delivery`.",
+   "question": "Which module validates and refuses each part of A3 rule 4: token, request form, project id, connection, photo folder and source id?",
+   "options": [
+    "`deliverer_api` validates token, form and project id; `object_connections` validates connection and folder; `photo_delivery` validates source id",
+    "`object_connections` and `photo_delivery` validate the whole request as State 4 says",
+    "another explicit division"
+   ],
+   "default_guess": "Use the State 3 division: API for token/form/project id, object connections for connection/folder, and photo delivery for source id."
+  },
+  {
+   "unit": "40_flows.md:`flow:record_publication`",
+   "subject": "publication-state reads and write",
+   "kind": "unstated failure",
+   "text": "`capability:delivery_store.read_placement` requires a placement of this project. `capability:delivery_store.read_mark` finds an existing mark. The same `photo_id` answers `replayed`. Without a mark, `capability:delivery_store.write_mark` writes it, and the lock is released.",
+   "question": "What answer is produced when a placement or mark record cannot be read or validated, or when `write_mark` fails?",
+   "options": [
+    "refuse with `unsafe_reference` for invalid stored state and a separate stated outcome for write failure",
+    "use one existing refusal code for every storage failure",
+    "return an M07-like failed result",
+    "treat unreadable state as absent and continue",
+    "fail outside the designed answer model"
+   ],
+   "default_guess": "Refuse invalid stored state with `unsafe_reference`; define a distinct operation failure for a failed mark write, leaving no mark.",
+   "witness": {
+    "initial": "A valid placement exists and no mark exists, but the state directory becomes unwritable.",
+    "events": [
+     "The calling agent reports the Portal `photo_id`.",
+     "The flow validates the request, reads the clock and connection, and takes the lock.",
+     "`write_mark` fails."
+    ],
+    "outcomes": [
+     "The caller receives a designed refusal or failure and can retry.",
+     "The request terminates outside the answer model even though the Portal photo already exists."
+    ],
+    "observer": "the calling agent and owner"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "photo-folder availability when recording publication",
+   "kind": "contradiction",
+   "text": "State 4 says, \"`module:object_connections` refuses as in the scan.\" State 2 A4 rule 2 says, \"The photo folder need not be available.\"",
+   "question": "Does recording a publication check only the connections-file record, or does it also require the project's photo folder to be available as a scan does?",
+   "options": [
+    "check the connection record only; the photo folder may be unavailable",
+    "perform the scan's photo-folder availability check and refuse with `folder_unavailable`"
+   ],
+   "default_guess": "Check the connection record only and do not require the photo folder.",
+   "witness": {
+    "initial": "The connection is valid and confirmed, the placement exists, the Portal publication succeeded, and the photo folder has since become unavailable.",
+    "events": [
+     "The calling agent calls `mark_photo_published` with the valid source and Portal photo ids."
+    ],
+    "outcomes": [
+     "The mark is written because A4 says the photo folder need not be available.",
+     "The call is refused with `folder_unavailable` because object connections refuses as in the scan."
+    ],
+    "observer": "the calling agent, owner and later scans"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "Portal staff-photo-list read",
+   "kind": "missing capability",
+   "text": "The agent reads the project's staff photo list in the Portal.",
+   "question": "Which Portal operation does the agent call, and what exact result supplies the photo dates checked by A11?",
+   "options": [
+    "a named existing Portal staff-list operation",
+    "a new kernel or Portal adapter operation",
+    "a direct database read by the agent"
+   ],
+   "default_guess": "Call a named authenticated Portal staff-photo-list operation through the kernel's Portal adapter.",
+   "witness": {
+    "initial": "The project has existing Portal photos, one of which may carry an old offset date.",
+    "events": [
+     "The owner starts delivery.",
+     "The agent must perform the pre-delivery date check."
+    ],
+    "outcomes": [
+     "The agent calls a defined Portal operation whose response is sufficient to inspect every `photo_date`.",
+     "The implementer chooses an unstated route, query or direct data access with different coverage."
+    ],
+    "observer": "the owner and Portal operator"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "photos eligible for owner selection",
+   "kind": "vague selection rule",
+   "text": "It calls `capability:photo_delivery.scan_project_photos` and shows the owner what can be delivered. The owner chooses. For each chosen file that is not yet published, it calls `capability:photo_delivery.deliver_project_photo`.",
+   "question": "Which scan statuses may the owner choose: only `ready`, both `ready` and `placed`, or every status except `published`?",
+   "options": [
+    "`ready` only",
+    "`ready` and `placed`",
+    "all statuses except `published`",
+    "all reported files, with rejected files handled specially"
+   ],
+   "default_guess": "Allow `ready` and `placed`; exclude `rejected` and `published`.",
+   "witness": {
+    "initial": "A previous run placed a photo but stopped before publishing it, so the next scan reports it as `placed`.",
+    "events": [
+     "The owner starts delivery again.",
+     "The scan reports the file as `placed`.",
+     "The workplace constructs the selectable list."
+    ],
+    "outcomes": [
+     "The placed file is selectable and the flow can publish and mark it.",
+     "Only `ready` files are selectable, so the unmarked placement cannot be completed through this flow."
+    ],
+    "observer": "the owner"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "scan refusal handling",
+   "kind": "unstated failure",
+   "text": "It calls `capability:photo_delivery.scan_project_photos` and shows the owner what can be delivered.",
+   "question": "What does the owner flow do and report when the scan is refused with `unknown_project`, `connection_not_confirmed` or `folder_unavailable`?",
+   "options": [
+    "stop the project and show the refusal reason to the owner",
+    "retry according to a stated policy",
+    "continue with cached or previously observed files",
+    "turn the refusal into a generic run failure"
+   ],
+   "default_guess": "Stop before selection and show the exact refusal reason to the owner.",
+   "witness": {
+    "initial": "The owner starts delivery for a project whose connection was just cleared.",
+    "events": [
+     "The staff photo-list check succeeds.",
+     "The agent calls the scan.",
+     "The scan returns `connection_not_confirmed`."
+    ],
+    "outcomes": [
+     "The owner is told that the connection is unconfirmed and nothing else runs.",
+     "The agent retries, shows an empty list, or reports an unspecified generic failure."
+    ],
+    "observer": "the owner"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "whole-request refusal from delivery",
+   "kind": "unstated failure",
+   "text": "For each chosen file that is not yet published, it calls `capability:photo_delivery.deliver_project_photo`. A failed photo is noted and the agent goes on with the next one.",
+   "question": "Does \"A failed photo\" include a whole-request refusal, and if not, what does the flow do when delivery is refused rather than returning a `failed` M06?",
+   "options": [
+    "record the refusal as that photo's failure and continue",
+    "stop the entire project run",
+    "retry the call according to a stated policy",
+    "distinguish authentication and project-level refusals from per-photo refusals"
+   ],
+   "default_guess": "For a project-level or authentication refusal, stop the run and tell the owner; for a photo-specific failed M06, record it and continue.",
+   "witness": {
+    "initial": "The owner chooses two photos, then the connection is cleared before the first delivery call.",
+    "events": [
+     "The scan and selection succeed.",
+     "The first `deliver_project_photo` call is refused with `connection_not_confirmed`."
+    ],
+    "outcomes": [
+     "The run stops because the refusal affects the whole project.",
+     "The refusal is recorded only against the first photo and the agent calls delivery for the second photo."
+    ],
+    "observer": "the owner"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "Portal publication refusal",
+   "kind": "unstated failure",
+   "text": "Otherwise the agent sends the publication body to the Portal's `photo.publish`.",
+   "question": "What result, retry behavior and owner message follow when `photo.publish` refuses or fails for reasons other than the specifically described 409 after the photo was shown?",
+   "options": [
+    "mark that photo failed with the Portal reason and continue",
+    "retry specified temporary Portal failures",
+    "stop the project run",
+    "hand every Portal refusal to the owner"
+   ],
+   "default_guess": "Report the photo as failed with the Portal reason, do not mark it, and continue; retry only failures explicitly classified as temporary.",
+   "witness": {
+    "initial": "A chosen photo has been placed and is not marked, but the Portal returns a non-409 refusal from `photo.publish`.",
+    "events": [
+     "The agent receives the placement and publication body.",
+     "It calls `photo.publish`.",
+     "The Portal refuses the call."
+    ],
+    "outcomes": [
+     "The photo is reported failed and the agent continues with the next choice.",
+     "The run stops or repeatedly retries the publication."
+    ],
+    "observer": "the owner"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "publication-mark refusal or storage failure",
+   "kind": "unstated failure",
+   "text": "It reports the Portal's `photo_id` through `capability:photo_delivery.mark_photo_published`.",
+   "question": "What does the owner flow do when marking is refused or fails after the Portal has already created the hidden photo?",
+   "options": [
+    "report an incomplete published-but-unmarked result and retry marking",
+    "repeat publication and then marking",
+    "stop the run and hand the photo to the owner",
+    "treat the photo as delivered despite the missing mark"
+   ],
+   "default_guess": "Report it as published but unmarked, retain the returned `photo_id` for the current attempt, and retry only the mark before publishing again.",
+   "witness": {
+    "initial": "The Portal has successfully created a hidden photo, but the connection file becomes unavailable before marking.",
+    "events": [
+     "`photo.publish` returns a `photo_id`.",
+     "The agent calls `mark_photo_published`.",
+     "The mark call is refused with `folder_unavailable` or fails to write."
+    ],
+    "outcomes": [
+     "The agent reports an incomplete state and retries marking without creating another Portal photo.",
+     "The agent reports success, failure, or hands off without preserving the distinction."
+    ],
+    "observer": "the owner and the next delivery run"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "retry policy",
+   "kind": "undecided policy",
+   "text": "The agent decides what to repeat.",
+   "question": "Which scan, delivery, Portal-publication and mark failures are retried, with what delay or attempt limit, and which are immediately final?",
+   "options": [
+    "no automatic retries; the owner starts another run",
+    "retry only explicitly classified temporary failures with bounded attempts",
+    "retry every failure until success",
+    "use different policies for scan, placement, Portal publication and marking"
+   ],
+   "default_guess": "Use bounded retries only for explicitly classified temporary transport or I/O failures; never automatically retry validation, connection, conflict or content failures.",
+   "witness": {
+    "initial": "A delivery call encounters a temporary service or Portal outage that clears shortly afterward.",
+    "events": [
+     "The owner has selected several photos.",
+     "One operation fails transiently.",
+     "The agent applies its unstated repeat decision."
+    ],
+    "outcomes": [
+     "The agent retries and completes the photo during the same run.",
+     "The agent records a failure immediately and proceeds or stops."
+    ],
+    "observer": "the owner"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_delivery`",
+   "subject": "showing a delivered photo",
+   "kind": "missing step boundary",
+   "text": "The owner shows a delivered photo with the Portal's own operation.",
+   "question": "Is showing the photo a step of `flow:owner_delivery` or a separate later owner action, and what named Portal operation performs it?",
+   "options": [
+    "the flow ends with the photo hidden; showing is a separate owner-triggered Portal action",
+    "the owner-delivery flow waits for review and then calls a named show operation",
+    "the flow automatically shows the photo after delivery"
+   ],
+   "default_guess": "End owner delivery with the photo hidden; make review and the named Portal show operation a separate owner-triggered action.",
+   "witness": {
+    "initial": "A selected photo has been placed, published hidden and marked successfully.",
+    "events": [
+     "The agent reports the delivery result to the owner.",
+     "The implementation interprets the final outcome sentence."
+    ],
+    "outcomes": [
+     "The flow ends while the photo remains hidden until the owner separately shows it.",
+     "The flow continues into a show action and the client can see the photo before a separate later action."
+    ],
+    "observer": "the owner and client"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:`flow:service_start`\",\"subject\":\"service listening operation\",\"kind\":\"missing capability\",\"text\":\"`capability:deliverer_api.create_app` builds the HTTP surface with the token and the clock, and the service listens on the loopback interface.\",\"question\":\"Which capability starts and owns the listening server after `create_app` builds the application?\",\"options\":[\"`create_app` also binds and serves\",\"a deployment or web-server capability receives the app and serves it\",\"a separate `deliverer_api` capability binds and serves\"],\"default_guess\":\"Have the deployment's web server receive the app from `create_app` and bind it to loopback.\",\"witness\":{\"initial\":\"The configuration, token and connections file are valid, but the loopback port is already occupied.\",\"events\":[\"The deployment calls `load_config` and `read_token`.\",\"It calls `create_app`.\",\"The implementation reaches the phrase that the service listens.\"],\"outcomes\":[\"`create_app` attempts the bind and fails, so startup ends.\",\"`create_app` succeeds and returns an app; a separate server operation attempts the bind and reports the failure.\"],\"observer\":\"the deployment operator and startup supervisor\"}},{\"unit\":\"40_flows.md:`flow:scan_project_photos`\",\"subject\":\"placement and mark record reads during a scan\",\"kind\":\"unstated failure\",\"text\":\"For each `ready` file, `capability:delivery_store.read_placement` and `capability:delivery_store.read_mark` complete its status by A1 orders 7 to 9.\",\"question\":\"What does the scan return when a placement or mark record cannot be read, is malformed, or contains an unsafe reference?\",\"options\":[\"refuse the whole scan with `unsafe_reference`\",\"refuse the whole scan with another stated refusal\",\"report the affected file as `rejected`\",\"treat the unreadable record as absent\",\"fail outside the designed answer model\"],\"default_guess\":\"Refuse the whole scan with `unsafe_reference` and return no partial scan.\",\"witness\":{\"initial\":\"The source folder contains one valid photo, and its placement record exists but contains a file reference outside the binary store.\",\"events\":[\"The calling agent requests a scan.\",\"`observe_source_files` reports the photo as a candidate.\",\"`read_placement` reads the unsafe record.\"],\"outcomes\":[\"The whole scan is refused with `unsafe_reference`.\",\"The record is treated as absent and the photo is reported `ready`.\"],\"observer\":\"the calling agent and owner\"}},{\"unit\":\"40_flows.md:`flow:deliver_one_photo`\",\"subject\":\"existing placement and mark record reads\",\"kind\":\"unstated failure\",\"text\":\"`capability:delivery_store.read_placement` finds an existing placement. If there is one, `capability:delivery_store.read_mark` supplies its `photo_id` and the flow answers `replayed`.\",\"question\":\"What outcome and failure member result when `read_placement` or `read_mark` cannot read or validate its record?\",\"options\":[\"refuse the whole request with `unsafe_reference`\",\"return a `failed` M06 with a specified `PlacementFailure`\",\"treat the record as absent and attempt a new placement or publication\",\"fail outside the designed answer model\"],\"default_guess\":\"Refuse the whole request with `unsafe_reference`; do not overwrite or reinterpret the existing state.\",\"witness\":{\"initial\":\"A placement record for the requested source exists but is malformed or refers outside the binary store.\",\"events\":[\"The calling agent requests delivery of the same source.\",\"The flow takes the project lock.\",\"`read_placement` encounters the invalid record.\"],\"outcomes\":[\"The request is refused and the record is left untouched.\",\"The record is treated as absent and the flow writes or returns a new placement.\"],\"observer\":\"the calling agent and the operator inspecting durable state\"}},{\"unit\":\"context\",\"subject\":\"ownership of delivery request validation\",\"kind\":\"contradiction\",\"text\":\"State 4 says, \\\"`module:object_connections` and `module:photo_delivery` refuse the whole request as A3 rule 4 orders it.\\\" State 3 says, \\\"A3 | rule 4, the request form of a placement | `deliverer_api`\\\" and assigns the source-id check to `photo_delivery`.\",\"question\":\"Which module validates and refuses each part of A3 rule 4: token, request form, project id, connection, photo folder and source id?\",\"options\":[\"`deliverer_api` validates token, form and project id; `object_connections` validates connection and folder; `photo_delivery` validates source id\",\"`object_connections` and `photo_delivery` validate the whole request as State 4 says\",\"another explicit division\"],\"default_guess\":\"Use the State 3 division: API for token/form/project id, object connections for connection/folder, and photo delivery for source id.\"},{\"unit\":\"40_flows.md:`flow:record_publication`\",\"subject\":\"publication-state reads and write\",\"kind\":\"unstated failure\",\"text\":\"`capability:delivery_store.read_placement` requires a placement of this project. `capability:delivery_store.read_mark` finds an existing mark. The same `photo_id` answers `replayed`. Without a mark, `capability:delivery_store.write_mark` writes it, and the lock is released.\",\"question\":\"What answer is produced when a placement or mark record cannot be read or validated, or when `write_mark` fails?\",\"options\":[\"refuse with `unsafe_reference` for invalid stored state and a separate stated outcome for write failure\",\"use one existing refusal code for every storage failure\",\"return an M07-like failed result\",\"treat unreadable state as absent and continue\",\"fail outside the designed answer model\"],\"default_guess\":\"Refuse invalid stored state with `unsafe_reference`; define a distinct operation failure for a failed mark write, leaving no mark.\",\"witness\":{\"initial\":\"A valid placement exists and no mark exists, but the state directory becomes unwritable.\",\"events\":[\"The calling agent reports the Portal `photo_id`.\",\"The flow validates the request, reads the clock and connection, and takes the lock.\",\"`write_mark` fails.\"],\"outcomes\":[\"The caller receives a designed refusal or failure and can retry.\",\"The request terminates outside the answer model even though the Portal photo already exists.\"],\"observer\":\"the calling agent and owner\"}},{\"unit\":\"context\",\"subject\":\"photo-folder availability when recording publication\",\"kind\":\"contradiction\",\"text\":\"State 4 says, \\\"`module:object_connections` refuses as in the scan.\\\" State 2 A4 rule 2 says, \\\"The photo folder need not be available.\\\"\",\"question\":\"Does recording a publication check only the connections-file record, or does it also require the project's photo folder to be available as a scan does?\",\"options\":[\"check the connection record only; the photo folder may be unavailable\",\"perform the scan's photo-folder availability check and refuse with `folder_unavailable`\"],\"default_guess\":\"Check the connection record only and do not require the photo folder.\",\"witness\":{\"initial\":\"The connection is valid and confirmed, the placement exists, the Portal publication succeeded, and the photo folder has since become unavailable.\",\"events\":[\"The calling agent calls `mark_photo_published` with the valid source and Portal photo ids.\"],\"outcomes\":[\"The mark is written because A4 says the photo folder need not be available.\",\"The call is refused with `folder_unavailable` because object connections refuses as in the scan.\"],\"observer\":\"the calling agent, owner and later scans\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"Portal staff-photo-list read\",\"kind\":\"missing capability\",\"text\":\"The agent reads the project's staff photo list in the Portal.\",\"question\":\"Which Portal operation does the agent call, and what exact result supplies the photo dates checked by A11?\",\"options\":[\"a named existing Portal staff-list operation\",\"a new kernel or Portal adapter operation\",\"a direct database read by the agent\"],\"default_guess\":\"Call a named authenticated Portal staff-photo-list operation through the kernel's Portal adapter.\",\"witness\":{\"initial\":\"The project has existing Portal photos, one of which may carry an old offset date.\",\"events\":[\"The owner starts delivery.\",\"The agent must perform the pre-delivery date check.\"],\"outcomes\":[\"The agent calls a defined Portal operation whose response is sufficient to inspect every `photo_date`.\",\"The implementer chooses an unstated route, query or direct data access with different coverage.\"],\"observer\":\"the owner and Portal operator\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"photos eligible for owner selection\",\"kind\":\"vague selection rule\",\"text\":\"It calls `capability:photo_delivery.scan_project_photos` and shows the owner what can be delivered. The owner chooses. For each chosen file that is not yet published, it calls `capability:photo_delivery.deliver_project_photo`.\",\"question\":\"Which scan statuses may the owner choose: only `ready`, both `ready` and `placed`, or every status except `published`?\",\"options\":[\"`ready` only\",\"`ready` and `placed`\",\"all statuses except `published`\",\"all reported files, with rejected files handled specially\"],\"default_guess\":\"Allow `ready` and `placed`; exclude `rejected` and `published`.\",\"witness\":{\"initial\":\"A previous run placed a photo but stopped before publishing it, so the next scan reports it as `placed`.\",\"events\":[\"The owner starts delivery again.\",\"The scan reports the file as `placed`.\",\"The workplace constructs the selectable list.\"],\"outcomes\":[\"The placed file is selectable and the flow can publish and mark it.\",\"Only `ready` files are selectable, so the unmarked placement cannot be completed through this flow.\"],\"observer\":\"the owner\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"scan refusal handling\",\"kind\":\"unstated failure\",\"text\":\"It calls `capability:photo_delivery.scan_project_photos` and shows the owner what can be delivered.\",\"question\":\"What does the owner flow do and report when the scan is refused with `unknown_project`, `connection_not_confirmed` or `folder_unavailable`?\",\"options\":[\"stop the project and show the refusal reason to the owner\",\"retry according to a stated policy\",\"continue with cached or previously observed files\",\"turn the refusal into a generic run failure\"],\"default_guess\":\"Stop before selection and show the exact refusal reason to the owner.\",\"witness\":{\"initial\":\"The owner starts delivery for a project whose connection was just cleared.\",\"events\":[\"The staff photo-list check succeeds.\",\"The agent calls the scan.\",\"The scan returns `connection_not_confirmed`.\"],\"outcomes\":[\"The owner is told that the connection is unconfirmed and nothing else runs.\",\"The agent retries, shows an empty list, or reports an unspecified generic failure.\"],\"observer\":\"the owner\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"whole-request refusal from delivery\",\"kind\":\"unstated failure\",\"text\":\"For each chosen file that is not yet published, it calls `capability:photo_delivery.deliver_project_photo`. A failed photo is noted and the agent goes on with the next one.\",\"question\":\"Does \\\"A failed photo\\\" include a whole-request refusal, and if not, what does the flow do when delivery is refused rather than returning a `failed` M06?\",\"options\":[\"record the refusal as that photo's failure and continue\",\"stop the entire project run\",\"retry the call according to a stated policy\",\"distinguish authentication and project-level refusals from per-photo refusals\"],\"default_guess\":\"For a project-level or authentication refusal, stop the run and tell the owner; for a photo-specific failed M06, record it and continue.\",\"witness\":{\"initial\":\"The owner chooses two photos, then the connection is cleared before the first delivery call.\",\"events\":[\"The scan and selection succeed.\",\"The first `deliver_project_photo` call is refused with `connection_not_confirmed`.\"],\"outcomes\":[\"The run stops because the refusal affects the whole project.\",\"The refusal is recorded only against the first photo and the agent calls delivery for the second photo.\"],\"observer\":\"the owner\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"Portal publication refusal\",\"kind\":\"unstated failure\",\"text\":\"Otherwise the agent sends the publication body to the Portal's `photo.publish`.\",\"question\":\"What result, retry behavior and owner message follow when `photo.publish` refuses or fails for reasons other than the specifically described 409 after the photo was shown?\",\"options\":[\"mark that photo failed with the Portal reason and continue\",\"retry specified temporary Portal failures\",\"stop the project run\",\"hand every Portal refusal to the owner\"],\"default_guess\":\"Report the photo as failed with the Portal reason, do not mark it, and continue; retry only failures explicitly classified as temporary.\",\"witness\":{\"initial\":\"A chosen photo has been placed and is not marked, but the Portal returns a non-409 refusal from `photo.publish`.\",\"events\":[\"The agent receives the placement and publication body.\",\"It calls `photo.publish`.\",\"The Portal refuses the call.\"],\"outcomes\":[\"The photo is reported failed and the agent continues with the next choice.\",\"The run stops or repeatedly retries the publication.\"],\"observer\":\"the owner\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"publication-mark refusal or storage failure\",\"kind\":\"unstated failure\",\"text\":\"It reports the Portal's `photo_id` through `capability:photo_delivery.mark_photo_published`.\",\"question\":\"What does the owner flow do when marking is refused or fails after the Portal has already created the hidden photo?\",\"options\":[\"report an incomplete published-but-unmarked result and retry marking\",\"repeat publication and then marking\",\"stop the run and hand the photo to the owner\",\"treat the photo as delivered despite the missing mark\"],\"default_guess\":\"Report it as published but unmarked, retain the returned `photo_id` for the current attempt, and retry only the mark before publishing again.\",\"witness\":{\"initial\":\"The Portal has successfully created a hidden photo, but the connection file becomes unavailable before marking.\",\"events\":[\"`photo.publish` returns a `photo_id`.\",\"The agent calls `mark_photo_published`.\",\"The mark call is refused with `folder_unavailable` or fails to write.\"],\"outcomes\":[\"The agent reports an incomplete state and retries marking without creating another Portal photo.\",\"The agent reports success, failure, or hands off without preserving the distinction.\"],\"observer\":\"the owner and the next delivery run\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"retry policy\",\"kind\":\"undecided policy\",\"text\":\"The agent decides what to repeat.\",\"question\":\"Which scan, delivery, Portal-publication and mark failures are retried, with what delay or attempt limit, and which are immediately final?\",\"options\":[\"no automatic retries; the owner starts another run\",\"retry only explicitly classified temporary failures with bounded attempts\",\"retry every failure until success\",\"use different policies for scan, placement, Portal publication and marking\"],\"default_guess\":\"Use bounded retries only for explicitly classified temporary transport or I/O failures; never automatically retry validation, connection, conflict or content failures.\",\"witness\":{\"initial\":\"A delivery call encounters a temporary service or Portal outage that clears shortly afterward.\",\"events\":[\"The owner has selected several photos.\",\"One operation fails transiently.\",\"The agent applies its unstated repeat decision.\"],\"outcomes\":[\"The agent retries and completes the photo during the same run.\",\"The agent records a failure immediately and proceeds or stops.\"],\"observer\":\"the owner\"}},{\"unit\":\"40_flows.md:`flow:owner_delivery`\",\"subject\":\"showing a delivered photo\",\"kind\":\"missing step boundary\",\"text\":\"The owner shows a delivered photo with the Portal's own operation.\",\"question\":\"Is showing the photo a step of `flow:owner_delivery` or a separate later owner action, and what named Portal operation performs it?\",\"options\":[\"the flow ends with the photo hidden; showing is a separate owner-triggered Portal action\",\"the owner-delivery flow waits for review and then calls a named show operation\",\"the flow automatically shows the photo after delivery\"],\"default_guess\":\"End owner delivery with the photo hidden; make review and the named Portal show operation a separate owner-triggered action.\",\"witness\":{\"initial\":\"A selected photo has been placed, published hidden and marked successfully.\",\"events\":[\"The agent reports the delivery result to the owner.\",\"The implementation interprets the final outcome sentence.\"],\"outcomes\":[\"The flow ends while the photo remains hidden until the owner separately shows it.\",\"The flow continues into a show action and the client can see the photo before a separate later action.\"],\"observer\":\"the owner and client\"}}]}",
+ "set_aside": []
+}

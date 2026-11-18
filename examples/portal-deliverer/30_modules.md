@@ -103,6 +103,7 @@ names the owner of each rule.
 | Invariant | Owner |
 |---|---|
 | INV-01, INV-02, INV-18 | `source_folder` |
+| INV-20 | `delivery_store` |
 | INV-03, INV-04, INV-05, INV-14 | `photo_preparation` |
 | INV-06, INV-07, INV-08, INV-12, INV-13, INV-19 | `photo_delivery` |
 | INV-09, INV-11 | `deliverer_api` |
@@ -290,11 +291,12 @@ build_publication
 - atomic writing of one file;
 - the reference of a stored image and its containment in the binary store;
 - the per-project lock across processes;
-- reading and writing placement and mark records.
+- reading and writing placement and mark records, and refusing with `state_unavailable` when a record, the
+  lock or a mark cannot be used (A6 rule 5).
 
 ### Knows
 
-- rules 1 to 3 of A6 and the lock of rule 4.
+- rules 1 to 3 and 5 of A6 and the lock of rule 4.
 
 ### Hides
 
