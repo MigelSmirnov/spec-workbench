@@ -1,0 +1,177 @@
+{
+ "open_points": [
+  {
+   "subject": "A2 DateTimeOriginal offset parsing",
+   "kind": "validity_boundary",
+   "text": "`DateTimeOriginal` uses `OffsetTimeOriginal` when that offset has the form `+HH:MM` or `-HH:MM`; otherwise it is read in the configured time zone",
+   "question": "Must `HH` and `MM` also be within valid UTC-offset ranges, and if a shape-matching but impossible offset is present, is it ignored or does it make `DateTimeOriginal` unusable?",
+   "options": [
+    "Validate the sign, digits and permitted offset ranges; an impossible offset makes `DateTimeOriginal` unusable",
+    "Test only the textual shape and ignore an unusable offset by interpreting `DateTimeOriginal` in the configured time zone",
+    "Accept every numeric `HH:MM` shape as an offset"
+   ],
+   "default_guess": "Validate the offset semantically and treat a shape-matching but impossible offset as making `DateTimeOriginal` unusable.",
+   "witness": {
+    "initial": "A source has valid `DateTimeOriginal` 2026:06:01 12:00:00, `OffsetTimeOriginal` +99:99, a different valid EXIF `DateTime`, and a plausible modification time.",
+    "events": [
+     "The calling flow asks the deliverer to place the source photo."
+    ],
+    "outcomes": [
+     "The impossible offset is ignored and `DateTimeOriginal` is interpreted in Europe/Madrid.",
+     "`DateTimeOriginal` is unusable, so the different EXIF `DateTime` supplies the photo moment."
+    ],
+    "observer": "The calling flow and Portal observe different `photo_date` values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 refusal precedence",
+   "kind": "check_precedence",
+   "text": "On each scan and placement the photo folder must be a folder whose resolved path is strictly below the resolved root, otherwise the operation is refused with `folder_unavailable`.",
+   "question": "When a connection is unconfirmed and its resolved photo folder is also outside the root, must the service return `connection_not_confirmed` or `folder_unavailable`?",
+   "options": [
+    "Check connection existence and confirmation before resolving or inspecting its folders",
+    "Check folder validity before confirmation",
+    "Specify a different fixed precedence"
+   ],
+   "default_guess": "Return `connection_not_confirmed` before inspecting the folder.",
+   "witness": {
+    "initial": "A project has an unconfirmed connection whose photo subfolder resolves through a symbolic link to a directory outside the resolved root.",
+    "events": [
+     "The calling flow sends an authenticated scan request for the project."
+    ],
+    "outcomes": [
+     "Rule 6 is checked first and the request is refused with `connection_not_confirmed`.",
+     "Rule 7 is checked first and the request is refused with `folder_unavailable`."
+    ],
+    "observer": "The calling flow sees a different refusal code."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M01 and A5 invoice-subfolder containment",
+   "kind": "validation_scope",
+   "text": "The photo and invoice subfolders are non-empty relative paths without `..` and are not the root itself. The service does not start with a connection that breaks this.",
+   "question": "Must startup resolve the invoice subfolder and refuse a connection whose invoice path escapes through a symbolic link, as M01's statement that both subfolders stay inside the root appears to require, or is resolved containment checked only for the photo folder?",
+   "options": [
+    "Resolve and validate both subfolders at startup",
+    "Apply resolved containment only to the photo folder because the deliverer does not use the invoice folder",
+    "Treat lexical relative-path validation as sufficient for the invoice folder"
+   ],
+   "default_guess": "Resolve and validate both subfolders at startup.",
+   "witness": {
+    "initial": "A confirmed connection has a valid photo folder, while its lexically valid invoice subfolder is a symbolic link to a directory outside the resolved root.",
+    "events": [
+     "The operator starts the deliverer with this connection file."
+    ],
+    "outcomes": [
+     "The service does not start because M01 says both subfolders stay inside the root.",
+     "The service starts because A5 explicitly performs the resolved-path check only for the photo folder."
+    ],
+    "observer": "The operator sees whether the service starts."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 placement list semantics",
+   "kind": "duplicate_input",
+   "text": "One placement call holds the lock for its whole list of photos.",
+   "question": "What result must a placement call produce when the same `source_id` occurs more than once in its list, and in what order are per-item results returned?",
+   "options": [
+    "Preserve input order and return `placed` for the first occurrence and `replayed` for later occurrences",
+    "Deduplicate the list and return one outcome for the source",
+    "Reject a request containing duplicate source ids"
+   ],
+   "default_guess": "Preserve input order and return one outcome per occurrence: first `placed`, then `replayed`.",
+   "witness": {
+    "initial": "A ready source has no existing placement.",
+    "events": [
+     "The calling flow submits one placement call whose list contains the same source id twice."
+    ],
+    "outcomes": [
+     "The answer contains two ordered outcomes, `placed` followed by `replayed`.",
+     "The service deduplicates the list and returns one `placed` outcome."
+    ],
+    "observer": "The calling flow sees a different number and sequence of outcomes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 timestamp representation",
+   "kind": "serialization_format",
+   "text": "The current time is a `datetime` in UTC without an offset, with microsecond precision and no rounding, written in ISO 8601 form.",
+   "question": "Which exact ISO 8601 spelling must be written, including the date-time separator, whether six fractional digits are mandatory, and whether any UTC suffix is permitted despite the requirement for no offset?",
+   "options": [
+    "Use `YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six fractional digits and no suffix",
+    "Use any ISO 8601 representation of the same naive datetime, including a space separator or omitted trailing fractional zeros",
+    "Use a `Z` or `+00:00` suffix to make UTC explicit"
+   ],
+   "default_guess": "Write `YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six fractional digits and no suffix.",
+   "witness": {
+    "initial": "A mark is created at the UTC instant represented by the naive datetime 2026-11-18 09:10:11.120000.",
+    "events": [
+     "The calling flow records the publication.",
+     "The deliverer serializes `marked_at`."
+    ],
+    "outcomes": [
+     "The stored value is `2026-11-18T09:10:11.120000`.",
+     "The stored value is `2026-11-18 09:10:11.12`."
+    ],
+    "observer": "An operator inspecting the state record, and any strict downstream parser, sees the different representation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 INV-13 Required tests",
+   "kind": "invariant_test_scope",
+   "text": "INV-13: a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Which execution paths must the Required tests exercise to demonstrate the invariant that every operation reads the clock at most once, including refusals before the clock point, refusals after it, and replayed marks?",
+   "options": [
+    "Test successful calls, pre-clock refusals with zero reads, post-clock refusals and replays with one read, and assert that no tested path reads more than once",
+    "Test only one successful invocation of scan, placement and mark plus health",
+    "Use a structural check proving all operation paths pass through one clock-read site"
+   ],
+   "default_guess": "Require the explicit successful, pre-clock-refusal, post-clock-refusal and replay matrix, with every count asserted to be at most one.",
+   "unit": "?"
+  },
+  {
+   "subject": "A7 Required test and M07 replayed mark",
+   "kind": "contradiction",
+   "text": "`marked_at` equals that reading",
+   "question": "Is this equality required only when a fresh mark is created, or also for a replayed mark whose newly read clock value differs from the stored first mark that M07 says must not change?",
+   "options": [
+    "Apply the equality only to the call that creates the mark; a replay returns the original `marked_at`",
+    "Apply the equality to every mark call, replacing or returning `marked_at` from the replay's new clock reading"
+   ],
+   "default_guess": "Apply the equality only to a newly created mark and require a replay to return the original `marked_at`.",
+   "witness": {
+    "initial": "A publication mark already exists with `marked_at` equal to clock reading T1.",
+    "events": [
+     "At a later clock reading T2, the calling flow marks the same source with the same `photo_id` again."
+    ],
+    "outcomes": [
+     "M07's unchanged first mark is returned with `marked_at` T1.",
+     "A literal application of the A7 Required test returns or stores `marked_at` T2 so that it equals the replay's reading."
+    ],
+    "observer": "The calling flow sees a different `marked_at`, and the state record may differ."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 INV-10 Required tests",
+   "kind": "invariant_test_coverage",
+   "text": "INV-10: scan, place and mark are refused for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`), a connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).",
+   "question": "Must the Required tests also show that scan, placement and mark are refused with `unknown_project` when no connection exists, as required by INV-10 and normative rule 6?",
+   "options": [
+    "Add an absent-connection test for all three operations and assert `unknown_project`",
+    "Treat the unconfirmed-connection test as sufficient evidence for the whole invariant",
+    "Narrow INV-10 so it does not cover an absent connection"
+   ],
+   "default_guess": "Add an absent-connection test covering scan, placement and mark and asserting `unknown_project`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A2 DateTimeOriginal offset parsing\",\"kind\":\"validity_boundary\",\"text\":\"`DateTimeOriginal` uses `OffsetTimeOriginal` when that offset has the form `+HH:MM` or `-HH:MM`; otherwise it is read in the configured time zone\",\"question\":\"Must `HH` and `MM` also be within valid UTC-offset ranges, and if a shape-matching but impossible offset is present, is it ignored or does it make `DateTimeOriginal` unusable?\",\"options\":[\"Validate the sign, digits and permitted offset ranges; an impossible offset makes `DateTimeOriginal` unusable\",\"Test only the textual shape and ignore an unusable offset by interpreting `DateTimeOriginal` in the configured time zone\",\"Accept every numeric `HH:MM` shape as an offset\"],\"default_guess\":\"Validate the offset semantically and treat a shape-matching but impossible offset as making `DateTimeOriginal` unusable.\",\"witness\":{\"initial\":\"A source has valid `DateTimeOriginal` 2026:06:01 12:00:00, `OffsetTimeOriginal` +99:99, a different valid EXIF `DateTime`, and a plausible modification time.\",\"events\":[\"The calling flow asks the deliverer to place the source photo.\"],\"outcomes\":[\"The impossible offset is ignored and `DateTimeOriginal` is interpreted in Europe/Madrid.\",\"`DateTimeOriginal` is unusable, so the different EXIF `DateTime` supplies the photo moment.\"],\"observer\":\"The calling flow and Portal observe different `photo_date` values.\"}},{\"subject\":\"A5 refusal precedence\",\"kind\":\"check_precedence\",\"text\":\"On each scan and placement the photo folder must be a folder whose resolved path is strictly below the resolved root, otherwise the operation is refused with `folder_unavailable`.\",\"question\":\"When a connection is unconfirmed and its resolved photo folder is also outside the root, must the service return `connection_not_confirmed` or `folder_unavailable`?\",\"options\":[\"Check connection existence and confirmation before resolving or inspecting its folders\",\"Check folder validity before confirmation\",\"Specify a different fixed precedence\"],\"default_guess\":\"Return `connection_not_confirmed` before inspecting the folder.\",\"witness\":{\"initial\":\"A project has an unconfirmed connection whose photo subfolder resolves through a symbolic link to a directory outside the resolved root.\",\"events\":[\"The calling flow sends an authenticated scan request for the project.\"],\"outcomes\":[\"Rule 6 is checked first and the request is refused with `connection_not_confirmed`.\",\"Rule 7 is checked first and the request is refused with `folder_unavailable`.\"],\"observer\":\"The calling flow sees a different refusal code.\"}},{\"subject\":\"M01 and A5 invoice-subfolder containment\",\"kind\":\"validation_scope\",\"text\":\"The photo and invoice subfolders are non-empty relative paths without `..` and are not the root itself. The service does not start with a connection that breaks this.\",\"question\":\"Must startup resolve the invoice subfolder and refuse a connection whose invoice path escapes through a symbolic link, as M01's statement that both subfolders stay inside the root appears to require, or is resolved containment checked only for the photo folder?\",\"options\":[\"Resolve and validate both subfolders at startup\",\"Apply resolved containment only to the photo folder because the deliverer does not use the invoice folder\",\"Treat lexical relative-path validation as sufficient for the invoice folder\"],\"default_guess\":\"Resolve and validate both subfolders at startup.\",\"witness\":{\"initial\":\"A confirmed connection has a valid photo folder, while its lexically valid invoice subfolder is a symbolic link to a directory outside the resolved root.\",\"events\":[\"The operator starts the deliverer with this connection file.\"],\"outcomes\":[\"The service does not start because M01 says both subfolders stay inside the root.\",\"The service starts because A5 explicitly performs the resolved-path check only for the photo folder.\"],\"observer\":\"The operator sees whether the service starts.\"}},{\"subject\":\"A6 placement list semantics\",\"kind\":\"duplicate_input\",\"text\":\"One placement call holds the lock for its whole list of photos.\",\"question\":\"What result must a placement call produce when the same `source_id` occurs more than once in its list, and in what order are per-item results returned?\",\"options\":[\"Preserve input order and return `placed` for the first occurrence and `replayed` for later occurrences\",\"Deduplicate the list and return one outcome for the source\",\"Reject a request containing duplicate source ids\"],\"default_guess\":\"Preserve input order and return one outcome per occurrence: first `placed`, then `replayed`.\",\"witness\":{\"initial\":\"A ready source has no existing placement.\",\"events\":[\"The calling flow submits one placement call whose list contains the same source id twice.\"],\"outcomes\":[\"The answer contains two ordered outcomes, `placed` followed by `replayed`.\",\"The service deduplicates the list and returns one `placed` outcome.\"],\"observer\":\"The calling flow sees a different number and sequence of outcomes.\"}},{\"subject\":\"A7 timestamp representation\",\"kind\":\"serialization_format\",\"text\":\"The current time is a `datetime` in UTC without an offset, with microsecond precision and no rounding, written in ISO 8601 form.\",\"question\":\"Which exact ISO 8601 spelling must be written, including the date-time separator, whether six fractional digits are mandatory, and whether any UTC suffix is permitted despite the requirement for no offset?\",\"options\":[\"Use `YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six fractional digits and no suffix\",\"Use any ISO 8601 representation of the same naive datetime, including a space separator or omitted trailing fractional zeros\",\"Use a `Z` or `+00:00` suffix to make UTC explicit\"],\"default_guess\":\"Write `YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six fractional digits and no suffix.\",\"witness\":{\"initial\":\"A mark is created at the UTC instant represented by the naive datetime 2026-11-18 09:10:11.120000.\",\"events\":[\"The calling flow records the publication.\",\"The deliverer serializes `marked_at`.\"],\"outcomes\":[\"The stored value is `2026-11-18T09:10:11.120000`.\",\"The stored value is `2026-11-18 09:10:11.12`.\"],\"observer\":\"An operator inspecting the state record, and any strict downstream parser, sees the different representation.\"}},{\"subject\":\"A7 INV-13 Required tests\",\"kind\":\"invariant_test_scope\",\"text\":\"INV-13: a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Which execution paths must the Required tests exercise to demonstrate the invariant that every operation reads the clock at most once, including refusals before the clock point, refusals after it, and replayed marks?\",\"options\":[\"Test successful calls, pre-clock refusals with zero reads, post-clock refusals and replays with one read, and assert that no tested path reads more than once\",\"Test only one successful invocation of scan, placement and mark plus health\",\"Use a structural check proving all operation paths pass through one clock-read site\"],\"default_guess\":\"Require the explicit successful, pre-clock-refusal, post-clock-refusal and replay matrix, with every count asserted to be at most one.\"},{\"subject\":\"A7 Required test and M07 replayed mark\",\"kind\":\"contradiction\",\"text\":\"`marked_at` equals that reading\",\"question\":\"Is this equality required only when a fresh mark is created, or also for a replayed mark whose newly read clock value differs from the stored first mark that M07 says must not change?\",\"options\":[\"Apply the equality only to the call that creates the mark; a replay returns the original `marked_at`\",\"Apply the equality to every mark call, replacing or returning `marked_at` from the replay's new clock reading\"],\"default_guess\":\"Apply the equality only to a newly created mark and require a replay to return the original `marked_at`.\",\"witness\":{\"initial\":\"A publication mark already exists with `marked_at` equal to clock reading T1.\",\"events\":[\"At a later clock reading T2, the calling flow marks the same source with the same `photo_id` again.\"],\"outcomes\":[\"M07's unchanged first mark is returned with `marked_at` T1.\",\"A literal application of the A7 Required test returns or stores `marked_at` T2 so that it equals the replay's reading.\"],\"observer\":\"The calling flow sees a different `marked_at`, and the state record may differ.\"}},{\"subject\":\"A5 INV-10 Required tests\",\"kind\":\"invariant_test_coverage\",\"text\":\"INV-10: scan, place and mark are refused for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`), a connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).\",\"question\":\"Must the Required tests also show that scan, placement and mark are refused with `unknown_project` when no connection exists, as required by INV-10 and normative rule 6?\",\"options\":[\"Add an absent-connection test for all three operations and assert `unknown_project`\",\"Treat the unconfirmed-connection test as sufficient evidence for the whole invariant\",\"Narrow INV-10 so it does not cover an absent connection\"],\"default_guess\":\"Add an absent-connection test covering scan, placement and mark and asserting `unknown_project`.\"}]}",
+ "set_aside": []
+}

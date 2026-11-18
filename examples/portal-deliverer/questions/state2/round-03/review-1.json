@@ -1,0 +1,143 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 scan of the photo-folder root",
+   "kind": "uncovered_failure",
+   "text": "When a subfolder that is not ignored cannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is never reported as complete.",
+   "question": "What happens when the photo folder itself, rather than one of its subfolders, cannot be listed?",
+   "options": [
+    "Refuse the whole scan with `folder_unavailable`.",
+    "Return an empty or partial scan.",
+    "Fail with some other response."
+   ],
+   "default_guess": "Refuse the whole scan with `folder_unavailable`.",
+   "witness": {
+    "initial": "A confirmed connection names an existing photo folder strictly below the root, but the service can resolve it and cannot list its entries because listing is denied.",
+    "events": [
+     "The calling flow sends an authenticated scan request for the project.",
+     "The service validates that the resolved photo folder is a folder below the resolved root.",
+     "The service attempts to list the photo folder itself."
+    ],
+    "outcomes": [
+     "The scan is refused with `folder_unavailable`.",
+     "The implementation returns an empty scan or an unspecified internal failure because the stated refusal covers only an unlistable subfolder."
+    ],
+    "observer": "The calling flow and owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 subfolder replacement during traversal",
+   "kind": "contradictory_classification",
+   "text": "When a subfolder that is not ignored cannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is never reported as complete.\n\nIgnored names are not reported, ignored folders are not entered, and symbolic links are neither reported nor followed.",
+   "question": "If a discovered non-ignored subfolder is replaced by a symbolic link before it is entered, is the scan refused because the discovered subfolder cannot be listed, or does it skip the entry because it is now a symbolic link?",
+   "options": [
+    "Refuse the whole scan with `folder_unavailable`.",
+    "Skip the replacement symbolic link and complete the scan."
+   ],
+   "default_guess": "Recheck the entry without following it and refuse with `folder_unavailable`, because a directory selected for traversal changed before it could be listed.",
+   "witness": {
+    "initial": "The photo folder contains a non-ignored real subfolder named `day1`.",
+    "events": [
+     "The service lists the photo folder and discovers `day1` as a subfolder.",
+     "Syncthing-fork or another filesystem actor replaces `day1` with a symbolic link before the service enters it.",
+     "The service reaches `day1` in traversal order."
+    ],
+    "outcomes": [
+     "The operation is refused with `folder_unavailable` because the discovered subfolder cannot safely be listed.",
+     "The symbolic link is neither followed nor reported, and the scan completes without `day1`."
+    ],
+    "observer": "The calling flow sees refusal versus a completed scan"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 OffsetTimeOriginal validity",
+   "kind": "vague_validity",
+   "text": "`DateTimeOriginal` uses `OffsetTimeOriginal` when that offset has the form `+HH:MM` or `-HH:MM`; otherwise it is read in the configured time zone, and so is `DateTime`. A camera value is unusable when it is malformed",
+   "question": "What numeric ranges make an `OffsetTimeOriginal` with the stated shape valid, and does an out-of-range value use the configured time zone or make `DateTimeOriginal` unusable?",
+   "options": [
+    "Treat any six-character value matching the shape as an attempted offset; an out-of-range offset makes the camera value malformed and causes fallback to the next photo-moment source.",
+    "Treat only a numerically valid UTC offset as having that form; an out-of-range value is ignored and `DateTimeOriginal` is interpreted in the configured time zone."
+   ],
+   "default_guess": "Require a numerically valid UTC offset; if the field has the shape but an invalid value, treat `DateTimeOriginal` as malformed and fall back to `DateTime` or the modification time.",
+   "witness": {
+    "initial": "A source has a valid `DateTimeOriginal`, `OffsetTimeOriginal` equal to `+25:00`, a different valid `DateTime`, and a modification time that makes both camera dates otherwise plausible.",
+    "events": [
+     "The owner selects the source for placement.",
+     "The deliverer derives the photo moment."
+    ],
+    "outcomes": [
+     "`DateTimeOriginal` is unusable because its associated offset is malformed, so the deliverer uses `DateTime`.",
+     "The invalid offset does not have an accepted offset form, so the deliverer interprets `DateTimeOriginal` in `Europe/Madrid`."
+    ],
+    "observer": "The owner and Portal see different `photo_date` values"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M01 and A5 invoice-subfolder containment",
+   "kind": "vague_cross_text_agreement",
+   "text": "Both subfolders stay inside the root.\n\nThe photo and invoice subfolders are non-empty relative paths without `..` and are not the root itself. The service does not start with a connection that breaks this. On each scan and placement the photo folder must be a folder whose resolved path is strictly below the resolved root",
+   "question": "Must the resolved invoice subfolder also be strictly below the resolved root at startup, including when the relative path traverses a symbolic link?",
+   "options": [
+    "Resolve both subfolders at startup and refuse to start if either is not strictly below the resolved root.",
+    "Apply only the lexical relative-path rule to the invoice subfolder; resolved containment is required only for the photo folder."
+   ],
+   "default_guess": "Require the resolved invoice subfolder to be strictly below the resolved root at startup so that M01's statement about both subfolders remains true.",
+   "witness": {
+    "initial": "A connection has root `/objects/p1`, photo subfolder `photos`, and invoice subfolder `invoices`; `/objects/p1/invoices` is a symbolic link to `/shared/invoices` outside the resolved root.",
+    "events": [
+     "The agent writes the confirmed connection.",
+     "The service starts and loads the connection."
+    ],
+    "outcomes": [
+     "Startup is refused because the resolved invoice subfolder is outside the root.",
+     "Startup succeeds because `invoices` is a non-empty relative path without `..`, and only the photo folder receives a resolved-containment check."
+    ],
+    "observer": "The operator sees whether the service starts"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "- INV-13: one operation reads the service clock at most once.\n\n- INV-13: a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Which tests must show that every refusal path and a replayed mark also read the clock at most once, with pre-clock refusals reading it zero times and post-clock refusals and replayed marks reading it once?",
+   "options": [
+    "Require counting-clock assertions for successful operations, pre-clock refusals, post-clock refusals and replayed marks.",
+    "Treat successful scan, placement and fresh mark plus health as sufficient evidence for INV-13."
+   ],
+   "default_guess": "Add explicit counting-clock cases for pre-clock refusal, post-clock refusal and replayed mark, each asserting the count required by normative rule 2.",
+   "unit": "?"
+  },
+  {
+   "subject": "A7 marked_at assertion on a replayed mark",
+   "kind": "ambiguous_test_scope",
+   "text": "A request refused after it, and a replayed mark, have read it and write nothing.\n\n`marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\n\nThe first mark stands when it is sent again, and its `marked_at` does not change",
+   "question": "Does the requirement that `marked_at` equal the clock reading apply only to the call that creates a fresh mark, or also to a replayed mark that takes a new reading but must return the unchanged first mark?",
+   "options": [
+    "Apply the equality only to a freshly created mark; a replay returns the original `marked_at`, not the replay call's clock reading.",
+    "Apply the equality to every mark response, which conflicts with preserving the first mark and writing nothing on replay."
+   ],
+   "default_guess": "Apply the equality only to the fresh `marked` result and explicitly require a replayed result to retain the original `marked_at`.",
+   "witness": {
+    "initial": "A source was freshly marked at clock reading `2026-11-18T10:00:00`, and its stored mark has that `marked_at`.",
+    "events": [
+     "Later, the calling flow repeats the mark with the same `photo_id`.",
+     "The replayed call reads the clock once as `2026-11-18T11:00:00`.",
+     "The service returns the replay result without writing."
+    ],
+    "outcomes": [
+     "The replay returns the original mark with `marked_at` `2026-11-18T10:00:00`, so it does not equal that call's reading.",
+     "The assertion that `marked_at` equals the reading is applied to the replay, requiring `2026-11-18T11:00:00` despite the rules that the first mark stands and the replay writes nothing."
+    ],
+    "observer": "The calling flow sees the returned `marked_at`"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 scan of the photo-folder root\",\"kind\":\"uncovered_failure\",\"text\":\"When a subfolder that is not ignored cannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is never reported as complete.\",\"question\":\"What happens when the photo folder itself, rather than one of its subfolders, cannot be listed?\",\"options\":[\"Refuse the whole scan with `folder_unavailable`.\",\"Return an empty or partial scan.\",\"Fail with some other response.\"],\"default_guess\":\"Refuse the whole scan with `folder_unavailable`.\",\"witness\":{\"initial\":\"A confirmed connection names an existing photo folder strictly below the root, but the service can resolve it and cannot list its entries because listing is denied.\",\"events\":[\"The calling flow sends an authenticated scan request for the project.\",\"The service validates that the resolved photo folder is a folder below the resolved root.\",\"The service attempts to list the photo folder itself.\"],\"outcomes\":[\"The scan is refused with `folder_unavailable`.\",\"The implementation returns an empty scan or an unspecified internal failure because the stated refusal covers only an unlistable subfolder.\"],\"observer\":\"The calling flow and owner\"}},{\"subject\":\"A1 subfolder replacement during traversal\",\"kind\":\"contradictory_classification\",\"text\":\"When a subfolder that is not ignored cannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is never reported as complete.\\n\\nIgnored names are not reported, ignored folders are not entered, and symbolic links are neither reported nor followed.\",\"question\":\"If a discovered non-ignored subfolder is replaced by a symbolic link before it is entered, is the scan refused because the discovered subfolder cannot be listed, or does it skip the entry because it is now a symbolic link?\",\"options\":[\"Refuse the whole scan with `folder_unavailable`.\",\"Skip the replacement symbolic link and complete the scan.\"],\"default_guess\":\"Recheck the entry without following it and refuse with `folder_unavailable`, because a directory selected for traversal changed before it could be listed.\",\"witness\":{\"initial\":\"The photo folder contains a non-ignored real subfolder named `day1`.\",\"events\":[\"The service lists the photo folder and discovers `day1` as a subfolder.\",\"Syncthing-fork or another filesystem actor replaces `day1` with a symbolic link before the service enters it.\",\"The service reaches `day1` in traversal order.\"],\"outcomes\":[\"The operation is refused with `folder_unavailable` because the discovered subfolder cannot safely be listed.\",\"The symbolic link is neither followed nor reported, and the scan completes without `day1`.\"],\"observer\":\"The calling flow sees refusal versus a completed scan\"}},{\"subject\":\"A2 OffsetTimeOriginal validity\",\"kind\":\"vague_validity\",\"text\":\"`DateTimeOriginal` uses `OffsetTimeOriginal` when that offset has the form `+HH:MM` or `-HH:MM`; otherwise it is read in the configured time zone, and so is `DateTime`. A camera value is unusable when it is malformed\",\"question\":\"What numeric ranges make an `OffsetTimeOriginal` with the stated shape valid, and does an out-of-range value use the configured time zone or make `DateTimeOriginal` unusable?\",\"options\":[\"Treat any six-character value matching the shape as an attempted offset; an out-of-range offset makes the camera value malformed and causes fallback to the next photo-moment source.\",\"Treat only a numerically valid UTC offset as having that form; an out-of-range value is ignored and `DateTimeOriginal` is interpreted in the configured time zone.\"],\"default_guess\":\"Require a numerically valid UTC offset; if the field has the shape but an invalid value, treat `DateTimeOriginal` as malformed and fall back to `DateTime` or the modification time.\",\"witness\":{\"initial\":\"A source has a valid `DateTimeOriginal`, `OffsetTimeOriginal` equal to `+25:00`, a different valid `DateTime`, and a modification time that makes both camera dates otherwise plausible.\",\"events\":[\"The owner selects the source for placement.\",\"The deliverer derives the photo moment.\"],\"outcomes\":[\"`DateTimeOriginal` is unusable because its associated offset is malformed, so the deliverer uses `DateTime`.\",\"The invalid offset does not have an accepted offset form, so the deliverer interprets `DateTimeOriginal` in `Europe/Madrid`.\"],\"observer\":\"The owner and Portal see different `photo_date` values\"}},{\"subject\":\"M01 and A5 invoice-subfolder containment\",\"kind\":\"vague_cross_text_agreement\",\"text\":\"Both subfolders stay inside the root.\\n\\nThe photo and invoice subfolders are non-empty relative paths without `..` and are not the root itself. The service does not start with a connection that breaks this. On each scan and placement the photo folder must be a folder whose resolved path is strictly below the resolved root\",\"question\":\"Must the resolved invoice subfolder also be strictly below the resolved root at startup, including when the relative path traverses a symbolic link?\",\"options\":[\"Resolve both subfolders at startup and refuse to start if either is not strictly below the resolved root.\",\"Apply only the lexical relative-path rule to the invoice subfolder; resolved containment is required only for the photo folder.\"],\"default_guess\":\"Require the resolved invoice subfolder to be strictly below the resolved root at startup so that M01's statement about both subfolders remains true.\",\"witness\":{\"initial\":\"A connection has root `/objects/p1`, photo subfolder `photos`, and invoice subfolder `invoices`; `/objects/p1/invoices` is a symbolic link to `/shared/invoices` outside the resolved root.\",\"events\":[\"The agent writes the confirmed connection.\",\"The service starts and loads the connection.\"],\"outcomes\":[\"Startup is refused because the resolved invoice subfolder is outside the root.\",\"Startup succeeds because `invoices` is a non-empty relative path without `..`, and only the photo folder receives a resolved-containment check.\"],\"observer\":\"The operator sees whether the service starts\"}},{\"subject\":\"INV-13 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"- INV-13: one operation reads the service clock at most once.\\n\\n- INV-13: a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Which tests must show that every refusal path and a replayed mark also read the clock at most once, with pre-clock refusals reading it zero times and post-clock refusals and replayed marks reading it once?\",\"options\":[\"Require counting-clock assertions for successful operations, pre-clock refusals, post-clock refusals and replayed marks.\",\"Treat successful scan, placement and fresh mark plus health as sufficient evidence for INV-13.\"],\"default_guess\":\"Add explicit counting-clock cases for pre-clock refusal, post-clock refusal and replayed mark, each asserting the count required by normative rule 2.\"},{\"subject\":\"A7 marked_at assertion on a replayed mark\",\"kind\":\"ambiguous_test_scope\",\"text\":\"A request refused after it, and a replayed mark, have read it and write nothing.\\n\\n`marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\\n\\nThe first mark stands when it is sent again, and its `marked_at` does not change\",\"question\":\"Does the requirement that `marked_at` equal the clock reading apply only to the call that creates a fresh mark, or also to a replayed mark that takes a new reading but must return the unchanged first mark?\",\"options\":[\"Apply the equality only to a freshly created mark; a replay returns the original `marked_at`, not the replay call's clock reading.\",\"Apply the equality to every mark response, which conflicts with preserving the first mark and writing nothing on replay.\"],\"default_guess\":\"Apply the equality only to the fresh `marked` result and explicitly require a replayed result to retain the original `marked_at`.\",\"witness\":{\"initial\":\"A source was freshly marked at clock reading `2026-11-18T10:00:00`, and its stored mark has that `marked_at`.\",\"events\":[\"Later, the calling flow repeats the mark with the same `photo_id`.\",\"The replayed call reads the clock once as `2026-11-18T11:00:00`.\",\"The service returns the replay result without writing.\"],\"outcomes\":[\"The replay returns the original mark with `marked_at` `2026-11-18T10:00:00`, so it does not equal that call's reading.\",\"The assertion that `marked_at` equals the reading is applied to the replay, requiring `2026-11-18T11:00:00` despite the rules that the first mark stands and the replay writes nothing.\"],\"observer\":\"The calling flow sees the returned `marked_at`\"}}]}",
+ "set_aside": []
+}
