@@ -18,17 +18,18 @@ The deployment starts the service.
 
 ### Boundary
 
-`module:deliverer_api` reads the settings and the token file. `module:object_connections` judges the
-connections file. Nothing crosses to a caller until the start has succeeded.
+`module:runtime_settings` reads the environment. `module:deliverer_api` reads the token file, and
+`module:object_connections` judges the connections file. Nothing crosses to a caller until the start has succeeded.
 
 ### Steps
 
 1. The deployment launches `capability:deliverer_api.run_service`, which owns the remaining steps.
-2. `capability:deliverer_api.load_config` reads the run settings and calls
+2. `capability:runtime_settings.load_runtime_settings` reads the run settings from the environment.
+3. `capability:deliverer_api.load_config` turns them into the context of the operations and calls
    `capability:object_connections.load_connections` once, to judge the connections file whole.
-3. `capability:deliverer_api.read_token` reads the token and checks its file permissions and length.
-4. `capability:deliverer_api.create_app` builds the HTTP surface with the settings, the token and the clock.
-5. `capability:deliverer_api.run_service` serves that surface in the web server, on the loopback interface.
+4. `capability:deliverer_api.read_token` reads the token and checks its file permissions and length.
+5. `capability:deliverer_api.create_app` builds the HTTP surface with that context, the token and the clock.
+6. `capability:deliverer_api.run_service` serves that surface in the web server, on the loopback interface.
 
 ### Outcomes
 

@@ -24,16 +24,21 @@ cycles, and `domain_models` names no other module.
 
 | Consumer | Provider | Symbols |
 |---|---|---|
+| `runtime_settings` | `domain_models` | `RuntimeSettings` |
 | `object_connections` | `domain_models` | `DelivererError`, `ObjectConnection`, `RefusalCode` |
-| `source_folder` | `domain_models` | `MAX_SOURCE_BYTES`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `CONFLICT_COPY_MARK`, `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `ObservationReason`, `RefusalCode` |
-| `photo_preparation` | `domain_models` | `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_MAX_SIDE`, `PHOTO_QUALITY`, `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `PreparedPhoto`, `Rejected`, `DateSource`, `PlacementFailure` |
+| `source_folder` | `data_provider` | `MAX_SOURCE_BYTES`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `CONFLICT_COPY_MARK` |
+| `source_folder` | `domain_models` | `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `ObservationReason`, `RefusalCode` |
+| `photo_preparation` | `data_provider` | `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_MAX_SIDE`, `PHOTO_QUALITY`, `INTAKE_ID_PREFIX`, `INTAKE_SOURCE` |
+| `photo_preparation` | `domain_models` | `PreparedPhoto`, `Rejected`, `DateSource`, `PlacementFailure` |
 | `delivery_store` | `domain_models` | `Config`, `DelivererError`, `RefusalCode` |
-| `photo_delivery` | `domain_models` | `SOURCE_ID_FORM`, `Config`, `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `PlacementStatus`, `PlacementFailure`, `MarkStatus`, `RefusalCode` |
+| `photo_delivery` | `data_provider` | `SOURCE_ID_PATTERN` |
+| `photo_delivery` | `domain_models` | `Config`, `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `PlacementStatus`, `PlacementFailure`, `MarkStatus`, `RefusalCode` |
 | `photo_delivery` | `object_connections` | `confirmed_connection`, `available_photo_folder` |
 | `photo_delivery` | `source_folder` | `observe_source_files`, `read_named_source` |
 | `photo_delivery` | `photo_preparation` | `prepare_photo`, `build_publication` |
 | `photo_delivery` | `delivery_store` | `project_lock`, `store_image`, `read_placement`, `write_placement`, `read_mark`, `write_mark` |
-| `deliverer_api` | `domain_models` | `Config`, `DelivererError`, `RefusalCode` |
+| `deliverer_api` | `domain_models` | `Config`, `DelivererError`, `RuntimeSettings`, `RefusalCode` |
+| `deliverer_api` | `runtime_settings` | `load_runtime_settings` |
 | `deliverer_api` | `object_connections` | `load_connections` |
 | `deliverer_api` | `photo_delivery` | `scan_project_photos`, `deliver_project_photo`, `mark_photo_published` |
 | `deliverer_api` | `system_clock` | `utc_now` |
@@ -87,7 +92,7 @@ names the owner of each rule.
 | A5 | rule 6, the write that clears a confirmation | the agent, outside this service (R0-11) |
 | A5 | rules 7 and 8, reading the file once per operation, judging it and refusing | `object_connections` |
 | A5 | rule 9, project id form | `deliverer_api` |
-| A5 | rule 9, checking a source id against `SOURCE_ID_FORM` | `photo_delivery` |
+| A5 | rule 9, checking a source id against `SOURCE_ID_PATTERN` | `photo_delivery` |
 | A5 | rule 9, stored names built only from checked identifiers | `delivery_store` |
 | A5 | rule 10, what a delivery result holds | `photo_delivery` |
 | A5 | rule 10, what a refusal answer holds | `deliverer_api` |
@@ -124,9 +129,7 @@ outbound call.
 - the models M01 to M07 and their enumerations;
 - `SourceFile`, what `source_folder` reports about one file to `photo_delivery`. It holds the server path
   of the file and never leaves the service; M02 is the form a caller sees;
-- the policy constants and the run settings of A8;
-- the constant `SOURCE_ID_FORM`, which no model applies by itself: a source id stays plain text until
-  `photo_delivery` checks it;
+- the type of the run settings;
 - the two refusal types: a refusal of the whole operation and a refusal of one file.
 
 ### Knows
@@ -151,6 +154,84 @@ Exports types and constants only.
 
 - kind: deep
 - hidden mechanism: none beyond type validity; this is the shared vocabulary of the service.
+
+## `data_provider`
+
+### Owns
+
+- the policy constants of A8, as typed values.
+
+### Knows
+
+- nothing but those values.
+
+### Hides
+
+- where each decided value is written down.
+
+### Must not own
+
+- any behaviour, check or default of a run setting.
+
+### Public surface
+
+```text
+MAX_SOURCE_BYTES
+MAX_OUTPUT_BYTES
+MAX_PIXELS
+PHOTO_MAX_SIDE
+PHOTO_QUALITY
+INTAKE_ID_PREFIX
+INTAKE_SOURCE
+IGNORED_NAME_PREFIXES
+IGNORED_NAME_SUFFIXES
+CONFLICT_COPY_MARK
+SOURCE_ID_PATTERN
+```
+
+### Trace inputs
+
+- A8
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: the one home of each decided value.
+
+## `runtime_settings`
+
+### Owns
+
+- reading the run settings of A8 from the environment of the process;
+- the default of each optional setting and the refusal of a missing or invalid one.
+
+### Knows
+
+- the environment variables of A8.
+
+### Hides
+
+- how the environment is read and validated.
+
+### Must not own
+
+- checking that a path exists, which the modules that use it do;
+- the policy constants of A8.
+
+### Candidate public capabilities
+
+```text
+load_runtime_settings
+```
+
+### Trace inputs
+
+- A8
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: the single boundary between the environment of the process and the service.
 
 ## `object_connections`
 
@@ -393,7 +474,7 @@ mark_photo_published
 - steps 1 and 2 of "Order of one operation";
 - the HTTP status and the content of every refusal answer;
 - handing the clock to the operations;
-- reading the run settings when the service starts;
+- turning the run settings into the context of the operations when the service starts;
 - listening on the loopback interface only.
 
 ### Knows

@@ -329,15 +329,16 @@ Every instant the deliverer writes has the form the Portal stores.
 
 ### Normative rules
 
-Run settings are fields of the settings object:
+Run settings are fields of the settings object, read from the environment of the process:
 
-| Field | Type | Decided |
-|---|---|---|
-| `timezone` | `str` | `Europe/Madrid` |
-| `binary_root` | `Path` | per installation |
-| `state_dir` | `Path` | per installation |
-| `connections_file` | `Path` | per installation |
-| `token_file` | `Path` | per installation |
+| Field | Type | Environment variable | Decided |
+|---|---|---|---|
+| `timezone` | `str` | `PORTAL_DELIVERER_TIMEZONE` | optional, `Europe/Madrid` when absent |
+| `binary_root` | `str` | `PORTAL_DELIVERER_BINARY_ROOT` | required, per installation |
+| `state_dir` | `str` | `PORTAL_DELIVERER_STATE_DIR` | required, per installation |
+| `connections_file` | `str` | `PORTAL_DELIVERER_CONNECTIONS_FILE` | required, per installation |
+| `token_file` | `str` | `PORTAL_DELIVERER_TOKEN_FILE` | required, per installation |
+| `port` | `int` | `PORTAL_DELIVERER_PORT` | optional, 8850 when absent |
 
 Policy values are constants of the data provider:
 
@@ -353,6 +354,7 @@ Policy values are constants of the data provider:
 | `IGNORED_NAME_PREFIXES` | `tuple[str, ...]` | `.`, `~syncthing~` |
 | `IGNORED_NAME_SUFFIXES` | `tuple[str, ...]` | `.tmp`, `~` |
 | `CONFLICT_COPY_MARK` | `str` | `.sync-conflict-` |
+| `SOURCE_ID_PATTERN` | `str` | `[0-9a-f]{64}` |
 
 Closed lists are enumerations: `= models.ScanStatus`, `= models.ObservationReason`,
 `= models.DateSource`, `= models.PlacementStatus`, `= models.PlacementFailure`,

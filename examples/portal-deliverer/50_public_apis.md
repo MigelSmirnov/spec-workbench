@@ -10,6 +10,40 @@ module of the prototype offers any other public function.
 `boundary:deployment` is what launches the process. The calling agent
 reaches the service only through the routes that `public_op:deliverer_api.create_app` builds.
 
+## `public_op:runtime_settings.load_runtime_settings`
+
+### Owner
+
+`module:runtime_settings`.
+
+### Callers
+
+`module:deliverer_api`, through `public_op:deliverer_api.run_service`.
+
+### Inputs
+
+The environment of the process.
+
+### Outputs
+
+The run settings of A8.
+
+### Observable effect
+
+Reads the environment.
+
+### Enforces
+
+A8: a required setting is present, an optional one takes its decided default, and the port is a positive integer.
+
+### Errors
+
+A missing required setting or an invalid port ends the start.
+
+### State impact
+
+Read-only.
+
 ## `public_op:deliverer_api.load_config`
 
 ### Owner
@@ -22,15 +56,15 @@ reaches the service only through the routes that `public_op:deliverer_api.create
 
 ### Inputs
 
-The path of the settings file.
+The run settings of A8.
 
 ### Outputs
 
-The run settings of A8: time zone, binary store, state folder, connections file and token file.
+The context of the operations: time zone, binary store, state folder and connections file.
 
 ### Observable effect
 
-Reads the settings file and the connections file.
+Reads the connections file.
 
 ### Enforces
 
@@ -38,7 +72,7 @@ A8 and condition 1 of A5 rule 7: the service does not start with an invalid conn
 
 ### Errors
 
-A missing or malformed setting, or an invalid connections file, ends the start.
+An unknown time zone or an invalid connections file ends the start.
 
 ### State impact
 
@@ -90,7 +124,7 @@ Read-only.
 
 ### Inputs
 
-The run settings, the token and the clock function.
+The context of the operations, the token and the clock function.
 
 ### Outputs
 
@@ -124,7 +158,7 @@ No state of its own.
 
 ### Inputs
 
-The path of the settings file and the port.
+The environment of the process.
 
 ### Outputs
 
@@ -132,7 +166,7 @@ The exit status of the process.
 
 ### Observable effect
 
-Calls `public_op:deliverer_api.load_config`, `public_op:deliverer_api.read_token` and `public_op:deliverer_api.create_app` in that order, then serves the surface on the loopback interface until it is stopped.
+Calls `public_op:runtime_settings.load_runtime_settings`, `public_op:deliverer_api.load_config`, `public_op:deliverer_api.read_token` and `public_op:deliverer_api.create_app` in that order, then serves the surface on the loopback interface until it is stopped.
 
 ### Enforces
 
@@ -396,7 +430,7 @@ No state.
 
 ### Inputs
 
-The run settings, the project id.
+The context of the operations, the project id.
 
 ### Outputs
 
@@ -430,7 +464,7 @@ Writes only the project lock file.
 
 ### Inputs
 
-The run settings, the project id, the source id and the image bytes.
+The context of the operations, the project id, the source id and the image bytes.
 
 ### Outputs
 
@@ -464,7 +498,7 @@ Writes one stored image.
 
 ### Inputs
 
-The run settings, the project id and the source id.
+The context of the operations, the project id and the source id.
 
 ### Outputs
 
@@ -498,7 +532,7 @@ Read-only.
 
 ### Inputs
 
-The run settings, the project id, the source id and M04.
+The context of the operations, the project id, the source id and M04.
 
 ### Outputs
 
@@ -532,7 +566,7 @@ Writes one placement record.
 
 ### Inputs
 
-The run settings, the project id and the source id.
+The context of the operations, the project id and the source id.
 
 ### Outputs
 
@@ -566,7 +600,7 @@ Read-only.
 
 ### Inputs
 
-The run settings, the project id, the source id and M07.
+The context of the operations, the project id, the source id and M07.
 
 ### Outputs
 
@@ -634,7 +668,7 @@ Read-only.
 
 ### Inputs
 
-The run settings, the project id, the name and the source id.
+The context of the operations, the project id, the name and the source id.
 
 ### Outputs
 
@@ -668,7 +702,7 @@ Creates at most one placement of a project and content, and the project lock fil
 
 ### Inputs
 
-The run settings, the project id, the source id, the `photo_id` and the clock function.
+The context of the operations, the project id, the source id, the `photo_id` and the clock function.
 
 ### Outputs
 
