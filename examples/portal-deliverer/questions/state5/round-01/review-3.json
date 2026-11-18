@@ -1,0 +1,481 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis.md:Status",
+   "subject": "all public operation contracts",
+   "kind": "deferred_contract",
+   "text": "Inputs and outputs name their meaning, and the exact signatures are decided in State 6.",
+   "question": "What is the exact signature of every operation, including parameter and return types, optionality, synchronous or asynchronous calling convention, and whether each error is returned or raised?",
+   "options": [
+    "Define every signature and error carrier in State 5",
+    "Define a single explicit signature convention here and give each operation's deviations"
+   ],
+   "default_guess": "Use synchronous typed functions; return domain results and raise DelivererError for whole-operation refusals."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:deliverer_api.load_config`",
+   "subject": "settings-file format and validation",
+   "kind": "vague_validation",
+   "text": "A missing or malformed setting, or an invalid connections file, ends the start.",
+   "question": "What serialization, top-level shape, field types, allowed extra fields, path-resolution rules and value checks make the settings file valid, and what exactly does this operation do on failure?",
+   "options": [
+    "A strict UTF-8 JSON object with exactly the A8 fields",
+    "A framework-defined settings format allowing additional fields"
+   ],
+   "default_guess": "Require a UTF-8 JSON object with exactly the A8 fields, resolve relative paths against the settings file, require timezone Europe/Madrid, and raise a startup exception."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:deliverer_api.read_token`",
+   "subject": "token trimming",
+   "kind": "vague_text_rule",
+   "text": "The token with the whitespace around it removed.",
+   "question": "Which characters count as surrounding whitespace, and is trimming performed before UTF-8 validation and the 32-character length check?",
+   "options": [
+    "Apply Unicode string strip after strict UTF-8 decoding, then check length",
+    "Remove only ASCII spaces and line endings, then check length"
+   ],
+   "default_guess": "Decode as strict UTF-8, apply Unicode strip, and validate the resulting character count.",
+   "witness": {
+    "initial": "The token file contains 31 visible token characters followed by a non-ASCII whitespace character.",
+    "events": [
+     "Deployment calls read_token.",
+     "A caller later sends the visible 31-character value as its bearer token."
+    ],
+    "outcomes": [
+     "Unicode trimming leaves 31 characters, so startup ends.",
+     "ASCII-only trimming retains the final character, so startup succeeds and the corresponding token is accepted."
+    ],
+    "observer": "The deployment and calling flow"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:deliverer_api.read_token`",
+   "subject": "token-file object and permission check",
+   "kind": "vague_validation",
+   "text": "A file that breaks A5 rule 2 or cannot be read ends the start.",
+   "question": "Must the token path be a regular non-symlink file, which file's mode is checked when it is a symlink, and what exception or exit result represents failure?",
+   "options": [
+    "Reject symlinks and non-regular files and raise a startup exception",
+    "Follow symlinks, check the target mode and report a process exit status"
+   ],
+   "default_guess": "Reject symlinks and non-regular files, check the opened file's mode, and raise a startup exception."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:deliverer_api.create_app`",
+   "subject": "HTTP surface",
+   "kind": "deferred_boundary_contract",
+   "text": "The HTTP surface with the health, scan, delivery and mark routes.",
+   "question": "What are the route paths, HTTP methods, request locations and schemas, success bodies, health body, status codes, refusal bodies and fixed refusal-detail sentences?",
+   "options": [
+    "Specify the entire HTTP contract in State 5",
+    "Reference a complete, already-decided manifest containing the HTTP contract"
+   ],
+   "default_guess": "Use four explicitly named JSON routes, map each M08 code to a fixed status and fixed path-free detail, and return the domain models as JSON."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:deliverer_api.create_app`",
+   "subject": "route exception handling",
+   "kind": "incomplete_error_contract",
+   "text": "A served route answers a wrong token, a malformed request and every M08 refusal.",
+   "question": "What does a served route answer for an unexpected exception and for a lower-level operating-system error not already converted to M06 or M08?",
+   "options": [
+    "Return one fixed path-free internal-error response",
+    "Let the web framework produce its default error response"
+   ],
+   "default_guess": "Return a fixed path-free internal-error response and log no credential or server path."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:deliverer_api.run_service`",
+   "subject": "run_service input and service-start composition",
+   "kind": "contradiction",
+   "text": "The path of the settings file and the port.",
+   "question": "Does run_service receive the already-created HTTP surface described by State 4, or does it receive a settings path and itself call load_config, read_token and create_app?",
+   "options": [
+    "run_service(app, port) only serves the surface created by the preceding start steps",
+    "run_service(settings_path, port) owns and repeats the complete startup sequence"
+   ],
+   "default_guess": "Make run_service the deployment entry point that receives settings_path and port and performs the complete startup sequence.",
+   "witness": {
+    "initial": "A valid settings file, token file and connections file exist, and deployment starts the service.",
+    "events": [
+     "The State 4 sequence calls load_config, read_token and create_app.",
+     "Deployment then invokes run_service."
+    ],
+    "outcomes": [
+     "An implementation following State 4 passes the created app to run_service, which State 5's input contract does not accept.",
+     "An implementation following State 5 passes the settings path, causing run_service to load configuration and create an app itself or leaving the previously created app unused."
+    ],
+    "observer": "The deployment entry point and startup tests"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:deliverer_api.run_service`",
+   "subject": "process exit result",
+   "kind": "ambiguous_output",
+   "text": "The exit status of the process.",
+   "question": "Which exit statuses are returned for normal shutdown, invalid startup, bind failure and runtime server failure, and does the function return a status or terminate the process itself?",
+   "options": [
+    "Return a documented integer and never call process exit",
+    "Own process termination and document the exit codes"
+   ],
+   "default_guess": "Return 0 after an orderly stop and a documented nonzero integer for every startup or server failure; let the deployment wrapper exit."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:deliverer_api.run_service`",
+   "subject": "port validation and binding",
+   "kind": "vague_input",
+   "text": "The path of the settings file and the port.",
+   "question": "What type and valid range does port have, and what result follows from a malformed, privileged, unavailable or zero port?",
+   "options": [
+    "Require an integer from 1 through 65535 and fail startup if it cannot be bound",
+    "Allow the server library's port forms and error behavior, including port zero"
+   ],
+   "default_guess": "Require an integer from 1 through 65535 and return a nonzero startup status if binding fails."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:object_connections.load_connections`",
+   "subject": "connections-file record format",
+   "kind": "undefined_format",
+   "text": "An unreadable file, a file of another form or a subfolder that breaks the form of A5 rule 8 raises an error.",
+   "question": "What exact JSON shape represents the collection and each M01, how are UUIDs and paths encoded, are extra fields allowed, and how are duplicate project ids handled?",
+   "options": [
+    "A strict object keyed by canonical project UUID with exact M01 record fields",
+    "A list of M01 objects in which duplicate project ids require an explicit resolution rule"
+   ],
+   "default_guess": "Use a strict UTF-8 JSON object keyed by lowercase hyphenated project UUID, reject extra or missing fields and reject duplicate logical UUIDs."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:object_connections.load_connections`",
+   "subject": "load_connections error type",
+   "kind": "ambiguous_error",
+   "text": "raises an error",
+   "question": "Which exception or domain error is raised, and how does load_config distinguish this startup failure from the folder_unavailable refusal produced during an operation?",
+   "options": [
+    "Raise a dedicated configuration/startup exception",
+    "Raise DelivererError with folder_unavailable in every context"
+   ],
+   "default_guess": "Raise a dedicated startup/configuration exception; confirmed_connection converts the same validation failure to DelivererError(folder_unavailable)."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:object_connections.available_photo_folder`",
+   "subject": "returned folder path",
+   "kind": "ambiguous_output",
+   "text": "The path of the photo folder, for use inside the service only.",
+   "question": "Is the returned value the original root-plus-subfolder path or its canonical resolved path, and what protects later file access if links or directories change after this check?",
+   "options": [
+    "Return the canonical resolved path and require later opens not to follow replacement links",
+    "Return the configured joined path and repeat containment checks at each actual open"
+   ],
+   "default_guess": "Return the canonical resolved path and have source_folder open every path component without following links.",
+   "witness": {
+    "initial": "The configured photo subfolder initially resolves below the object root and is replaced by a link outside the root immediately after available_photo_folder returns.",
+    "events": [
+     "photo_delivery calls available_photo_folder.",
+     "Another actor replaces the folder entry.",
+     "source_folder begins its scan or named read."
+    ],
+    "outcomes": [
+     "An implementation using the returned canonical path continues with the originally accepted in-root location or fails if it vanished.",
+     "An implementation returning and reopening the configured path follows or encounters the replacement, with behavior depending on its open strategy."
+    ],
+    "observer": "The calling flow through either a folder_unavailable refusal or the files reported"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:source_folder.observe_source_files`",
+   "subject": "SourceFile contract",
+   "kind": "undefined_model",
+   "text": "One `SourceFile` for each reported file, in the walking order of A1, with its source id when it is ready.",
+   "question": "What are all SourceFile fields and their types, which fields are present for ready and rejected files, and does it retain the bytes, path, metadata size and modification instant used by later operations?",
+   "options": [
+    "Define SourceFile as a discriminated ready/rejected internal model with exact fields",
+    "Use one model with optional path, bytes, source_id, status, reason, size and modification time"
+   ],
+   "default_guess": "Define a discriminated internal model; ready carries internal path, exact bytes, source_id, metadata size and normalized modification time, while rejected carries name, size when known and reason."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:source_folder.observe_source_files`",
+   "subject": "failure to list the photo-folder root",
+   "kind": "incomplete_error_condition",
+   "text": "`folder_unavailable` when a subfolder that is not ignored cannot be listed.",
+   "question": "Does failure to list the photo-folder root also produce folder_unavailable, and does an error encountered partway through discard all observations already accumulated?",
+   "options": [
+    "Any required directory-listing failure, including the root, refuses the whole scan and returns no partial result",
+    "Only descendant failures refuse; root failures use another error"
+   ],
+   "default_guess": "Any required listing failure, including the root, returns folder_unavailable and discards the partial scan."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:source_folder.read_named_source`",
+   "subject": "SourceFile snapshot and modification time",
+   "kind": "ambiguous_snapshot",
+   "text": "Otherwise one `SourceFile`, with the bytes that were judged when it is ready.",
+   "question": "Which metadata snapshot supplies size and modification time when the file changes while it is read, and must the returned SourceFile's metadata describe the same bytes that were hashed and judged?",
+   "options": [
+    "Use metadata from the opened file before reading and return it with the bytes read from that descriptor",
+    "Restat after reading and reject or retry when metadata changed"
+   ],
+   "default_guess": "Open without following links, take metadata from that descriptor before reading, read once, and return that metadata with exactly the bytes read."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:delivery_store.project_lock`",
+   "subject": "state-folder dependency",
+   "kind": "missing_input",
+   "text": "The project id.",
+   "question": "How does project_lock obtain the configured state folder needed to locate the lock file?",
+   "options": [
+    "Accept Config or state_dir as an explicit parameter",
+    "Use module-global configuration established by an initialization operation"
+   ],
+   "default_guess": "Accept Config as an explicit parameter because no initialization operation or module-global lifecycle is defined."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:delivery_store.project_lock`",
+   "subject": "lock handle protocol",
+   "kind": "undefined_return_protocol",
+   "text": "A held lock for the duration of the caller's block.",
+   "question": "What exact context-manager or acquire/release protocol is returned, and what happens if acquisition is interrupted or the block exits by exception?",
+   "options": [
+    "Return a synchronous context manager that blocks indefinitely and always releases on exit",
+    "Return an explicit lock handle requiring a separate release operation"
+   ],
+   "default_guess": "Return a synchronous context manager that blocks indefinitely and releases in finally on every exit path."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:delivery_store.store_image`",
+   "subject": "binary-store dependency",
+   "kind": "missing_input",
+   "text": "The project id, the source id and the image bytes.",
+   "question": "How does store_image obtain binary_root, and is the supplied image required to be immutable bytes?",
+   "options": [
+    "Accept Config or binary_root explicitly",
+    "Use module-global configuration"
+   ],
+   "default_guess": "Accept Config explicitly and require bytes."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:delivery_store.read_placement`",
+   "subject": "state-folder dependency",
+   "kind": "missing_input",
+   "text": "The project id and the source id.",
+   "question": "How does read_placement obtain state_dir?",
+   "options": [
+    "Accept Config or state_dir explicitly",
+    "Use module-global configuration"
+   ],
+   "default_guess": "Accept Config explicitly."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:delivery_store.read_placement`",
+   "subject": "damaged placement criteria",
+   "kind": "vague_validation",
+   "text": "`state_unavailable` for a damaged record.",
+   "question": "Exactly which syntax, field, type, enum, identifier mismatch, unknown-field or invariant defects make an existing placement record damaged?",
+   "options": [
+    "Require an exact strict serialization of M04 and equality with the project_id and source_id used as its key",
+    "Validate required fields and types but allow unknown fields and do not compare embedded identity with its key"
+   ],
+   "default_guess": "Strictly validate the complete M04, reject unknown fields, and require its embedded project_id and source_id to equal the lookup key."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:delivery_store.write_placement`",
+   "subject": "state-folder dependency",
+   "kind": "missing_input",
+   "text": "The project id, the source id and M04.",
+   "question": "How does write_placement obtain state_dir?",
+   "options": [
+    "Accept Config or state_dir explicitly",
+    "Use module-global configuration"
+   ],
+   "default_guess": "Accept Config explicitly."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:delivery_store.write_placement`",
+   "subject": "placement key disagreement",
+   "kind": "undefined_precondition",
+   "text": "The project id, the source id and M04.",
+   "question": "What happens when M04's project_id or source_id differs from the separate project id or source id arguments?",
+   "options": [
+    "Reject the call without writing",
+    "Ignore the embedded identity and write under the separate key",
+    "Ignore the separate key and derive the record path from M04"
+   ],
+   "default_guess": "Reject the call without writing."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:delivery_store.read_mark`",
+   "subject": "state-folder dependency",
+   "kind": "missing_input",
+   "text": "The project id and the source id.",
+   "question": "How does read_mark obtain state_dir?",
+   "options": [
+    "Accept Config or state_dir explicitly",
+    "Use module-global configuration"
+   ],
+   "default_guess": "Accept Config explicitly."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:delivery_store.read_mark`",
+   "subject": "damaged mark criteria",
+   "kind": "vague_validation",
+   "text": "`state_unavailable` for a damaged record.",
+   "question": "Exactly which syntax, field, type, identifier mismatch, unknown-field or invariant defects make an existing mark record damaged?",
+   "options": [
+    "Require an exact strict serialization of M07 and equality with the lookup key",
+    "Validate required fields and types while allowing unknown fields and identity mismatches"
+   ],
+   "default_guess": "Strictly validate the complete M07, reject unknown fields, and require its embedded project_id and source_id to equal the lookup key."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:delivery_store.write_mark`",
+   "subject": "state-folder dependency",
+   "kind": "missing_input",
+   "text": "The project id, the source id and M07.",
+   "question": "How does write_mark obtain state_dir?",
+   "options": [
+    "Accept Config or state_dir explicitly",
+    "Use module-global configuration"
+   ],
+   "default_guess": "Accept Config explicitly."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:delivery_store.write_mark`",
+   "subject": "mark key disagreement",
+   "kind": "undefined_precondition",
+   "text": "The project id, the source id and M07.",
+   "question": "What happens when M07's project_id or source_id differs from the separate project id or source id arguments?",
+   "options": [
+    "Reject with state_unavailable and write nothing",
+    "Ignore the embedded identity and write under the separate key",
+    "Ignore the separate key and derive the key from M07"
+   ],
+   "default_guess": "Reject with state_unavailable and write nothing."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:photo_delivery.scan_project_photos`",
+   "subject": "status-count result",
+   "kind": "ambiguous_output",
+   "text": "One M02 for each reported file and the count of each status.",
+   "question": "What result model contains the observations and counts, are zero-valued statuses included, and is the observation order preserved independently of the count representation?",
+   "options": [
+    "Return a named scan-result model with an ordered list and all four status keys including zero",
+    "Return a tuple of observations and a sparse mapping containing only statuses seen"
+   ],
+   "default_guess": "Return a named result model with the ordered observations and counts for all four statuses, including zeros."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:photo_delivery.scan_project_photos`",
+   "subject": "damaged mark during scan",
+   "kind": "contradiction",
+   "text": "The refusals of `confirmed_connection`, `available_photo_folder`, `observe_source_files` and `read_placement`, as M08.",
+   "question": "Must scan_project_photos also propagate state_unavailable from read_mark, as A6 and State 4 require, or is a damaged mark ignored or treated as an unmarked placement?",
+   "options": [
+    "Include read_mark refusals and return M08 state_unavailable",
+    "Ignore an unreadable mark and report the placement as placed",
+    "Treat the file as rejected"
+   ],
+   "default_guess": "Include read_mark refusals and return M08 state_unavailable.",
+   "witness": {
+    "initial": "A ready source has a valid placement record and an existing malformed mark record.",
+    "events": [
+     "The calling flow requests a scan.",
+     "scan_project_photos reads the placement and then attempts to determine whether it is published."
+    ],
+    "outcomes": [
+     "Following the State 5 error list, the implementation does not propagate a read_mark refusal and reports a status such as placed.",
+     "Following A6 rule 5 and State 4, it returns M08 with state_unavailable and reports no completed scan."
+    ],
+    "observer": "The calling flow"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:photo_delivery.deliver_project_photo`",
+   "subject": "project-lock failure",
+   "kind": "incomplete_error_set",
+   "text": "`invalid_source_id` and the refusals of the connection, the folder and the records, as M08.",
+   "question": "Is failure to open or lock the project lock an M08 state_unavailable refusal, as A6 rule 5 says, even though the lock is not a connection, folder or record?",
+   "options": [
+    "Explicitly include project_lock failures as M08 state_unavailable",
+    "Treat lock failure as an unhandled operating-system error",
+    "Convert it to failed M06"
+   ],
+   "default_guess": "Explicitly include project_lock failure as M08 state_unavailable.",
+   "witness": {
+    "initial": "The connection and folder are valid, but the project's lock file cannot be opened.",
+    "events": [
+     "The caller requests delivery of a valid ready source.",
+     "deliver_project_photo reaches project_lock."
+    ],
+    "outcomes": [
+     "One implementation returns M08 state_unavailable under A6 rule 5.",
+     "Another treats the unlisted lock error as an unexpected exception or failed M06."
+    ],
+    "observer": "The calling flow"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:photo_delivery.mark_photo_published`",
+   "subject": "project-lock failure",
+   "kind": "incomplete_error_set",
+   "text": "`invalid_source_id`, `not_placed`, `publication_conflict` and the refusals of the connection and the records, as M08.",
+   "question": "Is failure to open or lock the project lock an M08 state_unavailable refusal, as A6 rule 5 says?",
+   "options": [
+    "Explicitly include project_lock failures as M08 state_unavailable",
+    "Treat lock failure as an unhandled operating-system error"
+   ],
+   "default_guess": "Explicitly include project_lock failure as M08 state_unavailable."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:photo_delivery.mark_photo_published`",
+   "subject": "mark-operation return model",
+   "kind": "model_contradiction",
+   "text": "M07 with `marked` or `replayed`.",
+   "question": "How is MarkStatus returned when M07 has no status field and State 1 says MarkStatus belongs to the answer but is not stored?",
+   "options": [
+    "Define a separate MarkOutcome containing status and M07",
+    "Add a non-persisted status field to the operation's M07 representation",
+    "Return a tuple of M07 and MarkStatus"
+   ],
+   "default_guess": "Define a separate MarkOutcome with status and mark fields.",
+   "witness": {
+    "initial": "A mark already exists for the same photo_id.",
+    "events": [
+     "The caller invokes mark_photo_published again.",
+     "The operation reads the existing M07."
+    ],
+    "outcomes": [
+     "An implementation returning M07 alone cannot represent replayed without changing the declared model.",
+     "An implementation inventing a wrapper returns both the original M07 and replayed status."
+    ],
+    "observer": "The calling flow and HTTP serializer"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:system_clock.utc_now`",
+   "subject": "direct caller of utc_now",
+   "kind": "caller_contradiction",
+   "text": "`module:deliverer_api`.",
+   "question": "Is the caller the module that imports and passes utc_now, or photo_delivery, which State 3 and State 4 say invokes the received function?",
+   "options": [
+    "Treat deliverer_api as the dependency owner and photo_delivery as the runtime invoker of an injected callable",
+    "Declare photo_delivery as the caller and import system_clock there directly"
+   ],
+   "default_guess": "Keep the import edge from deliverer_api to system_clock, but state explicitly that photo_delivery is the runtime invoker of the injected callable.",
+   "witness": {
+    "initial": "create_app has received utc_now and a valid mark request arrives.",
+    "events": [
+     "deliverer_api passes the clock callable to mark_photo_published.",
+     "mark_photo_published invokes the callable."
+    ],
+    "outcomes": [
+     "Under an import-owner meaning, deliverer_api is recorded as the caller despite not executing the call.",
+     "Under an invocation meaning, photo_delivery is the caller, contradicting the stated Callers section."
+    ],
+    "observer": "Dependency tests, tracing and clock-call tests"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis.md:Status\",\"subject\":\"all public operation contracts\",\"kind\":\"deferred_contract\",\"text\":\"Inputs and outputs name their meaning, and the exact signatures are decided in State 6.\",\"question\":\"What is the exact signature of every operation, including parameter and return types, optionality, synchronous or asynchronous calling convention, and whether each error is returned or raised?\",\"options\":[\"Define every signature and error carrier in State 5\",\"Define a single explicit signature convention here and give each operation's deviations\"],\"default_guess\":\"Use synchronous typed functions; return domain results and raise DelivererError for whole-operation refusals.\"},{\"unit\":\"50_public_apis.md:`public_op:deliverer_api.load_config`\",\"subject\":\"settings-file format and validation\",\"kind\":\"vague_validation\",\"text\":\"A missing or malformed setting, or an invalid connections file, ends the start.\",\"question\":\"What serialization, top-level shape, field types, allowed extra fields, path-resolution rules and value checks make the settings file valid, and what exactly does this operation do on failure?\",\"options\":[\"A strict UTF-8 JSON object with exactly the A8 fields\",\"A framework-defined settings format allowing additional fields\"],\"default_guess\":\"Require a UTF-8 JSON object with exactly the A8 fields, resolve relative paths against the settings file, require timezone Europe/Madrid, and raise a startup exception.\"},{\"unit\":\"50_public_apis.md:`public_op:deliverer_api.read_token`\",\"subject\":\"token trimming\",\"kind\":\"vague_text_rule\",\"text\":\"The token with the whitespace around it removed.\",\"question\":\"Which characters count as surrounding whitespace, and is trimming performed before UTF-8 validation and the 32-character length check?\",\"options\":[\"Apply Unicode string strip after strict UTF-8 decoding, then check length\",\"Remove only ASCII spaces and line endings, then check length\"],\"default_guess\":\"Decode as strict UTF-8, apply Unicode strip, and validate the resulting character count.\",\"witness\":{\"initial\":\"The token file contains 31 visible token characters followed by a non-ASCII whitespace character.\",\"events\":[\"Deployment calls read_token.\",\"A caller later sends the visible 31-character value as its bearer token.\"],\"outcomes\":[\"Unicode trimming leaves 31 characters, so startup ends.\",\"ASCII-only trimming retains the final character, so startup succeeds and the corresponding token is accepted.\"],\"observer\":\"The deployment and calling flow\"}},{\"unit\":\"50_public_apis.md:`public_op:deliverer_api.read_token`\",\"subject\":\"token-file object and permission check\",\"kind\":\"vague_validation\",\"text\":\"A file that breaks A5 rule 2 or cannot be read ends the start.\",\"question\":\"Must the token path be a regular non-symlink file, which file's mode is checked when it is a symlink, and what exception or exit result represents failure?\",\"options\":[\"Reject symlinks and non-regular files and raise a startup exception\",\"Follow symlinks, check the target mode and report a process exit status\"],\"default_guess\":\"Reject symlinks and non-regular files, check the opened file's mode, and raise a startup exception.\"},{\"unit\":\"50_public_apis.md:`public_op:deliverer_api.create_app`\",\"subject\":\"HTTP surface\",\"kind\":\"deferred_boundary_contract\",\"text\":\"The HTTP surface with the health, scan, delivery and mark routes.\",\"question\":\"What are the route paths, HTTP methods, request locations and schemas, success bodies, health body, status codes, refusal bodies and fixed refusal-detail sentences?\",\"options\":[\"Specify the entire HTTP contract in State 5\",\"Reference a complete, already-decided manifest containing the HTTP contract\"],\"default_guess\":\"Use four explicitly named JSON routes, map each M08 code to a fixed status and fixed path-free detail, and return the domain models as JSON.\"},{\"unit\":\"50_public_apis.md:`public_op:deliverer_api.create_app`\",\"subject\":\"route exception handling\",\"kind\":\"incomplete_error_contract\",\"text\":\"A served route answers a wrong token, a malformed request and every M08 refusal.\",\"question\":\"What does a served route answer for an unexpected exception and for a lower-level operating-system error not already converted to M06 or M08?\",\"options\":[\"Return one fixed path-free internal-error response\",\"Let the web framework produce its default error response\"],\"default_guess\":\"Return a fixed path-free internal-error response and log no credential or server path.\"},{\"unit\":\"50_public_apis.md:`public_op:deliverer_api.run_service`\",\"subject\":\"run_service input and service-start composition\",\"kind\":\"contradiction\",\"text\":\"The path of the settings file and the port.\",\"question\":\"Does run_service receive the already-created HTTP surface described by State 4, or does it receive a settings path and itself call load_config, read_token and create_app?\",\"options\":[\"run_service(app, port) only serves the surface created by the preceding start steps\",\"run_service(settings_path, port) owns and repeats the complete startup sequence\"],\"default_guess\":\"Make run_service the deployment entry point that receives settings_path and port and performs the complete startup sequence.\",\"witness\":{\"initial\":\"A valid settings file, token file and connections file exist, and deployment starts the service.\",\"events\":[\"The State 4 sequence calls load_config, read_token and create_app.\",\"Deployment then invokes run_service.\"],\"outcomes\":[\"An implementation following State 4 passes the created app to run_service, which State 5's input contract does not accept.\",\"An implementation following State 5 passes the settings path, causing run_service to load configuration and create an app itself or leaving the previously created app unused.\"],\"observer\":\"The deployment entry point and startup tests\"}},{\"unit\":\"50_public_apis.md:`public_op:deliverer_api.run_service`\",\"subject\":\"process exit result\",\"kind\":\"ambiguous_output\",\"text\":\"The exit status of the process.\",\"question\":\"Which exit statuses are returned for normal shutdown, invalid startup, bind failure and runtime server failure, and does the function return a status or terminate the process itself?\",\"options\":[\"Return a documented integer and never call process exit\",\"Own process termination and document the exit codes\"],\"default_guess\":\"Return 0 after an orderly stop and a documented nonzero integer for every startup or server failure; let the deployment wrapper exit.\"},{\"unit\":\"50_public_apis.md:`public_op:deliverer_api.run_service`\",\"subject\":\"port validation and binding\",\"kind\":\"vague_input\",\"text\":\"The path of the settings file and the port.\",\"question\":\"What type and valid range does port have, and what result follows from a malformed, privileged, unavailable or zero port?\",\"options\":[\"Require an integer from 1 through 65535 and fail startup if it cannot be bound\",\"Allow the server library's port forms and error behavior, including port zero\"],\"default_guess\":\"Require an integer from 1 through 65535 and return a nonzero startup status if binding fails.\"},{\"unit\":\"50_public_apis.md:`public_op:object_connections.load_connections`\",\"subject\":\"connections-file record format\",\"kind\":\"undefined_format\",\"text\":\"An unreadable file, a file of another form or a subfolder that breaks the form of A5 rule 8 raises an error.\",\"question\":\"What exact JSON shape represents the collection and each M01, how are UUIDs and paths encoded, are extra fields allowed, and how are duplicate project ids handled?\",\"options\":[\"A strict object keyed by canonical project UUID with exact M01 record fields\",\"A list of M01 objects in which duplicate project ids require an explicit resolution rule\"],\"default_guess\":\"Use a strict UTF-8 JSON object keyed by lowercase hyphenated project UUID, reject extra or missing fields and reject duplicate logical UUIDs.\"},{\"unit\":\"50_public_apis.md:`public_op:object_connections.load_connections`\",\"subject\":\"load_connections error type\",\"kind\":\"ambiguous_error\",\"text\":\"raises an error\",\"question\":\"Which exception or domain error is raised, and how does load_config distinguish this startup failure from the folder_unavailable refusal produced during an operation?\",\"options\":[\"Raise a dedicated configuration/startup exception\",\"Raise DelivererError with folder_unavailable in every context\"],\"default_guess\":\"Raise a dedicated startup/configuration exception; confirmed_connection converts the same validation failure to DelivererError(folder_unavailable).\"},{\"unit\":\"50_public_apis.md:`public_op:object_connections.available_photo_folder`\",\"subject\":\"returned folder path\",\"kind\":\"ambiguous_output\",\"text\":\"The path of the photo folder, for use inside the service only.\",\"question\":\"Is the returned value the original root-plus-subfolder path or its canonical resolved path, and what protects later file access if links or directories change after this check?\",\"options\":[\"Return the canonical resolved path and require later opens not to follow replacement links\",\"Return the configured joined path and repeat containment checks at each actual open\"],\"default_guess\":\"Return the canonical resolved path and have source_folder open every path component without following links.\",\"witness\":{\"initial\":\"The configured photo subfolder initially resolves below the object root and is replaced by a link outside the root immediately after available_photo_folder returns.\",\"events\":[\"photo_delivery calls available_photo_folder.\",\"Another actor replaces the folder entry.\",\"source_folder begins its scan or named read.\"],\"outcomes\":[\"An implementation using the returned canonical path continues with the originally accepted in-root location or fails if it vanished.\",\"An implementation returning and reopening the configured path follows or encounters the replacement, with behavior depending on its open strategy.\"],\"observer\":\"The calling flow through either a folder_unavailable refusal or the files reported\"}},{\"unit\":\"50_public_apis.md:`public_op:source_folder.observe_source_files`\",\"subject\":\"SourceFile contract\",\"kind\":\"undefined_model\",\"text\":\"One `SourceFile` for each reported file, in the walking order of A1, with its source id when it is ready.\",\"question\":\"What are all SourceFile fields and their types, which fields are present for ready and rejected files, and does it retain the bytes, path, metadata size and modification instant used by later operations?\",\"options\":[\"Define SourceFile as a discriminated ready/rejected internal model with exact fields\",\"Use one model with optional path, bytes, source_id, status, reason, size and modification time\"],\"default_guess\":\"Define a discriminated internal model; ready carries internal path, exact bytes, source_id, metadata size and normalized modification time, while rejected carries name, size when known and reason.\"},{\"unit\":\"50_public_apis.md:`public_op:source_folder.observe_source_files`\",\"subject\":\"failure to list the photo-folder root\",\"kind\":\"incomplete_error_condition\",\"text\":\"`folder_unavailable` when a subfolder that is not ignored cannot be listed.\",\"question\":\"Does failure to list the photo-folder root also produce folder_unavailable, and does an error encountered partway through discard all observations already accumulated?\",\"options\":[\"Any required directory-listing failure, including the root, refuses the whole scan and returns no partial result\",\"Only descendant failures refuse; root failures use another error\"],\"default_guess\":\"Any required listing failure, including the root, returns folder_unavailable and discards the partial scan.\"},{\"unit\":\"50_public_apis.md:`public_op:source_folder.read_named_source`\",\"subject\":\"SourceFile snapshot and modification time\",\"kind\":\"ambiguous_snapshot\",\"text\":\"Otherwise one `SourceFile`, with the bytes that were judged when it is ready.\",\"question\":\"Which metadata snapshot supplies size and modification time when the file changes while it is read, and must the returned SourceFile's metadata describe the same bytes that were hashed and judged?\",\"options\":[\"Use metadata from the opened file before reading and return it with the bytes read from that descriptor\",\"Restat after reading and reject or retry when metadata changed\"],\"default_guess\":\"Open without following links, take metadata from that descriptor before reading, read once, and return that metadata with exactly the bytes read.\"},{\"unit\":\"50_public_apis.md:`public_op:delivery_store.project_lock`\",\"subject\":\"state-folder dependency\",\"kind\":\"missing_input\",\"text\":\"The project id.\",\"question\":\"How does project_lock obtain the configured state folder needed to locate the lock file?\",\"options\":[\"Accept Config or state_dir as an explicit parameter\",\"Use module-global configuration established by an initialization operation\"],\"default_guess\":\"Accept Config as an explicit parameter because no initialization operation or module-global lifecycle is defined.\"},{\"unit\":\"50_public_apis.md:`public_op:delivery_store.project_lock`\",\"subject\":\"lock handle protocol\",\"kind\":\"undefined_return_protocol\",\"text\":\"A held lock for the duration of the caller's block.\",\"question\":\"What exact context-manager or acquire/release protocol is returned, and what happens if acquisition is interrupted or the block exits by exception?\",\"options\":[\"Return a synchronous context manager that blocks indefinitely and always releases on exit\",\"Return an explicit lock handle requiring a separate release operation\"],\"default_guess\":\"Return a synchronous context manager that blocks indefinitely and releases in finally on every exit path.\"},{\"unit\":\"50_public_apis.md:`public_op:delivery_store.store_image`\",\"subject\":\"binary-store dependency\",\"kind\":\"missing_input\",\"text\":\"The project id, the source id and the image bytes.\",\"question\":\"How does store_image obtain binary_root, and is the supplied image required to be immutable bytes?\",\"options\":[\"Accept Config or binary_root explicitly\",\"Use module-global configuration\"],\"default_guess\":\"Accept Config explicitly and require bytes.\"},{\"unit\":\"50_public_apis.md:`public_op:delivery_store.read_placement`\",\"subject\":\"state-folder dependency\",\"kind\":\"missing_input\",\"text\":\"The project id and the source id.\",\"question\":\"How does read_placement obtain state_dir?\",\"options\":[\"Accept Config or state_dir explicitly\",\"Use module-global configuration\"],\"default_guess\":\"Accept Config explicitly.\"},{\"unit\":\"50_public_apis.md:`public_op:delivery_store.read_placement`\",\"subject\":\"damaged placement criteria\",\"kind\":\"vague_validation\",\"text\":\"`state_unavailable` for a damaged record.\",\"question\":\"Exactly which syntax, field, type, enum, identifier mismatch, unknown-field or invariant defects make an existing placement record damaged?\",\"options\":[\"Require an exact strict serialization of M04 and equality with the project_id and source_id used as its key\",\"Validate required fields and types but allow unknown fields and do not compare embedded identity with its key\"],\"default_guess\":\"Strictly validate the complete M04, reject unknown fields, and require its embedded project_id and source_id to equal the lookup key.\"},{\"unit\":\"50_public_apis.md:`public_op:delivery_store.write_placement`\",\"subject\":\"state-folder dependency\",\"kind\":\"missing_input\",\"text\":\"The project id, the source id and M04.\",\"question\":\"How does write_placement obtain state_dir?\",\"options\":[\"Accept Config or state_dir explicitly\",\"Use module-global configuration\"],\"default_guess\":\"Accept Config explicitly.\"},{\"unit\":\"50_public_apis.md:`public_op:delivery_store.write_placement`\",\"subject\":\"placement key disagreement\",\"kind\":\"undefined_precondition\",\"text\":\"The project id, the source id and M04.\",\"question\":\"What happens when M04's project_id or source_id differs from the separate project id or source id arguments?\",\"options\":[\"Reject the call without writing\",\"Ignore the embedded identity and write under the separate key\",\"Ignore the separate key and derive the record path from M04\"],\"default_guess\":\"Reject the call without writing.\"},{\"unit\":\"50_public_apis.md:`public_op:delivery_store.read_mark`\",\"subject\":\"state-folder dependency\",\"kind\":\"missing_input\",\"text\":\"The project id and the source id.\",\"question\":\"How does read_mark obtain state_dir?\",\"options\":[\"Accept Config or state_dir explicitly\",\"Use module-global configuration\"],\"default_guess\":\"Accept Config explicitly.\"},{\"unit\":\"50_public_apis.md:`public_op:delivery_store.read_mark`\",\"subject\":\"damaged mark criteria\",\"kind\":\"vague_validation\",\"text\":\"`state_unavailable` for a damaged record.\",\"question\":\"Exactly which syntax, field, type, identifier mismatch, unknown-field or invariant defects make an existing mark record damaged?\",\"options\":[\"Require an exact strict serialization of M07 and equality with the lookup key\",\"Validate required fields and types while allowing unknown fields and identity mismatches\"],\"default_guess\":\"Strictly validate the complete M07, reject unknown fields, and require its embedded project_id and source_id to equal the lookup key.\"},{\"unit\":\"50_public_apis.md:`public_op:delivery_store.write_mark`\",\"subject\":\"state-folder dependency\",\"kind\":\"missing_input\",\"text\":\"The project id, the source id and M07.\",\"question\":\"How does write_mark obtain state_dir?\",\"options\":[\"Accept Config or state_dir explicitly\",\"Use module-global configuration\"],\"default_guess\":\"Accept Config explicitly.\"},{\"unit\":\"50_public_apis.md:`public_op:delivery_store.write_mark`\",\"subject\":\"mark key disagreement\",\"kind\":\"undefined_precondition\",\"text\":\"The project id, the source id and M07.\",\"question\":\"What happens when M07's project_id or source_id differs from the separate project id or source id arguments?\",\"options\":[\"Reject with state_unavailable and write nothing\",\"Ignore the embedded identity and write under the separate key\",\"Ignore the separate key and derive the key from M07\"],\"default_guess\":\"Reject with state_unavailable and write nothing.\"},{\"unit\":\"50_public_apis.md:`public_op:photo_delivery.scan_project_photos`\",\"subject\":\"status-count result\",\"kind\":\"ambiguous_output\",\"text\":\"One M02 for each reported file and the count of each status.\",\"question\":\"What result model contains the observations and counts, are zero-valued statuses included, and is the observation order preserved independently of the count representation?\",\"options\":[\"Return a named scan-result model with an ordered list and all four status keys including zero\",\"Return a tuple of observations and a sparse mapping containing only statuses seen\"],\"default_guess\":\"Return a named result model with the ordered observations and counts for all four statuses, including zeros.\"},{\"unit\":\"50_public_apis.md:`public_op:photo_delivery.scan_project_photos`\",\"subject\":\"damaged mark during scan\",\"kind\":\"contradiction\",\"text\":\"The refusals of `confirmed_connection`, `available_photo_folder`, `observe_source_files` and `read_placement`, as M08.\",\"question\":\"Must scan_project_photos also propagate state_unavailable from read_mark, as A6 and State 4 require, or is a damaged mark ignored or treated as an unmarked placement?\",\"options\":[\"Include read_mark refusals and return M08 state_unavailable\",\"Ignore an unreadable mark and report the placement as placed\",\"Treat the file as rejected\"],\"default_guess\":\"Include read_mark refusals and return M08 state_unavailable.\",\"witness\":{\"initial\":\"A ready source has a valid placement record and an existing malformed mark record.\",\"events\":[\"The calling flow requests a scan.\",\"scan_project_photos reads the placement and then attempts to determine whether it is published.\"],\"outcomes\":[\"Following the State 5 error list, the implementation does not propagate a read_mark refusal and reports a status such as placed.\",\"Following A6 rule 5 and State 4, it returns M08 with state_unavailable and reports no completed scan.\"],\"observer\":\"The calling flow\"}},{\"unit\":\"50_public_apis.md:`public_op:photo_delivery.deliver_project_photo`\",\"subject\":\"project-lock failure\",\"kind\":\"incomplete_error_set\",\"text\":\"`invalid_source_id` and the refusals of the connection, the folder and the records, as M08.\",\"question\":\"Is failure to open or lock the project lock an M08 state_unavailable refusal, as A6 rule 5 says, even though the lock is not a connection, folder or record?\",\"options\":[\"Explicitly include project_lock failures as M08 state_unavailable\",\"Treat lock failure as an unhandled operating-system error\",\"Convert it to failed M06\"],\"default_guess\":\"Explicitly include project_lock failure as M08 state_unavailable.\",\"witness\":{\"initial\":\"The connection and folder are valid, but the project's lock file cannot be opened.\",\"events\":[\"The caller requests delivery of a valid ready source.\",\"deliver_project_photo reaches project_lock.\"],\"outcomes\":[\"One implementation returns M08 state_unavailable under A6 rule 5.\",\"Another treats the unlisted lock error as an unexpected exception or failed M06.\"],\"observer\":\"The calling flow\"}},{\"unit\":\"50_public_apis.md:`public_op:photo_delivery.mark_photo_published`\",\"subject\":\"project-lock failure\",\"kind\":\"incomplete_error_set\",\"text\":\"`invalid_source_id`, `not_placed`, `publication_conflict` and the refusals of the connection and the records, as M08.\",\"question\":\"Is failure to open or lock the project lock an M08 state_unavailable refusal, as A6 rule 5 says?\",\"options\":[\"Explicitly include project_lock failures as M08 state_unavailable\",\"Treat lock failure as an unhandled operating-system error\"],\"default_guess\":\"Explicitly include project_lock failure as M08 state_unavailable.\"},{\"unit\":\"50_public_apis.md:`public_op:photo_delivery.mark_photo_published`\",\"subject\":\"mark-operation return model\",\"kind\":\"model_contradiction\",\"text\":\"M07 with `marked` or `replayed`.\",\"question\":\"How is MarkStatus returned when M07 has no status field and State 1 says MarkStatus belongs to the answer but is not stored?\",\"options\":[\"Define a separate MarkOutcome containing status and M07\",\"Add a non-persisted status field to the operation's M07 representation\",\"Return a tuple of M07 and MarkStatus\"],\"default_guess\":\"Define a separate MarkOutcome with status and mark fields.\",\"witness\":{\"initial\":\"A mark already exists for the same photo_id.\",\"events\":[\"The caller invokes mark_photo_published again.\",\"The operation reads the existing M07.\"],\"outcomes\":[\"An implementation returning M07 alone cannot represent replayed without changing the declared model.\",\"An implementation inventing a wrapper returns both the original M07 and replayed status.\"],\"observer\":\"The calling flow and HTTP serializer\"}},{\"unit\":\"50_public_apis.md:`public_op:system_clock.utc_now`\",\"subject\":\"direct caller of utc_now\",\"kind\":\"caller_contradiction\",\"text\":\"`module:deliverer_api`.\",\"question\":\"Is the caller the module that imports and passes utc_now, or photo_delivery, which State 3 and State 4 say invokes the received function?\",\"options\":[\"Treat deliverer_api as the dependency owner and photo_delivery as the runtime invoker of an injected callable\",\"Declare photo_delivery as the caller and import system_clock there directly\"],\"default_guess\":\"Keep the import edge from deliverer_api to system_clock, but state explicitly that photo_delivery is the runtime invoker of the injected callable.\",\"witness\":{\"initial\":\"create_app has received utc_now and a valid mark request arrives.\",\"events\":[\"deliverer_api passes the clock callable to mark_photo_published.\",\"mark_photo_published invokes the callable.\"],\"outcomes\":[\"Under an import-owner meaning, deliverer_api is recorded as the caller despite not executing the call.\",\"Under an invocation meaning, photo_delivery is the caller, contradicting the stated Callers section.\"],\"observer\":\"Dependency tests, tracing and clock-call tests\"}}]}",
+ "set_aside": []
+}

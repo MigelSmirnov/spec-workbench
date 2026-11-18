@@ -98,7 +98,7 @@ The HTTP surface with the health, scan, delivery and mark routes.
 
 ### Observable effect
 
-None until the surface is served. A served route checks the token, the request form and the project id, calls one operation of `module:photo_delivery` and turns its refusal into an answer.
+None until the surface is served. The health route answers without a token. Every other route checks the token, the request form and the project id, calls one operation of `module:photo_delivery` and turns its refusal into an answer.
 
 ### Enforces
 
@@ -132,7 +132,7 @@ The exit status of the process.
 
 ### Observable effect
 
-The service listens on the loopback interface until it is stopped.
+Calls `public_op:deliverer_api.load_config`, `public_op:deliverer_api.read_token` and `public_op:deliverer_api.create_app` in that order, then serves the surface on the loopback interface until it is stopped.
 
 ### Enforces
 
@@ -276,7 +276,7 @@ A1 orders 1 to 6, the ignored names, INV-01 and INV-18.
 
 ### Errors
 
-`folder_unavailable` when a subfolder that is not ignored cannot be listed. A file that cannot be read is a rejected `SourceFile`, not an error.
+`folder_unavailable` when the photo folder or a subfolder that is not ignored cannot be listed. A file that cannot be read is a rejected `SourceFile`, not an error.
 
 ### State impact
 
@@ -396,7 +396,7 @@ No state.
 
 ### Inputs
 
-The project id.
+The run settings, the project id.
 
 ### Outputs
 
@@ -430,7 +430,7 @@ Writes only the project lock file.
 
 ### Inputs
 
-The project id, the source id and the image bytes.
+The run settings, the project id, the source id and the image bytes.
 
 ### Outputs
 
@@ -464,7 +464,7 @@ Writes one stored image.
 
 ### Inputs
 
-The project id and the source id.
+The run settings, the project id and the source id.
 
 ### Outputs
 
@@ -498,7 +498,7 @@ Read-only.
 
 ### Inputs
 
-The project id, the source id and M04.
+The run settings, the project id, the source id and M04.
 
 ### Outputs
 
@@ -532,7 +532,7 @@ Writes one placement record.
 
 ### Inputs
 
-The project id and the source id.
+The run settings, the project id and the source id.
 
 ### Outputs
 
@@ -566,7 +566,7 @@ Read-only.
 
 ### Inputs
 
-The project id, the source id and M07.
+The run settings, the project id, the source id and M07.
 
 ### Outputs
 
@@ -604,7 +604,7 @@ The run settings and the project id.
 
 ### Outputs
 
-One M02 for each reported file and the count of each status.
+One M02 for each reported file, in the walking order of A1, and the count of each status that occurs.
 
 ### Observable effect
 
@@ -616,7 +616,7 @@ A1 orders 7 to 9, INV-01 and INV-10.
 
 ### Errors
 
-The refusals of `confirmed_connection`, `available_photo_folder`, `observe_source_files` and `read_placement`, as M08.
+The refusals of `confirmed_connection`, `available_photo_folder`, `observe_source_files`, `read_placement` and `read_mark`, as M08.
 
 ### State impact
 
@@ -650,11 +650,11 @@ A3, INV-06, INV-07, INV-10, INV-11, INV-12 and INV-19.
 
 ### Errors
 
-`invalid_source_id` and the refusals of the connection, the folder and the records, as M08. Every condition of A3 rule 5 is a `failed` M06.
+`invalid_source_id` and the refusals of the connection, the folder, the project lock and the records, as M08. Every condition of A3 rule 5 is a `failed` M06.
 
 ### State impact
 
-Creates at most one placement of a project and content.
+Creates at most one placement of a project and content, and the project lock file on first use. After a failed record write a stored image may remain without a record (A3 rule 5).
 
 ## `public_op:photo_delivery.mark_photo_published`
 
@@ -672,7 +672,7 @@ The run settings, the project id, the source id, the `photo_id` and the clock fu
 
 ### Outputs
 
-M07 with `marked` or `replayed`.
+M07 together with its `MarkStatus`, `marked` or `replayed`.
 
 ### Observable effect
 
@@ -684,11 +684,11 @@ A4, A7 rule 2, INV-08, INV-10, INV-12 and INV-13.
 
 ### Errors
 
-`invalid_source_id`, `not_placed`, `publication_conflict` and the refusals of the connection and the records, as M08.
+`invalid_source_id`, `not_placed`, `publication_conflict` and the refusals of the connection, the project lock and the records, as M08.
 
 ### State impact
 
-Creates at most one mark of a placement.
+Creates at most one mark of a placement, and the project lock file on first use.
 
 ## `public_op:system_clock.utc_now`
 
@@ -710,7 +710,7 @@ The current time in UTC without an offset, in microseconds.
 
 ### Observable effect
 
-Reads the host clock.
+Reads the host clock at each call. `module:deliverer_api` passes this function to a mark, and `module:photo_delivery` calls it once, after the source id is accepted (A7 rule 2).
 
 ### Enforces
 
