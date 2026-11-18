@@ -79,7 +79,8 @@ names the owner of each rule.
 | A1 | orders 7 to 9, placed and published status | `photo_delivery` |
 | A5 | rules 1 to 4, token and listening address | `deliverer_api` |
 | A3 | rule 4, the request form of a placement | `deliverer_api` |
-| A3 | rule 4, every other check and its order; rules 2, 3 and 5 to 10 | `photo_delivery` |
+| A3 | rule 5, condition 1, whether a name is a path that may be opened | `source_folder` |
+| A3 | rule 4, every other check and its order; rules 2, 3, 6 to 10 and the rest of rule 5 | `photo_delivery` |
 | A4 | rule 2, the form of `photo_id` and its lowercase hyphenated spelling | `deliverer_api` |
 | A4 | every other rule | `photo_delivery` |
 | A5 | rule 5, the single principal | `deliverer_api` |
@@ -230,6 +231,7 @@ read_named_source
 ### Trace inputs
 
 - A1
+- A3
 - A7
 
 ### Depth assessment

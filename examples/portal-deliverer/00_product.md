@@ -58,8 +58,8 @@ The deliverer holds no Portal credential (P-01).
 | Record the publication | the file is reported as published, with its Portal photo id | a photo that was not placed, or a different photo id for the same source, is refused and nothing is changed | unit tests, E2E |
 | Show the photo (Portal operation, by the owner) | the client sees and downloads exactly the placed image | the Portal's own refusal | E2E, real Portal |
 
-Evidence is from local runs against a real Client Portal process and a stub Registry. No
-run has used a live Syncthing folder, the kernel or the VPS.
+Evidence is from local runs against a real Client Portal process with a stub Registry, and against two
+private Syncthing instances. No run has used the owner's devices, the kernel or the VPS.
 
 ## Inputs
 

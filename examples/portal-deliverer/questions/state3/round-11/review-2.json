@@ -1,0 +1,319 @@
+{
+ "open_points": [
+  {
+   "subject": "scan under concurrent folder changes",
+   "kind": "undefined race outcome",
+   "text": "Syncthing may change the folder during a scan, and a scan promises nothing about a file or folder that changes while it runs.",
+   "question": "For each relevant race—rename, removal, replacement, growth, directory disappearance or conversion to a link—must the scan omit the entry, report facts from the opened file, reject the entry, or refuse the whole scan?",
+   "options": [
+    "Report the result of the single successful open/read",
+    "Omit any entry detected as changed",
+    "Return a per-file rejection",
+    "Refuse the whole scan"
+   ],
+   "default_guess": "Use the bytes and metadata obtained from the one successful open; omit a file that vanishes before opening; refuse only when a non-ignored subfolder cannot be listed.",
+   "witness": {
+    "initial": "A regular JPEG named a.jpg is present when its directory is listed.",
+    "events": [
+     "Syncthing replaces a.jpg after the listing but before the scan opens it.",
+     "The calling flow receives the scan result."
+    ],
+    "outcomes": [
+     "The scan reports a.jpg with the source id of the replacement bytes.",
+     "The scan omits or rejects a.jpg because it changed during the scan."
+    ],
+    "observer": "The calling flow, which sees a different offered source id or no offered photo."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "delivery classification of a non-regular named entry",
+   "kind": "contradictory precedence",
+   "text": "| 1 | `name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link | `NOT_READY_OR_ABSENT` |\n| 2 | A1 orders 1 to 6 reject the file | the member with the value of the A1 reason |",
+   "question": "When the requested path opens but is not a regular file, does condition 1 return `not_ready_or_absent`, or does A1 order 3 return `not_a_regular_file`?",
+   "options": [
+    "Condition 1 wins: not_ready_or_absent",
+    "A1 order 3 wins: not_a_regular_file"
+   ],
+   "default_guess": "Return `not_ready_or_absent`, because condition 1 precedes condition 2 in A3 rule 5.",
+   "witness": {
+    "initial": "A scan reported name a.jpg, but before delivery that path is replaced by a directory or another non-regular entry.",
+    "events": [
+     "The calling flow requests delivery of a.jpg with the earlier source id.",
+     "source_folder opens or inspects the named entry."
+    ],
+    "outcomes": [
+     "The delivery fails with `not_ready_or_absent` under A3 rule 5 condition 1.",
+     "The delivery fails with `not_a_regular_file` by applying A1 order 3 through condition 2."
+    ],
+    "observer": "The calling flow sees a different `PlacementFailure`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "delivery race after name validation",
+   "kind": "undefined failure mapping",
+   "text": "deciding whether a requested name is a file a scan could report, and reading it once without following a link;",
+   "question": "If the name passes the eligibility check but the entry disappears, becomes a link, or becomes non-regular before or during the one read, which failure is returned: `not_ready_or_absent`, `unreadable_file`, or `not_a_regular_file`?",
+   "options": [
+    "Classify from the pre-read eligibility check",
+    "Classify the result of the open/read under A1",
+    "Give every post-validation race unreadable_file"
+   ],
+   "default_guess": "Classify a failure during the actual open/read under A1, using `unreadable_file` for disappearance or link substitution and `not_a_regular_file` when the opened object is non-regular.",
+   "witness": {
+    "initial": "a.jpg is an eligible regular file when delivery starts.",
+    "events": [
+     "source_folder validates the requested name.",
+     "Syncthing renames a.jpg away before the file is opened.",
+     "source_folder attempts the one read."
+    ],
+    "outcomes": [
+     "The result is `not_ready_or_absent` because the requested name is no longer a reportable file.",
+     "The result is `unreadable_file` because an eligible name failed during its actual read."
+    ],
+    "observer": "The calling flow sees a different failure reason."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "scan record snapshot",
+   "kind": "unclear ordering and consistency",
+   "text": "| 5 | observe the folder, read records | source id | connection |",
+   "question": "Must folder observation finish before placement and mark records are read, are records read before observation, and must all files be classified against one consistent record snapshot?",
+   "options": [
+    "Observe all files, then read all records once",
+    "Read records first, then observe files",
+    "Read placement and mark records per observed file",
+    "Permit any interleaving"
+   ],
+   "default_guess": "Observe the folder first, then read placement and mark records for the resulting source ids while using one logical record snapshot.",
+   "witness": {
+    "initial": "A placement exists for a source but has no publication mark.",
+    "events": [
+     "A scan begins and observes the source file.",
+     "A concurrent mark is written while the scan is processing records.",
+     "The scan returns the file status."
+    ],
+    "outcomes": [
+     "The scan reports `placed` because its record view precedes the concurrent mark.",
+     "The scan reports `published` because it reads the mark after the concurrent write."
+    ],
+    "observer": "The calling flow sees `placed` or `published` and may decide whether to publish."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "malformed placement or mark records",
+   "kind": "unowned failure policy",
+   "text": "| 5 | observe the folder, read records | source id | connection |",
+   "question": "What must scan, delivery and mark do when a placement or publication-mark record is unreadable, malformed, inconsistent with its file name, or references a missing stored image, and which module owns that decision?",
+   "options": [
+    "Refuse the whole operation with an existing refusal code",
+    "Treat the malformed record as absent",
+    "Return a per-photo failure",
+    "Introduce a dedicated corrupt-state refusal"
+   ],
+   "default_guess": "Refuse the whole operation with a dedicated corrupt-state error rather than silently treating durable state as absent.",
+   "witness": {
+    "initial": "A placement record exists for the requested project and source id but contains invalid JSON.",
+    "events": [
+     "The calling flow scans the project or repeats delivery of that source.",
+     "delivery_store attempts to read the placement record."
+    ],
+    "outcomes": [
+     "The operation treats the record as absent and creates or reports a new placement.",
+     "The operation refuses because durable state is corrupt."
+    ],
+    "observer": "The calling flow sees success/recreation or a refusal, and durable state may change in only one implementation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "failed placement-record write after stored-image write",
+   "kind": "contradiction",
+   "text": "A photo that cannot be delivered is answered with status `failed` and one member of `= models.PlacementFailure`, and nothing is written except the project lock:\n\n6. The stored image is written before the placement record, so a crash between them repeats the\n   placement and leaves no record without an image.",
+   "question": "If storing the image succeeds but writing the placement record fails, may the stored image remain, or must it be removed so that the failed result wrote nothing except the lock?",
+   "options": [
+    "Keep the orphan image and retry on the next delivery",
+    "Remove the image before returning failed",
+    "Treat the operation as indeterminate rather than failed"
+   ],
+   "default_guess": "Keep the complete image and return `unreadable_file`; a later retry overwrites or reuses it before writing the record.",
+   "witness": {
+    "initial": "No placement or stored image exists for a valid requested photo.",
+    "events": [
+     "photo_delivery stores the prepared image successfully.",
+     "Writing the placement record fails.",
+     "The operation returns to the calling flow."
+    ],
+    "outcomes": [
+     "The image remains, as implied by image-before-record crash recovery.",
+     "The image is removed, as required by 'nothing is written except the project lock'."
+    ],
+    "observer": "An operator inspecting the binary store and the next delivery attempt sees whether an orphan image exists."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ownership of operation steps versus lower-level decisions",
+   "kind": "overlapping ownership",
+   "text": "- steps 3 and later of \"Order of one operation\";",
+   "question": "Does `photo_delivery` own only the sequencing of steps 3 and later, or also the decisions performed in those steps that are assigned to `object_connections`, `source_folder`, `photo_preparation` and `delivery_store`?",
+   "options": [
+    "photo_delivery owns orchestration only",
+    "photo_delivery co-owns every decision in those steps",
+    "Each lower module owns its decision and photo_delivery owns only cross-module outcomes"
+   ],
+   "default_guess": "`photo_delivery` owns orchestration and cross-module outcome mapping; each lower module remains the sole owner of its local decision.",
+   "witness": {
+    "initial": "The named file fails image decoding during delivery.",
+    "events": [
+     "photo_delivery calls photo_preparation.",
+     "photo_preparation detects the decoding failure.",
+     "The result must be mapped to `unreadable_image`."
+    ],
+    "outcomes": [
+     "photo_preparation decides the failure and photo_delivery only transports it.",
+     "photo_delivery independently decides or reinterprets the decoding outcome because it owns step 8."
+    ],
+    "observer": "Tests and future maintainers see different module APIs and potentially different mappings."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "source_folder trace inputs",
+   "kind": "contradictory dependency record",
+   "text": "### Knows\n\n- A1 orders 1 to 6, condition 1 of A3 rule 5, and rule 4 of A7.\n\n### Trace inputs\n\n- A1\n- A7",
+   "question": "Must A3 be a trace input of `source_folder`, or must condition 1 of A3 rule 5 be removed from what the module knows?",
+   "options": [
+    "Add A3 to Trace inputs",
+    "Move the A3 condition entirely to photo_delivery",
+    "Restate the name rule in A1 and trace only A1"
+   ],
+   "default_guess": "Add A3 to `source_folder` trace inputs because its eligibility decision directly implements A3 rule 5 condition 1.",
+   "unit": "?"
+  },
+  {
+   "subject": "photo_preparation construction of PhotoPublication",
+   "kind": "missing dependency",
+   "text": "- building the publication body, with `client_visible` false.",
+   "question": "How can `photo_preparation` build the M05 `PhotoPublication` value when its declared `domain_models` dependency omits `PhotoPublication`; should it import and construct that model, or return another representation for another module to construct?",
+   "options": [
+    "Import and construct PhotoPublication in photo_preparation",
+    "Return primitive fields and construct PhotoPublication in photo_delivery",
+    "Move publication construction to domain_models"
+   ],
+   "default_guess": "Add `PhotoPublication` to the direct `photo_preparation` → `domain_models` dependency and construct it in `build_publication`.",
+   "unit": "?"
+  },
+  {
+   "subject": "photo_delivery construction of public results and records",
+   "kind": "missing dependency",
+   "text": "- completing a scan with placed and published status;\n- one placement per project and content, replay, and per-photo failure;\n- one mark per placement, replay and `publication_conflict`;",
+   "question": "Which module constructs `SourcePhotoObservation`, `PhotoPlacement`, `PlacementOutcome` and `PublicationMark`, and which of those models must therefore appear in `photo_delivery`'s direct dependency surface?",
+   "options": [
+    "photo_delivery constructs all four and imports them",
+    "Lower providers construct their own records and outcomes",
+    "Introduce domain-model factory functions"
+   ],
+   "default_guess": "`photo_delivery` constructs the scan observation, placement, delivery outcome and mark, so its `domain_models` dependency must name all four model types it directly constructs.",
+   "unit": "?"
+  },
+  {
+   "subject": "delivery_store reconstruction of durable models",
+   "kind": "missing dependency",
+   "text": "- reading and writing placement and mark records.",
+   "question": "Do `read_placement` and `read_mark` return `PhotoPlacement` and `PublicationMark` instances, and if so why are those directly named models absent from `delivery_store`'s dependencies?",
+   "options": [
+    "Import and reconstruct PhotoPlacement and PublicationMark",
+    "Return untyped dictionaries",
+    "Move serialization and reconstruction to photo_delivery"
+   ],
+   "default_guess": "Have `delivery_store` import, validate and return `PhotoPlacement` and `PublicationMark`.",
+   "unit": "?"
+  },
+  {
+   "subject": "Syncthing evidence",
+   "kind": "contradiction",
+   "text": "Evidence is from local runs against a real Client Portal process and a stub Registry. No\nrun has used a live Syncthing folder, the kernel or the VPS.\n\nEvidence for every model: `python3 -m pytest -q prototypes/portal_deliverer`,\n`python3 prototypes/portal_deliverer/e2e_local_portal.py` (a real Client Portal process and a stub\nRegistry) and `python3 prototypes/portal_deliverer/e2e_local_syncthing.py` (two private Syncthing\ninstances).",
+   "question": "Has the design evidence included a run against live Syncthing instances or not, and which evidence statements must be updated to agree?",
+   "options": [
+    "The two private Syncthing instances count as a live Syncthing run",
+    "They are simulated and do not count as a live Syncthing folder"
+   ],
+   "default_guess": "Record that live local Syncthing instances were used, while the owner's devices, kernel and VPS were not.",
+   "unit": "?"
+  },
+  {
+   "subject": "read_named_source result contract",
+   "kind": "undefined module contract",
+   "text": "read_named_source",
+   "question": "What exact success and failure value does `read_named_source` return so that `photo_delivery` receives the bytes, file modification time, source hash and ordered A1/A3 rejection reason without rereading or rejudging the file?",
+   "options": [
+    "Return SourceFile or Rejected as a discriminated result",
+    "Raise DelivererError for all failures",
+    "Return bytes and metadata and let photo_delivery classify failures"
+   ],
+   "default_guess": "Return a discriminated `SourceFile | Rejected`, with `SourceFile` carrying the one-read bytes, modification time and computed source id, and `Rejected` carrying the decided placement failure.",
+   "unit": "?"
+  },
+  {
+   "subject": "object_connections/domain_models dependency row",
+   "kind": "standard_violation",
+   "text": "| `object_connections` | `domain_models` | `DelivererError`, `ObjectConnection`, `RefusalCode` |",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации.",
+   "section": "7",
+   "question": "Remove `RefusalCode` from this direct import surface if the module writes refusal values as text, or state and implement the direct enum reference that requires it.",
+   "unit": "?"
+  },
+  {
+   "subject": "source_folder/domain_models dependency row",
+   "kind": "standard_violation",
+   "text": "| `source_folder` | `domain_models` | `MAX_SOURCE_BYTES`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `CONFLICT_COPY_MARK`, `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `ObservationReason`, `RefusalCode` |",
+   "rule": "Для provider-а `models` перечисляй ровно модели, enum и interface, которые\n  consumer непосредственно называет, конструирует или проверяет в своём\n  runtime коде. Тип поля выбранной модели, variants discriminated union и\n  другие транзитивные model-ссылки расширяют model-context локального\n  прохода и входят в Python-import consumer-а только тогда, когда consumer\n  обращается к ним сам: сравнивает с членом enum (`Cardinality.MANY`),\n  конструирует вложенную модель, проверяет тип",
+   "section": "7",
+   "question": "Remove `ScanStatus`, `ObservationReason` and `RefusalCode` if their values are written as text, or specify the direct runtime enum operations that make each import necessary.",
+   "unit": "?"
+  },
+  {
+   "subject": "photo_preparation/domain_models dependency row",
+   "kind": "standard_violation",
+   "text": "| `photo_preparation` | `domain_models` | `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_MAX_SIDE`, `PHOTO_QUALITY`, `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `PreparedPhoto`, `Rejected`, `DateSource`, `PlacementFailure` |",
+   "rule": "Для provider-а `models` перечисляй ровно модели, enum и interface, которые\n  consumer непосредственно называет, конструирует или проверяет в своём\n  runtime коде. Тип поля выбранной модели, variants discriminated union и\n  другие транзитивные model-ссылки расширяют model-context локального\n  прохода и входят в Python-import consumer-а только тогда, когда consumer\n  обращается к ним сам: сравнивает с членом enum (`Cardinality.MANY`),\n  конструирует вложенную модель, проверяет тип",
+   "section": "7",
+   "question": "Make this row the exact direct runtime surface: remove text-only `DateSource` and `PlacementFailure` enum imports unless the module directly names them, and add any directly constructed model such as `PhotoPublication`.",
+   "unit": "?"
+  },
+  {
+   "subject": "delivery_store/domain_models dependency row",
+   "kind": "standard_violation",
+   "text": "| `delivery_store` | `domain_models` | `Config`, `DelivererError`, `RefusalCode` |",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации. Само наличие символа в `models`, `imports.internal` или\n  `module_functions[provider]` зависимостью не является. Недостающий символ —\n  такая же ошибка спеки, как лишний: в строгом режиме импортов (ниже)\n  сгенерированный модуль без него отвергается",
+   "section": "7",
+   "question": "Replace this row with the exact symbols used by record serialization and reconstruction, removing text-only `RefusalCode` and adding `PhotoPlacement` and `PublicationMark` if the read functions construct or annotate those models.",
+   "unit": "?"
+  },
+  {
+   "subject": "photo_delivery/domain_models dependency row",
+   "kind": "standard_violation",
+   "text": "| `photo_delivery` | `domain_models` | `SOURCE_ID_FORM`, `Config`, `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `PlacementStatus`, `PlacementFailure`, `MarkStatus`, `RefusalCode` |",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\n  runtime import surface consumer-модуля, а не копия публичного API\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\n  аннотации. Само наличие символа в `models`, `imports.internal` или\n  `module_functions[provider]` зависимостью не является. Недостающий символ —\n  такая же ошибка спеки, как лишний: в строгом режиме импортов (ниже)\n  сгенерированный модуль без него отвергается",
+   "section": "7",
+   "question": "Make this row the exact direct runtime surface: remove enum symbols used only as text and add every public result or record model that `photo_delivery` directly constructs, checks or annotates.",
+   "unit": "?"
+  },
+  {
+   "subject": "deliverer_api/domain_models dependency row",
+   "kind": "standard_violation",
+   "text": "| `deliverer_api` | `domain_models` | `Config`, `DelivererError`, `RefusalCode` |",
+   "rule": "Для provider-а `models` перечисляй ровно модели, enum и interface, которые\n  consumer непосредственно называет, конструирует или проверяет в своём\n  runtime коде. Тип поля выбранной модели, variants discriminated union и\n  другие транзитивные model-ссылки расширяют model-context локального\n  прохода и входят в Python-import consumer-а только тогда, когда consumer\n  обращается к ним сам: сравнивает с членом enum (`Cardinality.MANY`),\n  конструирует вложенную модель, проверяет тип",
+   "section": "7",
+   "question": "Remove `RefusalCode` if refusal codes are emitted as text, or specify the direct runtime enum comparison or construction that requires this import.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"scan under concurrent folder changes\",\"kind\":\"undefined race outcome\",\"text\":\"Syncthing may change the folder during a scan, and a scan promises nothing about a file or folder that changes while it runs.\",\"question\":\"For each relevant race—rename, removal, replacement, growth, directory disappearance or conversion to a link—must the scan omit the entry, report facts from the opened file, reject the entry, or refuse the whole scan?\",\"options\":[\"Report the result of the single successful open/read\",\"Omit any entry detected as changed\",\"Return a per-file rejection\",\"Refuse the whole scan\"],\"default_guess\":\"Use the bytes and metadata obtained from the one successful open; omit a file that vanishes before opening; refuse only when a non-ignored subfolder cannot be listed.\",\"witness\":{\"initial\":\"A regular JPEG named a.jpg is present when its directory is listed.\",\"events\":[\"Syncthing replaces a.jpg after the listing but before the scan opens it.\",\"The calling flow receives the scan result.\"],\"outcomes\":[\"The scan reports a.jpg with the source id of the replacement bytes.\",\"The scan omits or rejects a.jpg because it changed during the scan.\"],\"observer\":\"The calling flow, which sees a different offered source id or no offered photo.\"}},{\"subject\":\"delivery classification of a non-regular named entry\",\"kind\":\"contradictory precedence\",\"text\":\"| 1 | `name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link | `NOT_READY_OR_ABSENT` |\\n| 2 | A1 orders 1 to 6 reject the file | the member with the value of the A1 reason |\",\"question\":\"When the requested path opens but is not a regular file, does condition 1 return `not_ready_or_absent`, or does A1 order 3 return `not_a_regular_file`?\",\"options\":[\"Condition 1 wins: not_ready_or_absent\",\"A1 order 3 wins: not_a_regular_file\"],\"default_guess\":\"Return `not_ready_or_absent`, because condition 1 precedes condition 2 in A3 rule 5.\",\"witness\":{\"initial\":\"A scan reported name a.jpg, but before delivery that path is replaced by a directory or another non-regular entry.\",\"events\":[\"The calling flow requests delivery of a.jpg with the earlier source id.\",\"source_folder opens or inspects the named entry.\"],\"outcomes\":[\"The delivery fails with `not_ready_or_absent` under A3 rule 5 condition 1.\",\"The delivery fails with `not_a_regular_file` by applying A1 order 3 through condition 2.\"],\"observer\":\"The calling flow sees a different `PlacementFailure`.\"}},{\"subject\":\"delivery race after name validation\",\"kind\":\"undefined failure mapping\",\"text\":\"deciding whether a requested name is a file a scan could report, and reading it once without following a link;\",\"question\":\"If the name passes the eligibility check but the entry disappears, becomes a link, or becomes non-regular before or during the one read, which failure is returned: `not_ready_or_absent`, `unreadable_file`, or `not_a_regular_file`?\",\"options\":[\"Classify from the pre-read eligibility check\",\"Classify the result of the open/read under A1\",\"Give every post-validation race unreadable_file\"],\"default_guess\":\"Classify a failure during the actual open/read under A1, using `unreadable_file` for disappearance or link substitution and `not_a_regular_file` when the opened object is non-regular.\",\"witness\":{\"initial\":\"a.jpg is an eligible regular file when delivery starts.\",\"events\":[\"source_folder validates the requested name.\",\"Syncthing renames a.jpg away before the file is opened.\",\"source_folder attempts the one read.\"],\"outcomes\":[\"The result is `not_ready_or_absent` because the requested name is no longer a reportable file.\",\"The result is `unreadable_file` because an eligible name failed during its actual read.\"],\"observer\":\"The calling flow sees a different failure reason.\"}},{\"subject\":\"scan record snapshot\",\"kind\":\"unclear ordering and consistency\",\"text\":\"| 5 | observe the folder, read records | source id | connection |\",\"question\":\"Must folder observation finish before placement and mark records are read, are records read before observation, and must all files be classified against one consistent record snapshot?\",\"options\":[\"Observe all files, then read all records once\",\"Read records first, then observe files\",\"Read placement and mark records per observed file\",\"Permit any interleaving\"],\"default_guess\":\"Observe the folder first, then read placement and mark records for the resulting source ids while using one logical record snapshot.\",\"witness\":{\"initial\":\"A placement exists for a source but has no publication mark.\",\"events\":[\"A scan begins and observes the source file.\",\"A concurrent mark is written while the scan is processing records.\",\"The scan returns the file status.\"],\"outcomes\":[\"The scan reports `placed` because its record view precedes the concurrent mark.\",\"The scan reports `published` because it reads the mark after the concurrent write.\"],\"observer\":\"The calling flow sees `placed` or `published` and may decide whether to publish.\"}},{\"subject\":\"malformed placement or mark records\",\"kind\":\"unowned failure policy\",\"text\":\"| 5 | observe the folder, read records | source id | connection |\",\"question\":\"What must scan, delivery and mark do when a placement or publication-mark record is unreadable, malformed, inconsistent with its file name, or references a missing stored image, and which module owns that decision?\",\"options\":[\"Refuse the whole operation with an existing refusal code\",\"Treat the malformed record as absent\",\"Return a per-photo failure\",\"Introduce a dedicated corrupt-state refusal\"],\"default_guess\":\"Refuse the whole operation with a dedicated corrupt-state error rather than silently treating durable state as absent.\",\"witness\":{\"initial\":\"A placement record exists for the requested project and source id but contains invalid JSON.\",\"events\":[\"The calling flow scans the project or repeats delivery of that source.\",\"delivery_store attempts to read the placement record.\"],\"outcomes\":[\"The operation treats the record as absent and creates or reports a new placement.\",\"The operation refuses because durable state is corrupt.\"],\"observer\":\"The calling flow sees success/recreation or a refusal, and durable state may change in only one implementation.\"}},{\"subject\":\"failed placement-record write after stored-image write\",\"kind\":\"contradiction\",\"text\":\"A photo that cannot be delivered is answered with status `failed` and one member of `= models.PlacementFailure`, and nothing is written except the project lock:\\n\\n6. The stored image is written before the placement record, so a crash between them repeats the\\n   placement and leaves no record without an image.\",\"question\":\"If storing the image succeeds but writing the placement record fails, may the stored image remain, or must it be removed so that the failed result wrote nothing except the lock?\",\"options\":[\"Keep the orphan image and retry on the next delivery\",\"Remove the image before returning failed\",\"Treat the operation as indeterminate rather than failed\"],\"default_guess\":\"Keep the complete image and return `unreadable_file`; a later retry overwrites or reuses it before writing the record.\",\"witness\":{\"initial\":\"No placement or stored image exists for a valid requested photo.\",\"events\":[\"photo_delivery stores the prepared image successfully.\",\"Writing the placement record fails.\",\"The operation returns to the calling flow.\"],\"outcomes\":[\"The image remains, as implied by image-before-record crash recovery.\",\"The image is removed, as required by 'nothing is written except the project lock'.\"],\"observer\":\"An operator inspecting the binary store and the next delivery attempt sees whether an orphan image exists.\"}},{\"subject\":\"ownership of operation steps versus lower-level decisions\",\"kind\":\"overlapping ownership\",\"text\":\"- steps 3 and later of \\\"Order of one operation\\\";\",\"question\":\"Does `photo_delivery` own only the sequencing of steps 3 and later, or also the decisions performed in those steps that are assigned to `object_connections`, `source_folder`, `photo_preparation` and `delivery_store`?\",\"options\":[\"photo_delivery owns orchestration only\",\"photo_delivery co-owns every decision in those steps\",\"Each lower module owns its decision and photo_delivery owns only cross-module outcomes\"],\"default_guess\":\"`photo_delivery` owns orchestration and cross-module outcome mapping; each lower module remains the sole owner of its local decision.\",\"witness\":{\"initial\":\"The named file fails image decoding during delivery.\",\"events\":[\"photo_delivery calls photo_preparation.\",\"photo_preparation detects the decoding failure.\",\"The result must be mapped to `unreadable_image`.\"],\"outcomes\":[\"photo_preparation decides the failure and photo_delivery only transports it.\",\"photo_delivery independently decides or reinterprets the decoding outcome because it owns step 8.\"],\"observer\":\"Tests and future maintainers see different module APIs and potentially different mappings.\"}},{\"subject\":\"source_folder trace inputs\",\"kind\":\"contradictory dependency record\",\"text\":\"### Knows\\n\\n- A1 orders 1 to 6, condition 1 of A3 rule 5, and rule 4 of A7.\\n\\n### Trace inputs\\n\\n- A1\\n- A7\",\"question\":\"Must A3 be a trace input of `source_folder`, or must condition 1 of A3 rule 5 be removed from what the module knows?\",\"options\":[\"Add A3 to Trace inputs\",\"Move the A3 condition entirely to photo_delivery\",\"Restate the name rule in A1 and trace only A1\"],\"default_guess\":\"Add A3 to `source_folder` trace inputs because its eligibility decision directly implements A3 rule 5 condition 1.\"},{\"subject\":\"photo_preparation construction of PhotoPublication\",\"kind\":\"missing dependency\",\"text\":\"- building the publication body, with `client_visible` false.\",\"question\":\"How can `photo_preparation` build the M05 `PhotoPublication` value when its declared `domain_models` dependency omits `PhotoPublication`; should it import and construct that model, or return another representation for another module to construct?\",\"options\":[\"Import and construct PhotoPublication in photo_preparation\",\"Return primitive fields and construct PhotoPublication in photo_delivery\",\"Move publication construction to domain_models\"],\"default_guess\":\"Add `PhotoPublication` to the direct `photo_preparation` → `domain_models` dependency and construct it in `build_publication`.\"},{\"subject\":\"photo_delivery construction of public results and records\",\"kind\":\"missing dependency\",\"text\":\"- completing a scan with placed and published status;\\n- one placement per project and content, replay, and per-photo failure;\\n- one mark per placement, replay and `publication_conflict`;\",\"question\":\"Which module constructs `SourcePhotoObservation`, `PhotoPlacement`, `PlacementOutcome` and `PublicationMark`, and which of those models must therefore appear in `photo_delivery`'s direct dependency surface?\",\"options\":[\"photo_delivery constructs all four and imports them\",\"Lower providers construct their own records and outcomes\",\"Introduce domain-model factory functions\"],\"default_guess\":\"`photo_delivery` constructs the scan observation, placement, delivery outcome and mark, so its `domain_models` dependency must name all four model types it directly constructs.\"},{\"subject\":\"delivery_store reconstruction of durable models\",\"kind\":\"missing dependency\",\"text\":\"- reading and writing placement and mark records.\",\"question\":\"Do `read_placement` and `read_mark` return `PhotoPlacement` and `PublicationMark` instances, and if so why are those directly named models absent from `delivery_store`'s dependencies?\",\"options\":[\"Import and reconstruct PhotoPlacement and PublicationMark\",\"Return untyped dictionaries\",\"Move serialization and reconstruction to photo_delivery\"],\"default_guess\":\"Have `delivery_store` import, validate and return `PhotoPlacement` and `PublicationMark`.\"},{\"subject\":\"Syncthing evidence\",\"kind\":\"contradiction\",\"text\":\"Evidence is from local runs against a real Client Portal process and a stub Registry. No\\nrun has used a live Syncthing folder, the kernel or the VPS.\\n\\nEvidence for every model: `python3 -m pytest -q prototypes/portal_deliverer`,\\n`python3 prototypes/portal_deliverer/e2e_local_portal.py` (a real Client Portal process and a stub\\nRegistry) and `python3 prototypes/portal_deliverer/e2e_local_syncthing.py` (two private Syncthing\\ninstances).\",\"question\":\"Has the design evidence included a run against live Syncthing instances or not, and which evidence statements must be updated to agree?\",\"options\":[\"The two private Syncthing instances count as a live Syncthing run\",\"They are simulated and do not count as a live Syncthing folder\"],\"default_guess\":\"Record that live local Syncthing instances were used, while the owner's devices, kernel and VPS were not.\"},{\"subject\":\"read_named_source result contract\",\"kind\":\"undefined module contract\",\"text\":\"read_named_source\",\"question\":\"What exact success and failure value does `read_named_source` return so that `photo_delivery` receives the bytes, file modification time, source hash and ordered A1/A3 rejection reason without rereading or rejudging the file?\",\"options\":[\"Return SourceFile or Rejected as a discriminated result\",\"Raise DelivererError for all failures\",\"Return bytes and metadata and let photo_delivery classify failures\"],\"default_guess\":\"Return a discriminated `SourceFile | Rejected`, with `SourceFile` carrying the one-read bytes, modification time and computed source id, and `Rejected` carrying the decided placement failure.\"},{\"subject\":\"object_connections/domain_models dependency row\",\"kind\":\"standard_violation\",\"text\":\"| `object_connections` | `domain_models` | `DelivererError`, `ObjectConnection`, `RefusalCode` |\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации.\",\"section\":\"7\",\"question\":\"Remove `RefusalCode` from this direct import surface if the module writes refusal values as text, or state and implement the direct enum reference that requires it.\"},{\"subject\":\"source_folder/domain_models dependency row\",\"kind\":\"standard_violation\",\"text\":\"| `source_folder` | `domain_models` | `MAX_SOURCE_BYTES`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `CONFLICT_COPY_MARK`, `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `ObservationReason`, `RefusalCode` |\",\"rule\":\"Для provider-а `models` перечисляй ровно модели, enum и interface, которые\\n  consumer непосредственно называет, конструирует или проверяет в своём\\n  runtime коде. Тип поля выбранной модели, variants discriminated union и\\n  другие транзитивные model-ссылки расширяют model-context локального\\n  прохода и входят в Python-import consumer-а только тогда, когда consumer\\n  обращается к ним сам: сравнивает с членом enum (`Cardinality.MANY`),\\n  конструирует вложенную модель, проверяет тип\",\"section\":\"7\",\"question\":\"Remove `ScanStatus`, `ObservationReason` and `RefusalCode` if their values are written as text, or specify the direct runtime enum operations that make each import necessary.\"},{\"subject\":\"photo_preparation/domain_models dependency row\",\"kind\":\"standard_violation\",\"text\":\"| `photo_preparation` | `domain_models` | `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_MAX_SIDE`, `PHOTO_QUALITY`, `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `PreparedPhoto`, `Rejected`, `DateSource`, `PlacementFailure` |\",\"rule\":\"Для provider-а `models` перечисляй ровно модели, enum и interface, которые\\n  consumer непосредственно называет, конструирует или проверяет в своём\\n  runtime коде. Тип поля выбранной модели, variants discriminated union и\\n  другие транзитивные model-ссылки расширяют model-context локального\\n  прохода и входят в Python-import consumer-а только тогда, когда consumer\\n  обращается к ним сам: сравнивает с членом enum (`Cardinality.MANY`),\\n  конструирует вложенную модель, проверяет тип\",\"section\":\"7\",\"question\":\"Make this row the exact direct runtime surface: remove text-only `DateSource` and `PlacementFailure` enum imports unless the module directly names them, and add any directly constructed model such as `PhotoPublication`.\"},{\"subject\":\"delivery_store/domain_models dependency row\",\"kind\":\"standard_violation\",\"text\":\"| `delivery_store` | `domain_models` | `Config`, `DelivererError`, `RefusalCode` |\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации. Само наличие символа в `models`, `imports.internal` или\\n  `module_functions[provider]` зависимостью не является. Недостающий символ —\\n  такая же ошибка спеки, как лишний: в строгом режиме импортов (ниже)\\n  сгенерированный модуль без него отвергается\",\"section\":\"7\",\"question\":\"Replace this row with the exact symbols used by record serialization and reconstruction, removing text-only `RefusalCode` and adding `PhotoPlacement` and `PublicationMark` if the read functions construct or annotate those models.\"},{\"subject\":\"photo_delivery/domain_models dependency row\",\"kind\":\"standard_violation\",\"text\":\"| `photo_delivery` | `domain_models` | `SOURCE_ID_FORM`, `Config`, `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `PlacementStatus`, `PlacementFailure`, `MarkStatus`, `RefusalCode` |\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\n  runtime import surface consumer-модуля, а не копия публичного API\\n  provider-а: ровно те символы, которые код consumer-а называет напрямую —\\n  вызывает, конструирует, проверяет (членство в enum, тип), пишет в\\n  аннотации. Само наличие символа в `models`, `imports.internal` или\\n  `module_functions[provider]` зависимостью не является. Недостающий символ —\\n  такая же ошибка спеки, как лишний: в строгом режиме импортов (ниже)\\n  сгенерированный модуль без него отвергается\",\"section\":\"7\",\"question\":\"Make this row the exact direct runtime surface: remove enum symbols used only as text and add every public result or record model that `photo_delivery` directly constructs, checks or annotates.\"},{\"subject\":\"deliverer_api/domain_models dependency row\",\"kind\":\"standard_violation\",\"text\":\"| `deliverer_api` | `domain_models` | `Config`, `DelivererError`, `RefusalCode` |\",\"rule\":\"Для provider-а `models` перечисляй ровно модели, enum и interface, которые\\n  consumer непосредственно называет, конструирует или проверяет в своём\\n  runtime коде. Тип поля выбранной модели, variants discriminated union и\\n  другие транзитивные model-ссылки расширяют model-context локального\\n  прохода и входят в Python-import consumer-а только тогда, когда consumer\\n  обращается к ним сам: сравнивает с членом enum (`Cardinality.MANY`),\\n  конструирует вложенную модель, проверяет тип\",\"section\":\"7\",\"question\":\"Remove `RefusalCode` if refusal codes are emitted as text, or specify the direct runtime enum comparison or construction that requires this import.\"}]}",
+ "set_aside": []
+}

@@ -23,7 +23,7 @@ applies decides:
 |---|---|---|---|
 | 1 | empty | `rejected` | `empty` |
 | 2 | larger than the source limit | `rejected` | `too_large` |
-| 3 | opened without following a link and without waiting, what it finds is not a regular file | `rejected` | `not_a_regular_file` |
+| 3 | opened in non-blocking mode without following a link, what it finds is not a regular file | `rejected` | `not_a_regular_file` |
 | 4 | it grew past the source limit while being read | `rejected` | `too_large` |
 | 5 | opening or reading it fails, which includes a file that disappeared and a path that became a symbolic link after the listing | `rejected` | `unreadable_file` |
 | 6 | does not begin with a JPEG, PNG or WEBP signature | `rejected` | `unsupported_format` |
@@ -35,7 +35,7 @@ A scan covers the photo folder and all its subfolders (R0-12). When a subfolder 
 cannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is
 never reported as complete. A file exactly at the source limit passes that rule. A file that
 disappears before its metadata is read is not reported. Files with the same content are each reported,
-with the same source id.
+with the same source id. A rejected file has no source id.
 
 Files are visited folder by folder: the files of a folder in order of their names, then its
 subfolders in order of their names, compared by Unicode code point.
@@ -48,8 +48,8 @@ constant, the mark of a Syncthing conflict copy (R0-14). Names beginning with a 
 writing lies under such a temporary name. Ignored names are not reported, ignored folders are not entered,
 and an entry the listing shows as a symbolic link is neither reported nor followed.
 
-Syncthing may change the folder during a scan, and a scan promises nothing about a file or folder that
-changes while it runs. The next scan sees the folder as it then stands.
+Syncthing may change the folder during a scan, so a scan is not a view of one instant. Each rule applies
+to what its step finds when it runs, and the next scan sees the folder as it then stands.
 
 A scan only reads the source folder. A signature does not prove that an image can be decoded: a `ready`
 file may still fail when it is delivered.
@@ -57,7 +57,7 @@ file may still fail when it is delivered.
 ### Formal invariants
 
 - INV-01: no operation creates, changes, moves or deletes anything in a source folder.
-- INV-02: a delivery reads only a file that a scan could report under the requested name.
+- INV-02: a delivery opens only a path that meets condition 1 of A3 rule 5.
 - INV-18: a scan never reports a Syncthing conflict copy.
 
 ### Required tests
@@ -117,21 +117,25 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
 2. Delivering content that already has a placement answers `replayed` with the stored placement and the
    current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even
    when the source file has left the folder.
-3. One call delivers one photo, named by `name`, the relative path a scan reported, and `source_id`. The
-   named file is read once, and the bytes that were read are the bytes judged, hashed and prepared.
+3. One call delivers one photo, named by `name`, a relative path in the form a scan reports, and
+   `source_id`. The service keeps no memory of earlier scans: it judges the name and the file when the call
+   runs. The named file is read once, and the bytes that were read are the bytes judged, hashed and prepared.
 4. Checks run in this order: token, request form and project id, connection, photo folder, source id,
    project lock, existing placement, named file. The request form is a body holding only `name` and
    `source_id`, both strings. A defect of that form or of the project id is refused as a whole request. A
    `source_id` that is not 64 lowercase hexadecimal characters is refused with `invalid_source_id`.
 5. A photo that cannot be delivered is answered with status `failed` and one member of
-   `= models.PlacementFailure`, and nothing is written except the project lock:
+   `= models.PlacementFailure`. Condition 1 is decided from the name and the metadata of its path before
+   the file is opened, and conditions 2 to 4 from the opening on. Conditions 1 to 4 write nothing except the
+   project lock. After condition 5 a stored image may remain without a record: no caller has received
+   its reference, and a repeated delivery writes it again and completes the placement.
 
    | Order | Condition | Member |
    |---|---|---|
-   | 1 | `name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link | `NOT_READY_OR_ABSENT` |
-   | 2 | A1 orders 1 to 6 reject the file | the member with the value of the A1 reason |
+   | 1 | `name` is not non-empty segments joined by single `/` characters, or a segment is `.` or `..`, or a segment is ignored under A1, or a folder on its path is absent or a symbolic link, or the last segment is absent or is not a regular file. Names are compared exactly, without Unicode normalisation | `NOT_READY_OR_ABSENT` |
+   | 2 | A1 orders 1 to 6 reject the file | `EMPTY` for order 1, `TOO_LARGE` for orders 2 and 4, `NOT_A_REGULAR_FILE` for order 3, `UNREADABLE_FILE` for order 5, `UNSUPPORTED_FORMAT` for order 6 |
    | 3 | the hash of the bytes differs from `source_id` | `SOURCE_CHANGED` |
-   | 4 | A2 rule 2 fails | the member with the value of the A2 failure |
+   | 4 | A2 rule 2 fails | `TOO_MANY_PIXELS`, `UNREADABLE_IMAGE` or `TOO_LARGE`, as that rule decides |
    | 5 | writing the stored image or the record fails | `UNREADABLE_FILE` |
 
 6. The stored image is written before the placement record, so a crash between them repeats the
@@ -153,7 +157,7 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
 
 ### Required tests
 
-- INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).
+- INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`). A delivery repeated after a failed record write completes the placement (`test_a_delivery_repeated_after_a_failed_record_write_completes`).
 - INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).
 - INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Placed content replays when only a conflict copy still holds it (`test_placed_content_replays_when_only_a_conflict_copy_still_holds_it`), and an ordinary file with the content of a conflict copy is delivered (`test_an_ordinary_file_is_placed_when_a_conflict_copy_has_the_same_content`).
 
@@ -296,8 +300,8 @@ A repeated action from the workplace cannot duplicate a delivery.
    and the health answer never read it.
 3. The current time is a `datetime` in UTC without an offset, with microsecond precision and no
    rounding, written in ISO 8601 form. It sets `marked_at`.
-4. A file's modification time is converted to the same form before it is delivered, dropping any
-   fraction finer than a microsecond toward the earlier instant.
+4. A file's modification time is converted to the same form before it is compared or delivered, dropping
+   any fraction finer than a microsecond toward the earlier instant.
 5. The photo moment comes from the file, as A2 decides, and never from the service clock.
 
 ### Formal invariants

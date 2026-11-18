@@ -1,0 +1,294 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "evidence for withdrawing the stability wait",
+   "kind": "contradictory evidence",
+   "text": "“No run has used a live Syncthing folder” contradicts “A run against real Syncthing showed that a file still arriving lies under a temporary name”",
+   "question": "Was a real Syncthing folder exercised, and what observed evidence authorizes withdrawing the two-minute wait?",
+   "options": [
+    "A live Syncthing folder was exercised and the earlier evidence statement is obsolete",
+    "Syncthing itself was exercised without a live synced folder, so the observation and its limits must be stated",
+    "No real Syncthing behavior was exercised and the wait withdrawal lacks the claimed evidence"
+   ],
+   "default_guess": "Treat the R0-15 run as newer evidence and amend the earlier evidence statement.",
+   "witness": {
+    "initial": "The reviewer must decide whether the stability rule is supported by a real integration run.",
+    "events": [
+     "The Primary actions evidence statement says no run used a live Syncthing folder.",
+     "R0-15 says a run against real Syncthing established the temporary-name behavior."
+    ],
+    "outcomes": [
+     "The wait is withdrawn on live-system evidence.",
+     "The wait is withdrawn without live-folder evidence."
+    ],
+    "observer": "The owner and later implementers deciding which behavior has actually been proved."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "connection management",
+   "kind": "missing operation",
+   "text": "“The deliverer offers three operations: scan a project's folder, deliver one photo, and record its publication”",
+   "question": "How does the agent create or change the connection record required by “Connect an object to its folders” if these are the deliverer's only operations?",
+   "options": [
+    "Add an authenticated connection-management operation",
+    "Declare that the agent writes the deliverer's storage directly and define that boundary",
+    "Move connection management to another named system and give the deliverer a read interface"
+   ],
+   "default_guess": "Add a separate authenticated connection-management operation.",
+   "witness": {
+    "initial": "No confirmed connection exists for a project.",
+    "events": [
+     "The owner confirms the object, root and subfolders.",
+     "The agent must write the connection record.",
+     "The deliverer exposes only scan, deliver and record-publication operations."
+    ],
+    "outcomes": [
+     "The agent calls an invented fourth deliverer operation.",
+     "The agent bypasses the service and writes its storage directly."
+    ],
+    "observer": "The owner, because delivery either becomes possible through a supported path or depends on an undocumented storage write."
+   }
+  },
+  {
+   "unit": "00_product.md:Inputs",
+   "subject": "file addressing below the photo folder",
+   "kind": "ambiguous identifier",
+   "text": "“the file name and source id of a photo to deliver”",
+   "question": "Does “file name” mean a basename, a path relative to the confirmed photo folder, or an opaque value returned by scan, and how are separators, case and Unicode normalized?",
+   "options": [
+    "Basename only",
+    "Normalized relative path",
+    "Opaque scan-issued file locator that the caller returns unchanged"
+   ],
+   "default_guess": "Use an opaque scan-issued locator backed by a normalized relative path.",
+   "witness": {
+    "initial": "The confirmed photo folder has `day-1/photo.jpg` and `day-2/photo.jpg`, with different contents.",
+    "events": [
+     "Scan returns both files.",
+     "The owner chooses the second file.",
+     "The caller invokes deliver with the text `photo.jpg` and its source id."
+    ],
+    "outcomes": [
+     "The deliverer selects `day-2/photo.jpg` by pairing the basename with the source id.",
+     "The deliverer treats the basename as ambiguous or selects the first matching path."
+    ],
+    "observer": "The owner, who receives the selected image or an ambiguity failure."
+   }
+  },
+  {
+   "unit": "00_product.md:Actors and trust boundaries",
+   "subject": "caller-supplied file name containment",
+   "kind": "trust-boundary gap",
+   "text": "“Calling flow → deliverer | project id, file name, source id, Portal photo id | authenticated by the deliverer's own bearer token”",
+   "question": "What validation guarantees that the supplied file name cannot address a parent path, absolute path, alternate encoding or symlink target outside the confirmed photo folder?",
+   "options": [
+    "Accept only an opaque locator previously returned by scan",
+    "Resolve a relative path and reject every escape, including symlink escapes",
+    "Trust any path supplied by the authenticated calling flow"
+   ],
+   "default_guess": "Accept only a scan-issued locator and re-resolve it with containment and symlink checks.",
+   "witness": {
+    "initial": "A project has a confirmed photo folder and a readable image outside it.",
+    "events": [
+     "An authenticated caller supplies a file name containing a parent traversal or naming an in-folder symlink to the outside image.",
+     "The deliverer resolves the requested file."
+    ],
+    "outcomes": [
+     "The request is refused because the resolved object is outside the confirmed folder.",
+     "The outside image is read and placed because the caller was authenticated."
+    ],
+    "observer": "The owner and the operator responsible for data isolation."
+   }
+  },
+  {
+   "unit": "00_product.md:Inputs",
+   "subject": "source identity",
+   "kind": "undefined model",
+   "text": "“source id”",
+   "question": "How is a source id derived, and does “source content” mean exact file bytes, decoded pixels, or prepared-image bytes after orientation and metadata removal?",
+   "options": [
+    "Hash the exact source-file bytes",
+    "Hash decoded pixels plus orientation",
+    "Hash the prepared output bytes",
+    "Issue a scan-specific opaque id"
+   ],
+   "default_guess": "Use a cryptographic hash of the exact source-file bytes, scoped by project.",
+   "witness": {
+    "initial": "Two files render identically but differ only in EXIF metadata.",
+    "events": [
+     "The first file is delivered.",
+     "It is replaced by the second file under the same name.",
+     "The project is scanned again."
+    ],
+    "outcomes": [
+     "The replacement receives a new source id and is ready for a new delivery.",
+     "The replacement has the old source id and is already placed."
+    ],
+    "observer": "The owner choosing what to deliver."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "retrying publication recording",
+   "kind": "unspecified idempotency",
+   "text": "“what to repeat ... belong to the calling flow” and “record its publication”",
+   "question": "What is the observable result when the caller repeats record-publication with the same project, source id and Portal photo id after losing the first response?",
+   "options": [
+    "Return the original successful publication result",
+    "Return a distinct already-recorded success",
+    "Refuse the repeat",
+    "Leave the result unspecified"
+   ],
+   "default_guess": "Return the original successful result without changing stored state.",
+   "witness": {
+    "initial": "A placement exists and has not yet visibly been marked published by the caller.",
+    "events": [
+     "The Portal publishes photo id 42.",
+     "The caller records photo id 42 at the deliverer.",
+     "The deliverer commits the mark but the response is lost.",
+     "The caller repeats the same record-publication request."
+    ],
+    "outcomes": [
+     "The repeat succeeds idempotently and confirms photo id 42.",
+     "The repeat is refused because the source is already marked published."
+    ],
+    "observer": "The calling flow and owner, who see either a completed delivery or a failed one."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "temporary failure policy",
+   "kind": "missing error contract",
+   "text": "“which failure to treat as temporary belong to the calling flow”",
+   "question": "What stable failure codes or categories does each operation return so that different callers make the same retry decision?",
+   "options": [
+    "The deliverer returns explicit stable retryable and terminal codes",
+    "The caller classifies stable reason codes defined here",
+    "The caller interprets free-form reason text",
+    "Every caller defines its own policy without a shared classification"
+   ],
+   "default_guess": "Define stable reason codes and mark each as retryable or terminal.",
+   "witness": {
+    "initial": "The Portal binary store is temporarily unavailable while one chosen photo is delivered.",
+    "events": [
+     "The deliverer reports that the photo cannot be delivered.",
+     "The calling flow must decide whether and when to repeat it."
+    ],
+    "outcomes": [
+     "The caller recognizes a retryable store failure and retries.",
+     "The caller treats the same reason as terminal and reports the photo failed."
+    ],
+    "observer": "The owner, who sees eventual delivery or a final failure."
+   }
+  },
+  {
+   "unit": "00_product.md:Primary actions",
+   "subject": "meaning and lifetime of rejected status",
+   "kind": "undefined state transition",
+   "text": "“each file with its source id and a status: ready, placed, published or rejected with a reason” and “a photo that cannot be delivered is reported with its reason and nothing is written”",
+   "question": "Which conditions produce `rejected`, whether rejection is stored or recomputed, and what a later scan reports after a deliver failure that writes nothing are not stated.",
+   "options": [
+    "Rejected is only a deterministic scan-time validation result",
+    "Every terminal delivery failure is persisted as rejected",
+    "Rejected is recomputed on every scan from the current file",
+    "Delivery failures never affect scan status"
+   ],
+   "default_guess": "Use rejected only for deterministic validation of the current source content and recompute it on scan.",
+   "witness": {
+    "initial": "A scanned file is ready.",
+    "events": [
+     "Delivery fails because its image encoding is unsupported and nothing is written.",
+     "The caller scans the unchanged project again."
+    ],
+    "outcomes": [
+     "The file is now reported rejected with the encoding reason.",
+     "The file is still reported ready because delivery wrote no state."
+    ],
+    "observer": "The owner deciding whether the photo can be selected again."
+   }
+  },
+  {
+   "unit": "00_product.md:Inputs",
+   "subject": "record-publication request identity",
+   "kind": "missing input",
+   "text": "“the file name and source id of a photo to deliver; the Portal photo id of a published photo”",
+   "question": "What identifies the placed photo in the record-publication operation: project plus source id, the placement reference, file name plus source id, or another value?",
+   "options": [
+    "Project id plus source id",
+    "The placement/file reference returned by delivery",
+    "Project id, file name and source id",
+    "A separate placement id"
+   ],
+   "default_guess": "Use an opaque placement id or file reference returned by delivery, together with project id and Portal photo id.",
+   "witness": {
+    "initial": "Two projects have placed photos with identical source bytes, and the caller has a Portal photo id for one of them.",
+    "events": [
+     "The caller invokes record-publication using the inputs named by the text.",
+     "The deliverer must select one placement to update."
+    ],
+    "outcomes": [
+     "The source id and implicit project context identify the intended placement.",
+     "The source id alone is ambiguous and the operation is refused or updates the wrong project."
+    ],
+    "observer": "The owner and the client Portal integration."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "metadata snapshot between scan and delivery",
+   "kind": "timing ambiguity",
+   "text": "“scan a project's folder, deliver one photo” and “A file replaced with other content is a new photo”",
+   "question": "For metadata not represented by source content, especially fallback modification time, does delivery use the value observed by scan or the value read at delivery time?",
+   "options": [
+    "Scan fixes both content identity and delivery metadata",
+    "Delivery re-reads metadata while requiring only content to match",
+    "The source id covers every metadata value that affects the publication body"
+   ],
+   "default_guess": "Make the source id cover all values that affect delivery, or return a scan token fixing both bytes and metadata.",
+   "witness": {
+    "initial": "An image has no camera date, is scanned with modification time T1, and its bytes receive source id S.",
+    "events": [
+     "The file's modification time changes to T2 without changing its bytes.",
+     "The owner delivers the file using source id S."
+    ],
+    "outcomes": [
+     "The publication body carries T1, the metadata chosen at scan.",
+     "The publication body carries T2, the metadata observed during delivery."
+    ],
+    "observer": "The owner and client, who see a different photo date."
+   }
+  },
+  {
+   "unit": "00_product.md:Accepted from the experiment (owner, 2026-11-18)",
+   "subject": "eligibility of an incomplete final-name file",
+   "kind": "missing completeness rule",
+   "text": "“The two-minute wait accepted here first was withdrawn by R0-15”",
+   "question": "If an incomplete file is visible under an ordinary non-hidden, non-temporary name, what rule prevents it from being offered or delivered?",
+   "options": [
+    "Ordinary names are immediately eligible and only image validation applies",
+    "Scan and delivery require a successful complete decode",
+    "The deliverer uses another stability or completeness check",
+    "The product assumes Syncthing always preserves temporary naming until completion"
+   ],
+   "default_guess": "Require a successful complete decode and exact source-id match, while documenting the Syncthing naming assumption.",
+   "witness": {
+    "initial": "The untrusted object folder contains a partially arrived but still decodable image under an ordinary visible name.",
+    "events": [
+     "The project is scanned after the two-minute wait has been removed.",
+     "The owner selects the file before the remaining bytes arrive.",
+     "Delivery reads the same partial bytes represented by the selected source id."
+    ],
+    "outcomes": [
+     "The partial but decodable image is placed because its content matches the choice.",
+     "The file is rejected as incomplete by an additional completeness rule."
+    ],
+    "observer": "The owner reviewing the hidden photo and later the client if the owner shows it."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Decisions\",\"subject\":\"evidence for withdrawing the stability wait\",\"kind\":\"contradictory evidence\",\"text\":\"“No run has used a live Syncthing folder” contradicts “A run against real Syncthing showed that a file still arriving lies under a temporary name”\",\"question\":\"Was a real Syncthing folder exercised, and what observed evidence authorizes withdrawing the two-minute wait?\",\"options\":[\"A live Syncthing folder was exercised and the earlier evidence statement is obsolete\",\"Syncthing itself was exercised without a live synced folder, so the observation and its limits must be stated\",\"No real Syncthing behavior was exercised and the wait withdrawal lacks the claimed evidence\"],\"default_guess\":\"Treat the R0-15 run as newer evidence and amend the earlier evidence statement.\",\"witness\":{\"initial\":\"The reviewer must decide whether the stability rule is supported by a real integration run.\",\"events\":[\"The Primary actions evidence statement says no run used a live Syncthing folder.\",\"R0-15 says a run against real Syncthing established the temporary-name behavior.\"],\"outcomes\":[\"The wait is withdrawn on live-system evidence.\",\"The wait is withdrawn without live-folder evidence.\"],\"observer\":\"The owner and later implementers deciding which behavior has actually been proved.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"connection management\",\"kind\":\"missing operation\",\"text\":\"“The deliverer offers three operations: scan a project's folder, deliver one photo, and record its publication”\",\"question\":\"How does the agent create or change the connection record required by “Connect an object to its folders” if these are the deliverer's only operations?\",\"options\":[\"Add an authenticated connection-management operation\",\"Declare that the agent writes the deliverer's storage directly and define that boundary\",\"Move connection management to another named system and give the deliverer a read interface\"],\"default_guess\":\"Add a separate authenticated connection-management operation.\",\"witness\":{\"initial\":\"No confirmed connection exists for a project.\",\"events\":[\"The owner confirms the object, root and subfolders.\",\"The agent must write the connection record.\",\"The deliverer exposes only scan, deliver and record-publication operations.\"],\"outcomes\":[\"The agent calls an invented fourth deliverer operation.\",\"The agent bypasses the service and writes its storage directly.\"],\"observer\":\"The owner, because delivery either becomes possible through a supported path or depends on an undocumented storage write.\"}},{\"unit\":\"00_product.md:Inputs\",\"subject\":\"file addressing below the photo folder\",\"kind\":\"ambiguous identifier\",\"text\":\"“the file name and source id of a photo to deliver”\",\"question\":\"Does “file name” mean a basename, a path relative to the confirmed photo folder, or an opaque value returned by scan, and how are separators, case and Unicode normalized?\",\"options\":[\"Basename only\",\"Normalized relative path\",\"Opaque scan-issued file locator that the caller returns unchanged\"],\"default_guess\":\"Use an opaque scan-issued locator backed by a normalized relative path.\",\"witness\":{\"initial\":\"The confirmed photo folder has `day-1/photo.jpg` and `day-2/photo.jpg`, with different contents.\",\"events\":[\"Scan returns both files.\",\"The owner chooses the second file.\",\"The caller invokes deliver with the text `photo.jpg` and its source id.\"],\"outcomes\":[\"The deliverer selects `day-2/photo.jpg` by pairing the basename with the source id.\",\"The deliverer treats the basename as ambiguous or selects the first matching path.\"],\"observer\":\"The owner, who receives the selected image or an ambiguity failure.\"}},{\"unit\":\"00_product.md:Actors and trust boundaries\",\"subject\":\"caller-supplied file name containment\",\"kind\":\"trust-boundary gap\",\"text\":\"“Calling flow → deliverer | project id, file name, source id, Portal photo id | authenticated by the deliverer's own bearer token”\",\"question\":\"What validation guarantees that the supplied file name cannot address a parent path, absolute path, alternate encoding or symlink target outside the confirmed photo folder?\",\"options\":[\"Accept only an opaque locator previously returned by scan\",\"Resolve a relative path and reject every escape, including symlink escapes\",\"Trust any path supplied by the authenticated calling flow\"],\"default_guess\":\"Accept only a scan-issued locator and re-resolve it with containment and symlink checks.\",\"witness\":{\"initial\":\"A project has a confirmed photo folder and a readable image outside it.\",\"events\":[\"An authenticated caller supplies a file name containing a parent traversal or naming an in-folder symlink to the outside image.\",\"The deliverer resolves the requested file.\"],\"outcomes\":[\"The request is refused because the resolved object is outside the confirmed folder.\",\"The outside image is read and placed because the caller was authenticated.\"],\"observer\":\"The owner and the operator responsible for data isolation.\"}},{\"unit\":\"00_product.md:Inputs\",\"subject\":\"source identity\",\"kind\":\"undefined model\",\"text\":\"“source id”\",\"question\":\"How is a source id derived, and does “source content” mean exact file bytes, decoded pixels, or prepared-image bytes after orientation and metadata removal?\",\"options\":[\"Hash the exact source-file bytes\",\"Hash decoded pixels plus orientation\",\"Hash the prepared output bytes\",\"Issue a scan-specific opaque id\"],\"default_guess\":\"Use a cryptographic hash of the exact source-file bytes, scoped by project.\",\"witness\":{\"initial\":\"Two files render identically but differ only in EXIF metadata.\",\"events\":[\"The first file is delivered.\",\"It is replaced by the second file under the same name.\",\"The project is scanned again.\"],\"outcomes\":[\"The replacement receives a new source id and is ready for a new delivery.\",\"The replacement has the old source id and is already placed.\"],\"observer\":\"The owner choosing what to deliver.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"retrying publication recording\",\"kind\":\"unspecified idempotency\",\"text\":\"“what to repeat ... belong to the calling flow” and “record its publication”\",\"question\":\"What is the observable result when the caller repeats record-publication with the same project, source id and Portal photo id after losing the first response?\",\"options\":[\"Return the original successful publication result\",\"Return a distinct already-recorded success\",\"Refuse the repeat\",\"Leave the result unspecified\"],\"default_guess\":\"Return the original successful result without changing stored state.\",\"witness\":{\"initial\":\"A placement exists and has not yet visibly been marked published by the caller.\",\"events\":[\"The Portal publishes photo id 42.\",\"The caller records photo id 42 at the deliverer.\",\"The deliverer commits the mark but the response is lost.\",\"The caller repeats the same record-publication request.\"],\"outcomes\":[\"The repeat succeeds idempotently and confirms photo id 42.\",\"The repeat is refused because the source is already marked published.\"],\"observer\":\"The calling flow and owner, who see either a completed delivery or a failed one.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"temporary failure policy\",\"kind\":\"missing error contract\",\"text\":\"“which failure to treat as temporary belong to the calling flow”\",\"question\":\"What stable failure codes or categories does each operation return so that different callers make the same retry decision?\",\"options\":[\"The deliverer returns explicit stable retryable and terminal codes\",\"The caller classifies stable reason codes defined here\",\"The caller interprets free-form reason text\",\"Every caller defines its own policy without a shared classification\"],\"default_guess\":\"Define stable reason codes and mark each as retryable or terminal.\",\"witness\":{\"initial\":\"The Portal binary store is temporarily unavailable while one chosen photo is delivered.\",\"events\":[\"The deliverer reports that the photo cannot be delivered.\",\"The calling flow must decide whether and when to repeat it.\"],\"outcomes\":[\"The caller recognizes a retryable store failure and retries.\",\"The caller treats the same reason as terminal and reports the photo failed.\"],\"observer\":\"The owner, who sees eventual delivery or a final failure.\"}},{\"unit\":\"00_product.md:Primary actions\",\"subject\":\"meaning and lifetime of rejected status\",\"kind\":\"undefined state transition\",\"text\":\"“each file with its source id and a status: ready, placed, published or rejected with a reason” and “a photo that cannot be delivered is reported with its reason and nothing is written”\",\"question\":\"Which conditions produce `rejected`, whether rejection is stored or recomputed, and what a later scan reports after a deliver failure that writes nothing are not stated.\",\"options\":[\"Rejected is only a deterministic scan-time validation result\",\"Every terminal delivery failure is persisted as rejected\",\"Rejected is recomputed on every scan from the current file\",\"Delivery failures never affect scan status\"],\"default_guess\":\"Use rejected only for deterministic validation of the current source content and recompute it on scan.\",\"witness\":{\"initial\":\"A scanned file is ready.\",\"events\":[\"Delivery fails because its image encoding is unsupported and nothing is written.\",\"The caller scans the unchanged project again.\"],\"outcomes\":[\"The file is now reported rejected with the encoding reason.\",\"The file is still reported ready because delivery wrote no state.\"],\"observer\":\"The owner deciding whether the photo can be selected again.\"}},{\"unit\":\"00_product.md:Inputs\",\"subject\":\"record-publication request identity\",\"kind\":\"missing input\",\"text\":\"“the file name and source id of a photo to deliver; the Portal photo id of a published photo”\",\"question\":\"What identifies the placed photo in the record-publication operation: project plus source id, the placement reference, file name plus source id, or another value?\",\"options\":[\"Project id plus source id\",\"The placement/file reference returned by delivery\",\"Project id, file name and source id\",\"A separate placement id\"],\"default_guess\":\"Use an opaque placement id or file reference returned by delivery, together with project id and Portal photo id.\",\"witness\":{\"initial\":\"Two projects have placed photos with identical source bytes, and the caller has a Portal photo id for one of them.\",\"events\":[\"The caller invokes record-publication using the inputs named by the text.\",\"The deliverer must select one placement to update.\"],\"outcomes\":[\"The source id and implicit project context identify the intended placement.\",\"The source id alone is ambiguous and the operation is refused or updates the wrong project.\"],\"observer\":\"The owner and the client Portal integration.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"metadata snapshot between scan and delivery\",\"kind\":\"timing ambiguity\",\"text\":\"“scan a project's folder, deliver one photo” and “A file replaced with other content is a new photo”\",\"question\":\"For metadata not represented by source content, especially fallback modification time, does delivery use the value observed by scan or the value read at delivery time?\",\"options\":[\"Scan fixes both content identity and delivery metadata\",\"Delivery re-reads metadata while requiring only content to match\",\"The source id covers every metadata value that affects the publication body\"],\"default_guess\":\"Make the source id cover all values that affect delivery, or return a scan token fixing both bytes and metadata.\",\"witness\":{\"initial\":\"An image has no camera date, is scanned with modification time T1, and its bytes receive source id S.\",\"events\":[\"The file's modification time changes to T2 without changing its bytes.\",\"The owner delivers the file using source id S.\"],\"outcomes\":[\"The publication body carries T1, the metadata chosen at scan.\",\"The publication body carries T2, the metadata observed during delivery.\"],\"observer\":\"The owner and client, who see a different photo date.\"}},{\"unit\":\"00_product.md:Accepted from the experiment (owner, 2026-11-18)\",\"subject\":\"eligibility of an incomplete final-name file\",\"kind\":\"missing completeness rule\",\"text\":\"“The two-minute wait accepted here first was withdrawn by R0-15”\",\"question\":\"If an incomplete file is visible under an ordinary non-hidden, non-temporary name, what rule prevents it from being offered or delivered?\",\"options\":[\"Ordinary names are immediately eligible and only image validation applies\",\"Scan and delivery require a successful complete decode\",\"The deliverer uses another stability or completeness check\",\"The product assumes Syncthing always preserves temporary naming until completion\"],\"default_guess\":\"Require a successful complete decode and exact source-id match, while documenting the Syncthing naming assumption.\",\"witness\":{\"initial\":\"The untrusted object folder contains a partially arrived but still decodable image under an ordinary visible name.\",\"events\":[\"The project is scanned after the two-minute wait has been removed.\",\"The owner selects the file before the remaining bytes arrive.\",\"Delivery reads the same partial bytes represented by the selected source id.\"],\"outcomes\":[\"The partial but decodable image is placed because its content matches the choice.\",\"The file is rejected as incomplete by an additional completeness rule.\"],\"observer\":\"The owner reviewing the hidden photo and later the client if the owner shows it.\"}}]}",
+ "set_aside": []
+}

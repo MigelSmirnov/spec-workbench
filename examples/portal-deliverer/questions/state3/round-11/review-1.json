@@ -1,0 +1,133 @@
+{
+ "open_points": [
+  {
+   "subject": "source_folder trace inputs",
+   "kind": "missing trace dependency",
+   "text": "- A1 orders 1 to 6, condition 1 of A3 rule 5, and rule 4 of A7.",
+   "question": "Must `source_folder` list A3 among its Trace inputs, since it is required to know and implement condition 1 of A3 rule 5?",
+   "options": [
+    "Add A3 to `source_folder` Trace inputs",
+    "Remove A3 condition 1 from `source_folder` knowledge and place the decision wholly in `photo_delivery`"
+   ],
+   "default_guess": "Add A3 to `source_folder` Trace inputs.",
+   "unit": "?"
+  },
+  {
+   "subject": "single-read guarantee for a delivered source",
+   "kind": "unclear ownership",
+   "text": "- deciding whether a requested name is a file a scan could report, and reading it once without following\n  a link;",
+   "question": "Does `source_folder` own the A3 rule 3 guarantee that the named file is read once, or does `photo_delivery` own it as the table assigning all of A3 rule 3 says?",
+   "options": [
+    "`source_folder` owns the single physical read and returns the resulting bytes and facts",
+    "`photo_delivery` owns the guarantee by controlling calls to a lower-level read capability",
+    "Split A3 rule 3 explicitly between the two modules"
+   ],
+   "default_guess": "Split it explicitly: `source_folder` owns one safe physical read, while `photo_delivery` owns invoking that capability once and using only its returned bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "clock injection into photo_delivery operations",
+   "kind": "vague dependency interface",
+   "text": "`deliverer_api` passes the clock to an operation as a function, and `photo_delivery` calls the function\nit receives without naming the module.",
+   "question": "Which `photo_delivery` capability receives the clock function: only `mark_photo_published`, or all operation capabilities even though scan and delivery must never read it?",
+   "options": [
+    "Pass the clock only to `mark_photo_published`",
+    "Pass it to all three operations but call it only in `mark_photo_published`"
+   ],
+   "default_guess": "Pass the clock only to `mark_photo_published`.",
+   "unit": "?"
+  },
+  {
+   "subject": "scan consistency with placement and mark records",
+   "kind": "unspecified concurrency semantics",
+   "text": "| 5 | observe the folder, read records | source id | connection |",
+   "question": "When a placement or mark changes concurrently with an unlocked scan, what record snapshot or ordering determines whether the scan reports `ready`, `placed`, or `published`?",
+   "options": [
+    "Read placement and mark records after folder observation and report what those reads see",
+    "Read records per observed file, allowing one scan to reflect different instants",
+    "Define a consistent record snapshot for the whole scan"
+   ],
+   "default_guess": "Read records after folder observation, with no whole-scan snapshot, and document that concurrent durable changes may appear or wait until the next scan.",
+   "witness": {
+    "initial": "A source file has a placement but no publication mark, and a scan starts without taking the project lock.",
+    "events": [
+     "The scan observes the source file.",
+     "The calling flow marks the placement while the scan is still running.",
+     "The scan reads the placement and mark records at an implementation-chosen point."
+    ],
+    "outcomes": [
+     "The scan reports the file as `placed`.",
+     "The scan reports the file as `published`."
+    ],
+    "observer": "The calling flow receiving the scan result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "failed delivery after the stored image is written",
+   "kind": "contradictory durability outcome",
+   "text": "5. A photo that cannot be delivered is answered with status `failed` and one member of\n   `= models.PlacementFailure`, and nothing is written except the project lock:",
+   "question": "If the stored image is written successfully but writing its placement record fails or the process crashes, must the image be removed so the failed delivery writes nothing, or may an unrecorded image remain as implied by the mandated image-before-record order?",
+   "options": [
+    "Rollback or remove the stored image so only the lock may have been written",
+    "Leave the unrecorded image and allow a retry to overwrite or reuse it",
+    "Distinguish ordinary record-write failure from a process crash and specify each outcome"
+   ],
+   "default_guess": "Distinguish the cases: clean up after a caught record-write failure when safe, but permit an orphan image after a crash and make retry overwrite or reuse it safely.",
+   "witness": {
+    "initial": "No placement or stored image exists for the requested project and source content.",
+    "events": [
+     "The caller requests delivery.",
+     "`photo_delivery` prepares the image and `delivery_store` successfully writes it.",
+     "Writing the placement record fails or the process stops before the record is committed."
+    ],
+    "outcomes": [
+     "Under A3 rule 5, nothing except the project lock remains.",
+     "Under the image-before-record crash rule, the stored image remains without a placement record and a retry repeats the placement."
+    ],
+    "observer": "The caller on retry and an operator inspecting the binary store."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Syncthing evidence status",
+   "kind": "text contradiction",
+   "text": "Evidence is from local runs against a real Client Portal process and a stub Registry. No\nrun has used a live Syncthing folder, the kernel or the VPS.",
+   "question": "Has a test run used real/live Syncthing folders, as R0-15 and the later evidence statements say, or has no run used one as this passage says?",
+   "options": [
+    "Real local Syncthing instances and their folders were used, but not the owner's devices or VPS",
+    "No real Syncthing folder was used; the stated Syncthing E2E evidence is not an executed run"
+   ],
+   "default_guess": "Real local Syncthing instances and folders were used; revise this sentence to say that no run used the owner's devices, kernel, or VPS.",
+   "witness": {
+    "initial": "The evidence record is used to decide what the prototype actually proved.",
+    "events": [
+     "A reviewer reads the Primary actions evidence paragraph.",
+     "The reviewer reads R0-15 and the State 3 status describing `e2e_local_syncthing.py` with two private Syncthing instances."
+    ],
+    "outcomes": [
+     "The evidence excludes every run against a live Syncthing folder.",
+     "The evidence includes a run against real local Syncthing instances and their folders."
+    ],
+    "observer": "A reviewer deciding whether the removal of the settling-time rule has real Syncthing evidence."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "unsafe_reference refusal",
+   "kind": "unowned outcome",
+   "text": "`RefusalCode` is `unknown_project`,\n`connection_not_confirmed`, `folder_unavailable`, `invalid_source_id`, `unsafe_reference`,\n`not_placed` and `publication_conflict`.",
+   "question": "Which condition produces `unsafe_reference`, which module decides it, and is it a whole-operation refusal or a failed delivery result?",
+   "options": [
+    "`delivery_store` produces a whole-operation `unsafe_reference` refusal when a derived store or state reference escapes its configured root",
+    "`photo_delivery` converts an unsafe reference into a failed delivery",
+    "The code is unreachable for validated identifiers and should be removed from the closed enumeration"
+   ],
+   "default_guess": "Have `delivery_store` detect containment failure and raise a whole-operation `unsafe_reference` refusal, with `deliverer_api` only rendering it.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"source_folder trace inputs\",\"kind\":\"missing trace dependency\",\"text\":\"- A1 orders 1 to 6, condition 1 of A3 rule 5, and rule 4 of A7.\",\"question\":\"Must `source_folder` list A3 among its Trace inputs, since it is required to know and implement condition 1 of A3 rule 5?\",\"options\":[\"Add A3 to `source_folder` Trace inputs\",\"Remove A3 condition 1 from `source_folder` knowledge and place the decision wholly in `photo_delivery`\"],\"default_guess\":\"Add A3 to `source_folder` Trace inputs.\"},{\"subject\":\"single-read guarantee for a delivered source\",\"kind\":\"unclear ownership\",\"text\":\"- deciding whether a requested name is a file a scan could report, and reading it once without following\\n  a link;\",\"question\":\"Does `source_folder` own the A3 rule 3 guarantee that the named file is read once, or does `photo_delivery` own it as the table assigning all of A3 rule 3 says?\",\"options\":[\"`source_folder` owns the single physical read and returns the resulting bytes and facts\",\"`photo_delivery` owns the guarantee by controlling calls to a lower-level read capability\",\"Split A3 rule 3 explicitly between the two modules\"],\"default_guess\":\"Split it explicitly: `source_folder` owns one safe physical read, while `photo_delivery` owns invoking that capability once and using only its returned bytes.\"},{\"subject\":\"clock injection into photo_delivery operations\",\"kind\":\"vague dependency interface\",\"text\":\"`deliverer_api` passes the clock to an operation as a function, and `photo_delivery` calls the function\\nit receives without naming the module.\",\"question\":\"Which `photo_delivery` capability receives the clock function: only `mark_photo_published`, or all operation capabilities even though scan and delivery must never read it?\",\"options\":[\"Pass the clock only to `mark_photo_published`\",\"Pass it to all three operations but call it only in `mark_photo_published`\"],\"default_guess\":\"Pass the clock only to `mark_photo_published`.\"},{\"subject\":\"scan consistency with placement and mark records\",\"kind\":\"unspecified concurrency semantics\",\"text\":\"| 5 | observe the folder, read records | source id | connection |\",\"question\":\"When a placement or mark changes concurrently with an unlocked scan, what record snapshot or ordering determines whether the scan reports `ready`, `placed`, or `published`?\",\"options\":[\"Read placement and mark records after folder observation and report what those reads see\",\"Read records per observed file, allowing one scan to reflect different instants\",\"Define a consistent record snapshot for the whole scan\"],\"default_guess\":\"Read records after folder observation, with no whole-scan snapshot, and document that concurrent durable changes may appear or wait until the next scan.\",\"witness\":{\"initial\":\"A source file has a placement but no publication mark, and a scan starts without taking the project lock.\",\"events\":[\"The scan observes the source file.\",\"The calling flow marks the placement while the scan is still running.\",\"The scan reads the placement and mark records at an implementation-chosen point.\"],\"outcomes\":[\"The scan reports the file as `placed`.\",\"The scan reports the file as `published`.\"],\"observer\":\"The calling flow receiving the scan result.\"}},{\"subject\":\"failed delivery after the stored image is written\",\"kind\":\"contradictory durability outcome\",\"text\":\"5. A photo that cannot be delivered is answered with status `failed` and one member of\\n   `= models.PlacementFailure`, and nothing is written except the project lock:\",\"question\":\"If the stored image is written successfully but writing its placement record fails or the process crashes, must the image be removed so the failed delivery writes nothing, or may an unrecorded image remain as implied by the mandated image-before-record order?\",\"options\":[\"Rollback or remove the stored image so only the lock may have been written\",\"Leave the unrecorded image and allow a retry to overwrite or reuse it\",\"Distinguish ordinary record-write failure from a process crash and specify each outcome\"],\"default_guess\":\"Distinguish the cases: clean up after a caught record-write failure when safe, but permit an orphan image after a crash and make retry overwrite or reuse it safely.\",\"witness\":{\"initial\":\"No placement or stored image exists for the requested project and source content.\",\"events\":[\"The caller requests delivery.\",\"`photo_delivery` prepares the image and `delivery_store` successfully writes it.\",\"Writing the placement record fails or the process stops before the record is committed.\"],\"outcomes\":[\"Under A3 rule 5, nothing except the project lock remains.\",\"Under the image-before-record crash rule, the stored image remains without a placement record and a retry repeats the placement.\"],\"observer\":\"The caller on retry and an operator inspecting the binary store.\"}},{\"subject\":\"Syncthing evidence status\",\"kind\":\"text contradiction\",\"text\":\"Evidence is from local runs against a real Client Portal process and a stub Registry. No\\nrun has used a live Syncthing folder, the kernel or the VPS.\",\"question\":\"Has a test run used real/live Syncthing folders, as R0-15 and the later evidence statements say, or has no run used one as this passage says?\",\"options\":[\"Real local Syncthing instances and their folders were used, but not the owner's devices or VPS\",\"No real Syncthing folder was used; the stated Syncthing E2E evidence is not an executed run\"],\"default_guess\":\"Real local Syncthing instances and folders were used; revise this sentence to say that no run used the owner's devices, kernel, or VPS.\",\"witness\":{\"initial\":\"The evidence record is used to decide what the prototype actually proved.\",\"events\":[\"A reviewer reads the Primary actions evidence paragraph.\",\"The reviewer reads R0-15 and the State 3 status describing `e2e_local_syncthing.py` with two private Syncthing instances.\"],\"outcomes\":[\"The evidence excludes every run against a live Syncthing folder.\",\"The evidence includes a run against real local Syncthing instances and their folders.\"],\"observer\":\"A reviewer deciding whether the removal of the settling-time rule has real Syncthing evidence.\"}},{\"subject\":\"unsafe_reference refusal\",\"kind\":\"unowned outcome\",\"text\":\"`RefusalCode` is `unknown_project`,\\n`connection_not_confirmed`, `folder_unavailable`, `invalid_source_id`, `unsafe_reference`,\\n`not_placed` and `publication_conflict`.\",\"question\":\"Which condition produces `unsafe_reference`, which module decides it, and is it a whole-operation refusal or a failed delivery result?\",\"options\":[\"`delivery_store` produces a whole-operation `unsafe_reference` refusal when a derived store or state reference escapes its configured root\",\"`photo_delivery` converts an unsafe reference into a failed delivery\",\"The code is unreachable for validated identifiers and should be removed from the closed enumeration\"],\"default_guess\":\"Have `delivery_store` detect containment failure and raise a whole-operation `unsafe_reference` refusal, with `deliverer_api` only rendering it.\"}]}",
+ "set_aside": []
+}

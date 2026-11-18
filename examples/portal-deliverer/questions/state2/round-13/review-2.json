@@ -1,0 +1,442 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 scan under concurrent folder changes",
+   "kind": "unspecified_behavior",
+   "text": "Syncthing may change the folder during a scan, and a scan promises nothing about a file or folder that changes while it runs.",
+   "question": "For each kind of concurrent change—content replacement, rename, deletion, creation, or a folder becoming unavailable—must the scan report the listed object, report its new state, omit it, or refuse the whole scan, and which status or refusal applies?",
+   "options": [
+    "Use the folder listing as the snapshot of names and classify each listed entry from what can be opened later",
+    "Use each entry's state when it is opened, allowing omission or a new classification",
+    "Permit any result, including omission or whole-scan refusal"
+   ],
+   "default_guess": "Use the listing for names, classify from the no-follow open, omit entries that vanished before metadata, and refuse only when a non-ignored subfolder cannot be listed.",
+   "witness": {
+    "initial": "A folder listing contains ordinary file a.jpg.",
+    "events": [
+     "Syncthing replaces a.jpg with different bytes after the listing but before the scanner reads it.",
+     "The scanner reaches a.jpg."
+    ],
+    "outcomes": [
+     "The scan reports the source id and facts of the replacement.",
+     "The scan omits a.jpg or reports facts derived from the earlier directory entry."
+    ],
+    "observer": "The calling flow comparing scan results"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 ignored-name classification",
+   "kind": "missing_decision_instant",
+   "text": "A name is ignored at every level of the path when, after the letters A to Z are lowered and no other character is changed, it begins with an item of the imported `IGNORED_NAME_PREFIXES` constant, ends with an item of the imported `IGNORED_NAME_SUFFIXES` constant, or contains the imported `CONFLICT_COPY_MARK` constant, the mark of a Syncthing conflict copy (R0-14).",
+   "question": "At which instant and from which representation is each path component tested when an entry is renamed during a scan: the folder-listing name, the name at open time, or both?",
+   "options": [
+    "Judge only the name returned by the folder listing",
+    "Re-resolve and judge the current name when opening",
+    "Require both the listed and current names to be non-ignored"
+   ],
+   "default_guess": "Judge the exact relative name returned by the folder listing and never follow a rename to another name.",
+   "witness": {
+    "initial": "The listing contains an ordinary name photo.jpg.",
+    "events": [
+     "Syncthing renames it to photo.sync-conflict-1.jpg before the scanner opens the listed path.",
+     "The scanner continues."
+    ],
+    "outcomes": [
+     "The listed ordinary name remains eligible for this scan.",
+     "The current conflict-copy name is ignored and cannot be reported."
+    ],
+    "observer": "The owner and calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 source_id population",
+   "kind": "undefined_result_field",
+   "text": "Files with the same content are each reported, with the same source id.",
+   "question": "Which reported statuses must carry a source id, and does the sentence include empty, oversized, unreadable, non-regular, or unsupported files whose full content may not have been read?",
+   "options": [
+    "Every reported entry carries a source id whenever its bytes can be read",
+    "Only ready, placed, and published entries carry a source id",
+    "Every regular file, including rejected files, is fully hashed unless reading fails"
+   ],
+   "default_guess": "Hash fully read regular files and give source ids to ready, placed, published, empty, and unsupported observations, but use null when the file cannot safely be fully read.",
+   "witness": {
+    "initial": "Two oversized files have identical bytes.",
+    "events": [
+     "The caller scans the folder."
+    ],
+    "outcomes": [
+     "Both rejected observations contain the same source id.",
+     "Both are rejected before full hashing and have null source ids."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 file opening",
+   "kind": "vague_operation",
+   "text": "opened without following a link and without waiting, what it finds is not a regular file",
+   "question": "What precisely does “without waiting” require, which operation or flag implements it, and what result applies when an open would block or the platform cannot provide that mode?",
+   "options": [
+    "Use a nonblocking no-follow open and classify its result",
+    "Use an ordinary no-follow open; “without waiting” only means no retry",
+    "Refuse unsupported platforms or filesystems"
+   ],
+   "default_guess": "Use one no-follow open attempt with no retry; do not promise that the operating-system call itself cannot block.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 prerequisite scan",
+   "kind": "contradictory_requirement",
+   "text": "One call delivers one photo, named by `name`, the relative path a scan reported, and `source_id`.",
+   "question": "Must a new delivery prove that this exact name and source_id were returned by an earlier scan, or may it deliver any current file that a scan could report without retaining scan state?",
+   "options": [
+    "An actual earlier scan result is required",
+    "Only current eligibility equivalent to a scan is required",
+    "An earlier scan is required only for new placements, not replays"
+   ],
+   "default_guess": "No retained scan result is required; validate the current file as a scan would.",
+   "witness": {
+    "initial": "A valid photo exists, but the caller has not invoked scan.",
+    "events": [
+     "The authenticated caller submits its correct name and source_id directly to delivery."
+    ],
+    "outcomes": [
+     "The photo is delivered because it is currently scan-eligible.",
+     "The request fails with NOT_READY_OR_ABSENT because no scan reported it."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 failure precedence for non-regular files",
+   "kind": "overlapping_rules",
+   "text": "| 1 | `name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link | `NOT_READY_OR_ABSENT` |\n| 2 | A1 orders 1 to 6 reject the file | the member with the value of the A1 reason |",
+   "question": "When the requested path resolves to a non-regular entry, when does condition 1 produce NOT_READY_OR_ABSENT and when does A1 order 3 produce NOT_A_REGULAR_FILE?",
+   "options": [
+    "Stable non-regular entries use NOT_READY_OR_ABSENT; only a race discovered after an initially regular listing uses NOT_A_REGULAR_FILE",
+    "Every non-regular entry uses NOT_READY_OR_ABSENT",
+    "Every safely opened non-regular entry uses NOT_A_REGULAR_FILE"
+   ],
+   "default_guess": "Use NOT_READY_OR_ABSENT if initial path validation finds a non-regular entry, and NOT_A_REGULAR_FILE only if a previously regular entry changes before the no-follow open.",
+   "witness": {
+    "initial": "The requested name identifies a directory inside the photo folder.",
+    "events": [
+     "The caller requests delivery with a syntactically valid source_id."
+    ],
+    "outcomes": [
+     "Condition 1 returns NOT_READY_OR_ABSENT.",
+     "A1 order 3 returns NOT_A_REGULAR_FILE."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 failure precedence for symbolic-link races",
+   "kind": "overlapping_rules",
+   "text": "| 1 | `name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link | `NOT_READY_OR_ABSENT` |\n| 2 | A1 orders 1 to 6 reject the file | the member with the value of the A1 reason |",
+   "question": "If an ordinary path becomes a symbolic link during delivery, does it fail as NOT_READY_OR_ABSENT under condition 1 or UNREADABLE_FILE under A1 order 5, and at what check is the distinction made?",
+   "options": [
+    "Any symbolic link discovered before reading gives NOT_READY_OR_ABSENT",
+    "A link already present at validation gives NOT_READY_OR_ABSENT; one introduced afterward gives UNREADABLE_FILE",
+    "Any post-listing link gives UNREADABLE_FILE"
+   ],
+   "default_guess": "Use NOT_READY_OR_ABSENT when path validation observes the link and UNREADABLE_FILE when a later no-follow open detects the race.",
+   "witness": {
+    "initial": "name refers to an ordinary regular file.",
+    "events": [
+     "Delivery validates the name.",
+     "Another actor replaces the file with a symbolic link before it is opened."
+    ],
+    "outcomes": [
+     "Delivery fails with NOT_READY_OR_ABSENT.",
+     "Delivery fails with UNREADABLE_FILE."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 failed storage writes",
+   "kind": "contradiction",
+   "text": "A photo that cannot be delivered is answered with status `failed` and one member of\n   `= models.PlacementFailure`, and nothing is written except the project lock:",
+   "question": "How can a record-write failure satisfy “nothing is written” when rule 6 requires the stored image to be written before the record; must the image and temporary files be rolled back, retained for retry, or treated as a crash-only state?",
+   "options": [
+    "Delete the newly written image and every temporary file before returning failed",
+    "Retain the complete image without a record and weaken the nothing-written promise",
+    "Treat a record-write failure as an unreturned crash rather than a failed outcome"
+   ],
+   "default_guess": "Attempt rollback of a newly written image and temporary files before returning failed; if rollback cannot be guaranteed, do not promise that nothing was written.",
+   "witness": {
+    "initial": "No placement or stored image exists for the source.",
+    "events": [
+     "Delivery successfully writes and renames the stored image.",
+     "Writing the placement record fails."
+    ],
+    "outcomes": [
+     "The call returns failed and the stored image remains, as required by image-before-record ordering.",
+     "The call returns failed only after deleting the stored image, as required by the nothing-written promise."
+    ],
+    "observer": "The caller and an operator inspecting the binary store"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 request-form refusal",
+   "kind": "undefined_refusal",
+   "text": "A defect of that form or of the project id is refused as a whole request.",
+   "question": "What exact defects count, which refusal code or transport response each produces, and whether validation stops at the first defect are not stated.",
+   "options": [
+    "Use framework validation for missing, extra, or wrongly typed fields and a separate invalid-project-id response",
+    "Map every form or project-id defect to one explicit RefusalCode",
+    "Define a precedence table for individual request defects"
+   ],
+   "default_guess": "Reject missing, extra, or non-string fields and malformed project ids before connection lookup using one documented request-validation response.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 name normalisation",
+   "kind": "undefined_refusal_condition",
+   "text": "`name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link",
+   "question": "What exact spellings are “unnormalised,” including repeated separators, `.` components, trailing separators, backslashes, Unicode normalization, percent escapes, and platform-specific drive or root forms?",
+   "options": [
+    "Require POSIX relative paths in exact lexical normal form with `/` separators",
+    "Normalize first and accept if the result stays inside the folder",
+    "Apply host-platform path normalization rules"
+   ],
+   "default_guess": "Require a nonempty POSIX relative path already in lexical normal form, reject backslashes, `.` and `..` components, repeated or trailing separators, roots, and drive forms, and leave Unicode code points unchanged.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-01 Required tests",
+   "kind": "stale_operation_name",
+   "text": "INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).",
+   "question": "Does “a placement” mean the new one-photo delivery operation, and must the test exercise both a successful delivery and every failed-delivery branch that reads a source?",
+   "options": [
+    "Replace placement with delivery and cover successful, replayed, and failed deliveries",
+    "Treat placement as a synonym for delivery",
+    "Test only the successful and replayed paths named here"
+   ],
+   "default_guess": "Rewrite the item to name successful, replayed, and representative failed deliveries explicitly.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-02: an empty, absolute, unnormalised or parent-climbing name, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What test shows that a file which becomes ignored, non-regular, or linked after initial validation is not read, as required by the invariant's universal “reads only” claim?",
+   "options": [
+    "Add race tests for replacement by a conflict name, directory, and symbolic link",
+    "Narrow INV-02 to validation of stable paths",
+    "State that concurrent changes are outside INV-02"
+   ],
+   "default_guess": "Add a race test using a controlled filesystem seam and assert that the replaced target's bytes are never opened or decoded.",
+   "witness": {
+    "initial": "A valid ordinary file passes initial name validation.",
+    "events": [
+     "Before the content read, another actor replaces it with a symbolic link to a readable image.",
+     "Delivery continues."
+    ],
+    "outcomes": [
+     "The linked image is read, while all currently listed stable-name examples still pass the Required test.",
+     "The no-follow read refuses the replacement and no linked bytes are read."
+    ],
+    "observer": "The source-folder owner and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-07 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).",
+   "question": "What must the tests assert about the earlier placement record itself, which INV-07 requires to remain unchanged but the item explicitly mentions only the image, mark, and an undefined “delivery”?",
+   "options": [
+    "Assert the exact earlier placement record remains byte-for-byte unchanged",
+    "Define “delivery stays” as including the placement record, stored image, and mark",
+    "Narrow the invariant to only the artifacts currently asserted"
+   ],
+   "default_guess": "Explicitly assert that the earlier placement record, image, and mark all remain unchanged after replacement and removal.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Placed content replays when only a conflict copy still holds it (`test_placed_content_replays_when_only_a_conflict_copy_still_holds_it`), and an ordinary file with the content of a conflict copy is delivered (`test_an_ordinary_file_is_placed_when_a_conflict_copy_has_the_same_content`).",
+   "question": "What test shows that a new placement never reads a file renamed to a conflict-copy name after validation or an ordinary request path replaced by a conflict copy during delivery?",
+   "options": [
+    "Add controlled rename-race tests and assert the conflict-copy bytes are never read",
+    "Define INV-19 only for names already conflicting when the call begins",
+    "Rely on INV-02 and state that it witnesses INV-19 too"
+   ],
+   "default_guess": "Add a controlled race test that renames or substitutes the entry before open and asserts failure with no source read and no durable write.",
+   "witness": {
+    "initial": "An ordinary file with no placement is selected for delivery.",
+    "events": [
+     "After name validation, Syncthing renames it to a conflict-copy name or replaces its path with a conflict copy.",
+     "Delivery opens a source."
+    ],
+    "outcomes": [
+     "The conflict-copy bytes are used for a new placement.",
+     "The delivery refuses without reading the conflict copy."
+    ],
+    "observer": "The owner and the Portal binary-store operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-12 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).",
+   "question": "Does the placement part also have to run in separate processes to demonstrate the rule's across-process locking guarantee, and does “placements” mean deliveries?",
+   "options": [
+    "Require separate-process concurrent deliveries and separate-process marks",
+    "Use threads for deliveries and processes only for marks",
+    "Narrow the invariant to the concurrency modes actually tested"
+   ],
+   "default_guess": "Require separate-process concurrent deliveries as well as marks and rename the action to delivery.",
+   "unit": "?"
+  },
+  {
+   "subject": "A7 clock-read boundary",
+   "kind": "undefined_precedence",
+   "text": "Only a mark reads it, once, after the token, the request form and the identifiers are accepted and\n   before the connection is examined or the project lock is taken.",
+   "question": "Which identifiers must be accepted before the clock read, in what order, and do syntactically valid but unknown project_id, source_id, or photo_id values count as accepted?",
+   "options": [
+    "Token, request shape, project_id syntax, source_id syntax, and photo_id syntax precede the clock; existence checks follow it",
+    "Only project_id and photo_id syntax precede the clock",
+    "All identifier syntax and existence checks precede the clock"
+   ],
+   "default_guess": "Validate the syntax and type of project_id, source_id, and photo_id before reading the clock; perform connection, placement, and mark existence checks afterward.",
+   "witness": {
+    "initial": "A mark request has a valid token and form but a malformed source_id.",
+    "events": [
+     "The service handles the request using a counting clock."
+    ],
+    "outcomes": [
+     "The request is refused before the clock and the count remains zero.",
+     "The clock is read once before the malformed source_id is refused."
+    ],
+    "observer": "The test and service operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 timestamp serialization",
+   "kind": "underspecified_representation",
+   "text": "The current time is a `datetime` in UTC without an offset, with microsecond precision and no\n   rounding, written in ISO 8601 form.",
+   "question": "Which exact ISO 8601 representation is required: separator, fixed or omitted fractional digits, treatment of zero microseconds, and whether a `Z` or offset is forbidden?",
+   "options": [
+    "Always `YYYY-MM-DDTHH:MM:SS.ffffff` with no suffix",
+    "Use the language's default datetime ISO formatter, allowing omitted zero fractions",
+    "Write `YYYY-MM-DDTHH:MM:SS.ffffffZ` despite the offset-free model"
+   ],
+   "default_guess": "Use exactly `YYYY-MM-DDTHH:MM:SS.ffffff` with six fractional digits and no zone suffix.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Which tests show zero reads for every pre-clock refusal and exactly one read for post-clock refusals and replayed marks, as the normative rule requires?",
+   "options": [
+    "Add cases for each validation boundary, an unknown connection or placement, a replay, and a publication conflict",
+    "Test only one successful mark because the invariant says at most once",
+    "Narrow the normative rule to the successful path currently witnessed"
+   ],
+   "default_guess": "Add representative pre-clock and post-clock refusals plus replay and conflict cases, asserting exact read counts.",
+   "unit": "?"
+  },
+  {
+   "subject": "context evidence for Syncthing",
+   "kind": "contradiction",
+   "text": "Evidence is from local runs against a real Client Portal process and a stub Registry. No\nrun has used a live Syncthing folder, the kernel or the VPS.",
+   "question": "How does this agree with R0-15's statement that “A run against real Syncthing” occurred and State 1's evidence naming `e2e_local_syncthing.py` with two private Syncthing instances; does “live” mean production/owner data rather than a real Syncthing process?",
+   "options": [
+    "Change “live Syncthing folder” to “the owner's or production Syncthing folders”",
+    "Remove the claim that a real Syncthing run occurred",
+    "Define private test instances as not live and say so explicitly"
+   ],
+   "default_guess": "State that real isolated Syncthing processes were tested, but no owner's device, production folder, kernel, or VPS was used.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 status and reason table",
+   "kind": "standard_violation",
+   "text": "| Order | Condition | Status | Reason |\n|---|---|---|---|\n| 1 | empty | `rejected` | `empty` |\n| 2 | larger than the source limit | `rejected` | `too_large` |\n| 3 | opened without following a link and without waiting, what it finds is not a regular file | `rejected` | `not_a_regular_file` |\n| 4 | it grew past the source limit while being read | `rejected` | `too_large` |\n| 5 | opening or reading it fails, which includes a file that disappeared and a path that became a symbolic link after the listing | `rejected` | `unreadable_file` |\n| 6 | does not begin with a JPEG, PNG or WEBP signature | `rejected` | `unsupported_format` |\n| 7 | placed and marked | `published` | none |\n| 8 | placed | `placed` | none |\n| 9 | anything else | `ready` | none |",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Replace each bare status and reason value with the emitted member name beside `= models.ScanStatus` or `= models.ObservationReason`; a wire value may appear only as an additional parenthetical value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 folder refusal",
+   "kind": "standard_violation",
+   "text": "When a subfolder that is not ignored\ncannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is\nnever reported as complete.",
+   "rule": "Имя — то, которое пишет\nemitter моделей и которое получает генератор: имя из `member_names`, иначе\nверхнее написание значения (`expense.create` → `EXPENSE_CREATE`, `pending` →\n`PENDING`). Имя есть у каждого члена. Значение допустимо только как дополнение к\nимени: `the EXPENSE_CREATE member (value expense.create) of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the FOLDER_UNAVAILABLE member of `= models.RefusalCode`, optionally adding its `folder_unavailable` value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 source-size policy",
+   "kind": "standard_violation",
+   "text": "| 2 | larger than the source limit | `rejected` | `too_large` |",
+   "rule": "Таблица выше —\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Replace “the source limit” with “the imported MAX_SOURCE_BYTES constant” and name the enum members by emitted names.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 growing-file policy",
+   "kind": "standard_violation",
+   "text": "| 4 | it grew past the source limit while being read | `rejected` | `too_large` |",
+   "rule": "Таблица выше —\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Replace “the source limit” with “the imported MAX_SOURCE_BYTES constant” and name the enum members by emitted names.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 replay outcome",
+   "kind": "standard_violation",
+   "text": "Delivering content that already has a placement answers `replayed` with the stored placement and the\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\n   when the source file has left the folder.",
+   "rule": "Имя — то, которое пишет\nemitter моделей и которое получает генератор: имя из `member_names`, иначе\nверхнее написание значения (`expense.create` → `EXPENSE_CREATE`, `pending` →\n`PENDING`). Имя есть у каждого члена. Значение допустимо только как дополнение к\nимени: `the EXPENSE_CREATE member (value expense.create) of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the REPLAYED member of `= models.PlacementStatus`, optionally adding its `replayed` value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 malformed-source refusal",
+   "kind": "standard_violation",
+   "text": "A\n   `source_id` that is not 64 lowercase hexadecimal characters is refused with `invalid_source_id`.",
+   "rule": "Имя — то, которое пишет\nemitter моделей и которое получает генератор: имя из `member_names`, иначе\nверхнее написание значения (`expense.create` → `EXPENSE_CREATE`, `pending` →\n`PENDING`). Имя есть у каждого члена. Значение допустимо только как дополнение к\nимени: `the EXPENSE_CREATE member (value expense.create) of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the INVALID_SOURCE_ID member of `= models.RefusalCode`, optionally adding its `invalid_source_id` value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 failed outcome",
+   "kind": "standard_violation",
+   "text": "A photo that cannot be delivered is answered with status `failed` and one member of\n   `= models.PlacementFailure`, and nothing is written except the project lock:",
+   "rule": "Имя — то, которое пишет\nemitter моделей и которое получает генератор: имя из `member_names`, иначе\nверхнее написание значения (`expense.create` → `EXPENSE_CREATE`, `pending` →\n`PENDING`). Имя есть у каждого члена. Значение допустимо только как дополнение к\nимени: `the EXPENSE_CREATE member (value expense.create) of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the FAILED member of `= models.PlacementStatus`, optionally adding its `failed` value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 failure mapping",
+   "kind": "standard_violation",
+   "text": "| 2 | A1 orders 1 to 6 reject the file | the member with the value of the A1 reason |\n| 3 | the hash of the bytes differs from `source_id` | `SOURCE_CHANGED` |\n| 4 | A2 rule 2 fails | the member with the value of the A2 failure |\n| 5 | writing the stored image or the record fails | `UNREADABLE_FILE` |",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не\nявляется именем ни одного члена, генератор пишет только имена\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\n(`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Replace the value-based mappings with an exhaustive mapping that names every emitted member of `= models.PlacementFailure` explicitly.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 scan under concurrent folder changes\",\"kind\":\"unspecified_behavior\",\"text\":\"Syncthing may change the folder during a scan, and a scan promises nothing about a file or folder that changes while it runs.\",\"question\":\"For each kind of concurrent change—content replacement, rename, deletion, creation, or a folder becoming unavailable—must the scan report the listed object, report its new state, omit it, or refuse the whole scan, and which status or refusal applies?\",\"options\":[\"Use the folder listing as the snapshot of names and classify each listed entry from what can be opened later\",\"Use each entry's state when it is opened, allowing omission or a new classification\",\"Permit any result, including omission or whole-scan refusal\"],\"default_guess\":\"Use the listing for names, classify from the no-follow open, omit entries that vanished before metadata, and refuse only when a non-ignored subfolder cannot be listed.\",\"witness\":{\"initial\":\"A folder listing contains ordinary file a.jpg.\",\"events\":[\"Syncthing replaces a.jpg with different bytes after the listing but before the scanner reads it.\",\"The scanner reaches a.jpg.\"],\"outcomes\":[\"The scan reports the source id and facts of the replacement.\",\"The scan omits a.jpg or reports facts derived from the earlier directory entry.\"],\"observer\":\"The calling flow comparing scan results\"}},{\"subject\":\"A1 ignored-name classification\",\"kind\":\"missing_decision_instant\",\"text\":\"A name is ignored at every level of the path when, after the letters A to Z are lowered and no other character is changed, it begins with an item of the imported `IGNORED_NAME_PREFIXES` constant, ends with an item of the imported `IGNORED_NAME_SUFFIXES` constant, or contains the imported `CONFLICT_COPY_MARK` constant, the mark of a Syncthing conflict copy (R0-14).\",\"question\":\"At which instant and from which representation is each path component tested when an entry is renamed during a scan: the folder-listing name, the name at open time, or both?\",\"options\":[\"Judge only the name returned by the folder listing\",\"Re-resolve and judge the current name when opening\",\"Require both the listed and current names to be non-ignored\"],\"default_guess\":\"Judge the exact relative name returned by the folder listing and never follow a rename to another name.\",\"witness\":{\"initial\":\"The listing contains an ordinary name photo.jpg.\",\"events\":[\"Syncthing renames it to photo.sync-conflict-1.jpg before the scanner opens the listed path.\",\"The scanner continues.\"],\"outcomes\":[\"The listed ordinary name remains eligible for this scan.\",\"The current conflict-copy name is ignored and cannot be reported.\"],\"observer\":\"The owner and calling flow\"}},{\"subject\":\"A1 source_id population\",\"kind\":\"undefined_result_field\",\"text\":\"Files with the same content are each reported, with the same source id.\",\"question\":\"Which reported statuses must carry a source id, and does the sentence include empty, oversized, unreadable, non-regular, or unsupported files whose full content may not have been read?\",\"options\":[\"Every reported entry carries a source id whenever its bytes can be read\",\"Only ready, placed, and published entries carry a source id\",\"Every regular file, including rejected files, is fully hashed unless reading fails\"],\"default_guess\":\"Hash fully read regular files and give source ids to ready, placed, published, empty, and unsupported observations, but use null when the file cannot safely be fully read.\",\"witness\":{\"initial\":\"Two oversized files have identical bytes.\",\"events\":[\"The caller scans the folder.\"],\"outcomes\":[\"Both rejected observations contain the same source id.\",\"Both are rejected before full hashing and have null source ids.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A1 file opening\",\"kind\":\"vague_operation\",\"text\":\"opened without following a link and without waiting, what it finds is not a regular file\",\"question\":\"What precisely does “without waiting” require, which operation or flag implements it, and what result applies when an open would block or the platform cannot provide that mode?\",\"options\":[\"Use a nonblocking no-follow open and classify its result\",\"Use an ordinary no-follow open; “without waiting” only means no retry\",\"Refuse unsupported platforms or filesystems\"],\"default_guess\":\"Use one no-follow open attempt with no retry; do not promise that the operating-system call itself cannot block.\"},{\"subject\":\"A3 prerequisite scan\",\"kind\":\"contradictory_requirement\",\"text\":\"One call delivers one photo, named by `name`, the relative path a scan reported, and `source_id`.\",\"question\":\"Must a new delivery prove that this exact name and source_id were returned by an earlier scan, or may it deliver any current file that a scan could report without retaining scan state?\",\"options\":[\"An actual earlier scan result is required\",\"Only current eligibility equivalent to a scan is required\",\"An earlier scan is required only for new placements, not replays\"],\"default_guess\":\"No retained scan result is required; validate the current file as a scan would.\",\"witness\":{\"initial\":\"A valid photo exists, but the caller has not invoked scan.\",\"events\":[\"The authenticated caller submits its correct name and source_id directly to delivery.\"],\"outcomes\":[\"The photo is delivered because it is currently scan-eligible.\",\"The request fails with NOT_READY_OR_ABSENT because no scan reported it.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A3 failure precedence for non-regular files\",\"kind\":\"overlapping_rules\",\"text\":\"| 1 | `name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link | `NOT_READY_OR_ABSENT` |\\n| 2 | A1 orders 1 to 6 reject the file | the member with the value of the A1 reason |\",\"question\":\"When the requested path resolves to a non-regular entry, when does condition 1 produce NOT_READY_OR_ABSENT and when does A1 order 3 produce NOT_A_REGULAR_FILE?\",\"options\":[\"Stable non-regular entries use NOT_READY_OR_ABSENT; only a race discovered after an initially regular listing uses NOT_A_REGULAR_FILE\",\"Every non-regular entry uses NOT_READY_OR_ABSENT\",\"Every safely opened non-regular entry uses NOT_A_REGULAR_FILE\"],\"default_guess\":\"Use NOT_READY_OR_ABSENT if initial path validation finds a non-regular entry, and NOT_A_REGULAR_FILE only if a previously regular entry changes before the no-follow open.\",\"witness\":{\"initial\":\"The requested name identifies a directory inside the photo folder.\",\"events\":[\"The caller requests delivery with a syntactically valid source_id.\"],\"outcomes\":[\"Condition 1 returns NOT_READY_OR_ABSENT.\",\"A1 order 3 returns NOT_A_REGULAR_FILE.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A3 failure precedence for symbolic-link races\",\"kind\":\"overlapping_rules\",\"text\":\"| 1 | `name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link | `NOT_READY_OR_ABSENT` |\\n| 2 | A1 orders 1 to 6 reject the file | the member with the value of the A1 reason |\",\"question\":\"If an ordinary path becomes a symbolic link during delivery, does it fail as NOT_READY_OR_ABSENT under condition 1 or UNREADABLE_FILE under A1 order 5, and at what check is the distinction made?\",\"options\":[\"Any symbolic link discovered before reading gives NOT_READY_OR_ABSENT\",\"A link already present at validation gives NOT_READY_OR_ABSENT; one introduced afterward gives UNREADABLE_FILE\",\"Any post-listing link gives UNREADABLE_FILE\"],\"default_guess\":\"Use NOT_READY_OR_ABSENT when path validation observes the link and UNREADABLE_FILE when a later no-follow open detects the race.\",\"witness\":{\"initial\":\"name refers to an ordinary regular file.\",\"events\":[\"Delivery validates the name.\",\"Another actor replaces the file with a symbolic link before it is opened.\"],\"outcomes\":[\"Delivery fails with NOT_READY_OR_ABSENT.\",\"Delivery fails with UNREADABLE_FILE.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A3 failed storage writes\",\"kind\":\"contradiction\",\"text\":\"A photo that cannot be delivered is answered with status `failed` and one member of\\n   `= models.PlacementFailure`, and nothing is written except the project lock:\",\"question\":\"How can a record-write failure satisfy “nothing is written” when rule 6 requires the stored image to be written before the record; must the image and temporary files be rolled back, retained for retry, or treated as a crash-only state?\",\"options\":[\"Delete the newly written image and every temporary file before returning failed\",\"Retain the complete image without a record and weaken the nothing-written promise\",\"Treat a record-write failure as an unreturned crash rather than a failed outcome\"],\"default_guess\":\"Attempt rollback of a newly written image and temporary files before returning failed; if rollback cannot be guaranteed, do not promise that nothing was written.\",\"witness\":{\"initial\":\"No placement or stored image exists for the source.\",\"events\":[\"Delivery successfully writes and renames the stored image.\",\"Writing the placement record fails.\"],\"outcomes\":[\"The call returns failed and the stored image remains, as required by image-before-record ordering.\",\"The call returns failed only after deleting the stored image, as required by the nothing-written promise.\"],\"observer\":\"The caller and an operator inspecting the binary store\"}},{\"subject\":\"A3 request-form refusal\",\"kind\":\"undefined_refusal\",\"text\":\"A defect of that form or of the project id is refused as a whole request.\",\"question\":\"What exact defects count, which refusal code or transport response each produces, and whether validation stops at the first defect are not stated.\",\"options\":[\"Use framework validation for missing, extra, or wrongly typed fields and a separate invalid-project-id response\",\"Map every form or project-id defect to one explicit RefusalCode\",\"Define a precedence table for individual request defects\"],\"default_guess\":\"Reject missing, extra, or non-string fields and malformed project ids before connection lookup using one documented request-validation response.\"},{\"subject\":\"A3 name normalisation\",\"kind\":\"undefined_refusal_condition\",\"text\":\"`name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link\",\"question\":\"What exact spellings are “unnormalised,” including repeated separators, `.` components, trailing separators, backslashes, Unicode normalization, percent escapes, and platform-specific drive or root forms?\",\"options\":[\"Require POSIX relative paths in exact lexical normal form with `/` separators\",\"Normalize first and accept if the result stays inside the folder\",\"Apply host-platform path normalization rules\"],\"default_guess\":\"Require a nonempty POSIX relative path already in lexical normal form, reject backslashes, `.` and `..` components, repeated or trailing separators, roots, and drive forms, and leave Unicode code points unchanged.\"},{\"subject\":\"INV-01 Required tests\",\"kind\":\"stale_operation_name\",\"text\":\"INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).\",\"question\":\"Does “a placement” mean the new one-photo delivery operation, and must the test exercise both a successful delivery and every failed-delivery branch that reads a source?\",\"options\":[\"Replace placement with delivery and cover successful, replayed, and failed deliveries\",\"Treat placement as a synonym for delivery\",\"Test only the successful and replayed paths named here\"],\"default_guess\":\"Rewrite the item to name successful, replayed, and representative failed deliveries explicitly.\"},{\"subject\":\"INV-02 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-02: an empty, absolute, unnormalised or parent-climbing name, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What test shows that a file which becomes ignored, non-regular, or linked after initial validation is not read, as required by the invariant's universal “reads only” claim?\",\"options\":[\"Add race tests for replacement by a conflict name, directory, and symbolic link\",\"Narrow INV-02 to validation of stable paths\",\"State that concurrent changes are outside INV-02\"],\"default_guess\":\"Add a race test using a controlled filesystem seam and assert that the replaced target's bytes are never opened or decoded.\",\"witness\":{\"initial\":\"A valid ordinary file passes initial name validation.\",\"events\":[\"Before the content read, another actor replaces it with a symbolic link to a readable image.\",\"Delivery continues.\"],\"outcomes\":[\"The linked image is read, while all currently listed stable-name examples still pass the Required test.\",\"The no-follow read refuses the replacement and no linked bytes are read.\"],\"observer\":\"The source-folder owner and the calling flow\"}},{\"subject\":\"INV-07 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).\",\"question\":\"What must the tests assert about the earlier placement record itself, which INV-07 requires to remain unchanged but the item explicitly mentions only the image, mark, and an undefined “delivery”?\",\"options\":[\"Assert the exact earlier placement record remains byte-for-byte unchanged\",\"Define “delivery stays” as including the placement record, stored image, and mark\",\"Narrow the invariant to only the artifacts currently asserted\"],\"default_guess\":\"Explicitly assert that the earlier placement record, image, and mark all remain unchanged after replacement and removal.\"},{\"subject\":\"INV-19 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Placed content replays when only a conflict copy still holds it (`test_placed_content_replays_when_only_a_conflict_copy_still_holds_it`), and an ordinary file with the content of a conflict copy is delivered (`test_an_ordinary_file_is_placed_when_a_conflict_copy_has_the_same_content`).\",\"question\":\"What test shows that a new placement never reads a file renamed to a conflict-copy name after validation or an ordinary request path replaced by a conflict copy during delivery?\",\"options\":[\"Add controlled rename-race tests and assert the conflict-copy bytes are never read\",\"Define INV-19 only for names already conflicting when the call begins\",\"Rely on INV-02 and state that it witnesses INV-19 too\"],\"default_guess\":\"Add a controlled race test that renames or substitutes the entry before open and asserts failure with no source read and no durable write.\",\"witness\":{\"initial\":\"An ordinary file with no placement is selected for delivery.\",\"events\":[\"After name validation, Syncthing renames it to a conflict-copy name or replaces its path with a conflict copy.\",\"Delivery opens a source.\"],\"outcomes\":[\"The conflict-copy bytes are used for a new placement.\",\"The delivery refuses without reading the conflict copy.\"],\"observer\":\"The owner and the Portal binary-store operator\"}},{\"subject\":\"INV-12 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).\",\"question\":\"Does the placement part also have to run in separate processes to demonstrate the rule's across-process locking guarantee, and does “placements” mean deliveries?\",\"options\":[\"Require separate-process concurrent deliveries and separate-process marks\",\"Use threads for deliveries and processes only for marks\",\"Narrow the invariant to the concurrency modes actually tested\"],\"default_guess\":\"Require separate-process concurrent deliveries as well as marks and rename the action to delivery.\"},{\"subject\":\"A7 clock-read boundary\",\"kind\":\"undefined_precedence\",\"text\":\"Only a mark reads it, once, after the token, the request form and the identifiers are accepted and\\n   before the connection is examined or the project lock is taken.\",\"question\":\"Which identifiers must be accepted before the clock read, in what order, and do syntactically valid but unknown project_id, source_id, or photo_id values count as accepted?\",\"options\":[\"Token, request shape, project_id syntax, source_id syntax, and photo_id syntax precede the clock; existence checks follow it\",\"Only project_id and photo_id syntax precede the clock\",\"All identifier syntax and existence checks precede the clock\"],\"default_guess\":\"Validate the syntax and type of project_id, source_id, and photo_id before reading the clock; perform connection, placement, and mark existence checks afterward.\",\"witness\":{\"initial\":\"A mark request has a valid token and form but a malformed source_id.\",\"events\":[\"The service handles the request using a counting clock.\"],\"outcomes\":[\"The request is refused before the clock and the count remains zero.\",\"The clock is read once before the malformed source_id is refused.\"],\"observer\":\"The test and service operator\"}},{\"subject\":\"A7 timestamp serialization\",\"kind\":\"underspecified_representation\",\"text\":\"The current time is a `datetime` in UTC without an offset, with microsecond precision and no\\n   rounding, written in ISO 8601 form.\",\"question\":\"Which exact ISO 8601 representation is required: separator, fixed or omitted fractional digits, treatment of zero microseconds, and whether a `Z` or offset is forbidden?\",\"options\":[\"Always `YYYY-MM-DDTHH:MM:SS.ffffff` with no suffix\",\"Use the language's default datetime ISO formatter, allowing omitted zero fractions\",\"Write `YYYY-MM-DDTHH:MM:SS.ffffffZ` despite the offset-free model\"],\"default_guess\":\"Use exactly `YYYY-MM-DDTHH:MM:SS.ffffff` with six fractional digits and no zone suffix.\"},{\"subject\":\"INV-13 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Which tests show zero reads for every pre-clock refusal and exactly one read for post-clock refusals and replayed marks, as the normative rule requires?\",\"options\":[\"Add cases for each validation boundary, an unknown connection or placement, a replay, and a publication conflict\",\"Test only one successful mark because the invariant says at most once\",\"Narrow the normative rule to the successful path currently witnessed\"],\"default_guess\":\"Add representative pre-clock and post-clock refusals plus replay and conflict cases, asserting exact read counts.\"},{\"subject\":\"context evidence for Syncthing\",\"kind\":\"contradiction\",\"text\":\"Evidence is from local runs against a real Client Portal process and a stub Registry. No\\nrun has used a live Syncthing folder, the kernel or the VPS.\",\"question\":\"How does this agree with R0-15's statement that “A run against real Syncthing” occurred and State 1's evidence naming `e2e_local_syncthing.py` with two private Syncthing instances; does “live” mean production/owner data rather than a real Syncthing process?\",\"options\":[\"Change “live Syncthing folder” to “the owner's or production Syncthing folders”\",\"Remove the claim that a real Syncthing run occurred\",\"Define private test instances as not live and say so explicitly\"],\"default_guess\":\"State that real isolated Syncthing processes were tested, but no owner's device, production folder, kernel, or VPS was used.\"},{\"subject\":\"A1 status and reason table\",\"kind\":\"standard_violation\",\"text\":\"| Order | Condition | Status | Reason |\\n|---|---|---|---|\\n| 1 | empty | `rejected` | `empty` |\\n| 2 | larger than the source limit | `rejected` | `too_large` |\\n| 3 | opened without following a link and without waiting, what it finds is not a regular file | `rejected` | `not_a_regular_file` |\\n| 4 | it grew past the source limit while being read | `rejected` | `too_large` |\\n| 5 | opening or reading it fails, which includes a file that disappeared and a path that became a symbolic link after the listing | `rejected` | `unreadable_file` |\\n| 6 | does not begin with a JPEG, PNG or WEBP signature | `rejected` | `unsupported_format` |\\n| 7 | placed and marked | `published` | none |\\n| 8 | placed | `placed` | none |\\n| 9 | anything else | `ready` | none |\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Replace each bare status and reason value with the emitted member name beside `= models.ScanStatus` or `= models.ObservationReason`; a wire value may appear only as an additional parenthetical value.\"},{\"subject\":\"A1 folder refusal\",\"kind\":\"standard_violation\",\"text\":\"When a subfolder that is not ignored\\ncannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is\\nnever reported as complete.\",\"rule\":\"Имя — то, которое пишет\\nemitter моделей и которое получает генератор: имя из `member_names`, иначе\\nверхнее написание значения (`expense.create` → `EXPENSE_CREATE`, `pending` →\\n`PENDING`). Имя есть у каждого члена. Значение допустимо только как дополнение к\\nимени: `the EXPENSE_CREATE member (value expense.create) of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the FOLDER_UNAVAILABLE member of `= models.RefusalCode`, optionally adding its `folder_unavailable` value.\"},{\"subject\":\"A1 source-size policy\",\"kind\":\"standard_violation\",\"text\":\"| 2 | larger than the source limit | `rejected` | `too_large` |\",\"rule\":\"Таблица выше —\\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Replace “the source limit” with “the imported MAX_SOURCE_BYTES constant” and name the enum members by emitted names.\"},{\"subject\":\"A1 growing-file policy\",\"kind\":\"standard_violation\",\"text\":\"| 4 | it grew past the source limit while being read | `rejected` | `too_large` |\",\"rule\":\"Таблица выше —\\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Replace “the source limit” with “the imported MAX_SOURCE_BYTES constant” and name the enum members by emitted names.\"},{\"subject\":\"A3 replay outcome\",\"kind\":\"standard_violation\",\"text\":\"Delivering content that already has a placement answers `replayed` with the stored placement and the\\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\\n   when the source file has left the folder.\",\"rule\":\"Имя — то, которое пишет\\nemitter моделей и которое получает генератор: имя из `member_names`, иначе\\nверхнее написание значения (`expense.create` → `EXPENSE_CREATE`, `pending` →\\n`PENDING`). Имя есть у каждого члена. Значение допустимо только как дополнение к\\nимени: `the EXPENSE_CREATE member (value expense.create) of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the REPLAYED member of `= models.PlacementStatus`, optionally adding its `replayed` value.\"},{\"subject\":\"A3 malformed-source refusal\",\"kind\":\"standard_violation\",\"text\":\"A\\n   `source_id` that is not 64 lowercase hexadecimal characters is refused with `invalid_source_id`.\",\"rule\":\"Имя — то, которое пишет\\nemitter моделей и которое получает генератор: имя из `member_names`, иначе\\nверхнее написание значения (`expense.create` → `EXPENSE_CREATE`, `pending` →\\n`PENDING`). Имя есть у каждого члена. Значение допустимо только как дополнение к\\nимени: `the EXPENSE_CREATE member (value expense.create) of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the INVALID_SOURCE_ID member of `= models.RefusalCode`, optionally adding its `invalid_source_id` value.\"},{\"subject\":\"A3 failed outcome\",\"kind\":\"standard_violation\",\"text\":\"A photo that cannot be delivered is answered with status `failed` and one member of\\n   `= models.PlacementFailure`, and nothing is written except the project lock:\",\"rule\":\"Имя — то, которое пишет\\nemitter моделей и которое получает генератор: имя из `member_names`, иначе\\nверхнее написание значения (`expense.create` → `EXPENSE_CREATE`, `pending` →\\n`PENDING`). Имя есть у каждого члена. Значение допустимо только как дополнение к\\nимени: `the EXPENSE_CREATE member (value expense.create) of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the FAILED member of `= models.PlacementStatus`, optionally adding its `failed` value.\"},{\"subject\":\"A3 failure mapping\",\"kind\":\"standard_violation\",\"text\":\"| 2 | A1 orders 1 to 6 reject the file | the member with the value of the A1 reason |\\n| 3 | the hash of the bytes differs from `source_id` | `SOURCE_CHANGED` |\\n| 4 | A2 rule 2 fails | the member with the value of the A2 failure |\\n| 5 | writing the stored image or the record fails | `UNREADABLE_FILE` |\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не\\nявляется именем ни одного члена, генератор пишет только имена\\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\\n(`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Replace the value-based mappings with an exhaustive mapping that names every emitted member of `= models.PlacementFailure` explicitly.\"}]}",
+ "set_aside": []
+}

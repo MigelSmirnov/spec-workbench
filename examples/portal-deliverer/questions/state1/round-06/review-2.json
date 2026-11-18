@@ -1,0 +1,197 @@
+{
+ "open_points": [
+  {
+   "subject": "Model M02 — SourcePhotoObservation",
+   "kind": "field-state invariants",
+   "text": "A placed file adds its `file_ref`, a published\nfile adds its Portal `photo_id`",
+   "question": "For every ScanStatus, which of `source_id`, `reason`, `file_ref` and `photo_id` must be present or absent, and does `published` retain `file_ref` as well as adding `photo_id`?",
+   "options": [
+    "`ready` has only `source_id`; `placed` adds `file_ref`; `published` retains `file_ref` and adds `photo_id`; `rejected` has only `reason` plus whatever facts could be read",
+    "Each status exposes only the fact named by that status, so `published` may have `photo_id` without `file_ref`",
+    "Optional fields may be populated independently whenever the scan can determine them"
+   ],
+   "default_guess": "Use cumulative states: `ready` has `source_id`, `placed` also has `file_ref`, `published` also has `photo_id`, and `reason` is present only for `rejected`.",
+   "witness": {
+    "initial": "A source has been placed and its publication has then been recorded.",
+    "events": [
+     "The calling flow scans the project folder."
+    ],
+    "outcomes": [
+     "The published observation contains both the placement's `file_ref` and the Portal `photo_id`.",
+     "The published observation contains `photo_id` but no `file_ref`."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M02 — SourcePhotoObservation",
+   "kind": "same-content projection",
+   "text": "files with the same content carry the same `source_id`",
+   "question": "When several current file names have the same `source_id`, does a placement or publication for that source make every such observation `placed` or `published`, or only the observation whose name was used for delivery?",
+   "options": [
+    "Placement and publication are projected to every file with the same content because the placement identity is project plus `source_id`",
+    "Only the delivered file name receives placement and publication facts",
+    "All names share placement status, but publication is associated only with the delivered name"
+   ],
+   "default_guess": "Project the same placement and publication to every observation with that `source_id`.",
+   "witness": {
+    "initial": "`a.jpg` and `b.jpg` contain identical bytes and therefore have the same source id.",
+    "events": [
+     "The owner delivers `a.jpg`.",
+     "The calling flow publishes it and records the publication.",
+     "The calling flow scans the folder again."
+    ],
+    "outcomes": [
+     "Both `a.jpg` and `b.jpg` are reported as published with the same placement and photo id.",
+     "Only `a.jpg` is published; `b.jpg` remains ready despite having the same source id."
+    ],
+    "observer": "The owner through the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M02 — SourcePhotoObservation",
+   "kind": "undefined field fact",
+   "text": "**Fields:** `name: str` (the path relative to the photo folder, with `/` separators), `size: int`,\n`source_id: str | None`, `status: ScanStatus`, `reason: ObservationReason | None`,\n`file_ref: str | None`, `photo_id: UUID | None`.",
+   "question": "What fact does mandatory `size` contain when the observation is rejected as `not_a_regular_file` or `unreadable_file`, where readable file-byte length may not exist?",
+   "options": [
+    "The filesystem entry's reported size",
+    "Zero",
+    "A sentinel integer",
+    "Such entries do not produce SourcePhotoObservation despite those rejection reasons"
+   ],
+   "default_guess": "Use the filesystem entry's reported size when stat succeeds and zero otherwise.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M06 — PlacementOutcome",
+   "kind": "field-state invariants",
+   "text": "It holds the placement facts when there is a placement, and the Portal\n`photo_id` when the photo is already marked as published.",
+   "question": "For each of `placed`, `replayed` and `failed`, exactly which of `reason`, `placement` and `photo_id` must be present, especially when a repeated delivery finds an already-published placement?",
+   "options": [
+    "`placed` has a placement only; `replayed` has the existing placement and has `photo_id` only if published; `failed` has only a reason",
+    "An already-published replay has `photo_id` but no placement",
+    "`placement` and `photo_id` are independently optional whenever known"
+   ],
+   "default_guess": "Make `placed` carry the new placement, `replayed` carry the existing placement and any recorded `photo_id`, and `failed` carry only its reason.",
+   "witness": {
+    "initial": "A placement exists and its publication mark contains a Portal photo id.",
+    "events": [
+     "The owner requests delivery of the same source again."
+    ],
+    "outcomes": [
+     "The replay outcome contains both the existing `PhotoPlacement` and `photo_id`.",
+     "The replay outcome contains only `photo_id` because the text distinguishes placement facts from the already-published case."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M06 — PlacementOutcome.source_id",
+   "kind": "ambiguous provenance",
+   "text": "**Fields:** `source_id: str`, `status: PlacementStatus`, `reason: PlacementFailure | None`,\n`placement: PhotoPlacement | None`, `photo_id: UUID | None`.",
+   "question": "When delivery fails with `source_changed`, is outcome `source_id` the source id requested by the caller or the newly observed source id of the named file?",
+   "options": [
+    "Echo the requested source id",
+    "Return the currently observed source id",
+    "Return a derived delivery-attempt id"
+   ],
+   "default_guess": "Echo the requested source id, since it identifies the requested delivery and is available even when the current content cannot be accepted.",
+   "witness": {
+    "initial": "The caller scanned `photo.jpg` as source id A, after which its bytes were replaced and now hash to B.",
+    "events": [
+     "The calling flow requests delivery of `photo.jpg` with source id A.",
+     "The deliverer returns `failed` with reason `source_changed`."
+    ],
+    "outcomes": [
+     "The outcome's `source_id` is A.",
+     "The outcome's `source_id` is B."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M06 — PlacementOutcome and repeated delivery",
+   "kind": "contradiction",
+   "text": "| Deliver the same photo again | the first result, nothing written | none | unit tests, E2E |",
+   "question": "Must a repeated delivery return the literally identical first outcome with status `placed`, as this passage says, or a new outcome with status `replayed`, as M06's `PlacementStatus` requires?",
+   "options": [
+    "Return the original `placed` outcome unchanged",
+    "Return a `replayed` outcome containing the original placement facts",
+    "Remove `replayed` because repetition is represented only by returning the first value"
+   ],
+   "default_guess": "Return a `replayed` outcome containing the original placement facts.",
+   "witness": {
+    "initial": "No placement exists for project P and source S.",
+    "events": [
+     "The calling flow delivers S and receives status `placed`.",
+     "The calling flow delivers S again."
+    ],
+    "outcomes": [
+     "The second call returns the first result, whose status is `placed`.",
+     "The second call returns status `replayed`."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M06 — PlacementOutcome and Model M04 — PhotoPlacement",
+   "kind": "contradictory publication model",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `name: str`, `file_ref: str`, `sha256: str`,\n`size: int`, `media_type: str`, `date_source: DateSource`, `publication: PhotoPublication`.",
+   "question": "How can a PhotoPlacement be created and returned before the separate Portal publication and publication-recording actions if its non-optional `publication` already exists, and is recording publication a mutation of the placement despite M04 saying it is never rewritten?",
+   "options": [
+    "Make `publication` optional and fill it by updating the placement when publication is recorded",
+    "Keep publication as a separate record and remove it from PhotoPlacement",
+    "Create PhotoPlacement with an explicit unpublished PhotoPublication value and later replace or transition that value",
+    "Do not create PhotoPlacement until after Portal publication"
+   ],
+   "default_guess": "Keep the publication mark as a separate optional fact associated with the placement, while leaving the immutable placement itself unchanged.",
+   "witness": {
+    "initial": "A chosen source has never been delivered or published.",
+    "events": [
+     "The calling flow invokes delivery; the deliverer writes the prepared image and creates a placement.",
+     "The calling flow receives the placement before invoking the Portal.",
+     "The calling flow later publishes and records the Portal photo id."
+    ],
+    "outcomes": [
+     "The initial PhotoPlacement exists without publication and is later associated with a separate publication mark.",
+     "The initial PhotoPlacement must already contain some PhotoPublication value, which is later rewritten or transitioned."
+    ],
+    "observer": "The calling flow and the deliverer's persistence implementation"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Status evidence and agreement with State 0",
+   "kind": "contradiction",
+   "text": "Evidence is from local runs against a real Client Portal process and a stub Registry. No\nrun has used a live Syncthing folder, the kernel or the VPS.",
+   "question": "Must the evidence record say that a run used real private Syncthing instances, as the changed State 1 status and R0-15 say, or that no run used a live Syncthing folder, as this State 0 passage says?",
+   "options": [
+    "The private Syncthing instances count as a real/live Syncthing run, so the State 0 denial is obsolete",
+    "A private local Syncthing instance is not a live Syncthing folder, so both statements stand",
+    "Only R0-15's narrower observation was obtained from Syncthing and it is not evidence for the models"
+   ],
+   "default_guess": "Treat the two-private-instance run as real Syncthing evidence and amend the State 0 denial to exclude only the owner's devices, kernel and VPS.",
+   "witness": {
+    "initial": "The documentation is used to decide what environments have actually supplied evidence.",
+    "events": [
+     "A reviewer reads the State 1 evidence statement.",
+     "The reviewer reads the State 0 evidence statement and R0-15."
+    ],
+    "outcomes": [
+     "The reviewer concludes that real Syncthing behavior was exercised by two private instances.",
+     "The reviewer concludes that no live Syncthing folder has ever been exercised."
+    ],
+    "observer": "A specification reviewer or later implementation agent"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Model M02 — SourcePhotoObservation\",\"kind\":\"field-state invariants\",\"text\":\"A placed file adds its `file_ref`, a published\\nfile adds its Portal `photo_id`\",\"question\":\"For every ScanStatus, which of `source_id`, `reason`, `file_ref` and `photo_id` must be present or absent, and does `published` retain `file_ref` as well as adding `photo_id`?\",\"options\":[\"`ready` has only `source_id`; `placed` adds `file_ref`; `published` retains `file_ref` and adds `photo_id`; `rejected` has only `reason` plus whatever facts could be read\",\"Each status exposes only the fact named by that status, so `published` may have `photo_id` without `file_ref`\",\"Optional fields may be populated independently whenever the scan can determine them\"],\"default_guess\":\"Use cumulative states: `ready` has `source_id`, `placed` also has `file_ref`, `published` also has `photo_id`, and `reason` is present only for `rejected`.\",\"witness\":{\"initial\":\"A source has been placed and its publication has then been recorded.\",\"events\":[\"The calling flow scans the project folder.\"],\"outcomes\":[\"The published observation contains both the placement's `file_ref` and the Portal `photo_id`.\",\"The published observation contains `photo_id` but no `file_ref`.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"Model M02 — SourcePhotoObservation\",\"kind\":\"same-content projection\",\"text\":\"files with the same content carry the same `source_id`\",\"question\":\"When several current file names have the same `source_id`, does a placement or publication for that source make every such observation `placed` or `published`, or only the observation whose name was used for delivery?\",\"options\":[\"Placement and publication are projected to every file with the same content because the placement identity is project plus `source_id`\",\"Only the delivered file name receives placement and publication facts\",\"All names share placement status, but publication is associated only with the delivered name\"],\"default_guess\":\"Project the same placement and publication to every observation with that `source_id`.\",\"witness\":{\"initial\":\"`a.jpg` and `b.jpg` contain identical bytes and therefore have the same source id.\",\"events\":[\"The owner delivers `a.jpg`.\",\"The calling flow publishes it and records the publication.\",\"The calling flow scans the folder again.\"],\"outcomes\":[\"Both `a.jpg` and `b.jpg` are reported as published with the same placement and photo id.\",\"Only `a.jpg` is published; `b.jpg` remains ready despite having the same source id.\"],\"observer\":\"The owner through the calling flow\"}},{\"subject\":\"Model M02 — SourcePhotoObservation\",\"kind\":\"undefined field fact\",\"text\":\"**Fields:** `name: str` (the path relative to the photo folder, with `/` separators), `size: int`,\\n`source_id: str | None`, `status: ScanStatus`, `reason: ObservationReason | None`,\\n`file_ref: str | None`, `photo_id: UUID | None`.\",\"question\":\"What fact does mandatory `size` contain when the observation is rejected as `not_a_regular_file` or `unreadable_file`, where readable file-byte length may not exist?\",\"options\":[\"The filesystem entry's reported size\",\"Zero\",\"A sentinel integer\",\"Such entries do not produce SourcePhotoObservation despite those rejection reasons\"],\"default_guess\":\"Use the filesystem entry's reported size when stat succeeds and zero otherwise.\"},{\"subject\":\"Model M06 — PlacementOutcome\",\"kind\":\"field-state invariants\",\"text\":\"It holds the placement facts when there is a placement, and the Portal\\n`photo_id` when the photo is already marked as published.\",\"question\":\"For each of `placed`, `replayed` and `failed`, exactly which of `reason`, `placement` and `photo_id` must be present, especially when a repeated delivery finds an already-published placement?\",\"options\":[\"`placed` has a placement only; `replayed` has the existing placement and has `photo_id` only if published; `failed` has only a reason\",\"An already-published replay has `photo_id` but no placement\",\"`placement` and `photo_id` are independently optional whenever known\"],\"default_guess\":\"Make `placed` carry the new placement, `replayed` carry the existing placement and any recorded `photo_id`, and `failed` carry only its reason.\",\"witness\":{\"initial\":\"A placement exists and its publication mark contains a Portal photo id.\",\"events\":[\"The owner requests delivery of the same source again.\"],\"outcomes\":[\"The replay outcome contains both the existing `PhotoPlacement` and `photo_id`.\",\"The replay outcome contains only `photo_id` because the text distinguishes placement facts from the already-published case.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"Model M06 — PlacementOutcome.source_id\",\"kind\":\"ambiguous provenance\",\"text\":\"**Fields:** `source_id: str`, `status: PlacementStatus`, `reason: PlacementFailure | None`,\\n`placement: PhotoPlacement | None`, `photo_id: UUID | None`.\",\"question\":\"When delivery fails with `source_changed`, is outcome `source_id` the source id requested by the caller or the newly observed source id of the named file?\",\"options\":[\"Echo the requested source id\",\"Return the currently observed source id\",\"Return a derived delivery-attempt id\"],\"default_guess\":\"Echo the requested source id, since it identifies the requested delivery and is available even when the current content cannot be accepted.\",\"witness\":{\"initial\":\"The caller scanned `photo.jpg` as source id A, after which its bytes were replaced and now hash to B.\",\"events\":[\"The calling flow requests delivery of `photo.jpg` with source id A.\",\"The deliverer returns `failed` with reason `source_changed`.\"],\"outcomes\":[\"The outcome's `source_id` is A.\",\"The outcome's `source_id` is B.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"Model M06 — PlacementOutcome and repeated delivery\",\"kind\":\"contradiction\",\"text\":\"| Deliver the same photo again | the first result, nothing written | none | unit tests, E2E |\",\"question\":\"Must a repeated delivery return the literally identical first outcome with status `placed`, as this passage says, or a new outcome with status `replayed`, as M06's `PlacementStatus` requires?\",\"options\":[\"Return the original `placed` outcome unchanged\",\"Return a `replayed` outcome containing the original placement facts\",\"Remove `replayed` because repetition is represented only by returning the first value\"],\"default_guess\":\"Return a `replayed` outcome containing the original placement facts.\",\"witness\":{\"initial\":\"No placement exists for project P and source S.\",\"events\":[\"The calling flow delivers S and receives status `placed`.\",\"The calling flow delivers S again.\"],\"outcomes\":[\"The second call returns the first result, whose status is `placed`.\",\"The second call returns status `replayed`.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"Model M06 — PlacementOutcome and Model M04 — PhotoPlacement\",\"kind\":\"contradictory publication model\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `name: str`, `file_ref: str`, `sha256: str`,\\n`size: int`, `media_type: str`, `date_source: DateSource`, `publication: PhotoPublication`.\",\"question\":\"How can a PhotoPlacement be created and returned before the separate Portal publication and publication-recording actions if its non-optional `publication` already exists, and is recording publication a mutation of the placement despite M04 saying it is never rewritten?\",\"options\":[\"Make `publication` optional and fill it by updating the placement when publication is recorded\",\"Keep publication as a separate record and remove it from PhotoPlacement\",\"Create PhotoPlacement with an explicit unpublished PhotoPublication value and later replace or transition that value\",\"Do not create PhotoPlacement until after Portal publication\"],\"default_guess\":\"Keep the publication mark as a separate optional fact associated with the placement, while leaving the immutable placement itself unchanged.\",\"witness\":{\"initial\":\"A chosen source has never been delivered or published.\",\"events\":[\"The calling flow invokes delivery; the deliverer writes the prepared image and creates a placement.\",\"The calling flow receives the placement before invoking the Portal.\",\"The calling flow later publishes and records the Portal photo id.\"],\"outcomes\":[\"The initial PhotoPlacement exists without publication and is later associated with a separate publication mark.\",\"The initial PhotoPlacement must already contain some PhotoPublication value, which is later rewritten or transitioned.\"],\"observer\":\"The calling flow and the deliverer's persistence implementation\"}},{\"subject\":\"Status evidence and agreement with State 0\",\"kind\":\"contradiction\",\"text\":\"Evidence is from local runs against a real Client Portal process and a stub Registry. No\\nrun has used a live Syncthing folder, the kernel or the VPS.\",\"question\":\"Must the evidence record say that a run used real private Syncthing instances, as the changed State 1 status and R0-15 say, or that no run used a live Syncthing folder, as this State 0 passage says?\",\"options\":[\"The private Syncthing instances count as a real/live Syncthing run, so the State 0 denial is obsolete\",\"A private local Syncthing instance is not a live Syncthing folder, so both statements stand\",\"Only R0-15's narrower observation was obtained from Syncthing and it is not evidence for the models\"],\"default_guess\":\"Treat the two-private-instance run as real Syncthing evidence and amend the State 0 denial to exclude only the owner's devices, kernel and VPS.\",\"witness\":{\"initial\":\"The documentation is used to decide what environments have actually supplied evidence.\",\"events\":[\"A reviewer reads the State 1 evidence statement.\",\"The reviewer reads the State 0 evidence statement and R0-15.\"],\"outcomes\":[\"The reviewer concludes that real Syncthing behavior was exercised by two private instances.\",\"The reviewer concludes that no live Syncthing folder has ever been exercised.\"],\"observer\":\"A specification reviewer or later implementation agent\"}}]}",
+ "set_aside": []
+}

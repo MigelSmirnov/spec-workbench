@@ -1,0 +1,173 @@
+{
+ "open_points": [
+  {
+   "subject": "A3 rule 1 ownership",
+   "kind": "missing_owner",
+   "text": "Where its rules reach other modules, this table\nnames the owner of each rule.",
+   "question": "Which module owns A3 rule 1, including deriving the placement identity from project id and source content, since the A3 rows omit rule 1?",
+   "options": [
+    "`photo_delivery` owns the identity decision and asks `delivery_store` to persist by that identity",
+    "`delivery_store` owns derivation and enforcement of the placement identity",
+    "Split derivation and persistence explicitly between the two modules"
+   ],
+   "default_guess": "Assign A3 rule 1 to `photo_delivery`; `delivery_store` only implements storage keyed by the supplied checked identity.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 4 check ownership",
+   "kind": "overlapping_ownership",
+   "text": "| A3 | rule 4, the request form of a placement | `deliverer_api` |\n| A3 | rule 4, every other check and its order; rules 2, 3 and 5 to 10 | `photo_delivery` |",
+   "question": "Does “every other check” include the token and project-id checks that `deliverer_api` performs in steps 1 and 2, or does `photo_delivery` own only the checks from step 3 onward?",
+   "options": [
+    "`deliverer_api` owns token, request-form and project-id checks; `photo_delivery` owns connection and all later checks",
+    "`deliverer_api` owns only request-form parsing; `photo_delivery` owns every other A3 rule 4 check",
+    "List every A3 rule 4 check separately with its owner"
+   ],
+   "default_guess": "Keep token, request form and project id in `deliverer_api`, and assign connection through named-file checks to `photo_delivery`.",
+   "unit": "?"
+  },
+  {
+   "subject": "`source_folder` trace dependency on A3",
+   "kind": "undeclared_knowledge",
+   "text": "- A1 orders 1 to 6, condition 1 of A3 rule 5, and rule 4 of A7.",
+   "question": "How may `source_folder` know and implement condition 1 of A3 rule 5 when its Trace inputs list only A1 and A7?",
+   "options": [
+    "Add A3 to the `source_folder` Trace inputs",
+    "Move the A3 condition entirely to `photo_delivery` and keep `source_folder` policy-neutral",
+    "Define a separately owned path-safety rule that both modules receive"
+   ],
+   "default_guess": "Add A3 to the `source_folder` Trace inputs because `read_named_source` enforces that condition.",
+   "unit": "?"
+  },
+  {
+   "subject": "normal form of a requested file name",
+   "kind": "undefined_validation",
+   "text": "`name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link",
+   "question": "Exactly which spellings are “unnormalised,” including repeated separators, `.` components, trailing separators, backslashes and Unicode normalization, and are they rejected or normalized before lookup?",
+   "options": [
+    "Accept only the exact canonical `/`-separated spelling emitted by a scan",
+    "Lexically normalize benign variants before lookup",
+    "Define a narrower explicit list of forbidden forms"
+   ],
+   "default_guess": "Accept only the exact canonical relative spelling a scan can emit and reject every alternate spelling.",
+   "witness": {
+    "initial": "The scan reported a regular file as `a/b.jpg`, and no placement exists.",
+    "events": [
+     "The calling flow requests delivery with name `a//b.jpg` and the correct source id.",
+     "`source_folder` validates the requested name."
+    ],
+    "outcomes": [
+     "The spelling is unnormalised, so delivery fails with `not_ready_or_absent`.",
+     "The spelling is normalized to `a/b.jpg`, so the file is read and delivered."
+    ],
+    "observer": "The calling flow sees either a failed or placed delivery."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "classification of a non-regular or link-swapped requested path",
+   "kind": "overlapping_conditions",
+   "text": "| 1 | `name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link | `NOT_READY_OR_ABSENT` |",
+   "question": "What observation boundary separates this condition from A1 order 3 (`not_a_regular_file`) and order 5 (`unreadable_file`) when the named path changes type or becomes a link during the single read?",
+   "options": [
+    "Classify the initial lexical/path check as `not_ready_or_absent`, then classify changes detected by the opened handle under A1",
+    "Classify every non-regular or linked result as `not_ready_or_absent`",
+    "Classify every failure discovered while opening as the corresponding A1 reason"
+   ],
+   "default_guess": "Use `not_ready_or_absent` for the initial path check and A1 reasons for changes detected during the subsequent no-follow open and read.",
+   "witness": {
+    "initial": "The requested name identifies a regular file when the delivery begins, and no placement exists.",
+    "events": [
+     "Another actor replaces the path with a directory or symbolic link before `read_named_source` opens it.",
+     "`source_folder` performs its path check and single no-follow read."
+    ],
+    "outcomes": [
+     "The path is treated as a name that a scan could not report, producing `not_ready_or_absent`.",
+     "The attempted open reaches A1 order 3 or 5, producing `not_a_regular_file` or `unreadable_file`."
+    ],
+    "observer": "The calling flow sees a different `PlacementFailure` reason."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "failed record write after stored-image write",
+   "kind": "contradiction",
+   "text": "A photo that cannot be delivered is answered with status `failed` and one member of\n   `= models.PlacementFailure`, and nothing is written except the project lock:",
+   "question": "When the stored image has been committed and writing the placement record then fails, must the image be removed to satisfy “nothing is written,” or may it remain as implied by the required image-before-record order and crash behavior; and which module owns any cleanup?",
+   "options": [
+    "Remove the newly written image before returning `failed` and add an owned cleanup capability",
+    "Allow an orphan image and narrow “nothing is written” to placement and mark records",
+    "Treat failure after image commit as an indeterminate/crash outcome rather than a normal failed delivery"
+   ],
+   "default_guess": "Allow the unreferenced image to remain and rewrite the failure guarantee to exclude an image already committed before the record failure.",
+   "witness": {
+    "initial": "No placement or stored image exists for the requested project and source.",
+    "events": [
+     "`photo_delivery` prepares the photo.",
+     "`delivery_store` successfully commits the stored image.",
+     "Writing the placement record fails and control returns to the operation."
+    ],
+    "outcomes": [
+     "The failure rule leaves only the project lock, so the image is removed or never remains durable.",
+     "The image-before-record rule leaves a complete stored image without a placement record, to be overwritten or reused on retry."
+    ],
+    "observer": "A subsequent retry or an operator inspecting the binary store sees whether the orphan image exists."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "scan consistency with placement and mark records",
+   "kind": "undefined_concurrency",
+   "text": "| 5 | observe the folder, read records | source id | connection |",
+   "question": "What consistency does an unlocked scan promise when a delivery or mark changes records during this combined step, and when relative to folder observation are placement and mark records read?",
+   "options": [
+    "No snapshot guarantee; each file may reflect records read when that item is completed",
+    "Read all relevant records after the folder observation and use that one collected view",
+    "Take a project lock or another snapshot mechanism for the record-completion phase"
+   ],
+   "default_guess": "Promise no snapshot: observe the folder first, then complete each result from the records visible when that result is built.",
+   "witness": {
+    "initial": "A reportable file has no placement or mark.",
+    "events": [
+     "A scan is executing step 5.",
+     "A concurrent caller delivers the file and commits its placement while the scan remains in step 5.",
+     "The scan completes the file's status from the records it reads."
+    ],
+    "outcomes": [
+     "The scan reports `ready` because its record view preceded the placement commit.",
+     "The scan reports `placed` because its record view followed the placement commit."
+    ],
+    "observer": "The calling flow sees a different status for the same scan invocation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Syncthing evidence record",
+   "kind": "contradiction",
+   "text": "Evidence is from local runs against a real Client Portal process and a stub Registry. No\nrun has used a live Syncthing folder, the kernel or the VPS.",
+   "question": "Were two real local Syncthing instances exercised, as the State 3 status and other State 0 evidence passages say, or has no run used a live Syncthing folder?",
+   "options": [
+    "The local E2E used real Syncthing instances but not the owner's production folders or VPS",
+    "The Syncthing program was stubbed and no real instance was used",
+    "Define “live Syncthing folder” to distinguish production folders from local test instances"
+   ],
+   "default_guess": "Record that real local Syncthing instances were used, while no owner's device, production folder, kernel or VPS was used.",
+   "witness": {
+    "initial": "A reviewer evaluates whether the Syncthing behavior has executable evidence.",
+    "events": [
+     "The reviewer reads the Primary actions evidence note.",
+     "The reviewer reads the State 3 status and the updated evidence statement naming `e2e_local_syncthing.py` and two private Syncthing instances."
+    ],
+    "outcomes": [
+     "The Primary actions note says no run used a live Syncthing folder.",
+     "The updated passages say a run used two private Syncthing instances."
+    ],
+    "observer": "The reviewer reaches a different conclusion about the evidence supporting R0-15 and P-04."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A3 rule 1 ownership\",\"kind\":\"missing_owner\",\"text\":\"Where its rules reach other modules, this table\\nnames the owner of each rule.\",\"question\":\"Which module owns A3 rule 1, including deriving the placement identity from project id and source content, since the A3 rows omit rule 1?\",\"options\":[\"`photo_delivery` owns the identity decision and asks `delivery_store` to persist by that identity\",\"`delivery_store` owns derivation and enforcement of the placement identity\",\"Split derivation and persistence explicitly between the two modules\"],\"default_guess\":\"Assign A3 rule 1 to `photo_delivery`; `delivery_store` only implements storage keyed by the supplied checked identity.\"},{\"subject\":\"A3 rule 4 check ownership\",\"kind\":\"overlapping_ownership\",\"text\":\"| A3 | rule 4, the request form of a placement | `deliverer_api` |\\n| A3 | rule 4, every other check and its order; rules 2, 3 and 5 to 10 | `photo_delivery` |\",\"question\":\"Does “every other check” include the token and project-id checks that `deliverer_api` performs in steps 1 and 2, or does `photo_delivery` own only the checks from step 3 onward?\",\"options\":[\"`deliverer_api` owns token, request-form and project-id checks; `photo_delivery` owns connection and all later checks\",\"`deliverer_api` owns only request-form parsing; `photo_delivery` owns every other A3 rule 4 check\",\"List every A3 rule 4 check separately with its owner\"],\"default_guess\":\"Keep token, request form and project id in `deliverer_api`, and assign connection through named-file checks to `photo_delivery`.\"},{\"subject\":\"`source_folder` trace dependency on A3\",\"kind\":\"undeclared_knowledge\",\"text\":\"- A1 orders 1 to 6, condition 1 of A3 rule 5, and rule 4 of A7.\",\"question\":\"How may `source_folder` know and implement condition 1 of A3 rule 5 when its Trace inputs list only A1 and A7?\",\"options\":[\"Add A3 to the `source_folder` Trace inputs\",\"Move the A3 condition entirely to `photo_delivery` and keep `source_folder` policy-neutral\",\"Define a separately owned path-safety rule that both modules receive\"],\"default_guess\":\"Add A3 to the `source_folder` Trace inputs because `read_named_source` enforces that condition.\"},{\"subject\":\"normal form of a requested file name\",\"kind\":\"undefined_validation\",\"text\":\"`name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link\",\"question\":\"Exactly which spellings are “unnormalised,” including repeated separators, `.` components, trailing separators, backslashes and Unicode normalization, and are they rejected or normalized before lookup?\",\"options\":[\"Accept only the exact canonical `/`-separated spelling emitted by a scan\",\"Lexically normalize benign variants before lookup\",\"Define a narrower explicit list of forbidden forms\"],\"default_guess\":\"Accept only the exact canonical relative spelling a scan can emit and reject every alternate spelling.\",\"witness\":{\"initial\":\"The scan reported a regular file as `a/b.jpg`, and no placement exists.\",\"events\":[\"The calling flow requests delivery with name `a//b.jpg` and the correct source id.\",\"`source_folder` validates the requested name.\"],\"outcomes\":[\"The spelling is unnormalised, so delivery fails with `not_ready_or_absent`.\",\"The spelling is normalized to `a/b.jpg`, so the file is read and delivered.\"],\"observer\":\"The calling flow sees either a failed or placed delivery.\"}},{\"subject\":\"classification of a non-regular or link-swapped requested path\",\"kind\":\"overlapping_conditions\",\"text\":\"| 1 | `name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link | `NOT_READY_OR_ABSENT` |\",\"question\":\"What observation boundary separates this condition from A1 order 3 (`not_a_regular_file`) and order 5 (`unreadable_file`) when the named path changes type or becomes a link during the single read?\",\"options\":[\"Classify the initial lexical/path check as `not_ready_or_absent`, then classify changes detected by the opened handle under A1\",\"Classify every non-regular or linked result as `not_ready_or_absent`\",\"Classify every failure discovered while opening as the corresponding A1 reason\"],\"default_guess\":\"Use `not_ready_or_absent` for the initial path check and A1 reasons for changes detected during the subsequent no-follow open and read.\",\"witness\":{\"initial\":\"The requested name identifies a regular file when the delivery begins, and no placement exists.\",\"events\":[\"Another actor replaces the path with a directory or symbolic link before `read_named_source` opens it.\",\"`source_folder` performs its path check and single no-follow read.\"],\"outcomes\":[\"The path is treated as a name that a scan could not report, producing `not_ready_or_absent`.\",\"The attempted open reaches A1 order 3 or 5, producing `not_a_regular_file` or `unreadable_file`.\"],\"observer\":\"The calling flow sees a different `PlacementFailure` reason.\"}},{\"subject\":\"failed record write after stored-image write\",\"kind\":\"contradiction\",\"text\":\"A photo that cannot be delivered is answered with status `failed` and one member of\\n   `= models.PlacementFailure`, and nothing is written except the project lock:\",\"question\":\"When the stored image has been committed and writing the placement record then fails, must the image be removed to satisfy “nothing is written,” or may it remain as implied by the required image-before-record order and crash behavior; and which module owns any cleanup?\",\"options\":[\"Remove the newly written image before returning `failed` and add an owned cleanup capability\",\"Allow an orphan image and narrow “nothing is written” to placement and mark records\",\"Treat failure after image commit as an indeterminate/crash outcome rather than a normal failed delivery\"],\"default_guess\":\"Allow the unreferenced image to remain and rewrite the failure guarantee to exclude an image already committed before the record failure.\",\"witness\":{\"initial\":\"No placement or stored image exists for the requested project and source.\",\"events\":[\"`photo_delivery` prepares the photo.\",\"`delivery_store` successfully commits the stored image.\",\"Writing the placement record fails and control returns to the operation.\"],\"outcomes\":[\"The failure rule leaves only the project lock, so the image is removed or never remains durable.\",\"The image-before-record rule leaves a complete stored image without a placement record, to be overwritten or reused on retry.\"],\"observer\":\"A subsequent retry or an operator inspecting the binary store sees whether the orphan image exists.\"}},{\"subject\":\"scan consistency with placement and mark records\",\"kind\":\"undefined_concurrency\",\"text\":\"| 5 | observe the folder, read records | source id | connection |\",\"question\":\"What consistency does an unlocked scan promise when a delivery or mark changes records during this combined step, and when relative to folder observation are placement and mark records read?\",\"options\":[\"No snapshot guarantee; each file may reflect records read when that item is completed\",\"Read all relevant records after the folder observation and use that one collected view\",\"Take a project lock or another snapshot mechanism for the record-completion phase\"],\"default_guess\":\"Promise no snapshot: observe the folder first, then complete each result from the records visible when that result is built.\",\"witness\":{\"initial\":\"A reportable file has no placement or mark.\",\"events\":[\"A scan is executing step 5.\",\"A concurrent caller delivers the file and commits its placement while the scan remains in step 5.\",\"The scan completes the file's status from the records it reads.\"],\"outcomes\":[\"The scan reports `ready` because its record view preceded the placement commit.\",\"The scan reports `placed` because its record view followed the placement commit.\"],\"observer\":\"The calling flow sees a different status for the same scan invocation.\"}},{\"subject\":\"Syncthing evidence record\",\"kind\":\"contradiction\",\"text\":\"Evidence is from local runs against a real Client Portal process and a stub Registry. No\\nrun has used a live Syncthing folder, the kernel or the VPS.\",\"question\":\"Were two real local Syncthing instances exercised, as the State 3 status and other State 0 evidence passages say, or has no run used a live Syncthing folder?\",\"options\":[\"The local E2E used real Syncthing instances but not the owner's production folders or VPS\",\"The Syncthing program was stubbed and no real instance was used\",\"Define “live Syncthing folder” to distinguish production folders from local test instances\"],\"default_guess\":\"Record that real local Syncthing instances were used, while no owner's device, production folder, kernel or VPS was used.\",\"witness\":{\"initial\":\"A reviewer evaluates whether the Syncthing behavior has executable evidence.\",\"events\":[\"The reviewer reads the Primary actions evidence note.\",\"The reviewer reads the State 3 status and the updated evidence statement naming `e2e_local_syncthing.py` and two private Syncthing instances.\"],\"outcomes\":[\"The Primary actions note says no run used a live Syncthing folder.\",\"The updated passages say a run used two private Syncthing instances.\"],\"observer\":\"The reviewer reaches a different conclusion about the evidence supporting R0-15 and P-04.\"}}]}",
+ "set_aside": []
+}

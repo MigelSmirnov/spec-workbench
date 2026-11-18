@@ -1,0 +1,394 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 scan of a changing folder",
+   "kind": "contradictory race contract",
+   "text": "Syncthing may change the folder during a scan, and a scan promises nothing about a file or folder that changes while it runs.",
+   "question": "Do the explicit rules for disappearance, growth, link replacement and unavailable subfolders still determine the result when the event is a concurrent change, or does this sentence make every such result unconstrained?",
+   "options": [
+    "The explicit ordered rules and folder_unavailable rule still apply",
+    "Any result is permitted for every entry that changes",
+    "Only the specifically named races are determined; other changes are unconstrained"
+   ],
+   "default_guess": "Apply every specifically stated race rule and treat only unmentioned changes as unconstrained.",
+   "witness": {
+    "initial": "A listed ordinary file still exists and is below the source limit.",
+    "events": [
+     "Syncthing replaces its path with a symbolic link before the scan opens it.",
+     "The scan reaches that listed entry."
+    ],
+    "outcomes": [
+     "The scan reports rejected/unreadable_file under order 5.",
+     "The scan may omit it or produce another result because the file changed while the scan ran."
+    ],
+    "observer": "The calling flow reading the scan result"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 subfolder changed after listing",
+   "kind": "missing race outcome",
+   "text": "When a subfolder that is not ignored cannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is never reported as complete.",
+   "question": "What happens when a listed subfolder disappears or becomes a symbolic link before it is entered: refuse the whole scan, skip it, or return another result under the no-promise rule?",
+   "options": [
+    "Refuse with folder_unavailable whenever it disappeared",
+    "Skip a subfolder that became a link but refuse one that disappeared",
+    "Skip either changed subfolder",
+    "Leave both outcomes unconstrained"
+   ],
+   "default_guess": "Skip a subfolder that is now a symbolic link and refuse with folder_unavailable if it disappeared for another reason.",
+   "witness": {
+    "initial": "The root listing contains an ordinary subfolder named `later`.",
+    "events": [
+     "Syncthing removes `later` after the root is listed.",
+     "The walker attempts to enter `later`."
+    ],
+    "outcomes": [
+     "The whole scan is refused with folder_unavailable.",
+     "The changed subfolder is skipped and the remaining scan is returned."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 ignored-name race",
+   "kind": "missing observation instant",
+   "text": "Ignored names are not reported, ignored folders are not entered, and an entry the listing shows as a symbolic link is neither reported nor followed.",
+   "question": "Is ignored-name status fixed from the folder listing, checked again when the entry is opened, or allowed to vary when a file is renamed during the scan?",
+   "options": [
+    "Judge the name only as it appeared in the listing",
+    "Judge the name used at open time",
+    "Require both the listed and current names to be eligible",
+    "Leave renamed entries unconstrained"
+   ],
+   "default_guess": "Judge eligibility from the listing and refuse to substitute any differently named entry.",
+   "witness": {
+    "initial": "The listing contains an ordinary file named `.sync-conflict-copy.jpg`, which is ignored.",
+    "events": [
+     "Syncthing renames it to `photo.jpg` before the walker reaches it.",
+     "The scan continues."
+    ],
+    "outcomes": [
+     "The file remains absent from this scan because its listed name was ignored.",
+     "The file is reported as `photo.jpg` because its current name is ordinary."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 observation of content changed during a scan",
+   "kind": "missing snapshot semantics",
+   "text": "Files with the same content are each reported, with the same source id.",
+   "question": "When bytes, size or modification time change between metadata collection and reading, which observation supplies `size`, `source_id` and status, and must those fields describe one coherent version?",
+   "options": [
+    "Use metadata and bytes from the first observed version",
+    "Use the final version reached by the read",
+    "Retry until metadata and bytes describe one version",
+    "Allow mixed or omitted observations under the no-promise rule"
+   ],
+   "default_guess": "Read once and report a coherent result for the bytes actually read, rejecting growth beyond the limit.",
+   "witness": {
+    "initial": "A listed file has small content A.",
+    "events": [
+     "The scan reads its metadata.",
+     "Syncthing replaces its content with same-sized content B before the byte read.",
+     "The scan hashes and reports it."
+    ],
+    "outcomes": [
+     "The observation carries the source id of A.",
+     "The observation carries the source id of B."
+    ],
+    "observer": "The caller comparing the scan result with a later delivery"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 file opening",
+   "kind": "undefined waiting rule",
+   "text": "opened without following a link and without waiting",
+   "question": "What kind of waiting is forbidden, and which filesystem operation or condition must make the open return immediately?",
+   "options": [
+    "Do not wait for advisory or mandatory file locks",
+    "Use a nonblocking open flag where supported",
+    "Do not retry transient open failures",
+    "The phrase has no effect beyond ordinary open behavior"
+   ],
+   "default_guess": "Perform one no-follow open without retries and do not coordinate on source-file locks.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 delivery eligibility",
+   "kind": "missing scan relationship",
+   "text": "One call delivers one photo, named by `name`, the relative path a scan reported, and `source_id`.",
+   "question": "Must the service establish that this exact name and source id were returned by an earlier scan, perform an equivalent current scan check, or merely accept caller-supplied values that currently pass the file rules?",
+   "options": [
+    "Require proof of a particular earlier scan observation",
+    "Re-evaluate current eligibility without requiring stored scan state",
+    "Trust the caller's claim that a scan reported it",
+    "Require only syntactic path validation and the source hash"
+   ],
+   "default_guess": "Keep no scan session state; re-evaluate the named file under the current eligibility rules and verify its hash.",
+   "witness": {
+    "initial": "No scan has been called, but `photo.jpg` is an eligible ordinary image and its hash is known.",
+    "events": [
+     "The authenticated caller directly requests delivery with that name and hash."
+    ],
+    "outcomes": [
+     "Delivery succeeds because the current file could be reported by a scan.",
+     "Delivery fails because no scan actually reported this request's name."
+    ],
+    "observer": "The authenticated calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 name validation",
+   "kind": "undefined normalisation",
+   "text": "`name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link",
+   "question": "Which spellings are \"unnormalised\", including repeated separators, `.` segments, trailing separators, backslashes and Unicode-normalisation variants?",
+   "options": [
+    "Require a canonical POSIX relative path with single `/` separators and no `.` or `..` segments",
+    "Apply the host platform's path normalisation and compare the result",
+    "Reject only absolute paths and effective parent traversal",
+    "Also require Unicode normalisation of every segment"
+   ],
+   "default_guess": "Require a nonempty canonical POSIX relative path with single `/` separators, no empty, `.` or `..` segments, and treat backslash as an ordinary character on POSIX.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 non-regular named file",
+   "kind": "conflicting failure precedence",
+   "text": "`name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link",
+   "question": "Does a non-regular file fail under this condition with NOT_READY_OR_ABSENT, or under A1 order 3 with NOT_A_REGULAR_FILE?",
+   "options": [
+    "NOT_READY_OR_ABSENT under table order 1",
+    "NOT_A_REGULAR_FILE by applying A1 order 3",
+    "Use NOT_READY_OR_ABSENT for a known folder or link and NOT_A_REGULAR_FILE only for an open-time race"
+   ],
+   "default_guess": "Use NOT_READY_OR_ABSENT when validation already identifies a folder or link, and NOT_A_REGULAR_FILE only when a no-follow open finds that a previously eligible entry changed type.",
+   "witness": {
+    "initial": "The requested relative name currently denotes a FIFO rather than a regular file.",
+    "events": [
+     "The caller requests delivery with a valid source-id string.",
+     "The service checks the named file."
+    ],
+    "outcomes": [
+     "The answer is failed/NOT_READY_OR_ABSENT under A3 table order 1.",
+     "The answer is failed/NOT_A_REGULAR_FILE because A1 order 3 rejects it."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 request and project-id refusal",
+   "kind": "unspecified refusal result",
+   "text": "A defect of that form or of the project id is refused as a whole request.",
+   "question": "What exact response, status and RefusalCode apply to malformed JSON, extra or missing fields, wrong field types, and a syntactically invalid project id, and how is that distinguished from a valid but unknown project id?",
+   "options": [
+    "Framework validation response for request defects and unknown_project only for a valid absent UUID",
+    "One explicit refusal model for every request or project-id defect",
+    "Treat an invalid project id as unknown_project"
+   ],
+   "default_guess": "Use request-validation refusal for malformed form or UUID syntax, and unknown_project only for a syntactically valid UUID with no connection.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 storage failure",
+   "kind": "incomplete atomic-failure contract",
+   "text": "A photo that cannot be delivered is answered with status `failed` and one member of\n   `= models.PlacementFailure`, and nothing is written except the project lock:",
+   "question": "If the stored image has been atomically renamed and the subsequent placement-record write fails, must the image be removed before returning failed, retained as an orphan, or converted into a recoverable placement?",
+   "options": [
+    "Remove the newly written image and return failed/UNREADABLE_FILE",
+    "Leave the complete orphan image and return failed/UNREADABLE_FILE",
+    "Retry or recover the record before answering",
+    "Treat this only as a process crash and return no answer"
+   ],
+   "default_guess": "On an ordinary caught record-write failure, remove a newly created image before returning failed; after a process crash, retain the orphan and overwrite or reuse it on retry.",
+   "witness": {
+    "initial": "No placement or stored image exists for the source.",
+    "events": [
+     "A delivery prepares and atomically renames the stored image.",
+     "Writing the placement record fails without terminating the process."
+    ],
+    "outcomes": [
+     "The service removes the image and returns failed, so only the lock remains.",
+     "The service returns failed but the complete image remains because atomicity is only per file."
+    ],
+    "observer": "The caller and an operator inspecting the binary store"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-01 Required tests",
+   "kind": "incomplete invariant evidence",
+   "text": "INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).",
+   "question": "What must the test show for the invariant's prohibition on creating, moving or deleting anything beyond files and the listed attributes, such as directories, names, ownership, links or extended metadata?",
+   "options": [
+    "Compare the complete source tree and all relevant metadata before and after every operation",
+    "Limit INV-01 to file paths, bytes, modification times and modes",
+    "State explicitly that untested metadata and directory changes are outside the invariant"
+   ],
+   "default_guess": "Compare the complete tree of paths and file kinds plus bytes, timestamps and modes before and after each operation.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 meaning",
+   "kind": "ambiguous invariant instant",
+   "text": "INV-02: a delivery reads only a file that a scan could report under the requested name.",
+   "question": "At what instant is the counterfactual scan evaluated, and does \"could report\" mean merely a syntactically eligible path, a currently reportable entry, or an actual earlier observation?",
+   "options": [
+    "The actual scan from which the caller selected the item",
+    "A counterfactual scan at delivery validation time",
+    "Path eligibility only, regardless of current file identity",
+    "The instant the source file is opened"
+   ],
+   "default_guess": "Evaluate the same eligibility checks immediately before a no-follow open during delivery, without requiring an earlier stored scan.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "test does not demonstrate no-read invariant",
+   "text": "INV-02: an empty, absolute, unnormalised or parent-climbing name, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "How must the Required tests item demonstrate that none of these source targets is read, rather than merely demonstrating the returned failure and absence of durable output?",
+   "options": [
+    "Instrument source opens and reads and assert that none occur",
+    "Use targets whose read would create an observable sentinel effect",
+    "Weaken INV-02 to constrain only the result and durable writes"
+   ],
+   "default_guess": "Instrument the source filesystem boundary and assert that no content read occurs for every rejected-name case.",
+   "witness": {
+    "initial": "An ignored file contains a valid image and can be read.",
+    "events": [
+     "Delivery opens and reads the file.",
+     "After reading, delivery notices that the name is ignored and returns NOT_READY_OR_ABSENT without storing output."
+    ],
+    "outcomes": [
+     "The listed Required test passes because the response and durable files are correct, although INV-02 was violated.",
+     "A stronger test fails because it observes the forbidden read."
+    ],
+    "observer": "The invariant test suite"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-06 Required tests",
+   "kind": "test underspecifies writes-nothing invariant",
+   "text": "INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).",
+   "question": "Must the test also show that publication marks, state-directory entries, temporary files and the project-lock file are neither created nor changed by replay?",
+   "options": [
+    "Assert no durable filesystem or record change anywhere except transient lock state",
+    "Limit the invariant to stored images and placement records",
+    "Allow creation or mutation of the project lock but forbid every other durable write"
+   ],
+   "default_guess": "Allow acquisition of an existing lock but assert that replay creates or changes no durable file, record or temporary artifact.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "test does not demonstrate no-read invariant",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "How must the test prove that the conflict copy was never read, as required by INV-19, rather than read and rejected afterward?",
+   "options": [
+    "Instrument source opens and reads and assert no read of the conflict copy",
+    "Make reading the conflict copy raise a distinguishable failure",
+    "Change INV-19 to prohibit only successful placement"
+   ],
+   "default_guess": "Instrument the source boundary and assert that no open-for-content or read occurs for the conflict-copy path.",
+   "witness": {
+    "initial": "A conflict copy contains valid bytes and no placement exists.",
+    "events": [
+     "Delivery reads and hashes the conflict copy.",
+     "It then rejects the ignored name and returns NOT_READY_OR_ABSENT without writing output."
+    ],
+    "outcomes": [
+     "The Required test as written passes even though INV-19 was violated.",
+     "A read-observing test fails at the forbidden source access."
+    ],
+    "observer": "The invariant test suite"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-12 cross-process delivery locking",
+   "kind": "incomplete concurrency evidence",
+   "text": "INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).",
+   "question": "Must a Required test explicitly run concurrent deliveries in separate processes to demonstrate the stated across-process lock guarantee, rather than testing only marks across processes?",
+   "options": [
+    "Add a separate-process concurrent-delivery witness",
+    "State that the first named test already uses separate processes",
+    "Narrow the invariant to concurrency within one process for deliveries"
+   ],
+   "default_guess": "Require an explicit separate-process delivery test that produces one placed result, replay results for the rest and one placement record.",
+   "unit": "?"
+  },
+  {
+   "subject": "A7 modification-time comparison",
+   "kind": "unspecified instant representation",
+   "text": "A file's modification time is converted to the same form before it is delivered, dropping any\n   fraction finer than a microsecond toward the earlier instant.",
+   "question": "Is the modification time truncated before A2 compares camera time with it, or is full filesystem precision used for the 24-hour plausibility check and truncation performed only for the delivered value?",
+   "options": [
+    "Truncate to naive UTC microseconds before every comparison and delivery",
+    "Compare at full filesystem precision, then truncate only the selected delivered moment",
+    "Round or truncate independently at each use"
+   ],
+   "default_guess": "Convert to naive UTC and truncate toward the earlier microsecond before any comparison or delivery.",
+   "witness": {
+    "initial": "The file modification instant has a sub-microsecond fraction, and the camera time is just over 24 hours after the truncated instant but not over 24 hours after the full-precision instant.",
+    "events": [
+     "Delivery evaluates A2's camera-time plausibility check."
+    ],
+    "outcomes": [
+     "The camera value is unusable when comparison uses the truncated modification time.",
+     "The camera value is usable when comparison uses the full-precision modification time."
+    ],
+    "observer": "The caller receiving the publication photo_date and date_source"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 stored time representation",
+   "kind": "ambiguous serialization",
+   "text": "The current time is a `datetime` in UTC without an offset, with microsecond precision and no\n   rounding, written in ISO 8601 form.",
+   "question": "Which exact ISO 8601 spelling is stored or emitted—separator, fractional digits and timezone suffix—and how does that reconcile with M07 declaring `marked_at` as a datetime rather than a string?",
+   "options": [
+    "Naive `YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six fractional digits",
+    "Naive ISO output with fractional digits omitted when zero",
+    "A `Z`-suffixed UTC string despite the no-offset rule",
+    "Persist a typed datetime and specify ISO 8601 only for external serialization"
+   ],
+   "default_guess": "Use a typed naive-UTC datetime in the model and persist/serialize it as `YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six fractional digits and no suffix.",
+   "unit": "?"
+  },
+  {
+   "subject": "context Syncthing evidence",
+   "kind": "contradiction",
+   "text": "No run has used a live Syncthing folder, the kernel or the VPS.",
+   "question": "Must this passage say that a run did use the two private Syncthing instances, consistently with the State 0 evidence list and R0-15, or are those instances not considered a live Syncthing folder?",
+   "options": [
+    "Replace the claim to exclude only the owner's devices, kernel and VPS",
+    "Define the private two-instance run as not using a live Syncthing folder",
+    "Remove the Syncthing E2E evidence and R0-15 claim"
+   ],
+   "default_guess": "State that private Syncthing instances were used, while the owner's devices, kernel and VPS were not.",
+   "witness": {
+    "initial": "Two private Syncthing instances are available for the experiment.",
+    "events": [
+     "`e2e_local_syncthing.py` runs a real synchronization and conflict scenario.",
+     "The State 0 evidence claims both that this run occurred and that no run used a live Syncthing folder."
+    ],
+    "outcomes": [
+     "The run counts as use of a live Syncthing folder, making the quoted sentence false.",
+     "The run does not count as live use, leaving the quoted sentence true but the term `live Syncthing folder` undefined."
+    ],
+    "observer": "A reviewer assessing the evidence for R0-15 and INV-18"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 scan of a changing folder\",\"kind\":\"contradictory race contract\",\"text\":\"Syncthing may change the folder during a scan, and a scan promises nothing about a file or folder that changes while it runs.\",\"question\":\"Do the explicit rules for disappearance, growth, link replacement and unavailable subfolders still determine the result when the event is a concurrent change, or does this sentence make every such result unconstrained?\",\"options\":[\"The explicit ordered rules and folder_unavailable rule still apply\",\"Any result is permitted for every entry that changes\",\"Only the specifically named races are determined; other changes are unconstrained\"],\"default_guess\":\"Apply every specifically stated race rule and treat only unmentioned changes as unconstrained.\",\"witness\":{\"initial\":\"A listed ordinary file still exists and is below the source limit.\",\"events\":[\"Syncthing replaces its path with a symbolic link before the scan opens it.\",\"The scan reaches that listed entry.\"],\"outcomes\":[\"The scan reports rejected/unreadable_file under order 5.\",\"The scan may omit it or produce another result because the file changed while the scan ran.\"],\"observer\":\"The calling flow reading the scan result\"}},{\"subject\":\"A1 subfolder changed after listing\",\"kind\":\"missing race outcome\",\"text\":\"When a subfolder that is not ignored cannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is never reported as complete.\",\"question\":\"What happens when a listed subfolder disappears or becomes a symbolic link before it is entered: refuse the whole scan, skip it, or return another result under the no-promise rule?\",\"options\":[\"Refuse with folder_unavailable whenever it disappeared\",\"Skip a subfolder that became a link but refuse one that disappeared\",\"Skip either changed subfolder\",\"Leave both outcomes unconstrained\"],\"default_guess\":\"Skip a subfolder that is now a symbolic link and refuse with folder_unavailable if it disappeared for another reason.\",\"witness\":{\"initial\":\"The root listing contains an ordinary subfolder named `later`.\",\"events\":[\"Syncthing removes `later` after the root is listed.\",\"The walker attempts to enter `later`.\"],\"outcomes\":[\"The whole scan is refused with folder_unavailable.\",\"The changed subfolder is skipped and the remaining scan is returned.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A1 ignored-name race\",\"kind\":\"missing observation instant\",\"text\":\"Ignored names are not reported, ignored folders are not entered, and an entry the listing shows as a symbolic link is neither reported nor followed.\",\"question\":\"Is ignored-name status fixed from the folder listing, checked again when the entry is opened, or allowed to vary when a file is renamed during the scan?\",\"options\":[\"Judge the name only as it appeared in the listing\",\"Judge the name used at open time\",\"Require both the listed and current names to be eligible\",\"Leave renamed entries unconstrained\"],\"default_guess\":\"Judge eligibility from the listing and refuse to substitute any differently named entry.\",\"witness\":{\"initial\":\"The listing contains an ordinary file named `.sync-conflict-copy.jpg`, which is ignored.\",\"events\":[\"Syncthing renames it to `photo.jpg` before the walker reaches it.\",\"The scan continues.\"],\"outcomes\":[\"The file remains absent from this scan because its listed name was ignored.\",\"The file is reported as `photo.jpg` because its current name is ordinary.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A1 observation of content changed during a scan\",\"kind\":\"missing snapshot semantics\",\"text\":\"Files with the same content are each reported, with the same source id.\",\"question\":\"When bytes, size or modification time change between metadata collection and reading, which observation supplies `size`, `source_id` and status, and must those fields describe one coherent version?\",\"options\":[\"Use metadata and bytes from the first observed version\",\"Use the final version reached by the read\",\"Retry until metadata and bytes describe one version\",\"Allow mixed or omitted observations under the no-promise rule\"],\"default_guess\":\"Read once and report a coherent result for the bytes actually read, rejecting growth beyond the limit.\",\"witness\":{\"initial\":\"A listed file has small content A.\",\"events\":[\"The scan reads its metadata.\",\"Syncthing replaces its content with same-sized content B before the byte read.\",\"The scan hashes and reports it.\"],\"outcomes\":[\"The observation carries the source id of A.\",\"The observation carries the source id of B.\"],\"observer\":\"The caller comparing the scan result with a later delivery\"}},{\"subject\":\"A1 file opening\",\"kind\":\"undefined waiting rule\",\"text\":\"opened without following a link and without waiting\",\"question\":\"What kind of waiting is forbidden, and which filesystem operation or condition must make the open return immediately?\",\"options\":[\"Do not wait for advisory or mandatory file locks\",\"Use a nonblocking open flag where supported\",\"Do not retry transient open failures\",\"The phrase has no effect beyond ordinary open behavior\"],\"default_guess\":\"Perform one no-follow open without retries and do not coordinate on source-file locks.\"},{\"subject\":\"A3 delivery eligibility\",\"kind\":\"missing scan relationship\",\"text\":\"One call delivers one photo, named by `name`, the relative path a scan reported, and `source_id`.\",\"question\":\"Must the service establish that this exact name and source id were returned by an earlier scan, perform an equivalent current scan check, or merely accept caller-supplied values that currently pass the file rules?\",\"options\":[\"Require proof of a particular earlier scan observation\",\"Re-evaluate current eligibility without requiring stored scan state\",\"Trust the caller's claim that a scan reported it\",\"Require only syntactic path validation and the source hash\"],\"default_guess\":\"Keep no scan session state; re-evaluate the named file under the current eligibility rules and verify its hash.\",\"witness\":{\"initial\":\"No scan has been called, but `photo.jpg` is an eligible ordinary image and its hash is known.\",\"events\":[\"The authenticated caller directly requests delivery with that name and hash.\"],\"outcomes\":[\"Delivery succeeds because the current file could be reported by a scan.\",\"Delivery fails because no scan actually reported this request's name.\"],\"observer\":\"The authenticated calling flow\"}},{\"subject\":\"A3 name validation\",\"kind\":\"undefined normalisation\",\"text\":\"`name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link\",\"question\":\"Which spellings are \\\"unnormalised\\\", including repeated separators, `.` segments, trailing separators, backslashes and Unicode-normalisation variants?\",\"options\":[\"Require a canonical POSIX relative path with single `/` separators and no `.` or `..` segments\",\"Apply the host platform's path normalisation and compare the result\",\"Reject only absolute paths and effective parent traversal\",\"Also require Unicode normalisation of every segment\"],\"default_guess\":\"Require a nonempty canonical POSIX relative path with single `/` separators, no empty, `.` or `..` segments, and treat backslash as an ordinary character on POSIX.\"},{\"subject\":\"A3 non-regular named file\",\"kind\":\"conflicting failure precedence\",\"text\":\"`name` is not a file a scan could report: it is empty, absolute, unnormalised, climbs with `..`, is ignored at any level, is not a regular file or passes through a symbolic link\",\"question\":\"Does a non-regular file fail under this condition with NOT_READY_OR_ABSENT, or under A1 order 3 with NOT_A_REGULAR_FILE?\",\"options\":[\"NOT_READY_OR_ABSENT under table order 1\",\"NOT_A_REGULAR_FILE by applying A1 order 3\",\"Use NOT_READY_OR_ABSENT for a known folder or link and NOT_A_REGULAR_FILE only for an open-time race\"],\"default_guess\":\"Use NOT_READY_OR_ABSENT when validation already identifies a folder or link, and NOT_A_REGULAR_FILE only when a no-follow open finds that a previously eligible entry changed type.\",\"witness\":{\"initial\":\"The requested relative name currently denotes a FIFO rather than a regular file.\",\"events\":[\"The caller requests delivery with a valid source-id string.\",\"The service checks the named file.\"],\"outcomes\":[\"The answer is failed/NOT_READY_OR_ABSENT under A3 table order 1.\",\"The answer is failed/NOT_A_REGULAR_FILE because A1 order 3 rejects it.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A3 request and project-id refusal\",\"kind\":\"unspecified refusal result\",\"text\":\"A defect of that form or of the project id is refused as a whole request.\",\"question\":\"What exact response, status and RefusalCode apply to malformed JSON, extra or missing fields, wrong field types, and a syntactically invalid project id, and how is that distinguished from a valid but unknown project id?\",\"options\":[\"Framework validation response for request defects and unknown_project only for a valid absent UUID\",\"One explicit refusal model for every request or project-id defect\",\"Treat an invalid project id as unknown_project\"],\"default_guess\":\"Use request-validation refusal for malformed form or UUID syntax, and unknown_project only for a syntactically valid UUID with no connection.\"},{\"subject\":\"A3 storage failure\",\"kind\":\"incomplete atomic-failure contract\",\"text\":\"A photo that cannot be delivered is answered with status `failed` and one member of\\n   `= models.PlacementFailure`, and nothing is written except the project lock:\",\"question\":\"If the stored image has been atomically renamed and the subsequent placement-record write fails, must the image be removed before returning failed, retained as an orphan, or converted into a recoverable placement?\",\"options\":[\"Remove the newly written image and return failed/UNREADABLE_FILE\",\"Leave the complete orphan image and return failed/UNREADABLE_FILE\",\"Retry or recover the record before answering\",\"Treat this only as a process crash and return no answer\"],\"default_guess\":\"On an ordinary caught record-write failure, remove a newly created image before returning failed; after a process crash, retain the orphan and overwrite or reuse it on retry.\",\"witness\":{\"initial\":\"No placement or stored image exists for the source.\",\"events\":[\"A delivery prepares and atomically renames the stored image.\",\"Writing the placement record fails without terminating the process.\"],\"outcomes\":[\"The service removes the image and returns failed, so only the lock remains.\",\"The service returns failed but the complete image remains because atomicity is only per file.\"],\"observer\":\"The caller and an operator inspecting the binary store\"}},{\"subject\":\"INV-01 Required tests\",\"kind\":\"incomplete invariant evidence\",\"text\":\"INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).\",\"question\":\"What must the test show for the invariant's prohibition on creating, moving or deleting anything beyond files and the listed attributes, such as directories, names, ownership, links or extended metadata?\",\"options\":[\"Compare the complete source tree and all relevant metadata before and after every operation\",\"Limit INV-01 to file paths, bytes, modification times and modes\",\"State explicitly that untested metadata and directory changes are outside the invariant\"],\"default_guess\":\"Compare the complete tree of paths and file kinds plus bytes, timestamps and modes before and after each operation.\"},{\"subject\":\"INV-02 meaning\",\"kind\":\"ambiguous invariant instant\",\"text\":\"INV-02: a delivery reads only a file that a scan could report under the requested name.\",\"question\":\"At what instant is the counterfactual scan evaluated, and does \\\"could report\\\" mean merely a syntactically eligible path, a currently reportable entry, or an actual earlier observation?\",\"options\":[\"The actual scan from which the caller selected the item\",\"A counterfactual scan at delivery validation time\",\"Path eligibility only, regardless of current file identity\",\"The instant the source file is opened\"],\"default_guess\":\"Evaluate the same eligibility checks immediately before a no-follow open during delivery, without requiring an earlier stored scan.\"},{\"subject\":\"INV-02 Required tests\",\"kind\":\"test does not demonstrate no-read invariant\",\"text\":\"INV-02: an empty, absolute, unnormalised or parent-climbing name, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"How must the Required tests item demonstrate that none of these source targets is read, rather than merely demonstrating the returned failure and absence of durable output?\",\"options\":[\"Instrument source opens and reads and assert that none occur\",\"Use targets whose read would create an observable sentinel effect\",\"Weaken INV-02 to constrain only the result and durable writes\"],\"default_guess\":\"Instrument the source filesystem boundary and assert that no content read occurs for every rejected-name case.\",\"witness\":{\"initial\":\"An ignored file contains a valid image and can be read.\",\"events\":[\"Delivery opens and reads the file.\",\"After reading, delivery notices that the name is ignored and returns NOT_READY_OR_ABSENT without storing output.\"],\"outcomes\":[\"The listed Required test passes because the response and durable files are correct, although INV-02 was violated.\",\"A stronger test fails because it observes the forbidden read.\"],\"observer\":\"The invariant test suite\"}},{\"subject\":\"INV-06 Required tests\",\"kind\":\"test underspecifies writes-nothing invariant\",\"text\":\"INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).\",\"question\":\"Must the test also show that publication marks, state-directory entries, temporary files and the project-lock file are neither created nor changed by replay?\",\"options\":[\"Assert no durable filesystem or record change anywhere except transient lock state\",\"Limit the invariant to stored images and placement records\",\"Allow creation or mutation of the project lock but forbid every other durable write\"],\"default_guess\":\"Allow acquisition of an existing lock but assert that replay creates or changes no durable file, record or temporary artifact.\"},{\"subject\":\"INV-19 Required tests\",\"kind\":\"test does not demonstrate no-read invariant\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"How must the test prove that the conflict copy was never read, as required by INV-19, rather than read and rejected afterward?\",\"options\":[\"Instrument source opens and reads and assert no read of the conflict copy\",\"Make reading the conflict copy raise a distinguishable failure\",\"Change INV-19 to prohibit only successful placement\"],\"default_guess\":\"Instrument the source boundary and assert that no open-for-content or read occurs for the conflict-copy path.\",\"witness\":{\"initial\":\"A conflict copy contains valid bytes and no placement exists.\",\"events\":[\"Delivery reads and hashes the conflict copy.\",\"It then rejects the ignored name and returns NOT_READY_OR_ABSENT without writing output.\"],\"outcomes\":[\"The Required test as written passes even though INV-19 was violated.\",\"A read-observing test fails at the forbidden source access.\"],\"observer\":\"The invariant test suite\"}},{\"subject\":\"INV-12 cross-process delivery locking\",\"kind\":\"incomplete concurrency evidence\",\"text\":\"INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).\",\"question\":\"Must a Required test explicitly run concurrent deliveries in separate processes to demonstrate the stated across-process lock guarantee, rather than testing only marks across processes?\",\"options\":[\"Add a separate-process concurrent-delivery witness\",\"State that the first named test already uses separate processes\",\"Narrow the invariant to concurrency within one process for deliveries\"],\"default_guess\":\"Require an explicit separate-process delivery test that produces one placed result, replay results for the rest and one placement record.\"},{\"subject\":\"A7 modification-time comparison\",\"kind\":\"unspecified instant representation\",\"text\":\"A file's modification time is converted to the same form before it is delivered, dropping any\\n   fraction finer than a microsecond toward the earlier instant.\",\"question\":\"Is the modification time truncated before A2 compares camera time with it, or is full filesystem precision used for the 24-hour plausibility check and truncation performed only for the delivered value?\",\"options\":[\"Truncate to naive UTC microseconds before every comparison and delivery\",\"Compare at full filesystem precision, then truncate only the selected delivered moment\",\"Round or truncate independently at each use\"],\"default_guess\":\"Convert to naive UTC and truncate toward the earlier microsecond before any comparison or delivery.\",\"witness\":{\"initial\":\"The file modification instant has a sub-microsecond fraction, and the camera time is just over 24 hours after the truncated instant but not over 24 hours after the full-precision instant.\",\"events\":[\"Delivery evaluates A2's camera-time plausibility check.\"],\"outcomes\":[\"The camera value is unusable when comparison uses the truncated modification time.\",\"The camera value is usable when comparison uses the full-precision modification time.\"],\"observer\":\"The caller receiving the publication photo_date and date_source\"}},{\"subject\":\"A7 stored time representation\",\"kind\":\"ambiguous serialization\",\"text\":\"The current time is a `datetime` in UTC without an offset, with microsecond precision and no\\n   rounding, written in ISO 8601 form.\",\"question\":\"Which exact ISO 8601 spelling is stored or emitted—separator, fractional digits and timezone suffix—and how does that reconcile with M07 declaring `marked_at` as a datetime rather than a string?\",\"options\":[\"Naive `YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six fractional digits\",\"Naive ISO output with fractional digits omitted when zero\",\"A `Z`-suffixed UTC string despite the no-offset rule\",\"Persist a typed datetime and specify ISO 8601 only for external serialization\"],\"default_guess\":\"Use a typed naive-UTC datetime in the model and persist/serialize it as `YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six fractional digits and no suffix.\"},{\"subject\":\"context Syncthing evidence\",\"kind\":\"contradiction\",\"text\":\"No run has used a live Syncthing folder, the kernel or the VPS.\",\"question\":\"Must this passage say that a run did use the two private Syncthing instances, consistently with the State 0 evidence list and R0-15, or are those instances not considered a live Syncthing folder?\",\"options\":[\"Replace the claim to exclude only the owner's devices, kernel and VPS\",\"Define the private two-instance run as not using a live Syncthing folder\",\"Remove the Syncthing E2E evidence and R0-15 claim\"],\"default_guess\":\"State that private Syncthing instances were used, while the owner's devices, kernel and VPS were not.\",\"witness\":{\"initial\":\"Two private Syncthing instances are available for the experiment.\",\"events\":[\"`e2e_local_syncthing.py` runs a real synchronization and conflict scenario.\",\"The State 0 evidence claims both that this run occurred and that no run used a live Syncthing folder.\"],\"outcomes\":[\"The run counts as use of a live Syncthing folder, making the quoted sentence false.\",\"The run does not count as live use, leaving the quoted sentence true but the term `live Syncthing folder` undefined.\"],\"observer\":\"A reviewer assessing the evidence for R0-15 and INV-18\"}}]}",
+ "set_aside": []
+}

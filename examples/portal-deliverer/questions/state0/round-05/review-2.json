@@ -1,0 +1,290 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "connection management",
+   "kind": "missing operation",
+   "text": "The deliverer offers three operations: scan a project's folder, deliver one photo, and record its publication.",
+   "question": "What operation or other authorised mechanism creates, changes and confirms the connection record required by the primary action?",
+   "options": [
+    "Add authenticated create/update/confirm connection operations to the deliverer",
+    "Let the agent write the deliverer's store directly and define that trust boundary",
+    "Move connection ownership to another named system"
+   ],
+   "default_guess": "Add authenticated connection-management operations to the deliverer.",
+   "witness": {
+    "initial": "A project has no connection record.",
+    "events": [
+     "The owner confirms the object and folders to the agent.",
+     "The agent must make delivery possible."
+    ],
+    "outcomes": [
+     "The agent calls a deliverer operation that writes the confirmed connection.",
+     "The agent writes the deliverer's storage directly because no such operation exists."
+    ],
+    "observer": "The owner and the operator securing the deliverer's store"
+   }
+  },
+  {
+   "unit": "00_product.md:Actors and trust boundaries",
+   "subject": "connection input boundary",
+   "kind": "unnamed input",
+   "text": "Calling flow → deliverer | project id, file name, source id, Portal photo id",
+   "question": "Where do the root, photo-folder and invoice-folder values and the owner's confirmation cross into the system when a connection is created or changed?",
+   "options": [
+    "They cross the calling-flow boundary in a connection request",
+    "The agent writes them through a separate administrative boundary",
+    "Another named system supplies them"
+   ],
+   "default_guess": "Define a separate authenticated administrative boundary for the agent's connection writes."
+  },
+  {
+   "unit": "00_product.md:Inputs",
+   "subject": "file name",
+   "kind": "undefined identifier",
+   "text": "the file name and source id of a photo to deliver",
+   "question": "Is the file name a basename, a root-relative path, or another opaque scan value, and what normalization and containment rules prevent traversal, aliasing and ambiguity across subfolders?",
+   "options": [
+    "Use the exact root-relative path returned by scan and reject absolute paths, traversal and non-canonical forms",
+    "Use a basename and reject duplicate basenames",
+    "Use an opaque scan-entry identifier instead of accepting a path"
+   ],
+   "default_guess": "Use the exact normalized root-relative path returned by scan and verify that resolution remains inside the confirmed photo folder.",
+   "witness": {
+    "initial": "Two subfolders contain files named photo.jpg.",
+    "events": [
+     "The deliverer scans the recursive photo folder.",
+     "The owner chooses one photo.",
+     "The calling flow sends file name photo.jpg and its source id."
+    ],
+    "outcomes": [
+     "The deliverer treats photo.jpg as a basename and cannot uniquely select a file.",
+     "The deliverer treats it as a root-relative path and selects one subfolder."
+    ],
+    "observer": "The owner, who may receive the wrong photo or a refusal"
+   }
+  },
+  {
+   "unit": "00_product.md:Inputs",
+   "subject": "source id",
+   "kind": "undefined identity",
+   "text": "the file name and source id of a photo to deliver",
+   "question": "How is a source id formed, what scope makes it unique, whether identical content at different paths shares it, and whether callers must treat it as opaque?",
+   "options": [
+    "A collision-resistant digest of source content scoped by project",
+    "An opaque stored identifier allocated per content and project",
+    "An identifier for a particular path-and-content scan entry"
+   ],
+   "default_guess": "Use an opaque versioned identifier backed by a collision-resistant content digest and scoped by project."
+  },
+  {
+   "unit": "00_product.md:Primary actions",
+   "subject": "scan-to-deliver validation",
+   "kind": "ambiguous matching",
+   "text": "a file whose content differs from the chosen one is not placed",
+   "question": "Against which observation is content compared—the supplied source id, the latest scan record, or bytes re-read during delivery—and what happens if the file is renamed while its content remains identical?",
+   "options": [
+    "Require the named path to exist and its freshly read content to match the supplied source id",
+    "Locate any current file with matching content even if the named path changed",
+    "Bind delivery to an expiring scan snapshot containing both path and content identity"
+   ],
+   "default_guess": "Require the normalized path returned by scan to exist and freshly hash its bytes against the supplied source id.",
+   "witness": {
+    "initial": "A scan reports a.jpg with source id S.",
+    "events": [
+     "The owner chooses it.",
+     "Before delivery, Syncthing renames a.jpg to b.jpg without changing its bytes.",
+     "The caller sends a.jpg and S."
+    ],
+    "outcomes": [
+     "Delivery is refused because the chosen path no longer exists.",
+     "Delivery succeeds by finding the same source content under b.jpg."
+    ],
+    "observer": "The owner"
+   }
+  },
+  {
+   "unit": "00_product.md:Accepted from the experiment (owner, 2026-11-18)",
+   "subject": "incomplete final-name files",
+   "kind": "readiness gap",
+   "text": "The two-minute wait accepted here first was withdrawn by R0-15.",
+   "question": "What prevents a final-name file that is incomplete or still being replaced from being reported ready and delivered, given that object-folder input is explicitly allowed to be incomplete or replaced?",
+   "options": [
+    "Rely exclusively on Syncthing temporary-name behavior and accept final-name bytes as complete",
+    "Perform an atomic open/read/recheck and reject any file whose identity changes during delivery",
+    "Retain a stability or completion check for sources not covered by the observed Syncthing behavior"
+   ],
+   "default_guess": "Read through one file handle, hash the delivered bytes, and recheck file identity and metadata before committing; reject a concurrent change.",
+   "witness": {
+    "initial": "An incomplete image exists under its final visible name.",
+    "events": [
+     "The calling flow scans while the writer pauses.",
+     "The scan reports the file ready.",
+     "The owner chooses it.",
+     "Delivery reads the same incomplete bytes before writing resumes."
+    ],
+    "outcomes": [
+     "The incomplete bytes are accepted because the final name and source id still match the scan.",
+     "The file is withheld because readiness requires a completion or stability condition."
+    ],
+    "observer": "The owner and client viewing the resulting image"
+   }
+  },
+  {
+   "unit": "00_product.md:Accepted from the experiment (owner, 2026-11-18)",
+   "subject": "ignored-name rules",
+   "kind": "undefined classification",
+   "text": "Syncthing's temporary files and hidden names, which include the phone's `.trashed-` files, are ignored.",
+   "question": "Which exact file and directory name patterns count as temporary, hidden, `.trashed-`, or Syncthing conflict copies, on which platforms, and are ignored entries omitted or returned as rejected?",
+   "options": [
+    "Specify a complete versioned matcher and omit matching entries from scan",
+    "Specify a matcher and report matching entries as rejected with reason codes",
+    "Delegate classification to Syncthing metadata rather than names"
+   ],
+   "default_guess": "Define explicit component-level patterns, prune ignored directories, and omit matching entries from scan."
+  },
+  {
+   "unit": "00_product.md:Primary actions",
+   "subject": "scan result coverage",
+   "kind": "status ambiguity",
+   "text": "each file with its source id and a status: ready, placed, published or rejected with a reason",
+   "question": "Does “each file” include ignored names, conflict copies, unsupported files and multiple paths with identical source content, and which of the four statuses applies to each case?",
+   "options": [
+    "Return every filesystem entry, using rejected for ignored and unsupported entries",
+    "Return only eligible image candidates; ignored entries are absent",
+    "Return eligible and rejected images but omit explicitly ignored names"
+   ],
+   "default_guess": "Omit explicitly ignored names, return other image candidates, and mark unsupported or unreadable candidates rejected with a stable reason code.",
+   "witness": {
+    "initial": "The folder contains original.jpg and copy.jpg with identical content, plus .trashed-old.jpg.",
+    "events": [
+     "The calling flow scans the project."
+    ],
+    "outcomes": [
+     "All three names appear, with the duplicate and hidden file assigned statuses from the four-value list.",
+     "Only one eligible source appears because ignored names and duplicate content are omitted or collapsed."
+    ],
+    "observer": "The owner choosing photos"
+   }
+  },
+  {
+   "unit": "00_product.md:Primary actions",
+   "subject": "duplicate-content scan status",
+   "kind": "missing state mapping",
+   "text": "ready, placed, published or rejected with a reason",
+   "question": "When two file names have the same project-and-content identity, what status does each receive before and after the single placement or publication, and which file's date and publication body win?",
+   "options": [
+    "Both names share one source id and status; the first delivery fixes the publication body",
+    "Each path has a distinct source id but delivery deduplicates by a separate content key",
+    "Only one canonical path is returned and the other is omitted or rejected"
+   ],
+   "default_guess": "Return both paths with the same source id and shared placement/publication status; use the selected path's source metadata on first delivery.",
+   "witness": {
+    "initial": "a.jpg and b.jpg have identical bytes, no camera date and different modification times.",
+    "events": [
+     "The scan reports both files.",
+     "The owner delivers b.jpg.",
+     "A later scan reports both again."
+    ],
+    "outcomes": [
+     "Both entries are placed and carry the date chosen from b.jpg because identity is content-based.",
+     "a.jpg remains ready or has a different date because scan identity is path-based."
+    ],
+    "observer": "The owner and the Portal user reading the photo date"
+   }
+  },
+  {
+   "unit": "00_product.md:Primary actions",
+   "subject": "delivery failure contract",
+   "kind": "vague failure",
+   "text": "a photo that cannot be delivered is reported with its reason and nothing is written",
+   "question": "Which concrete conditions can make delivery fail, what stable reason codes and retryability data are returned, and does “nothing is written” cover placement records, final binaries and temporary artifacts?",
+   "options": [
+    "Define an exhaustive typed failure result with stable codes and retryability hints",
+    "Return stable codes but let the caller configure which codes are temporary",
+    "Return only human-readable reasons"
+   ],
+   "default_guess": "Define stable machine-readable codes, leave retry policy to the caller, and guarantee no committed binary or database state on failure."
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "temporary failure policy",
+   "kind": "missing interface support",
+   "text": "which failure to treat as temporary belong to the calling flow",
+   "question": "What machine-readable information lets different callers classify the same failure consistently without parsing free-form reasons?",
+   "options": [
+    "The service returns stable failure codes and the caller owns a code-to-policy mapping",
+    "The service returns a retryable flag while the caller decides whether to act on it",
+    "Every caller interprets human-readable reason text"
+   ],
+   "default_guess": "Return stable failure codes and document their conditions; keep retry timing and limits in the calling flow."
+  },
+  {
+   "unit": "00_product.md:Primary actions",
+   "subject": "publication body",
+   "kind": "undefined output",
+   "text": "its reference and the publication body",
+   "question": "What exact fields, types and values make up the publication body, including the source identity, UTC date, binary reference and any idempotency value expected by the Portal?",
+   "options": [
+    "Define a versioned publication-body schema returned by delivery",
+    "Return only a binary reference and require the caller to construct the Portal request",
+    "Return a Portal-specific request object tied to the current Portal API"
+   ],
+   "default_guess": "Return a versioned, validated publication-body value containing the binary reference and normalized photo date, without credentials or server paths."
+  },
+  {
+   "unit": "00_product.md:Actors and trust boundaries",
+   "subject": "operation request signatures",
+   "kind": "unmapped inputs",
+   "text": "project id, file name, source id, Portal photo id",
+   "question": "Which listed values are required by scan, deliver and record-publication respectively, and how does record-publication identify the exact existing placement?",
+   "options": [
+    "Scan takes project id; deliver takes project id, file name and source id; record takes project id, source id and Portal photo id",
+    "Record also takes the file name",
+    "Each operation takes a single opaque operation token returned by its predecessor"
+   ],
+   "default_guess": "Scan takes project id; deliver takes project id, normalized file name and source id; record takes project id, source id and Portal photo id."
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "delivery idempotency",
+   "kind": "concurrency ambiguity",
+   "text": "a repeated delivery creates nothing new",
+   "question": "Does the no-new-write guarantee cover concurrent deliveries as well as sequential retries, and what atomic key and result are used when two calls race?",
+   "options": [
+    "Enforce atomic uniqueness per project and source content and return the winning result to every caller",
+    "Guarantee idempotency only after the first request commits",
+    "Serialize all delivery requests per project"
+   ],
+   "default_guess": "Enforce an atomic unique placement keyed by project and source content, with concurrent callers receiving the same committed result.",
+   "witness": {
+    "initial": "No placement exists for project P and source S.",
+    "events": [
+     "Two calling-flow attempts concurrently request delivery of P, the same file name and S.",
+     "Both finish their validation before either commits."
+    ],
+    "outcomes": [
+     "One binary and placement are committed and both calls return that result.",
+     "Two binaries are written because “repeated” was interpreted as sequential only."
+    ],
+    "observer": "The calling flow and the operator inspecting the Portal store"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "authentication failures",
+   "kind": "missing failure",
+   "text": "every operation needs the token",
+   "question": "What happens when the bearer token is absent, invalid or expired, and does authentication occur before any project lookup, folder access or mutation?",
+   "options": [
+    "Reject uniformly before all domain work with one authentication error",
+    "Distinguish missing, invalid and expired tokens",
+    "Authenticate after request parsing and project lookup"
+   ],
+   "default_guess": "Reject uniformly before folder or project access and before mutation, without revealing whether the project exists."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Decisions\",\"subject\":\"connection management\",\"kind\":\"missing operation\",\"text\":\"The deliverer offers three operations: scan a project's folder, deliver one photo, and record its publication.\",\"question\":\"What operation or other authorised mechanism creates, changes and confirms the connection record required by the primary action?\",\"options\":[\"Add authenticated create/update/confirm connection operations to the deliverer\",\"Let the agent write the deliverer's store directly and define that trust boundary\",\"Move connection ownership to another named system\"],\"default_guess\":\"Add authenticated connection-management operations to the deliverer.\",\"witness\":{\"initial\":\"A project has no connection record.\",\"events\":[\"The owner confirms the object and folders to the agent.\",\"The agent must make delivery possible.\"],\"outcomes\":[\"The agent calls a deliverer operation that writes the confirmed connection.\",\"The agent writes the deliverer's storage directly because no such operation exists.\"],\"observer\":\"The owner and the operator securing the deliverer's store\"}},{\"unit\":\"00_product.md:Actors and trust boundaries\",\"subject\":\"connection input boundary\",\"kind\":\"unnamed input\",\"text\":\"Calling flow → deliverer | project id, file name, source id, Portal photo id\",\"question\":\"Where do the root, photo-folder and invoice-folder values and the owner's confirmation cross into the system when a connection is created or changed?\",\"options\":[\"They cross the calling-flow boundary in a connection request\",\"The agent writes them through a separate administrative boundary\",\"Another named system supplies them\"],\"default_guess\":\"Define a separate authenticated administrative boundary for the agent's connection writes.\"},{\"unit\":\"00_product.md:Inputs\",\"subject\":\"file name\",\"kind\":\"undefined identifier\",\"text\":\"the file name and source id of a photo to deliver\",\"question\":\"Is the file name a basename, a root-relative path, or another opaque scan value, and what normalization and containment rules prevent traversal, aliasing and ambiguity across subfolders?\",\"options\":[\"Use the exact root-relative path returned by scan and reject absolute paths, traversal and non-canonical forms\",\"Use a basename and reject duplicate basenames\",\"Use an opaque scan-entry identifier instead of accepting a path\"],\"default_guess\":\"Use the exact normalized root-relative path returned by scan and verify that resolution remains inside the confirmed photo folder.\",\"witness\":{\"initial\":\"Two subfolders contain files named photo.jpg.\",\"events\":[\"The deliverer scans the recursive photo folder.\",\"The owner chooses one photo.\",\"The calling flow sends file name photo.jpg and its source id.\"],\"outcomes\":[\"The deliverer treats photo.jpg as a basename and cannot uniquely select a file.\",\"The deliverer treats it as a root-relative path and selects one subfolder.\"],\"observer\":\"The owner, who may receive the wrong photo or a refusal\"}},{\"unit\":\"00_product.md:Inputs\",\"subject\":\"source id\",\"kind\":\"undefined identity\",\"text\":\"the file name and source id of a photo to deliver\",\"question\":\"How is a source id formed, what scope makes it unique, whether identical content at different paths shares it, and whether callers must treat it as opaque?\",\"options\":[\"A collision-resistant digest of source content scoped by project\",\"An opaque stored identifier allocated per content and project\",\"An identifier for a particular path-and-content scan entry\"],\"default_guess\":\"Use an opaque versioned identifier backed by a collision-resistant content digest and scoped by project.\"},{\"unit\":\"00_product.md:Primary actions\",\"subject\":\"scan-to-deliver validation\",\"kind\":\"ambiguous matching\",\"text\":\"a file whose content differs from the chosen one is not placed\",\"question\":\"Against which observation is content compared—the supplied source id, the latest scan record, or bytes re-read during delivery—and what happens if the file is renamed while its content remains identical?\",\"options\":[\"Require the named path to exist and its freshly read content to match the supplied source id\",\"Locate any current file with matching content even if the named path changed\",\"Bind delivery to an expiring scan snapshot containing both path and content identity\"],\"default_guess\":\"Require the normalized path returned by scan to exist and freshly hash its bytes against the supplied source id.\",\"witness\":{\"initial\":\"A scan reports a.jpg with source id S.\",\"events\":[\"The owner chooses it.\",\"Before delivery, Syncthing renames a.jpg to b.jpg without changing its bytes.\",\"The caller sends a.jpg and S.\"],\"outcomes\":[\"Delivery is refused because the chosen path no longer exists.\",\"Delivery succeeds by finding the same source content under b.jpg.\"],\"observer\":\"The owner\"}},{\"unit\":\"00_product.md:Accepted from the experiment (owner, 2026-11-18)\",\"subject\":\"incomplete final-name files\",\"kind\":\"readiness gap\",\"text\":\"The two-minute wait accepted here first was withdrawn by R0-15.\",\"question\":\"What prevents a final-name file that is incomplete or still being replaced from being reported ready and delivered, given that object-folder input is explicitly allowed to be incomplete or replaced?\",\"options\":[\"Rely exclusively on Syncthing temporary-name behavior and accept final-name bytes as complete\",\"Perform an atomic open/read/recheck and reject any file whose identity changes during delivery\",\"Retain a stability or completion check for sources not covered by the observed Syncthing behavior\"],\"default_guess\":\"Read through one file handle, hash the delivered bytes, and recheck file identity and metadata before committing; reject a concurrent change.\",\"witness\":{\"initial\":\"An incomplete image exists under its final visible name.\",\"events\":[\"The calling flow scans while the writer pauses.\",\"The scan reports the file ready.\",\"The owner chooses it.\",\"Delivery reads the same incomplete bytes before writing resumes.\"],\"outcomes\":[\"The incomplete bytes are accepted because the final name and source id still match the scan.\",\"The file is withheld because readiness requires a completion or stability condition.\"],\"observer\":\"The owner and client viewing the resulting image\"}},{\"unit\":\"00_product.md:Accepted from the experiment (owner, 2026-11-18)\",\"subject\":\"ignored-name rules\",\"kind\":\"undefined classification\",\"text\":\"Syncthing's temporary files and hidden names, which include the phone's `.trashed-` files, are ignored.\",\"question\":\"Which exact file and directory name patterns count as temporary, hidden, `.trashed-`, or Syncthing conflict copies, on which platforms, and are ignored entries omitted or returned as rejected?\",\"options\":[\"Specify a complete versioned matcher and omit matching entries from scan\",\"Specify a matcher and report matching entries as rejected with reason codes\",\"Delegate classification to Syncthing metadata rather than names\"],\"default_guess\":\"Define explicit component-level patterns, prune ignored directories, and omit matching entries from scan.\"},{\"unit\":\"00_product.md:Primary actions\",\"subject\":\"scan result coverage\",\"kind\":\"status ambiguity\",\"text\":\"each file with its source id and a status: ready, placed, published or rejected with a reason\",\"question\":\"Does “each file” include ignored names, conflict copies, unsupported files and multiple paths with identical source content, and which of the four statuses applies to each case?\",\"options\":[\"Return every filesystem entry, using rejected for ignored and unsupported entries\",\"Return only eligible image candidates; ignored entries are absent\",\"Return eligible and rejected images but omit explicitly ignored names\"],\"default_guess\":\"Omit explicitly ignored names, return other image candidates, and mark unsupported or unreadable candidates rejected with a stable reason code.\",\"witness\":{\"initial\":\"The folder contains original.jpg and copy.jpg with identical content, plus .trashed-old.jpg.\",\"events\":[\"The calling flow scans the project.\"],\"outcomes\":[\"All three names appear, with the duplicate and hidden file assigned statuses from the four-value list.\",\"Only one eligible source appears because ignored names and duplicate content are omitted or collapsed.\"],\"observer\":\"The owner choosing photos\"}},{\"unit\":\"00_product.md:Primary actions\",\"subject\":\"duplicate-content scan status\",\"kind\":\"missing state mapping\",\"text\":\"ready, placed, published or rejected with a reason\",\"question\":\"When two file names have the same project-and-content identity, what status does each receive before and after the single placement or publication, and which file's date and publication body win?\",\"options\":[\"Both names share one source id and status; the first delivery fixes the publication body\",\"Each path has a distinct source id but delivery deduplicates by a separate content key\",\"Only one canonical path is returned and the other is omitted or rejected\"],\"default_guess\":\"Return both paths with the same source id and shared placement/publication status; use the selected path's source metadata on first delivery.\",\"witness\":{\"initial\":\"a.jpg and b.jpg have identical bytes, no camera date and different modification times.\",\"events\":[\"The scan reports both files.\",\"The owner delivers b.jpg.\",\"A later scan reports both again.\"],\"outcomes\":[\"Both entries are placed and carry the date chosen from b.jpg because identity is content-based.\",\"a.jpg remains ready or has a different date because scan identity is path-based.\"],\"observer\":\"The owner and the Portal user reading the photo date\"}},{\"unit\":\"00_product.md:Primary actions\",\"subject\":\"delivery failure contract\",\"kind\":\"vague failure\",\"text\":\"a photo that cannot be delivered is reported with its reason and nothing is written\",\"question\":\"Which concrete conditions can make delivery fail, what stable reason codes and retryability data are returned, and does “nothing is written” cover placement records, final binaries and temporary artifacts?\",\"options\":[\"Define an exhaustive typed failure result with stable codes and retryability hints\",\"Return stable codes but let the caller configure which codes are temporary\",\"Return only human-readable reasons\"],\"default_guess\":\"Define stable machine-readable codes, leave retry policy to the caller, and guarantee no committed binary or database state on failure.\"},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"temporary failure policy\",\"kind\":\"missing interface support\",\"text\":\"which failure to treat as temporary belong to the calling flow\",\"question\":\"What machine-readable information lets different callers classify the same failure consistently without parsing free-form reasons?\",\"options\":[\"The service returns stable failure codes and the caller owns a code-to-policy mapping\",\"The service returns a retryable flag while the caller decides whether to act on it\",\"Every caller interprets human-readable reason text\"],\"default_guess\":\"Return stable failure codes and document their conditions; keep retry timing and limits in the calling flow.\"},{\"unit\":\"00_product.md:Primary actions\",\"subject\":\"publication body\",\"kind\":\"undefined output\",\"text\":\"its reference and the publication body\",\"question\":\"What exact fields, types and values make up the publication body, including the source identity, UTC date, binary reference and any idempotency value expected by the Portal?\",\"options\":[\"Define a versioned publication-body schema returned by delivery\",\"Return only a binary reference and require the caller to construct the Portal request\",\"Return a Portal-specific request object tied to the current Portal API\"],\"default_guess\":\"Return a versioned, validated publication-body value containing the binary reference and normalized photo date, without credentials or server paths.\"},{\"unit\":\"00_product.md:Actors and trust boundaries\",\"subject\":\"operation request signatures\",\"kind\":\"unmapped inputs\",\"text\":\"project id, file name, source id, Portal photo id\",\"question\":\"Which listed values are required by scan, deliver and record-publication respectively, and how does record-publication identify the exact existing placement?\",\"options\":[\"Scan takes project id; deliver takes project id, file name and source id; record takes project id, source id and Portal photo id\",\"Record also takes the file name\",\"Each operation takes a single opaque operation token returned by its predecessor\"],\"default_guess\":\"Scan takes project id; deliver takes project id, normalized file name and source id; record takes project id, source id and Portal photo id.\"},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"delivery idempotency\",\"kind\":\"concurrency ambiguity\",\"text\":\"a repeated delivery creates nothing new\",\"question\":\"Does the no-new-write guarantee cover concurrent deliveries as well as sequential retries, and what atomic key and result are used when two calls race?\",\"options\":[\"Enforce atomic uniqueness per project and source content and return the winning result to every caller\",\"Guarantee idempotency only after the first request commits\",\"Serialize all delivery requests per project\"],\"default_guess\":\"Enforce an atomic unique placement keyed by project and source content, with concurrent callers receiving the same committed result.\",\"witness\":{\"initial\":\"No placement exists for project P and source S.\",\"events\":[\"Two calling-flow attempts concurrently request delivery of P, the same file name and S.\",\"Both finish their validation before either commits.\"],\"outcomes\":[\"One binary and placement are committed and both calls return that result.\",\"Two binaries are written because “repeated” was interpreted as sequential only.\"],\"observer\":\"The calling flow and the operator inspecting the Portal store\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"authentication failures\",\"kind\":\"missing failure\",\"text\":\"every operation needs the token\",\"question\":\"What happens when the bearer token is absent, invalid or expired, and does authentication occur before any project lookup, folder access or mutation?\",\"options\":[\"Reject uniformly before all domain work with one authentication error\",\"Distinguish missing, invalid and expired tokens\",\"Authenticate after request parsing and project lookup\"],\"default_guess\":\"Reject uniformly before folder or project access and before mutation, without revealing whether the project exists.\"}]}",
+ "set_aside": []
+}
