@@ -1,0 +1,399 @@
+# State 2 — Portal Deliverer rules and decisions
+
+## Status
+
+Written on 2026-11-18 from the accepted product frame, the models and the running prototype. The
+owner accepted on 2026-11-18 the single principal and HTTPS rules of A5, the values of A8, the
+dependency policy of A9 and the absence of removal in the first version (A3).
+
+OQ-07 is the one earlier question still open: A5 decides the HTTPS rule, and the host and route are
+carried to deployment.
+The tests named below live in `prototypes/portal_deliverer/test_deliverer.py` of the Factory
+repository; E2E names a check of `e2e_local_portal.py`. They are evidence of the prototype. The
+checks that witness the generated service are bound after State 7.
+
+## Accepted decision A1 — What a file of the folder becomes
+
+### Normative rules
+
+A scan gives each regular file of the photo folder exactly one status. The first rule that
+applies decides:
+
+| Order | Condition | Status | Reason |
+|---|---|---|---|
+| 1 | its age is below the settling time, which includes a modification time in the future | `settling` | none |
+| 2 | empty | `rejected` | `empty` |
+| 3 | larger than the source limit | `rejected` | `too_large` |
+| 4 | when opened it is no longer a regular file | `rejected` | `not_a_regular_file` |
+| 5 | it grew past the source limit while being read | `rejected` | `too_large` |
+| 6 | opening or reading it fails, including a file that disappeared or became a link | `rejected` | `unreadable_file` |
+| 7 | does not begin with a JPEG, PNG or WEBP signature | `rejected` | `unsupported_format` |
+| 8 | same content as an earlier file of this scan | `duplicate` | `duplicate_content`, with `duplicate_of` |
+| 9 | placed and marked | `published` | none |
+| 10 | placed | `placed` | none |
+| 11 | anything else | `ready` | none |
+
+A scan covers the photo folder and all its subfolders (R0-12). A file exactly at the settling time or exactly at the source limit passes that rule. A file that
+disappears before its metadata is read is not reported.
+
+Files are visited folder by folder: the files of a folder in order of their names, then its
+subfolders in order of their names, compared by Unicode code point. The earlier file of rule 8 is
+the first file with that content in this order that reached rule 8.
+
+A name is ignored, in any letter case and at every level of the path, when it begins with a dot or
+with `~syncthing~`, or ends in `.tmp` or `~`. Names beginning with a dot include Syncthing's
+`.syncthing.*`, `.stfolder` and `.stversions` and the phone's `.trashed-*` files. Ignored names are
+not reported, ignored folders are not entered, and symbolic links are neither reported nor followed.
+
+A scan only reads the source folder. A signature
+does not prove that an image can be decoded: a `ready` file may still fail when it is placed.
+
+### Formal invariants
+
+- INV-01: no operation creates, changes, moves or deletes anything in a source folder.
+- INV-02: a file that changed less than the settling time ago is never placed.
+
+### Required tests
+
+- INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).
+- INV-02: placing a file still inside the settling time fails with `not_ready_or_absent` (`test_a_file_still_arriving_is_not_placed`).
+
+### Consequence
+
+A replaced file is scanned again by its new content (A3).
+
+## Accepted decision A2 — What reaches the Portal store
+
+### Normative rules
+
+1. A stored image is a newly encoded JPEG made from the decoded pixels of the source. Transparent
+   areas become white. The camera orientation is applied, then the longest side is reduced to the
+   limit when it is larger.
+2. The source may be JPEG, PNG or WEBP. Checks run in this order: a first frame above the pixel
+   limit (width times height) fails with `too_many_pixels`, a source that cannot be decoded with
+   `unreadable_image`, and a result above the Portal's read limit with `too_large`. A value equal
+   to a limit passes. Only the first frame of an animated image is delivered.
+3. The photo moment is the first usable value of: EXIF `DateTimeOriginal` with
+   `OffsetTimeOriginal` when that offset has the form `+HH:MM` or `-HH:MM`, EXIF `DateTime`, then
+   the file's modification time. A camera value is unusable when it is malformed, when its UTC year
+   is before 2000, or when it is more than 24 hours after the file's modification time.
+4. The photo date is delivered as UTC without an offset, as the Client Portal stores it. A camera
+   time with no offset is read in the configured time zone. A local time that occurs twice is the
+   first occurrence, and a local time that does not exist is read with the offset in force before
+   the clock change. A modification time is an absolute instant converted to UTC.
+5. The publication body has `client_visible` false, no section and no caption (R0-06, R0-12). The
+   owner sets a section or caption in the Portal. `intake_id` and `intake_source` are as M05 states.
+
+### Formal invariants
+
+- INV-03: a stored image carries no EXIF, GPS, XMP or comment of its source.
+- INV-04: every delivered photo date is UTC without an offset.
+- INV-05: every publication body the deliverer builds has `client_visible` false.
+
+### Required tests
+
+- INV-03: a source holding GPS, EXIF, XMP and a comment is stored with none of them, by the unit test `test_a_placed_photo_keeps_no_metadata_and_the_source_is_untouched` and by the E2E check that the client's download has no EXIF.
+- INV-04: camera times with an offset, without one, implausible or absent give the expected UTC value (`test_the_photo_date_is_naive_utc`).
+- INV-05: every publication body returned by a placement has `client_visible` exactly false, and a published delivery is absent from the client's overview until the owner shows it (E2E, `a delivered photo stays hidden from the client`).
+
+### Consequence
+
+The owner decides what a client sees. Originals never leave the Syncthing folder.
+
+## Accepted decision A3 — One placement per project and content
+
+### Normative rules
+
+1. A placement is identified by the project and the SHA-256 of the source content (R0-10).
+2. Placing an existing placement answers `replayed` with the stored placement and the current
+   `photo_id` of its mark, if any, and writes nothing, even when the source file has left the
+   folder.
+3. Inside the call the folder is scanned once. A requested source with no placement that this scan
+   does not report as `ready` fails with `not_ready_or_absent`. A source reported `ready` whose
+   bytes no longer have the requested hash when it is read for placing fails with `source_changed`.
+4. A call holds from 1 to 50 source ids, otherwise it is refused whole. Checks run in this order:
+   token, request form and project id, connection, photo folder, every source id. A malformed source
+   id refuses the whole call before anything is written. Items are processed in request order, so
+   a source id repeated in one call is `placed` and then `replayed`. A read or storage failure of
+   one photo is reported in its item as `unreadable_file` and the others proceed.
+5. The stored image is written before the placement record, so a crash between them repeats the
+   placement and leaves no record without an image.
+6. A replaced source is a new photo. The earlier placement, its stored image and its mark stay.
+   Removing a source changes no placement (R0-10).
+7. The first version offers no removal of a placement, a mark or a stored image. Removal of a
+   hidden photo is designed in the Portal (client-portal Q27).
+
+### Formal invariants
+
+- INV-06: at most one placement exists per project and source content, and a repeated placement writes nothing.
+- INV-07: replacing or removing a source file changes no earlier placement, stored image or mark.
+
+### Required tests
+
+- INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).
+- INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).
+
+### Consequence
+
+The same content in two projects is two deliveries.
+
+## Accepted decision A4 — The publication mark
+
+### Normative rules
+
+1. The calling flow publishes a placed photo, then records the Portal `photo_id` at the deliverer
+   (R0-08). It does not publish an item reported as `published`, or a replayed placement that
+   carries a `photo_id`.
+2. Checks run in this order: token, request form and identifiers, connection, placement. A
+   `photo_id` is a UUID, kept in lowercase hyphenated form. A mark needs an existing placement of
+   the same project, otherwise it is refused with `not_placed`. The photo folder need not be
+   available.
+3. The same `photo_id` again answers `replayed` with the first mark. Another `photo_id` is refused
+   with `publication_conflict` and nothing changes.
+4. The deliverer holds no Portal credential, so it does not verify a `photo_id` with the Portal
+   and does not check that a `photo_id` is unused by another placement. It trusts the authenticated
+   calling flow for this fact.
+5. While a photo is hidden, a flow that lost the Portal's answer repeats the publication and
+   receives the same `photo_id`. After the owner has shown the photo the Portal answers 409, and
+   the `photo_id` of an unmarked photo cannot be recovered from the Portal. This is a recorded
+   limit of the first version.
+
+### Formal invariants
+
+- INV-08: a placement has at most one mark, and a mark never changes after it is written.
+
+### Required tests
+
+- INV-08: a repeated mark keeps the first `marked_at`, and another `photo_id` is refused (`test_marking_again_changes_nothing_and_another_photo_is_refused`). A mark for a source placed only in another project is refused (`test_a_photo_that_was_not_placed_cannot_be_marked`).
+
+### Consequence
+
+A published photo is recognised without any change to the Portal.
+
+## Accepted decision A5 — Access and object connection
+
+### Normative rules
+
+1. Every operation except the health answer requires the header `Authorization: Bearer <token>`,
+   compared whole, case-sensitively and in constant time. Any other value is refused with 401 before
+   the request's identifiers or body are examined.
+2. The token is generated with 256 bits from a cryptographic random source and is kept in a UTF-8
+   file. Whitespace around it is removed when it is read. The service does not start when the group
+   or others have any permission on the file or the token has fewer than 32 characters.
+3. A token is replaced by writing a new file and restarting the service. The old token then stops
+   working. The token is never written to logs, answers, repository files or the manifest.
+4. The service listens on the loopback interface. A reverse proxy on the same host terminates
+   HTTPS for any caller from outside. The service reads no forwarded header.
+5. There is one principal: the calling flow of the owner. It may act on every confirmed connection.
+6. A change of an object's root or subfolder writes `assignment_confirmed` false (R0-11). An
+   operation on a project with no connection is refused with `unknown_project`, and one with an
+   unconfirmed connection with `connection_not_confirmed`. This is decided by the service, not by
+   the caller.
+7. The photo and invoice subfolders are non-empty relative paths without `..`. The service does
+   not start with a connection that breaks this. On each scan and placement the photo folder must
+   be a folder whose resolved path is inside the resolved root, otherwise the operation is refused
+   with `folder_unavailable`.
+8. A project id must be a UUID and a source id 64 lowercase hexadecimal characters. Neither a file
+   name nor any other received text becomes part of a stored path.
+9. An answer never holds a server path or a credential. File names are returned as plain data.
+
+### Formal invariants
+
+- INV-09: no operation except the health answer succeeds without the deliverer's token.
+- INV-10: nothing is scanned, placed or marked for a project without a confirmed connection.
+- INV-11: the deliverer holds no Portal credential, never calls the Portal, and returns no server path.
+
+### Required tests
+
+- INV-09: every declared route except the health answer refuses a request without the token (`test_every_route_except_health_requires_the_token`), and a wrong token or one without the `Bearer` prefix is refused (`test_the_api_requires_the_token`).
+- INV-10: scan, place and mark are refused for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`), a connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).
+- INV-11: answers of scan, place, mark and a refusal contain neither the folder path, the store path nor the state path (`test_the_api_scans_and_places_without_showing_server_paths`), and the generated service has no Portal client, no outbound HTTP dependency and no Portal credential setting.
+
+### Consequence
+
+A wrong folder cannot deliver photos of another client until the owner confirms it.
+
+## Accepted decision A6 — Stored files and concurrent calls
+
+### Normative rules
+
+1. A stored image is named only from the project id and the source hash:
+   `photos/<project_id>/<source_id>.jpg`. The reference must stay inside the binary store.
+2. A stored image has mode 0644 and a state record mode 0600, so neither is executable. The Portal
+   reads a stored image and alone decides who may retrieve it. The deliverer has no operation that
+   returns image bytes.
+3. Each file is written to a temporary name in its folder, synchronised to disk and renamed, and
+   its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. A3
+   decides what a crash between the image and the record means.
+4. Placements and marks of one project run one at a time, across processes, under an operating
+   system lock on one lock file of that project in the state folder. A caller waits for the lock
+   without a time limit, and the lock is released when its holder ends. The check that a placement
+   or mark exists and its writing happen inside that lock.
+
+### Formal invariants
+
+- INV-12: concurrent calls for one project never produce two placements or two marks for one source.
+
+### Required tests
+
+- INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).
+
+### Consequence
+
+A repeated action from the workplace cannot duplicate a delivery.
+
+## Accepted decision A7 — Time
+
+### Normative rules
+
+1. The system clock is the one source of the current time, declared as `rules.time_source_policy`
+   and reaching code through `system_clock_backend` as the operation `utc_now`.
+2. Scan, placement and mark each read it once, after the request is accepted and before any file is
+   examined. The health answer and a refused request do not read it. A replayed mark reads it and
+   writes nothing.
+3. The current time is a `datetime` in UTC without an offset, with microsecond precision and no
+   rounding, written in ISO 8601 form. It decides the settling status and sets `marked_at`.
+4. A file's modification time is converted to the same form before it is compared or delivered.
+5. The photo moment comes from the file, as A2 decides, and never from the service clock.
+
+### Formal invariants
+
+- INV-13: one operation uses one reading of the service clock.
+
+### Required tests
+
+- INV-13: a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).
+
+### Consequence
+
+Every instant the deliverer writes has the form the Portal stores.
+
+## Accepted decision A8 — Decided values
+
+### Normative rules
+
+Run settings are fields of the settings object:
+
+| Field | Type | Decided |
+|---|---|---|
+| `min_age_seconds` | `int` | 120 |
+| `timezone` | `str` | `Europe/Madrid` |
+| `binary_root` | `Path` | per installation |
+| `state_dir` | `Path` | per installation |
+| `connections_file` | `Path` | per installation |
+| `token_file` | `Path` | per installation |
+
+Policy values are constants of the data provider:
+
+| Constant | Type | Value |
+|---|---|---|
+| `MAX_SOURCE_BYTES` | `int` | 41 943 040 |
+| `MAX_OUTPUT_BYTES` | `int` | 26 214 400 |
+| `MAX_PIXELS` | `int` | 80 000 000 |
+| `PHOTO_MAX_SIDE` | `int` | 2000 |
+| `PHOTO_QUALITY` | `int` | 85 |
+| `MAX_PLACE_ITEMS` | `int` | 50 |
+| `INTAKE_ID_PREFIX` | `str` | `deliverer-photo-` |
+| `INTAKE_SOURCE` | `str` | `syncthing` |
+
+Closed lists are enumerations: `= models.ScanStatus`, `= models.ObservationReason`,
+`= models.DateSource`, `= models.PlacementStatus`, `= models.PlacementFailure`,
+`= models.MarkStatus` and `= models.RefusalCode`. `RefusalCode` is `unknown_project`,
+`connection_not_confirmed`, `folder_unavailable`, `invalid_source_id`, `unsafe_reference`,
+`not_placed` and `publication_conflict`.
+
+`MAX_OUTPUT_BYTES` equals the Portal's `BINARY_MAX_READ_BYTES`. A change of that Portal value is
+released together with a change of this constant. The deliverer does not ask the Portal for it.
+
+### Formal invariants
+
+- INV-14: a stored image never exceeds the Portal's read limit.
+
+### Required tests
+
+- INV-14: a prepared image above the stored image limit fails with `too_large` and nothing is stored (`test_an_image_above_the_portal_read_limit_is_not_stored`).
+
+### Consequence
+
+A stored image can always be read back by the Portal.
+
+## Accepted decision A9 — Dependencies
+
+### Normative rules
+
+1. The direct libraries are pinned to exact versions: pillow, fastapi, pydantic and uvicorn. The
+   libraries they require are resolved when the deployment image is built and are covered by rule 2.
+2. The image library decodes untrusted files. Before each deployment every distribution installed
+   in the image is checked against a snapshot of the OSV database, ecosystem PyPI, no older than the
+   deploy route's maximum snapshot age. Any known vulnerability listed for an installed version
+   blocks the deployment, whatever its severity, and a check that cannot complete does not pass.
+   This is the policy the Client Portal already follows.
+
+### Formal invariants
+
+- INV-15: no distribution with a known vulnerability is deployed.
+
+### Required tests
+
+- INV-15: the deployment route refuses an image holding a distribution with a known vulnerability, and refuses when the check cannot complete.
+
+### Consequence
+
+The prototype's `requirements.txt` already pins these libraries. The OSV check is not built for this service yet.
+
+## Accepted decision A11 — Old photo dates stop a delivery
+
+### Normative rules
+
+1. Before placing anything for a project, the calling flow reads that project's staff photo list in
+   the Portal. A `photo_date` ending in `Z` or in an offset `+HH:MM` or `-HH:MM` is an old date.
+2. When the list holds an old date, or cannot be read, the flow places and publishes nothing for that
+   project and tells the owner which project needs the repair.
+3. The agent repairs the dates of one project at a time, after a backup and with the owner's
+   permission for that project (R0-13). The repair changes the Portal's data, not the deliverer's.
+4. The deliverer does not make this check, because it never calls the Portal (INV-11).
+
+### Formal invariants
+
+- INV-17: a calling flow publishes no delivered photo to a project whose staff photo list holds an old date.
+
+### Required tests
+
+- INV-17: a project holding a date with an offset is detected before delivery, and a project holding only UTC dates passes (E2E, `the flow can see an old date before it delivers`, `a project with UTC dates passes that check`). The calling flow's own stop is shown when that flow exists.
+
+### Consequence
+
+The first delivered photo cannot break the photo list of a project with old dates.
+
+## Accepted decision A10 — Security review
+
+### Normative rules
+
+The total review of `SECURITY_REVIEW_EVIDENCE.md` over States 0 to 2. Each applicable category is
+owned by a decision above.
+
+### Formal invariants
+
+- INV-16: every security category has an explicit outcome.
+
+### Required tests
+
+- INV-16: `python tools/design_lint.py examples/portal-deliverer --state 2` reports no security finding. The closed list of categories is `SECURITY_REVIEW_EVIDENCE.md`.
+
+### Consequence
+
+State 3 may start only when no category is unresolved.
+
+### Security review
+
+Security review: PERFORMED
+
+- authentication_credential_abuse: APPLICABLE; references: A5; affected: bearer token boundary
+- secrets: APPLICABLE; references: A5; affected: token file, logs, answers
+- authorization: APPLICABLE; references: A5; affected: M01, every project-scoped operation
+- injection_interpreted_input: APPLICABLE; references: A5, A6; affected: project id, source id, file names, stored paths
+- external_callbacks_webhooks: NOT_APPLICABLE; rationale: no external system sends events to the deliverer, and the publication mark is an authenticated call of the owner's flow
+- browser_boundary: NOT_APPLICABLE; rationale: the service has no browser client, cookie, page or cross-origin surface, and a caller that displays a file name treats it as plain text
+- files_artifacts: APPLICABLE; references: A1, A2, A6, A8; affected: M02, M03, M04, source folders, Portal binary store
+- concurrency: APPLICABLE; references: A3, A4, A6; affected: M04, M07
+- dependencies: APPLICABLE; references: A9; affected: image library, web framework, validation library, web server

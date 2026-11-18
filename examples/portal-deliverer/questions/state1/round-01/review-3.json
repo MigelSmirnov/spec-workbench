@@ -1,0 +1,240 @@
+{
+ "open_points": [
+  {
+   "subject": "01_models.md:Model M01 — ObjectConnection",
+   "kind": "minting_contradiction",
+   "text": "The owner creates and confirms it; the deliverer only reads it.",
+   "question": "Who mints the ObjectConnection entity: the owner when creating the connection record, or the Registry when issuing the project_id, as the Identity evidence says?",
+   "options": [
+    "The owner mints the ObjectConnection; the Registry mints only its project_id.",
+    "The Registry mints the ObjectConnection when it issues project_id.",
+    "The deliverer mints the ObjectConnection from an owner request and an existing Registry project_id."
+   ],
+   "default_guess": "The owner creates the record, while the Registry mints only the project_id used as its identity.",
+   "witness": {
+    "initial": "The Registry has issued project_id P, but no connection record exists.",
+    "events": [
+     "The owner submits folders for P and confirms the assignment.",
+     "The deliverer later reads the connection."
+    ],
+    "outcomes": [
+     "The owner-created record is the new ObjectConnection entity; the Registry supplied only its key.",
+     "The ObjectConnection is treated as an already-minted Registry entity that the owner merely configures."
+    ],
+    "observer": "The owner, Registry adapter and persistence implementation see different creation authority and audit history."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "01_models.md:Model M01 — ObjectConnection",
+   "kind": "lifecycle_mutation",
+   "text": "The same object stays connected while its folders or its confirmation change.",
+   "question": "After confirmation, may folders or assignment_confirmed change, may confirmation return to unconfirmed, and does changing a folder require a new confirmation before delivery resumes?",
+   "options": [
+    "A confirmed connection is mutable and stays confirmed after folder changes.",
+    "A folder change makes the connection unconfirmed until the owner reconfirms it.",
+    "Confirmation is one-way and confirmed connections cannot be edited; replacement requires another action or entity."
+   ],
+   "default_guess": "A folder change preserves the entity but makes it unconfirmed until the owner reconfirms it.",
+   "witness": {
+    "initial": "Project P has a confirmed connection to photo folder A.",
+    "events": [
+     "The owner changes its photo folder to B.",
+     "The calling flow asks to scan P before any further confirmation."
+    ],
+    "outcomes": [
+     "The deliverer scans B because the connection remains confirmed.",
+     "The deliverer refuses the scan because the folder change returned the connection to unconfirmed."
+    ],
+    "observer": "The owner and calling flow see either deliverable photos or an unconfirmed-connection refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "01_models.md:Model M02 — SourcePhotoObservation",
+   "kind": "status_meaning",
+   "text": "The statuses are `ready`, `placed`, `published`, `settling`, `duplicate` and `rejected`.",
+   "question": "What model fact makes an observation `duplicate`, and duplicate relative to which scope: another file in the same scan, any source content in the project, an existing placement, or something else?",
+   "options": [
+    "It is another pathname in the same project with the same source content.",
+    "It is content for which a placement already exists.",
+    "It is a duplicate only within the current scan, with canonical-file selection decided later."
+   ],
+   "default_guess": "It is an additional pathname in the same project whose content has the same source_id as another observed pathname.",
+   "witness": {
+    "initial": "A confirmed project's photo folder contains a.jpg and b.jpg with identical bytes, and no placement exists.",
+    "events": [
+     "The calling flow scans the project."
+    ],
+    "outcomes": [
+     "One observation is ready and the other is duplicate.",
+     "Both observations are ready because duplicate means an already placed source."
+    ],
+    "observer": "The calling flow sees a different set of photos available for placement."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "observation_membership_contradiction",
+   "text": "See what can be delivered for a project | each file with a status: ready, placed, published, settling, duplicate or rejected with a reason",
+   "question": "Does “each file” include Syncthing temporary files and the phone's trash as observations, or does P-04's statement that they are ignored mean they produce no SourcePhotoObservation at all?",
+   "options": [
+    "Ignored files are absent from scan results.",
+    "Ignored files appear as rejected observations with a reason.",
+    "Ignored files appear with another listed status."
+   ],
+   "default_guess": "Ignored files are absent from scan results.",
+   "witness": {
+    "initial": "A confirmed photo folder contains one normal image and one Syncthing temporary file.",
+    "events": [
+     "Syncthing-fork leaves both files present.",
+     "The calling flow asks what can be delivered."
+    ],
+    "outcomes": [
+     "The response contains observations for both files because the action reports each file.",
+     "The response contains only the normal image because temporary files are ignored under P-04."
+    ],
+    "observer": "The calling flow sees a different number of observations."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "01_models.md:Model M02 — SourcePhotoObservation",
+   "kind": "conditional_fact",
+   "text": "its `source_id` when the content was read",
+   "question": "For which statuses must source_id exist, and may settling, rejected or ignored content have no source_id?",
+   "options": [
+    "source_id is present only after content has been read; settling and some rejected observations omit it.",
+    "Every returned observation has a source_id, including settling and rejected files.",
+    "An observation without source_id is not returned at all."
+   ],
+   "default_guess": "source_id is optional and absent until content is safely read; settling observations can therefore lack it.",
+   "witness": {
+    "initial": "A newly changing file is present in a confirmed photo folder.",
+    "events": [
+     "The deliverer scans it before it has remained unchanged for two minutes.",
+     "The calling flow reads the settling observation."
+    ],
+    "outcomes": [
+     "The settling observation has no source_id because its content was not read.",
+     "The deliverer reads and hashes the changing content and returns a settling observation with source_id."
+    ],
+    "observer": "The calling flow and later placement request see whether the observation identifies content."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "01_models.md:Model M03 — PreparedPhoto",
+   "kind": "value_identity_contradiction",
+   "text": "with the moment the photo was taken as UTC without an offset, and how that moment was obtained, `exif` or `file_modified`",
+   "question": "Is date provenance part of PreparedPhoto value identity, despite the Identity evidence saying equal bytes and equal moments are substitutable without mentioning provenance?",
+   "options": [
+    "Provenance is part of the value, so equal pixels and moments with different provenance are different PreparedPhoto values.",
+    "Only prepared bytes and moment define the value; provenance is placement metadata outside PreparedPhoto identity.",
+    "Provenance is carried but deliberately ignored by value equality."
+   ],
+   "default_guess": "Provenance is part of PreparedPhoto because the model explicitly carries it and M04 persists it.",
+   "witness": {
+    "initial": "Two source files prepare to identical upright pixels and the same UTC moment; one moment came from EXIF and the other from file modification time.",
+    "events": [
+     "The deliverer prepares both files.",
+     "A caller or persistence layer compares the PreparedPhoto values."
+    ],
+    "outcomes": [
+     "The values differ because exif and file_modified are different model facts.",
+     "The values are equal because their bytes and moments are equal."
+    ],
+    "observer": "The placement and persistence implementations see different value equality and metadata."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "01_models.md:Model M05 — PhotoPublication",
+   "kind": "minting_inputs",
+   "text": "The deliverer builds it once within M04.",
+   "question": "From what facts does the deliverer mint the PhotoPublication, especially intake_id: is intake_id derived from the placement identity, copied from a caller, or newly generated and then persisted?",
+   "options": [
+    "The deliverer deterministically derives intake_id from project_id and source_id.",
+    "The deliverer generates a fresh intake_id when M04 is first created and persists it for replay.",
+    "The calling flow supplies intake_id and the deliverer copies it."
+   ],
+   "default_guess": "The deliverer generates intake_id once while creating M04 and persists the complete body for exact replay.",
+   "witness": {
+    "initial": "No placement exists for source S in project P.",
+    "events": [
+     "The owner requests placement of S.",
+     "The same placement is requested again."
+    ],
+    "outcomes": [
+     "Both calls return a publication body whose intake_id is deterministically derived from P and S.",
+     "The first call generates and stores an opaque intake_id, and the replay returns that stored value."
+    ],
+    "observer": "The calling flow and Portal observe different publication identifiers."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "01_models.md:Model M07 — PublicationMark",
+   "kind": "creation_contradiction",
+   "text": "The calling flow creates it right after `photo.publish` answers.",
+   "question": "Who mints PublicationMark and marked_at: the calling flow, as this passage says, or the deliverer, as the Identity evidence says; does the caller submit a complete mark or only request that the deliverer create one from project_id, source_id and photo_id?",
+   "options": [
+    "The calling flow mints and submits the complete PublicationMark, including marked_at.",
+    "The deliverer mints the mark and marked_at after the calling flow submits project_id, source_id and photo_id.",
+    "The calling flow mints the logical mark while the deliverer independently assigns marked_at."
+   ],
+   "default_guess": "The calling flow requests recording with the three identifiers, and the deliverer mints the PublicationMark and marked_at.",
+   "witness": {
+    "initial": "Placement S exists and the Portal has just returned photo_id Q.",
+    "events": [
+     "The calling flow invokes the record-publication action.",
+     "The deliverer persists a mark."
+    ],
+    "outcomes": [
+     "The caller-created mark and caller-chosen marked_at are persisted.",
+     "The deliverer creates the mark and assigns marked_at at receipt."
+    ],
+    "observer": "The calling flow, deliverer and audit reader see different creation authority and timestamps."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "01_models.md:Model M07 — PublicationMark",
+   "kind": "cardinality_invariant",
+   "text": "The same `photo_id` again returns the first mark; another `photo_id` is refused.",
+   "question": "Is this idempotency rule scoped only to one placement, and may the same Portal photo_id be marked for two different placements or projects?",
+   "options": [
+    "photo_id is globally unique across all PublicationMarks and a second placement using it is refused.",
+    "photo_id is unique only within a project.",
+    "Only placement identity is unique; the same photo_id may appear on marks for different placements."
+   ],
+   "default_guess": "A Portal photo_id may belong to only one PublicationMark globally, so reuse for another placement is refused.",
+   "witness": {
+    "initial": "Placements A and B exist and neither is marked.",
+    "events": [
+     "The calling flow records Portal photo_id Q for A.",
+     "The calling flow then records the same Q for B."
+    ],
+    "outcomes": [
+     "The second action is refused because one Portal photo cannot represent two placements.",
+     "A second mark is created because the stated conflict rule checks only whether B already has another photo_id."
+    ],
+    "observer": "The calling flow, scan results and owner see whether two source photos claim the same Portal photo."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "01_models.md:preamble",
+   "kind": "standard_violation",
+   "text": "Field types and the complete field lists belong to the\nState 6 model closure.",
+   "rule": "Указывай все поля с типами",
+   "section": "5",
+   "question": "The State 1 model definitions must state every field with its type instead of deferring the field lists and types to State 6.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"01_models.md:Model M01 — ObjectConnection\",\"kind\":\"minting_contradiction\",\"text\":\"The owner creates and confirms it; the deliverer only reads it.\",\"question\":\"Who mints the ObjectConnection entity: the owner when creating the connection record, or the Registry when issuing the project_id, as the Identity evidence says?\",\"options\":[\"The owner mints the ObjectConnection; the Registry mints only its project_id.\",\"The Registry mints the ObjectConnection when it issues project_id.\",\"The deliverer mints the ObjectConnection from an owner request and an existing Registry project_id.\"],\"default_guess\":\"The owner creates the record, while the Registry mints only the project_id used as its identity.\",\"witness\":{\"initial\":\"The Registry has issued project_id P, but no connection record exists.\",\"events\":[\"The owner submits folders for P and confirms the assignment.\",\"The deliverer later reads the connection.\"],\"outcomes\":[\"The owner-created record is the new ObjectConnection entity; the Registry supplied only its key.\",\"The ObjectConnection is treated as an already-minted Registry entity that the owner merely configures.\"],\"observer\":\"The owner, Registry adapter and persistence implementation see different creation authority and audit history.\"}},{\"subject\":\"01_models.md:Model M01 — ObjectConnection\",\"kind\":\"lifecycle_mutation\",\"text\":\"The same object stays connected while its folders or its confirmation change.\",\"question\":\"After confirmation, may folders or assignment_confirmed change, may confirmation return to unconfirmed, and does changing a folder require a new confirmation before delivery resumes?\",\"options\":[\"A confirmed connection is mutable and stays confirmed after folder changes.\",\"A folder change makes the connection unconfirmed until the owner reconfirms it.\",\"Confirmation is one-way and confirmed connections cannot be edited; replacement requires another action or entity.\"],\"default_guess\":\"A folder change preserves the entity but makes it unconfirmed until the owner reconfirms it.\",\"witness\":{\"initial\":\"Project P has a confirmed connection to photo folder A.\",\"events\":[\"The owner changes its photo folder to B.\",\"The calling flow asks to scan P before any further confirmation.\"],\"outcomes\":[\"The deliverer scans B because the connection remains confirmed.\",\"The deliverer refuses the scan because the folder change returned the connection to unconfirmed.\"],\"observer\":\"The owner and calling flow see either deliverable photos or an unconfirmed-connection refusal.\"}},{\"subject\":\"01_models.md:Model M02 — SourcePhotoObservation\",\"kind\":\"status_meaning\",\"text\":\"The statuses are `ready`, `placed`, `published`, `settling`, `duplicate` and `rejected`.\",\"question\":\"What model fact makes an observation `duplicate`, and duplicate relative to which scope: another file in the same scan, any source content in the project, an existing placement, or something else?\",\"options\":[\"It is another pathname in the same project with the same source content.\",\"It is content for which a placement already exists.\",\"It is a duplicate only within the current scan, with canonical-file selection decided later.\"],\"default_guess\":\"It is an additional pathname in the same project whose content has the same source_id as another observed pathname.\",\"witness\":{\"initial\":\"A confirmed project's photo folder contains a.jpg and b.jpg with identical bytes, and no placement exists.\",\"events\":[\"The calling flow scans the project.\"],\"outcomes\":[\"One observation is ready and the other is duplicate.\",\"Both observations are ready because duplicate means an already placed source.\"],\"observer\":\"The calling flow sees a different set of photos available for placement.\"}},{\"subject\":\"context\",\"kind\":\"observation_membership_contradiction\",\"text\":\"See what can be delivered for a project | each file with a status: ready, placed, published, settling, duplicate or rejected with a reason\",\"question\":\"Does “each file” include Syncthing temporary files and the phone's trash as observations, or does P-04's statement that they are ignored mean they produce no SourcePhotoObservation at all?\",\"options\":[\"Ignored files are absent from scan results.\",\"Ignored files appear as rejected observations with a reason.\",\"Ignored files appear with another listed status.\"],\"default_guess\":\"Ignored files are absent from scan results.\",\"witness\":{\"initial\":\"A confirmed photo folder contains one normal image and one Syncthing temporary file.\",\"events\":[\"Syncthing-fork leaves both files present.\",\"The calling flow asks what can be delivered.\"],\"outcomes\":[\"The response contains observations for both files because the action reports each file.\",\"The response contains only the normal image because temporary files are ignored under P-04.\"],\"observer\":\"The calling flow sees a different number of observations.\"}},{\"subject\":\"01_models.md:Model M02 — SourcePhotoObservation\",\"kind\":\"conditional_fact\",\"text\":\"its `source_id` when the content was read\",\"question\":\"For which statuses must source_id exist, and may settling, rejected or ignored content have no source_id?\",\"options\":[\"source_id is present only after content has been read; settling and some rejected observations omit it.\",\"Every returned observation has a source_id, including settling and rejected files.\",\"An observation without source_id is not returned at all.\"],\"default_guess\":\"source_id is optional and absent until content is safely read; settling observations can therefore lack it.\",\"witness\":{\"initial\":\"A newly changing file is present in a confirmed photo folder.\",\"events\":[\"The deliverer scans it before it has remained unchanged for two minutes.\",\"The calling flow reads the settling observation.\"],\"outcomes\":[\"The settling observation has no source_id because its content was not read.\",\"The deliverer reads and hashes the changing content and returns a settling observation with source_id.\"],\"observer\":\"The calling flow and later placement request see whether the observation identifies content.\"}},{\"subject\":\"01_models.md:Model M03 — PreparedPhoto\",\"kind\":\"value_identity_contradiction\",\"text\":\"with the moment the photo was taken as UTC without an offset, and how that moment was obtained, `exif` or `file_modified`\",\"question\":\"Is date provenance part of PreparedPhoto value identity, despite the Identity evidence saying equal bytes and equal moments are substitutable without mentioning provenance?\",\"options\":[\"Provenance is part of the value, so equal pixels and moments with different provenance are different PreparedPhoto values.\",\"Only prepared bytes and moment define the value; provenance is placement metadata outside PreparedPhoto identity.\",\"Provenance is carried but deliberately ignored by value equality.\"],\"default_guess\":\"Provenance is part of PreparedPhoto because the model explicitly carries it and M04 persists it.\",\"witness\":{\"initial\":\"Two source files prepare to identical upright pixels and the same UTC moment; one moment came from EXIF and the other from file modification time.\",\"events\":[\"The deliverer prepares both files.\",\"A caller or persistence layer compares the PreparedPhoto values.\"],\"outcomes\":[\"The values differ because exif and file_modified are different model facts.\",\"The values are equal because their bytes and moments are equal.\"],\"observer\":\"The placement and persistence implementations see different value equality and metadata.\"}},{\"subject\":\"01_models.md:Model M05 — PhotoPublication\",\"kind\":\"minting_inputs\",\"text\":\"The deliverer builds it once within M04.\",\"question\":\"From what facts does the deliverer mint the PhotoPublication, especially intake_id: is intake_id derived from the placement identity, copied from a caller, or newly generated and then persisted?\",\"options\":[\"The deliverer deterministically derives intake_id from project_id and source_id.\",\"The deliverer generates a fresh intake_id when M04 is first created and persists it for replay.\",\"The calling flow supplies intake_id and the deliverer copies it.\"],\"default_guess\":\"The deliverer generates intake_id once while creating M04 and persists the complete body for exact replay.\",\"witness\":{\"initial\":\"No placement exists for source S in project P.\",\"events\":[\"The owner requests placement of S.\",\"The same placement is requested again.\"],\"outcomes\":[\"Both calls return a publication body whose intake_id is deterministically derived from P and S.\",\"The first call generates and stores an opaque intake_id, and the replay returns that stored value.\"],\"observer\":\"The calling flow and Portal observe different publication identifiers.\"}},{\"subject\":\"01_models.md:Model M07 — PublicationMark\",\"kind\":\"creation_contradiction\",\"text\":\"The calling flow creates it right after `photo.publish` answers.\",\"question\":\"Who mints PublicationMark and marked_at: the calling flow, as this passage says, or the deliverer, as the Identity evidence says; does the caller submit a complete mark or only request that the deliverer create one from project_id, source_id and photo_id?\",\"options\":[\"The calling flow mints and submits the complete PublicationMark, including marked_at.\",\"The deliverer mints the mark and marked_at after the calling flow submits project_id, source_id and photo_id.\",\"The calling flow mints the logical mark while the deliverer independently assigns marked_at.\"],\"default_guess\":\"The calling flow requests recording with the three identifiers, and the deliverer mints the PublicationMark and marked_at.\",\"witness\":{\"initial\":\"Placement S exists and the Portal has just returned photo_id Q.\",\"events\":[\"The calling flow invokes the record-publication action.\",\"The deliverer persists a mark.\"],\"outcomes\":[\"The caller-created mark and caller-chosen marked_at are persisted.\",\"The deliverer creates the mark and assigns marked_at at receipt.\"],\"observer\":\"The calling flow, deliverer and audit reader see different creation authority and timestamps.\"}},{\"subject\":\"01_models.md:Model M07 — PublicationMark\",\"kind\":\"cardinality_invariant\",\"text\":\"The same `photo_id` again returns the first mark; another `photo_id` is refused.\",\"question\":\"Is this idempotency rule scoped only to one placement, and may the same Portal photo_id be marked for two different placements or projects?\",\"options\":[\"photo_id is globally unique across all PublicationMarks and a second placement using it is refused.\",\"photo_id is unique only within a project.\",\"Only placement identity is unique; the same photo_id may appear on marks for different placements.\"],\"default_guess\":\"A Portal photo_id may belong to only one PublicationMark globally, so reuse for another placement is refused.\",\"witness\":{\"initial\":\"Placements A and B exist and neither is marked.\",\"events\":[\"The calling flow records Portal photo_id Q for A.\",\"The calling flow then records the same Q for B.\"],\"outcomes\":[\"The second action is refused because one Portal photo cannot represent two placements.\",\"A second mark is created because the stated conflict rule checks only whether B already has another photo_id.\"],\"observer\":\"The calling flow, scan results and owner see whether two source photos claim the same Portal photo.\"}},{\"subject\":\"01_models.md:preamble\",\"kind\":\"standard_violation\",\"text\":\"Field types and the complete field lists belong to the\\nState 6 model closure.\",\"rule\":\"Указывай все поля с типами\",\"section\":\"5\",\"question\":\"The State 1 model definitions must state every field with its type instead of deferring the field lists and types to State 6.\"}]}",
+ "set_aside": []
+}

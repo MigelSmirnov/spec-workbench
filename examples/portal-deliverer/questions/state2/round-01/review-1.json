@@ -1,0 +1,569 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 file classification",
+   "kind": "refusal_reason",
+   "text": "cannot be read as a regular file",
+   "question": "Which exact condition selects `not_a_regular_file`, `too_large`, or `unreadable_file`, and does this row cover a file that disappears or changes type during the scan?",
+   "options": [
+    "Map file type, size/stat failure, and read failure to distinct reasons",
+    "Use one reason for every failure in this row",
+    "Define an ordered mapping for race and permission failures"
+   ],
+   "default_guess": "Use `not_a_regular_file` for a non-regular inode, `too_large` for an observed oversized file, and `unreadable_file` for open/read/stat failures.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 ignored entries",
+   "kind": "undefined_set",
+   "text": "Syncthing's temporary and bookkeeping names",
+   "question": "What exact names or patterns are Syncthing temporary and bookkeeping names?",
+   "options": [
+    "Publish a closed pattern list",
+    "Ignore every name Syncthing documents as internal",
+    "Make the patterns a policy constant"
+   ],
+   "default_guess": "Use an explicit policy-constant list matching the prototype.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 folder traversal",
+   "kind": "scope_and_order",
+   "text": "folders with such names are not entered",
+   "question": "Are all other subfolders traversed recursively, how are relative paths normalized, and what exact ordering is meant by sorted path order?",
+   "options": [
+    "Recursive traversal with bytewise normalized relative-path order",
+    "Recursive traversal with locale-aware order",
+    "Only the photo folder's direct children"
+   ],
+   "default_guess": "Traverse recursively and sort normalized relative POSIX paths lexicographically by Unicode code point.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 duplicate classification",
+   "kind": "precedence_scope",
+   "text": "same content as an earlier file of this scan, in sorted path order",
+   "question": "Which earlier files are eligible to establish a duplicate: every readable file, only format-valid files, only `ready` files, or files with placements too?",
+   "options": [
+    "Any earlier file whose content hash was obtained",
+    "Only an earlier otherwise-ready file",
+    "Any earlier reported file, including settling and rejected files"
+   ],
+   "default_guess": "Only compare against an earlier file that passed rules 1–5 and has a usable source hash.",
+   "witness": {
+    "initial": "The folder contains two byte-identical valid images; the first is still settling and the second is old enough to place.",
+    "events": [
+     "The owner asks the service to scan the project.",
+     "The scanner visits the settling path before the stable path."
+    ],
+    "outcomes": [
+     "The stable path is `duplicate` because the settling file counts as the earlier file.",
+     "The stable path is `ready` because only placement-eligible files establish duplicates."
+    ],
+    "observer": "The calling flow and owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-01",
+   "kind": "incomplete_required_test",
+   "text": "INV-01: after a placement the source file has the bytes it had before (`test_a_placed_photo_keeps_no_metadata_and_the_source_is_untouched`).",
+   "question": "What Required tests evidence must show that every operation creates, changes, moves, and deletes nothing in a source folder, rather than only showing unchanged bytes after one placement?",
+   "options": [
+    "Assert the complete source tree, metadata, names, and bytes are unchanged after every operation",
+    "Narrow INV-01 to source bytes during placement",
+    "Name separate checks for scan, place, and mark"
+   ],
+   "default_guess": "Require tree snapshots before and after scan, placement, replay, failure, and marking, including names, types, metadata, and bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2 image preparation",
+   "kind": "unspecified_algorithm",
+   "text": "A stored image is a newly encoded JPEG made from the decoded pixels of the source. Transparent areas become white. The camera orientation is applied, then the longest side is reduced to the limit when it is larger.",
+   "question": "Which color conversion, alpha composition, resampling algorithm, JPEG subsampling/progressive settings, metadata stripping method, and rounding rule define the stored bytes and dimensions?",
+   "options": [
+    "Specify a complete deterministic encoding recipe",
+    "Permit any encoder output satisfying the observable limits",
+    "Name a supplied preparation function as the authority"
+   ],
+   "default_guess": "Name a deterministic backend recipe using sRGB, white alpha composition, orientation before resize, high-quality downsampling, integer dimensions preserving aspect ratio, quality 85, and no metadata.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2 image refusals",
+   "kind": "check_precedence",
+   "text": "A source above the pixel limit fails with `too_many_pixels`, one that cannot be decoded with `unreadable_image`, and a result above the Portal's read limit with `too_large`.",
+   "question": "When more than one condition is discoverable, in what order are decode validity, pixel count, source-size, and encoded-result-size checked, and which refusal wins?",
+   "options": [
+    "Source-size, decode, pixel count, then encoded size",
+    "Decode enough for dimensions, pixel count, full decode, then encoded size",
+    "Return the first failure raised by the image library"
+   ],
+   "default_guess": "Apply A1 source-size first, then safely read dimensions and reject excess pixels, then fully decode, then encode and enforce the stored limit.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2 photo moment",
+   "kind": "undefined_metadata",
+   "text": "The photo moment is the camera's original time, then the camera's general time, then the file's modification time.",
+   "question": "Which concrete metadata tags and formats count as original time, general time, and offset, and what happens when a preferred tag is malformed or internally inconsistent?",
+   "options": [
+    "Define an ordered closed list of EXIF/XMP tags and parsing rules",
+    "Let the image library choose a camera timestamp",
+    "Treat any malformed preferred tag as an image refusal"
+   ],
+   "default_guess": "Use an explicit ordered tag list; skip malformed or implausible candidates and fall back to the next source.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2 local camera time",
+   "kind": "time_ambiguity",
+   "text": "A camera time with no offset is read in the configured time zone.",
+   "question": "How are ambiguous and nonexistent Europe/Madrid local times resolved at daylight-saving transitions?",
+   "options": [
+    "Choose the earlier occurrence and reject nonexistent times",
+    "Choose the later occurrence and shift nonexistent times forward",
+    "Refuse ambiguous and nonexistent camera times and fall back"
+   ],
+   "default_guess": "Reject that camera-time candidate and fall back to the next time source.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-03",
+   "kind": "incomplete_required_test",
+   "text": "INV-03: a source holding GPS, EXIF and a comment is stored with none of them, by the unit test `test_a_placed_photo_keeps_no_metadata_and_the_source_is_untouched` and by the E2E check that the client's download has no EXIF.",
+   "question": "What Required tests evidence must explicitly show that XMP is absent as INV-03 requires?",
+   "options": [
+    "Add XMP to the source fixture and assert its absence",
+    "Remove XMP from INV-03",
+    "Add a separate XMP-stripping check"
+   ],
+   "default_guess": "Add XMP to the fixture and inspect the stored and downloaded JPEG for EXIF, GPS, XMP, and comments.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 placement call",
+   "kind": "exact_refusal_conditions",
+   "text": "One call places from 1 to 50 photos.",
+   "question": "What happens for an empty list, more than 50 items, or repeated source ids in the same call?",
+   "options": [
+    "Refuse the whole call as malformed",
+    "Deduplicate ids and process up to 50 distinct photos",
+    "Return per-item failures"
+   ],
+   "default_guess": "Refuse the whole call before writes when the list is empty, exceeds 50 entries, or contains duplicate source ids.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 and A5 request processing",
+   "kind": "check_precedence",
+   "text": "A malformed source id refuses the whole call before anything is written.",
+   "question": "What is the complete precedence among authentication, request-shape validation, project-id validation, connection checks, replay lookup, source-state checks, and per-item failures?",
+   "options": [
+    "Authenticate, validate the whole request, check connection, then process items",
+    "Authenticate, check project connection, then validate source ids",
+    "Perform replay lookup before connection and source checks"
+   ],
+   "default_guess": "Authenticate first, validate all request fields and batch constraints second, check the confirmed connection third, then process each item with replay lookup before source-state checks.",
+   "witness": {
+    "initial": "A placement request has a valid bearer token, an unknown project id, and one malformed source id.",
+    "events": [
+     "The calling flow sends the request."
+    ],
+    "outcomes": [
+     "The service returns a whole-call malformed-request refusal because validation precedes project lookup.",
+     "The service returns `unknown_project` because project lookup precedes source-id validation."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 replayed placement and M07 PublicationMark",
+   "kind": "contradiction",
+   "text": "Placing an existing placement answers `replayed` with the first result and writes nothing, even when the source file has left the folder.",
+   "question": "Does a replay return the literal original result without a later `photo_id`, or the existing placement augmented with the current mark as M06 and M07 require?",
+   "options": [
+    "Return the original placement plus the current mark and `photo_id`",
+    "Return the exact first placement response forever",
+    "Treat marking as changing the stored first result"
+   ],
+   "default_guess": "Return `replayed` with the immutable first placement facts and, if present, the separately stored current mark and `photo_id`.",
+   "witness": {
+    "initial": "A source was placed, then successfully marked with Portal photo id P, and then removed from the folder.",
+    "events": [
+     "The calling flow requests placement of the same project and source id again."
+    ],
+    "outcomes": [
+     "`replayed` returns the first result without P, following the literal first-result rule.",
+     "`replayed` includes P because M06 says an already marked photo carries its `photo_id` and M07 says repeated placement reads the mark."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-06",
+   "kind": "incomplete_required_test",
+   "text": "INV-06: a second placement returns the first publication and leaves the stored file's modification time unchanged (`test_placing_again_returns_the_same_result_without_writing`).",
+   "question": "What must the test show to establish both that only one placement record exists and that no record, mark, image, or other durable state is written?",
+   "options": [
+    "Snapshot every relevant durable store and count placement records",
+    "Narrow the invariant to the stored image",
+    "Add separate uniqueness and no-write checks"
+   ],
+   "default_guess": "Assert one placement record and byte-for-byte unchanged records, images, marks, and filesystem metadata after replay.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-07",
+   "kind": "vague_required_test",
+   "text": "a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`)",
+   "question": "Which exact facts must remain to prove INV-07: the placement record, stored image, publication body, mark, and their bytes and timestamps?",
+   "options": [
+    "Name and assert every artifact in INV-07",
+    "Define `delivery` as a formal aggregate",
+    "Narrow INV-07 to the facts the test actually checks"
+   ],
+   "default_guess": "Assert that the placement record, stored image, and mark all remain unchanged after replacement and removal.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 bearer authentication",
+   "kind": "exact_refusal_conditions",
+   "text": "Every operation except the health answer requires the deliverer's bearer token, compared in constant time. Any other value is refused before the request is handled.",
+   "question": "What exact Authorization syntax is accepted, how are whitespace, case, duplicate headers, non-ASCII data, and malformed schemes handled, and what response status/body is returned?",
+   "options": [
+    "Accept exactly one `Authorization: Bearer <token>` header with fixed syntax",
+    "Use ordinary HTTP bearer parsing",
+    "Accept bearer credentials from another request field"
+   ],
+   "default_guess": "Accept exactly one ASCII Authorization header with the case-sensitive `Bearer ` prefix and exact token bytes; return one uniform 401 response for every authentication failure.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 token file",
+   "kind": "representation_and_permissions",
+   "text": "The token is 256 bits from a cryptographic random source, kept in a file only its owner can read. The service does not start when the file is readable by others or the token has fewer than 32 characters.",
+   "question": "What encoding and file format represent 256 bits, whether a trailing newline is stripped, which ownership/mode/ACL conditions are allowed, and whether exactly 32 characters can represent less than 256 bits?",
+   "options": [
+    "Require 64 lowercase hexadecimal characters in a mode-0600 regular file",
+    "Require a fixed-length base64url token in a mode-0600 regular file",
+    "Accept any 32-or-more-character string and check only file mode bits"
+   ],
+   "default_guess": "Require one 64-character lowercase hexadecimal token plus an optional final newline in a regular file owned by the service user with no group/other or ACL access.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 HTTPS boundary",
+   "kind": "enforcement_location",
+   "text": "Outside the loopback interface the service is reached only over HTTPS (OQ-07).",
+   "question": "Which component terminates and enforces HTTPS, what proxy headers are trusted, and must the service reject direct non-loopback HTTP itself?",
+   "options": [
+    "The service binds only to loopback behind a named HTTPS reverse proxy",
+    "The service serves TLS directly",
+    "The service accepts HTTP but deployment policy prevents exposure"
+   ],
+   "default_guess": "Bind the service to loopback and expose it only through an authenticated, configured HTTPS reverse proxy.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 connection paths",
+   "kind": "path_resolution",
+   "text": "A connection that leaves the root is not loaded. A photo folder that resolves outside the root, or is missing, is refused with `folder_unavailable`.",
+   "question": "What normalization and symlink policy is used, when containment is rechecked, and which outcome applies to permission errors, dangling links, non-directories, or a root changed after loading?",
+   "options": [
+    "Resolve every component on each operation and require the final directory under the resolved root",
+    "Validate only when loading the connection",
+    "Reject all symlinks even when they remain under the root"
+   ],
+   "default_guess": "Resolve the root and photo folder on every operation, require existing readable directories with the resolved photo folder contained beneath the resolved root, and use `folder_unavailable` for runtime failures.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-09",
+   "kind": "incomplete_required_test",
+   "text": "INV-09: a missing token, a wrong token and a token without the `Bearer` prefix are refused (`test_the_api_requires_the_token`).",
+   "question": "What test demonstrates that every operation except health fails authentication and that health is the only exception?",
+   "options": [
+    "Parameterize the check over every operation and separately exercise health",
+    "Narrow INV-09 to the tested endpoint",
+    "Use a route-enumeration check that proves the middleware coverage"
+   ],
+   "default_guess": "Enumerate all routes, prove authentication middleware covers every non-health route, and test health without a token.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-11",
+   "kind": "incomplete_required_test",
+   "text": "INV-11: answers of scan and place contain neither the folder path nor the store path (`test_the_api_scans_and_places_without_showing_server_paths`), and the generated service has no Portal client or Portal credential setting.",
+   "question": "What must show that every answer, including mark, health, validation, and error answers, returns no server path, and that no execution path calls the Portal?",
+   "options": [
+    "Inspect every response schema and enforce a forbidden-path/Portal-import check",
+    "Narrow INV-11 to scan and place",
+    "Add endpoint-specific runtime tests"
+   ],
+   "default_guess": "Use schema and generated-code checks for every answer and a dependency/import check proving there is no Portal client or credential.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 stored reference containment",
+   "kind": "path_safety",
+   "text": "The reference must stay inside the binary store.",
+   "question": "Is containment lexical or resolved through symlinks, and what happens if the store root or a project directory is a link or is replaced during the write?",
+   "options": [
+    "Require resolved containment and refuse symlinked path components",
+    "Allow a symlinked configured store root but refuse links below it",
+    "Use lexical containment only"
+   ],
+   "default_guess": "Resolve the configured store root once, open path components without following symlinks, and verify the final target remains beneath that root.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 executable files",
+   "kind": "exact_invariant",
+   "text": "A stored image is not executable.",
+   "question": "Which filesystem permission bits and inherited ACLs satisfy this rule, and what mode is required for newly written and atomically replaced files?",
+   "options": [
+    "Require no execute bit for owner, group, or others",
+    "Require a fixed file mode such as 0640",
+    "Rely only on the storage mount being non-executable"
+   ],
+   "default_guess": "Create every stored image with mode 0640 and verify that no execute bit or executable ACL is present.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 atomic persistence",
+   "kind": "crash_semantics",
+   "text": "Records and images are replaced atomically, so a reader sees a complete file or none.",
+   "question": "Does atomicity also require durability after an acknowledged call, and what are the required file and directory synchronization and cleanup semantics after a crash?",
+   "options": [
+    "Atomic visibility and crash durability are both required",
+    "Only complete-or-none visibility is required",
+    "Use an atomic backend transaction for records but filesystem rename for images"
+   ],
+   "default_guess": "Require same-filesystem temporary writes, file synchronization, atomic rename, directory synchronization, and cleanup of abandoned temporary files.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 project exclusion",
+   "kind": "lock_failure_semantics",
+   "text": "Placements and marks of one project run one at a time, across processes.",
+   "question": "What lock authority is shared across processes, when is it acquired and released, and what refusal or recovery occurs on timeout, process death, or an unavailable lock backend?",
+   "options": [
+    "Use an OS file lock in the state folder with bounded waiting",
+    "Use a database transaction/advisory lock",
+    "Wait indefinitely for a per-project lock"
+   ],
+   "default_guess": "Use a crash-released OS lock keyed by project id in the state folder and return a defined service-unavailable refusal on bounded acquisition failure.",
+   "unit": "?"
+  },
+  {
+   "subject": "A7 service clock",
+   "kind": "missing_time_source",
+   "text": "The service clock is the one source of the current time.",
+   "question": "Where does the service clock obtain an instant in production, and what exact clock port or authority supplies it to operations?",
+   "options": [
+    "A declared `system_clock_backend` reading the operating-system UTC clock",
+    "A clock dependency injected into every operation",
+    "A module-level datetime call"
+   ],
+   "default_guess": "Use a declared `system_clock_backend` exposed through an injected clock port.",
+   "unit": "?"
+  },
+  {
+   "subject": "A7 instant representation",
+   "kind": "missing_representation",
+   "text": "The current time is UTC without an offset.",
+   "question": "What exact in-code and serialized representation is UTC without an offset, at what precision, and how are subsecond values rounded?",
+   "options": [
+    "A timezone-naive UTC datetime at microsecond precision",
+    "An aware UTC datetime internally, stripped only at serialization",
+    "A fixed-format UTC string without an offset"
+   ],
+   "default_guess": "Use an aware UTC instant internally and serialize a timezone-naive UTC datetime at microsecond precision only where the Portal contract requires it.",
+   "unit": "?"
+  },
+  {
+   "subject": "A7 clock reads",
+   "kind": "scope",
+   "text": "Each operation reads it once.",
+   "question": "Which calls count as operations, do health, refused, replayed, and read-only calls still read the clock, and at what point is the single reading taken?",
+   "options": [
+    "Every public service operation reads once immediately after authentication and validation",
+    "Only operations that compare or write time read once",
+    "Each batch item reads once"
+   ],
+   "default_guess": "Only a public operation that needs current time reads it, exactly once after whole-call validation and before item processing; all items share that instant.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13",
+   "kind": "incomplete_required_test",
+   "text": "INV-13: an operation given one fixed instant classifies every file against it and writes it as `marked_at` (`test_a_marked_photo_is_reported_as_published`, `test_a_file_still_arriving_is_not_placed`).",
+   "question": "How does the Required tests item prove that the clock is read exactly once, given that a fixed clock can be read repeatedly, and which single operation both classifies files and writes `marked_at`?",
+   "options": [
+    "Use a counting clock that fails on a second read for each relevant operation",
+    "Change the invariant to consistent use of one supplied instant",
+    "Split scan/placement classification and marking into separate tests"
+   ],
+   "default_guess": "Use a counting fake clock per operation, assert exactly one read, and split classification and marking into explicit operation-specific checks.",
+   "unit": "?"
+  },
+  {
+   "subject": "A8 status enumerations",
+   "kind": "undefined_code_symbols",
+   "text": "Scan, placement and refusal statuses | as A1, A3, A4 and A5 | enumerations in the models",
+   "question": "What are the exact enumeration types and member names for scan statuses, rejection reasons, placement outcomes, and operation refusals?",
+   "options": [
+    "Define separate closed enums with explicit member names",
+    "Use one combined status/reason enum",
+    "Leave values as strings"
+   ],
+   "default_guess": "Define separate model enums for observation status, rejection reason, placement outcome, and API refusal code, with explicit uppercase member names.",
+   "unit": "?"
+  },
+  {
+   "subject": "A8 stored image limit",
+   "kind": "value_domain_conflict",
+   "text": "The stored image limit must follow the Portal's deployment value if that value changes.",
+   "question": "Is 26,214,400 bytes a fixed policy constant or an environment-dependent run setting, and how is the deliverer kept equal to a particular Portal deployment without calling the Portal?",
+   "options": [
+    "Make the limit a required run setting shared with the Portal deployment",
+    "Keep a versioned code constant and redeploy both systems together",
+    "Generate both configurations from one deployment manifest"
+   ],
+   "default_guess": "Use a required run setting generated from the same deployment manifest as the Portal limit.",
+   "witness": {
+    "initial": "Portal deployment A accepts 26,214,400 bytes and deployment B is changed to accept 20,000,000 bytes.",
+    "events": [
+     "The same deliverer build is configured for deployment B.",
+     "The owner places an image encoded to 23,000,000 bytes."
+    ],
+    "outcomes": [
+     "Placement succeeds because the deliverer uses the fixed policy constant.",
+     "Placement fails because the deliverer follows deployment B's limit."
+    ],
+    "observer": "The owner and the Portal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9 dependencies",
+   "kind": "missing_decided_values",
+   "text": "The service runs only externally maintained libraries pinned to exact versions: the image library, the web framework, its data validation library and the web server.",
+   "question": "Which packages and exact versions are selected, and must every transitive installed distribution also be exactly pinned?",
+   "options": [
+    "List every direct and transitive distribution with exact versions",
+    "Pin only the four direct dependencies",
+    "Name a lock artifact as the complete authority"
+   ],
+   "default_guess": "Name a generated lock artifact that pins all direct and transitive distributions exactly.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9 vulnerability gate",
+   "kind": "undefined_policy",
+   "text": "Before each deployment every installed distribution is checked against a current snapshot of the OSV database.",
+   "question": "What makes a snapshot current, which ecosystems and identifiers are matched, how withdrawn or disputed records are treated, and what concrete result constitutes an incomplete check?",
+   "options": [
+    "Define freshness, matching, and fail-closed rules in a policy constant",
+    "Always query live OSV during deployment",
+    "Use the deployment platform's scanner defaults"
+   ],
+   "default_guess": "Use a versioned OSV snapshot with a maximum age, scan the complete lock/install manifest, treat every applicable non-withdrawn vulnerability as blocking, and fail closed on missing packages or scanner errors.",
+   "unit": "?"
+  },
+  {
+   "subject": "A10 security review",
+   "kind": "undefined_universe",
+   "text": "INV-16: every security category has an explicit outcome.",
+   "question": "What authoritative closed set of security categories must be covered so that the listed nine outcomes can be shown complete?",
+   "options": [
+    "Name a versioned security-category enumeration",
+    "Treat only the categories printed in this section as the universe",
+    "Let `design_lint.py` define the category set"
+   ],
+   "default_guess": "Name a versioned model enumeration that is also consumed by `design_lint.py`.",
+   "unit": "?"
+  },
+  {
+   "subject": "context P-04 and A1",
+   "kind": "contradiction",
+   "text": "Symbolic links, Syncthing's temporary and bookkeeping names, names beginning with a dot and names ending in `~` or `.tmp` are not reported, and folders with such names are not entered.",
+   "question": "Which rule implements State 0's accepted statement that the phone's trash is ignored when a trash entry does not match one of these patterns?",
+   "options": [
+    "Add the phone-trash names to A1's closed ignore list",
+    "State that every supported phone-trash name already matches a listed pattern",
+    "Remove the phone-trash claim from the accepted earlier text"
+   ],
+   "default_guess": "Add explicit supported phone-trash directory and filename patterns to A1.",
+   "witness": {
+    "initial": "A phone trash directory has a name that is neither dot-prefixed nor suffixed by `~` or `.tmp` and is not a Syncthing bookkeeping name.",
+    "events": [
+     "Syncthing copies the directory into the photo folder.",
+     "The owner requests a scan."
+    ],
+    "outcomes": [
+     "Its images are ignored because State 0 P-04 says the phone's trash is ignored.",
+     "Its images are traversed and reported because A1 excludes only the named patterns."
+    ],
+    "observer": "The owner and calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context OQ-07",
+   "kind": "carried_question",
+   "text": "OQ-07 — Where does the service run and how does the kernel reach it?",
+   "question": "What is the decided deployment location, network route, TLS termination point, and reachability path from the owner's kernel?",
+   "options": [
+    "Run on the VPS behind its HTTPS reverse proxy",
+    "Run elsewhere with mounted VPS folders and store",
+    "Run directly on the VPS with application-managed TLS"
+   ],
+   "default_guess": "Run on the VPS, bind to loopback, and expose a dedicated route through the VPS HTTPS reverse proxy.",
+   "unit": "?"
+  },
+  {
+   "subject": "A7 time source",
+   "kind": "standard_violation",
+   "text": "The service clock is the one source of the current time.",
+   "rule": "Иначе устроена `time_source_policy` (§6.8): её тоже проверяет гейт фабрики, но до кода она доходит через IR `system_clock_backend` (ниже, «Что считается достижимостью листа»), и декларация ей не нужна.",
+   "section": "15.3.1",
+   "question": "The passage must identify the time-source policy's path to generated code through IR `system_clock_backend`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A8 run settings",
+   "kind": "standard_violation",
+   "text": "run setting",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Each run-setting passage must become the exact named field of the settings object, with its type supplied by the settings model.",
+   "unit": "?"
+  },
+  {
+   "subject": "A8 policy constants",
+   "kind": "standard_violation",
+   "text": "policy constant",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Each policy-constant passage must become `the imported X constant` with the actual exported symbol name.",
+   "unit": "?"
+  },
+  {
+   "subject": "A8 model enumerations",
+   "kind": "standard_violation",
+   "text": "enumerations in the models",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must become exact `= models.<Enumeration>` addresses for every enumeration.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 file classification\",\"kind\":\"refusal_reason\",\"text\":\"cannot be read as a regular file\",\"question\":\"Which exact condition selects `not_a_regular_file`, `too_large`, or `unreadable_file`, and does this row cover a file that disappears or changes type during the scan?\",\"options\":[\"Map file type, size/stat failure, and read failure to distinct reasons\",\"Use one reason for every failure in this row\",\"Define an ordered mapping for race and permission failures\"],\"default_guess\":\"Use `not_a_regular_file` for a non-regular inode, `too_large` for an observed oversized file, and `unreadable_file` for open/read/stat failures.\"},{\"subject\":\"A1 ignored entries\",\"kind\":\"undefined_set\",\"text\":\"Syncthing's temporary and bookkeeping names\",\"question\":\"What exact names or patterns are Syncthing temporary and bookkeeping names?\",\"options\":[\"Publish a closed pattern list\",\"Ignore every name Syncthing documents as internal\",\"Make the patterns a policy constant\"],\"default_guess\":\"Use an explicit policy-constant list matching the prototype.\"},{\"subject\":\"A1 folder traversal\",\"kind\":\"scope_and_order\",\"text\":\"folders with such names are not entered\",\"question\":\"Are all other subfolders traversed recursively, how are relative paths normalized, and what exact ordering is meant by sorted path order?\",\"options\":[\"Recursive traversal with bytewise normalized relative-path order\",\"Recursive traversal with locale-aware order\",\"Only the photo folder's direct children\"],\"default_guess\":\"Traverse recursively and sort normalized relative POSIX paths lexicographically by Unicode code point.\"},{\"subject\":\"A1 duplicate classification\",\"kind\":\"precedence_scope\",\"text\":\"same content as an earlier file of this scan, in sorted path order\",\"question\":\"Which earlier files are eligible to establish a duplicate: every readable file, only format-valid files, only `ready` files, or files with placements too?\",\"options\":[\"Any earlier file whose content hash was obtained\",\"Only an earlier otherwise-ready file\",\"Any earlier reported file, including settling and rejected files\"],\"default_guess\":\"Only compare against an earlier file that passed rules 1–5 and has a usable source hash.\",\"witness\":{\"initial\":\"The folder contains two byte-identical valid images; the first is still settling and the second is old enough to place.\",\"events\":[\"The owner asks the service to scan the project.\",\"The scanner visits the settling path before the stable path.\"],\"outcomes\":[\"The stable path is `duplicate` because the settling file counts as the earlier file.\",\"The stable path is `ready` because only placement-eligible files establish duplicates.\"],\"observer\":\"The calling flow and owner\"}},{\"subject\":\"INV-01\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-01: after a placement the source file has the bytes it had before (`test_a_placed_photo_keeps_no_metadata_and_the_source_is_untouched`).\",\"question\":\"What Required tests evidence must show that every operation creates, changes, moves, and deletes nothing in a source folder, rather than only showing unchanged bytes after one placement?\",\"options\":[\"Assert the complete source tree, metadata, names, and bytes are unchanged after every operation\",\"Narrow INV-01 to source bytes during placement\",\"Name separate checks for scan, place, and mark\"],\"default_guess\":\"Require tree snapshots before and after scan, placement, replay, failure, and marking, including names, types, metadata, and bytes.\"},{\"subject\":\"A2 image preparation\",\"kind\":\"unspecified_algorithm\",\"text\":\"A stored image is a newly encoded JPEG made from the decoded pixels of the source. Transparent areas become white. The camera orientation is applied, then the longest side is reduced to the limit when it is larger.\",\"question\":\"Which color conversion, alpha composition, resampling algorithm, JPEG subsampling/progressive settings, metadata stripping method, and rounding rule define the stored bytes and dimensions?\",\"options\":[\"Specify a complete deterministic encoding recipe\",\"Permit any encoder output satisfying the observable limits\",\"Name a supplied preparation function as the authority\"],\"default_guess\":\"Name a deterministic backend recipe using sRGB, white alpha composition, orientation before resize, high-quality downsampling, integer dimensions preserving aspect ratio, quality 85, and no metadata.\"},{\"subject\":\"A2 image refusals\",\"kind\":\"check_precedence\",\"text\":\"A source above the pixel limit fails with `too_many_pixels`, one that cannot be decoded with `unreadable_image`, and a result above the Portal's read limit with `too_large`.\",\"question\":\"When more than one condition is discoverable, in what order are decode validity, pixel count, source-size, and encoded-result-size checked, and which refusal wins?\",\"options\":[\"Source-size, decode, pixel count, then encoded size\",\"Decode enough for dimensions, pixel count, full decode, then encoded size\",\"Return the first failure raised by the image library\"],\"default_guess\":\"Apply A1 source-size first, then safely read dimensions and reject excess pixels, then fully decode, then encode and enforce the stored limit.\"},{\"subject\":\"A2 photo moment\",\"kind\":\"undefined_metadata\",\"text\":\"The photo moment is the camera's original time, then the camera's general time, then the file's modification time.\",\"question\":\"Which concrete metadata tags and formats count as original time, general time, and offset, and what happens when a preferred tag is malformed or internally inconsistent?\",\"options\":[\"Define an ordered closed list of EXIF/XMP tags and parsing rules\",\"Let the image library choose a camera timestamp\",\"Treat any malformed preferred tag as an image refusal\"],\"default_guess\":\"Use an explicit ordered tag list; skip malformed or implausible candidates and fall back to the next source.\"},{\"subject\":\"A2 local camera time\",\"kind\":\"time_ambiguity\",\"text\":\"A camera time with no offset is read in the configured time zone.\",\"question\":\"How are ambiguous and nonexistent Europe/Madrid local times resolved at daylight-saving transitions?\",\"options\":[\"Choose the earlier occurrence and reject nonexistent times\",\"Choose the later occurrence and shift nonexistent times forward\",\"Refuse ambiguous and nonexistent camera times and fall back\"],\"default_guess\":\"Reject that camera-time candidate and fall back to the next time source.\"},{\"subject\":\"INV-03\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-03: a source holding GPS, EXIF and a comment is stored with none of them, by the unit test `test_a_placed_photo_keeps_no_metadata_and_the_source_is_untouched` and by the E2E check that the client's download has no EXIF.\",\"question\":\"What Required tests evidence must explicitly show that XMP is absent as INV-03 requires?\",\"options\":[\"Add XMP to the source fixture and assert its absence\",\"Remove XMP from INV-03\",\"Add a separate XMP-stripping check\"],\"default_guess\":\"Add XMP to the fixture and inspect the stored and downloaded JPEG for EXIF, GPS, XMP, and comments.\"},{\"subject\":\"A3 placement call\",\"kind\":\"exact_refusal_conditions\",\"text\":\"One call places from 1 to 50 photos.\",\"question\":\"What happens for an empty list, more than 50 items, or repeated source ids in the same call?\",\"options\":[\"Refuse the whole call as malformed\",\"Deduplicate ids and process up to 50 distinct photos\",\"Return per-item failures\"],\"default_guess\":\"Refuse the whole call before writes when the list is empty, exceeds 50 entries, or contains duplicate source ids.\"},{\"subject\":\"A3 and A5 request processing\",\"kind\":\"check_precedence\",\"text\":\"A malformed source id refuses the whole call before anything is written.\",\"question\":\"What is the complete precedence among authentication, request-shape validation, project-id validation, connection checks, replay lookup, source-state checks, and per-item failures?\",\"options\":[\"Authenticate, validate the whole request, check connection, then process items\",\"Authenticate, check project connection, then validate source ids\",\"Perform replay lookup before connection and source checks\"],\"default_guess\":\"Authenticate first, validate all request fields and batch constraints second, check the confirmed connection third, then process each item with replay lookup before source-state checks.\",\"witness\":{\"initial\":\"A placement request has a valid bearer token, an unknown project id, and one malformed source id.\",\"events\":[\"The calling flow sends the request.\"],\"outcomes\":[\"The service returns a whole-call malformed-request refusal because validation precedes project lookup.\",\"The service returns `unknown_project` because project lookup precedes source-id validation.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A3 replayed placement and M07 PublicationMark\",\"kind\":\"contradiction\",\"text\":\"Placing an existing placement answers `replayed` with the first result and writes nothing, even when the source file has left the folder.\",\"question\":\"Does a replay return the literal original result without a later `photo_id`, or the existing placement augmented with the current mark as M06 and M07 require?\",\"options\":[\"Return the original placement plus the current mark and `photo_id`\",\"Return the exact first placement response forever\",\"Treat marking as changing the stored first result\"],\"default_guess\":\"Return `replayed` with the immutable first placement facts and, if present, the separately stored current mark and `photo_id`.\",\"witness\":{\"initial\":\"A source was placed, then successfully marked with Portal photo id P, and then removed from the folder.\",\"events\":[\"The calling flow requests placement of the same project and source id again.\"],\"outcomes\":[\"`replayed` returns the first result without P, following the literal first-result rule.\",\"`replayed` includes P because M06 says an already marked photo carries its `photo_id` and M07 says repeated placement reads the mark.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"INV-06\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-06: a second placement returns the first publication and leaves the stored file's modification time unchanged (`test_placing_again_returns_the_same_result_without_writing`).\",\"question\":\"What must the test show to establish both that only one placement record exists and that no record, mark, image, or other durable state is written?\",\"options\":[\"Snapshot every relevant durable store and count placement records\",\"Narrow the invariant to the stored image\",\"Add separate uniqueness and no-write checks\"],\"default_guess\":\"Assert one placement record and byte-for-byte unchanged records, images, marks, and filesystem metadata after replay.\"},{\"subject\":\"INV-07\",\"kind\":\"vague_required_test\",\"text\":\"a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`)\",\"question\":\"Which exact facts must remain to prove INV-07: the placement record, stored image, publication body, mark, and their bytes and timestamps?\",\"options\":[\"Name and assert every artifact in INV-07\",\"Define `delivery` as a formal aggregate\",\"Narrow INV-07 to the facts the test actually checks\"],\"default_guess\":\"Assert that the placement record, stored image, and mark all remain unchanged after replacement and removal.\"},{\"subject\":\"A5 bearer authentication\",\"kind\":\"exact_refusal_conditions\",\"text\":\"Every operation except the health answer requires the deliverer's bearer token, compared in constant time. Any other value is refused before the request is handled.\",\"question\":\"What exact Authorization syntax is accepted, how are whitespace, case, duplicate headers, non-ASCII data, and malformed schemes handled, and what response status/body is returned?\",\"options\":[\"Accept exactly one `Authorization: Bearer <token>` header with fixed syntax\",\"Use ordinary HTTP bearer parsing\",\"Accept bearer credentials from another request field\"],\"default_guess\":\"Accept exactly one ASCII Authorization header with the case-sensitive `Bearer ` prefix and exact token bytes; return one uniform 401 response for every authentication failure.\"},{\"subject\":\"A5 token file\",\"kind\":\"representation_and_permissions\",\"text\":\"The token is 256 bits from a cryptographic random source, kept in a file only its owner can read. The service does not start when the file is readable by others or the token has fewer than 32 characters.\",\"question\":\"What encoding and file format represent 256 bits, whether a trailing newline is stripped, which ownership/mode/ACL conditions are allowed, and whether exactly 32 characters can represent less than 256 bits?\",\"options\":[\"Require 64 lowercase hexadecimal characters in a mode-0600 regular file\",\"Require a fixed-length base64url token in a mode-0600 regular file\",\"Accept any 32-or-more-character string and check only file mode bits\"],\"default_guess\":\"Require one 64-character lowercase hexadecimal token plus an optional final newline in a regular file owned by the service user with no group/other or ACL access.\"},{\"subject\":\"A5 HTTPS boundary\",\"kind\":\"enforcement_location\",\"text\":\"Outside the loopback interface the service is reached only over HTTPS (OQ-07).\",\"question\":\"Which component terminates and enforces HTTPS, what proxy headers are trusted, and must the service reject direct non-loopback HTTP itself?\",\"options\":[\"The service binds only to loopback behind a named HTTPS reverse proxy\",\"The service serves TLS directly\",\"The service accepts HTTP but deployment policy prevents exposure\"],\"default_guess\":\"Bind the service to loopback and expose it only through an authenticated, configured HTTPS reverse proxy.\"},{\"subject\":\"A5 connection paths\",\"kind\":\"path_resolution\",\"text\":\"A connection that leaves the root is not loaded. A photo folder that resolves outside the root, or is missing, is refused with `folder_unavailable`.\",\"question\":\"What normalization and symlink policy is used, when containment is rechecked, and which outcome applies to permission errors, dangling links, non-directories, or a root changed after loading?\",\"options\":[\"Resolve every component on each operation and require the final directory under the resolved root\",\"Validate only when loading the connection\",\"Reject all symlinks even when they remain under the root\"],\"default_guess\":\"Resolve the root and photo folder on every operation, require existing readable directories with the resolved photo folder contained beneath the resolved root, and use `folder_unavailable` for runtime failures.\"},{\"subject\":\"INV-09\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-09: a missing token, a wrong token and a token without the `Bearer` prefix are refused (`test_the_api_requires_the_token`).\",\"question\":\"What test demonstrates that every operation except health fails authentication and that health is the only exception?\",\"options\":[\"Parameterize the check over every operation and separately exercise health\",\"Narrow INV-09 to the tested endpoint\",\"Use a route-enumeration check that proves the middleware coverage\"],\"default_guess\":\"Enumerate all routes, prove authentication middleware covers every non-health route, and test health without a token.\"},{\"subject\":\"INV-11\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-11: answers of scan and place contain neither the folder path nor the store path (`test_the_api_scans_and_places_without_showing_server_paths`), and the generated service has no Portal client or Portal credential setting.\",\"question\":\"What must show that every answer, including mark, health, validation, and error answers, returns no server path, and that no execution path calls the Portal?\",\"options\":[\"Inspect every response schema and enforce a forbidden-path/Portal-import check\",\"Narrow INV-11 to scan and place\",\"Add endpoint-specific runtime tests\"],\"default_guess\":\"Use schema and generated-code checks for every answer and a dependency/import check proving there is no Portal client or credential.\"},{\"subject\":\"A6 stored reference containment\",\"kind\":\"path_safety\",\"text\":\"The reference must stay inside the binary store.\",\"question\":\"Is containment lexical or resolved through symlinks, and what happens if the store root or a project directory is a link or is replaced during the write?\",\"options\":[\"Require resolved containment and refuse symlinked path components\",\"Allow a symlinked configured store root but refuse links below it\",\"Use lexical containment only\"],\"default_guess\":\"Resolve the configured store root once, open path components without following symlinks, and verify the final target remains beneath that root.\"},{\"subject\":\"A6 executable files\",\"kind\":\"exact_invariant\",\"text\":\"A stored image is not executable.\",\"question\":\"Which filesystem permission bits and inherited ACLs satisfy this rule, and what mode is required for newly written and atomically replaced files?\",\"options\":[\"Require no execute bit for owner, group, or others\",\"Require a fixed file mode such as 0640\",\"Rely only on the storage mount being non-executable\"],\"default_guess\":\"Create every stored image with mode 0640 and verify that no execute bit or executable ACL is present.\"},{\"subject\":\"A6 atomic persistence\",\"kind\":\"crash_semantics\",\"text\":\"Records and images are replaced atomically, so a reader sees a complete file or none.\",\"question\":\"Does atomicity also require durability after an acknowledged call, and what are the required file and directory synchronization and cleanup semantics after a crash?\",\"options\":[\"Atomic visibility and crash durability are both required\",\"Only complete-or-none visibility is required\",\"Use an atomic backend transaction for records but filesystem rename for images\"],\"default_guess\":\"Require same-filesystem temporary writes, file synchronization, atomic rename, directory synchronization, and cleanup of abandoned temporary files.\"},{\"subject\":\"A6 project exclusion\",\"kind\":\"lock_failure_semantics\",\"text\":\"Placements and marks of one project run one at a time, across processes.\",\"question\":\"What lock authority is shared across processes, when is it acquired and released, and what refusal or recovery occurs on timeout, process death, or an unavailable lock backend?\",\"options\":[\"Use an OS file lock in the state folder with bounded waiting\",\"Use a database transaction/advisory lock\",\"Wait indefinitely for a per-project lock\"],\"default_guess\":\"Use a crash-released OS lock keyed by project id in the state folder and return a defined service-unavailable refusal on bounded acquisition failure.\"},{\"subject\":\"A7 service clock\",\"kind\":\"missing_time_source\",\"text\":\"The service clock is the one source of the current time.\",\"question\":\"Where does the service clock obtain an instant in production, and what exact clock port or authority supplies it to operations?\",\"options\":[\"A declared `system_clock_backend` reading the operating-system UTC clock\",\"A clock dependency injected into every operation\",\"A module-level datetime call\"],\"default_guess\":\"Use a declared `system_clock_backend` exposed through an injected clock port.\"},{\"subject\":\"A7 instant representation\",\"kind\":\"missing_representation\",\"text\":\"The current time is UTC without an offset.\",\"question\":\"What exact in-code and serialized representation is UTC without an offset, at what precision, and how are subsecond values rounded?\",\"options\":[\"A timezone-naive UTC datetime at microsecond precision\",\"An aware UTC datetime internally, stripped only at serialization\",\"A fixed-format UTC string without an offset\"],\"default_guess\":\"Use an aware UTC instant internally and serialize a timezone-naive UTC datetime at microsecond precision only where the Portal contract requires it.\"},{\"subject\":\"A7 clock reads\",\"kind\":\"scope\",\"text\":\"Each operation reads it once.\",\"question\":\"Which calls count as operations, do health, refused, replayed, and read-only calls still read the clock, and at what point is the single reading taken?\",\"options\":[\"Every public service operation reads once immediately after authentication and validation\",\"Only operations that compare or write time read once\",\"Each batch item reads once\"],\"default_guess\":\"Only a public operation that needs current time reads it, exactly once after whole-call validation and before item processing; all items share that instant.\"},{\"subject\":\"INV-13\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-13: an operation given one fixed instant classifies every file against it and writes it as `marked_at` (`test_a_marked_photo_is_reported_as_published`, `test_a_file_still_arriving_is_not_placed`).\",\"question\":\"How does the Required tests item prove that the clock is read exactly once, given that a fixed clock can be read repeatedly, and which single operation both classifies files and writes `marked_at`?\",\"options\":[\"Use a counting clock that fails on a second read for each relevant operation\",\"Change the invariant to consistent use of one supplied instant\",\"Split scan/placement classification and marking into separate tests\"],\"default_guess\":\"Use a counting fake clock per operation, assert exactly one read, and split classification and marking into explicit operation-specific checks.\"},{\"subject\":\"A8 status enumerations\",\"kind\":\"undefined_code_symbols\",\"text\":\"Scan, placement and refusal statuses | as A1, A3, A4 and A5 | enumerations in the models\",\"question\":\"What are the exact enumeration types and member names for scan statuses, rejection reasons, placement outcomes, and operation refusals?\",\"options\":[\"Define separate closed enums with explicit member names\",\"Use one combined status/reason enum\",\"Leave values as strings\"],\"default_guess\":\"Define separate model enums for observation status, rejection reason, placement outcome, and API refusal code, with explicit uppercase member names.\"},{\"subject\":\"A8 stored image limit\",\"kind\":\"value_domain_conflict\",\"text\":\"The stored image limit must follow the Portal's deployment value if that value changes.\",\"question\":\"Is 26,214,400 bytes a fixed policy constant or an environment-dependent run setting, and how is the deliverer kept equal to a particular Portal deployment without calling the Portal?\",\"options\":[\"Make the limit a required run setting shared with the Portal deployment\",\"Keep a versioned code constant and redeploy both systems together\",\"Generate both configurations from one deployment manifest\"],\"default_guess\":\"Use a required run setting generated from the same deployment manifest as the Portal limit.\",\"witness\":{\"initial\":\"Portal deployment A accepts 26,214,400 bytes and deployment B is changed to accept 20,000,000 bytes.\",\"events\":[\"The same deliverer build is configured for deployment B.\",\"The owner places an image encoded to 23,000,000 bytes.\"],\"outcomes\":[\"Placement succeeds because the deliverer uses the fixed policy constant.\",\"Placement fails because the deliverer follows deployment B's limit.\"],\"observer\":\"The owner and the Portal\"}},{\"subject\":\"A9 dependencies\",\"kind\":\"missing_decided_values\",\"text\":\"The service runs only externally maintained libraries pinned to exact versions: the image library, the web framework, its data validation library and the web server.\",\"question\":\"Which packages and exact versions are selected, and must every transitive installed distribution also be exactly pinned?\",\"options\":[\"List every direct and transitive distribution with exact versions\",\"Pin only the four direct dependencies\",\"Name a lock artifact as the complete authority\"],\"default_guess\":\"Name a generated lock artifact that pins all direct and transitive distributions exactly.\"},{\"subject\":\"A9 vulnerability gate\",\"kind\":\"undefined_policy\",\"text\":\"Before each deployment every installed distribution is checked against a current snapshot of the OSV database.\",\"question\":\"What makes a snapshot current, which ecosystems and identifiers are matched, how withdrawn or disputed records are treated, and what concrete result constitutes an incomplete check?\",\"options\":[\"Define freshness, matching, and fail-closed rules in a policy constant\",\"Always query live OSV during deployment\",\"Use the deployment platform's scanner defaults\"],\"default_guess\":\"Use a versioned OSV snapshot with a maximum age, scan the complete lock/install manifest, treat every applicable non-withdrawn vulnerability as blocking, and fail closed on missing packages or scanner errors.\"},{\"subject\":\"A10 security review\",\"kind\":\"undefined_universe\",\"text\":\"INV-16: every security category has an explicit outcome.\",\"question\":\"What authoritative closed set of security categories must be covered so that the listed nine outcomes can be shown complete?\",\"options\":[\"Name a versioned security-category enumeration\",\"Treat only the categories printed in this section as the universe\",\"Let `design_lint.py` define the category set\"],\"default_guess\":\"Name a versioned model enumeration that is also consumed by `design_lint.py`.\"},{\"subject\":\"context P-04 and A1\",\"kind\":\"contradiction\",\"text\":\"Symbolic links, Syncthing's temporary and bookkeeping names, names beginning with a dot and names ending in `~` or `.tmp` are not reported, and folders with such names are not entered.\",\"question\":\"Which rule implements State 0's accepted statement that the phone's trash is ignored when a trash entry does not match one of these patterns?\",\"options\":[\"Add the phone-trash names to A1's closed ignore list\",\"State that every supported phone-trash name already matches a listed pattern\",\"Remove the phone-trash claim from the accepted earlier text\"],\"default_guess\":\"Add explicit supported phone-trash directory and filename patterns to A1.\",\"witness\":{\"initial\":\"A phone trash directory has a name that is neither dot-prefixed nor suffixed by `~` or `.tmp` and is not a Syncthing bookkeeping name.\",\"events\":[\"Syncthing copies the directory into the photo folder.\",\"The owner requests a scan.\"],\"outcomes\":[\"Its images are ignored because State 0 P-04 says the phone's trash is ignored.\",\"Its images are traversed and reported because A1 excludes only the named patterns.\"],\"observer\":\"The owner and calling flow\"}},{\"subject\":\"context OQ-07\",\"kind\":\"carried_question\",\"text\":\"OQ-07 — Where does the service run and how does the kernel reach it?\",\"question\":\"What is the decided deployment location, network route, TLS termination point, and reachability path from the owner's kernel?\",\"options\":[\"Run on the VPS behind its HTTPS reverse proxy\",\"Run elsewhere with mounted VPS folders and store\",\"Run directly on the VPS with application-managed TLS\"],\"default_guess\":\"Run on the VPS, bind to loopback, and expose a dedicated route through the VPS HTTPS reverse proxy.\"},{\"subject\":\"A7 time source\",\"kind\":\"standard_violation\",\"text\":\"The service clock is the one source of the current time.\",\"rule\":\"Иначе устроена `time_source_policy` (§6.8): её тоже проверяет гейт фабрики, но до кода она доходит через IR `system_clock_backend` (ниже, «Что считается достижимостью листа»), и декларация ей не нужна.\",\"section\":\"15.3.1\",\"question\":\"The passage must identify the time-source policy's path to generated code through IR `system_clock_backend`.\"},{\"subject\":\"A8 run settings\",\"kind\":\"standard_violation\",\"text\":\"run setting\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Each run-setting passage must become the exact named field of the settings object, with its type supplied by the settings model.\"},{\"subject\":\"A8 policy constants\",\"kind\":\"standard_violation\",\"text\":\"policy constant\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Each policy-constant passage must become `the imported X constant` with the actual exported symbol name.\"},{\"subject\":\"A8 model enumerations\",\"kind\":\"standard_violation\",\"text\":\"enumerations in the models\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must become exact `= models.<Enumeration>` addresses for every enumeration.\"}]}",
+ "set_aside": []
+}
