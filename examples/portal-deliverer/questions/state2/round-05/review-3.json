@@ -1,0 +1,323 @@
+{
+ "open_points": [
+  {
+   "subject": "A5: Accepted decision A5 — Access and object connection",
+   "kind": "missing configuration",
+   "text": "Each scan, placement and mark reads the connections file exactly once, at its connection check,",
+   "question": "Where does the service obtain the connections-file path, and is it a required runtime setting, a fixed imported constant, or another declared authority?",
+   "options": [
+    "A required field of the runtime settings model",
+    "An imported deployment-policy constant",
+    "A fixed path chosen by the implementation"
+   ],
+   "default_guess": "Use a required runtime-settings field because the path depends on the host environment.",
+   "witness": {
+    "initial": "A valid confirmed record for project P exists in one of two plausible connections-file locations.",
+    "events": [
+     "The service starts with no text-defined setting selecting either location.",
+     "The caller scans project P."
+    ],
+    "outcomes": [
+     "An implementation choosing the first location returns the scan results.",
+     "An implementation choosing the second location sees an absent file and returns folder_unavailable or fails to start."
+    ],
+    "observer": "The calling flow and the operator starting the service"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5: Accepted decision A5 — Access and object connection",
+   "kind": "undefined record form",
+   "text": "does not have the record form",
+   "question": "What is the complete JSON form of the connections file, including its top-level shape, field names and types, path encoding, treatment of unknown fields and duplicate project ids, and whether every M01 field is required?",
+   "options": [
+    "A JSON object keyed by project UUID",
+    "A JSON array of ObjectConnection records",
+    "A versioned envelope containing the records"
+   ],
+   "default_guess": "Use a versioned envelope containing a list of strict ObjectConnection records, reject unknown fields and duplicate project ids.",
+   "witness": {
+    "initial": "The file contains two otherwise valid confirmed records with the same project_id but different roots.",
+    "events": [
+     "The service starts.",
+     "The caller scans that project."
+    ],
+    "outcomes": [
+     "A mapping-oriented implementation rejects the whole file as having duplicate records and answers folder_unavailable.",
+     "A list-oriented implementation accepts the file and uses either the first or last record."
+    ],
+    "observer": "The calling flow and the service operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5: Accepted decision A5 — Access and object connection",
+   "kind": "concurrent read semantics",
+   "text": "reads the connections file exactly once, at its connection check, and uses that reading for the whole operation",
+   "question": "What constitutes the one reading when the agent replaces or rewrites the file concurrently: an atomic snapshot selected at open time, a lock-protected read, or whatever byte sequence one unprotected read returns?",
+   "options": [
+    "Require atomic replacement and use the complete old or new file",
+    "Coordinate readers and writers with a shared lock",
+    "Permit a partial or mixed read and treat invalid bytes as folder_unavailable"
+   ],
+   "default_guess": "Require writers to replace the file atomically and let an operation use either the complete old file or the complete new file.",
+   "witness": {
+    "initial": "A valid confirmed file is present and a scan has reached its connection check.",
+    "events": [
+     "The service begins reading the file.",
+     "The agent rewrites the same file with a new valid record while the read is in progress."
+    ],
+    "outcomes": [
+     "A snapshot implementation completes using one valid version.",
+     "An unprotected streaming implementation reads mixed bytes and returns folder_unavailable."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5: Accepted decision A5 — Access and object connection",
+   "kind": "contradictory refusal precedence",
+   "text": "An operation on a project with no connection is refused with `unknown_project`, and one with an unconfirmed connection with `connection_not_confirmed`. This is decided by the service, not by the caller.",
+   "question": "When the requested project has no record but another record makes the whole file invalid, must the answer be unknown_project as rule 6 says or folder_unavailable as rule 7's first condition says?",
+   "options": [
+    "folder_unavailable because whole-file validation has precedence",
+    "unknown_project because the requested project has no connection"
+   ],
+   "default_guess": "Return folder_unavailable because rule 7 explicitly supplies an ordered whole-file check.",
+   "witness": {
+    "initial": "The connections file has no record for project P and has a malformed record for unrelated project Q.",
+    "events": [
+     "The authenticated caller scans project P."
+    ],
+    "outcomes": [
+     "Rule 6 gives unknown_project.",
+     "Rule 7 gives folder_unavailable because the entire file is judged before project lookup."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5: Accepted decision A5 — Access and object connection",
+   "kind": "startup validation ambiguity",
+   "text": "The service does not start when condition 1 applies.",
+   "question": "Does a record break rule 8 at startup when its syntactically valid photo subfolder is missing, is not a directory, or resolves outside the root, even though rule 8 requires those resolved-path checks only \"On each scan and placement\"?",
+   "options": [
+    "Startup performs both syntactic and resolved-filesystem checks",
+    "Startup checks only the serialized record and runtime operations check the filesystem",
+    "Startup checks syntax and containment but not existence"
+   ],
+   "default_guess": "At startup validate only the serialized record; perform existence and resolved-path checks during scan and placement as rule 8 expressly says.",
+   "witness": {
+    "initial": "The file has a confirmed record whose photo_subfolder is syntactically valid but is currently a symlink resolving outside the root.",
+    "events": [
+     "The service is started."
+    ],
+    "outcomes": [
+     "Treating the runtime clause as part of condition 1 prevents startup.",
+     "Treating it as an operation-time check allows startup and later refuses scan or placement."
+    ],
+    "observer": "The service operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5: Accepted decision A5 — Access and object connection",
+   "kind": "path validation ambiguity",
+   "text": "The photo and invoice subfolders are non-empty relative paths without `..` and are not the root itself.",
+   "question": "Does \"without `..`\" forbid only a path component exactly equal to `..`, every occurrence of those two characters, or a normalized path that escapes; and which separator and normalization rules define a relative path?",
+   "options": [
+    "Reject an exact `..` component under the host path rules",
+    "Reject any textual occurrence of `..`",
+    "Parse a portable slash-separated path, normalize it, and reject escape or root equivalence"
+   ],
+   "default_guess": "Parse slash-separated relative paths, reject absolute paths and exact `..` components, normalize `.` components, and then require a non-root result.",
+   "witness": {
+    "initial": "A record uses photo_subfolder `photos..old`.",
+    "events": [
+     "The service judges the whole connections file."
+    ],
+    "outcomes": [
+     "A component-based implementation accepts the record.",
+     "A textual implementation treats the two dots as forbidden and returns folder_unavailable or refuses startup."
+    ],
+    "observer": "The service operator and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5: Accepted decision A5 — Access and object connection",
+   "kind": "contradiction with M04 replay",
+   "text": "A repeated placement returns it and writes nothing (P-06).",
+   "question": "After a placement exists but its connection becomes unconfirmed or the connections file becomes invalid, does repeating placement return the existing M04 record or refuse at the newly required connection check?",
+   "options": [
+    "Always perform A5's connection check first and refuse",
+    "Return an existing placement before checking the current connection"
+   ],
+   "default_guess": "Perform the connection check first and refuse, because A5 now says each placement reads and judges the file.",
+   "witness": {
+    "initial": "Project P is confirmed and source S already has a PhotoPlacement.",
+    "events": [
+     "The agent clears P's confirmation.",
+     "The caller places S again."
+    ],
+    "outcomes": [
+     "M04 says the first placement is returned and nothing is written.",
+     "A5 says the placement answers connection_not_confirmed."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5: Accepted decision A5 — Access and object connection",
+   "kind": "contradiction with M07 replay",
+   "text": "The same `photo_id` again returns the first mark; another `photo_id` is refused.",
+   "question": "After a publication mark exists but its connection becomes unconfirmed or the connections file becomes invalid, does replaying the same photo_id return the mark or fail the newly required connection check?",
+   "options": [
+    "Always perform A5's connection check first and refuse",
+    "Return an existing mark before checking the current connection"
+   ],
+   "default_guess": "Perform the connection check first and refuse, because A5 now says every mark checks the file.",
+   "witness": {
+    "initial": "Project P is confirmed and source S is marked with Portal photo id X.",
+    "events": [
+     "The agent clears P's confirmation.",
+     "The caller marks S with X again."
+    ],
+    "outcomes": [
+     "M07 says the first mark is returned as a replay.",
+     "A5 says the mark answers connection_not_confirmed."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5: Accepted decision A5 — Access and object connection",
+   "kind": "incomplete invariant test",
+   "text": "INV-10: scan, placement and mark each answer `connection_not_confirmed` for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`).",
+   "question": "What must the INV-10 test show about side effects for an initially unconfirmed connection, since this sentence specifies the answer but—unlike the later cleared-confirmation and invalid-file cases—does not require that nothing is scanned or written?",
+   "options": [
+    "Assert the answer and that no folder, store, placement, or mark action occurs",
+    "Assert only the answer code"
+   ],
+   "default_guess": "Assert the answer and that no scan or write of any kind occurs.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5: Accepted decision A5 — Access and object connection",
+   "kind": "missing invariant case",
+   "text": "INV-10: nothing is scanned, placed or marked for a project unless the connections file read by that operation is valid and holds a confirmed connection for the project.",
+   "question": "Which Required tests check the no-record case and show that scan, placement, and mark each return unknown_project and perform no scan or write?",
+   "options": [
+    "Add an explicit no-record case for all three operations",
+    "Treat the existing unconfirmed test as also covering an absent record",
+    "Do not require an INV-10 witness for the no-record branch"
+   ],
+   "default_guess": "Add an explicit no-record case for scan, placement, and mark, asserting unknown_project and no side effects.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5: Accepted decision A5 — Access and object connection",
+   "kind": "incomplete snapshot test",
+   "text": "Each operation reads the file once (`test_each_operation_reads_the_connection_record_once`).",
+   "question": "What must this test demonstrate about using the same reading for the whole operation and about a replacement after the read, rather than merely counting one file-open call?",
+   "options": [
+    "Replace the file after the read and assert the operation finishes from the old snapshot",
+    "Only assert a single read call",
+    "Exercise both a post-read replacement and a pre-read replacement"
+   ],
+   "default_guess": "Exercise replacements on both sides of the connection check and assert that a post-read change affects only a later operation.",
+   "unit": "?"
+  },
+  {
+   "subject": "A7: Accepted decision A7 — Time",
+   "kind": "missing referenced rule",
+   "text": "A source id in the body of a placement is not a path identifier: it is checked after the clock, at the place A3 rule 4 gives it.",
+   "question": "What exactly does A3 rule 4 require at that point—request-level refusal or per-source failure, ordering relative to the project lock and connection check, and handling when only some source ids are invalid—since that rule is not present in the supplied texts?",
+   "options": [
+    "Reject the entire placement request after reading the clock",
+    "Return a failed outcome only for each invalid source id and continue with valid ids",
+    "Validate all source ids after the clock but before the lock and connection check"
+   ],
+   "default_guess": "After the single clock read, validate each source id and return a per-source failed outcome while continuing with valid ids.",
+   "witness": {
+    "initial": "An authenticated placement request for a valid project contains one valid source id and one uppercase, nonconforming source id.",
+    "events": [
+     "The request form and project id are accepted.",
+     "The service reads the clock.",
+     "The placement reaches the unspecified A3 rule 4 point."
+    ],
+    "outcomes": [
+     "A request-level implementation refuses the whole call and does not place the valid source.",
+     "A per-item implementation fails the invalid source and places the valid source."
+    ],
+    "observer": "The calling flow and owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7: Accepted decision A7 — Time",
+   "kind": "unspecified check precedence",
+   "text": "after the token, the request form and the path identifiers are accepted",
+   "question": "When the request form and a path identifier are both invalid, which is checked first and which refusal is returned?",
+   "options": [
+    "Validate the request form before path identifiers",
+    "Validate path identifiers before the rest of the request form",
+    "Define a single validation result with deterministic field ordering"
+   ],
+   "default_guess": "Validate the request form structurally first, then validate path identifiers in their declared field order.",
+   "witness": {
+    "initial": "An authenticated placement request has a malformed body and a non-UUID project id.",
+    "events": [
+     "The service validates the request before the clock-read point."
+    ],
+    "outcomes": [
+     "A form-first implementation returns the malformed-body refusal.",
+     "An identifier-first implementation returns the invalid-project-id refusal."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7: Accepted decision A7 — Time",
+   "kind": "incomplete invariant test",
+   "text": "INV-13: a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Which cases must show INV-13 for operations refused after the clock and for replayed marks, where an implementation could read the clock more than once even though successful calls pass the named test?",
+   "options": [
+    "Test every post-clock refusal and replay path with a counting clock",
+    "Test one representative post-clock refusal plus mark replay",
+    "Treat only successful calls as the invariant's domain"
+   ],
+   "default_guess": "Test each distinct post-clock branch, including invalid placement source ids, connection refusals, file refusals, and replayed marks.",
+   "witness": {
+    "initial": "A mark already exists for source S and photo id X.",
+    "events": [
+     "The caller replays the mark with X.",
+     "The implementation reads the clock once before the connection check and again in its replay branch."
+    ],
+    "outcomes": [
+     "A test covering only a newly created mark passes despite two reads on replay.",
+     "A test covering replay detects the violation of INV-13."
+    ],
+    "observer": "The generated-service test suite and reviewer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5: Accepted decision A5 — Access and object connection",
+   "kind": "standard_violation",
+   "text": "   | Order | Condition | Answer |\n   |---|---|---|\n   | 1 | the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or any record breaks rule 8 | `folder_unavailable` |\n   | 2 | the file holds no record for the project | `unknown_project` |\n   | 3 | the project's record is unconfirmed | `connection_not_confirmed` |",
+   "rule": "| закрытый список вариантов: статусы, виды, коды | `models`, перечисление | `= models.ИмяПеречисления` | перечисление как тип |",
+   "section": "15.3.1",
+   "question": "Make these closed refusal codes members of a model enumeration and name the enumeration and each member through the required `= models.*` path instead of supplying bare code values.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A5: Accepted decision A5 — Access and object connection\",\"kind\":\"missing configuration\",\"text\":\"Each scan, placement and mark reads the connections file exactly once, at its connection check,\",\"question\":\"Where does the service obtain the connections-file path, and is it a required runtime setting, a fixed imported constant, or another declared authority?\",\"options\":[\"A required field of the runtime settings model\",\"An imported deployment-policy constant\",\"A fixed path chosen by the implementation\"],\"default_guess\":\"Use a required runtime-settings field because the path depends on the host environment.\",\"witness\":{\"initial\":\"A valid confirmed record for project P exists in one of two plausible connections-file locations.\",\"events\":[\"The service starts with no text-defined setting selecting either location.\",\"The caller scans project P.\"],\"outcomes\":[\"An implementation choosing the first location returns the scan results.\",\"An implementation choosing the second location sees an absent file and returns folder_unavailable or fails to start.\"],\"observer\":\"The calling flow and the operator starting the service\"}},{\"subject\":\"A5: Accepted decision A5 — Access and object connection\",\"kind\":\"undefined record form\",\"text\":\"does not have the record form\",\"question\":\"What is the complete JSON form of the connections file, including its top-level shape, field names and types, path encoding, treatment of unknown fields and duplicate project ids, and whether every M01 field is required?\",\"options\":[\"A JSON object keyed by project UUID\",\"A JSON array of ObjectConnection records\",\"A versioned envelope containing the records\"],\"default_guess\":\"Use a versioned envelope containing a list of strict ObjectConnection records, reject unknown fields and duplicate project ids.\",\"witness\":{\"initial\":\"The file contains two otherwise valid confirmed records with the same project_id but different roots.\",\"events\":[\"The service starts.\",\"The caller scans that project.\"],\"outcomes\":[\"A mapping-oriented implementation rejects the whole file as having duplicate records and answers folder_unavailable.\",\"A list-oriented implementation accepts the file and uses either the first or last record.\"],\"observer\":\"The calling flow and the service operator\"}},{\"subject\":\"A5: Accepted decision A5 — Access and object connection\",\"kind\":\"concurrent read semantics\",\"text\":\"reads the connections file exactly once, at its connection check, and uses that reading for the whole operation\",\"question\":\"What constitutes the one reading when the agent replaces or rewrites the file concurrently: an atomic snapshot selected at open time, a lock-protected read, or whatever byte sequence one unprotected read returns?\",\"options\":[\"Require atomic replacement and use the complete old or new file\",\"Coordinate readers and writers with a shared lock\",\"Permit a partial or mixed read and treat invalid bytes as folder_unavailable\"],\"default_guess\":\"Require writers to replace the file atomically and let an operation use either the complete old file or the complete new file.\",\"witness\":{\"initial\":\"A valid confirmed file is present and a scan has reached its connection check.\",\"events\":[\"The service begins reading the file.\",\"The agent rewrites the same file with a new valid record while the read is in progress.\"],\"outcomes\":[\"A snapshot implementation completes using one valid version.\",\"An unprotected streaming implementation reads mixed bytes and returns folder_unavailable.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A5: Accepted decision A5 — Access and object connection\",\"kind\":\"contradictory refusal precedence\",\"text\":\"An operation on a project with no connection is refused with `unknown_project`, and one with an unconfirmed connection with `connection_not_confirmed`. This is decided by the service, not by the caller.\",\"question\":\"When the requested project has no record but another record makes the whole file invalid, must the answer be unknown_project as rule 6 says or folder_unavailable as rule 7's first condition says?\",\"options\":[\"folder_unavailable because whole-file validation has precedence\",\"unknown_project because the requested project has no connection\"],\"default_guess\":\"Return folder_unavailable because rule 7 explicitly supplies an ordered whole-file check.\",\"witness\":{\"initial\":\"The connections file has no record for project P and has a malformed record for unrelated project Q.\",\"events\":[\"The authenticated caller scans project P.\"],\"outcomes\":[\"Rule 6 gives unknown_project.\",\"Rule 7 gives folder_unavailable because the entire file is judged before project lookup.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A5: Accepted decision A5 — Access and object connection\",\"kind\":\"startup validation ambiguity\",\"text\":\"The service does not start when condition 1 applies.\",\"question\":\"Does a record break rule 8 at startup when its syntactically valid photo subfolder is missing, is not a directory, or resolves outside the root, even though rule 8 requires those resolved-path checks only \\\"On each scan and placement\\\"?\",\"options\":[\"Startup performs both syntactic and resolved-filesystem checks\",\"Startup checks only the serialized record and runtime operations check the filesystem\",\"Startup checks syntax and containment but not existence\"],\"default_guess\":\"At startup validate only the serialized record; perform existence and resolved-path checks during scan and placement as rule 8 expressly says.\",\"witness\":{\"initial\":\"The file has a confirmed record whose photo_subfolder is syntactically valid but is currently a symlink resolving outside the root.\",\"events\":[\"The service is started.\"],\"outcomes\":[\"Treating the runtime clause as part of condition 1 prevents startup.\",\"Treating it as an operation-time check allows startup and later refuses scan or placement.\"],\"observer\":\"The service operator\"}},{\"subject\":\"A5: Accepted decision A5 — Access and object connection\",\"kind\":\"path validation ambiguity\",\"text\":\"The photo and invoice subfolders are non-empty relative paths without `..` and are not the root itself.\",\"question\":\"Does \\\"without `..`\\\" forbid only a path component exactly equal to `..`, every occurrence of those two characters, or a normalized path that escapes; and which separator and normalization rules define a relative path?\",\"options\":[\"Reject an exact `..` component under the host path rules\",\"Reject any textual occurrence of `..`\",\"Parse a portable slash-separated path, normalize it, and reject escape or root equivalence\"],\"default_guess\":\"Parse slash-separated relative paths, reject absolute paths and exact `..` components, normalize `.` components, and then require a non-root result.\",\"witness\":{\"initial\":\"A record uses photo_subfolder `photos..old`.\",\"events\":[\"The service judges the whole connections file.\"],\"outcomes\":[\"A component-based implementation accepts the record.\",\"A textual implementation treats the two dots as forbidden and returns folder_unavailable or refuses startup.\"],\"observer\":\"The service operator and the calling flow\"}},{\"subject\":\"A5: Accepted decision A5 — Access and object connection\",\"kind\":\"contradiction with M04 replay\",\"text\":\"A repeated placement returns it and writes nothing (P-06).\",\"question\":\"After a placement exists but its connection becomes unconfirmed or the connections file becomes invalid, does repeating placement return the existing M04 record or refuse at the newly required connection check?\",\"options\":[\"Always perform A5's connection check first and refuse\",\"Return an existing placement before checking the current connection\"],\"default_guess\":\"Perform the connection check first and refuse, because A5 now says each placement reads and judges the file.\",\"witness\":{\"initial\":\"Project P is confirmed and source S already has a PhotoPlacement.\",\"events\":[\"The agent clears P's confirmation.\",\"The caller places S again.\"],\"outcomes\":[\"M04 says the first placement is returned and nothing is written.\",\"A5 says the placement answers connection_not_confirmed.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A5: Accepted decision A5 — Access and object connection\",\"kind\":\"contradiction with M07 replay\",\"text\":\"The same `photo_id` again returns the first mark; another `photo_id` is refused.\",\"question\":\"After a publication mark exists but its connection becomes unconfirmed or the connections file becomes invalid, does replaying the same photo_id return the mark or fail the newly required connection check?\",\"options\":[\"Always perform A5's connection check first and refuse\",\"Return an existing mark before checking the current connection\"],\"default_guess\":\"Perform the connection check first and refuse, because A5 now says every mark checks the file.\",\"witness\":{\"initial\":\"Project P is confirmed and source S is marked with Portal photo id X.\",\"events\":[\"The agent clears P's confirmation.\",\"The caller marks S with X again.\"],\"outcomes\":[\"M07 says the first mark is returned as a replay.\",\"A5 says the mark answers connection_not_confirmed.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A5: Accepted decision A5 — Access and object connection\",\"kind\":\"incomplete invariant test\",\"text\":\"INV-10: scan, placement and mark each answer `connection_not_confirmed` for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`).\",\"question\":\"What must the INV-10 test show about side effects for an initially unconfirmed connection, since this sentence specifies the answer but—unlike the later cleared-confirmation and invalid-file cases—does not require that nothing is scanned or written?\",\"options\":[\"Assert the answer and that no folder, store, placement, or mark action occurs\",\"Assert only the answer code\"],\"default_guess\":\"Assert the answer and that no scan or write of any kind occurs.\"},{\"subject\":\"A5: Accepted decision A5 — Access and object connection\",\"kind\":\"missing invariant case\",\"text\":\"INV-10: nothing is scanned, placed or marked for a project unless the connections file read by that operation is valid and holds a confirmed connection for the project.\",\"question\":\"Which Required tests check the no-record case and show that scan, placement, and mark each return unknown_project and perform no scan or write?\",\"options\":[\"Add an explicit no-record case for all three operations\",\"Treat the existing unconfirmed test as also covering an absent record\",\"Do not require an INV-10 witness for the no-record branch\"],\"default_guess\":\"Add an explicit no-record case for scan, placement, and mark, asserting unknown_project and no side effects.\"},{\"subject\":\"A5: Accepted decision A5 — Access and object connection\",\"kind\":\"incomplete snapshot test\",\"text\":\"Each operation reads the file once (`test_each_operation_reads_the_connection_record_once`).\",\"question\":\"What must this test demonstrate about using the same reading for the whole operation and about a replacement after the read, rather than merely counting one file-open call?\",\"options\":[\"Replace the file after the read and assert the operation finishes from the old snapshot\",\"Only assert a single read call\",\"Exercise both a post-read replacement and a pre-read replacement\"],\"default_guess\":\"Exercise replacements on both sides of the connection check and assert that a post-read change affects only a later operation.\"},{\"subject\":\"A7: Accepted decision A7 — Time\",\"kind\":\"missing referenced rule\",\"text\":\"A source id in the body of a placement is not a path identifier: it is checked after the clock, at the place A3 rule 4 gives it.\",\"question\":\"What exactly does A3 rule 4 require at that point—request-level refusal or per-source failure, ordering relative to the project lock and connection check, and handling when only some source ids are invalid—since that rule is not present in the supplied texts?\",\"options\":[\"Reject the entire placement request after reading the clock\",\"Return a failed outcome only for each invalid source id and continue with valid ids\",\"Validate all source ids after the clock but before the lock and connection check\"],\"default_guess\":\"After the single clock read, validate each source id and return a per-source failed outcome while continuing with valid ids.\",\"witness\":{\"initial\":\"An authenticated placement request for a valid project contains one valid source id and one uppercase, nonconforming source id.\",\"events\":[\"The request form and project id are accepted.\",\"The service reads the clock.\",\"The placement reaches the unspecified A3 rule 4 point.\"],\"outcomes\":[\"A request-level implementation refuses the whole call and does not place the valid source.\",\"A per-item implementation fails the invalid source and places the valid source.\"],\"observer\":\"The calling flow and owner\"}},{\"subject\":\"A7: Accepted decision A7 — Time\",\"kind\":\"unspecified check precedence\",\"text\":\"after the token, the request form and the path identifiers are accepted\",\"question\":\"When the request form and a path identifier are both invalid, which is checked first and which refusal is returned?\",\"options\":[\"Validate the request form before path identifiers\",\"Validate path identifiers before the rest of the request form\",\"Define a single validation result with deterministic field ordering\"],\"default_guess\":\"Validate the request form structurally first, then validate path identifiers in their declared field order.\",\"witness\":{\"initial\":\"An authenticated placement request has a malformed body and a non-UUID project id.\",\"events\":[\"The service validates the request before the clock-read point.\"],\"outcomes\":[\"A form-first implementation returns the malformed-body refusal.\",\"An identifier-first implementation returns the invalid-project-id refusal.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A7: Accepted decision A7 — Time\",\"kind\":\"incomplete invariant test\",\"text\":\"INV-13: a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Which cases must show INV-13 for operations refused after the clock and for replayed marks, where an implementation could read the clock more than once even though successful calls pass the named test?\",\"options\":[\"Test every post-clock refusal and replay path with a counting clock\",\"Test one representative post-clock refusal plus mark replay\",\"Treat only successful calls as the invariant's domain\"],\"default_guess\":\"Test each distinct post-clock branch, including invalid placement source ids, connection refusals, file refusals, and replayed marks.\",\"witness\":{\"initial\":\"A mark already exists for source S and photo id X.\",\"events\":[\"The caller replays the mark with X.\",\"The implementation reads the clock once before the connection check and again in its replay branch.\"],\"outcomes\":[\"A test covering only a newly created mark passes despite two reads on replay.\",\"A test covering replay detects the violation of INV-13.\"],\"observer\":\"The generated-service test suite and reviewer\"}},{\"subject\":\"A5: Accepted decision A5 — Access and object connection\",\"kind\":\"standard_violation\",\"text\":\"   | Order | Condition | Answer |\\n   |---|---|---|\\n   | 1 | the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or any record breaks rule 8 | `folder_unavailable` |\\n   | 2 | the file holds no record for the project | `unknown_project` |\\n   | 3 | the project's record is unconfirmed | `connection_not_confirmed` |\",\"rule\":\"| закрытый список вариантов: статусы, виды, коды | `models`, перечисление | `= models.ИмяПеречисления` | перечисление как тип |\",\"section\":\"15.3.1\",\"question\":\"Make these closed refusal codes members of a model enumeration and name the enumeration and each member through the required `= models.*` path instead of supplying bare code values.\"}]}",
+ "set_aside": []
+}

@@ -115,8 +115,11 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
    does not report as `ready` fails with `not_ready_or_absent`. A source reported `ready` whose
    bytes no longer have the requested hash when it is read for placing fails with `source_changed`.
 4. A call holds from 1 to 50 source ids, otherwise it is refused whole. Checks run in this order:
-   token, request form and project id, connection, photo folder, every source id. A malformed source
-   id refuses the whole call before anything is written. Items are processed in request order, so
+   token, request form and project id, connection, photo folder, every source id. The request form is
+   a body holding only `source_ids`, a list of 1 to 50 strings; a defect of that form or of the project
+   id is refused before the clock is read. A string that is not 64 lowercase hexadecimal characters is
+   a malformed source id, and one malformed source
+   id refuses the whole call with `invalid_source_id` before anything is written. Items are processed in request order, so
    a source id repeated in one call is `placed` and then `replayed`. A read or storage failure of
    one photo is reported in its item as `unreadable_file` and the others proceed.
 5. The stored image is written before the placement record, so a crash between them repeats the
@@ -195,21 +198,25 @@ A published photo is recognised without any change to the Portal.
 7. Each scan, placement and mark reads the connections file exactly once, at its connection check,
    and uses that reading for the whole operation. A change written later applies from the next
    operation without a restart, and an operation that has already read the file finishes on that
-   reading. The file is judged whole before any project is looked up, so the first condition that
-   applies decides:
+   reading. A request refused before its connection check does not read the file. The agent replaces
+   the file by writing a complete new file in the same folder and renaming it, so a reading sees the
+   complete old file or the complete new one. The file is judged whole before any project is looked
+   up, so the first condition that applies decides:
 
    | Order | Condition | Answer |
    |---|---|---|
-   | 1 | the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or any record breaks rule 8 | `folder_unavailable` |
+   | 1 | the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or the subfolders of any record break the form of rule 8 | `folder_unavailable` |
    | 2 | the file holds no record for the project | `unknown_project` |
    | 3 | the project's record is unconfirmed | `connection_not_confirmed` |
 
    The service does not start when condition 1 applies.
-8. The photo and invoice subfolders are non-empty relative paths without `..` and are not the root
-   itself. On each scan and placement
-   the photo folder must be a folder whose resolved path is strictly below the resolved root,
-   otherwise the operation is refused
-   with `folder_unavailable`.
+8. The form of a subfolder: the photo and invoice subfolders are non-empty relative paths without
+   `..` and are not the root itself. Separately, on each scan and placement the photo folder of the
+   requested project must be a folder whose resolved path is strictly below the resolved root,
+   otherwise the operation is refused with `folder_unavailable`. This second check does not run at
+   the start of the service or for other projects. The deliverer never opens the invoice folder, so
+   the resolved path of that folder is checked by the Cabinet Inbox when it moves to this record
+   (R0-09).
 9. A project id must be a UUID and a source id 64 lowercase hexadecimal characters. Neither a file
    name nor any other received text becomes part of a stored path.
 10. An answer never holds a server path or a credential. File names are returned as plain data.
@@ -223,7 +230,7 @@ A published photo is recognised without any change to the Portal.
 ### Required tests
 
 - INV-09: every declared route except the health answer refuses a request without the token (`test_every_route_except_health_requires_the_token`), and a wrong token or one without the `Bearer` prefix is refused (`test_the_api_requires_the_token`).
-- INV-10: scan, placement and mark each answer `connection_not_confirmed` for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`). After a scan has succeeded on the running service, clearing the confirmation makes scan, placement and mark each answer `connection_not_confirmed` and write nothing (`test_a_cleared_confirmation_stops_the_running_service`). For an absent file, a file that is not UTF-8 or JSON, a file of another form and a record that breaks rule 8, also when that record is unconfirmed, scan, placement and mark each answer `folder_unavailable` and write nothing (`test_unreadable_connections_deliver_nothing`), and the service does not start (`test_the_service_does_not_start_with_an_unreadable_connection_record`). Each operation reads the file once (`test_each_operation_reads_the_connection_record_once`). A connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).
+- INV-10: scan, placement and mark each answer `connection_not_confirmed` for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`). After a scan has succeeded on the running service, clearing the confirmation makes scan, placement and mark each answer `connection_not_confirmed` and write nothing (`test_a_cleared_confirmation_stops_the_running_service`). For a valid file with no record for the project, scan, placement and mark each answer `unknown_project` and write nothing (`test_a_project_without_a_connection_delivers_nothing`). For an absent file, a file that cannot be opened, a file that is not UTF-8 or JSON, a file of another form and a record that breaks the form of rule 8, also when that record is unconfirmed or belongs to another project, scan, placement and mark each answer `folder_unavailable` and write nothing (`test_unreadable_connections_deliver_nothing`), and the service does not start (`test_the_service_does_not_start_with_an_unreadable_connection_record`). A scan, placement or mark that reaches its connection check reads the file exactly once (`test_each_operation_reads_the_connection_record_once`), a request refused earlier reads it zero times (`test_a_request_refused_before_the_connection_check_does_not_read_the_file`), and a file replaced after the reading does not change the running operation (`test_an_operation_finishes_on_the_reading_it_made`). A connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).
 - INV-11: answers of scan, place, mark and a refusal contain neither the folder path, the store path nor the state path (`test_the_api_scans_and_places_without_showing_server_paths`), and the generated service has no Portal client, no outbound HTTP dependency and no Portal credential setting.
 
 ### Consequence

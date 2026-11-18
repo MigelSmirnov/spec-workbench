@@ -1,0 +1,234 @@
+{
+ "open_points": [
+  {
+   "subject": "A5 connections file location",
+   "kind": "missing configuration source",
+   "text": "Each scan, placement and mark reads the connections file exactly once, at its connection check, and uses that reading for the whole operation.",
+   "question": "Which exact file does the service read, and is its path fixed or supplied through a configuration field?",
+   "options": [
+    "A fixed deployment path",
+    "A field of the runtime settings object",
+    "A constructor or command-line parameter"
+   ],
+   "default_guess": "Use a typed runtime-settings field for the absolute connections-file path.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 connection record form",
+   "kind": "undefined validation schema",
+   "text": "the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or any record breaks rule 8",
+   "question": "What exact JSON top-level shape, record fields, field types, duplicate-key policy, unknown-field policy and project-key relationship constitute \"the record form\"?",
+   "options": [
+    "A JSON object keyed by project UUID with strict records",
+    "A JSON array of records with unique project_id values",
+    "A permissive structure accepting unknown fields"
+   ],
+   "default_guess": "Use an object keyed by canonical project UUID, require every M01 field with its declared type, reject duplicate JSON keys and project-id mismatches, and reject unknown fields.",
+   "witness": {
+    "initial": "The file is valid UTF-8 JSON and contains all M01 fields, but it is an array rather than an object keyed by project id.",
+    "events": [
+     "The owner has confirmed the connection.",
+     "The calling flow asks the service to scan that project."
+    ],
+    "outcomes": [
+     "The implementation accepts the array as the record form and performs the scan.",
+     "The implementation rejects the file as having another form and answers folder_unavailable."
+    ],
+    "observer": "The calling flow and owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 connection-file replacement",
+   "kind": "concurrent update semantics",
+   "text": "A change written later applies from the next operation without a restart, and an operation that has already read the file finishes on that reading.",
+   "question": "Must the agent replace the connections file atomically, and which snapshot must a read overlapping a write observe?",
+   "options": [
+    "The writer must atomically replace the complete file, so the reader sees either the old or new version",
+    "An overlapping reader may see a partial file and answer folder_unavailable",
+    "The reader must retry until it obtains a stable complete version"
+   ],
+   "default_guess": "Require atomic replacement and let each operation observe either the complete old file or the complete new file.",
+   "witness": {
+    "initial": "A valid confirmed connection is in the file and the service is running.",
+    "events": [
+     "The calling flow starts a scan.",
+     "At the same time, the agent rewrites the file to clear assignment_confirmed using an in-place truncate-and-write sequence.",
+     "The scan performs its single file read during that rewrite."
+    ],
+    "outcomes": [
+     "The scan reads a partial JSON document and answers folder_unavailable.",
+     "The update is treated as an atomic replacement; the scan reads either the old confirmed record and finishes or the new unconfirmed record and answers connection_not_confirmed."
+    ],
+    "observer": "The calling flow and owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 rule 7 versus rule 8",
+   "kind": "startup contradiction",
+   "text": "The file is judged whole before any project is looked up, so the first condition that applies decides:\n\n   | Order | Condition | Answer |\n   |---|---|---|\n   | 1 | the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or any record breaks rule 8 | `folder_unavailable` |\n   | 2 | the file holds no record for the project | `unknown_project` |\n   | 3 | the project's record is unconfirmed | `connection_not_confirmed` |\n\n   The service does not start when condition 1 applies.\n8. The photo and invoice subfolders are non-empty relative paths without `..` and are not the root\n   itself. On each scan and placement\n   the photo folder must be a folder whose resolved path is strictly below the resolved root,\n   otherwise the operation is refused\n   with `folder_unavailable`.",
+   "question": "Is the resolved-photo-folder condition part of whole-file startup validation, or is it checked only for the requested project during scan and placement?",
+   "options": [
+    "Validate every record's resolved photo folder at startup and refuse to start if any fails",
+    "At startup validate only the static record fields; check resolved folders during each scan or placement",
+    "Validate the requested record only, even though rule 7 says the file is judged whole"
+   ],
+   "default_guess": "Treat the relative-subfolder requirements as file validation, but check the requested project's resolved photo folder only during scan or placement.",
+   "witness": {
+    "initial": "The connections file has two syntactically valid records; project A is confirmed and usable, while project B's photo_subfolder is a symlink resolving outside B's root.",
+    "events": [
+     "The operator starts the service.",
+     "The calling flow asks to scan project A."
+    ],
+    "outcomes": [
+     "Because any record breaks rule 8, condition 1 applies and the service does not start.",
+     "Because resolved containment is checked on each scan or placement, the service starts and project A scans successfully; only an operation on B is refused."
+    ],
+    "observer": "The operator and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M01 invoice subfolder containment and A5 rule 8",
+   "kind": "cross-text contradiction",
+   "text": "Both subfolders stay inside the root.\nThe photo and invoice subfolders are non-empty relative paths without `..` and are not the root\n   itself. On each scan and placement\n   the photo folder must be a folder whose resolved path is strictly below the resolved root",
+   "question": "Must the invoice folder's resolved path also be strictly below the resolved root, including when a relative invoice path traverses a symlink?",
+   "options": [
+    "Resolve and validate both photo and invoice folders",
+    "Resolve only the photo folder because the deliverer does not use invoices",
+    "Reject lexical traversal only for the invoice folder"
+   ],
+   "default_guess": "Resolve and validate both subfolders when judging the connection record.",
+   "witness": {
+    "initial": "A record has invoice_subfolder set to a relative symlink that resolves outside the root; its photo folder is safely below the root.",
+    "events": [
+     "The agent writes and confirms the record.",
+     "The service starts and the calling flow scans the project."
+    ],
+    "outcomes": [
+     "M01's requirement makes the connection invalid because the invoice subfolder does not stay inside the root.",
+     "A5's explicit resolved-path check applies only to the photo folder, so the record is accepted and the scan proceeds."
+    ],
+    "observer": "The operator and owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 INV-10 Required tests",
+   "kind": "invariant test omission",
+   "text": "INV-10: nothing is scanned, placed or marked for a project unless the connections file read by that operation is valid and holds a confirmed connection for the project.\n- INV-10: scan, placement and mark each answer `connection_not_confirmed` for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`). After a scan has succeeded on the running service, clearing the confirmation makes scan, placement and mark each answer `connection_not_confirmed` and write nothing (`test_a_cleared_confirmation_stops_the_running_service`). For an absent file, a file that is not UTF-8 or JSON, a file of another form and a record that breaks rule 8, also when that record is unconfirmed, scan, placement and mark each answer `folder_unavailable` and write nothing (`test_unreadable_connections_deliver_nothing`), and the service does not start (`test_the_service_does_not_start_with_an_unreadable_connection_record`). Each operation reads the file once (`test_each_operation_reads_the_connection_record_once`). A connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).",
+   "question": "Which required check shows that scan, placement and mark do not scan, write or mark anything when the valid file has no record for the requested project?",
+   "options": [
+    "Add an unknown-project test for all three operations that asserts unknown_project and no reads or writes beyond the connection file",
+    "Extend one named test explicitly to cover the missing-record case",
+    "Narrow INV-10 so it does not claim coverage of the missing-record case"
+   ],
+   "default_guess": "Add an explicit unknown-project test for scan, placement and mark that asserts unknown_project and no folder, placement or mark activity.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 identifier refusal",
+   "kind": "undefined refusal result",
+   "text": "A project id must be a UUID and a source id 64 lowercase hexadecimal characters.",
+   "question": "What exact refusal does scan, placement or mark return for a malformed project id or source id, and does one malformed source id reject the whole placement request or produce one failed per-photo outcome?",
+   "options": [
+    "Reject the whole request with an HTTP request-validation response",
+    "Return a domain refusal for the whole operation",
+    "For placement, return a failed outcome for the malformed source id while processing the others"
+   ],
+   "default_guess": "Reject a malformed project id as a whole-request validation error; represent each malformed placement source id as a failed per-photo outcome so other requested photos continue.",
+   "witness": {
+    "initial": "A placement request is authenticated and structurally valid, and contains one valid source id plus one 64-character uppercase hexadecimal source id.",
+    "events": [
+     "The calling flow sends the placement request.",
+     "The service reads the clock as A7 requires before checking source ids."
+    ],
+    "outcomes": [
+     "The service rejects the entire request as an invalid identifier and places nothing.",
+     "The service reports one failed outcome for the uppercase id and continues placing the valid source."
+    ],
+    "observer": "The calling flow and owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 camera timestamp meaning",
+   "kind": "undefined instant conversion",
+   "text": "The photo moment comes from the file, as A2 decides, and never from the service clock.",
+   "question": "When the camera record contains a date and time without a UTC offset, what timezone or other rule turns it into the UTC instant stored in taken_at and photo_date?",
+   "options": [
+    "Interpret an offset-less camera value as UTC",
+    "Interpret it in a configured project or owner timezone, including daylight-saving rules",
+    "Ignore an offset-less camera value and fall back to the file modification time"
+   ],
+   "default_guess": "Use an explicitly configured IANA timezone for offset-less camera timestamps, reject nonexistent local times, disambiguate repeated times by a stated rule, then convert to naive UTC.",
+   "witness": {
+    "initial": "A photo has an EXIF camera time of 2026-01-10 10:00:00 with no offset; the project is in Europe/Madrid.",
+    "events": [
+     "The owner chooses the photo for delivery.",
+     "The service prepares and places it."
+    ],
+    "outcomes": [
+     "The camera value is treated as UTC and photo_date is 2026-01-10T10:00:00.",
+     "The camera value is treated as Madrid local time and photo_date is 2026-01-10T09:00:00."
+    ],
+    "observer": "The owner and, after publication is shown, the client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 ISO 8601 representation",
+   "kind": "non-canonical representation",
+   "text": "The current time is a `datetime` in UTC without an offset, with microsecond precision and no\n   rounding, written in ISO 8601 form.",
+   "question": "Which single ISO 8601 spelling is required, including separator, fractional-second width and whether a UTC designator is present despite the offset-less representation?",
+   "options": [
+    "YYYY-MM-DDTHH:MM:SS.ffffff with exactly six digits and no suffix",
+    "Omit the fraction when it is zero and trim trailing zeros otherwise",
+    "Use a Z suffix to denote UTC"
+   ],
+   "default_guess": "Use YYYY-MM-DDTHH:MM:SS.ffffff with exactly six fractional digits and no offset or Z suffix.",
+   "witness": {
+    "initial": "The clock returns a UTC datetime whose microsecond field is zero.",
+    "events": [
+     "The calling flow records a publication mark.",
+     "The service serializes marked_at."
+    ],
+    "outcomes": [
+     "The stored value is 2026-11-18T12:00:00.",
+     "The stored value is 2026-11-18T12:00:00.000000."
+    ],
+    "observer": "A repository reader and the calling flow when the value is returned"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 INV-13 Required tests",
+   "kind": "rule-test contradiction",
+   "text": "A request refused before that point and the health answer do not read it. A request\n   refused after it, and a replayed mark, have read it and write nothing.\n- INV-13: a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Must the Required tests explicitly show zero clock reads for every pre-clock refusal and exactly one for representative post-clock refusals and a replayed mark, rather than saying without qualification that each operation reads exactly once?",
+   "options": [
+    "Test successful calls, every pre-clock refusal class, representative post-clock refusals and replayed marks separately",
+    "Interpret \"each\" as successful calls only and leave refusal timing untested",
+    "Change the invariant and rules so every authenticated route invocation reads once"
+   ],
+   "default_guess": "Specify separate counting-clock cases: zero for invalid token, invalid request form and invalid path identifiers; one for successful calls, invalid placement source ids, connection refusals and replayed marks.",
+   "witness": {
+    "initial": "The counting clock is at zero and a scan request has a wrong bearer token.",
+    "events": [
+     "The caller sends the scan request.",
+     "The test named test_each_operation_reads_the_clock_once is interpreted by one implementer as applying to every invocation and by another as applying only to an accepted scan."
+    ],
+    "outcomes": [
+     "The normative ordering is followed and the counter remains zero.",
+     "The unqualified Required tests sentence is followed literally and the scan reads the clock once before refusing."
+    ],
+    "observer": "The test author through the counting clock"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A5 connections file location\",\"kind\":\"missing configuration source\",\"text\":\"Each scan, placement and mark reads the connections file exactly once, at its connection check, and uses that reading for the whole operation.\",\"question\":\"Which exact file does the service read, and is its path fixed or supplied through a configuration field?\",\"options\":[\"A fixed deployment path\",\"A field of the runtime settings object\",\"A constructor or command-line parameter\"],\"default_guess\":\"Use a typed runtime-settings field for the absolute connections-file path.\"},{\"subject\":\"A5 connection record form\",\"kind\":\"undefined validation schema\",\"text\":\"the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or any record breaks rule 8\",\"question\":\"What exact JSON top-level shape, record fields, field types, duplicate-key policy, unknown-field policy and project-key relationship constitute \\\"the record form\\\"?\",\"options\":[\"A JSON object keyed by project UUID with strict records\",\"A JSON array of records with unique project_id values\",\"A permissive structure accepting unknown fields\"],\"default_guess\":\"Use an object keyed by canonical project UUID, require every M01 field with its declared type, reject duplicate JSON keys and project-id mismatches, and reject unknown fields.\",\"witness\":{\"initial\":\"The file is valid UTF-8 JSON and contains all M01 fields, but it is an array rather than an object keyed by project id.\",\"events\":[\"The owner has confirmed the connection.\",\"The calling flow asks the service to scan that project.\"],\"outcomes\":[\"The implementation accepts the array as the record form and performs the scan.\",\"The implementation rejects the file as having another form and answers folder_unavailable.\"],\"observer\":\"The calling flow and owner\"}},{\"subject\":\"A5 connection-file replacement\",\"kind\":\"concurrent update semantics\",\"text\":\"A change written later applies from the next operation without a restart, and an operation that has already read the file finishes on that reading.\",\"question\":\"Must the agent replace the connections file atomically, and which snapshot must a read overlapping a write observe?\",\"options\":[\"The writer must atomically replace the complete file, so the reader sees either the old or new version\",\"An overlapping reader may see a partial file and answer folder_unavailable\",\"The reader must retry until it obtains a stable complete version\"],\"default_guess\":\"Require atomic replacement and let each operation observe either the complete old file or the complete new file.\",\"witness\":{\"initial\":\"A valid confirmed connection is in the file and the service is running.\",\"events\":[\"The calling flow starts a scan.\",\"At the same time, the agent rewrites the file to clear assignment_confirmed using an in-place truncate-and-write sequence.\",\"The scan performs its single file read during that rewrite.\"],\"outcomes\":[\"The scan reads a partial JSON document and answers folder_unavailable.\",\"The update is treated as an atomic replacement; the scan reads either the old confirmed record and finishes or the new unconfirmed record and answers connection_not_confirmed.\"],\"observer\":\"The calling flow and owner\"}},{\"subject\":\"A5 rule 7 versus rule 8\",\"kind\":\"startup contradiction\",\"text\":\"The file is judged whole before any project is looked up, so the first condition that applies decides:\\n\\n   | Order | Condition | Answer |\\n   |---|---|---|\\n   | 1 | the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or any record breaks rule 8 | `folder_unavailable` |\\n   | 2 | the file holds no record for the project | `unknown_project` |\\n   | 3 | the project's record is unconfirmed | `connection_not_confirmed` |\\n\\n   The service does not start when condition 1 applies.\\n8. The photo and invoice subfolders are non-empty relative paths without `..` and are not the root\\n   itself. On each scan and placement\\n   the photo folder must be a folder whose resolved path is strictly below the resolved root,\\n   otherwise the operation is refused\\n   with `folder_unavailable`.\",\"question\":\"Is the resolved-photo-folder condition part of whole-file startup validation, or is it checked only for the requested project during scan and placement?\",\"options\":[\"Validate every record's resolved photo folder at startup and refuse to start if any fails\",\"At startup validate only the static record fields; check resolved folders during each scan or placement\",\"Validate the requested record only, even though rule 7 says the file is judged whole\"],\"default_guess\":\"Treat the relative-subfolder requirements as file validation, but check the requested project's resolved photo folder only during scan or placement.\",\"witness\":{\"initial\":\"The connections file has two syntactically valid records; project A is confirmed and usable, while project B's photo_subfolder is a symlink resolving outside B's root.\",\"events\":[\"The operator starts the service.\",\"The calling flow asks to scan project A.\"],\"outcomes\":[\"Because any record breaks rule 8, condition 1 applies and the service does not start.\",\"Because resolved containment is checked on each scan or placement, the service starts and project A scans successfully; only an operation on B is refused.\"],\"observer\":\"The operator and the calling flow\"}},{\"subject\":\"M01 invoice subfolder containment and A5 rule 8\",\"kind\":\"cross-text contradiction\",\"text\":\"Both subfolders stay inside the root.\\nThe photo and invoice subfolders are non-empty relative paths without `..` and are not the root\\n   itself. On each scan and placement\\n   the photo folder must be a folder whose resolved path is strictly below the resolved root\",\"question\":\"Must the invoice folder's resolved path also be strictly below the resolved root, including when a relative invoice path traverses a symlink?\",\"options\":[\"Resolve and validate both photo and invoice folders\",\"Resolve only the photo folder because the deliverer does not use invoices\",\"Reject lexical traversal only for the invoice folder\"],\"default_guess\":\"Resolve and validate both subfolders when judging the connection record.\",\"witness\":{\"initial\":\"A record has invoice_subfolder set to a relative symlink that resolves outside the root; its photo folder is safely below the root.\",\"events\":[\"The agent writes and confirms the record.\",\"The service starts and the calling flow scans the project.\"],\"outcomes\":[\"M01's requirement makes the connection invalid because the invoice subfolder does not stay inside the root.\",\"A5's explicit resolved-path check applies only to the photo folder, so the record is accepted and the scan proceeds.\"],\"observer\":\"The operator and owner\"}},{\"subject\":\"A5 INV-10 Required tests\",\"kind\":\"invariant test omission\",\"text\":\"INV-10: nothing is scanned, placed or marked for a project unless the connections file read by that operation is valid and holds a confirmed connection for the project.\\n- INV-10: scan, placement and mark each answer `connection_not_confirmed` for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`). After a scan has succeeded on the running service, clearing the confirmation makes scan, placement and mark each answer `connection_not_confirmed` and write nothing (`test_a_cleared_confirmation_stops_the_running_service`). For an absent file, a file that is not UTF-8 or JSON, a file of another form and a record that breaks rule 8, also when that record is unconfirmed, scan, placement and mark each answer `folder_unavailable` and write nothing (`test_unreadable_connections_deliver_nothing`), and the service does not start (`test_the_service_does_not_start_with_an_unreadable_connection_record`). Each operation reads the file once (`test_each_operation_reads_the_connection_record_once`). A connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).\",\"question\":\"Which required check shows that scan, placement and mark do not scan, write or mark anything when the valid file has no record for the requested project?\",\"options\":[\"Add an unknown-project test for all three operations that asserts unknown_project and no reads or writes beyond the connection file\",\"Extend one named test explicitly to cover the missing-record case\",\"Narrow INV-10 so it does not claim coverage of the missing-record case\"],\"default_guess\":\"Add an explicit unknown-project test for scan, placement and mark that asserts unknown_project and no folder, placement or mark activity.\"},{\"subject\":\"A5 identifier refusal\",\"kind\":\"undefined refusal result\",\"text\":\"A project id must be a UUID and a source id 64 lowercase hexadecimal characters.\",\"question\":\"What exact refusal does scan, placement or mark return for a malformed project id or source id, and does one malformed source id reject the whole placement request or produce one failed per-photo outcome?\",\"options\":[\"Reject the whole request with an HTTP request-validation response\",\"Return a domain refusal for the whole operation\",\"For placement, return a failed outcome for the malformed source id while processing the others\"],\"default_guess\":\"Reject a malformed project id as a whole-request validation error; represent each malformed placement source id as a failed per-photo outcome so other requested photos continue.\",\"witness\":{\"initial\":\"A placement request is authenticated and structurally valid, and contains one valid source id plus one 64-character uppercase hexadecimal source id.\",\"events\":[\"The calling flow sends the placement request.\",\"The service reads the clock as A7 requires before checking source ids.\"],\"outcomes\":[\"The service rejects the entire request as an invalid identifier and places nothing.\",\"The service reports one failed outcome for the uppercase id and continues placing the valid source.\"],\"observer\":\"The calling flow and owner\"}},{\"subject\":\"A7 camera timestamp meaning\",\"kind\":\"undefined instant conversion\",\"text\":\"The photo moment comes from the file, as A2 decides, and never from the service clock.\",\"question\":\"When the camera record contains a date and time without a UTC offset, what timezone or other rule turns it into the UTC instant stored in taken_at and photo_date?\",\"options\":[\"Interpret an offset-less camera value as UTC\",\"Interpret it in a configured project or owner timezone, including daylight-saving rules\",\"Ignore an offset-less camera value and fall back to the file modification time\"],\"default_guess\":\"Use an explicitly configured IANA timezone for offset-less camera timestamps, reject nonexistent local times, disambiguate repeated times by a stated rule, then convert to naive UTC.\",\"witness\":{\"initial\":\"A photo has an EXIF camera time of 2026-01-10 10:00:00 with no offset; the project is in Europe/Madrid.\",\"events\":[\"The owner chooses the photo for delivery.\",\"The service prepares and places it.\"],\"outcomes\":[\"The camera value is treated as UTC and photo_date is 2026-01-10T10:00:00.\",\"The camera value is treated as Madrid local time and photo_date is 2026-01-10T09:00:00.\"],\"observer\":\"The owner and, after publication is shown, the client\"}},{\"subject\":\"A7 ISO 8601 representation\",\"kind\":\"non-canonical representation\",\"text\":\"The current time is a `datetime` in UTC without an offset, with microsecond precision and no\\n   rounding, written in ISO 8601 form.\",\"question\":\"Which single ISO 8601 spelling is required, including separator, fractional-second width and whether a UTC designator is present despite the offset-less representation?\",\"options\":[\"YYYY-MM-DDTHH:MM:SS.ffffff with exactly six digits and no suffix\",\"Omit the fraction when it is zero and trim trailing zeros otherwise\",\"Use a Z suffix to denote UTC\"],\"default_guess\":\"Use YYYY-MM-DDTHH:MM:SS.ffffff with exactly six fractional digits and no offset or Z suffix.\",\"witness\":{\"initial\":\"The clock returns a UTC datetime whose microsecond field is zero.\",\"events\":[\"The calling flow records a publication mark.\",\"The service serializes marked_at.\"],\"outcomes\":[\"The stored value is 2026-11-18T12:00:00.\",\"The stored value is 2026-11-18T12:00:00.000000.\"],\"observer\":\"A repository reader and the calling flow when the value is returned\"}},{\"subject\":\"A7 INV-13 Required tests\",\"kind\":\"rule-test contradiction\",\"text\":\"A request refused before that point and the health answer do not read it. A request\\n   refused after it, and a replayed mark, have read it and write nothing.\\n- INV-13: a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Must the Required tests explicitly show zero clock reads for every pre-clock refusal and exactly one for representative post-clock refusals and a replayed mark, rather than saying without qualification that each operation reads exactly once?\",\"options\":[\"Test successful calls, every pre-clock refusal class, representative post-clock refusals and replayed marks separately\",\"Interpret \\\"each\\\" as successful calls only and leave refusal timing untested\",\"Change the invariant and rules so every authenticated route invocation reads once\"],\"default_guess\":\"Specify separate counting-clock cases: zero for invalid token, invalid request form and invalid path identifiers; one for successful calls, invalid placement source ids, connection refusals and replayed marks.\",\"witness\":{\"initial\":\"The counting clock is at zero and a scan request has a wrong bearer token.\",\"events\":[\"The caller sends the scan request.\",\"The test named test_each_operation_reads_the_clock_once is interpreted by one implementer as applying to every invocation and by another as applying only to an accepted scan.\"],\"outcomes\":[\"The normative ordering is followed and the counter remains zero.\",\"The unqualified Required tests sentence is followed literally and the scan reads the clock once before refusing.\"],\"observer\":\"The test author through the counting clock\"}}]}",
+ "set_aside": []
+}

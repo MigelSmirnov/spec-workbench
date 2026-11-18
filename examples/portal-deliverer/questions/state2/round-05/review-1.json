@@ -1,0 +1,248 @@
+{
+ "open_points": [
+  {
+   "subject": "A5 connections file format",
+   "kind": "undefined record form",
+   "text": "does not have the record form",
+   "question": "What exact JSON shape is the connections file required to have, including its top-level structure, field types, project-key representation, treatment of missing or unknown fields, duplicate project identifiers and JSON values such as numbers used where strings or booleans are required?",
+   "options": [
+    "A JSON object keyed by canonical project UUID, with each value containing exactly the M01 fields",
+    "A JSON array of M01 records, with uniqueness and unknown-field rules specified separately",
+    "Another explicitly defined schema"
+   ],
+   "default_guess": "Use a JSON object keyed by canonical project UUID, require exactly one complete M01-shaped record per key, reject duplicate keys, wrong field types and unknown fields.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 concurrent connection-file access",
+   "kind": "undefined snapshot semantics",
+   "text": "Each scan, placement and mark reads the connections file exactly once, at its connection check, and uses that reading for the whole operation. A change written later applies from the next operation without a restart, and an operation that has already read the file finishes on that reading.",
+   "question": "What constitutes the single reading when the agent changes the file concurrently, and must publication of a new file be atomic so that an operation can observe only the complete old version or the complete new version?",
+   "options": [
+    "Writers atomically replace the file and readers observe one complete old-or-new byte snapshot",
+    "An overlapping read may observe a partial file and answer folder_unavailable",
+    "The service coordinates readers and writers with a lock"
+   ],
+   "default_guess": "Require atomic replacement by the writer; one operation opens and consumes one immutable byte snapshot and may see either the complete old file or the complete new file.",
+   "witness": {
+    "initial": "The service is running with a valid, confirmed connection file for project P.",
+    "events": [
+     "The owner confirms changed folders and the agent begins rewriting the connections file.",
+     "At the same time, the calling flow starts a scan for P and reaches its connection check."
+    ],
+    "outcomes": [
+     "The scan reads the complete old snapshot and finishes using the old confirmed connection; the next operation sees the replacement.",
+     "The scan observes the rewrite in progress, parses a partial file and answers folder_unavailable."
+    ],
+    "observer": "The calling flow and the owner see success versus folder_unavailable."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 startup validation versus operation-time path validation",
+   "kind": "ambiguous refusal phase",
+   "text": "or any record breaks rule 8",
+   "question": "Does a record break rule 8 at startup only when its subfolder strings violate the lexical restrictions, or also when the current filesystem resolution of its photo folder is not strictly below the root?",
+   "options": [
+    "Startup checks only the record's lexical subfolder values; scan and placement check filesystem resolution",
+    "Startup also resolves every photo folder and refuses to start when one resolves outside its root",
+    "Startup resolves existing folders but operation-time checks remain authoritative after filesystem changes"
+   ],
+   "default_guess": "Treat only the first, lexical sentence of rule 8 as record validation at startup and perform the resolved-path/folder check on each scan and placement.",
+   "witness": {
+    "initial": "The connections file has syntactically valid relative subfolders, but one photo subfolder is a symlink resolving outside its root when the service starts.",
+    "events": [
+     "The operator starts the service.",
+     "The calling flow attempts a scan for that project if startup succeeds."
+    ],
+    "outcomes": [
+     "The service does not start because the record breaks rule 8.",
+     "The service starts because the record form is valid, then the scan answers folder_unavailable under rule 8's operation-time check."
+    ],
+    "observer": "The operator and calling flow see startup failure versus a running service that refuses the scan."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-10 Required tests",
+   "kind": "missing unknown-project witness",
+   "text": "INV-10: scan, placement and mark each answer `connection_not_confirmed` for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`).",
+   "question": "Which Required tests check that scan, placement and mark cannot scan, place or mark when the otherwise valid connections file has no record for the requested project, and that each answers unknown_project and writes nothing?",
+   "options": [
+    "Add an explicit no-record case for all three operations",
+    "Declare that another named check supplies this invariant witness",
+    "Narrow INV-10 so it does not claim the no-record case"
+   ],
+   "default_guess": "Add an explicit valid-file/no-project case for scan, placement and mark, asserting unknown_project and no writes.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-10 Required tests",
+   "kind": "missing unreadable-file witness",
+   "text": "For an absent file, a file that is not UTF-8 or JSON, a file of another form and a record that breaks rule 8, also when that record is unconfirmed, scan, placement and mark each answer `folder_unavailable` and write nothing (`test_unreadable_connections_deliver_nothing`)",
+   "question": "What Required test demonstrates the rule's separate case where the file exists but cannot be read because opening or reading it fails?",
+   "options": [
+    "Add an explicit permission or injected read-I/O failure for every operation",
+    "State that 'absent file' is intended to cover every open/read failure",
+    "Remove 'cannot be read' from the normative condition"
+   ],
+   "default_guess": "Add an injected read failure, independent of absence and decoding, for scan, placement and mark and assert folder_unavailable with no writes.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-10 whole-file validity",
+   "kind": "missing invariant witness",
+   "text": "a record that breaks rule 8, also when that record is unconfirmed",
+   "question": "Must the Required test show that a malformed or rule-8-breaking record for an unrelated project invalidates the whole file and takes precedence even when the requested project's own record is valid and confirmed?",
+   "options": [
+    "Test a valid confirmed requested record alongside an invalid unrelated record",
+    "Only the requested record needs to be invalid in the test",
+    "Change the normative rule so validation is per requested record"
+   ],
+   "default_guess": "Add a case with valid confirmed project P and invalid unrelated project Q, then assert that every operation on P answers folder_unavailable and writes nothing.",
+   "witness": {
+    "initial": "The file contains a valid confirmed record for P and a rule-8-breaking record for Q.",
+    "events": [
+     "The calling flow requests a scan for P."
+    ],
+    "outcomes": [
+     "A whole-file implementation answers folder_unavailable before looking up P.",
+     "A target-record-only implementation scans P successfully; the existing Required-tests wording can pass if it only makes P invalid in its test fixture."
+    ],
+    "observer": "The calling flow sees refusal versus scan results, and the invariant check distinguishes the implementations only if the unrelated-record history is required."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 connection-read count",
+   "kind": "unqualified check timing",
+   "text": "Each operation reads the file once (`test_each_operation_reads_the_connection_record_once`).",
+   "question": "For which requests does 'each operation' require one read, given that authentication and other checks can refuse a request before its connection check?",
+   "options": [
+    "Exactly once only for calls that reach the connection check, and zero before it",
+    "Exactly once for every attempted scan, placement and mark, including unauthenticated calls",
+    "Exactly once only for successful calls"
+   ],
+   "default_guess": "Require exactly one read for every call that reaches the connection check, zero reads for any earlier refusal, and still one read for refusals occurring after that check.",
+   "witness": {
+    "initial": "The service is running with a valid connections file and a counting file reader.",
+    "events": [
+     "An unauthenticated caller sends a scan request without the bearer token."
+    ],
+    "outcomes": [
+     "Authentication refuses the request before the connection check and the file-reader count remains zero.",
+     "The implementation satisfies the unqualified 'each operation reads the file once' wording by reading the file once even though authentication refuses the request."
+    ],
+    "observer": "The counting test and system operator see zero versus one file read."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 placement validation order",
+   "kind": "undefined form-validation boundary",
+   "text": "A source id in the body of a placement is not a path identifier: it is checked after the clock, at the place A3 rule 4 gives it.",
+   "question": "Which aspects of a placement source-id field belong to the pre-clock request-form check, and which are deferred until after the clock—for example absence, wrong JSON type, an empty list, and a string that is not 64 lowercase hexadecimal characters?",
+   "options": [
+    "Only the surrounding JSON/envelope is checked before the clock; every source-id field and value check occurs after it",
+    "Presence and JSON types are checked before the clock, while only the 64-lowercase-hex rule is checked after it",
+    "All schema validation is before the clock and only per-photo readiness is after it"
+   ],
+   "default_guess": "Validate the request envelope and presence/container types before the clock, then validate each source-id string against the 64-lowercase-hex rule after the single clock reading.",
+   "witness": {
+    "initial": "A counting clock is installed and the connections file is valid.",
+    "events": [
+     "The calling flow submits a placement body whose source-id entry has the wrong JSON type."
+    ],
+    "outcomes": [
+     "The request-form check refuses it before the clock, leaving the count at zero.",
+     "The source-id check is wholly deferred, so the clock is read once before the request is refused."
+    ],
+    "observer": "The counting clock and calling flow distinguish whether the malformed request consumed a time reading."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 ISO 8601 representation",
+   "kind": "underspecified serialization",
+   "text": "written in ISO 8601 form",
+   "question": "What exact serialized spelling is required for a UTC datetime without an offset, including date-time separator, whether six fractional digits are always emitted, and whether a `Z` or offset suffix is forbidden?",
+   "options": [
+    "`YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six digits and no suffix",
+    "ISO 8601 with a variable-length or omitted fractional part and no suffix",
+    "ISO 8601 with `Z` even though the in-memory datetime has no offset"
+   ],
+   "default_guess": "Emit `YYYY-MM-DDTHH:MM:SS.ffffff` with `T`, exactly six fractional digits and no `Z` or numeric offset.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13 Required tests",
+   "kind": "contradictory read count",
+   "text": "a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`)",
+   "question": "Must this test expect exactly one clock read for every attempted scan, placement and mark, or only for calls that pass the pre-clock checks, since rule 2 says requests refused before that point do not read it?",
+   "options": [
+    "Exactly once only after all pre-clock checks pass; zero for earlier refusals",
+    "Exactly once for every attempted scan, placement and mark",
+    "Use separate assertions for zero-read early refusals and one-read later paths"
+   ],
+   "default_guess": "Specify separate cases: zero reads for health and every pre-clock refusal, exactly one for every call reaching the clock, including late refusals and a replayed mark.",
+   "witness": {
+    "initial": "A counting clock is installed.",
+    "events": [
+     "A caller sends a scan request with a wrong bearer token."
+    ],
+    "outcomes": [
+     "Rule 2 applies and the request is refused with zero clock reads.",
+     "The unqualified Required-tests sentence is applied to the attempted scan and demands exactly one clock read."
+    ],
+    "observer": "The counting-clock test sees zero versus one."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13 path coverage",
+   "kind": "incomplete invariant witness",
+   "text": "a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer",
+   "question": "Which Required tests show the at-most-once invariant on late-refusal and replay branches, rather than only on one ordinary call of each operation?",
+   "options": [
+    "Exercise every distinct post-clock exit, including a replayed mark, with the counting clock",
+    "State a structural check that proves the clock operation has one call site per operation",
+    "Limit the invariant to the three successful examples tested"
+   ],
+   "default_guess": "Exercise representative successful, post-clock-refused and replayed paths for each operation and assert a count of one; also exercise pre-clock refusals and assert zero.",
+   "witness": {
+    "initial": "Happy-path tests read the counting clock once, but a mark already exists for the supplied source and photo id.",
+    "events": [
+     "The calling flow repeats the mark.",
+     "An implementation reads the clock once before lookup and again in its replay branch."
+    ],
+    "outcomes": [
+     "A branch-complete Required test fails because the replay used two readings.",
+     "A happy-path-only interpretation of the named test passes even though INV-13 is violated on replay."
+    ],
+    "observer": "The invariant test and calling flow's clock dependency distinguish one reading from two."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 refusal precedence table",
+   "kind": "standard_violation",
+   "text": "| Order | Condition | Answer |\n   |---|---|---|\n   | 1 | the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or any record breaks rule 8 | `folder_unavailable` |\n   | 2 | the file holds no record for the project | `unknown_project` |\n   | 3 | the project's record is unconfirmed | `connection_not_confirmed` |",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "Replace the prose-only precedence and answer table with a named data-provider policy constant that reaches generated code as `the imported X constant`, and have the behavior refer to that symbol.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 refusal answer codes",
+   "kind": "standard_violation",
+   "text": "| Order | Condition | Answer |\n   |---|---|---|\n   | 1 | the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or any record breaks rule 8 | `folder_unavailable` |\n   | 2 | the file holds no record for the project | `unknown_project` |\n   | 3 | the project's record is unconfirmed | `connection_not_confirmed` |",
+   "rule": "| закрытый список вариантов: статусы, виды, коды | `models`, перечисление | `= models.ИмяПеречисления` | перечисление как тип |",
+   "section": "15.3.1",
+   "question": "Define these closed refusal codes as members of a models enumeration and make the consuming note name the enumeration and its members, rather than leaving generated code to reproduce literal codes from this table.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A5 connections file format\",\"kind\":\"undefined record form\",\"text\":\"does not have the record form\",\"question\":\"What exact JSON shape is the connections file required to have, including its top-level structure, field types, project-key representation, treatment of missing or unknown fields, duplicate project identifiers and JSON values such as numbers used where strings or booleans are required?\",\"options\":[\"A JSON object keyed by canonical project UUID, with each value containing exactly the M01 fields\",\"A JSON array of M01 records, with uniqueness and unknown-field rules specified separately\",\"Another explicitly defined schema\"],\"default_guess\":\"Use a JSON object keyed by canonical project UUID, require exactly one complete M01-shaped record per key, reject duplicate keys, wrong field types and unknown fields.\"},{\"subject\":\"A5 concurrent connection-file access\",\"kind\":\"undefined snapshot semantics\",\"text\":\"Each scan, placement and mark reads the connections file exactly once, at its connection check, and uses that reading for the whole operation. A change written later applies from the next operation without a restart, and an operation that has already read the file finishes on that reading.\",\"question\":\"What constitutes the single reading when the agent changes the file concurrently, and must publication of a new file be atomic so that an operation can observe only the complete old version or the complete new version?\",\"options\":[\"Writers atomically replace the file and readers observe one complete old-or-new byte snapshot\",\"An overlapping read may observe a partial file and answer folder_unavailable\",\"The service coordinates readers and writers with a lock\"],\"default_guess\":\"Require atomic replacement by the writer; one operation opens and consumes one immutable byte snapshot and may see either the complete old file or the complete new file.\",\"witness\":{\"initial\":\"The service is running with a valid, confirmed connection file for project P.\",\"events\":[\"The owner confirms changed folders and the agent begins rewriting the connections file.\",\"At the same time, the calling flow starts a scan for P and reaches its connection check.\"],\"outcomes\":[\"The scan reads the complete old snapshot and finishes using the old confirmed connection; the next operation sees the replacement.\",\"The scan observes the rewrite in progress, parses a partial file and answers folder_unavailable.\"],\"observer\":\"The calling flow and the owner see success versus folder_unavailable.\"}},{\"subject\":\"A5 startup validation versus operation-time path validation\",\"kind\":\"ambiguous refusal phase\",\"text\":\"or any record breaks rule 8\",\"question\":\"Does a record break rule 8 at startup only when its subfolder strings violate the lexical restrictions, or also when the current filesystem resolution of its photo folder is not strictly below the root?\",\"options\":[\"Startup checks only the record's lexical subfolder values; scan and placement check filesystem resolution\",\"Startup also resolves every photo folder and refuses to start when one resolves outside its root\",\"Startup resolves existing folders but operation-time checks remain authoritative after filesystem changes\"],\"default_guess\":\"Treat only the first, lexical sentence of rule 8 as record validation at startup and perform the resolved-path/folder check on each scan and placement.\",\"witness\":{\"initial\":\"The connections file has syntactically valid relative subfolders, but one photo subfolder is a symlink resolving outside its root when the service starts.\",\"events\":[\"The operator starts the service.\",\"The calling flow attempts a scan for that project if startup succeeds.\"],\"outcomes\":[\"The service does not start because the record breaks rule 8.\",\"The service starts because the record form is valid, then the scan answers folder_unavailable under rule 8's operation-time check.\"],\"observer\":\"The operator and calling flow see startup failure versus a running service that refuses the scan.\"}},{\"subject\":\"INV-10 Required tests\",\"kind\":\"missing unknown-project witness\",\"text\":\"INV-10: scan, placement and mark each answer `connection_not_confirmed` for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`).\",\"question\":\"Which Required tests check that scan, placement and mark cannot scan, place or mark when the otherwise valid connections file has no record for the requested project, and that each answers unknown_project and writes nothing?\",\"options\":[\"Add an explicit no-record case for all three operations\",\"Declare that another named check supplies this invariant witness\",\"Narrow INV-10 so it does not claim the no-record case\"],\"default_guess\":\"Add an explicit valid-file/no-project case for scan, placement and mark, asserting unknown_project and no writes.\"},{\"subject\":\"INV-10 Required tests\",\"kind\":\"missing unreadable-file witness\",\"text\":\"For an absent file, a file that is not UTF-8 or JSON, a file of another form and a record that breaks rule 8, also when that record is unconfirmed, scan, placement and mark each answer `folder_unavailable` and write nothing (`test_unreadable_connections_deliver_nothing`)\",\"question\":\"What Required test demonstrates the rule's separate case where the file exists but cannot be read because opening or reading it fails?\",\"options\":[\"Add an explicit permission or injected read-I/O failure for every operation\",\"State that 'absent file' is intended to cover every open/read failure\",\"Remove 'cannot be read' from the normative condition\"],\"default_guess\":\"Add an injected read failure, independent of absence and decoding, for scan, placement and mark and assert folder_unavailable with no writes.\"},{\"subject\":\"INV-10 whole-file validity\",\"kind\":\"missing invariant witness\",\"text\":\"a record that breaks rule 8, also when that record is unconfirmed\",\"question\":\"Must the Required test show that a malformed or rule-8-breaking record for an unrelated project invalidates the whole file and takes precedence even when the requested project's own record is valid and confirmed?\",\"options\":[\"Test a valid confirmed requested record alongside an invalid unrelated record\",\"Only the requested record needs to be invalid in the test\",\"Change the normative rule so validation is per requested record\"],\"default_guess\":\"Add a case with valid confirmed project P and invalid unrelated project Q, then assert that every operation on P answers folder_unavailable and writes nothing.\",\"witness\":{\"initial\":\"The file contains a valid confirmed record for P and a rule-8-breaking record for Q.\",\"events\":[\"The calling flow requests a scan for P.\"],\"outcomes\":[\"A whole-file implementation answers folder_unavailable before looking up P.\",\"A target-record-only implementation scans P successfully; the existing Required-tests wording can pass if it only makes P invalid in its test fixture.\"],\"observer\":\"The calling flow sees refusal versus scan results, and the invariant check distinguishes the implementations only if the unrelated-record history is required.\"}},{\"subject\":\"A5 connection-read count\",\"kind\":\"unqualified check timing\",\"text\":\"Each operation reads the file once (`test_each_operation_reads_the_connection_record_once`).\",\"question\":\"For which requests does 'each operation' require one read, given that authentication and other checks can refuse a request before its connection check?\",\"options\":[\"Exactly once only for calls that reach the connection check, and zero before it\",\"Exactly once for every attempted scan, placement and mark, including unauthenticated calls\",\"Exactly once only for successful calls\"],\"default_guess\":\"Require exactly one read for every call that reaches the connection check, zero reads for any earlier refusal, and still one read for refusals occurring after that check.\",\"witness\":{\"initial\":\"The service is running with a valid connections file and a counting file reader.\",\"events\":[\"An unauthenticated caller sends a scan request without the bearer token.\"],\"outcomes\":[\"Authentication refuses the request before the connection check and the file-reader count remains zero.\",\"The implementation satisfies the unqualified 'each operation reads the file once' wording by reading the file once even though authentication refuses the request.\"],\"observer\":\"The counting test and system operator see zero versus one file read.\"}},{\"subject\":\"A7 placement validation order\",\"kind\":\"undefined form-validation boundary\",\"text\":\"A source id in the body of a placement is not a path identifier: it is checked after the clock, at the place A3 rule 4 gives it.\",\"question\":\"Which aspects of a placement source-id field belong to the pre-clock request-form check, and which are deferred until after the clock—for example absence, wrong JSON type, an empty list, and a string that is not 64 lowercase hexadecimal characters?\",\"options\":[\"Only the surrounding JSON/envelope is checked before the clock; every source-id field and value check occurs after it\",\"Presence and JSON types are checked before the clock, while only the 64-lowercase-hex rule is checked after it\",\"All schema validation is before the clock and only per-photo readiness is after it\"],\"default_guess\":\"Validate the request envelope and presence/container types before the clock, then validate each source-id string against the 64-lowercase-hex rule after the single clock reading.\",\"witness\":{\"initial\":\"A counting clock is installed and the connections file is valid.\",\"events\":[\"The calling flow submits a placement body whose source-id entry has the wrong JSON type.\"],\"outcomes\":[\"The request-form check refuses it before the clock, leaving the count at zero.\",\"The source-id check is wholly deferred, so the clock is read once before the request is refused.\"],\"observer\":\"The counting clock and calling flow distinguish whether the malformed request consumed a time reading.\"}},{\"subject\":\"A7 ISO 8601 representation\",\"kind\":\"underspecified serialization\",\"text\":\"written in ISO 8601 form\",\"question\":\"What exact serialized spelling is required for a UTC datetime without an offset, including date-time separator, whether six fractional digits are always emitted, and whether a `Z` or offset suffix is forbidden?\",\"options\":[\"`YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six digits and no suffix\",\"ISO 8601 with a variable-length or omitted fractional part and no suffix\",\"ISO 8601 with `Z` even though the in-memory datetime has no offset\"],\"default_guess\":\"Emit `YYYY-MM-DDTHH:MM:SS.ffffff` with `T`, exactly six fractional digits and no `Z` or numeric offset.\"},{\"subject\":\"INV-13 Required tests\",\"kind\":\"contradictory read count\",\"text\":\"a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`)\",\"question\":\"Must this test expect exactly one clock read for every attempted scan, placement and mark, or only for calls that pass the pre-clock checks, since rule 2 says requests refused before that point do not read it?\",\"options\":[\"Exactly once only after all pre-clock checks pass; zero for earlier refusals\",\"Exactly once for every attempted scan, placement and mark\",\"Use separate assertions for zero-read early refusals and one-read later paths\"],\"default_guess\":\"Specify separate cases: zero reads for health and every pre-clock refusal, exactly one for every call reaching the clock, including late refusals and a replayed mark.\",\"witness\":{\"initial\":\"A counting clock is installed.\",\"events\":[\"A caller sends a scan request with a wrong bearer token.\"],\"outcomes\":[\"Rule 2 applies and the request is refused with zero clock reads.\",\"The unqualified Required-tests sentence is applied to the attempted scan and demands exactly one clock read.\"],\"observer\":\"The counting-clock test sees zero versus one.\"}},{\"subject\":\"INV-13 path coverage\",\"kind\":\"incomplete invariant witness\",\"text\":\"a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer\",\"question\":\"Which Required tests show the at-most-once invariant on late-refusal and replay branches, rather than only on one ordinary call of each operation?\",\"options\":[\"Exercise every distinct post-clock exit, including a replayed mark, with the counting clock\",\"State a structural check that proves the clock operation has one call site per operation\",\"Limit the invariant to the three successful examples tested\"],\"default_guess\":\"Exercise representative successful, post-clock-refused and replayed paths for each operation and assert a count of one; also exercise pre-clock refusals and assert zero.\",\"witness\":{\"initial\":\"Happy-path tests read the counting clock once, but a mark already exists for the supplied source and photo id.\",\"events\":[\"The calling flow repeats the mark.\",\"An implementation reads the clock once before lookup and again in its replay branch.\"],\"outcomes\":[\"A branch-complete Required test fails because the replay used two readings.\",\"A happy-path-only interpretation of the named test passes even though INV-13 is violated on replay.\"],\"observer\":\"The invariant test and calling flow's clock dependency distinguish one reading from two.\"}},{\"subject\":\"A5 refusal precedence table\",\"kind\":\"standard_violation\",\"text\":\"| Order | Condition | Answer |\\n   |---|---|---|\\n   | 1 | the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or any record breaks rule 8 | `folder_unavailable` |\\n   | 2 | the file holds no record for the project | `unknown_project` |\\n   | 3 | the project's record is unconfirmed | `connection_not_confirmed` |\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"Replace the prose-only precedence and answer table with a named data-provider policy constant that reaches generated code as `the imported X constant`, and have the behavior refer to that symbol.\"},{\"subject\":\"A5 refusal answer codes\",\"kind\":\"standard_violation\",\"text\":\"| Order | Condition | Answer |\\n   |---|---|---|\\n   | 1 | the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or any record breaks rule 8 | `folder_unavailable` |\\n   | 2 | the file holds no record for the project | `unknown_project` |\\n   | 3 | the project's record is unconfirmed | `connection_not_confirmed` |\",\"rule\":\"| закрытый список вариантов: статусы, виды, коды | `models`, перечисление | `= models.ИмяПеречисления` | перечисление как тип |\",\"section\":\"15.3.1\",\"question\":\"Define these closed refusal codes as members of a models enumeration and make the consuming note name the enumeration and its members, rather than leaving generated code to reproduce literal codes from this table.\"}]}",
+ "set_aside": []
+}
