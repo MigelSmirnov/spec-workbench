@@ -128,7 +128,8 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
    `= models.PlacementFailure`. Condition 1 is decided from the name and the metadata of its path before
    the file is opened, and conditions 2 to 4 from the opening on. Conditions 1 to 4 write nothing except the
    project lock. After condition 5 a stored image may remain without a record: no caller has received
-   its reference, and a repeated delivery of the same file writes it again and completes the placement.
+   its reference, and a repeated delivery of the same file writes it again and completes the placement,
+   unless a refusal of A6 rule 5 applies.
 
    | Order | Condition | Member |
    |---|---|---|

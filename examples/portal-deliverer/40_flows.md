@@ -32,8 +32,8 @@ connections file. Nothing crosses to a caller until the start has succeeded.
 
 ### Outcomes
 
-The start has succeeded when the service answers the health route. Otherwise the process ends without listening. A
-later failure of the web server ends the process, and the deployment decides what happens next.
+The start has succeeded when the web server is listening. Otherwise the process ends without listening. A later failure
+of the web server ends the process, and the deployment decides what happens next.
 
 ### Errors
 
