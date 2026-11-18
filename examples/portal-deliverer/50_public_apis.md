@@ -7,7 +7,7 @@ service may call. Inputs and outputs name their meaning, and the exact signature
 `test_each_module_offers_exactly_its_public_operations` of `prototypes/portal_deliverer/test_deliverer.py` fails when a
 module of the prototype offers any other public function.
 
-`boundary:service_entry` is the start of the process, and `boundary:deployment` is what launches it. The calling agent
+`boundary:deployment` is what launches the process. The calling agent
 reaches the service only through the routes that `public_op:deliverer_api.create_app` builds.
 
 ## `public_op:deliverer_api.load_config`
@@ -18,7 +18,7 @@ reaches the service only through the routes that `public_op:deliverer_api.create
 
 ### Callers
 
-`boundary:service_entry`.
+`module:deliverer_api`, through `public_op:deliverer_api.run_service`.
 
 ### Inputs
 
@@ -52,7 +52,7 @@ Read-only.
 
 ### Callers
 
-`boundary:service_entry`.
+`module:deliverer_api`, through `public_op:deliverer_api.run_service`.
 
 ### Inputs
 
@@ -86,7 +86,7 @@ Read-only.
 
 ### Callers
 
-`boundary:service_entry`.
+`module:deliverer_api`, through `public_op:deliverer_api.run_service`.
 
 ### Inputs
 

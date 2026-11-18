@@ -290,7 +290,7 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 ### Required tests
 
 - INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).
-- INV-20: with a damaged placement or mark record, scan, delivery and mark each answer M08 with the STATE_UNAVAILABLE member of = models.RefusalCode and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).
+- INV-20: with a damaged placement or mark record, scan, delivery and mark each answer M08 with the STATE_UNAVAILABLE member of = models.RefusalCode and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), a damaged mark without a placement stops a new placement (`test_a_damaged_mark_without_a_placement_stops_a_new_placement`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).
 
 ### Consequence
 

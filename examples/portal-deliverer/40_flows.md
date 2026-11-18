@@ -32,7 +32,8 @@ connections file. Nothing crosses to a caller until the start has succeeded.
 
 ### Outcomes
 
-The service answers the health route, or the process ends without listening.
+The start has succeeded when the service answers the health route. Otherwise the process ends without listening. A
+later failure of the web server ends the process, and the deployment decides what happens next.
 
 ### Errors
 
@@ -93,8 +94,9 @@ crosses back to the caller.
 2. `capability:photo_delivery.deliver_project_photo` asks `capability:object_connections.confirmed_connection`
    and `capability:object_connections.available_photo_folder`, then checks the form of the source id.
 3. It takes `capability:delivery_store.project_lock`.
-4. `capability:delivery_store.read_placement` finds an existing placement. If there is one,
-   `capability:delivery_store.read_mark` supplies its `photo_id` and the flow answers `replayed`.
+4. `capability:delivery_store.read_placement` and `capability:delivery_store.read_mark` read both records, so a
+   damaged record stops the delivery. With an existing placement the flow answers `replayed`, with the `photo_id` of
+   its mark if there is one.
 5. `capability:source_folder.read_named_source` applies condition 1 of A3 rule 5 and reads the file once.
 6. `module:photo_delivery` compares the hash of those bytes with the requested source id.
 7. `capability:photo_preparation.prepare_photo` makes the clean image and the photo moment.

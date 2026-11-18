@@ -1,0 +1,185 @@
+{
+ "open_points": [
+  {
+   "subject": "40_flows.md:`flow:service_start`: invocation of `run_service`",
+   "kind": "ambiguous self-call",
+   "text": "The deployment launches `capability:deliverer_api.run_service`, which owns the remaining steps. / `capability:deliverer_api.run_service` serves that surface in the web server, on the loopback interface.",
+   "question": "Is step 5 the serving phase of the invocation launched in step 1, or must the owning invocation make another call to `run_service`?",
+   "options": [
+    "One `run_service` invocation orchestrates startup and then serves.",
+    "The first `run_service` invocation orchestrates startup and calls a second `run_service` invocation to serve."
+   ],
+   "default_guess": "Treat steps 1 and 5 as two phases of one `run_service` invocation.",
+   "witness": {
+    "initial": "The service is stopped and all startup inputs are valid.",
+    "events": [
+     "The deployment invokes `capability:deliverer_api.run_service`.",
+     "That invocation completes `load_config`, `read_token`, and `create_app`.",
+     "Execution reaches step 5."
+    ],
+    "outcomes": [
+     "The existing invocation enters the web-server serving loop.",
+     "The existing invocation calls `run_service` again, producing recursion or a distinct serving invocation."
+    ],
+    "observer": "The deployment and an operator waiting for the service to listen."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:`flow:service_start`: source and owner of the clock dependency",
+   "kind": "unnamed operation",
+   "text": "`capability:deliverer_api.create_app` builds the HTTP surface with the settings, the token and the clock.",
+   "question": "Who obtains or constructs the clock passed to `create_app`, and through what named capability or deployment input?",
+   "options": [
+    "The deployment supplies the clock to `run_service`.",
+    "`run_service` obtains the `system_clock_backend` and passes it to `create_app`.",
+    "`create_app` obtains the clock itself."
+   ],
+   "default_guess": "Have `run_service` obtain the `system_clock_backend` dependency and pass it to `create_app`.",
+   "witness": {
+    "initial": "The settings, token and connections file are valid, and a test clock is available.",
+    "events": [
+     "The deployment launches `run_service`.",
+     "Startup reaches `create_app`."
+    ],
+    "outcomes": [
+     "`create_app` receives the deployment's test clock.",
+     "`run_service` or `create_app` selects the production clock instead."
+    ],
+    "observer": "A mark caller, which sees a different `marked_at`, and a test that injects the clock."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:`flow:service_start`: ordering inside `load_config`",
+   "kind": "unstated precedence",
+   "text": "`capability:deliverer_api.load_config` reads the run settings and calls `capability:object_connections.load_connections` once, to judge the connections file whole.",
+   "question": "When the run settings are unusable, must `load_config` still call `load_connections` once, and which failure takes precedence if both inputs are bad?",
+   "options": [
+    "Validate the run settings first and do not read the connections file when they fail.",
+    "Always call `load_connections` once and then choose a defined failure precedence.",
+    "Read and judge the connections file first, before validating the settings."
+   ],
+   "default_guess": "Validate the run settings first; call `load_connections` only after the settings are usable.",
+   "witness": {
+    "initial": "A required setting is missing and the connections file is invalid.",
+    "events": [
+     "The deployment launches `run_service`.",
+     "`run_service` calls `load_config`."
+    ],
+    "outcomes": [
+     "Startup ends for the missing setting without reading the connections file.",
+     "Startup reads the connections file and ends for its rejection, or must choose between both failures."
+    ],
+    "observer": "The operator receiving startup diagnostics and anyone observing access to the connections file."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:`flow:service_start`: failures while reading run settings",
+   "kind": "missing failure outcome",
+   "text": "A connections file that condition 1 of A5 rule 7 rejects, a missing setting, or a token file that A5 rule 2 rejects ends the start.",
+   "question": "What happens when the run settings exist but cannot be opened, decoded, parsed, or have an invalid value or form?",
+   "options": [
+    "Every unreadable or invalid settings input ends the start without listening.",
+    "Only a missing setting ends the start; other defects use defaults or are ignored.",
+    "`load_config` produces a separately defined startup failure for each defect."
+   ],
+   "default_guess": "Treat every unreadable, malformed, or invalid settings input as a startup failure and end without listening.",
+   "witness": {
+    "initial": "The service is stopped; the settings file exists but is malformed; the token and connections file are valid.",
+    "events": [
+     "The deployment launches `run_service`.",
+     "`load_config` attempts to read the run settings."
+    ],
+    "outcomes": [
+     "The process ends without listening because malformed settings are a startup failure.",
+     "Startup continues using defaults or partially read settings because only a missing setting is named."
+    ],
+    "observer": "The deployment and callers attempting the health route."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:`flow:service_start`: failures while reading the token file",
+   "kind": "missing failure outcome",
+   "text": "`capability:deliverer_api.read_token` reads the token and checks its file permissions and length. / a token file that A5 rule 2 rejects ends the start.",
+   "question": "What outcome does `read_token` produce when the token file is absent, cannot be opened or read, or is not valid UTF-8, rather than merely having rejected permissions or length?",
+   "options": [
+    "Every failure to obtain a valid token ends the start without listening.",
+    "Only the permission and length conditions explicitly end the start.",
+    "Each read or decoding failure has a distinct startup outcome."
+   ],
+   "default_guess": "End the start without listening for every missing, unreadable, or non-UTF-8 token file.",
+   "witness": {
+    "initial": "The service is stopped; the token path is absent; settings and connections are valid.",
+    "events": [
+     "The deployment launches `run_service`.",
+     "Startup reaches `read_token`.",
+     "`read_token` cannot open the token file."
+    ],
+    "outcomes": [
+     "The process ends without listening.",
+     "The failure is not a specified rejection, so the implementation propagates an exception or applies an implementation-chosen fallback."
+    ],
+    "observer": "The deployment and callers attempting the health route."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:`flow:service_start`: failure of `create_app`",
+   "kind": "missing failure outcome",
+   "text": "`capability:deliverer_api.create_app` builds the HTTP surface with the settings, the token and the clock.",
+   "question": "Is `create_app` guaranteed to succeed for the accepted inputs, and if not, what startup outcome does its failure produce?",
+   "options": [
+    "`create_app` is total after the preceding validations.",
+    "Any failure to build the HTTP surface ends the process without listening.",
+    "A build failure is returned to the deployment as a distinct result."
+   ],
+   "default_guess": "Treat failure to build the HTTP surface as a startup failure that ends the process without listening.",
+   "witness": {
+    "initial": "Settings, connections and token pass their stated checks, but the web surface cannot be constructed from an accepted setting.",
+    "events": [
+     "The deployment launches `run_service`.",
+     "Startup completes `load_config` and `read_token`.",
+     "`create_app` fails while building the HTTP surface."
+    ],
+    "outcomes": [
+     "The process ends without listening as a failed start.",
+     "The exception or partial application escapes according to framework-specific behavior because no outcome is stated."
+    ],
+    "observer": "The deployment and the operator reading startup diagnostics."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:`flow:service_start`: definition of successful start",
+   "kind": "vague completion boundary",
+   "text": "Nothing crosses to a caller until the start has succeeded. / The service answers the health route, or the process ends without listening.",
+   "question": "At what observable event has the start succeeded: binding the loopback socket, entering the serving loop, or answering the first health request, and what is the outcome if the process binds and then ends before answering health?",
+   "options": [
+    "Success occurs when the socket is listening.",
+    "Success occurs when the serving loop is running.",
+    "Success occurs only when a health request is answered; an earlier exit is a failed start."
+   ],
+   "default_guess": "Define success as the serving loop being ready to answer health; an exit before that is a failed start even if the socket was briefly bound.",
+   "witness": {
+    "initial": "All inputs are valid and the loopback port is free.",
+    "events": [
+     "The deployment launches `run_service`.",
+     "The web server binds the loopback socket.",
+     "The process fails before any health request is answered."
+    ],
+    "outcomes": [
+     "The start succeeded at binding and the later event is a runtime failure.",
+     "The start never succeeded because the service never answered health, but the stated failure outcome says only that the process ends without listening."
+    ],
+    "observer": "The deployment and a health-checking supervisor."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"40_flows.md:`flow:service_start`: invocation of `run_service`\",\"kind\":\"ambiguous self-call\",\"text\":\"The deployment launches `capability:deliverer_api.run_service`, which owns the remaining steps. / `capability:deliverer_api.run_service` serves that surface in the web server, on the loopback interface.\",\"question\":\"Is step 5 the serving phase of the invocation launched in step 1, or must the owning invocation make another call to `run_service`?\",\"options\":[\"One `run_service` invocation orchestrates startup and then serves.\",\"The first `run_service` invocation orchestrates startup and calls a second `run_service` invocation to serve.\"],\"default_guess\":\"Treat steps 1 and 5 as two phases of one `run_service` invocation.\",\"witness\":{\"initial\":\"The service is stopped and all startup inputs are valid.\",\"events\":[\"The deployment invokes `capability:deliverer_api.run_service`.\",\"That invocation completes `load_config`, `read_token`, and `create_app`.\",\"Execution reaches step 5.\"],\"outcomes\":[\"The existing invocation enters the web-server serving loop.\",\"The existing invocation calls `run_service` again, producing recursion or a distinct serving invocation.\"],\"observer\":\"The deployment and an operator waiting for the service to listen.\"}},{\"subject\":\"40_flows.md:`flow:service_start`: source and owner of the clock dependency\",\"kind\":\"unnamed operation\",\"text\":\"`capability:deliverer_api.create_app` builds the HTTP surface with the settings, the token and the clock.\",\"question\":\"Who obtains or constructs the clock passed to `create_app`, and through what named capability or deployment input?\",\"options\":[\"The deployment supplies the clock to `run_service`.\",\"`run_service` obtains the `system_clock_backend` and passes it to `create_app`.\",\"`create_app` obtains the clock itself.\"],\"default_guess\":\"Have `run_service` obtain the `system_clock_backend` dependency and pass it to `create_app`.\",\"witness\":{\"initial\":\"The settings, token and connections file are valid, and a test clock is available.\",\"events\":[\"The deployment launches `run_service`.\",\"Startup reaches `create_app`.\"],\"outcomes\":[\"`create_app` receives the deployment's test clock.\",\"`run_service` or `create_app` selects the production clock instead.\"],\"observer\":\"A mark caller, which sees a different `marked_at`, and a test that injects the clock.\"}},{\"subject\":\"40_flows.md:`flow:service_start`: ordering inside `load_config`\",\"kind\":\"unstated precedence\",\"text\":\"`capability:deliverer_api.load_config` reads the run settings and calls `capability:object_connections.load_connections` once, to judge the connections file whole.\",\"question\":\"When the run settings are unusable, must `load_config` still call `load_connections` once, and which failure takes precedence if both inputs are bad?\",\"options\":[\"Validate the run settings first and do not read the connections file when they fail.\",\"Always call `load_connections` once and then choose a defined failure precedence.\",\"Read and judge the connections file first, before validating the settings.\"],\"default_guess\":\"Validate the run settings first; call `load_connections` only after the settings are usable.\",\"witness\":{\"initial\":\"A required setting is missing and the connections file is invalid.\",\"events\":[\"The deployment launches `run_service`.\",\"`run_service` calls `load_config`.\"],\"outcomes\":[\"Startup ends for the missing setting without reading the connections file.\",\"Startup reads the connections file and ends for its rejection, or must choose between both failures.\"],\"observer\":\"The operator receiving startup diagnostics and anyone observing access to the connections file.\"}},{\"subject\":\"40_flows.md:`flow:service_start`: failures while reading run settings\",\"kind\":\"missing failure outcome\",\"text\":\"A connections file that condition 1 of A5 rule 7 rejects, a missing setting, or a token file that A5 rule 2 rejects ends the start.\",\"question\":\"What happens when the run settings exist but cannot be opened, decoded, parsed, or have an invalid value or form?\",\"options\":[\"Every unreadable or invalid settings input ends the start without listening.\",\"Only a missing setting ends the start; other defects use defaults or are ignored.\",\"`load_config` produces a separately defined startup failure for each defect.\"],\"default_guess\":\"Treat every unreadable, malformed, or invalid settings input as a startup failure and end without listening.\",\"witness\":{\"initial\":\"The service is stopped; the settings file exists but is malformed; the token and connections file are valid.\",\"events\":[\"The deployment launches `run_service`.\",\"`load_config` attempts to read the run settings.\"],\"outcomes\":[\"The process ends without listening because malformed settings are a startup failure.\",\"Startup continues using defaults or partially read settings because only a missing setting is named.\"],\"observer\":\"The deployment and callers attempting the health route.\"}},{\"subject\":\"40_flows.md:`flow:service_start`: failures while reading the token file\",\"kind\":\"missing failure outcome\",\"text\":\"`capability:deliverer_api.read_token` reads the token and checks its file permissions and length. / a token file that A5 rule 2 rejects ends the start.\",\"question\":\"What outcome does `read_token` produce when the token file is absent, cannot be opened or read, or is not valid UTF-8, rather than merely having rejected permissions or length?\",\"options\":[\"Every failure to obtain a valid token ends the start without listening.\",\"Only the permission and length conditions explicitly end the start.\",\"Each read or decoding failure has a distinct startup outcome.\"],\"default_guess\":\"End the start without listening for every missing, unreadable, or non-UTF-8 token file.\",\"witness\":{\"initial\":\"The service is stopped; the token path is absent; settings and connections are valid.\",\"events\":[\"The deployment launches `run_service`.\",\"Startup reaches `read_token`.\",\"`read_token` cannot open the token file.\"],\"outcomes\":[\"The process ends without listening.\",\"The failure is not a specified rejection, so the implementation propagates an exception or applies an implementation-chosen fallback.\"],\"observer\":\"The deployment and callers attempting the health route.\"}},{\"subject\":\"40_flows.md:`flow:service_start`: failure of `create_app`\",\"kind\":\"missing failure outcome\",\"text\":\"`capability:deliverer_api.create_app` builds the HTTP surface with the settings, the token and the clock.\",\"question\":\"Is `create_app` guaranteed to succeed for the accepted inputs, and if not, what startup outcome does its failure produce?\",\"options\":[\"`create_app` is total after the preceding validations.\",\"Any failure to build the HTTP surface ends the process without listening.\",\"A build failure is returned to the deployment as a distinct result.\"],\"default_guess\":\"Treat failure to build the HTTP surface as a startup failure that ends the process without listening.\",\"witness\":{\"initial\":\"Settings, connections and token pass their stated checks, but the web surface cannot be constructed from an accepted setting.\",\"events\":[\"The deployment launches `run_service`.\",\"Startup completes `load_config` and `read_token`.\",\"`create_app` fails while building the HTTP surface.\"],\"outcomes\":[\"The process ends without listening as a failed start.\",\"The exception or partial application escapes according to framework-specific behavior because no outcome is stated.\"],\"observer\":\"The deployment and the operator reading startup diagnostics.\"}},{\"subject\":\"40_flows.md:`flow:service_start`: definition of successful start\",\"kind\":\"vague completion boundary\",\"text\":\"Nothing crosses to a caller until the start has succeeded. / The service answers the health route, or the process ends without listening.\",\"question\":\"At what observable event has the start succeeded: binding the loopback socket, entering the serving loop, or answering the first health request, and what is the outcome if the process binds and then ends before answering health?\",\"options\":[\"Success occurs when the socket is listening.\",\"Success occurs when the serving loop is running.\",\"Success occurs only when a health request is answered; an earlier exit is a failed start.\"],\"default_guess\":\"Define success as the serving loop being ready to answer health; an exit before that is a failed start even if the socket was briefly bound.\",\"witness\":{\"initial\":\"All inputs are valid and the loopback port is free.\",\"events\":[\"The deployment launches `run_service`.\",\"The web server binds the loopback socket.\",\"The process fails before any health request is answered.\"],\"outcomes\":[\"The start succeeded at binding and the later event is a runtime failure.\",\"The start never succeeded because the service never answered health, but the stated failure outcome says only that the process ends without listening.\"],\"observer\":\"The deployment and a health-checking supervisor.\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,184 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:deliverer_api.create_app callers",
+   "kind": "contradictory_caller",
+   "text": "`boundary:service_entry`.",
+   "question": "Does `boundary:service_entry` call `create_app` directly, or is its direct caller `capability:deliverer_api.run_service`, which owns the remaining startup steps and invokes `create_app` in `flow:service_start`?",
+   "options": [
+    "`run_service` is the direct caller and the service entry calls only `run_service`",
+    "the service entry calls `create_app` directly and passes its result to `run_service`",
+    "`boundary:service_entry` denotes the whole startup boundary rather than a direct caller"
+   ],
+   "default_guess": "Treat `run_service` as the direct caller and the service entry as the caller of `run_service`.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.create_app inputs",
+   "kind": "undefined_signature",
+   "text": "The run settings, the token and the clock function.",
+   "question": "What are the concrete types and callable signature of these three inputs, including whether the token is text or bytes, which run-settings value is passed, and whether the clock is a zero-argument callable returning the A7 datetime form?",
+   "options": [
+    "a typed settings model, a normalized string token, and a zero-argument naive-UTC datetime callable",
+    "a mapping of settings, token bytes, and a clock object",
+    "separate scalar settings plus a token and callable"
+   ],
+   "default_guess": "Use a typed settings model, the normalized token as `str`, and a zero-argument callable returning a naive UTC `datetime`.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.create_app output",
+   "kind": "undefined_output_interface",
+   "text": "The HTTP surface with the health, scan, delivery and mark routes.",
+   "question": "What concrete interface does the returned HTTP surface implement so that `run_service` can serve it?",
+   "options": [
+    "an ASGI application",
+    "a WSGI application",
+    "a framework-specific application object governed by a declared interface"
+   ],
+   "default_guess": "Return an ASGI application.",
+   "unit": "?"
+  },
+  {
+   "subject": "HTTP route contract created by create_app",
+   "kind": "undefined_routes",
+   "text": "The HTTP surface with the health, scan, delivery and mark routes.",
+   "question": "What are the method and path of each route, and where does each route receive the project id, name, source id and photo id?",
+   "options": [
+    "project id and source id in path parameters, with delivery and mark data in JSON bodies",
+    "project id in the path and all remaining values in JSON bodies",
+    "all identifiers and values in JSON bodies"
+   ],
+   "default_guess": "Use explicit versioned paths with the project id in the path, delivery `name` and `source_id` in its JSON body, and mark `source_id` and `photo_id` in its JSON body.",
+   "unit": "?"
+  },
+  {
+   "subject": "request bodies accepted by create_app routes",
+   "kind": "undefined_request_form",
+   "text": "the form of its body when it has one",
+   "question": "Which routes have bodies, what is the exact mark body, are additional fields rejected, and what content type and JSON conditions constitute a malformed request?",
+   "options": [
+    "only delivery and mark have strict JSON object bodies with no extra fields",
+    "delivery and mark accept JSON objects but ignore extra fields",
+    "scan, delivery and mark all have request bodies"
+   ],
+   "default_guess": "Give delivery and mark strict JSON object bodies, reject extra fields and non-JSON or non-object bodies, and give scan and health no body contract.",
+   "witness": {
+    "initial": "A caller has a valid token and project id and sends a mark request containing valid `source_id` and `photo_id` plus an extra field.",
+    "events": [
+     "The caller sends the request to the mark route built by `create_app`.",
+     "One implementer treats the documented values as the required subset; another treats the body as a closed form."
+    ],
+    "outcomes": [
+     "The request reaches `mark_photo_published`.",
+     "The request is answered as malformed before `photo_delivery` is called."
+    ],
+    "observer": "The HTTP caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "validation order in create_app routes",
+   "kind": "contradictory_check_order",
+   "text": "Every other route checks the token, the project id and the form of its body when it has one",
+   "question": "For delivery and mark requests, is the body form checked before the project id as A3 rule 4, A4 rule 2 and the State 4 flows say, or is the project id checked before the body as this ordered wording says?",
+   "options": [
+    "token, request form, then project id and other identifiers",
+    "token, project id, then request body",
+    "the list is unordered, with the earlier normative rules controlling each route"
+   ],
+   "default_guess": "Treat the list as unordered prose and follow token, request form, then project id and other identifiers.",
+   "witness": {
+    "initial": "The token is valid, while both the project id and the delivery request body are malformed.",
+    "events": [
+     "The caller sends the request to the delivery route.",
+     "One implementation follows the order written in `create_app`; another follows A3 rule 4 and `flow:deliver_one_photo`."
+    ],
+    "outcomes": [
+     "The project-id defect decides the answer.",
+     "The request-form defect decides the answer."
+    ],
+    "observer": "The HTTP caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "dispatch after boundary validation",
+   "kind": "ambiguous_control_flow",
+   "text": "Every other route checks the token, the project id and the form of its body when it has one, calls one operation of `module:photo_delivery` and turns its refusal into an answer.",
+   "question": "Does a route call `photo_delivery` only after all boundary checks succeed, or does the unconditional wording require one call even for a request already refused by token, project-id or body validation?",
+   "options": [
+    "call `photo_delivery` only after all boundary checks succeed",
+    "call one `photo_delivery` operation for every request and pass validation failures into it"
+   ],
+   "default_guess": "Call `photo_delivery` only after all boundary checks succeed.",
+   "witness": {
+    "initial": "A delivery request has a wrong token and an otherwise valid project and body.",
+    "events": [
+     "The caller sends the request.",
+     "One implementer stops after the token check; another reads the sentence literally and still invokes `deliver_project_photo`."
+    ],
+    "outcomes": [
+     "The request returns 401 without reading connections or creating a project lock.",
+     "The downstream operation may read connections or create a project lock before the route returns its answer."
+    ],
+    "observer": "The caller and an operator observing filesystem or connection-file access"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "HTTP success and health answers",
+   "kind": "undefined_response_contract",
+   "text": "The health route answers without a token.",
+   "question": "What status code, headers and body does the health route return, and how are successful scan, delivery and mark results serialized and assigned HTTP statuses?",
+   "options": [
+    "JSON responses with an explicit schema and 2xx status per operation",
+    "framework-default serialization and status codes",
+    "empty health response and model-shaped JSON for operation results"
+   ],
+   "default_guess": "Specify JSON schemas and explicit 2xx statuses, using a small fixed health object.",
+   "unit": "?"
+  },
+  {
+   "subject": "HTTP refusal and malformed-request answers",
+   "kind": "undefined_error_mapping",
+   "text": "A served route answers a wrong token, a malformed request and every M08 refusal.",
+   "question": "What exact HTTP status, response schema and fixed `detail` sentence correspond to a malformed request and to each M08 refusal code?",
+   "options": [
+    "a declared per-code status table and one common refusal JSON schema",
+    "all non-token refusals use one status",
+    "framework defaults handle malformed requests while M08 uses a custom mapping"
+   ],
+   "default_guess": "Declare one stable refusal JSON schema and an explicit status-and-detail table for malformed requests and every M08 code.",
+   "witness": {
+    "initial": "A validly authenticated delivery reaches a damaged placement record and receives M08 `state_unavailable`.",
+    "events": [
+     "The route turns the refusal into an HTTP answer.",
+     "One implementer maps unavailable state to 500; another maps it to 503."
+    ],
+    "outcomes": [
+     "The caller receives HTTP 500 with one chosen body.",
+     "The caller receives HTTP 503 with a different retry implication and potentially different body."
+    ],
+    "observer": "The HTTP caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "create_app construction failures",
+   "kind": "undefined_errors",
+   "text": "Building the surface raises no refusal.",
+   "question": "Can construction fail with any non-refusal error, and if so which errors are part of the operation contract and how does `run_service` handle them?",
+   "options": [
+    "construction is guaranteed not to fail for validated inputs",
+    "construction may propagate framework or configuration exceptions",
+    "construction returns a typed startup failure instead of raising"
+   ],
+   "default_guess": "Guarantee construction for inputs already validated by startup and treat only programming/framework initialization failures as process-fatal exceptions outside the domain refusal model.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:deliverer_api.create_app callers\",\"kind\":\"contradictory_caller\",\"text\":\"`boundary:service_entry`.\",\"question\":\"Does `boundary:service_entry` call `create_app` directly, or is its direct caller `capability:deliverer_api.run_service`, which owns the remaining startup steps and invokes `create_app` in `flow:service_start`?\",\"options\":[\"`run_service` is the direct caller and the service entry calls only `run_service`\",\"the service entry calls `create_app` directly and passes its result to `run_service`\",\"`boundary:service_entry` denotes the whole startup boundary rather than a direct caller\"],\"default_guess\":\"Treat `run_service` as the direct caller and the service entry as the caller of `run_service`.\"},{\"subject\":\"public_op:deliverer_api.create_app inputs\",\"kind\":\"undefined_signature\",\"text\":\"The run settings, the token and the clock function.\",\"question\":\"What are the concrete types and callable signature of these three inputs, including whether the token is text or bytes, which run-settings value is passed, and whether the clock is a zero-argument callable returning the A7 datetime form?\",\"options\":[\"a typed settings model, a normalized string token, and a zero-argument naive-UTC datetime callable\",\"a mapping of settings, token bytes, and a clock object\",\"separate scalar settings plus a token and callable\"],\"default_guess\":\"Use a typed settings model, the normalized token as `str`, and a zero-argument callable returning a naive UTC `datetime`.\"},{\"subject\":\"public_op:deliverer_api.create_app output\",\"kind\":\"undefined_output_interface\",\"text\":\"The HTTP surface with the health, scan, delivery and mark routes.\",\"question\":\"What concrete interface does the returned HTTP surface implement so that `run_service` can serve it?\",\"options\":[\"an ASGI application\",\"a WSGI application\",\"a framework-specific application object governed by a declared interface\"],\"default_guess\":\"Return an ASGI application.\"},{\"subject\":\"HTTP route contract created by create_app\",\"kind\":\"undefined_routes\",\"text\":\"The HTTP surface with the health, scan, delivery and mark routes.\",\"question\":\"What are the method and path of each route, and where does each route receive the project id, name, source id and photo id?\",\"options\":[\"project id and source id in path parameters, with delivery and mark data in JSON bodies\",\"project id in the path and all remaining values in JSON bodies\",\"all identifiers and values in JSON bodies\"],\"default_guess\":\"Use explicit versioned paths with the project id in the path, delivery `name` and `source_id` in its JSON body, and mark `source_id` and `photo_id` in its JSON body.\"},{\"subject\":\"request bodies accepted by create_app routes\",\"kind\":\"undefined_request_form\",\"text\":\"the form of its body when it has one\",\"question\":\"Which routes have bodies, what is the exact mark body, are additional fields rejected, and what content type and JSON conditions constitute a malformed request?\",\"options\":[\"only delivery and mark have strict JSON object bodies with no extra fields\",\"delivery and mark accept JSON objects but ignore extra fields\",\"scan, delivery and mark all have request bodies\"],\"default_guess\":\"Give delivery and mark strict JSON object bodies, reject extra fields and non-JSON or non-object bodies, and give scan and health no body contract.\",\"witness\":{\"initial\":\"A caller has a valid token and project id and sends a mark request containing valid `source_id` and `photo_id` plus an extra field.\",\"events\":[\"The caller sends the request to the mark route built by `create_app`.\",\"One implementer treats the documented values as the required subset; another treats the body as a closed form.\"],\"outcomes\":[\"The request reaches `mark_photo_published`.\",\"The request is answered as malformed before `photo_delivery` is called.\"],\"observer\":\"The HTTP caller\"}},{\"subject\":\"validation order in create_app routes\",\"kind\":\"contradictory_check_order\",\"text\":\"Every other route checks the token, the project id and the form of its body when it has one\",\"question\":\"For delivery and mark requests, is the body form checked before the project id as A3 rule 4, A4 rule 2 and the State 4 flows say, or is the project id checked before the body as this ordered wording says?\",\"options\":[\"token, request form, then project id and other identifiers\",\"token, project id, then request body\",\"the list is unordered, with the earlier normative rules controlling each route\"],\"default_guess\":\"Treat the list as unordered prose and follow token, request form, then project id and other identifiers.\",\"witness\":{\"initial\":\"The token is valid, while both the project id and the delivery request body are malformed.\",\"events\":[\"The caller sends the request to the delivery route.\",\"One implementation follows the order written in `create_app`; another follows A3 rule 4 and `flow:deliver_one_photo`.\"],\"outcomes\":[\"The project-id defect decides the answer.\",\"The request-form defect decides the answer.\"],\"observer\":\"The HTTP caller\"}},{\"subject\":\"dispatch after boundary validation\",\"kind\":\"ambiguous_control_flow\",\"text\":\"Every other route checks the token, the project id and the form of its body when it has one, calls one operation of `module:photo_delivery` and turns its refusal into an answer.\",\"question\":\"Does a route call `photo_delivery` only after all boundary checks succeed, or does the unconditional wording require one call even for a request already refused by token, project-id or body validation?\",\"options\":[\"call `photo_delivery` only after all boundary checks succeed\",\"call one `photo_delivery` operation for every request and pass validation failures into it\"],\"default_guess\":\"Call `photo_delivery` only after all boundary checks succeed.\",\"witness\":{\"initial\":\"A delivery request has a wrong token and an otherwise valid project and body.\",\"events\":[\"The caller sends the request.\",\"One implementer stops after the token check; another reads the sentence literally and still invokes `deliver_project_photo`.\"],\"outcomes\":[\"The request returns 401 without reading connections or creating a project lock.\",\"The downstream operation may read connections or create a project lock before the route returns its answer.\"],\"observer\":\"The caller and an operator observing filesystem or connection-file access\"}},{\"subject\":\"HTTP success and health answers\",\"kind\":\"undefined_response_contract\",\"text\":\"The health route answers without a token.\",\"question\":\"What status code, headers and body does the health route return, and how are successful scan, delivery and mark results serialized and assigned HTTP statuses?\",\"options\":[\"JSON responses with an explicit schema and 2xx status per operation\",\"framework-default serialization and status codes\",\"empty health response and model-shaped JSON for operation results\"],\"default_guess\":\"Specify JSON schemas and explicit 2xx statuses, using a small fixed health object.\"},{\"subject\":\"HTTP refusal and malformed-request answers\",\"kind\":\"undefined_error_mapping\",\"text\":\"A served route answers a wrong token, a malformed request and every M08 refusal.\",\"question\":\"What exact HTTP status, response schema and fixed `detail` sentence correspond to a malformed request and to each M08 refusal code?\",\"options\":[\"a declared per-code status table and one common refusal JSON schema\",\"all non-token refusals use one status\",\"framework defaults handle malformed requests while M08 uses a custom mapping\"],\"default_guess\":\"Declare one stable refusal JSON schema and an explicit status-and-detail table for malformed requests and every M08 code.\",\"witness\":{\"initial\":\"A validly authenticated delivery reaches a damaged placement record and receives M08 `state_unavailable`.\",\"events\":[\"The route turns the refusal into an HTTP answer.\",\"One implementer maps unavailable state to 500; another maps it to 503.\"],\"outcomes\":[\"The caller receives HTTP 500 with one chosen body.\",\"The caller receives HTTP 503 with a different retry implication and potentially different body.\"],\"observer\":\"The HTTP caller\"}},{\"subject\":\"create_app construction failures\",\"kind\":\"undefined_errors\",\"text\":\"Building the surface raises no refusal.\",\"question\":\"Can construction fail with any non-refusal error, and if so which errors are part of the operation contract and how does `run_service` handle them?\",\"options\":[\"construction is guaranteed not to fail for validated inputs\",\"construction may propagate framework or configuration exceptions\",\"construction returns a typed startup failure instead of raising\"],\"default_guess\":\"Guarantee construction for inputs already validated by startup and treat only programming/framework initialization failures as process-fatal exceptions outside the domain refusal model.\"}]}",
+ "set_aside": []
+}

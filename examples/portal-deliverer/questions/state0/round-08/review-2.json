@@ -1,0 +1,166 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "R0-15 authentication boundary",
+   "kind": "ambiguous scope",
+   "text": "every operation on a project needs the token",
+   "question": "What exactly makes an operation “on a project,” and does “every operation” mean every deliverer operation or also the agent, calling flow and Portal actions described in these decisions?",
+   "options": [
+    "Only the deliverer's three primitives are covered",
+    "Every deliverer endpoint that reads or changes project-associated state is covered",
+    "All described actions concerning a project are covered, including connection, repair and Portal actions"
+   ],
+   "default_guess": "Apply the rule to every deliverer operation that reads or changes project-associated state, but not to direct Portal operations.",
+   "witness": {
+    "initial": "An object has a confirmed folder connection and a photo ready for delivery.",
+    "events": [
+     "The calling flow invokes deliver-one-photo with the token.",
+     "The owner invokes the Portal's operation to show the resulting photo without that token."
+    ],
+    "outcomes": [
+     "The Portal action is outside the deliverer's guarantee and proceeds under the Portal's own authorization.",
+     "The Portal action is an operation on a project and must also receive the token."
+    ],
+    "observer": "the owner and the implementers of the calling flow"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "token identity and issuer",
+   "kind": "unnamed trust fact",
+   "text": "the token",
+   "question": "What token is this, who issues it, which actor obtains and stores it, and which system validates it?",
+   "options": [
+    "One static shared secret configured in the deliverer and calling flow",
+    "A token issued by an existing identity system",
+    "A separate token issued for each project or owner"
+   ],
+   "default_guess": "Use a service credential shared by the calling flow and deliverer, stored outside project records and validated by the deliverer."
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "project authorization semantics",
+   "kind": "authorization ambiguity",
+   "text": "every operation on a project needs the token",
+   "question": "Does possession of the token merely authenticate the caller, or must the token authorize the particular project named or implied by the operation?",
+   "options": [
+    "One token permits operations on every confirmed project",
+    "Each token carries an allowed set of project ids",
+    "Each project has its own token"
+   ],
+   "default_guess": "Require a token whose claims authorize the specific Registry project id.",
+   "witness": {
+    "initial": "Projects A and B are both confirmed, and the caller has a token obtained while working on project A.",
+    "events": [
+     "The caller uses that token to scan project B."
+    ],
+    "outcomes": [
+     "The scan succeeds because the token is a service-wide credential.",
+     "The scan is rejected because the token does not authorize project B."
+    ],
+    "observer": "the caller and the owner of project B"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "token failure behavior",
+   "kind": "missing failure contract",
+   "text": "needs the token",
+   "question": "What observable result must each operation return when the token is absent, malformed, expired, invalid or unauthorized for the project, and must it avoid reading or changing project state in every such case?",
+   "options": [
+    "Reject all such cases with one authentication failure before project access",
+    "Distinguish missing or invalid authentication from project authorization failure",
+    "Leave the failure shape to each operation"
+   ],
+   "default_guess": "Validate before project access, return distinct authentication and authorization errors, and create or change nothing.",
+   "witness": {
+    "initial": "A confirmed project contains an undelivered photo.",
+    "events": [
+     "The calling flow invokes delivery without a token."
+    ],
+    "outcomes": [
+     "The operation rejects the request before reading the project or placing anything.",
+     "The operation performs part or all of the delivery and only later reports that a token was missing."
+    ],
+    "observer": "the owner and the calling flow"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "non-project service operations",
+   "kind": "missing security policy",
+   "text": "every operation on a project needs the token",
+   "question": "May a deliverer operation that is classified as not being on a project be called without authentication, and which such operations, if any, are allowed?",
+   "options": [
+    "Only explicitly named health or readiness checks may be unauthenticated",
+    "Every deliverer operation still requires authentication, while project operations additionally require project authorization",
+    "Any operation without a project parameter may be unauthenticated"
+   ],
+   "default_guess": "Allow unauthenticated access only to an explicitly enumerated, non-sensitive health check; require authentication for everything else.",
+   "witness": {
+    "initial": "The service exposes a status operation without a project id that reports configured connections.",
+    "events": [
+     "An unauthenticated caller invokes the status operation."
+    ],
+    "outcomes": [
+     "The request succeeds because it is not an operation on a project.",
+     "The request is rejected because non-project operations are authenticated unless explicitly exempted."
+    ],
+    "observer": "the unauthenticated caller and the service operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "connection and confirmation operations",
+   "kind": "unclassified action",
+   "text": "every operation on a project needs the token",
+   "question": "Do writing a connection record, clearing its confirmation after a folder change, and recording the owner's renewed confirmation count as protected project operations, and if so who supplies the token when the agent performs them?",
+   "options": [
+    "All connection and confirmation changes require the same project-authorized token",
+    "They are out-of-band administrative writes protected by a different control",
+    "They are not covered by any token requirement"
+   ],
+   "default_guess": "Treat them as administrative project operations protected by a separately identified administrator credential.",
+   "witness": {
+    "initial": "A project has a confirmed photo folder.",
+    "events": [
+     "The agent changes the configured photo-folder root.",
+     "The change clears confirmation as R0-11 requires."
+    ],
+    "outcomes": [
+     "The agent must present the token because the write changes project state.",
+     "The agent may make the write without the token because connection maintenance is not one of the deliverer's three operations."
+    ],
+    "observer": "the agent and the owner attempting the next delivery"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "date-repair operation",
+   "kind": "unclassified action",
+   "text": "every operation on a project needs the token",
+   "question": "Does the agent's one-project-at-a-time date repair require this token in addition to the owner's permission, or is repair outside the operations governed by R0-15?",
+   "options": [
+    "Repair requires both the owner's permission and the token",
+    "Owner permission is the repair's only authorization",
+    "Repair uses a separate administrative credential"
+   ],
+   "default_guess": "Require the owner's recorded permission plus a separate administrative credential.",
+   "witness": {
+    "initial": "A project has offset-bearing photo dates, a backup and the owner's permission to repair them.",
+    "events": [
+     "The agent starts the repair without the token."
+    ],
+    "outcomes": [
+     "The repair proceeds because it is an administrative procedure outside the deliverer service.",
+     "The repair is rejected because it is an operation on a project and every such operation needs the token."
+    ],
+    "observer": "the agent and the owner waiting to deliver photos"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Decisions\",\"subject\":\"R0-15 authentication boundary\",\"kind\":\"ambiguous scope\",\"text\":\"every operation on a project needs the token\",\"question\":\"What exactly makes an operation “on a project,” and does “every operation” mean every deliverer operation or also the agent, calling flow and Portal actions described in these decisions?\",\"options\":[\"Only the deliverer's three primitives are covered\",\"Every deliverer endpoint that reads or changes project-associated state is covered\",\"All described actions concerning a project are covered, including connection, repair and Portal actions\"],\"default_guess\":\"Apply the rule to every deliverer operation that reads or changes project-associated state, but not to direct Portal operations.\",\"witness\":{\"initial\":\"An object has a confirmed folder connection and a photo ready for delivery.\",\"events\":[\"The calling flow invokes deliver-one-photo with the token.\",\"The owner invokes the Portal's operation to show the resulting photo without that token.\"],\"outcomes\":[\"The Portal action is outside the deliverer's guarantee and proceeds under the Portal's own authorization.\",\"The Portal action is an operation on a project and must also receive the token.\"],\"observer\":\"the owner and the implementers of the calling flow\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"token identity and issuer\",\"kind\":\"unnamed trust fact\",\"text\":\"the token\",\"question\":\"What token is this, who issues it, which actor obtains and stores it, and which system validates it?\",\"options\":[\"One static shared secret configured in the deliverer and calling flow\",\"A token issued by an existing identity system\",\"A separate token issued for each project or owner\"],\"default_guess\":\"Use a service credential shared by the calling flow and deliverer, stored outside project records and validated by the deliverer.\"},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"project authorization semantics\",\"kind\":\"authorization ambiguity\",\"text\":\"every operation on a project needs the token\",\"question\":\"Does possession of the token merely authenticate the caller, or must the token authorize the particular project named or implied by the operation?\",\"options\":[\"One token permits operations on every confirmed project\",\"Each token carries an allowed set of project ids\",\"Each project has its own token\"],\"default_guess\":\"Require a token whose claims authorize the specific Registry project id.\",\"witness\":{\"initial\":\"Projects A and B are both confirmed, and the caller has a token obtained while working on project A.\",\"events\":[\"The caller uses that token to scan project B.\"],\"outcomes\":[\"The scan succeeds because the token is a service-wide credential.\",\"The scan is rejected because the token does not authorize project B.\"],\"observer\":\"the caller and the owner of project B\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"token failure behavior\",\"kind\":\"missing failure contract\",\"text\":\"needs the token\",\"question\":\"What observable result must each operation return when the token is absent, malformed, expired, invalid or unauthorized for the project, and must it avoid reading or changing project state in every such case?\",\"options\":[\"Reject all such cases with one authentication failure before project access\",\"Distinguish missing or invalid authentication from project authorization failure\",\"Leave the failure shape to each operation\"],\"default_guess\":\"Validate before project access, return distinct authentication and authorization errors, and create or change nothing.\",\"witness\":{\"initial\":\"A confirmed project contains an undelivered photo.\",\"events\":[\"The calling flow invokes delivery without a token.\"],\"outcomes\":[\"The operation rejects the request before reading the project or placing anything.\",\"The operation performs part or all of the delivery and only later reports that a token was missing.\"],\"observer\":\"the owner and the calling flow\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"non-project service operations\",\"kind\":\"missing security policy\",\"text\":\"every operation on a project needs the token\",\"question\":\"May a deliverer operation that is classified as not being on a project be called without authentication, and which such operations, if any, are allowed?\",\"options\":[\"Only explicitly named health or readiness checks may be unauthenticated\",\"Every deliverer operation still requires authentication, while project operations additionally require project authorization\",\"Any operation without a project parameter may be unauthenticated\"],\"default_guess\":\"Allow unauthenticated access only to an explicitly enumerated, non-sensitive health check; require authentication for everything else.\",\"witness\":{\"initial\":\"The service exposes a status operation without a project id that reports configured connections.\",\"events\":[\"An unauthenticated caller invokes the status operation.\"],\"outcomes\":[\"The request succeeds because it is not an operation on a project.\",\"The request is rejected because non-project operations are authenticated unless explicitly exempted.\"],\"observer\":\"the unauthenticated caller and the service operator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"connection and confirmation operations\",\"kind\":\"unclassified action\",\"text\":\"every operation on a project needs the token\",\"question\":\"Do writing a connection record, clearing its confirmation after a folder change, and recording the owner's renewed confirmation count as protected project operations, and if so who supplies the token when the agent performs them?\",\"options\":[\"All connection and confirmation changes require the same project-authorized token\",\"They are out-of-band administrative writes protected by a different control\",\"They are not covered by any token requirement\"],\"default_guess\":\"Treat them as administrative project operations protected by a separately identified administrator credential.\",\"witness\":{\"initial\":\"A project has a confirmed photo folder.\",\"events\":[\"The agent changes the configured photo-folder root.\",\"The change clears confirmation as R0-11 requires.\"],\"outcomes\":[\"The agent must present the token because the write changes project state.\",\"The agent may make the write without the token because connection maintenance is not one of the deliverer's three operations.\"],\"observer\":\"the agent and the owner attempting the next delivery\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"date-repair operation\",\"kind\":\"unclassified action\",\"text\":\"every operation on a project needs the token\",\"question\":\"Does the agent's one-project-at-a-time date repair require this token in addition to the owner's permission, or is repair outside the operations governed by R0-15?\",\"options\":[\"Repair requires both the owner's permission and the token\",\"Owner permission is the repair's only authorization\",\"Repair uses a separate administrative credential\"],\"default_guess\":\"Require the owner's recorded permission plus a separate administrative credential.\",\"witness\":{\"initial\":\"A project has offset-bearing photo dates, a backup and the owner's permission to repair them.\",\"events\":[\"The agent starts the repair without the token.\"],\"outcomes\":[\"The repair proceeds because it is an administrative procedure outside the deliverer service.\",\"The repair is rejected because it is an operation on a project and every such operation needs the token.\"],\"observer\":\"the agent and the owner waiting to deliver photos\"}}]}",
+ "set_aside": []
+}

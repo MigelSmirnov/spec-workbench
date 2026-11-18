@@ -1,0 +1,124 @@
+{
+ "open_points": [
+  {
+   "subject": "delivery_store",
+   "kind": "conflicting failure classification",
+   "text": "- reading and writing placement and mark records, and refusing with the STATE_UNAVAILABLE member of\n  = models.RefusalCode as A6 rule 5 decides. A placement record that cannot be written is the failure of that photo (A3 rule 5).",
+   "question": "When writing a new placement record fails, must the operation return an M06 failed outcome with UNREADABLE_FILE, or an M08 refusal with STATE_UNAVAILABLE, and which module performs that mapping?",
+   "options": [
+    "photo_delivery returns M06 failed with UNREADABLE_FILE; delivery_store reports a placement-write error",
+    "delivery_store produces STATE_UNAVAILABLE and deliverer_api returns M08",
+    "delivery_store exposes distinct placement-write and mark-write errors, with mappings stated explicitly"
+   ],
+   "default_guess": "Expose distinct store errors; map a placement-record write failure to M06/UNREADABLE_FILE and a mark-record write failure to M08/STATE_UNAVAILABLE.",
+   "witness": {
+    "initial": "A valid project has no placement for the requested source; storing the prepared image succeeds, but creation of the placement record fails.",
+    "events": [
+     "The caller asks deliverer_api to deliver the photo.",
+     "photo_delivery stores the image and asks delivery_store to write the placement record.",
+     "delivery_store cannot write the record."
+    ],
+    "outcomes": [
+     "The caller receives M06 with status failed and reason unreadable_file.",
+     "The caller receives M08 with code state_unavailable."
+    ],
+    "observer": "The caller sees a different answer type and failure code."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "delivery_store",
+   "kind": "undeclared model dependency",
+   "text": "- reading and writing placement and mark records, and refusing with the STATE_UNAVAILABLE member of\n  = models.RefusalCode as A6 rule 5 decides.",
+   "question": "May delivery_store depend directly on models.RefusalCode and construct a domain refusal, or must it expose a store-specific failure that photo_delivery or deliverer_api maps to RefusalCode?",
+   "options": [
+    "Declare a delivery_store → models dependency and let delivery_store return RefusalCode",
+    "Keep delivery_store independent of refusal models and map a typed store error in photo_delivery",
+    "Keep delivery_store independent and map the error only in deliverer_api"
+   ],
+   "default_guess": "Keep storage independent of service answers; delivery_store raises or returns a typed state-unavailable error, and photo_delivery maps it to the domain refusal.",
+   "unit": "?"
+  },
+  {
+   "subject": "delivery_store",
+   "kind": "split invariant ownership",
+   "text": "A placement or mark record that exists but cannot\n   be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent\n   record: the operation is refused with the STATE_UNAVAILABLE member of = models.RefusalCode, whose value is\n   `state_unavailable`, and changes no record and no stored image.",
+   "question": "Which module owns and enforces the new whole-operation guarantee that a damaged record changes no stored image, given that delivery_store owns A6 rule 5 while photo_delivery owns operation ordering and decides when store_image is called?",
+   "options": [
+    "Move the no-record/no-image postcondition to photo_delivery",
+    "Make delivery_store own a transaction encompassing record inspection and image storage",
+    "Keep delivery_store as primary owner but state an explicit required precondition and sequencing obligation for photo_delivery"
+   ],
+   "default_guess": "Make photo_delivery own the whole-operation postcondition while delivery_store owns damaged-record detection and guarantees that its failing read performs no mutation.",
+   "unit": "?"
+  },
+  {
+   "subject": "delivery_store",
+   "kind": "undecided public contract",
+   "text": "### Candidate public capabilities\n\n```text\nproject_lock\nstore_image\nread_placement\nwrite_placement\nread_mark\nwrite_mark\n```",
+   "question": "Are these the final exported capabilities, and what are their inputs, return values, missing-record representation, failure channels and lock-lifetime semantics?",
+   "options": [
+    "Adopt all six as final exports and specify contracts for each",
+    "Expose a smaller transactional API that combines locking, reads and writes",
+    "Keep these as internal implementation helpers and expose a different storage interface"
+   ],
+   "default_guess": "Adopt the six capabilities, make project_lock a context-managed per-project lock, use an explicit absent result for missing records, and use typed errors for unavailable state and write failures.",
+   "unit": "?"
+  },
+  {
+   "subject": "photo_delivery",
+   "kind": "unclear dependency set",
+   "text": "- how the four lower modules are combined into one operation;",
+   "question": "Which four modules are meant, since photo_delivery's assigned rules require source_folder, photo_preparation, delivery_store, system_clock and the connection judgment owned by object_connections; in particular, who calls object_connections and owns its position in the check order?",
+   "options": [
+    "photo_delivery depends on all five lower modules and the word four is corrected",
+    "deliverer_api calls object_connections and passes a confirmed-folder value to photo_delivery",
+    "One of source_folder, photo_preparation, delivery_store or system_clock is reached indirectly through another module"
+   ],
+   "default_guess": "deliverer_api performs authentication and request validation, while photo_delivery directly coordinates object_connections plus the four named operational modules; correct the count to five.",
+   "witness": {
+    "initial": "A project connection is confirmed when a delivery request begins.",
+    "events": [
+     "The caller starts a delivery.",
+     "deliverer_api validates the token and request.",
+     "The outside agent clears the confirmation before the connection is read by whichever module owns that step."
+    ],
+    "outcomes": [
+     "If deliverer_api already resolved and passed the confirmed folder, photo_delivery continues with that value.",
+     "If photo_delivery owns and performs the connection read, it observes the cleared confirmation and the operation is refused."
+    ],
+    "observer": "The caller sees placement progress in one implementation and connection_not_confirmed in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "photo_delivery",
+   "kind": "duplicate ownership",
+   "text": "- keeping server paths out of every answer.",
+   "question": "Does photo_delivery own path removal for every answer, or does deliverer_api own it as INV-11 states; what path-free error/result contract must cross their boundary?",
+   "options": [
+    "photo_delivery guarantees all results and errors are path-free; deliverer_api only serializes them",
+    "deliverer_api alone sanitizes and fixes every outward message",
+    "photo_delivery guarantees path-free success and domain results while deliverer_api maps internal errors to fixed path-free refusals"
+   ],
+   "default_guess": "photo_delivery must return only path-free domain results and typed errors, while deliverer_api remains the sole owner of the final outward refusal body.",
+   "unit": "?"
+  },
+  {
+   "subject": "photo_delivery",
+   "kind": "undecided public contract",
+   "text": "### Candidate public capabilities\n\n```text\nscan_project_photos\ndeliver_project_photo\nmark_photo_published\n```",
+   "question": "Are these final exports, and do they accept authenticated raw requests, validated project values, a confirmed connection or folder, and how do they return whole-operation refusals versus per-photo failures?",
+   "options": [
+    "Expose the three functions as complete service operations accepting validated request values and returning domain result-or-refusal unions",
+    "Pass a confirmed-folder capability into them after deliverer_api performs connection checks",
+    "Let the functions accept raw requests and perform all validation except token handling"
+   ],
+   "default_guess": "Expose the three operations with explicit typed inputs after token and request-form validation; let photo_delivery perform the remaining ordered checks and return a typed domain result-or-refusal union.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"delivery_store\",\"kind\":\"conflicting failure classification\",\"text\":\"- reading and writing placement and mark records, and refusing with the STATE_UNAVAILABLE member of\\n  = models.RefusalCode as A6 rule 5 decides. A placement record that cannot be written is the failure of that photo (A3 rule 5).\",\"question\":\"When writing a new placement record fails, must the operation return an M06 failed outcome with UNREADABLE_FILE, or an M08 refusal with STATE_UNAVAILABLE, and which module performs that mapping?\",\"options\":[\"photo_delivery returns M06 failed with UNREADABLE_FILE; delivery_store reports a placement-write error\",\"delivery_store produces STATE_UNAVAILABLE and deliverer_api returns M08\",\"delivery_store exposes distinct placement-write and mark-write errors, with mappings stated explicitly\"],\"default_guess\":\"Expose distinct store errors; map a placement-record write failure to M06/UNREADABLE_FILE and a mark-record write failure to M08/STATE_UNAVAILABLE.\",\"witness\":{\"initial\":\"A valid project has no placement for the requested source; storing the prepared image succeeds, but creation of the placement record fails.\",\"events\":[\"The caller asks deliverer_api to deliver the photo.\",\"photo_delivery stores the image and asks delivery_store to write the placement record.\",\"delivery_store cannot write the record.\"],\"outcomes\":[\"The caller receives M06 with status failed and reason unreadable_file.\",\"The caller receives M08 with code state_unavailable.\"],\"observer\":\"The caller sees a different answer type and failure code.\"}},{\"subject\":\"delivery_store\",\"kind\":\"undeclared model dependency\",\"text\":\"- reading and writing placement and mark records, and refusing with the STATE_UNAVAILABLE member of\\n  = models.RefusalCode as A6 rule 5 decides.\",\"question\":\"May delivery_store depend directly on models.RefusalCode and construct a domain refusal, or must it expose a store-specific failure that photo_delivery or deliverer_api maps to RefusalCode?\",\"options\":[\"Declare a delivery_store → models dependency and let delivery_store return RefusalCode\",\"Keep delivery_store independent of refusal models and map a typed store error in photo_delivery\",\"Keep delivery_store independent and map the error only in deliverer_api\"],\"default_guess\":\"Keep storage independent of service answers; delivery_store raises or returns a typed state-unavailable error, and photo_delivery maps it to the domain refusal.\"},{\"subject\":\"delivery_store\",\"kind\":\"split invariant ownership\",\"text\":\"A placement or mark record that exists but cannot\\n   be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent\\n   record: the operation is refused with the STATE_UNAVAILABLE member of = models.RefusalCode, whose value is\\n   `state_unavailable`, and changes no record and no stored image.\",\"question\":\"Which module owns and enforces the new whole-operation guarantee that a damaged record changes no stored image, given that delivery_store owns A6 rule 5 while photo_delivery owns operation ordering and decides when store_image is called?\",\"options\":[\"Move the no-record/no-image postcondition to photo_delivery\",\"Make delivery_store own a transaction encompassing record inspection and image storage\",\"Keep delivery_store as primary owner but state an explicit required precondition and sequencing obligation for photo_delivery\"],\"default_guess\":\"Make photo_delivery own the whole-operation postcondition while delivery_store owns damaged-record detection and guarantees that its failing read performs no mutation.\"},{\"subject\":\"delivery_store\",\"kind\":\"undecided public contract\",\"text\":\"### Candidate public capabilities\\n\\n```text\\nproject_lock\\nstore_image\\nread_placement\\nwrite_placement\\nread_mark\\nwrite_mark\\n```\",\"question\":\"Are these the final exported capabilities, and what are their inputs, return values, missing-record representation, failure channels and lock-lifetime semantics?\",\"options\":[\"Adopt all six as final exports and specify contracts for each\",\"Expose a smaller transactional API that combines locking, reads and writes\",\"Keep these as internal implementation helpers and expose a different storage interface\"],\"default_guess\":\"Adopt the six capabilities, make project_lock a context-managed per-project lock, use an explicit absent result for missing records, and use typed errors for unavailable state and write failures.\"},{\"subject\":\"photo_delivery\",\"kind\":\"unclear dependency set\",\"text\":\"- how the four lower modules are combined into one operation;\",\"question\":\"Which four modules are meant, since photo_delivery's assigned rules require source_folder, photo_preparation, delivery_store, system_clock and the connection judgment owned by object_connections; in particular, who calls object_connections and owns its position in the check order?\",\"options\":[\"photo_delivery depends on all five lower modules and the word four is corrected\",\"deliverer_api calls object_connections and passes a confirmed-folder value to photo_delivery\",\"One of source_folder, photo_preparation, delivery_store or system_clock is reached indirectly through another module\"],\"default_guess\":\"deliverer_api performs authentication and request validation, while photo_delivery directly coordinates object_connections plus the four named operational modules; correct the count to five.\",\"witness\":{\"initial\":\"A project connection is confirmed when a delivery request begins.\",\"events\":[\"The caller starts a delivery.\",\"deliverer_api validates the token and request.\",\"The outside agent clears the confirmation before the connection is read by whichever module owns that step.\"],\"outcomes\":[\"If deliverer_api already resolved and passed the confirmed folder, photo_delivery continues with that value.\",\"If photo_delivery owns and performs the connection read, it observes the cleared confirmation and the operation is refused.\"],\"observer\":\"The caller sees placement progress in one implementation and connection_not_confirmed in the other.\"}},{\"subject\":\"photo_delivery\",\"kind\":\"duplicate ownership\",\"text\":\"- keeping server paths out of every answer.\",\"question\":\"Does photo_delivery own path removal for every answer, or does deliverer_api own it as INV-11 states; what path-free error/result contract must cross their boundary?\",\"options\":[\"photo_delivery guarantees all results and errors are path-free; deliverer_api only serializes them\",\"deliverer_api alone sanitizes and fixes every outward message\",\"photo_delivery guarantees path-free success and domain results while deliverer_api maps internal errors to fixed path-free refusals\"],\"default_guess\":\"photo_delivery must return only path-free domain results and typed errors, while deliverer_api remains the sole owner of the final outward refusal body.\"},{\"subject\":\"photo_delivery\",\"kind\":\"undecided public contract\",\"text\":\"### Candidate public capabilities\\n\\n```text\\nscan_project_photos\\ndeliver_project_photo\\nmark_photo_published\\n```\",\"question\":\"Are these final exports, and do they accept authenticated raw requests, validated project values, a confirmed connection or folder, and how do they return whole-operation refusals versus per-photo failures?\",\"options\":[\"Expose the three functions as complete service operations accepting validated request values and returning domain result-or-refusal unions\",\"Pass a confirmed-folder capability into them after deliverer_api performs connection checks\",\"Let the functions accept raw requests and perform all validation except token handling\"],\"default_guess\":\"Expose the three operations with explicit typed inputs after token and request-form validation; let photo_delivery perform the remaining ordered checks and return a typed domain result-or-refusal union.\"}]}",
+ "set_aside": []
+}
