@@ -1,0 +1,364 @@
+{
+ "open_points": [
+  {
+   "subject": "source file observation",
+   "kind": "undefined_model",
+   "text": "Object folder → deliverer | file names, file metadata and bytes | untrusted, read only",
+   "question": "What model represents an observed source file, which file-metadata facts does it contain, and is it a value snapshot or an entity that persists across scans?",
+   "options": [
+    "A value snapshot minted by each scan from the name, selected metadata and observed bytes",
+    "An entity retained across scans and updated when the folder entry changes",
+    "No source-file model; name, metadata and bytes remain separate transient inputs"
+   ],
+   "default_guess": "Use a value snapshot minted by each scan, containing only metadata needed by stated product facts.",
+   "unit": "?"
+  },
+  {
+   "subject": "file metadata",
+   "kind": "vague_facts",
+   "text": "file names, file metadata and bytes",
+   "question": "Which metadata items are product facts that State 1 models, rather than implementation inputs left to later states?",
+   "options": [
+    "Only modification time and the camera-record facts required for the photo date",
+    "Modification time plus size, media type and other filesystem facts",
+    "All available filesystem and embedded-image metadata",
+    "No metadata is retained as a model fact"
+   ],
+   "default_guess": "Model only the modification time and camera-record facts required to establish the delivered photo date.",
+   "witness": {
+    "initial": "A source photo has a camera date different from its filesystem modification time.",
+    "events": [
+     "Syncthing-fork places the photo in the object folder.",
+     "The calling flow asks the deliverer to scan the project."
+    ],
+    "outcomes": [
+     "The returned source-photo value carries both observed date facts and their provenance.",
+     "The returned value carries only the selected photo date, with the observations remaining transient."
+    ],
+    "observer": "The calling flow and any later implementation of delivery"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "source content identity",
+   "kind": "undefined_identity",
+   "text": "One placement exists per project and source content; repeating it changes nothing.",
+   "question": "What exactly constitutes “source content,” who mints its identity, and from what evidence is that identity made?",
+   "options": [
+    "The complete source byte sequence",
+    "The decoded image pixels",
+    "The prepared image after metadata removal, orientation and resizing",
+    "A caller-supplied source id",
+    "A deliverer-minted digest of the source bytes"
+   ],
+   "default_guess": "Treat source content as the complete observed source byte sequence and let the deliverer mint its identifier from those bytes.",
+   "witness": {
+    "initial": "Two files decode to identical pixels but have different EXIF blocks.",
+    "events": [
+     "The owner connects a confirmed folder.",
+     "The calling flow delivers the first file.",
+     "The calling flow delivers the second file."
+    ],
+    "outcomes": [
+     "A byte-based identity creates two placements.",
+     "A pixel- or prepared-image-based identity returns the first placement."
+    ],
+    "observer": "The calling flow and the Portal binary store"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "source id",
+   "kind": "minting_ambiguity",
+   "text": "| Calling flow → deliverer | project id, file name, source id, Portal photo id | authenticated by the deliverer's own bearer token |\n| See what can be delivered for a project | each file with a status: ready, placed or published with its source id, or rejected with a reason | unknown project, unconfirmed connection or unavailable folder is refused; nothing is changed | unit tests, E2E |",
+   "question": "Is a source id minted by the deliverer during scanning and later returned by the calling flow, or minted by the calling flow and merely accepted or echoed by the deliverer; and from what is it minted?",
+   "options": [
+    "Deliverer-minted from source content during scan",
+    "Calling-flow-minted and supplied to every relevant operation",
+    "Externally existing identifier imported with the folder entry",
+    "Composite identity made from project id and file name"
+   ],
+   "default_guess": "Have the deliverer mint it from project id and source-content identity during scan, then require the caller to return it for delivery and publication recording.",
+   "witness": {
+    "initial": "A previously unseen file exists in a confirmed project folder.",
+    "events": [
+     "The calling flow asks what can be delivered.",
+     "The deliverer returns the file and a source id.",
+     "The calling flow requests delivery using that source id."
+    ],
+    "outcomes": [
+     "The source id is authoritative because the deliverer minted it from the observation.",
+     "The source id is only a caller-owned correlation value that the deliverer accepted."
+    ],
+    "observer": "The calling flow and the deliverer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "deliverable item",
+   "kind": "undefined_model",
+   "text": "each file with a status: ready, placed or published with its source id, or rejected with a reason",
+   "question": "What closed model or models represent one scan result, and which facts belong to every result versus only to particular status variants?",
+   "options": [
+    "One product model with optional source id and rejection reason",
+    "A discriminated union with separate ready, placed, published and rejected variants",
+    "A source-file model plus a separate status model",
+    "Four unrelated result models"
+   ],
+   "default_guess": "Use a discriminated union with one variant per status and explicitly shared file identity facts.",
+   "unit": "?"
+  },
+  {
+   "subject": "rejected item source id",
+   "kind": "field_presence_ambiguity",
+   "text": "each file with a status: ready, placed or published with its source id, or rejected with a reason",
+   "question": "Does a rejected file have a source id as well as a reason, or is source id present only for ready, placed and published results?",
+   "options": [
+    "Every file result, including rejected, has a source id",
+    "Only ready, placed and published results have a source id",
+    "Rejected results have a source id only when content identity could be established"
+   ],
+   "default_guess": "Give a rejected result a source id only when the source content could be identified; otherwise give it a separate observation identity.",
+   "witness": {
+    "initial": "A named file is visible but cannot be decoded as an image.",
+    "events": [
+     "The calling flow scans the confirmed project folder.",
+     "The deliverer reports the file as rejected."
+    ],
+    "outcomes": [
+     "The rejected result includes a stable source id that can be correlated on a later scan.",
+     "The rejected result contains only the file identity and reason, so no source id can be correlated."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "delivery status",
+   "kind": "lifecycle_ambiguity",
+   "text": "ready, placed or published with its source id, or rejected with a reason",
+   "question": "Are ready, placed, published and rejected persistent states of one entity, derived views over placement and publication records, or result variants computed independently on every scan?",
+   "options": [
+    "Persistent mutable status on a source-photo entity",
+    "Derived status from immutable source, placement and publication records",
+    "Ephemeral status recomputed by each scan"
+   ],
+   "default_guess": "Derive status from immutable source observation, placement and publication records rather than store an independently mutable status.",
+   "unit": "?"
+  },
+  {
+   "subject": "rejected status lifecycle",
+   "kind": "status_transition_ambiguity",
+   "text": "rejected with a reason",
+   "question": "Is rejected terminal for a source id, or can the same file or source later become ready after replacement, completion or environmental recovery; if it can, does it retain the same identity?",
+   "options": [
+    "Rejected is terminal for that source id",
+    "Rejected may become ready under the same source id",
+    "A changed file creates a new source id while transient environmental rejection can clear under the old id"
+   ],
+   "default_guess": "Make content rejection terminal for that source-content id, but allow environmental rejection to clear without changing the content identity.",
+   "witness": {
+    "initial": "A scan reports a file as rejected because its bytes are incomplete.",
+    "events": [
+     "Syncthing-fork replaces the file with its complete bytes.",
+     "The calling flow scans again."
+    ],
+    "outcomes": [
+     "The existing source entity changes from rejected to ready.",
+     "The complete bytes mint a new source identity while the rejected observation remains distinct."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "scan refusal and per-file rejection",
+   "kind": "failure_model_ambiguity",
+   "text": "unknown project, unconfirmed connection or unavailable folder is refused; nothing is changed",
+   "question": "How is an action-level refusal distinguished in the model from a successful scan containing rejected file results, and does an unavailable folder yield no result collection or rejected items?",
+   "options": [
+    "A separate scan-refusal result with no file items",
+    "The same result model with every affected file rejected",
+    "An exception or transport failure with no runtime model"
+   ],
+   "default_guess": "Use a separate typed scan-refusal result with no file items and no model mutation.",
+   "unit": "?"
+  },
+  {
+   "subject": "failed delivery effects",
+   "kind": "creation_ambiguity",
+   "text": "a photo that cannot be delivered is reported with its reason and no placement is made",
+   "question": "Besides forbidding a placement, may a failed delivery create or change any model such as a rejection status, delivery-attempt record, diagnostic record or cached source observation?",
+   "options": [
+    "No persistent model is created or changed",
+    "A rejection/status record may be created or updated",
+    "A delivery-attempt entity is created while placement is not",
+    "Only an already existing source observation may be updated"
+   ],
+   "default_guess": "Create no persistent domain model on failure; return a value result containing the reason.",
+   "witness": {
+    "initial": "A ready source photo exists and no placement exists for it.",
+    "events": [
+     "The calling flow requests delivery.",
+     "Image preparation fails."
+    ],
+    "outcomes": [
+     "The operation returns a failure value and leaves all persistent models unchanged.",
+     "The operation records a failed attempt or changes the source status to rejected while creating no placement."
+    ],
+    "observer": "The calling flow on the next scan or retry"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "placement",
+   "kind": "undefined_model",
+   "text": "a prepared image in the Portal store, its reference and the publication body",
+   "question": "What model is the placement, is it a value or entity, who mints it, and which source, project, prepared-image reference and publication-body facts define it?",
+   "options": [
+    "A deliverer-minted entity keyed by project and source-content identity",
+    "A value identified entirely by its immutable fields",
+    "The binary-store reference itself is the placement identity",
+    "No placement model; only a delivery result exists"
+   ],
+   "default_guess": "Use a deliverer-minted entity whose natural uniqueness is project id plus source-content identity.",
+   "unit": "?"
+  },
+  {
+   "subject": "prepared image",
+   "kind": "undefined_model",
+   "text": "A stored image carries no EXIF, GPS, XMP or comment, is upright and is at most\n  2000 px on its longest side.",
+   "question": "Is the prepared image a modeled value distinct from the source photo, and which stated properties and identity evidence does its model carry?",
+   "options": [
+    "A value model containing content identity, dimensions, date and sanitization facts",
+    "An entity represented by the binary-store reference",
+    "Only unmodeled bytes governed by invariants",
+    "Part of the placement model with no independent identity"
+   ],
+   "default_guess": "Model it as an immutable value identified by its prepared bytes, with dimensions and the stated sanitization guarantees as facts.",
+   "unit": "?"
+  },
+  {
+   "subject": "file reference",
+   "kind": "undefined_identity",
+   "text": "statuses, file reference, publication body",
+   "question": "What does the file reference identify, who mints it, and is it a stable value, a placement entity id, or an opaque binary-store locator?",
+   "options": [
+    "An opaque deliverer-minted binary-store key",
+    "The identity of the placement entity",
+    "A Portal-understood public or relative reference",
+    "A content-addressed identifier of the prepared image"
+   ],
+   "default_guess": "Use an opaque, credential-free binary-store key minted by the deliverer and stored as a fact of the placement.",
+   "unit": "?"
+  },
+  {
+   "subject": "publication body",
+   "kind": "undefined_model",
+   "text": "statuses, file reference, publication body",
+   "question": "What model represents the publication body, which product facts does it contain, and is it an immutable value produced from the placement or a mutable entity?",
+   "options": [
+    "An immutable value derived from the placement and prepared-photo facts",
+    "A mutable draft entity retained by the deliverer",
+    "An unmodeled transport payload left to contract states",
+    "A field embedded directly in the placement"
+   ],
+   "default_guess": "Use an immutable value produced from the placement; leave only its later encoding and wire format to later states.",
+   "unit": "?"
+  },
+  {
+   "subject": "repeat delivery result",
+   "kind": "read_semantics_ambiguity",
+   "text": "Deliver the same photo again | the first result, nothing written",
+   "question": "Which persisted model is read to return “the first result,” and does sameness require returning the identical stored reference and publication-body facts or merely an equivalent newly reconstructed value?",
+   "options": [
+    "Read the existing placement and return its originally stored result facts",
+    "Reconstruct an equivalent result from the existing prepared image",
+    "Store the entire first delivery-result value and return it verbatim"
+   ],
+   "default_guess": "Read the existing placement and return its originally stored file reference and publication body without reconstructing them.",
+   "witness": {
+    "initial": "A placement already exists and the rules used to construct publication bodies have since changed.",
+    "events": [
+     "The calling flow delivers the same project and source content again."
+    ],
+    "outcomes": [
+     "The original publication body is returned from persisted placement facts.",
+     "A newly reconstructed publication body is returned while no new placement is written."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "publication record",
+   "kind": "undefined_model",
+   "text": "the file is reported as published, with its Portal photo id",
+   "question": "Does recording publication create a separate publication entity, mutate the placement, or attach a Portal photo id to the source-photo entity; and who mints each identity involved?",
+   "options": [
+    "Create a separate deliverer-minted publication entity linking placement and Portal photo id",
+    "Mutate the placement from placed to published",
+    "Attach publication facts to the source-photo entity",
+    "Store only a mapping from source id to Portal photo id"
+   ],
+   "default_guess": "Create an immutable publication record linking the existing placement to the externally minted Portal photo id, and derive published status from it.",
+   "witness": {
+    "initial": "A placement exists with no recorded Portal publication.",
+    "events": [
+     "The calling flow creates a hidden Portal photo.",
+     "The calling flow records the returned Portal photo id with the deliverer."
+    ],
+    "outcomes": [
+     "A new publication entity is created and the placement remains unchanged.",
+     "The existing placement entity changes status and gains the Portal photo id."
+    ],
+    "observer": "The calling flow on later scans"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Portal photo id",
+   "kind": "external_identity_ambiguity",
+   "text": "with its Portal photo id",
+   "question": "Is the Portal photo id modeled as an externally minted value tied to one placement, and what relation makes a later different id for the same source invalid?",
+   "options": [
+    "An external value identity minted by the Portal and uniquely bound to a placement",
+    "An attribute of a mutable placement",
+    "The identity of the publication entity itself",
+    "An untyped scalar left entirely to later contracts"
+   ],
+   "default_guess": "Model it as a Portal-minted value identifier uniquely and immutably bound by a publication record to one placement.",
+   "unit": "?"
+  },
+  {
+   "subject": "photo date",
+   "kind": "fact_provenance_ambiguity",
+   "text": "The photo date comes from the camera record, otherwise from the file's\n  modification time, and is delivered as UTC without an offset.",
+   "question": "Which model owns the photo date, and does it also retain whether the value came from the camera record or file modification time?",
+   "options": [
+    "The source-photo model owns the date and its provenance",
+    "The prepared-image model owns only the normalized date",
+    "The publication body owns the date with no provenance",
+    "Both source observation and prepared image carry different date facts"
+   ],
+   "default_guess": "Put the observed date and provenance on the source-photo value, and put the normalized delivered date on the prepared-image or publication-body value.",
+   "witness": {
+    "initial": "A photo has no camera date and its filesystem modification time later changes.",
+    "events": [
+     "The file is scanned and delivered.",
+     "Syncthing-fork changes the file modification time without changing its bytes.",
+     "The project is scanned again."
+    ],
+    "outcomes": [
+     "The original source-content identity retains the first observed photo date.",
+     "The same source-content identity now reports a different photo date derived from current metadata."
+    ],
+    "observer": "The calling flow and the client through the Portal"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"source file observation\",\"kind\":\"undefined_model\",\"text\":\"Object folder → deliverer | file names, file metadata and bytes | untrusted, read only\",\"question\":\"What model represents an observed source file, which file-metadata facts does it contain, and is it a value snapshot or an entity that persists across scans?\",\"options\":[\"A value snapshot minted by each scan from the name, selected metadata and observed bytes\",\"An entity retained across scans and updated when the folder entry changes\",\"No source-file model; name, metadata and bytes remain separate transient inputs\"],\"default_guess\":\"Use a value snapshot minted by each scan, containing only metadata needed by stated product facts.\"},{\"subject\":\"file metadata\",\"kind\":\"vague_facts\",\"text\":\"file names, file metadata and bytes\",\"question\":\"Which metadata items are product facts that State 1 models, rather than implementation inputs left to later states?\",\"options\":[\"Only modification time and the camera-record facts required for the photo date\",\"Modification time plus size, media type and other filesystem facts\",\"All available filesystem and embedded-image metadata\",\"No metadata is retained as a model fact\"],\"default_guess\":\"Model only the modification time and camera-record facts required to establish the delivered photo date.\",\"witness\":{\"initial\":\"A source photo has a camera date different from its filesystem modification time.\",\"events\":[\"Syncthing-fork places the photo in the object folder.\",\"The calling flow asks the deliverer to scan the project.\"],\"outcomes\":[\"The returned source-photo value carries both observed date facts and their provenance.\",\"The returned value carries only the selected photo date, with the observations remaining transient.\"],\"observer\":\"The calling flow and any later implementation of delivery\"}},{\"subject\":\"source content identity\",\"kind\":\"undefined_identity\",\"text\":\"One placement exists per project and source content; repeating it changes nothing.\",\"question\":\"What exactly constitutes “source content,” who mints its identity, and from what evidence is that identity made?\",\"options\":[\"The complete source byte sequence\",\"The decoded image pixels\",\"The prepared image after metadata removal, orientation and resizing\",\"A caller-supplied source id\",\"A deliverer-minted digest of the source bytes\"],\"default_guess\":\"Treat source content as the complete observed source byte sequence and let the deliverer mint its identifier from those bytes.\",\"witness\":{\"initial\":\"Two files decode to identical pixels but have different EXIF blocks.\",\"events\":[\"The owner connects a confirmed folder.\",\"The calling flow delivers the first file.\",\"The calling flow delivers the second file.\"],\"outcomes\":[\"A byte-based identity creates two placements.\",\"A pixel- or prepared-image-based identity returns the first placement.\"],\"observer\":\"The calling flow and the Portal binary store\"}},{\"subject\":\"source id\",\"kind\":\"minting_ambiguity\",\"text\":\"| Calling flow → deliverer | project id, file name, source id, Portal photo id | authenticated by the deliverer's own bearer token |\\n| See what can be delivered for a project | each file with a status: ready, placed or published with its source id, or rejected with a reason | unknown project, unconfirmed connection or unavailable folder is refused; nothing is changed | unit tests, E2E |\",\"question\":\"Is a source id minted by the deliverer during scanning and later returned by the calling flow, or minted by the calling flow and merely accepted or echoed by the deliverer; and from what is it minted?\",\"options\":[\"Deliverer-minted from source content during scan\",\"Calling-flow-minted and supplied to every relevant operation\",\"Externally existing identifier imported with the folder entry\",\"Composite identity made from project id and file name\"],\"default_guess\":\"Have the deliverer mint it from project id and source-content identity during scan, then require the caller to return it for delivery and publication recording.\",\"witness\":{\"initial\":\"A previously unseen file exists in a confirmed project folder.\",\"events\":[\"The calling flow asks what can be delivered.\",\"The deliverer returns the file and a source id.\",\"The calling flow requests delivery using that source id.\"],\"outcomes\":[\"The source id is authoritative because the deliverer minted it from the observation.\",\"The source id is only a caller-owned correlation value that the deliverer accepted.\"],\"observer\":\"The calling flow and the deliverer\"}},{\"subject\":\"deliverable item\",\"kind\":\"undefined_model\",\"text\":\"each file with a status: ready, placed or published with its source id, or rejected with a reason\",\"question\":\"What closed model or models represent one scan result, and which facts belong to every result versus only to particular status variants?\",\"options\":[\"One product model with optional source id and rejection reason\",\"A discriminated union with separate ready, placed, published and rejected variants\",\"A source-file model plus a separate status model\",\"Four unrelated result models\"],\"default_guess\":\"Use a discriminated union with one variant per status and explicitly shared file identity facts.\"},{\"subject\":\"rejected item source id\",\"kind\":\"field_presence_ambiguity\",\"text\":\"each file with a status: ready, placed or published with its source id, or rejected with a reason\",\"question\":\"Does a rejected file have a source id as well as a reason, or is source id present only for ready, placed and published results?\",\"options\":[\"Every file result, including rejected, has a source id\",\"Only ready, placed and published results have a source id\",\"Rejected results have a source id only when content identity could be established\"],\"default_guess\":\"Give a rejected result a source id only when the source content could be identified; otherwise give it a separate observation identity.\",\"witness\":{\"initial\":\"A named file is visible but cannot be decoded as an image.\",\"events\":[\"The calling flow scans the confirmed project folder.\",\"The deliverer reports the file as rejected.\"],\"outcomes\":[\"The rejected result includes a stable source id that can be correlated on a later scan.\",\"The rejected result contains only the file identity and reason, so no source id can be correlated.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"delivery status\",\"kind\":\"lifecycle_ambiguity\",\"text\":\"ready, placed or published with its source id, or rejected with a reason\",\"question\":\"Are ready, placed, published and rejected persistent states of one entity, derived views over placement and publication records, or result variants computed independently on every scan?\",\"options\":[\"Persistent mutable status on a source-photo entity\",\"Derived status from immutable source, placement and publication records\",\"Ephemeral status recomputed by each scan\"],\"default_guess\":\"Derive status from immutable source observation, placement and publication records rather than store an independently mutable status.\"},{\"subject\":\"rejected status lifecycle\",\"kind\":\"status_transition_ambiguity\",\"text\":\"rejected with a reason\",\"question\":\"Is rejected terminal for a source id, or can the same file or source later become ready after replacement, completion or environmental recovery; if it can, does it retain the same identity?\",\"options\":[\"Rejected is terminal for that source id\",\"Rejected may become ready under the same source id\",\"A changed file creates a new source id while transient environmental rejection can clear under the old id\"],\"default_guess\":\"Make content rejection terminal for that source-content id, but allow environmental rejection to clear without changing the content identity.\",\"witness\":{\"initial\":\"A scan reports a file as rejected because its bytes are incomplete.\",\"events\":[\"Syncthing-fork replaces the file with its complete bytes.\",\"The calling flow scans again.\"],\"outcomes\":[\"The existing source entity changes from rejected to ready.\",\"The complete bytes mint a new source identity while the rejected observation remains distinct.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"scan refusal and per-file rejection\",\"kind\":\"failure_model_ambiguity\",\"text\":\"unknown project, unconfirmed connection or unavailable folder is refused; nothing is changed\",\"question\":\"How is an action-level refusal distinguished in the model from a successful scan containing rejected file results, and does an unavailable folder yield no result collection or rejected items?\",\"options\":[\"A separate scan-refusal result with no file items\",\"The same result model with every affected file rejected\",\"An exception or transport failure with no runtime model\"],\"default_guess\":\"Use a separate typed scan-refusal result with no file items and no model mutation.\"},{\"subject\":\"failed delivery effects\",\"kind\":\"creation_ambiguity\",\"text\":\"a photo that cannot be delivered is reported with its reason and no placement is made\",\"question\":\"Besides forbidding a placement, may a failed delivery create or change any model such as a rejection status, delivery-attempt record, diagnostic record or cached source observation?\",\"options\":[\"No persistent model is created or changed\",\"A rejection/status record may be created or updated\",\"A delivery-attempt entity is created while placement is not\",\"Only an already existing source observation may be updated\"],\"default_guess\":\"Create no persistent domain model on failure; return a value result containing the reason.\",\"witness\":{\"initial\":\"A ready source photo exists and no placement exists for it.\",\"events\":[\"The calling flow requests delivery.\",\"Image preparation fails.\"],\"outcomes\":[\"The operation returns a failure value and leaves all persistent models unchanged.\",\"The operation records a failed attempt or changes the source status to rejected while creating no placement.\"],\"observer\":\"The calling flow on the next scan or retry\"}},{\"subject\":\"placement\",\"kind\":\"undefined_model\",\"text\":\"a prepared image in the Portal store, its reference and the publication body\",\"question\":\"What model is the placement, is it a value or entity, who mints it, and which source, project, prepared-image reference and publication-body facts define it?\",\"options\":[\"A deliverer-minted entity keyed by project and source-content identity\",\"A value identified entirely by its immutable fields\",\"The binary-store reference itself is the placement identity\",\"No placement model; only a delivery result exists\"],\"default_guess\":\"Use a deliverer-minted entity whose natural uniqueness is project id plus source-content identity.\"},{\"subject\":\"prepared image\",\"kind\":\"undefined_model\",\"text\":\"A stored image carries no EXIF, GPS, XMP or comment, is upright and is at most\\n  2000 px on its longest side.\",\"question\":\"Is the prepared image a modeled value distinct from the source photo, and which stated properties and identity evidence does its model carry?\",\"options\":[\"A value model containing content identity, dimensions, date and sanitization facts\",\"An entity represented by the binary-store reference\",\"Only unmodeled bytes governed by invariants\",\"Part of the placement model with no independent identity\"],\"default_guess\":\"Model it as an immutable value identified by its prepared bytes, with dimensions and the stated sanitization guarantees as facts.\"},{\"subject\":\"file reference\",\"kind\":\"undefined_identity\",\"text\":\"statuses, file reference, publication body\",\"question\":\"What does the file reference identify, who mints it, and is it a stable value, a placement entity id, or an opaque binary-store locator?\",\"options\":[\"An opaque deliverer-minted binary-store key\",\"The identity of the placement entity\",\"A Portal-understood public or relative reference\",\"A content-addressed identifier of the prepared image\"],\"default_guess\":\"Use an opaque, credential-free binary-store key minted by the deliverer and stored as a fact of the placement.\"},{\"subject\":\"publication body\",\"kind\":\"undefined_model\",\"text\":\"statuses, file reference, publication body\",\"question\":\"What model represents the publication body, which product facts does it contain, and is it an immutable value produced from the placement or a mutable entity?\",\"options\":[\"An immutable value derived from the placement and prepared-photo facts\",\"A mutable draft entity retained by the deliverer\",\"An unmodeled transport payload left to contract states\",\"A field embedded directly in the placement\"],\"default_guess\":\"Use an immutable value produced from the placement; leave only its later encoding and wire format to later states.\"},{\"subject\":\"repeat delivery result\",\"kind\":\"read_semantics_ambiguity\",\"text\":\"Deliver the same photo again | the first result, nothing written\",\"question\":\"Which persisted model is read to return “the first result,” and does sameness require returning the identical stored reference and publication-body facts or merely an equivalent newly reconstructed value?\",\"options\":[\"Read the existing placement and return its originally stored result facts\",\"Reconstruct an equivalent result from the existing prepared image\",\"Store the entire first delivery-result value and return it verbatim\"],\"default_guess\":\"Read the existing placement and return its originally stored file reference and publication body without reconstructing them.\",\"witness\":{\"initial\":\"A placement already exists and the rules used to construct publication bodies have since changed.\",\"events\":[\"The calling flow delivers the same project and source content again.\"],\"outcomes\":[\"The original publication body is returned from persisted placement facts.\",\"A newly reconstructed publication body is returned while no new placement is written.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"publication record\",\"kind\":\"undefined_model\",\"text\":\"the file is reported as published, with its Portal photo id\",\"question\":\"Does recording publication create a separate publication entity, mutate the placement, or attach a Portal photo id to the source-photo entity; and who mints each identity involved?\",\"options\":[\"Create a separate deliverer-minted publication entity linking placement and Portal photo id\",\"Mutate the placement from placed to published\",\"Attach publication facts to the source-photo entity\",\"Store only a mapping from source id to Portal photo id\"],\"default_guess\":\"Create an immutable publication record linking the existing placement to the externally minted Portal photo id, and derive published status from it.\",\"witness\":{\"initial\":\"A placement exists with no recorded Portal publication.\",\"events\":[\"The calling flow creates a hidden Portal photo.\",\"The calling flow records the returned Portal photo id with the deliverer.\"],\"outcomes\":[\"A new publication entity is created and the placement remains unchanged.\",\"The existing placement entity changes status and gains the Portal photo id.\"],\"observer\":\"The calling flow on later scans\"}},{\"subject\":\"Portal photo id\",\"kind\":\"external_identity_ambiguity\",\"text\":\"with its Portal photo id\",\"question\":\"Is the Portal photo id modeled as an externally minted value tied to one placement, and what relation makes a later different id for the same source invalid?\",\"options\":[\"An external value identity minted by the Portal and uniquely bound to a placement\",\"An attribute of a mutable placement\",\"The identity of the publication entity itself\",\"An untyped scalar left entirely to later contracts\"],\"default_guess\":\"Model it as a Portal-minted value identifier uniquely and immutably bound by a publication record to one placement.\"},{\"subject\":\"photo date\",\"kind\":\"fact_provenance_ambiguity\",\"text\":\"The photo date comes from the camera record, otherwise from the file's\\n  modification time, and is delivered as UTC without an offset.\",\"question\":\"Which model owns the photo date, and does it also retain whether the value came from the camera record or file modification time?\",\"options\":[\"The source-photo model owns the date and its provenance\",\"The prepared-image model owns only the normalized date\",\"The publication body owns the date with no provenance\",\"Both source observation and prepared image carry different date facts\"],\"default_guess\":\"Put the observed date and provenance on the source-photo value, and put the normalized delivered date on the prepared-image or publication-body value.\",\"witness\":{\"initial\":\"A photo has no camera date and its filesystem modification time later changes.\",\"events\":[\"The file is scanned and delivered.\",\"Syncthing-fork changes the file modification time without changing its bytes.\",\"The project is scanned again.\"],\"outcomes\":[\"The original source-content identity retains the first observed photo date.\",\"The same source-content identity now reports a different photo date derived from current metadata.\"],\"observer\":\"The calling flow and the client through the Portal\"}}]}",
+ "set_aside": []
+}

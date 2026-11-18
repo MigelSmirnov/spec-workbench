@@ -1,0 +1,163 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Actors and trust boundaries",
+   "subject": "object-folder input contract",
+   "kind": "undefined input",
+   "text": "file metadata",
+   "question": "What information counts as file metadata at this boundary, including its fields, types, availability and distinction from metadata embedded in image bytes?",
+   "options": [
+    "Only size and modification time",
+    "Filesystem stat data including type, size, times and permissions",
+    "Extended attributes and link information as well",
+    "Image metadata such as EXIF"
+   ],
+   "default_guess": "Filesystem entry type, byte size and modification time only"
+  },
+  {
+   "unit": "00_product.md:Actors and trust boundaries",
+   "subject": "use of file metadata",
+   "kind": "missing semantics",
+   "text": "file names, file metadata and bytes",
+   "question": "Which delivery decisions may depend on metadata, and which metadata fields, if any, contribute to source identity, eligibility, content-change detection or image preparation?",
+   "options": [
+    "Metadata is diagnostic only",
+    "Metadata affects eligibility and safety checks but not identity",
+    "Metadata contributes to source identity and change detection",
+    "Metadata may also alter image preparation"
+   ],
+   "default_guess": "Use entry type and size for safety checks and use a byte digest, not metadata, for identity and content-change detection",
+   "witness": {
+    "initial": "A confirmed project contains a file whose name and bytes stay unchanged while its modification time changes.",
+    "events": [
+     "Syncthing-fork changes only the file's modification time.",
+     "Calling flow asks what can be delivered."
+    ],
+    "outcomes": [
+     "The deliverer returns the same source id and status because metadata does not define identity.",
+     "The deliverer returns a new source id or ready state because metadata participates in identity or change detection."
+    ],
+    "observer": "Calling flow and owner"
+   }
+  },
+  {
+   "unit": "00_product.md:Actors and trust boundaries",
+   "subject": "consistency of folder reads",
+   "kind": "undefined snapshot",
+   "text": "file names, file metadata and bytes",
+   "question": "What consistency must hold between a file's name, metadata and bytes when Syncthing replaces or modifies it during a read?",
+   "options": [
+    "Use each value whenever it is read",
+    "Require matching metadata before and after reading the bytes",
+    "Open one stable file handle and validate its identity",
+    "Reject any entry observed changing and retry only on a later request"
+   ],
+   "default_guess": "Read through one handle, compare identity, size and modification data before and after, and reject the entry if they changed",
+   "witness": {
+    "initial": "A confirmed folder contains photo.jpg with metadata M1 and bytes B1.",
+    "events": [
+     "Calling flow asks what can be delivered or asks for placement.",
+     "Syncthing-fork replaces photo.jpg with metadata M2 and bytes B2 while the deliverer is reading it."
+    ],
+    "outcomes": [
+     "The deliverer accepts a mixed observation such as M1 with B2.",
+     "The deliverer rejects the changing file without placing it."
+    ],
+    "observer": "Calling flow and owner"
+   }
+  },
+  {
+   "unit": "00_product.md:Actors and trust boundaries",
+   "subject": "invalid metadata handling",
+   "kind": "missing failure",
+   "text": "file metadata",
+   "question": "What happens when metadata is unreadable, unsupported, malformed or changes during inspection: is that file rejected, is the whole project request refused, or is the metadata ignored?",
+   "options": [
+    "Reject only the affected file with a reason",
+    "Refuse the entire request without changes",
+    "Ignore unusable metadata and continue from the bytes",
+    "Retry metadata reads before rejecting"
+   ],
+   "default_guess": "Reject only the affected file with a stable reason and leave other files available",
+   "witness": {
+    "initial": "A confirmed project contains one valid photo and one entry whose metadata cannot be read.",
+    "events": [
+     "Calling flow asks what can be delivered."
+    ],
+    "outcomes": [
+     "The valid photo is returned and the bad entry is rejected with a reason.",
+     "The entire request is refused as an unavailable folder or metadata error."
+    ],
+    "observer": "Calling flow and owner"
+   }
+  },
+  {
+   "unit": "00_product.md:Primary actions",
+   "subject": "rejected listing entries",
+   "kind": "ambiguous output",
+   "text": "each file with a status: ready, placed or published with its source id, or rejected with a reason",
+   "question": "Does a rejected file also carry its source id, and is rejected itself a status or a separate result shape?",
+   "options": [
+    "Every entry, including rejected, has a source id and status",
+    "Rejected entries have a reason but no source id",
+    "Rejected entries have a source id only when identity could be established"
+   ],
+   "default_guess": "Every identifiable file has a source id; an unidentifiable entry is rejected using its file name and reason",
+   "witness": {
+    "initial": "A confirmed project contains a file that is identifiable but cannot be delivered.",
+    "events": [
+     "Calling flow asks what can be delivered."
+    ],
+    "outcomes": [
+     "The response contains status rejected, the source id and the reason.",
+     "The response contains only a rejected result and reason, without the source id."
+    ],
+    "observer": "Calling flow and owner"
+   }
+  },
+  {
+   "unit": "00_product.md:Primary actions",
+   "subject": "placement transaction",
+   "kind": "undefined abstraction",
+   "text": "no placement is made",
+   "question": "What exact writes and state transition constitute a placement, and at what commit point may the deliverer report that placement succeeded?",
+   "options": [
+    "Writing the prepared binary alone is placement",
+    "Writing the binary and creating its stable reference together is placement",
+    "Binary, reference and publication body must commit atomically",
+    "Placement may leave recoverable temporary artifacts before commit"
+   ],
+   "default_guess": "Placement commits only when the prepared binary and stable reference are both durable; temporary artifacts are not placements and must not be externally visible"
+  },
+  {
+   "unit": "00_product.md:Primary actions",
+   "subject": "failed delivery side effects",
+   "kind": "incomplete failure guarantee",
+   "text": "a photo that cannot be delivered is reported with its reason and no placement is made",
+   "question": "Besides forbidding a placement, what state changes or writes are permitted on a failed delivery, including temporary files, rejection records, caches, counters and changes to an earlier placement?",
+   "options": [
+    "No durable state or Portal-store write is permitted",
+    "Diagnostic or rejection state may be written but Portal-store content may not",
+    "Temporary Portal-store objects may be written if removed before returning",
+    "An earlier placement may be retained but never changed or removed"
+   ],
+   "default_guess": "Permit only non-product operational logging; make no durable product-state or Portal-store change and preserve any earlier placement",
+   "witness": {
+    "initial": "A source already has a successful placement, and a later delivery request for it cannot be completed.",
+    "events": [
+     "Calling flow requests delivery.",
+     "The deliverer detects the failure and reports its reason.",
+     "Calling flow later asks what can be delivered."
+    ],
+    "outcomes": [
+     "The earlier placement remains unchanged and no failure state was stored.",
+     "The earlier placement remains, but a durable rejection or attempt record changes the later reported state or reason."
+    ],
+    "observer": "Calling flow and owner"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Actors and trust boundaries\",\"subject\":\"object-folder input contract\",\"kind\":\"undefined input\",\"text\":\"file metadata\",\"question\":\"What information counts as file metadata at this boundary, including its fields, types, availability and distinction from metadata embedded in image bytes?\",\"options\":[\"Only size and modification time\",\"Filesystem stat data including type, size, times and permissions\",\"Extended attributes and link information as well\",\"Image metadata such as EXIF\"],\"default_guess\":\"Filesystem entry type, byte size and modification time only\"},{\"unit\":\"00_product.md:Actors and trust boundaries\",\"subject\":\"use of file metadata\",\"kind\":\"missing semantics\",\"text\":\"file names, file metadata and bytes\",\"question\":\"Which delivery decisions may depend on metadata, and which metadata fields, if any, contribute to source identity, eligibility, content-change detection or image preparation?\",\"options\":[\"Metadata is diagnostic only\",\"Metadata affects eligibility and safety checks but not identity\",\"Metadata contributes to source identity and change detection\",\"Metadata may also alter image preparation\"],\"default_guess\":\"Use entry type and size for safety checks and use a byte digest, not metadata, for identity and content-change detection\",\"witness\":{\"initial\":\"A confirmed project contains a file whose name and bytes stay unchanged while its modification time changes.\",\"events\":[\"Syncthing-fork changes only the file's modification time.\",\"Calling flow asks what can be delivered.\"],\"outcomes\":[\"The deliverer returns the same source id and status because metadata does not define identity.\",\"The deliverer returns a new source id or ready state because metadata participates in identity or change detection.\"],\"observer\":\"Calling flow and owner\"}},{\"unit\":\"00_product.md:Actors and trust boundaries\",\"subject\":\"consistency of folder reads\",\"kind\":\"undefined snapshot\",\"text\":\"file names, file metadata and bytes\",\"question\":\"What consistency must hold between a file's name, metadata and bytes when Syncthing replaces or modifies it during a read?\",\"options\":[\"Use each value whenever it is read\",\"Require matching metadata before and after reading the bytes\",\"Open one stable file handle and validate its identity\",\"Reject any entry observed changing and retry only on a later request\"],\"default_guess\":\"Read through one handle, compare identity, size and modification data before and after, and reject the entry if they changed\",\"witness\":{\"initial\":\"A confirmed folder contains photo.jpg with metadata M1 and bytes B1.\",\"events\":[\"Calling flow asks what can be delivered or asks for placement.\",\"Syncthing-fork replaces photo.jpg with metadata M2 and bytes B2 while the deliverer is reading it.\"],\"outcomes\":[\"The deliverer accepts a mixed observation such as M1 with B2.\",\"The deliverer rejects the changing file without placing it.\"],\"observer\":\"Calling flow and owner\"}},{\"unit\":\"00_product.md:Actors and trust boundaries\",\"subject\":\"invalid metadata handling\",\"kind\":\"missing failure\",\"text\":\"file metadata\",\"question\":\"What happens when metadata is unreadable, unsupported, malformed or changes during inspection: is that file rejected, is the whole project request refused, or is the metadata ignored?\",\"options\":[\"Reject only the affected file with a reason\",\"Refuse the entire request without changes\",\"Ignore unusable metadata and continue from the bytes\",\"Retry metadata reads before rejecting\"],\"default_guess\":\"Reject only the affected file with a stable reason and leave other files available\",\"witness\":{\"initial\":\"A confirmed project contains one valid photo and one entry whose metadata cannot be read.\",\"events\":[\"Calling flow asks what can be delivered.\"],\"outcomes\":[\"The valid photo is returned and the bad entry is rejected with a reason.\",\"The entire request is refused as an unavailable folder or metadata error.\"],\"observer\":\"Calling flow and owner\"}},{\"unit\":\"00_product.md:Primary actions\",\"subject\":\"rejected listing entries\",\"kind\":\"ambiguous output\",\"text\":\"each file with a status: ready, placed or published with its source id, or rejected with a reason\",\"question\":\"Does a rejected file also carry its source id, and is rejected itself a status or a separate result shape?\",\"options\":[\"Every entry, including rejected, has a source id and status\",\"Rejected entries have a reason but no source id\",\"Rejected entries have a source id only when identity could be established\"],\"default_guess\":\"Every identifiable file has a source id; an unidentifiable entry is rejected using its file name and reason\",\"witness\":{\"initial\":\"A confirmed project contains a file that is identifiable but cannot be delivered.\",\"events\":[\"Calling flow asks what can be delivered.\"],\"outcomes\":[\"The response contains status rejected, the source id and the reason.\",\"The response contains only a rejected result and reason, without the source id.\"],\"observer\":\"Calling flow and owner\"}},{\"unit\":\"00_product.md:Primary actions\",\"subject\":\"placement transaction\",\"kind\":\"undefined abstraction\",\"text\":\"no placement is made\",\"question\":\"What exact writes and state transition constitute a placement, and at what commit point may the deliverer report that placement succeeded?\",\"options\":[\"Writing the prepared binary alone is placement\",\"Writing the binary and creating its stable reference together is placement\",\"Binary, reference and publication body must commit atomically\",\"Placement may leave recoverable temporary artifacts before commit\"],\"default_guess\":\"Placement commits only when the prepared binary and stable reference are both durable; temporary artifacts are not placements and must not be externally visible\"},{\"unit\":\"00_product.md:Primary actions\",\"subject\":\"failed delivery side effects\",\"kind\":\"incomplete failure guarantee\",\"text\":\"a photo that cannot be delivered is reported with its reason and no placement is made\",\"question\":\"Besides forbidding a placement, what state changes or writes are permitted on a failed delivery, including temporary files, rejection records, caches, counters and changes to an earlier placement?\",\"options\":[\"No durable state or Portal-store write is permitted\",\"Diagnostic or rejection state may be written but Portal-store content may not\",\"Temporary Portal-store objects may be written if removed before returning\",\"An earlier placement may be retained but never changed or removed\"],\"default_guess\":\"Permit only non-product operational logging; make no durable product-state or Portal-store change and preserve any earlier placement\",\"witness\":{\"initial\":\"A source already has a successful placement, and a later delivery request for it cannot be completed.\",\"events\":[\"Calling flow requests delivery.\",\"The deliverer detects the failure and reports its reason.\",\"Calling flow later asks what can be delivered.\"],\"outcomes\":[\"The earlier placement remains unchanged and no failure state was stored.\",\"The earlier placement remains, but a durable rejection or attempt record changes the later reported state or reason.\"],\"observer\":\"Calling flow and owner\"}}]}",
+ "set_aside": []
+}

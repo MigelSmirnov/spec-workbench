@@ -1,0 +1,109 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_policy",
+   "text": "`marked_at: datetime`",
+   "question": "What clock supplies `marked_at`, is it represented as an aware UTC datetime or UTC without an offset, and how many clock readings may one mark operation take?",
+   "options": [
+    "Read an injected system clock exactly once and store an aware UTC datetime",
+    "Read an injected system clock exactly once and store UTC without an offset",
+    "Let the persistence layer or ambient system clock choose the value and representation"
+   ],
+   "default_guess": "Read an injected system clock exactly once when the mark is created and store an aware UTC datetime.",
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto.taken_at and M05 PhotoPublication.photo_date",
+   "kind": "underspecified_instant",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "Which camera metadata field is the camera record, how is a camera timestamp without an offset converted to UTC, when does fallback occur, and is the chosen metadata or modification time read exactly once during a placement?",
+   "options": [
+    "Use a specified EXIF datetime plus its offset; if the offset is absent or invalid, fall back to one captured file modification time",
+    "Interpret an offsetless camera datetime in a specified deployment or project timezone, then convert it to UTC",
+    "Treat an offsetless camera datetime as already UTC and fall back only when the datetime field is absent"
+   ],
+   "default_guess": "Use a specifically named EXIF capture-time field only when its UTC offset is available and valid; otherwise capture the file modification time once and convert it to UTC without an offset.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 failed-record-write recovery",
+   "kind": "identity_ambiguity",
+   "text": "a repeated delivery of the same file writes it again and completes the placement.",
+   "question": "Does “the same file” mean the same project and source content, the same request name, the same filesystem object, or the same bytes still present at the original path?",
+   "options": [
+    "Any ordinary source file in the project whose bytes hash to the same `source_id` completes the placement",
+    "Only a retry carrying the same `name` completes it",
+    "Only the same filesystem object at the same path completes it"
+   ],
+   "default_guess": "Treat sameness as the placement identity: the same project and source content, regardless of name or filesystem identity.",
+   "witness": {
+    "initial": "A record write failed after storing the image for project P and source hash H; no placement record exists.",
+    "events": [
+     "Syncthing removes `a.jpg`.",
+     "Syncthing supplies an ordinary `b.jpg` with the same bytes and hash H.",
+     "The caller delivers `b.jpg` with source_id H."
+    ],
+    "outcomes": [
+     "The call rewrites the deterministic stored image and completes the placement because project P and content H are the same placement identity.",
+     "The call is not the specified recovery because `b.jpg` is not “the same file”; recovery is restricted to `a.jpg` or its former filesystem object."
+    ],
+    "observer": "The caller and an operator inspecting the placement record"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 5 condition 1",
+   "kind": "vague_refusal_condition",
+   "text": "the metadata of a segment cannot be read",
+   "question": "What metadata operation and fields count as reading a segment, which path segments are checked, and which errors or unavailable fields produce `NOT_READY_OR_ABSENT`?",
+   "options": [
+    "A no-follow metadata read must succeed for every segment, with directories required for intermediate segments and a regular file required for the last segment; any metadata error refuses the delivery",
+    "Only metadata needed to classify symlinks, directories and the final regular file is required; unrelated unavailable metadata does not refuse it",
+    "Only permission and absence errors refuse it here; transient I/O errors become `UNREADABLE_FILE` after opening"
+   ],
+   "default_guess": "Perform one no-follow metadata read for every segment and return `NOT_READY_OR_ABSENT` on any failure.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 INV-02",
+   "kind": "ambiguous_invariant",
+   "text": "INV-02: a delivery opens no path that fails condition 1 of A3 rule 5.",
+   "question": "Does “opens no path” prohibit every open attempt and every opened ancestor, or only successfully opening the final source file for reading?",
+   "options": [
+    "No filesystem object on the candidate path may be opened, including ancestor directories",
+    "Ancestor directories may be opened safely, but the final source file must not be opened",
+    "An attempted no-follow open that fails is permitted because no file descriptor was obtained"
+   ],
+   "default_guess": "Permit safe opening of ancestor directories for traversal, but do not successfully open the final source file when condition 1 fails.",
+   "witness": {
+    "initial": "The requested name traverses an ordinary directory and ends at a symbolic link.",
+    "events": [
+     "The deliverer validates the path and returns `NOT_READY_OR_ABSENT`."
+    ],
+    "outcomes": [
+     "It uses metadata calls only and never attempts to open the final segment.",
+     "It opens ancestor directory descriptors and attempts a no-follow open of the final segment, which fails on the symbolic link."
+    ],
+    "observer": "A filesystem-call trace or security test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 INV-02 Required tests",
+   "kind": "incomplete_required_test",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What test case must demonstrate the newly added condition that a segment's metadata cannot be read, and what assertion must demonstrate the invariant's claim that the failing path is not opened rather than merely that the call fails without durable writes?",
+   "options": [
+    "Add an inaccessible-metadata case and instrument filesystem opens to prove the prohibited final path is never opened",
+    "Treat the symbolic-link case as sufficient coverage for unreadable metadata and infer non-opening from the failure result",
+    "Assert only `NOT_READY_OR_ABSENT` and durable-state effects, leaving the no-open property untested"
+   ],
+   "default_guess": "Add a deterministic metadata-read failure and explicit open-call instrumentation, asserting `NOT_READY_OR_ABSENT`, no final-file open, and no write except the project lock.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_policy\",\"text\":\"`marked_at: datetime`\",\"question\":\"What clock supplies `marked_at`, is it represented as an aware UTC datetime or UTC without an offset, and how many clock readings may one mark operation take?\",\"options\":[\"Read an injected system clock exactly once and store an aware UTC datetime\",\"Read an injected system clock exactly once and store UTC without an offset\",\"Let the persistence layer or ambient system clock choose the value and representation\"],\"default_guess\":\"Read an injected system clock exactly once when the mark is created and store an aware UTC datetime.\"},{\"subject\":\"M03 PreparedPhoto.taken_at and M05 PhotoPublication.photo_date\",\"kind\":\"underspecified_instant\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"Which camera metadata field is the camera record, how is a camera timestamp without an offset converted to UTC, when does fallback occur, and is the chosen metadata or modification time read exactly once during a placement?\",\"options\":[\"Use a specified EXIF datetime plus its offset; if the offset is absent or invalid, fall back to one captured file modification time\",\"Interpret an offsetless camera datetime in a specified deployment or project timezone, then convert it to UTC\",\"Treat an offsetless camera datetime as already UTC and fall back only when the datetime field is absent\"],\"default_guess\":\"Use a specifically named EXIF capture-time field only when its UTC offset is available and valid; otherwise capture the file modification time once and convert it to UTC without an offset.\"},{\"subject\":\"A3 failed-record-write recovery\",\"kind\":\"identity_ambiguity\",\"text\":\"a repeated delivery of the same file writes it again and completes the placement.\",\"question\":\"Does “the same file” mean the same project and source content, the same request name, the same filesystem object, or the same bytes still present at the original path?\",\"options\":[\"Any ordinary source file in the project whose bytes hash to the same `source_id` completes the placement\",\"Only a retry carrying the same `name` completes it\",\"Only the same filesystem object at the same path completes it\"],\"default_guess\":\"Treat sameness as the placement identity: the same project and source content, regardless of name or filesystem identity.\",\"witness\":{\"initial\":\"A record write failed after storing the image for project P and source hash H; no placement record exists.\",\"events\":[\"Syncthing removes `a.jpg`.\",\"Syncthing supplies an ordinary `b.jpg` with the same bytes and hash H.\",\"The caller delivers `b.jpg` with source_id H.\"],\"outcomes\":[\"The call rewrites the deterministic stored image and completes the placement because project P and content H are the same placement identity.\",\"The call is not the specified recovery because `b.jpg` is not “the same file”; recovery is restricted to `a.jpg` or its former filesystem object.\"],\"observer\":\"The caller and an operator inspecting the placement record\"}},{\"subject\":\"A3 rule 5 condition 1\",\"kind\":\"vague_refusal_condition\",\"text\":\"the metadata of a segment cannot be read\",\"question\":\"What metadata operation and fields count as reading a segment, which path segments are checked, and which errors or unavailable fields produce `NOT_READY_OR_ABSENT`?\",\"options\":[\"A no-follow metadata read must succeed for every segment, with directories required for intermediate segments and a regular file required for the last segment; any metadata error refuses the delivery\",\"Only metadata needed to classify symlinks, directories and the final regular file is required; unrelated unavailable metadata does not refuse it\",\"Only permission and absence errors refuse it here; transient I/O errors become `UNREADABLE_FILE` after opening\"],\"default_guess\":\"Perform one no-follow metadata read for every segment and return `NOT_READY_OR_ABSENT` on any failure.\"},{\"subject\":\"A1 INV-02\",\"kind\":\"ambiguous_invariant\",\"text\":\"INV-02: a delivery opens no path that fails condition 1 of A3 rule 5.\",\"question\":\"Does “opens no path” prohibit every open attempt and every opened ancestor, or only successfully opening the final source file for reading?\",\"options\":[\"No filesystem object on the candidate path may be opened, including ancestor directories\",\"Ancestor directories may be opened safely, but the final source file must not be opened\",\"An attempted no-follow open that fails is permitted because no file descriptor was obtained\"],\"default_guess\":\"Permit safe opening of ancestor directories for traversal, but do not successfully open the final source file when condition 1 fails.\",\"witness\":{\"initial\":\"The requested name traverses an ordinary directory and ends at a symbolic link.\",\"events\":[\"The deliverer validates the path and returns `NOT_READY_OR_ABSENT`.\"],\"outcomes\":[\"It uses metadata calls only and never attempts to open the final segment.\",\"It opens ancestor directory descriptors and attempts a no-follow open of the final segment, which fails on the symbolic link.\"],\"observer\":\"A filesystem-call trace or security test\"}},{\"subject\":\"A1 INV-02 Required tests\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What test case must demonstrate the newly added condition that a segment's metadata cannot be read, and what assertion must demonstrate the invariant's claim that the failing path is not opened rather than merely that the call fails without durable writes?\",\"options\":[\"Add an inaccessible-metadata case and instrument filesystem opens to prove the prohibited final path is never opened\",\"Treat the symbolic-link case as sufficient coverage for unreadable metadata and infer non-opening from the failure result\",\"Assert only `NOT_READY_OR_ABSENT` and durable-state effects, leaving the no-open property untested\"],\"default_guess\":\"Add a deterministic metadata-read failure and explicit open-call instrumentation, asserting `NOT_READY_OR_ABSENT`, no final-file open, and no write except the project lock.\"}]}",
+ "set_aside": []
+}

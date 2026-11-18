@@ -1,0 +1,161 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Actors and trust boundaries",
+   "subject": "object-folder input model",
+   "kind": "unnamed input",
+   "text": "file metadata",
+   "question": "Which metadata fields and filesystem object types cross this boundary, in what representation, and which fields are required versus optional?",
+   "options": [
+    "Only portable stat fields such as size and modification time",
+    "Full filesystem stat data including ownership, permissions and link information",
+    "An explicitly allowlisted metadata schema defined by the deliverer"
+   ],
+   "default_guess": "Use an explicitly allowlisted schema containing object type, byte length and modification time; ignore all other metadata.",
+   "witness": {
+    "initial": "A photo file has valid image bytes but lacks one metadata field available on other files.",
+    "events": [
+     "Syncthing-fork creates the file.",
+     "The calling flow asks the deliverer what can be delivered."
+    ],
+    "outcomes": [
+     "The deliverer lists the file using the metadata that is available.",
+     "The deliverer rejects or omits the file because required metadata is missing."
+    ],
+    "observer": "The owner sees a different deliverable-file list."
+   }
+  },
+  {
+   "unit": "00_product.md:Actors and trust boundaries",
+   "subject": "untrusted metadata handling",
+   "kind": "missing failure contract",
+   "text": "file names, file metadata and bytes | untrusted, read only",
+   "question": "What must the deliverer do, and what observable reason must it return, when metadata is malformed, unreadable, unsupported or changes during inspection?",
+   "options": [
+    "Reject the affected file with a defined reason",
+    "Refuse the whole folder or project request",
+    "Ignore unusable metadata and continue from the bytes",
+    "Retry until a stable read is obtained"
+   ],
+   "default_guess": "Reject only the affected file with a stable reason and do not place it.",
+   "witness": {
+    "initial": "One file has readable bytes but metadata that cannot be read consistently.",
+    "events": [
+     "The calling flow requests the project's deliverable files.",
+     "The deliverer reads the file and its metadata."
+    ],
+    "outcomes": [
+     "Only that file is reported as rejected.",
+     "The entire request is refused as an unavailable or unsafe folder."
+    ],
+    "observer": "The owner sees either the remaining files or no result."
+   }
+  },
+  {
+   "unit": "00_product.md:Actors and trust boundaries",
+   "subject": "filesystem traversal",
+   "kind": "trust-boundary ambiguity",
+   "text": "file metadata and bytes | untrusted, read only",
+   "question": "Are symbolic links, hard links, devices, sockets and other non-regular objects permitted, and may metadata or byte reads follow a link outside the connected root?",
+   "options": [
+    "Accept regular files only and never follow links",
+    "Follow links only when the resolved target remains beneath the connected root",
+    "Follow all readable links because the boundary is read only"
+   ],
+   "default_guess": "Accept regular files only, resolve every path beneath the connected root and refuse links or special objects.",
+   "witness": {
+    "initial": "A name inside the photo folder is a symbolic link to a readable image outside the connected root.",
+    "events": [
+     "Syncthing-fork or another process creates the link.",
+     "The calling flow requests placement of that name.",
+     "The deliverer inspects its metadata and reads its bytes."
+    ],
+    "outcomes": [
+     "The deliverer refuses the linked file because its resolved target leaves the root.",
+     "The deliverer follows the link and places the external image."
+    ],
+    "observer": "The owner and client can see whether the external image is delivered."
+   }
+  },
+  {
+   "unit": "00_product.md:Actors and trust boundaries",
+   "subject": "file snapshot and replacement race",
+   "kind": "undefined consistency",
+   "text": "file names, file metadata and bytes",
+   "question": "Must the name, metadata and bytes describe one atomic snapshot, and how must the deliverer react if the file is replaced or modified between those reads?",
+   "options": [
+    "Require a stable snapshot and reject on any detected change",
+    "Retry and use the newest stable version",
+    "Use whichever bytes are read, even if the earlier metadata described another version"
+   ],
+   "default_guess": "Open the file once, verify its identity and relevant metadata before and after reading, and reject the attempt if they changed.",
+   "witness": {
+    "initial": "The deliverer has read a file's name and metadata but not yet all its bytes.",
+    "events": [
+     "The calling flow chooses the file for delivery.",
+     "Syncthing-fork replaces the file after metadata is read.",
+     "The deliverer reads and prepares the bytes."
+    ],
+    "outcomes": [
+     "The attempt is rejected because the metadata and bytes were not one stable snapshot.",
+     "The replacement bytes are placed under the identity selected from the earlier observation."
+    ],
+    "observer": "The owner and client see either a refusal or a different image."
+   }
+  },
+  {
+   "unit": "00_product.md:Primary actions",
+   "subject": "deliverable-list result schema",
+   "kind": "ambiguous output",
+   "text": "each file with a status: ready, placed or published with its source id, or rejected with a reason",
+   "question": "Is rejected a status, and exactly which result variants include a source id and a reason so every returned file can be correlated with a later delivery request?",
+   "options": [
+    "All four variants are statuses; every variant has a source id, and rejected additionally has a reason",
+    "Ready, placed and published have source ids; rejected has a reason but no source id",
+    "Only published is required to have a source id; rejected is an alternative result rather than a status"
+   ],
+   "default_guess": "Treat ready, placed, published and rejected as statuses; return a source id for every file and require a reason only for rejected.",
+   "witness": {
+    "initial": "A project contains one valid image and one invalid image with the same display name in different locations.",
+    "events": [
+     "The calling flow asks what can be delivered.",
+     "The deliverer returns one ready result and one rejected result."
+    ],
+    "outcomes": [
+     "Both results include source ids, so the calling flow can identify each file unambiguously.",
+     "The rejected result has only a reason, so the calling flow cannot reliably identify which source was rejected."
+    ],
+    "observer": "The owner sees either a precisely attributable rejection or an ambiguous one."
+   }
+  },
+  {
+   "unit": "00_product.md:Primary actions",
+   "subject": "failed delivery side effects",
+   "kind": "undefined atomicity",
+   "text": "no placement is made",
+   "question": "What constitutes a placement, and which writes or stored facts, if any, are permitted when delivery fails?",
+   "options": [
+    "No durable write of any kind is permitted",
+    "No final Portal-store image or returned reference is permitted, but temporary files, audit records or retry state may be written",
+    "Prepared bytes may remain in the Portal store provided no usable reference is returned"
+   ],
+   "default_guess": "Permit recoverable temporary work only; commit no Portal-store image, reference, publication body, idempotency result or other durable delivery state on failure.",
+   "witness": {
+    "initial": "The deliverer can prepare and write an image, but generation of the publication body then fails.",
+    "events": [
+     "The calling flow asks to deliver the chosen photo.",
+     "The deliverer writes prepared bytes to the Portal binary store.",
+     "The deliverer encounters the later failure and reports its reason."
+    ],
+    "outcomes": [
+     "The prepared bytes and every durable record are removed because the placement did not complete.",
+     "The unreferenced prepared bytes remain because no completed placement or reference was made."
+    ],
+    "observer": "An operator inspecting storage sees different retained data, and a later retry may reuse or duplicate it."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Actors and trust boundaries\",\"subject\":\"object-folder input model\",\"kind\":\"unnamed input\",\"text\":\"file metadata\",\"question\":\"Which metadata fields and filesystem object types cross this boundary, in what representation, and which fields are required versus optional?\",\"options\":[\"Only portable stat fields such as size and modification time\",\"Full filesystem stat data including ownership, permissions and link information\",\"An explicitly allowlisted metadata schema defined by the deliverer\"],\"default_guess\":\"Use an explicitly allowlisted schema containing object type, byte length and modification time; ignore all other metadata.\",\"witness\":{\"initial\":\"A photo file has valid image bytes but lacks one metadata field available on other files.\",\"events\":[\"Syncthing-fork creates the file.\",\"The calling flow asks the deliverer what can be delivered.\"],\"outcomes\":[\"The deliverer lists the file using the metadata that is available.\",\"The deliverer rejects or omits the file because required metadata is missing.\"],\"observer\":\"The owner sees a different deliverable-file list.\"}},{\"unit\":\"00_product.md:Actors and trust boundaries\",\"subject\":\"untrusted metadata handling\",\"kind\":\"missing failure contract\",\"text\":\"file names, file metadata and bytes | untrusted, read only\",\"question\":\"What must the deliverer do, and what observable reason must it return, when metadata is malformed, unreadable, unsupported or changes during inspection?\",\"options\":[\"Reject the affected file with a defined reason\",\"Refuse the whole folder or project request\",\"Ignore unusable metadata and continue from the bytes\",\"Retry until a stable read is obtained\"],\"default_guess\":\"Reject only the affected file with a stable reason and do not place it.\",\"witness\":{\"initial\":\"One file has readable bytes but metadata that cannot be read consistently.\",\"events\":[\"The calling flow requests the project's deliverable files.\",\"The deliverer reads the file and its metadata.\"],\"outcomes\":[\"Only that file is reported as rejected.\",\"The entire request is refused as an unavailable or unsafe folder.\"],\"observer\":\"The owner sees either the remaining files or no result.\"}},{\"unit\":\"00_product.md:Actors and trust boundaries\",\"subject\":\"filesystem traversal\",\"kind\":\"trust-boundary ambiguity\",\"text\":\"file metadata and bytes | untrusted, read only\",\"question\":\"Are symbolic links, hard links, devices, sockets and other non-regular objects permitted, and may metadata or byte reads follow a link outside the connected root?\",\"options\":[\"Accept regular files only and never follow links\",\"Follow links only when the resolved target remains beneath the connected root\",\"Follow all readable links because the boundary is read only\"],\"default_guess\":\"Accept regular files only, resolve every path beneath the connected root and refuse links or special objects.\",\"witness\":{\"initial\":\"A name inside the photo folder is a symbolic link to a readable image outside the connected root.\",\"events\":[\"Syncthing-fork or another process creates the link.\",\"The calling flow requests placement of that name.\",\"The deliverer inspects its metadata and reads its bytes.\"],\"outcomes\":[\"The deliverer refuses the linked file because its resolved target leaves the root.\",\"The deliverer follows the link and places the external image.\"],\"observer\":\"The owner and client can see whether the external image is delivered.\"}},{\"unit\":\"00_product.md:Actors and trust boundaries\",\"subject\":\"file snapshot and replacement race\",\"kind\":\"undefined consistency\",\"text\":\"file names, file metadata and bytes\",\"question\":\"Must the name, metadata and bytes describe one atomic snapshot, and how must the deliverer react if the file is replaced or modified between those reads?\",\"options\":[\"Require a stable snapshot and reject on any detected change\",\"Retry and use the newest stable version\",\"Use whichever bytes are read, even if the earlier metadata described another version\"],\"default_guess\":\"Open the file once, verify its identity and relevant metadata before and after reading, and reject the attempt if they changed.\",\"witness\":{\"initial\":\"The deliverer has read a file's name and metadata but not yet all its bytes.\",\"events\":[\"The calling flow chooses the file for delivery.\",\"Syncthing-fork replaces the file after metadata is read.\",\"The deliverer reads and prepares the bytes.\"],\"outcomes\":[\"The attempt is rejected because the metadata and bytes were not one stable snapshot.\",\"The replacement bytes are placed under the identity selected from the earlier observation.\"],\"observer\":\"The owner and client see either a refusal or a different image.\"}},{\"unit\":\"00_product.md:Primary actions\",\"subject\":\"deliverable-list result schema\",\"kind\":\"ambiguous output\",\"text\":\"each file with a status: ready, placed or published with its source id, or rejected with a reason\",\"question\":\"Is rejected a status, and exactly which result variants include a source id and a reason so every returned file can be correlated with a later delivery request?\",\"options\":[\"All four variants are statuses; every variant has a source id, and rejected additionally has a reason\",\"Ready, placed and published have source ids; rejected has a reason but no source id\",\"Only published is required to have a source id; rejected is an alternative result rather than a status\"],\"default_guess\":\"Treat ready, placed, published and rejected as statuses; return a source id for every file and require a reason only for rejected.\",\"witness\":{\"initial\":\"A project contains one valid image and one invalid image with the same display name in different locations.\",\"events\":[\"The calling flow asks what can be delivered.\",\"The deliverer returns one ready result and one rejected result.\"],\"outcomes\":[\"Both results include source ids, so the calling flow can identify each file unambiguously.\",\"The rejected result has only a reason, so the calling flow cannot reliably identify which source was rejected.\"],\"observer\":\"The owner sees either a precisely attributable rejection or an ambiguous one.\"}},{\"unit\":\"00_product.md:Primary actions\",\"subject\":\"failed delivery side effects\",\"kind\":\"undefined atomicity\",\"text\":\"no placement is made\",\"question\":\"What constitutes a placement, and which writes or stored facts, if any, are permitted when delivery fails?\",\"options\":[\"No durable write of any kind is permitted\",\"No final Portal-store image or returned reference is permitted, but temporary files, audit records or retry state may be written\",\"Prepared bytes may remain in the Portal store provided no usable reference is returned\"],\"default_guess\":\"Permit recoverable temporary work only; commit no Portal-store image, reference, publication body, idempotency result or other durable delivery state on failure.\",\"witness\":{\"initial\":\"The deliverer can prepare and write an image, but generation of the publication body then fails.\",\"events\":[\"The calling flow asks to deliver the chosen photo.\",\"The deliverer writes prepared bytes to the Portal binary store.\",\"The deliverer encounters the later failure and reports its reason.\"],\"outcomes\":[\"The prepared bytes and every durable record are removed because the placement did not complete.\",\"The unreferenced prepared bytes remain because no completed placement or reference was made.\"],\"observer\":\"An operator inspecting storage sees different retained data, and a later retry may reuse or duplicate it.\"}}]}",
+ "set_aside": []
+}
