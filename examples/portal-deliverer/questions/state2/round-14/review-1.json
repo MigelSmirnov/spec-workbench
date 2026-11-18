@@ -1,0 +1,361 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 INV-02",
+   "kind": "contradiction",
+   "text": "INV-02: a delivery opens only a path that meets condition 1 of A3 rule 5.\nCondition 1 is decided from the name and the metadata of its path before the file is opened",
+   "question": "Must INV-02 say that delivery opens only a path that does not meet the failure condition in A3 rule 5 condition 1?",
+   "options": [
+    "A delivery opens only a path that does not meet condition 1",
+    "A delivery opens paths that meet condition 1 despite condition 1 being a pre-open refusal"
+   ],
+   "default_guess": "Change INV-02 to say “does not meet condition 1.”",
+   "witness": {
+    "initial": "A requested name has a missing last segment, so it meets A3 rule 5 condition 1.",
+    "events": [
+     "The calling flow requests delivery under that name.",
+     "The deliverer evaluates condition 1 before opening."
+    ],
+    "outcomes": [
+     "A3 requires NOT_READY_OR_ABSENT without opening the path.",
+     "INV-02 literally permits opening only because the path meets condition 1."
+    ],
+    "observer": "The calling flow and an open-operation spy"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 Required test for INV-02",
+   "kind": "incomplete invariant test",
+   "text": "INV-02: an empty, absolute, unnormalised or parent-climbing name, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What must the test show for absent folders, an absent last segment, every malformed segment form in A3 condition 1, exact non-normalised Unicode comparison, and the invariant that the path was not opened rather than merely that the call failed?",
+   "options": [
+    "Add cases and an open-operation witness for every branch of A3 condition 1",
+    "Narrow INV-02 to only the cases and observable effects the named test covers"
+   ],
+   "default_guess": "Add every missing condition-1 case and instrument opening to prove none of the refused paths is opened.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 Required test versus A3 replay precedence",
+   "kind": "contradiction",
+   "text": "INV-02: an empty, absolute, unnormalised or parent-climbing name, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\nDelivering content that already has a placement answers `replayed` with the stored placement and the current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even when the source file has left the folder.",
+   "question": "Is the INV-02 test restricted to a source_id with no existing placement, or must an invalid name override the existing-placement replay rule?",
+   "options": [
+    "Invalid names fail only when no placement exists; replay wins first",
+    "Name validation precedes replay, so invalid names always fail"
+   ],
+   "default_guess": "Qualify the INV-02 test with “content that has no placement,” preserving the stated check order and replay rule.",
+   "witness": {
+    "initial": "Project P already has a placement for source_id S.",
+    "events": [
+     "The calling flow delivers S again with `name` equal to `../photo.jpg`."
+    ],
+    "outcomes": [
+     "A3 rule 2 and the check order return `replayed` without examining the named file.",
+     "The unqualified INV-02 Required tests item requires NOT_READY_OR_ABSENT."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 scan observation sequence",
+   "kind": "unspecified observation instant",
+   "text": "Syncthing may change the folder during a scan, so a scan is not a view of one instant. Each rule applies to what its step finds when it runs",
+   "question": "What are the ordered observation steps, and which metadata observation decides A1 orders 1 and 2 when size changes between listing, metadata inspection, opening and reading?",
+   "options": [
+    "Orders 1 and 2 use the metadata obtained during folder listing",
+    "Orders 1 and 2 use metadata fetched immediately before opening",
+    "Orders 1 and 2 use metadata from the opened file descriptor"
+   ],
+   "default_guess": "Use metadata from the opened file descriptor for rejection decisions, while retaining listing metadata only as the reported `size`.",
+   "witness": {
+    "initial": "The listing reports a regular zero-byte file `p.jpg`.",
+    "events": [
+     "Syncthing writes valid JPEG bytes after listing but before the deliverer opens the file.",
+     "The scan reaches A1 orders 1 through 6."
+    ],
+    "outcomes": [
+     "Using listing metadata reports `rejected` with `empty`.",
+     "Using metadata from the opened file reports `ready` with a source id."
+    ],
+    "observer": "The calling flow reading the scan result"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 traversal of a changing subfolder",
+   "kind": "uncovered mutation case",
+   "text": "When a subfolder that is not ignored cannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is never reported as complete.\nEach rule applies to what its step finds when it runs",
+   "question": "What happens when an entry observed as a subfolder is replaced by a symbolic link or a regular file before that subfolder is entered?",
+   "options": [
+    "Refuse the whole scan with `folder_unavailable`",
+    "Skip the changed entry because its current type is not an enterable subfolder",
+    "Treat the replacement as a file and process it in the current scan"
+   ],
+   "default_guess": "Refuse the whole scan with `folder_unavailable`, without following the replacement.",
+   "witness": {
+    "initial": "The root listing contains a real subfolder `day1`.",
+    "events": [
+     "Syncthing replaces `day1` with a symbolic link after the root listing.",
+     "The scanner reaches the step that would enter `day1`."
+    ],
+    "outcomes": [
+     "The scanner treats the expected subfolder as unlistable and refuses the scan with `folder_unavailable`.",
+     "The scanner reclassifies the entry as a symbolic link, skips it and completes the scan."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 and A3 symbolic-link protection",
+   "kind": "TOCTOU semantics",
+   "text": "opened in non-blocking mode without following a link\nor a folder on its path is absent or a symbolic link",
+   "question": "Does “without following a link” require component-by-component, descriptor-relative opening that prevents any parent folder from becoming a symbolic link after condition 1, or does it apply only to the last path component?",
+   "options": [
+    "Do not follow a symbolic link in any path component, including one introduced after the metadata check",
+    "Apply no-follow only to the last component and rely on the earlier metadata checks for parent folders"
+   ],
+   "default_guess": "Open every component relative to an already-open directory descriptor with no-follow semantics.",
+   "witness": {
+    "initial": "`photos/day1/p.jpg` is inside the confirmed source folder and all components are ordinary when A3 condition 1 is checked.",
+    "events": [
+     "After the metadata check, Syncthing replaces `day1` with a symbolic link to an outside directory containing `p.jpg`.",
+     "The deliverer opens the requested path."
+    ],
+    "outcomes": [
+     "Component-safe opening refuses the delivery without reading the outside file.",
+     "A final-component-only no-follow open follows `day1` and reads the outside file."
+    ],
+    "observer": "The calling flow and the owner of the outside file"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 and M02 SourcePhotoObservation",
+   "kind": "contradiction",
+   "text": "See what can be delivered for a project | each file with its source id and a status: ready, placed, published or rejected with a reason\nA rejected file has no source id.",
+   "question": "Must rejected observations omit `source_id`, or must every reported file have one as the State 0 action says?",
+   "options": [
+    "Rejected observations have no source_id",
+    "Rejected observations include a source_id"
+   ],
+   "default_guess": "Treat the explicit A1 and M02 rule as authoritative and revise the State 0 action to exempt rejected files.",
+   "witness": {
+    "initial": "The photo folder contains a non-empty file with an unsupported signature.",
+    "events": [
+     "The calling flow scans the project."
+    ],
+    "outcomes": [
+     "State 0's action description gives the reported file a source id and `rejected` status.",
+     "A1 and M02 return `rejected` with `source_id` absent."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 condition 5 versus State 0 delivery failure",
+   "kind": "contradiction",
+   "text": "a photo that cannot be delivered is reported with its reason and nothing is written\nAfter condition 5 a stored image may remain without a record",
+   "question": "May a failed delivery leave a stored image, or must every failed delivery leave no written artifact?",
+   "options": [
+    "A condition-5 failure may leave the complete stored image",
+    "Every failed delivery rolls back or removes the stored image"
+   ],
+   "default_guess": "Allow the explicitly specified condition-5 orphan image and revise State 0 to say that conditions 1 to 4 write nothing while a storage failure may leave an unreferenced image.",
+   "witness": {
+    "initial": "The source is valid and no placement exists.",
+    "events": [
+     "The deliverer successfully writes and synchronises the stored image.",
+     "Writing the placement record fails."
+    ],
+    "outcomes": [
+     "A3 returns `failed` and leaves the stored image without a record.",
+     "State 0 requires `failed` with nothing written."
+    ],
+    "observer": "The calling flow and an operator inspecting the binary store"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 retry after failed record write",
+   "kind": "missing precondition",
+   "text": "a repeated delivery writes it again and completes the placement",
+   "question": "Under what retained-source conditions is completion guaranteed, and what happens if the named source disappears or changes before the repeated call?",
+   "options": [
+    "Completion is guaranteed only while the same name still yields bytes matching source_id and passes preparation",
+    "The retained stored image is sufficient to complete the record even when the source is gone or changed",
+    "The sentence guarantees completion unconditionally"
+   ],
+   "default_guess": "Qualify the guarantee on the source still passing conditions 1 to 4 with bytes matching the requested source_id.",
+   "witness": {
+    "initial": "The stored image was written, the placement-record write failed, and no placement record exists.",
+    "events": [
+     "Syncthing removes the source file.",
+     "The calling flow repeats the same delivery request."
+    ],
+    "outcomes": [
+     "The retry follows current-file judging and returns NOT_READY_OR_ABSENT.",
+     "The unconditional retry sentence says it writes again and completes the placement."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 retry outcome",
+   "kind": "unspecified observable result",
+   "text": "A delivery repeated after a failed record write completes the placement (`test_a_delivery_repeated_after_a_failed_record_write_completes`).",
+   "question": "Does the successful retry answer `placed` or `replayed`, and must it overwrite the existing unreferenced image or may it reuse it?",
+   "options": [
+    "Answer `placed` and rewrite the image before creating the record",
+    "Answer `placed` and reuse a verified existing image",
+    "Answer `replayed` because the image already exists"
+   ],
+   "default_guess": "Answer `placed`; rewrite atomically as the normative sentence says, then create the first placement record.",
+   "witness": {
+    "initial": "A complete stored image exists for project P and source S, but its first record write failed.",
+    "events": [
+     "The calling flow repeats delivery of the unchanged source.",
+     "The operation succeeds."
+    ],
+    "outcomes": [
+     "The response is `placed` because this call creates the first placement record.",
+     "The response is `replayed` because the durable image already existed."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 condition 5 and A6 atomic record writing",
+   "kind": "failure boundary",
+   "text": "writing the stored image or the record fails\nEach file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised",
+   "question": "At which atomic-write stage is a placement record considered written, and what state and response are required if rename succeeds but record-file or folder synchronisation reports failure?",
+   "options": [
+    "Return `failed` and remove or invalidate the visible record",
+    "Return `failed` while allowing the visible record to remain and define the next call's result",
+    "Treat a successfully renamed record as committed despite the later synchronisation failure"
+   ],
+   "default_guess": "Count the record as committed only after all required synchronisation succeeds; on a reported failure, ensure no valid placement record remains.",
+   "witness": {
+    "initial": "The stored image is durable and the placement-record temporary file is complete.",
+    "events": [
+     "The record is renamed to its final name.",
+     "Synchronising the record's folder fails.",
+     "The caller retries after the process continues or restarts."
+    ],
+    "outcomes": [
+     "The first call reports `failed`, but the visible record makes the retry return `replayed`.",
+     "The implementation removes or rejects the incompletely committed record, so the retry writes again and returns `placed`."
+    ],
+    "observer": "The calling flow and an operator inspecting state storage"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 file modification time",
+   "kind": "unspecified reading count and instant",
+   "text": "A file's modification time is converted to the same form before it is compared or delivered",
+   "question": "How many times may one scan or delivery read the modification time, and which reading is paired with the bytes when the timestamp changes during the operation?",
+   "options": [
+    "Read it once from the opened file before reading bytes",
+    "Read it once from the opened file after reading bytes",
+    "Read before and after and refuse or retry if the values differ"
+   ],
+   "default_guess": "Read it once from the same opened descriptor after the source bytes have been read and use that value for the prepared photo.",
+   "witness": {
+    "initial": "A valid image has no usable camera date and initially has modification time T1.",
+    "events": [
+     "A delivery opens and reads its bytes.",
+     "Syncthing changes only the modification time to T2 before preparation finishes."
+    ],
+    "outcomes": [
+     "An implementation using the first metadata reading delivers photo_date T1.",
+     "An implementation reading metadata after the bytes delivers photo_date T2."
+    ],
+    "observer": "The calling flow and the Portal user viewing the photo date"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 datetime representation",
+   "kind": "underspecified representation",
+   "text": "The current time is a `datetime` in UTC without an offset, with microsecond precision and no rounding, written in ISO 8601 form.",
+   "question": "What exact persisted and transferred ISO 8601 spelling is required, including separator and whether six fractional digits are always present when the microsecond value is zero or has trailing zeros?",
+   "options": [
+    "Always `YYYY-MM-DDTHH:MM:SS.ffffff` with no suffix",
+    "Use the language's default ISO serializer, which may omit or shorten the fractional part",
+    "Use a UTC designator such as `Z` despite saying the datetime has no offset"
+   ],
+   "default_guess": "Always emit `YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six fractional digits and no offset suffix.",
+   "witness": {
+    "initial": "The mark clock returns the naive UTC datetime 2026-11-18 12:00:00.120000.",
+    "events": [
+     "The deliverer creates and serialises the publication mark."
+    ],
+    "outcomes": [
+     "One implementation stores `2026-11-18T12:00:00.120000`.",
+     "Another conforming ISO serializer stores `2026-11-18T12:00:00.120` or `2026-11-18T12:00:00.12`."
+    ],
+    "observer": "A state-file reader or API client comparing the representation"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 INV-13 Required tests",
+   "kind": "incomplete invariant test",
+   "text": "INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "What test must show clock counts for a mark refused before the reading point, a mark refused after it, a replayed mark, and a publication-conflict mark?",
+   "options": [
+    "Require explicit count assertions for every mark outcome named by A7 rule 2",
+    "Limit INV-13 to successful first marks",
+    "Leave the named test free to cover unspecified mark paths"
+   ],
+   "default_guess": "Add explicit cases proving zero reads before the point and exactly one read for every later refusal, replay and conflict.",
+   "witness": {
+    "initial": "A placement and its existing publication mark are present.",
+    "events": [
+     "The calling flow repeats the same mark request.",
+     "A second implementation handles replay by checking the stored mark before consulting the clock."
+    ],
+    "outcomes": [
+     "A7 rule 2 requires the replayed mark to read the clock once.",
+     "The alternative implementation reads it zero times while still satisfying the Required tests item as written if that item exercises only a successful mark."
+    ],
+    "observer": "A counting-clock test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context evidence",
+   "kind": "ambiguous evidence claim",
+   "text": "Evidence is from local runs against a real Client Portal process with a stub Registry, and against two private Syncthing instances.",
+   "question": "What interaction with the two Syncthing instances must have occurred for this to count as evidence: actual synchronisation and conflict creation through Syncthing, or merely running the processes while test code manipulates their folders?",
+   "options": [
+    "The instances actually synchronised files and produced the tested conflict copy",
+    "It is sufficient that two real Syncthing processes were running while the test manipulated their folders directly"
+   ],
+   "default_guess": "Require the evidence statement to say explicitly that the instances synchronised the files and produced the conflict through Syncthing.",
+   "witness": {
+    "initial": "Two private Syncthing processes run locally with test folders configured.",
+    "events": [
+     "A test writes an ordinary file and a conflict-named copy directly into one configured folder without synchronising them between the instances.",
+     "The test scans the folder and passes."
+    ],
+    "outcomes": [
+     "One reviewer counts this as a run “against two private Syncthing instances.”",
+     "Another reviewer says it proves only filename handling, not behavior of a live Syncthing-managed folder."
+    ],
+    "observer": "The State 2 reviewer deciding what the evidence establishes"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 INV-02\",\"kind\":\"contradiction\",\"text\":\"INV-02: a delivery opens only a path that meets condition 1 of A3 rule 5.\\nCondition 1 is decided from the name and the metadata of its path before the file is opened\",\"question\":\"Must INV-02 say that delivery opens only a path that does not meet the failure condition in A3 rule 5 condition 1?\",\"options\":[\"A delivery opens only a path that does not meet condition 1\",\"A delivery opens paths that meet condition 1 despite condition 1 being a pre-open refusal\"],\"default_guess\":\"Change INV-02 to say “does not meet condition 1.”\",\"witness\":{\"initial\":\"A requested name has a missing last segment, so it meets A3 rule 5 condition 1.\",\"events\":[\"The calling flow requests delivery under that name.\",\"The deliverer evaluates condition 1 before opening.\"],\"outcomes\":[\"A3 requires NOT_READY_OR_ABSENT without opening the path.\",\"INV-02 literally permits opening only because the path meets condition 1.\"],\"observer\":\"The calling flow and an open-operation spy\"}},{\"subject\":\"A1 Required test for INV-02\",\"kind\":\"incomplete invariant test\",\"text\":\"INV-02: an empty, absolute, unnormalised or parent-climbing name, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What must the test show for absent folders, an absent last segment, every malformed segment form in A3 condition 1, exact non-normalised Unicode comparison, and the invariant that the path was not opened rather than merely that the call failed?\",\"options\":[\"Add cases and an open-operation witness for every branch of A3 condition 1\",\"Narrow INV-02 to only the cases and observable effects the named test covers\"],\"default_guess\":\"Add every missing condition-1 case and instrument opening to prove none of the refused paths is opened.\"},{\"subject\":\"A1 Required test versus A3 replay precedence\",\"kind\":\"contradiction\",\"text\":\"INV-02: an empty, absolute, unnormalised or parent-climbing name, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\\nDelivering content that already has a placement answers `replayed` with the stored placement and the current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even when the source file has left the folder.\",\"question\":\"Is the INV-02 test restricted to a source_id with no existing placement, or must an invalid name override the existing-placement replay rule?\",\"options\":[\"Invalid names fail only when no placement exists; replay wins first\",\"Name validation precedes replay, so invalid names always fail\"],\"default_guess\":\"Qualify the INV-02 test with “content that has no placement,” preserving the stated check order and replay rule.\",\"witness\":{\"initial\":\"Project P already has a placement for source_id S.\",\"events\":[\"The calling flow delivers S again with `name` equal to `../photo.jpg`.\"],\"outcomes\":[\"A3 rule 2 and the check order return `replayed` without examining the named file.\",\"The unqualified INV-02 Required tests item requires NOT_READY_OR_ABSENT.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A1 scan observation sequence\",\"kind\":\"unspecified observation instant\",\"text\":\"Syncthing may change the folder during a scan, so a scan is not a view of one instant. Each rule applies to what its step finds when it runs\",\"question\":\"What are the ordered observation steps, and which metadata observation decides A1 orders 1 and 2 when size changes between listing, metadata inspection, opening and reading?\",\"options\":[\"Orders 1 and 2 use the metadata obtained during folder listing\",\"Orders 1 and 2 use metadata fetched immediately before opening\",\"Orders 1 and 2 use metadata from the opened file descriptor\"],\"default_guess\":\"Use metadata from the opened file descriptor for rejection decisions, while retaining listing metadata only as the reported `size`.\",\"witness\":{\"initial\":\"The listing reports a regular zero-byte file `p.jpg`.\",\"events\":[\"Syncthing writes valid JPEG bytes after listing but before the deliverer opens the file.\",\"The scan reaches A1 orders 1 through 6.\"],\"outcomes\":[\"Using listing metadata reports `rejected` with `empty`.\",\"Using metadata from the opened file reports `ready` with a source id.\"],\"observer\":\"The calling flow reading the scan result\"}},{\"subject\":\"A1 traversal of a changing subfolder\",\"kind\":\"uncovered mutation case\",\"text\":\"When a subfolder that is not ignored cannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is never reported as complete.\\nEach rule applies to what its step finds when it runs\",\"question\":\"What happens when an entry observed as a subfolder is replaced by a symbolic link or a regular file before that subfolder is entered?\",\"options\":[\"Refuse the whole scan with `folder_unavailable`\",\"Skip the changed entry because its current type is not an enterable subfolder\",\"Treat the replacement as a file and process it in the current scan\"],\"default_guess\":\"Refuse the whole scan with `folder_unavailable`, without following the replacement.\",\"witness\":{\"initial\":\"The root listing contains a real subfolder `day1`.\",\"events\":[\"Syncthing replaces `day1` with a symbolic link after the root listing.\",\"The scanner reaches the step that would enter `day1`.\"],\"outcomes\":[\"The scanner treats the expected subfolder as unlistable and refuses the scan with `folder_unavailable`.\",\"The scanner reclassifies the entry as a symbolic link, skips it and completes the scan.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A1 and A3 symbolic-link protection\",\"kind\":\"TOCTOU semantics\",\"text\":\"opened in non-blocking mode without following a link\\nor a folder on its path is absent or a symbolic link\",\"question\":\"Does “without following a link” require component-by-component, descriptor-relative opening that prevents any parent folder from becoming a symbolic link after condition 1, or does it apply only to the last path component?\",\"options\":[\"Do not follow a symbolic link in any path component, including one introduced after the metadata check\",\"Apply no-follow only to the last component and rely on the earlier metadata checks for parent folders\"],\"default_guess\":\"Open every component relative to an already-open directory descriptor with no-follow semantics.\",\"witness\":{\"initial\":\"`photos/day1/p.jpg` is inside the confirmed source folder and all components are ordinary when A3 condition 1 is checked.\",\"events\":[\"After the metadata check, Syncthing replaces `day1` with a symbolic link to an outside directory containing `p.jpg`.\",\"The deliverer opens the requested path.\"],\"outcomes\":[\"Component-safe opening refuses the delivery without reading the outside file.\",\"A final-component-only no-follow open follows `day1` and reads the outside file.\"],\"observer\":\"The calling flow and the owner of the outside file\"}},{\"subject\":\"A1 and M02 SourcePhotoObservation\",\"kind\":\"contradiction\",\"text\":\"See what can be delivered for a project | each file with its source id and a status: ready, placed, published or rejected with a reason\\nA rejected file has no source id.\",\"question\":\"Must rejected observations omit `source_id`, or must every reported file have one as the State 0 action says?\",\"options\":[\"Rejected observations have no source_id\",\"Rejected observations include a source_id\"],\"default_guess\":\"Treat the explicit A1 and M02 rule as authoritative and revise the State 0 action to exempt rejected files.\",\"witness\":{\"initial\":\"The photo folder contains a non-empty file with an unsupported signature.\",\"events\":[\"The calling flow scans the project.\"],\"outcomes\":[\"State 0's action description gives the reported file a source id and `rejected` status.\",\"A1 and M02 return `rejected` with `source_id` absent.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A3 condition 5 versus State 0 delivery failure\",\"kind\":\"contradiction\",\"text\":\"a photo that cannot be delivered is reported with its reason and nothing is written\\nAfter condition 5 a stored image may remain without a record\",\"question\":\"May a failed delivery leave a stored image, or must every failed delivery leave no written artifact?\",\"options\":[\"A condition-5 failure may leave the complete stored image\",\"Every failed delivery rolls back or removes the stored image\"],\"default_guess\":\"Allow the explicitly specified condition-5 orphan image and revise State 0 to say that conditions 1 to 4 write nothing while a storage failure may leave an unreferenced image.\",\"witness\":{\"initial\":\"The source is valid and no placement exists.\",\"events\":[\"The deliverer successfully writes and synchronises the stored image.\",\"Writing the placement record fails.\"],\"outcomes\":[\"A3 returns `failed` and leaves the stored image without a record.\",\"State 0 requires `failed` with nothing written.\"],\"observer\":\"The calling flow and an operator inspecting the binary store\"}},{\"subject\":\"A3 retry after failed record write\",\"kind\":\"missing precondition\",\"text\":\"a repeated delivery writes it again and completes the placement\",\"question\":\"Under what retained-source conditions is completion guaranteed, and what happens if the named source disappears or changes before the repeated call?\",\"options\":[\"Completion is guaranteed only while the same name still yields bytes matching source_id and passes preparation\",\"The retained stored image is sufficient to complete the record even when the source is gone or changed\",\"The sentence guarantees completion unconditionally\"],\"default_guess\":\"Qualify the guarantee on the source still passing conditions 1 to 4 with bytes matching the requested source_id.\",\"witness\":{\"initial\":\"The stored image was written, the placement-record write failed, and no placement record exists.\",\"events\":[\"Syncthing removes the source file.\",\"The calling flow repeats the same delivery request.\"],\"outcomes\":[\"The retry follows current-file judging and returns NOT_READY_OR_ABSENT.\",\"The unconditional retry sentence says it writes again and completes the placement.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A3 retry outcome\",\"kind\":\"unspecified observable result\",\"text\":\"A delivery repeated after a failed record write completes the placement (`test_a_delivery_repeated_after_a_failed_record_write_completes`).\",\"question\":\"Does the successful retry answer `placed` or `replayed`, and must it overwrite the existing unreferenced image or may it reuse it?\",\"options\":[\"Answer `placed` and rewrite the image before creating the record\",\"Answer `placed` and reuse a verified existing image\",\"Answer `replayed` because the image already exists\"],\"default_guess\":\"Answer `placed`; rewrite atomically as the normative sentence says, then create the first placement record.\",\"witness\":{\"initial\":\"A complete stored image exists for project P and source S, but its first record write failed.\",\"events\":[\"The calling flow repeats delivery of the unchanged source.\",\"The operation succeeds.\"],\"outcomes\":[\"The response is `placed` because this call creates the first placement record.\",\"The response is `replayed` because the durable image already existed.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A3 condition 5 and A6 atomic record writing\",\"kind\":\"failure boundary\",\"text\":\"writing the stored image or the record fails\\nEach file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised\",\"question\":\"At which atomic-write stage is a placement record considered written, and what state and response are required if rename succeeds but record-file or folder synchronisation reports failure?\",\"options\":[\"Return `failed` and remove or invalidate the visible record\",\"Return `failed` while allowing the visible record to remain and define the next call's result\",\"Treat a successfully renamed record as committed despite the later synchronisation failure\"],\"default_guess\":\"Count the record as committed only after all required synchronisation succeeds; on a reported failure, ensure no valid placement record remains.\",\"witness\":{\"initial\":\"The stored image is durable and the placement-record temporary file is complete.\",\"events\":[\"The record is renamed to its final name.\",\"Synchronising the record's folder fails.\",\"The caller retries after the process continues or restarts.\"],\"outcomes\":[\"The first call reports `failed`, but the visible record makes the retry return `replayed`.\",\"The implementation removes or rejects the incompletely committed record, so the retry writes again and returns `placed`.\"],\"observer\":\"The calling flow and an operator inspecting state storage\"}},{\"subject\":\"A7 file modification time\",\"kind\":\"unspecified reading count and instant\",\"text\":\"A file's modification time is converted to the same form before it is compared or delivered\",\"question\":\"How many times may one scan or delivery read the modification time, and which reading is paired with the bytes when the timestamp changes during the operation?\",\"options\":[\"Read it once from the opened file before reading bytes\",\"Read it once from the opened file after reading bytes\",\"Read before and after and refuse or retry if the values differ\"],\"default_guess\":\"Read it once from the same opened descriptor after the source bytes have been read and use that value for the prepared photo.\",\"witness\":{\"initial\":\"A valid image has no usable camera date and initially has modification time T1.\",\"events\":[\"A delivery opens and reads its bytes.\",\"Syncthing changes only the modification time to T2 before preparation finishes.\"],\"outcomes\":[\"An implementation using the first metadata reading delivers photo_date T1.\",\"An implementation reading metadata after the bytes delivers photo_date T2.\"],\"observer\":\"The calling flow and the Portal user viewing the photo date\"}},{\"subject\":\"A7 datetime representation\",\"kind\":\"underspecified representation\",\"text\":\"The current time is a `datetime` in UTC without an offset, with microsecond precision and no rounding, written in ISO 8601 form.\",\"question\":\"What exact persisted and transferred ISO 8601 spelling is required, including separator and whether six fractional digits are always present when the microsecond value is zero or has trailing zeros?\",\"options\":[\"Always `YYYY-MM-DDTHH:MM:SS.ffffff` with no suffix\",\"Use the language's default ISO serializer, which may omit or shorten the fractional part\",\"Use a UTC designator such as `Z` despite saying the datetime has no offset\"],\"default_guess\":\"Always emit `YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six fractional digits and no offset suffix.\",\"witness\":{\"initial\":\"The mark clock returns the naive UTC datetime 2026-11-18 12:00:00.120000.\",\"events\":[\"The deliverer creates and serialises the publication mark.\"],\"outcomes\":[\"One implementation stores `2026-11-18T12:00:00.120000`.\",\"Another conforming ISO serializer stores `2026-11-18T12:00:00.120` or `2026-11-18T12:00:00.12`.\"],\"observer\":\"A state-file reader or API client comparing the representation\"}},{\"subject\":\"A7 INV-13 Required tests\",\"kind\":\"incomplete invariant test\",\"text\":\"INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"What test must show clock counts for a mark refused before the reading point, a mark refused after it, a replayed mark, and a publication-conflict mark?\",\"options\":[\"Require explicit count assertions for every mark outcome named by A7 rule 2\",\"Limit INV-13 to successful first marks\",\"Leave the named test free to cover unspecified mark paths\"],\"default_guess\":\"Add explicit cases proving zero reads before the point and exactly one read for every later refusal, replay and conflict.\",\"witness\":{\"initial\":\"A placement and its existing publication mark are present.\",\"events\":[\"The calling flow repeats the same mark request.\",\"A second implementation handles replay by checking the stored mark before consulting the clock.\"],\"outcomes\":[\"A7 rule 2 requires the replayed mark to read the clock once.\",\"The alternative implementation reads it zero times while still satisfying the Required tests item as written if that item exercises only a successful mark.\"],\"observer\":\"A counting-clock test\"}},{\"subject\":\"context evidence\",\"kind\":\"ambiguous evidence claim\",\"text\":\"Evidence is from local runs against a real Client Portal process with a stub Registry, and against two private Syncthing instances.\",\"question\":\"What interaction with the two Syncthing instances must have occurred for this to count as evidence: actual synchronisation and conflict creation through Syncthing, or merely running the processes while test code manipulates their folders?\",\"options\":[\"The instances actually synchronised files and produced the tested conflict copy\",\"It is sufficient that two real Syncthing processes were running while the test manipulated their folders directly\"],\"default_guess\":\"Require the evidence statement to say explicitly that the instances synchronised the files and produced the conflict through Syncthing.\",\"witness\":{\"initial\":\"Two private Syncthing processes run locally with test folders configured.\",\"events\":[\"A test writes an ordinary file and a conflict-named copy directly into one configured folder without synchronising them between the instances.\",\"The test scans the folder and passes.\"],\"outcomes\":[\"One reviewer counts this as a run “against two private Syncthing instances.”\",\"Another reviewer says it proves only filename handling, not behavior of a live Syncthing-managed folder.\"],\"observer\":\"The State 2 reviewer deciding what the evidence establishes\"}}]}",
+ "set_aside": []
+}

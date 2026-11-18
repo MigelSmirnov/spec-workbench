@@ -39,7 +39,7 @@ backup of the Syncthing folders or a general file transfer service.
 
 | Boundary | What crosses it | Trust |
 |---|---|---|
-| Object folder → deliverer | file names and bytes | untrusted, read only |
+| Object folder → deliverer | file names, file metadata and bytes | untrusted, read only |
 | Calling flow → deliverer | project id, file name, source id, Portal photo id | authenticated by the deliverer's own bearer token |
 | Deliverer → Portal binary store | prepared image files | written by the deliverer, read by the Portal |
 | Deliverer → calling flow | statuses, file reference, publication body | no server path, no credential |
@@ -51,8 +51,8 @@ The deliverer holds no Portal credential (P-01).
 | Action | Observable result | Failure | Evidence |
 |---|---|---|---|
 | Connect an object to its folders (owner, through the agent) | a connection record the owner has confirmed; delivery becomes possible for that project | a connection whose subfolder is written to leave its root is refused, a photo folder linked outside the root is refused when it is used, and an unconfirmed connection delivers nothing | unit tests |
-| See what can be delivered for a project | each file with its source id and a status: ready, placed, published or rejected with a reason | unknown project, unconfirmed connection or unavailable folder is refused; nothing is changed | unit tests, E2E |
-| Deliver one chosen photo | a prepared image in the Portal store, its reference and the publication body | a photo that cannot be delivered is reported with its reason and nothing is written; a file whose content differs from the chosen one is not placed | unit tests, E2E |
+| See what can be delivered for a project | each file with a status: ready, placed or published with its source id, or rejected with a reason | unknown project, unconfirmed connection or unavailable folder is refused; nothing is changed | unit tests, E2E |
+| Deliver one chosen photo | a prepared image in the Portal store, its reference and the publication body | a photo that cannot be delivered is reported with its reason and no placement is made; a file whose content differs from the chosen one is not placed | unit tests, E2E |
 | Deliver the same photo again | the first result, nothing written | none | unit tests, E2E |
 | Publish a placed photo (Portal operation, by the calling flow) | a photo record in the Portal, hidden from the client | the Portal's own refusal | E2E, real Portal |
 | Record the publication | the file is reported as published, with its Portal photo id | a photo that was not placed, or a different photo id for the same source, is refused and nothing is changed | unit tests, E2E |

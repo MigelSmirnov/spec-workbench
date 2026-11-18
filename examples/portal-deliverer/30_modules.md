@@ -201,8 +201,8 @@ available_photo_folder
 - walking the photo folder in the decided order;
 - ignored names, links, source limits and file signatures;
 - computing the SHA-256 source id of each file it reads;
-- deciding whether a requested name is a file a scan could report, and reading it once without following
-  a link;
+- deciding whether a requested name passes condition 1 of A3 rule 5, and reading that file once without
+  following a link;
 - the modification time of a file in the service's time form.
 
 ### Knows

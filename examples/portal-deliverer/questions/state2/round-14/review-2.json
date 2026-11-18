@@ -1,0 +1,227 @@
+{
+ "open_points": [
+  {
+   "subject": "A1",
+   "kind": "race_outcome",
+   "text": "Ignored names are not reported, ignored folders are not entered, and an entry the listing shows as a symbolic link is neither reported nor followed.\n\nSyncthing may change the folder during a scan, so a scan is not a view of one instant. Each rule applies\nto what its step finds when it runs",
+   "question": "If a listed subfolder becomes a symbolic link before traversal, is it silently skipped or is the scan refused with folder_unavailable?",
+   "options": [
+    "Skip it because the traversal step now finds a symbolic link",
+    "Refuse the whole scan with folder_unavailable because the listed subfolder can no longer be safely listed"
+   ],
+   "default_guess": "Refuse the whole scan with folder_unavailable.",
+   "witness": {
+    "initial": "The scan lists subfolder albums as an ordinary directory; an external directory contains outside.jpg.",
+    "events": [
+     "Syncthing replaces albums with a symbolic link to the external directory before the scan traverses it.",
+     "The scanner reaches albums."
+    ],
+    "outcomes": [
+     "The scanner skips albums and completes successfully without outside.jpg.",
+     "The scanner refuses the entire scan with folder_unavailable."
+    ],
+    "observer": "The calling flow sees either a complete scan answer or a folder_unavailable refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "test_term_ambiguity",
+   "text": "an empty, absolute, unnormalised or parent-climbing name",
+   "question": "Does “unnormalised” mean only a lexically non-canonical path, or also a filename whose Unicode spelling is not in a normalization form, despite A3 saying names are compared exactly without Unicode normalisation?",
+   "options": [
+    "Only lexical path forms such as repeated separators or dot segments are unnormalised",
+    "Unicode-decomposed filenames are also unnormalised and must be refused"
+   ],
+   "default_guess": "Treat it as lexical path normalization only and accept an exact Unicode-decomposed filename when that file exists.",
+   "witness": {
+    "initial": "The photo folder contains a regular JPEG named with the decomposed spelling café.jpg, and the request uses those exact code points.",
+    "events": [
+     "The caller requests delivery using that exact relative name.",
+     "The delivery evaluates A3 condition 1 and the INV-02 Required tests item."
+    ],
+    "outcomes": [
+     "The exact existing name passes because Unicode normalization is expressly not performed.",
+     "The name fails with NOT_READY_OR_ABSENT because the test's “unnormalised” category includes decomposed Unicode."
+    ],
+    "observer": "The caller sees placed versus failed."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "invariant_contradiction",
+   "text": "INV-02: a delivery opens only a path that meets condition 1 of A3 rule 5.",
+   "question": "Does “meets condition 1” mean that the path satisfies the listed failure condition, or that it passes the condition and therefore does not satisfy it?",
+   "options": [
+    "Only paths that satisfy the failure condition may be opened",
+    "Only paths that do not satisfy the failure condition may be opened"
+   ],
+   "default_guess": "Interpret it as “does not meet condition 1,” so only validated paths may be opened.",
+   "witness": {
+    "initial": "One request names an existing regular file and another names a symbolic-link path.",
+    "events": [
+     "The delivery applies A3 rule 5 condition 1.",
+     "It decides whether either path may be opened."
+    ],
+    "outcomes": [
+     "A literal reading permits opening only the invalid symbolic-link path.",
+     "The apparent intended reading permits opening only the existing regular file."
+    ],
+    "observer": "A filesystem access monitor and the caller see which path is opened and whether delivery succeeds."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "incomplete_required_test",
+   "text": "INV-02: an empty, absolute, unnormalised or parent-climbing name, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "Must the Required tests item show that each rejected path is never opened, rather than only checking its answer and durable writes?",
+   "options": [
+    "Instrument file opening and assert that none of the rejected paths is opened",
+    "Treat the failure answer and absence of new durable files as sufficient evidence"
+   ],
+   "default_guess": "Instrument opening and assert that rejected paths are not opened.",
+   "witness": {
+    "initial": "An ignored regular file exists and can record or expose read access without causing a stored write.",
+    "events": [
+     "A delivery implementation opens and reads the file.",
+     "It then returns NOT_READY_OR_ABSENT and writes only the project lock."
+    ],
+    "outcomes": [
+     "The stated Required tests assertions pass even though INV-02 is violated.",
+     "A test that observes open calls fails and proves the invariant."
+    ],
+    "observer": "A filesystem access monitor sees the read; the current described test and caller do not."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "incomplete_required_test",
+   "text": "delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`)",
+   "question": "How must the test demonstrate INV-19's requirement that a new placement never reads a conflict copy?",
+   "options": [
+    "Observe file-open or file-read calls and assert that the conflict copy is never read",
+    "Check only the failure answer and resulting filesystem state"
+   ],
+   "default_guess": "Observe file access and assert that the conflict copy is never opened or read.",
+   "witness": {
+    "initial": "An unplaced conflict copy contains a valid image.",
+    "events": [
+     "The implementation opens and reads its bytes.",
+     "It discards them, returns NOT_READY_OR_ABSENT, and changes no file except the project lock."
+    ],
+    "outcomes": [
+     "All behavior named by the Required tests item holds while INV-19 is violated.",
+     "A read-observing test detects the violation."
+    ],
+    "observer": "A filesystem access monitor sees the read; the caller and the described state assertions do not."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "cross_state_contradiction",
+   "text": "After condition 5 a stored image may remain without a record: no caller has received\n   its reference, and a repeated delivery writes it again and completes the placement.\n\nDeliver one chosen photo | a prepared image in the Portal store, its reference and the publication body | a photo that cannot be delivered is reported with its reason and nothing is written; a file whose content differs from the chosen one is not placed",
+   "question": "When record writing fails after the stored image was written, must the image remain as A3 permits, or must nothing remain as the State 0 action promises?",
+   "options": [
+    "Keep the unreferenced stored image and return failed",
+    "Remove or roll back the stored image so nothing durable was written"
+   ],
+   "default_guess": "Follow the more specific A3 recovery rule and permit the unreferenced stored image to remain.",
+   "witness": {
+    "initial": "No placement or stored image exists for the requested project and source.",
+    "events": [
+     "The delivery successfully writes the stored image.",
+     "Writing the placement record fails.",
+     "The service returns failed with UNREADABLE_FILE."
+    ],
+    "outcomes": [
+     "A3 leaves the stored image without a record.",
+     "State 0 requires that nothing was written, so no stored image remains."
+    ],
+    "observer": "The binary-store operator sees whether the image remains."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7",
+   "kind": "instant_source",
+   "text": "A file's modification time is converted to the same form before it is compared or delivered",
+   "question": "Which metadata observation supplies the modification instant, and how many times may one scan or delivery read it when the file changes during the operation?",
+   "options": [
+    "Read it once from pre-open path metadata",
+    "Read it once from the opened file descriptor",
+    "Read it more than once and use a specified first or last reading"
+   ],
+   "default_guess": "Read it once from the opened file descriptor and reuse that value.",
+   "witness": {
+    "initial": "A JPEG without a usable camera date has modification time T1.",
+    "events": [
+     "The delivery reads path metadata.",
+     "Syncthing changes the file's modification time to T2 before it is opened, without changing its bytes.",
+     "The delivery opens and prepares the file."
+    ],
+    "outcomes": [
+     "The delivered photo moment is T1 from the pre-open metadata.",
+     "The delivered photo moment is T2 from metadata of the opened file."
+    ],
+    "observer": "The calling flow and Portal see different photo_date values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7",
+   "kind": "representation_ambiguity",
+   "text": "written in ISO 8601 form",
+   "question": "Which exact ISO 8601 serialization is required for a UTC datetime without an offset, including separator and whether six fractional digits are always emitted?",
+   "options": [
+    "Use T and always emit exactly six fractional digits with no suffix",
+    "Use any ISO 8601-compatible naive-datetime spelling, including a space separator or omitted zero fraction",
+    "Append a UTC designator despite saying the datetime has no offset"
+   ],
+   "default_guess": "Use `YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six fractional digits and no offset or Z suffix.",
+   "witness": {
+    "initial": "The clock returns a naive UTC datetime whose microsecond value is zero.",
+    "events": [
+     "A mark is created and marked_at is serialized."
+    ],
+    "outcomes": [
+     "The stored value is `2026-11-18T12:00:00.000000`.",
+     "The stored value is another ISO 8601 form such as `2026-11-18 12:00:00`."
+    ],
+    "observer": "A reader of the state record sees different bytes and may parse or compare them differently."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7",
+   "kind": "incomplete_required_test",
+   "text": "INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Must the Required tests item also show the clock-read count for marks refused before the read point, refused after it, and replayed, so INV-13 is established on every mark path?",
+   "options": [
+    "Test successful, early-refused, late-refused, and replayed marks separately",
+    "Test one successful mark only and infer the other mark paths"
+   ],
+   "default_guess": "Test every listed mark path and assert counts of zero or one as A7 rule 2 specifies.",
+   "witness": {
+    "initial": "A publication mark already exists for the source.",
+    "events": [
+     "The caller repeats the mark with the same photo_id.",
+     "An implementation reads the clock twice but returns the existing mark without writing.",
+     "The described successful-mark, scan, delivery, and health checks run."
+    ],
+    "outcomes": [
+     "The described checks can pass although the replay path violates INV-13.",
+     "A replay-specific counting-clock check fails on the second read."
+    ],
+    "observer": "The counting clock or its test sees the difference; the caller receives the same replay answer."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1\",\"kind\":\"race_outcome\",\"text\":\"Ignored names are not reported, ignored folders are not entered, and an entry the listing shows as a symbolic link is neither reported nor followed.\\n\\nSyncthing may change the folder during a scan, so a scan is not a view of one instant. Each rule applies\\nto what its step finds when it runs\",\"question\":\"If a listed subfolder becomes a symbolic link before traversal, is it silently skipped or is the scan refused with folder_unavailable?\",\"options\":[\"Skip it because the traversal step now finds a symbolic link\",\"Refuse the whole scan with folder_unavailable because the listed subfolder can no longer be safely listed\"],\"default_guess\":\"Refuse the whole scan with folder_unavailable.\",\"witness\":{\"initial\":\"The scan lists subfolder albums as an ordinary directory; an external directory contains outside.jpg.\",\"events\":[\"Syncthing replaces albums with a symbolic link to the external directory before the scan traverses it.\",\"The scanner reaches albums.\"],\"outcomes\":[\"The scanner skips albums and completes successfully without outside.jpg.\",\"The scanner refuses the entire scan with folder_unavailable.\"],\"observer\":\"The calling flow sees either a complete scan answer or a folder_unavailable refusal.\"}},{\"subject\":\"A1\",\"kind\":\"test_term_ambiguity\",\"text\":\"an empty, absolute, unnormalised or parent-climbing name\",\"question\":\"Does “unnormalised” mean only a lexically non-canonical path, or also a filename whose Unicode spelling is not in a normalization form, despite A3 saying names are compared exactly without Unicode normalisation?\",\"options\":[\"Only lexical path forms such as repeated separators or dot segments are unnormalised\",\"Unicode-decomposed filenames are also unnormalised and must be refused\"],\"default_guess\":\"Treat it as lexical path normalization only and accept an exact Unicode-decomposed filename when that file exists.\",\"witness\":{\"initial\":\"The photo folder contains a regular JPEG named with the decomposed spelling café.jpg, and the request uses those exact code points.\",\"events\":[\"The caller requests delivery using that exact relative name.\",\"The delivery evaluates A3 condition 1 and the INV-02 Required tests item.\"],\"outcomes\":[\"The exact existing name passes because Unicode normalization is expressly not performed.\",\"The name fails with NOT_READY_OR_ABSENT because the test's “unnormalised” category includes decomposed Unicode.\"],\"observer\":\"The caller sees placed versus failed.\"}},{\"subject\":\"A1\",\"kind\":\"invariant_contradiction\",\"text\":\"INV-02: a delivery opens only a path that meets condition 1 of A3 rule 5.\",\"question\":\"Does “meets condition 1” mean that the path satisfies the listed failure condition, or that it passes the condition and therefore does not satisfy it?\",\"options\":[\"Only paths that satisfy the failure condition may be opened\",\"Only paths that do not satisfy the failure condition may be opened\"],\"default_guess\":\"Interpret it as “does not meet condition 1,” so only validated paths may be opened.\",\"witness\":{\"initial\":\"One request names an existing regular file and another names a symbolic-link path.\",\"events\":[\"The delivery applies A3 rule 5 condition 1.\",\"It decides whether either path may be opened.\"],\"outcomes\":[\"A literal reading permits opening only the invalid symbolic-link path.\",\"The apparent intended reading permits opening only the existing regular file.\"],\"observer\":\"A filesystem access monitor and the caller see which path is opened and whether delivery succeeds.\"}},{\"subject\":\"A1\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-02: an empty, absolute, unnormalised or parent-climbing name, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"Must the Required tests item show that each rejected path is never opened, rather than only checking its answer and durable writes?\",\"options\":[\"Instrument file opening and assert that none of the rejected paths is opened\",\"Treat the failure answer and absence of new durable files as sufficient evidence\"],\"default_guess\":\"Instrument opening and assert that rejected paths are not opened.\",\"witness\":{\"initial\":\"An ignored regular file exists and can record or expose read access without causing a stored write.\",\"events\":[\"A delivery implementation opens and reads the file.\",\"It then returns NOT_READY_OR_ABSENT and writes only the project lock.\"],\"outcomes\":[\"The stated Required tests assertions pass even though INV-02 is violated.\",\"A test that observes open calls fails and proves the invariant.\"],\"observer\":\"A filesystem access monitor sees the read; the current described test and caller do not.\"}},{\"subject\":\"A3\",\"kind\":\"incomplete_required_test\",\"text\":\"delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`)\",\"question\":\"How must the test demonstrate INV-19's requirement that a new placement never reads a conflict copy?\",\"options\":[\"Observe file-open or file-read calls and assert that the conflict copy is never read\",\"Check only the failure answer and resulting filesystem state\"],\"default_guess\":\"Observe file access and assert that the conflict copy is never opened or read.\",\"witness\":{\"initial\":\"An unplaced conflict copy contains a valid image.\",\"events\":[\"The implementation opens and reads its bytes.\",\"It discards them, returns NOT_READY_OR_ABSENT, and changes no file except the project lock.\"],\"outcomes\":[\"All behavior named by the Required tests item holds while INV-19 is violated.\",\"A read-observing test detects the violation.\"],\"observer\":\"A filesystem access monitor sees the read; the caller and the described state assertions do not.\"}},{\"subject\":\"A3\",\"kind\":\"cross_state_contradiction\",\"text\":\"After condition 5 a stored image may remain without a record: no caller has received\\n   its reference, and a repeated delivery writes it again and completes the placement.\\n\\nDeliver one chosen photo | a prepared image in the Portal store, its reference and the publication body | a photo that cannot be delivered is reported with its reason and nothing is written; a file whose content differs from the chosen one is not placed\",\"question\":\"When record writing fails after the stored image was written, must the image remain as A3 permits, or must nothing remain as the State 0 action promises?\",\"options\":[\"Keep the unreferenced stored image and return failed\",\"Remove or roll back the stored image so nothing durable was written\"],\"default_guess\":\"Follow the more specific A3 recovery rule and permit the unreferenced stored image to remain.\",\"witness\":{\"initial\":\"No placement or stored image exists for the requested project and source.\",\"events\":[\"The delivery successfully writes the stored image.\",\"Writing the placement record fails.\",\"The service returns failed with UNREADABLE_FILE.\"],\"outcomes\":[\"A3 leaves the stored image without a record.\",\"State 0 requires that nothing was written, so no stored image remains.\"],\"observer\":\"The binary-store operator sees whether the image remains.\"}},{\"subject\":\"A7\",\"kind\":\"instant_source\",\"text\":\"A file's modification time is converted to the same form before it is compared or delivered\",\"question\":\"Which metadata observation supplies the modification instant, and how many times may one scan or delivery read it when the file changes during the operation?\",\"options\":[\"Read it once from pre-open path metadata\",\"Read it once from the opened file descriptor\",\"Read it more than once and use a specified first or last reading\"],\"default_guess\":\"Read it once from the opened file descriptor and reuse that value.\",\"witness\":{\"initial\":\"A JPEG without a usable camera date has modification time T1.\",\"events\":[\"The delivery reads path metadata.\",\"Syncthing changes the file's modification time to T2 before it is opened, without changing its bytes.\",\"The delivery opens and prepares the file.\"],\"outcomes\":[\"The delivered photo moment is T1 from the pre-open metadata.\",\"The delivered photo moment is T2 from metadata of the opened file.\"],\"observer\":\"The calling flow and Portal see different photo_date values.\"}},{\"subject\":\"A7\",\"kind\":\"representation_ambiguity\",\"text\":\"written in ISO 8601 form\",\"question\":\"Which exact ISO 8601 serialization is required for a UTC datetime without an offset, including separator and whether six fractional digits are always emitted?\",\"options\":[\"Use T and always emit exactly six fractional digits with no suffix\",\"Use any ISO 8601-compatible naive-datetime spelling, including a space separator or omitted zero fraction\",\"Append a UTC designator despite saying the datetime has no offset\"],\"default_guess\":\"Use `YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six fractional digits and no offset or Z suffix.\",\"witness\":{\"initial\":\"The clock returns a naive UTC datetime whose microsecond value is zero.\",\"events\":[\"A mark is created and marked_at is serialized.\"],\"outcomes\":[\"The stored value is `2026-11-18T12:00:00.000000`.\",\"The stored value is another ISO 8601 form such as `2026-11-18 12:00:00`.\"],\"observer\":\"A reader of the state record sees different bytes and may parse or compare them differently.\"}},{\"subject\":\"A7\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Must the Required tests item also show the clock-read count for marks refused before the read point, refused after it, and replayed, so INV-13 is established on every mark path?\",\"options\":[\"Test successful, early-refused, late-refused, and replayed marks separately\",\"Test one successful mark only and infer the other mark paths\"],\"default_guess\":\"Test every listed mark path and assert counts of zero or one as A7 rule 2 specifies.\",\"witness\":{\"initial\":\"A publication mark already exists for the source.\",\"events\":[\"The caller repeats the mark with the same photo_id.\",\"An implementation reads the clock twice but returns the existing mark without writing.\",\"The described successful-mark, scan, delivery, and health checks run.\"],\"outcomes\":[\"The described checks can pass although the replay path violates INV-13.\",\"A replay-specific counting-clock check fails on the second read.\"],\"observer\":\"The counting clock or its test sees the difference; the caller receives the same replay answer.\"}}]}",
+ "set_aside": []
+}

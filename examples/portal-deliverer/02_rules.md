@@ -57,13 +57,13 @@ file may still fail when it is delivered.
 ### Formal invariants
 
 - INV-01: no operation creates, changes, moves or deletes anything in a source folder.
-- INV-02: a delivery opens only a path that meets condition 1 of A3 rule 5.
+- INV-02: a delivery opens no path that fails condition 1 of A3 rule 5.
 - INV-18: a scan never reports a Syncthing conflict copy.
 
 ### Required tests
 
 - INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).
-- INV-02: an empty, absolute, unnormalised or parent-climbing name, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).
+- INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).
 - INV-18: a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Only the letters A to Z are folded (`test_only_ascii_letters_fold_in_the_conflict_mark`). A real Syncthing conflict leaves its copy unreported while the photo itself is still reported (`e2e_local_syncthing.py`, `a real Syncthing conflict copy is not offered`).
 
 ### Consequence
@@ -128,11 +128,11 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
    `= models.PlacementFailure`. Condition 1 is decided from the name and the metadata of its path before
    the file is opened, and conditions 2 to 4 from the opening on. Conditions 1 to 4 write nothing except the
    project lock. After condition 5 a stored image may remain without a record: no caller has received
-   its reference, and a repeated delivery writes it again and completes the placement.
+   its reference, and a repeated delivery of the same file writes it again and completes the placement.
 
    | Order | Condition | Member |
    |---|---|---|
-   | 1 | `name` is not non-empty segments joined by single `/` characters, or a segment is `.` or `..`, or a segment is ignored under A1, or a folder on its path is absent or a symbolic link, or the last segment is absent or is not a regular file. Names are compared exactly, without Unicode normalisation | `NOT_READY_OR_ABSENT` |
+   | 1 | `name` is not non-empty segments joined by single `/` characters, or a segment is `.` or `..`, or a segment is ignored under A1, or a folder on its path is absent or a symbolic link, or the last segment is absent or is not a regular file, or the metadata of a segment cannot be read. Names are compared exactly, without Unicode normalisation | `NOT_READY_OR_ABSENT` |
    | 2 | A1 orders 1 to 6 reject the file | `EMPTY` for order 1, `TOO_LARGE` for orders 2 and 4, `NOT_A_REGULAR_FILE` for order 3, `UNREADABLE_FILE` for order 5, `UNSUPPORTED_FORMAT` for order 6 |
    | 3 | the hash of the bytes differs from `source_id` | `SOURCE_CHANGED` |
    | 4 | A2 rule 2 fails | `TOO_MANY_PIXELS`, `UNREADABLE_IMAGE` or `TOO_LARGE`, as that rule decides |

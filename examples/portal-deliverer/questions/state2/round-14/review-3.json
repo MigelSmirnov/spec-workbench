@@ -1,0 +1,298 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 rejected SourcePhotoObservation",
+   "kind": "contradiction",
+   "text": "See what can be delivered for a project | each file with its source id and a status: ready, placed, published or rejected with a reason\nA rejected file has no source id.",
+   "question": "Must a rejected scan observation include the file's source id, or must its source_id be absent?",
+   "options": [
+    "Every reported file, including a rejected file, has a source id.",
+    "A rejected file has no source id."
+   ],
+   "default_guess": "A rejected file has no source id, following A1 and M02.",
+   "witness": {
+    "initial": "The photo folder contains a non-empty regular file whose bytes have no supported image signature.",
+    "events": [
+     "The calling flow scans the project folder."
+    ],
+    "outcomes": [
+     "The rejected observation includes a source id, as the State 0 action promises for each file.",
+     "The rejected observation has source_id absent, as A1 and M02 require."
+    ],
+    "observer": "The calling flow reading the scan result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 INV-02",
+   "kind": "contradiction",
+   "text": "INV-02: a delivery opens only a path that meets condition 1 of A3 rule 5.\nCondition 1 is decided from the name and the metadata of its path before the file is opened",
+   "question": "Does INV-02 mean that a delivery may open only a path for which condition 1 does not apply, rather than a path that meets the failure condition?",
+   "options": [
+    "Only paths that do not trigger A3 rule 5 condition 1 may be opened.",
+    "Only paths that trigger A3 rule 5 condition 1 may be opened, as INV-02 literally says."
+   ],
+   "default_guess": "Rewrite INV-02 to say that a delivery opens only a path that does not meet condition 1.",
+   "witness": {
+    "initial": "A valid ordinary image exists at a non-empty relative name with regular, non-symbolic path components.",
+    "events": [
+     "The caller requests delivery using that exact name and its source id.",
+     "The service evaluates A3 rule 5 condition 1."
+    ],
+    "outcomes": [
+     "A3 permits the service to open the file because condition 1 does not apply.",
+     "INV-02 literally forbids opening it because the path does not meet condition 1."
+    ],
+    "observer": "The caller, because one implementation delivers the image and the other cannot open it."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 INV-02 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "INV-02: an empty, absolute, unnormalised or parent-climbing name, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What must the test observe to prove that none of these paths was opened, rather than merely proving the returned failure and durable-state result?",
+   "options": [
+    "Instrument file-opening and assert that no source path is opened.",
+    "Treat the failure result and absence of durable output as sufficient even if the implementation opened or followed the path before refusing it."
+   ],
+   "default_guess": "Instrument the file-opening boundary and assert that no invalid source path is opened.",
+   "witness": {
+    "initial": "A requested name passes through a symbolic link to a readable file outside the photo folder.",
+    "events": [
+     "The caller requests delivery.",
+     "An implementation follows and reads the target, then returns NOT_READY_OR_ABSENT without creating a stored image."
+    ],
+    "outcomes": [
+     "The stated Required test passes because the result and durable files are correct, despite the forbidden open.",
+     "A test that observes opens fails because the outside target was opened."
+    ],
+    "observer": "A filesystem audit or instrumented file-opening test."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 INV-02 Required tests and A3 name validation",
+   "kind": "ambiguous term",
+   "text": "an empty, absolute, unnormalised or parent-climbing name\nNames are compared exactly, without Unicode normalisation",
+   "question": "What does “unnormalised” mean in the Required test: invalid path syntax such as repeated separators, or a Unicode spelling that is not in a normalization form?",
+   "options": [
+    "It means only path-syntax forms excluded by A3, such as repeated separators or dot segments.",
+    "It includes Unicode-decomposed names, which must therefore be refused.",
+    "Remove the term and enumerate every rejected spelling."
+   ],
+   "default_guess": "Use it only for path-syntax forms and accept an exact Unicode-decomposed name when the filesystem entry has that exact name.",
+   "witness": {
+    "initial": "The folder contains a regular file whose name uses a decomposed Unicode character, and the request contains the exact same code points.",
+    "events": [
+     "The caller requests delivery under that exact relative name."
+    ],
+    "outcomes": [
+     "The service accepts the exact match because no Unicode normalization is performed.",
+     "The service refuses it as an “unnormalised” name under the Required test."
+    ],
+    "observer": "The caller receiving either a placement or NOT_READY_OR_ABSENT."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 5 condition 1",
+   "kind": "uncovered refusal",
+   "text": "or a folder on its path is absent or a symbolic link, or the last segment is absent or is not a regular file",
+   "question": "Which failure applies when metadata for a path component or the last segment cannot be obtained for a reason other than absence, such as permission denial or an I/O error?",
+   "options": [
+    "Treat every metadata-access failure as NOT_READY_OR_ABSENT under condition 1.",
+    "Treat it as UNREADABLE_FILE under condition 2 and A1 order 5.",
+    "Refuse the whole operation as folder_unavailable when the failing component is a folder."
+   ],
+   "default_guess": "Return UNREADABLE_FILE for a file-specific metadata error and folder_unavailable only when the scan or photo folder itself cannot be traversed.",
+   "witness": {
+    "initial": "A listed path still exists, but permissions change so metadata lookup of its last segment returns EACCES before the file is opened.",
+    "events": [
+     "The caller requests delivery after the permission change.",
+     "The service tries to decide condition 1 from path metadata."
+    ],
+    "outcomes": [
+     "The service returns NOT_READY_OR_ABSENT because condition 1 treats an uninspectable entry like an absent entry.",
+     "The service returns UNREADABLE_FILE because the entry exists but cannot be inspected."
+    ],
+    "observer": "The caller receiving the failure member."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 scan traversal under concurrent folder changes",
+   "kind": "unspecified observation boundary",
+   "text": "Syncthing may change the folder during a scan, so a scan is not a view of one instant. Each rule applies to what its step finds when it runs",
+   "question": "What constitutes the directory-listing step, and must an entry created after listing begins but before traversal finishes be included in that scan?",
+   "options": [
+    "Snapshot each directory's names once; later additions wait for the next scan.",
+    "Use a live iterator and include additions it yields while that directory is being visited.",
+    "Promise neither inclusion nor exclusion for entries changed during directory enumeration."
+   ],
+   "default_guess": "Snapshot each directory's entries once when that directory is visited; changes after that snapshot appear on the next scan.",
+   "witness": {
+    "initial": "A scan has begun enumerating a folder that initially contains one file.",
+    "events": [
+     "Syncthing creates a second ordinary file after enumeration begins but before the scanner finishes that folder."
+    ],
+    "outcomes": [
+     "The result contains only the entry present in the directory snapshot.",
+     "The result also contains the newly created entry because the live iterator yields it."
+    ],
+    "observer": "The calling flow comparing the names in the scan result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Deliver-one-photo failure durability",
+   "kind": "contradiction",
+   "text": "a photo that cannot be delivered is reported with its reason and nothing is written\nConditions 1 to 4 write nothing except the project lock.",
+   "question": "When delivery reaches the project lock and then fails under conditions 1 to 4, is creation or modification of the project lock allowed?",
+   "options": [
+    "Nothing at all is written on a failed delivery.",
+    "The project lock may be created or modified, but no image, placement, or mark is written."
+   ],
+   "default_guess": "Allow only the project lock, following A3's more specific rule.",
+   "witness": {
+    "initial": "The project has no existing lock file or placement, and the requested name is absent.",
+    "events": [
+     "The caller submits a structurally valid delivery request.",
+     "The service takes the project lock and then evaluates the named file."
+    ],
+    "outcomes": [
+     "No filesystem entry is created, as the State 0 failure promise says.",
+     "A project lock file is created, as A3 expressly permits."
+    ],
+    "observer": "An operator or test inspecting the state folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Deliver-one-photo record-write failure",
+   "kind": "contradiction",
+   "text": "a photo that cannot be delivered is reported with its reason and nothing is written\nAfter condition 5 a stored image may remain without a record",
+   "question": "May a failed delivery leave a stored image when writing its placement record fails?",
+   "options": [
+    "The failed operation must remove or roll back the stored image so nothing remains.",
+    "The complete stored image may remain without a placement record."
+   ],
+   "default_guess": "Permit the orphan stored image, following A3 and A6's per-file atomicity.",
+   "witness": {
+    "initial": "A valid source has no placement, the binary store is writable, and the placement-record write will fail.",
+    "events": [
+     "The caller requests delivery.",
+     "The service writes the stored image successfully.",
+     "Writing the placement record fails."
+    ],
+    "outcomes": [
+     "The service removes the image so the failed operation writes nothing durably.",
+     "The service returns failed and leaves the stored image without a record."
+    ],
+    "observer": "An operator or test inspecting the Portal binary store."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Repeated delivery after failed record write",
+   "kind": "contradiction",
+   "text": "a repeated delivery creates nothing new\nA delivery repeated after a failed record write completes the placement",
+   "question": "Does the no-new-write guarantee apply when the earlier attempt wrote the image but failed before creating the placement record?",
+   "options": [
+    "Every repeated request writes nothing, including repetition after a partial failed attempt.",
+    "Only repetition of an existing placement writes nothing; repetition after a failed record write may create the placement record and rewrite the image."
+   ],
+   "default_guess": "Limit the no-write guarantee to content that already has a placement.",
+   "witness": {
+    "initial": "The image was stored by an earlier attempt, but its placement-record write failed.",
+    "events": [
+     "The caller repeats the same delivery request."
+    ],
+    "outcomes": [
+     "The retry creates nothing new and therefore cannot complete the missing placement.",
+     "The retry writes the image again and creates the placement record, completing the placement."
+    ],
+    "observer": "The caller and an observer of the placement store."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 timestamp representation",
+   "kind": "underspecified representation",
+   "text": "The current time is a `datetime` in UTC without an offset, with microsecond precision and no rounding, written in ISO 8601 form.",
+   "question": "Which exact ISO 8601 representation is required, including separator, fixed or omitted fractional digits, and whether a `Z` or offset suffix is forbidden?",
+   "options": [
+    "Use a naive form such as `2026-11-18T12:34:56.123456` with exactly six fractional digits and no suffix.",
+    "Permit any ISO 8601 spelling that represents the same instant, including a space separator, omitted trailing fractional zeros, or `Z`.",
+    "Define the in-memory value only and leave serialization to the persistence or transport layer."
+   ],
+   "default_guess": "Use `YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six fractional digits and no timezone suffix.",
+   "witness": {
+    "initial": "The clock returns the UTC instant 2026-11-18 12:34:56.120000.",
+    "events": [
+     "The calling flow records a publication mark.",
+     "The mark is serialized to storage or an answer."
+    ],
+    "outcomes": [
+     "The value is written as `2026-11-18T12:34:56.120000`.",
+     "The value is written as another valid ISO 8601 form such as `2026-11-18T12:34:56.12` or `2026-11-18T12:34:56.120000Z`."
+    ],
+    "observer": "The persistence reader or caller comparing serialized `marked_at`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 file modification time",
+   "kind": "unspecified reading count",
+   "text": "A file's modification time is converted to the same form before it is compared or delivered",
+   "question": "How many times may an operation read a file's modification time, and which reading supplies the delivered photo moment if the value changes during delivery?",
+   "options": [
+    "Read it once from the opened file and use that single value for every comparison and delivered field.",
+    "Use the pre-open path-metadata reading already made for A3 condition 1.",
+    "Allow separate readings for validation and preparation, with the later reading supplying the photo moment."
+   ],
+   "default_guess": "Read modification time once from the opened file descriptor and reuse that value throughout the delivery.",
+   "witness": {
+    "initial": "A valid image has no usable camera date, so its modification time will supply the photo moment.",
+    "events": [
+     "Delivery reads path metadata before opening the file.",
+     "Another actor changes the file's modification time without changing its bytes.",
+     "Delivery opens and prepares the image."
+    ],
+    "outcomes": [
+     "The placement publication contains the earlier modification time from the pre-open metadata.",
+     "The placement publication contains the later modification time read from the opened file."
+    ],
+    "observer": "The calling flow reading `publication.photo_date`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 INV-13 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Must the Required tests also show the clock count for a replayed mark and for every refusal occurring after the specified clock-read point?",
+   "options": [
+    "Test successful, replayed, and post-read refused marks, each with exactly one clock read, plus pre-read refusals with zero reads.",
+    "Treat one successful mark as sufficient evidence for all mark paths."
+   ],
+   "default_guess": "Require explicit counting-clock cases for successful, replayed, pre-read-refused, and post-read-refused marks.",
+   "witness": {
+    "initial": "A publication mark already exists for the requested source and photo id.",
+    "events": [
+     "The caller repeats the mark operation.",
+     "An implementation reads the clock twice before returning replayed."
+    ],
+    "outcomes": [
+     "The stated successful-mark test still passes even though the replay path violates the once-only rule.",
+     "A replay-specific counting-clock test fails with a count of two."
+    ],
+    "observer": "The counting-clock test."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 rejected SourcePhotoObservation\",\"kind\":\"contradiction\",\"text\":\"See what can be delivered for a project | each file with its source id and a status: ready, placed, published or rejected with a reason\\nA rejected file has no source id.\",\"question\":\"Must a rejected scan observation include the file's source id, or must its source_id be absent?\",\"options\":[\"Every reported file, including a rejected file, has a source id.\",\"A rejected file has no source id.\"],\"default_guess\":\"A rejected file has no source id, following A1 and M02.\",\"witness\":{\"initial\":\"The photo folder contains a non-empty regular file whose bytes have no supported image signature.\",\"events\":[\"The calling flow scans the project folder.\"],\"outcomes\":[\"The rejected observation includes a source id, as the State 0 action promises for each file.\",\"The rejected observation has source_id absent, as A1 and M02 require.\"],\"observer\":\"The calling flow reading the scan result.\"}},{\"subject\":\"A1 INV-02\",\"kind\":\"contradiction\",\"text\":\"INV-02: a delivery opens only a path that meets condition 1 of A3 rule 5.\\nCondition 1 is decided from the name and the metadata of its path before the file is opened\",\"question\":\"Does INV-02 mean that a delivery may open only a path for which condition 1 does not apply, rather than a path that meets the failure condition?\",\"options\":[\"Only paths that do not trigger A3 rule 5 condition 1 may be opened.\",\"Only paths that trigger A3 rule 5 condition 1 may be opened, as INV-02 literally says.\"],\"default_guess\":\"Rewrite INV-02 to say that a delivery opens only a path that does not meet condition 1.\",\"witness\":{\"initial\":\"A valid ordinary image exists at a non-empty relative name with regular, non-symbolic path components.\",\"events\":[\"The caller requests delivery using that exact name and its source id.\",\"The service evaluates A3 rule 5 condition 1.\"],\"outcomes\":[\"A3 permits the service to open the file because condition 1 does not apply.\",\"INV-02 literally forbids opening it because the path does not meet condition 1.\"],\"observer\":\"The caller, because one implementation delivers the image and the other cannot open it.\"}},{\"subject\":\"A1 INV-02 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-02: an empty, absolute, unnormalised or parent-climbing name, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What must the test observe to prove that none of these paths was opened, rather than merely proving the returned failure and durable-state result?\",\"options\":[\"Instrument file-opening and assert that no source path is opened.\",\"Treat the failure result and absence of durable output as sufficient even if the implementation opened or followed the path before refusing it.\"],\"default_guess\":\"Instrument the file-opening boundary and assert that no invalid source path is opened.\",\"witness\":{\"initial\":\"A requested name passes through a symbolic link to a readable file outside the photo folder.\",\"events\":[\"The caller requests delivery.\",\"An implementation follows and reads the target, then returns NOT_READY_OR_ABSENT without creating a stored image.\"],\"outcomes\":[\"The stated Required test passes because the result and durable files are correct, despite the forbidden open.\",\"A test that observes opens fails because the outside target was opened.\"],\"observer\":\"A filesystem audit or instrumented file-opening test.\"}},{\"subject\":\"A1 INV-02 Required tests and A3 name validation\",\"kind\":\"ambiguous term\",\"text\":\"an empty, absolute, unnormalised or parent-climbing name\\nNames are compared exactly, without Unicode normalisation\",\"question\":\"What does “unnormalised” mean in the Required test: invalid path syntax such as repeated separators, or a Unicode spelling that is not in a normalization form?\",\"options\":[\"It means only path-syntax forms excluded by A3, such as repeated separators or dot segments.\",\"It includes Unicode-decomposed names, which must therefore be refused.\",\"Remove the term and enumerate every rejected spelling.\"],\"default_guess\":\"Use it only for path-syntax forms and accept an exact Unicode-decomposed name when the filesystem entry has that exact name.\",\"witness\":{\"initial\":\"The folder contains a regular file whose name uses a decomposed Unicode character, and the request contains the exact same code points.\",\"events\":[\"The caller requests delivery under that exact relative name.\"],\"outcomes\":[\"The service accepts the exact match because no Unicode normalization is performed.\",\"The service refuses it as an “unnormalised” name under the Required test.\"],\"observer\":\"The caller receiving either a placement or NOT_READY_OR_ABSENT.\"}},{\"subject\":\"A3 rule 5 condition 1\",\"kind\":\"uncovered refusal\",\"text\":\"or a folder on its path is absent or a symbolic link, or the last segment is absent or is not a regular file\",\"question\":\"Which failure applies when metadata for a path component or the last segment cannot be obtained for a reason other than absence, such as permission denial or an I/O error?\",\"options\":[\"Treat every metadata-access failure as NOT_READY_OR_ABSENT under condition 1.\",\"Treat it as UNREADABLE_FILE under condition 2 and A1 order 5.\",\"Refuse the whole operation as folder_unavailable when the failing component is a folder.\"],\"default_guess\":\"Return UNREADABLE_FILE for a file-specific metadata error and folder_unavailable only when the scan or photo folder itself cannot be traversed.\",\"witness\":{\"initial\":\"A listed path still exists, but permissions change so metadata lookup of its last segment returns EACCES before the file is opened.\",\"events\":[\"The caller requests delivery after the permission change.\",\"The service tries to decide condition 1 from path metadata.\"],\"outcomes\":[\"The service returns NOT_READY_OR_ABSENT because condition 1 treats an uninspectable entry like an absent entry.\",\"The service returns UNREADABLE_FILE because the entry exists but cannot be inspected.\"],\"observer\":\"The caller receiving the failure member.\"}},{\"subject\":\"A1 scan traversal under concurrent folder changes\",\"kind\":\"unspecified observation boundary\",\"text\":\"Syncthing may change the folder during a scan, so a scan is not a view of one instant. Each rule applies to what its step finds when it runs\",\"question\":\"What constitutes the directory-listing step, and must an entry created after listing begins but before traversal finishes be included in that scan?\",\"options\":[\"Snapshot each directory's names once; later additions wait for the next scan.\",\"Use a live iterator and include additions it yields while that directory is being visited.\",\"Promise neither inclusion nor exclusion for entries changed during directory enumeration.\"],\"default_guess\":\"Snapshot each directory's entries once when that directory is visited; changes after that snapshot appear on the next scan.\",\"witness\":{\"initial\":\"A scan has begun enumerating a folder that initially contains one file.\",\"events\":[\"Syncthing creates a second ordinary file after enumeration begins but before the scanner finishes that folder.\"],\"outcomes\":[\"The result contains only the entry present in the directory snapshot.\",\"The result also contains the newly created entry because the live iterator yields it.\"],\"observer\":\"The calling flow comparing the names in the scan result.\"}},{\"subject\":\"Deliver-one-photo failure durability\",\"kind\":\"contradiction\",\"text\":\"a photo that cannot be delivered is reported with its reason and nothing is written\\nConditions 1 to 4 write nothing except the project lock.\",\"question\":\"When delivery reaches the project lock and then fails under conditions 1 to 4, is creation or modification of the project lock allowed?\",\"options\":[\"Nothing at all is written on a failed delivery.\",\"The project lock may be created or modified, but no image, placement, or mark is written.\"],\"default_guess\":\"Allow only the project lock, following A3's more specific rule.\",\"witness\":{\"initial\":\"The project has no existing lock file or placement, and the requested name is absent.\",\"events\":[\"The caller submits a structurally valid delivery request.\",\"The service takes the project lock and then evaluates the named file.\"],\"outcomes\":[\"No filesystem entry is created, as the State 0 failure promise says.\",\"A project lock file is created, as A3 expressly permits.\"],\"observer\":\"An operator or test inspecting the state folder.\"}},{\"subject\":\"Deliver-one-photo record-write failure\",\"kind\":\"contradiction\",\"text\":\"a photo that cannot be delivered is reported with its reason and nothing is written\\nAfter condition 5 a stored image may remain without a record\",\"question\":\"May a failed delivery leave a stored image when writing its placement record fails?\",\"options\":[\"The failed operation must remove or roll back the stored image so nothing remains.\",\"The complete stored image may remain without a placement record.\"],\"default_guess\":\"Permit the orphan stored image, following A3 and A6's per-file atomicity.\",\"witness\":{\"initial\":\"A valid source has no placement, the binary store is writable, and the placement-record write will fail.\",\"events\":[\"The caller requests delivery.\",\"The service writes the stored image successfully.\",\"Writing the placement record fails.\"],\"outcomes\":[\"The service removes the image so the failed operation writes nothing durably.\",\"The service returns failed and leaves the stored image without a record.\"],\"observer\":\"An operator or test inspecting the Portal binary store.\"}},{\"subject\":\"Repeated delivery after failed record write\",\"kind\":\"contradiction\",\"text\":\"a repeated delivery creates nothing new\\nA delivery repeated after a failed record write completes the placement\",\"question\":\"Does the no-new-write guarantee apply when the earlier attempt wrote the image but failed before creating the placement record?\",\"options\":[\"Every repeated request writes nothing, including repetition after a partial failed attempt.\",\"Only repetition of an existing placement writes nothing; repetition after a failed record write may create the placement record and rewrite the image.\"],\"default_guess\":\"Limit the no-write guarantee to content that already has a placement.\",\"witness\":{\"initial\":\"The image was stored by an earlier attempt, but its placement-record write failed.\",\"events\":[\"The caller repeats the same delivery request.\"],\"outcomes\":[\"The retry creates nothing new and therefore cannot complete the missing placement.\",\"The retry writes the image again and creates the placement record, completing the placement.\"],\"observer\":\"The caller and an observer of the placement store.\"}},{\"subject\":\"A7 timestamp representation\",\"kind\":\"underspecified representation\",\"text\":\"The current time is a `datetime` in UTC without an offset, with microsecond precision and no rounding, written in ISO 8601 form.\",\"question\":\"Which exact ISO 8601 representation is required, including separator, fixed or omitted fractional digits, and whether a `Z` or offset suffix is forbidden?\",\"options\":[\"Use a naive form such as `2026-11-18T12:34:56.123456` with exactly six fractional digits and no suffix.\",\"Permit any ISO 8601 spelling that represents the same instant, including a space separator, omitted trailing fractional zeros, or `Z`.\",\"Define the in-memory value only and leave serialization to the persistence or transport layer.\"],\"default_guess\":\"Use `YYYY-MM-DDTHH:MM:SS.ffffff` with exactly six fractional digits and no timezone suffix.\",\"witness\":{\"initial\":\"The clock returns the UTC instant 2026-11-18 12:34:56.120000.\",\"events\":[\"The calling flow records a publication mark.\",\"The mark is serialized to storage or an answer.\"],\"outcomes\":[\"The value is written as `2026-11-18T12:34:56.120000`.\",\"The value is written as another valid ISO 8601 form such as `2026-11-18T12:34:56.12` or `2026-11-18T12:34:56.120000Z`.\"],\"observer\":\"The persistence reader or caller comparing serialized `marked_at`.\"}},{\"subject\":\"A7 file modification time\",\"kind\":\"unspecified reading count\",\"text\":\"A file's modification time is converted to the same form before it is compared or delivered\",\"question\":\"How many times may an operation read a file's modification time, and which reading supplies the delivered photo moment if the value changes during delivery?\",\"options\":[\"Read it once from the opened file and use that single value for every comparison and delivered field.\",\"Use the pre-open path-metadata reading already made for A3 condition 1.\",\"Allow separate readings for validation and preparation, with the later reading supplying the photo moment.\"],\"default_guess\":\"Read modification time once from the opened file descriptor and reuse that value throughout the delivery.\",\"witness\":{\"initial\":\"A valid image has no usable camera date, so its modification time will supply the photo moment.\",\"events\":[\"Delivery reads path metadata before opening the file.\",\"Another actor changes the file's modification time without changing its bytes.\",\"Delivery opens and prepares the image.\"],\"outcomes\":[\"The placement publication contains the earlier modification time from the pre-open metadata.\",\"The placement publication contains the later modification time read from the opened file.\"],\"observer\":\"The calling flow reading `publication.photo_date`.\"}},{\"subject\":\"A7 INV-13 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Must the Required tests also show the clock count for a replayed mark and for every refusal occurring after the specified clock-read point?\",\"options\":[\"Test successful, replayed, and post-read refused marks, each with exactly one clock read, plus pre-read refusals with zero reads.\",\"Treat one successful mark as sufficient evidence for all mark paths.\"],\"default_guess\":\"Require explicit counting-clock cases for successful, replayed, pre-read-refused, and post-read-refused marks.\",\"witness\":{\"initial\":\"A publication mark already exists for the requested source and photo id.\",\"events\":[\"The caller repeats the mark operation.\",\"An implementation reads the clock twice before returning replayed.\"],\"outcomes\":[\"The stated successful-mark test still passes even though the replay path violates the once-only rule.\",\"A replay-specific counting-clock test fails with a count of two.\"],\"observer\":\"The counting-clock test.\"}}]}",
+ "set_aside": []
+}

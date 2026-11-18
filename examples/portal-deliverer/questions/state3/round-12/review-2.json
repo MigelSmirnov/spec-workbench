@@ -1,0 +1,132 @@
+{
+ "open_points": [
+  {
+   "subject": "A3 condition 5 failure durability",
+   "kind": "contradiction",
+   "text": "a photo that cannot be delivered is reported with its reason and nothing is written",
+   "question": "Must a failed delivery leave no stored image as State 0 says, or may a stored image remain when the placement-record write fails as A3 rule 5 now says?",
+   "options": [
+    "Remove the stored image when the record write fails, so failure leaves no image.",
+    "Allow the unreferenced stored image to remain and document an exception to State 0's no-write guarantee."
+   ],
+   "default_guess": "Allow the stored image to remain because A3 gives the specific crash and retry behavior, and revise the State 0 guarantee.",
+   "witness": {
+    "initial": "A confirmed project has a valid source with no existing placement; the binary store is writable, but writing the placement record will fail.",
+    "events": [
+     "The caller requests delivery.",
+     "photo_delivery writes the stored image successfully.",
+     "delivery_store fails to write the placement record, and the service returns failed with UNREADABLE_FILE."
+    ],
+    "outcomes": [
+     "The stored image is removed or was never durably left, because a failed photo writes nothing.",
+     "The stored image remains without a placement record, as A3 rule 5 permits."
+    ],
+    "observer": "An operator inspecting the binary store, and the next delivery attempt, see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "retry after a failed placement-record write",
+   "kind": "contradiction",
+   "text": "a repeated delivery creates nothing new",
+   "question": "Does this State 0 guarantee include repetition after a failed record write, or only repetition of content that already has a placement?",
+   "options": [
+    "Every repeated request is write-free, including one following a failed record write.",
+    "Only an existing placement replays without writes; retrying an attempt that left no placement may rewrite the image and create the record."
+   ],
+   "default_guess": "Limit the guarantee to content that already has a placement, matching A3 rules 2 and 5.",
+   "witness": {
+    "initial": "A first delivery has written an image but failed before creating its placement record.",
+    "events": [
+     "The caller repeats the same delivery request.",
+     "The service checks for an existing placement and finds none."
+    ],
+    "outcomes": [
+     "The repeat creates nothing new and cannot complete the placement.",
+     "The repeat writes the image again and creates the placement record, completing the placement."
+    ],
+    "observer": "The caller sees failure versus placement, and the store owner sees whether a record was created."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 5 condition 1 metadata errors",
+   "kind": "missing outcome",
+   "text": "Condition 1 is decided from the name and the metadata of its path before the file is opened, and conditions 2 to 4 from the opening on.",
+   "question": "Which failure applies when obtaining path metadata itself fails for a reason other than an absent path, such as permission denial or an I/O error?",
+   "options": [
+    "Treat the path as NOT_READY_OR_ABSENT under condition 1.",
+    "Treat the metadata failure as UNREADABLE_FILE under condition 2/A1 order 5.",
+    "Refuse the whole operation with folder_unavailable."
+   ],
+   "default_guess": "Return UNREADABLE_FILE because the path is syntactically acceptable but cannot be inspected safely.",
+   "witness": {
+    "initial": "The project and photo folder are valid, the requested name has valid segments, and metadata lookup for an intermediate component returns an I/O error.",
+    "events": [
+     "The caller requests delivery.",
+     "source_folder validates the name and attempts the required pre-open metadata checks.",
+     "The metadata operation fails before the source file is opened."
+    ],
+    "outcomes": [
+     "The photo fails with NOT_READY_OR_ABSENT because condition 1 could not establish an openable path.",
+     "The photo fails with UNREADABLE_FILE because filesystem inspection failed."
+    ],
+    "observer": "The caller sees a different PlacementFailure member and may choose a different retry policy."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "source_folder path predicate",
+   "kind": "contradictory predicates",
+   "text": "deciding whether a requested name is a file a scan could report, and reading it once without following\n  a link;",
+   "question": "Must delivery condition 1 test only the name and current path metadata stated by A3, or must the file also be reportable by a scan, including successful directory listing?",
+   "options": [
+    "Use exactly A3 condition 1's name-and-path predicate; scan reportability is not required.",
+    "Require that a scan could report the file, including the ability to list every containing folder."
+   ],
+   "default_guess": "Use exactly A3 condition 1's name-and-path predicate and replace the stale 'a scan could report' wording.",
+   "witness": {
+    "initial": "A confirmed photo folder contains a subfolder that is searchable but not listable; a caller knows the exact valid relative name of a regular, readable file inside it.",
+    "events": [
+     "A scan attempts to list the subfolder and is refused with folder_unavailable.",
+     "The caller requests delivery using the exact relative name.",
+     "source_folder can inspect and open the named file through the searchable directory."
+    ],
+    "outcomes": [
+     "Delivery may proceed because the name and path meet A3 condition 1 when the call runs.",
+     "Delivery is refused because the file is not one a scan could report from the unlistable folder."
+    ],
+    "observer": "The caller sees a successful placement versus a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ownership of A3 condition 1 failure",
+   "kind": "overlapping ownership",
+   "text": "one placement per project and content, replay, and per-photo failure;",
+   "question": "Does source_folder, as primary owner of A3 rule 5 condition 1, also choose the NOT_READY_OR_ABSENT member, or does it return only path facts while photo_delivery owns that per-photo failure decision?",
+   "options": [
+    "source_folder owns both the path predicate and selection of NOT_READY_OR_ABSENT.",
+    "source_folder owns only path inspection; photo_delivery maps its result to NOT_READY_OR_ABSENT.",
+    "photo_delivery owns condition 1 entirely and source_folder only supplies filesystem operations."
+   ],
+   "default_guess": "source_folder should own and return a typed condition-1 result, while photo_delivery constructs the PlacementOutcome without re-deciding the failure.",
+   "witness": {
+    "initial": "A delivery request uses the normalized name x/y.jpg, but y.jpg is absent.",
+    "events": [
+     "photo_delivery asks source_folder to handle the named source.",
+     "source_folder determines that the last segment is absent."
+    ],
+    "outcomes": [
+     "source_folder returns the domain failure NOT_READY_OR_ABSENT, requiring it to know the A3 failure decision.",
+     "source_folder returns a filesystem/path classification, and photo_delivery selects NOT_READY_OR_ABSENT."
+    ],
+    "observer": "Module contract tests and the generated dependency graph see different APIs and imports."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A3 condition 5 failure durability\",\"kind\":\"contradiction\",\"text\":\"a photo that cannot be delivered is reported with its reason and nothing is written\",\"question\":\"Must a failed delivery leave no stored image as State 0 says, or may a stored image remain when the placement-record write fails as A3 rule 5 now says?\",\"options\":[\"Remove the stored image when the record write fails, so failure leaves no image.\",\"Allow the unreferenced stored image to remain and document an exception to State 0's no-write guarantee.\"],\"default_guess\":\"Allow the stored image to remain because A3 gives the specific crash and retry behavior, and revise the State 0 guarantee.\",\"witness\":{\"initial\":\"A confirmed project has a valid source with no existing placement; the binary store is writable, but writing the placement record will fail.\",\"events\":[\"The caller requests delivery.\",\"photo_delivery writes the stored image successfully.\",\"delivery_store fails to write the placement record, and the service returns failed with UNREADABLE_FILE.\"],\"outcomes\":[\"The stored image is removed or was never durably left, because a failed photo writes nothing.\",\"The stored image remains without a placement record, as A3 rule 5 permits.\"],\"observer\":\"An operator inspecting the binary store, and the next delivery attempt, see the difference.\"}},{\"subject\":\"retry after a failed placement-record write\",\"kind\":\"contradiction\",\"text\":\"a repeated delivery creates nothing new\",\"question\":\"Does this State 0 guarantee include repetition after a failed record write, or only repetition of content that already has a placement?\",\"options\":[\"Every repeated request is write-free, including one following a failed record write.\",\"Only an existing placement replays without writes; retrying an attempt that left no placement may rewrite the image and create the record.\"],\"default_guess\":\"Limit the guarantee to content that already has a placement, matching A3 rules 2 and 5.\",\"witness\":{\"initial\":\"A first delivery has written an image but failed before creating its placement record.\",\"events\":[\"The caller repeats the same delivery request.\",\"The service checks for an existing placement and finds none.\"],\"outcomes\":[\"The repeat creates nothing new and cannot complete the placement.\",\"The repeat writes the image again and creates the placement record, completing the placement.\"],\"observer\":\"The caller sees failure versus placement, and the store owner sees whether a record was created.\"}},{\"subject\":\"A3 rule 5 condition 1 metadata errors\",\"kind\":\"missing outcome\",\"text\":\"Condition 1 is decided from the name and the metadata of its path before the file is opened, and conditions 2 to 4 from the opening on.\",\"question\":\"Which failure applies when obtaining path metadata itself fails for a reason other than an absent path, such as permission denial or an I/O error?\",\"options\":[\"Treat the path as NOT_READY_OR_ABSENT under condition 1.\",\"Treat the metadata failure as UNREADABLE_FILE under condition 2/A1 order 5.\",\"Refuse the whole operation with folder_unavailable.\"],\"default_guess\":\"Return UNREADABLE_FILE because the path is syntactically acceptable but cannot be inspected safely.\",\"witness\":{\"initial\":\"The project and photo folder are valid, the requested name has valid segments, and metadata lookup for an intermediate component returns an I/O error.\",\"events\":[\"The caller requests delivery.\",\"source_folder validates the name and attempts the required pre-open metadata checks.\",\"The metadata operation fails before the source file is opened.\"],\"outcomes\":[\"The photo fails with NOT_READY_OR_ABSENT because condition 1 could not establish an openable path.\",\"The photo fails with UNREADABLE_FILE because filesystem inspection failed.\"],\"observer\":\"The caller sees a different PlacementFailure member and may choose a different retry policy.\"}},{\"subject\":\"source_folder path predicate\",\"kind\":\"contradictory predicates\",\"text\":\"deciding whether a requested name is a file a scan could report, and reading it once without following\\n  a link;\",\"question\":\"Must delivery condition 1 test only the name and current path metadata stated by A3, or must the file also be reportable by a scan, including successful directory listing?\",\"options\":[\"Use exactly A3 condition 1's name-and-path predicate; scan reportability is not required.\",\"Require that a scan could report the file, including the ability to list every containing folder.\"],\"default_guess\":\"Use exactly A3 condition 1's name-and-path predicate and replace the stale 'a scan could report' wording.\",\"witness\":{\"initial\":\"A confirmed photo folder contains a subfolder that is searchable but not listable; a caller knows the exact valid relative name of a regular, readable file inside it.\",\"events\":[\"A scan attempts to list the subfolder and is refused with folder_unavailable.\",\"The caller requests delivery using the exact relative name.\",\"source_folder can inspect and open the named file through the searchable directory.\"],\"outcomes\":[\"Delivery may proceed because the name and path meet A3 condition 1 when the call runs.\",\"Delivery is refused because the file is not one a scan could report from the unlistable folder.\"],\"observer\":\"The caller sees a successful placement versus a refusal.\"}},{\"subject\":\"ownership of A3 condition 1 failure\",\"kind\":\"overlapping ownership\",\"text\":\"one placement per project and content, replay, and per-photo failure;\",\"question\":\"Does source_folder, as primary owner of A3 rule 5 condition 1, also choose the NOT_READY_OR_ABSENT member, or does it return only path facts while photo_delivery owns that per-photo failure decision?\",\"options\":[\"source_folder owns both the path predicate and selection of NOT_READY_OR_ABSENT.\",\"source_folder owns only path inspection; photo_delivery maps its result to NOT_READY_OR_ABSENT.\",\"photo_delivery owns condition 1 entirely and source_folder only supplies filesystem operations.\"],\"default_guess\":\"source_folder should own and return a typed condition-1 result, while photo_delivery constructs the PlacementOutcome without re-deciding the failure.\",\"witness\":{\"initial\":\"A delivery request uses the normalized name x/y.jpg, but y.jpg is absent.\",\"events\":[\"photo_delivery asks source_folder to handle the named source.\",\"source_folder determines that the last segment is absent.\"],\"outcomes\":[\"source_folder returns the domain failure NOT_READY_OR_ABSENT, requiring it to know the A3 failure decision.\",\"source_folder returns a filesystem/path classification, and photo_delivery selects NOT_READY_OR_ABSENT.\"],\"observer\":\"Module contract tests and the generated dependency graph see different APIs and imports.\"}}]}",
+ "set_aside": []
+}
