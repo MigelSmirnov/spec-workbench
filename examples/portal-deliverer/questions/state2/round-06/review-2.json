@@ -1,0 +1,120 @@
+{
+ "open_points": [
+  {
+   "subject": "A3 request refusal",
+   "kind": "undefined_refusal_contract",
+   "text": "A call holds from 1 to 50 source ids, otherwise it is refused whole. Checks run in this order: token, request form and project id, connection, photo folder, every source id. The request form is a body holding only `source_ids`, a list of 1 to 50 strings; a defect of that form or of the project id is refused before the clock is read.",
+   "question": "What exact refusal answer, error code and HTTP status apply separately to malformed JSON, a non-object body, an extra field, a missing `source_ids`, a non-list value, a list outside 1 to 50 items, a non-string item and an invalid project id?",
+   "options": [
+    "Use one request-level `invalid_request` refusal for every form defect and a separate `invalid_project_id` refusal.",
+    "Use framework validation errors and statuses.",
+    "Use one common refusal for both request-form and project-id defects."
+   ],
+   "default_guess": "Return a stable 400 request-level `invalid_request` response for form defects and `invalid_project_id` for an invalid project id.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 and A5 project id validation",
+   "kind": "vague_refusal_condition",
+   "text": "A project id must be a UUID",
+   "question": "Which textual UUID representations are accepted: only canonical hyphenated lowercase UUIDs, canonical UUIDs in either case, or every representation accepted by the UUID parser, and are any UUID versions or the nil UUID excluded?",
+   "options": [
+    "Require canonical lowercase hyphenated text for any non-nil UUID.",
+    "Accept canonical text in either case.",
+    "Accept every representation parsed as a UUID, including compact, braced and nil forms."
+   ],
+   "default_guess": "Accept canonical hyphenated UUID text in either case and normalize it internally.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 malformed source-id refusal",
+   "kind": "undefined_response_shape",
+   "text": "one malformed source id refuses the whole call with `invalid_source_id` before anything is written",
+   "question": "Is `invalid_source_id` an HTTP-level refusal or a placement response, what HTTP status and response shape does it use, and does it identify the offending list position or value?",
+   "options": [
+    "Return a request-level 400 response containing only `invalid_source_id`.",
+    "Return a request-level 422 response with the offending index.",
+    "Return failed item outcomes while writing nothing for the whole list."
+   ],
+   "default_guess": "Return a request-level 400 response with `invalid_source_id` and the first offending index, without echoing the value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 resolved-path validation",
+   "kind": "contradictory_scope",
+   "text": "This second check does not run at the start of the service or for other projects.",
+   "question": "What exactly must `A connection leaving its root is not loaded` test, given that rule 8 expressly forbids resolved-path checking at startup and for records belonging to other projects: only the requested project's photo folder during scan or placement, every record while loading, or some different root-boundary check?",
+   "options": [
+    "Check only the requested project's photo folder during scan and placement.",
+    "Reject the whole file at startup if any record resolves outside its root.",
+    "Distinguish a separate connection-root boundary checked while loading from the operation-specific photo-folder check."
+   ],
+   "default_guess": "Treat the test as covering only the requested project's photo folder during scan and placement, and rename its description accordingly.",
+   "witness": {
+    "initial": "The file has valid record forms for projects A and B; B's lexical photo subfolder resolves through a symbolic link outside B's root.",
+    "events": [
+     "The service starts, or a caller performs a scan for project A."
+    ],
+    "outcomes": [
+     "Rule 8 does not inspect B's resolved photo path, so the service starts and project A proceeds.",
+     "The required-test phrase is read as saying any connection leaving its root is not loaded, so the whole file or service is refused."
+    ],
+    "observer": "The operator at startup or the caller scanning project A."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-10 Required tests",
+   "kind": "invariant_not_demonstrated",
+   "text": "scan, placement and mark each answer `connection_not_confirmed` for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`)",
+   "question": "How must the test demonstrate the invariant's claim that nothing is scanned, rather than merely checking the final refusal and durable writes?",
+   "options": [
+    "Instrument source-folder access and assert that no listing, metadata read or file read occurs.",
+    "Use an inaccessible or fail-on-access source folder and still require `connection_not_confirmed`.",
+    "Assert only the response and writes, leaving internal scanning unobserved."
+   ],
+   "default_guess": "Use a fail-on-access source-folder adapter and assert zero source-folder operations.",
+   "witness": {
+    "initial": "An unconfirmed connection points to an accessible photo folder containing files.",
+    "events": [
+     "A caller sends an authenticated scan request.",
+     "Implementation one refuses immediately after reading the connection; implementation two scans the folder and then returns the same refusal."
+    ],
+    "outcomes": [
+     "The source folder is never examined and the answer is `connection_not_confirmed`.",
+     "The source folder is examined but the answer is still `connection_not_confirmed`; the described test can pass although INV-10 is false."
+    ],
+    "observer": "A filesystem-access spy or audit observer."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13 Required tests after the A3 change",
+   "kind": "test_scope_ambiguity",
+   "text": "a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`)",
+   "question": "Which successful and refused calls must this test exercise, since A3 and A7 require zero readings for request-form and project-id refusals, one reading before source-id validation, and at most one reading for later refusals?",
+   "options": [
+    "Test a successful call plus every refusal boundary before and after the clock.",
+    "Interpret “each” as only one valid call per operation and add separate tests for refusal boundaries.",
+    "Test only valid calls, leaving the new clock-order rules unwitnessed."
+   ],
+   "default_guess": "Test one successful call per operation, representative pre-clock refusals with zero reads, a malformed source-id refusal with one read, and representative post-clock refusals with one read.",
+   "witness": {
+    "initial": "A placement request has a valid token and project id but contains a malformed source-id string.",
+    "events": [
+     "The caller submits the placement request to an implementation whose valid-call path reads the clock once.",
+     "One implementation reads the clock before source-id validation as A7 requires; another validates the source id first and reads it zero times."
+    ],
+    "outcomes": [
+     "The request returns `invalid_source_id` after one clock reading.",
+     "The same refusal is returned after zero clock readings; a test that covers only a valid placement still passes."
+    ],
+    "observer": "The counting-clock test double."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A3 request refusal\",\"kind\":\"undefined_refusal_contract\",\"text\":\"A call holds from 1 to 50 source ids, otherwise it is refused whole. Checks run in this order: token, request form and project id, connection, photo folder, every source id. The request form is a body holding only `source_ids`, a list of 1 to 50 strings; a defect of that form or of the project id is refused before the clock is read.\",\"question\":\"What exact refusal answer, error code and HTTP status apply separately to malformed JSON, a non-object body, an extra field, a missing `source_ids`, a non-list value, a list outside 1 to 50 items, a non-string item and an invalid project id?\",\"options\":[\"Use one request-level `invalid_request` refusal for every form defect and a separate `invalid_project_id` refusal.\",\"Use framework validation errors and statuses.\",\"Use one common refusal for both request-form and project-id defects.\"],\"default_guess\":\"Return a stable 400 request-level `invalid_request` response for form defects and `invalid_project_id` for an invalid project id.\"},{\"subject\":\"A3 and A5 project id validation\",\"kind\":\"vague_refusal_condition\",\"text\":\"A project id must be a UUID\",\"question\":\"Which textual UUID representations are accepted: only canonical hyphenated lowercase UUIDs, canonical UUIDs in either case, or every representation accepted by the UUID parser, and are any UUID versions or the nil UUID excluded?\",\"options\":[\"Require canonical lowercase hyphenated text for any non-nil UUID.\",\"Accept canonical text in either case.\",\"Accept every representation parsed as a UUID, including compact, braced and nil forms.\"],\"default_guess\":\"Accept canonical hyphenated UUID text in either case and normalize it internally.\"},{\"subject\":\"A3 malformed source-id refusal\",\"kind\":\"undefined_response_shape\",\"text\":\"one malformed source id refuses the whole call with `invalid_source_id` before anything is written\",\"question\":\"Is `invalid_source_id` an HTTP-level refusal or a placement response, what HTTP status and response shape does it use, and does it identify the offending list position or value?\",\"options\":[\"Return a request-level 400 response containing only `invalid_source_id`.\",\"Return a request-level 422 response with the offending index.\",\"Return failed item outcomes while writing nothing for the whole list.\"],\"default_guess\":\"Return a request-level 400 response with `invalid_source_id` and the first offending index, without echoing the value.\"},{\"subject\":\"A5 resolved-path validation\",\"kind\":\"contradictory_scope\",\"text\":\"This second check does not run at the start of the service or for other projects.\",\"question\":\"What exactly must `A connection leaving its root is not loaded` test, given that rule 8 expressly forbids resolved-path checking at startup and for records belonging to other projects: only the requested project's photo folder during scan or placement, every record while loading, or some different root-boundary check?\",\"options\":[\"Check only the requested project's photo folder during scan and placement.\",\"Reject the whole file at startup if any record resolves outside its root.\",\"Distinguish a separate connection-root boundary checked while loading from the operation-specific photo-folder check.\"],\"default_guess\":\"Treat the test as covering only the requested project's photo folder during scan and placement, and rename its description accordingly.\",\"witness\":{\"initial\":\"The file has valid record forms for projects A and B; B's lexical photo subfolder resolves through a symbolic link outside B's root.\",\"events\":[\"The service starts, or a caller performs a scan for project A.\"],\"outcomes\":[\"Rule 8 does not inspect B's resolved photo path, so the service starts and project A proceeds.\",\"The required-test phrase is read as saying any connection leaving its root is not loaded, so the whole file or service is refused.\"],\"observer\":\"The operator at startup or the caller scanning project A.\"}},{\"subject\":\"INV-10 Required tests\",\"kind\":\"invariant_not_demonstrated\",\"text\":\"scan, placement and mark each answer `connection_not_confirmed` for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`)\",\"question\":\"How must the test demonstrate the invariant's claim that nothing is scanned, rather than merely checking the final refusal and durable writes?\",\"options\":[\"Instrument source-folder access and assert that no listing, metadata read or file read occurs.\",\"Use an inaccessible or fail-on-access source folder and still require `connection_not_confirmed`.\",\"Assert only the response and writes, leaving internal scanning unobserved.\"],\"default_guess\":\"Use a fail-on-access source-folder adapter and assert zero source-folder operations.\",\"witness\":{\"initial\":\"An unconfirmed connection points to an accessible photo folder containing files.\",\"events\":[\"A caller sends an authenticated scan request.\",\"Implementation one refuses immediately after reading the connection; implementation two scans the folder and then returns the same refusal.\"],\"outcomes\":[\"The source folder is never examined and the answer is `connection_not_confirmed`.\",\"The source folder is examined but the answer is still `connection_not_confirmed`; the described test can pass although INV-10 is false.\"],\"observer\":\"A filesystem-access spy or audit observer.\"}},{\"subject\":\"INV-13 Required tests after the A3 change\",\"kind\":\"test_scope_ambiguity\",\"text\":\"a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`)\",\"question\":\"Which successful and refused calls must this test exercise, since A3 and A7 require zero readings for request-form and project-id refusals, one reading before source-id validation, and at most one reading for later refusals?\",\"options\":[\"Test a successful call plus every refusal boundary before and after the clock.\",\"Interpret “each” as only one valid call per operation and add separate tests for refusal boundaries.\",\"Test only valid calls, leaving the new clock-order rules unwitnessed.\"],\"default_guess\":\"Test one successful call per operation, representative pre-clock refusals with zero reads, a malformed source-id refusal with one read, and representative post-clock refusals with one read.\",\"witness\":{\"initial\":\"A placement request has a valid token and project id but contains a malformed source-id string.\",\"events\":[\"The caller submits the placement request to an implementation whose valid-call path reads the clock once.\",\"One implementation reads the clock before source-id validation as A7 requires; another validates the source id first and reads it zero times.\"],\"outcomes\":[\"The request returns `invalid_source_id` after one clock reading.\",\"The same refusal is returned after zero clock readings; a test that covers only a valid placement still passes.\"],\"observer\":\"The counting-clock test double.\"}}]}",
+ "set_aside": []
+}

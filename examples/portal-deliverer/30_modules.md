@@ -76,6 +76,10 @@ names the owner of each rule.
 | A1 | order 1 to 8, ignored names, walking order | `source_folder` |
 | A1 | order 9 to 11, placed and published status | `photo_delivery` |
 | A5 | rules 1 to 4, token and listening address | `deliverer_api` |
+| A3 | rule 4, the request form of a placement | `deliverer_api` |
+| A3 | rule 4, every other check and its order | `photo_delivery` |
+| A4 | rule 2, the form of `photo_id` and its lowercase hyphenated spelling | `deliverer_api` |
+| A4 | every other rule | `photo_delivery` |
 | A5 | rule 5, the single principal | `deliverer_api` |
 | A5 | rule 6, the write that clears a confirmation | the agent, outside this service (R0-11) |
 | A5 | rules 7 and 8, reading the file once per operation, judging it and refusing | `object_connections` |
@@ -149,6 +153,8 @@ Exports types and constants only.
 
 - reading the connections file once per operation and judging it whole;
 - the refusal of a start when the file is not valid;
+- the written form of both subfolders, and the resolved containment of the photo folder of the requested
+  project. The resolved invoice folder is not checked here (A5 rule 8);
 - deciding from that reading whether a project has a confirmed connection;
 - deciding whether the photo folder is available and strictly below the resolved root.
 
@@ -334,8 +340,8 @@ write_mark
 
 ### Knows
 
-- A3, A4, rule 4 of A6, rule 2 of A7, order 9 to 11 of A1, and the parts of rules 9 and 10 of A5 given to
-  it above.
+- A3 and A4 without the two request forms given to `deliverer_api` above, rule 4 of A6, rule 2 of A7,
+  order 9 to 11 of A1, and the parts of rules 9 and 10 of A5 given to it above.
 
 ### Hides
 
@@ -384,7 +390,8 @@ mark_photo_published
 
 ### Knows
 
-- rules 1 to 5, the project id part of rule 9 and the refusal part of rule 10 of A5.
+- rules 1 to 5, the project id part of rule 9 and the refusal part of rule 10 of A5;
+- the request form of A3 rule 4 and the `photo_id` form of A4 rule 2.
 
 ### Hides
 
@@ -393,7 +400,7 @@ mark_photo_published
 
 ### Must not own
 
-- any delivery rule or the order of the checks of `photo_delivery`;
+- any delivery rule other than these two request forms, or the order of the checks of `photo_delivery`;
 - a Portal credential or client;
 - forwarded headers, which the service does not read.
 
@@ -407,6 +414,8 @@ load_config
 
 ### Trace inputs
 
+- A3
+- A4
 - A5
 - A7
 

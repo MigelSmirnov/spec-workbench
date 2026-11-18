@@ -17,7 +17,7 @@ the VPS.
 ### Meaning
 
 One renovation object and its folders on the VPS (R0-09). `assignment_confirmed` records that the owner confirmed
-these exact folders for this object. Both subfolders stay inside the root. Nothing is delivered for
+these exact folders for this object. Both subfolders are written as paths inside the root. Nothing is delivered for
 an unconfirmed connection. The agent writes the connection for a project the Registry already
 issued, and sets the confirmation only for the folders the owner confirmed. When the agent later
 changes the root or a subfolder it clears the confirmation in the same write, and sets it again

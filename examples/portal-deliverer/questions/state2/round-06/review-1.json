@@ -1,0 +1,211 @@
+{
+ "open_points": [
+  {
+   "subject": "A3 placement validation and A7 clock reading",
+   "kind": "contradictory_check_order",
+   "text": "A string that is not 64 lowercase hexadecimal characters is a malformed source id, and one malformed source id refuses the whole call with `invalid_source_id` before anything is written. / A source id in the body of a placement is not a path identifier: it is checked after the clock, at the place A3 rule 4 gives it.",
+   "question": "Is a malformed placement source id checked before or after the operation reads the clock?",
+   "options": [
+    "Check every source-id string before reading the clock",
+    "Read the clock before validating the source-id strings"
+   ],
+   "default_guess": "Read the clock first, following A7's explicit exception for placement source ids.",
+   "witness": {
+    "initial": "The connections file and photo folder are valid, and the counting clock has not been read.",
+    "events": [
+     "The calling flow sends an authenticated placement request with `source_ids` containing `ABC`.",
+     "The deliverer validates the request."
+    ],
+    "outcomes": [
+     "A3 is read as input validation before work: the call returns `invalid_source_id` and the clock count remains zero.",
+     "A7 is followed: the clock count becomes one and the call then returns `invalid_source_id`."
+    ],
+    "observer": "The calling flow and a test using the counting clock"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 placement request validation",
+   "kind": "unspecified_refusal",
+   "text": "A call holds from 1 to 50 source ids, otherwise it is refused whole. Checks run in this order: token, request form and project id, connection, photo folder, every source id. The request form is a body holding only `source_ids`, a list of 1 to 50 strings; a defect of that form or of the project id is refused before the clock is read.",
+   "question": "What HTTP status and refusal code/body must be returned for an absent or malformed body, an extra field, a non-list `source_ids`, a list outside the size range, a non-string item, and an invalid project UUID?",
+   "options": [
+    "Use one common invalid-request refusal for every request-form and project-id defect",
+    "Use distinct refusals for malformed JSON, invalid request form, invalid list size and invalid project id",
+    "Return framework-default validation responses"
+   ],
+   "default_guess": "Use one explicit invalid-request response shape, with a distinct `invalid_project_id` code for an invalid project UUID.",
+   "witness": {
+    "initial": "The service is running with a valid token.",
+    "events": [
+     "The calling flow sends a placement body with an empty `source_ids` list.",
+     "The deliverer rejects it before reading the clock."
+    ],
+    "outcomes": [
+     "The deliverer answers HTTP 400 with a product error code such as `invalid_request`.",
+     "The web framework answers HTTP 422 with its native validation payload."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 check precedence",
+   "kind": "unspecified_precedence",
+   "text": "Checks run in this order: token, request form and project id, connection, photo folder, every source id.",
+   "question": "Within the combined “request form and project id” stage, which check wins when both are invalid?",
+   "options": [
+    "Validate the request form before the project id",
+    "Validate the project id before the request form",
+    "Return one common refusal so their internal order is unobservable"
+   ],
+   "default_guess": "Validate the request form before the project id.",
+   "witness": {
+    "initial": "The caller supplies a valid bearer token.",
+    "events": [
+     "The calling flow sends an invalid project id and a body with no `source_ids` field."
+    ],
+    "outcomes": [
+     "The answer reports the request-form defect.",
+     "The answer reports the invalid project id."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 subfolder form",
+   "kind": "ambiguous_path_syntax",
+   "text": "The form of a subfolder: the photo and invoice subfolders are non-empty relative paths without `..` and are not the root itself.",
+   "question": "Does “without `..`” prohibit the literal substring anywhere or only a path component equal to `..`, and which separators and normalized spellings such as `.`, `./photos`, repeated separators and backslashes satisfy the form?",
+   "options": [
+    "Reject only a path component exactly equal to `..`, using the host path syntax",
+    "Reject any string containing the two-character substring `..`",
+    "Define a platform-independent relative-path grammar and normalize before validation"
+   ],
+   "default_guess": "Use a platform-independent slash-separated grammar, reject components `.` and `..`, and require the normalized result to name a non-root descendant.",
+   "witness": {
+    "initial": "The connections file otherwise has the required record form.",
+    "events": [
+     "The agent writes `photo_subfolder` as `photos..old` and confirms the connection.",
+     "The service loads the connections file."
+    ],
+    "outcomes": [
+     "The record is rejected with `folder_unavailable` because the value contains `..`.",
+     "The record is accepted because no path component is equal to `..`."
+    ],
+    "observer": "The owner attempting to scan the project"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 clock-read boundary",
+   "kind": "undefined_identifier_class",
+   "text": "Scan, placement and mark each read it once, after the token, the request form and the path identifiers are accepted and before the project lock is taken or any connection, file or record is examined.",
+   "question": "Which fields of scan, placement and mark are “path identifiers,” and therefore which invalid project, source and photo identifiers are rejected before the clock is read?",
+   "options": [
+    "Treat the project id and every route parameter used to locate state as path identifiers",
+    "Treat only the project id as a path identifier",
+    "List the pre-clock fields separately for scan, placement and mark"
+   ],
+   "default_guess": "List the fields per operation; validate the project id and route source id before the clock, placement-body source ids after it, and the mark body including `photo_id` before it.",
+   "witness": {
+    "initial": "A counting clock is installed and no connection or record has been read.",
+    "events": [
+     "The calling flow sends an authenticated mark request with a malformed source id in the route.",
+     "The deliverer validates the request."
+    ],
+    "outcomes": [
+     "The source id is a path identifier, so the request is refused with zero clock reads.",
+     "The source id is ordinary request data, so the clock is read once before refusal."
+    ],
+    "observer": "A test using the counting clock"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 instant representation",
+   "kind": "vague_serialization",
+   "text": "The current time is a `datetime` in UTC without an offset, with microsecond precision and no rounding, written in ISO 8601 form.",
+   "question": "What exact serialized representation is required, including the date-time separator, whether six fractional digits are always present, and whether a UTC suffix is forbidden or required?",
+   "options": [
+    "Always write `YYYY-MM-DDTHH:MM:SS.ffffff` with no suffix",
+    "Use the language's default ISO serializer, which may omit a zero fractional part",
+    "Write an offset-aware form ending in `Z` while converting to an offset-free datetime in models"
+   ],
+   "default_guess": "Always write `YYYY-MM-DDTHH:MM:SS.ffffff` with no UTC suffix.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-10",
+   "kind": "incomplete_required_test",
+   "text": "For a valid file with no record for the project, scan, placement and mark each answer `unknown_project` and write nothing (`test_a_project_without_a_connection_delivers_nothing`). For an absent file, a file that cannot be opened, a file that is not UTF-8 or JSON, a file of another form and a record that breaks the form of rule 8, also when that record is unconfirmed or belongs to another project, scan, placement and mark each answer `folder_unavailable` and write nothing (`test_unreadable_connections_deliver_nothing`)",
+   "question": "What must the Required tests show to prove INV-10's claim that nothing is scanned when the connection is missing, invalid or unconfirmed, rather than merely showing the answer and absence of writes?",
+   "options": [
+    "Assert that the source folder and its files are never opened or listed",
+    "Narrow INV-10 so it promises only that nothing is placed or marked",
+    "Treat the named test's phrase “delivers nothing” as sufficient without an observable no-scan assertion"
+   ],
+   "default_guess": "Assert that no source directory or source file is accessed in every invalid, unknown and unconfirmed connection case.",
+   "witness": {
+    "initial": "A project has an unconfirmed connection whose photo folder raises an observable error whenever listed.",
+    "events": [
+     "The calling flow requests a scan for that project.",
+     "The service returns `connection_not_confirmed` and writes nothing."
+    ],
+    "outcomes": [
+     "The implementation refuses directly and never lists the photo folder, satisfying INV-10.",
+     "The implementation lists the photo folder but discards the result before returning the same refusal; the described test still passes although INV-10 is broken."
+    ],
+    "observer": "A source-folder access spy or audit log"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13",
+   "kind": "incomplete_required_test",
+   "text": "INV-13: a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Which refusal and replay paths must be exercised to demonstrate the invariant that every operation reads the clock at most once, including zero-read early refusals and one-read later refusals?",
+   "options": [
+    "Test every check boundary before and after the clock plus a replayed mark",
+    "Test one successful call of each operation and rely on code inspection for other branches",
+    "Narrow INV-13 to successful operations only"
+   ],
+   "default_guess": "Test representative refusal at every pre-clock and post-clock boundary, successful calls, and replayed marks, asserting zero or one reads as specified.",
+   "witness": {
+    "initial": "A counting clock returns a different instant on every read.",
+    "events": [
+     "The calling flow makes a placement request that passes initial validation but is later refused because the connection is unconfirmed.",
+     "An implementation reads the clock twice on that refusal branch."
+    ],
+    "outcomes": [
+     "A successful-call-only Required test passes even though INV-13 is violated.",
+     "A refusal-path test observes two reads and fails."
+    ],
+    "observer": "The generated-service test suite"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 placement list limit",
+   "kind": "standard_violation",
+   "text": "A call holds from 1 to 50 source ids, otherwise it is refused whole.",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The passage must name the list-size threshold through its single code path, normally as an imported provider constant, instead of leaving the generated code to obtain the literal policy value from prose.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 source-id refusal code",
+   "kind": "standard_violation",
+   "text": "A string that is not 64 lowercase hexadecimal characters is a malformed source id, and one malformed source id refuses the whole call with `invalid_source_id` before anything is written.",
+   "rule": "| закрытый список вариантов: статусы, виды, коды | `models`, перечисление | `= models.ИмяПеречисления` | перечисление как тип |",
+   "section": "15.3.1",
+   "question": "The refusal code must become a named member of a models enumeration and the passage must name that member beside the enumeration address.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A3 placement validation and A7 clock reading\",\"kind\":\"contradictory_check_order\",\"text\":\"A string that is not 64 lowercase hexadecimal characters is a malformed source id, and one malformed source id refuses the whole call with `invalid_source_id` before anything is written. / A source id in the body of a placement is not a path identifier: it is checked after the clock, at the place A3 rule 4 gives it.\",\"question\":\"Is a malformed placement source id checked before or after the operation reads the clock?\",\"options\":[\"Check every source-id string before reading the clock\",\"Read the clock before validating the source-id strings\"],\"default_guess\":\"Read the clock first, following A7's explicit exception for placement source ids.\",\"witness\":{\"initial\":\"The connections file and photo folder are valid, and the counting clock has not been read.\",\"events\":[\"The calling flow sends an authenticated placement request with `source_ids` containing `ABC`.\",\"The deliverer validates the request.\"],\"outcomes\":[\"A3 is read as input validation before work: the call returns `invalid_source_id` and the clock count remains zero.\",\"A7 is followed: the clock count becomes one and the call then returns `invalid_source_id`.\"],\"observer\":\"The calling flow and a test using the counting clock\"}},{\"subject\":\"A3 placement request validation\",\"kind\":\"unspecified_refusal\",\"text\":\"A call holds from 1 to 50 source ids, otherwise it is refused whole. Checks run in this order: token, request form and project id, connection, photo folder, every source id. The request form is a body holding only `source_ids`, a list of 1 to 50 strings; a defect of that form or of the project id is refused before the clock is read.\",\"question\":\"What HTTP status and refusal code/body must be returned for an absent or malformed body, an extra field, a non-list `source_ids`, a list outside the size range, a non-string item, and an invalid project UUID?\",\"options\":[\"Use one common invalid-request refusal for every request-form and project-id defect\",\"Use distinct refusals for malformed JSON, invalid request form, invalid list size and invalid project id\",\"Return framework-default validation responses\"],\"default_guess\":\"Use one explicit invalid-request response shape, with a distinct `invalid_project_id` code for an invalid project UUID.\",\"witness\":{\"initial\":\"The service is running with a valid token.\",\"events\":[\"The calling flow sends a placement body with an empty `source_ids` list.\",\"The deliverer rejects it before reading the clock.\"],\"outcomes\":[\"The deliverer answers HTTP 400 with a product error code such as `invalid_request`.\",\"The web framework answers HTTP 422 with its native validation payload.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A3 check precedence\",\"kind\":\"unspecified_precedence\",\"text\":\"Checks run in this order: token, request form and project id, connection, photo folder, every source id.\",\"question\":\"Within the combined “request form and project id” stage, which check wins when both are invalid?\",\"options\":[\"Validate the request form before the project id\",\"Validate the project id before the request form\",\"Return one common refusal so their internal order is unobservable\"],\"default_guess\":\"Validate the request form before the project id.\",\"witness\":{\"initial\":\"The caller supplies a valid bearer token.\",\"events\":[\"The calling flow sends an invalid project id and a body with no `source_ids` field.\"],\"outcomes\":[\"The answer reports the request-form defect.\",\"The answer reports the invalid project id.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A5 subfolder form\",\"kind\":\"ambiguous_path_syntax\",\"text\":\"The form of a subfolder: the photo and invoice subfolders are non-empty relative paths without `..` and are not the root itself.\",\"question\":\"Does “without `..`” prohibit the literal substring anywhere or only a path component equal to `..`, and which separators and normalized spellings such as `.`, `./photos`, repeated separators and backslashes satisfy the form?\",\"options\":[\"Reject only a path component exactly equal to `..`, using the host path syntax\",\"Reject any string containing the two-character substring `..`\",\"Define a platform-independent relative-path grammar and normalize before validation\"],\"default_guess\":\"Use a platform-independent slash-separated grammar, reject components `.` and `..`, and require the normalized result to name a non-root descendant.\",\"witness\":{\"initial\":\"The connections file otherwise has the required record form.\",\"events\":[\"The agent writes `photo_subfolder` as `photos..old` and confirms the connection.\",\"The service loads the connections file.\"],\"outcomes\":[\"The record is rejected with `folder_unavailable` because the value contains `..`.\",\"The record is accepted because no path component is equal to `..`.\"],\"observer\":\"The owner attempting to scan the project\"}},{\"subject\":\"A7 clock-read boundary\",\"kind\":\"undefined_identifier_class\",\"text\":\"Scan, placement and mark each read it once, after the token, the request form and the path identifiers are accepted and before the project lock is taken or any connection, file or record is examined.\",\"question\":\"Which fields of scan, placement and mark are “path identifiers,” and therefore which invalid project, source and photo identifiers are rejected before the clock is read?\",\"options\":[\"Treat the project id and every route parameter used to locate state as path identifiers\",\"Treat only the project id as a path identifier\",\"List the pre-clock fields separately for scan, placement and mark\"],\"default_guess\":\"List the fields per operation; validate the project id and route source id before the clock, placement-body source ids after it, and the mark body including `photo_id` before it.\",\"witness\":{\"initial\":\"A counting clock is installed and no connection or record has been read.\",\"events\":[\"The calling flow sends an authenticated mark request with a malformed source id in the route.\",\"The deliverer validates the request.\"],\"outcomes\":[\"The source id is a path identifier, so the request is refused with zero clock reads.\",\"The source id is ordinary request data, so the clock is read once before refusal.\"],\"observer\":\"A test using the counting clock\"}},{\"subject\":\"A7 instant representation\",\"kind\":\"vague_serialization\",\"text\":\"The current time is a `datetime` in UTC without an offset, with microsecond precision and no rounding, written in ISO 8601 form.\",\"question\":\"What exact serialized representation is required, including the date-time separator, whether six fractional digits are always present, and whether a UTC suffix is forbidden or required?\",\"options\":[\"Always write `YYYY-MM-DDTHH:MM:SS.ffffff` with no suffix\",\"Use the language's default ISO serializer, which may omit a zero fractional part\",\"Write an offset-aware form ending in `Z` while converting to an offset-free datetime in models\"],\"default_guess\":\"Always write `YYYY-MM-DDTHH:MM:SS.ffffff` with no UTC suffix.\"},{\"subject\":\"INV-10\",\"kind\":\"incomplete_required_test\",\"text\":\"For a valid file with no record for the project, scan, placement and mark each answer `unknown_project` and write nothing (`test_a_project_without_a_connection_delivers_nothing`). For an absent file, a file that cannot be opened, a file that is not UTF-8 or JSON, a file of another form and a record that breaks the form of rule 8, also when that record is unconfirmed or belongs to another project, scan, placement and mark each answer `folder_unavailable` and write nothing (`test_unreadable_connections_deliver_nothing`)\",\"question\":\"What must the Required tests show to prove INV-10's claim that nothing is scanned when the connection is missing, invalid or unconfirmed, rather than merely showing the answer and absence of writes?\",\"options\":[\"Assert that the source folder and its files are never opened or listed\",\"Narrow INV-10 so it promises only that nothing is placed or marked\",\"Treat the named test's phrase “delivers nothing” as sufficient without an observable no-scan assertion\"],\"default_guess\":\"Assert that no source directory or source file is accessed in every invalid, unknown and unconfirmed connection case.\",\"witness\":{\"initial\":\"A project has an unconfirmed connection whose photo folder raises an observable error whenever listed.\",\"events\":[\"The calling flow requests a scan for that project.\",\"The service returns `connection_not_confirmed` and writes nothing.\"],\"outcomes\":[\"The implementation refuses directly and never lists the photo folder, satisfying INV-10.\",\"The implementation lists the photo folder but discards the result before returning the same refusal; the described test still passes although INV-10 is broken.\"],\"observer\":\"A source-folder access spy or audit log\"}},{\"subject\":\"INV-13\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-13: a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Which refusal and replay paths must be exercised to demonstrate the invariant that every operation reads the clock at most once, including zero-read early refusals and one-read later refusals?\",\"options\":[\"Test every check boundary before and after the clock plus a replayed mark\",\"Test one successful call of each operation and rely on code inspection for other branches\",\"Narrow INV-13 to successful operations only\"],\"default_guess\":\"Test representative refusal at every pre-clock and post-clock boundary, successful calls, and replayed marks, asserting zero or one reads as specified.\",\"witness\":{\"initial\":\"A counting clock returns a different instant on every read.\",\"events\":[\"The calling flow makes a placement request that passes initial validation but is later refused because the connection is unconfirmed.\",\"An implementation reads the clock twice on that refusal branch.\"],\"outcomes\":[\"A successful-call-only Required test passes even though INV-13 is violated.\",\"A refusal-path test observes two reads and fails.\"],\"observer\":\"The generated-service test suite\"}},{\"subject\":\"A3 placement list limit\",\"kind\":\"standard_violation\",\"text\":\"A call holds from 1 to 50 source ids, otherwise it is refused whole.\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The passage must name the list-size threshold through its single code path, normally as an imported provider constant, instead of leaving the generated code to obtain the literal policy value from prose.\"},{\"subject\":\"A3 source-id refusal code\",\"kind\":\"standard_violation\",\"text\":\"A string that is not 64 lowercase hexadecimal characters is a malformed source id, and one malformed source id refuses the whole call with `invalid_source_id` before anything is written.\",\"rule\":\"| закрытый список вариантов: статусы, виды, коды | `models`, перечисление | `= models.ИмяПеречисления` | перечисление как тип |\",\"section\":\"15.3.1\",\"question\":\"The refusal code must become a named member of a models enumeration and the passage must name that member beside the enumeration address.\"}]}",
+ "set_aside": []
+}

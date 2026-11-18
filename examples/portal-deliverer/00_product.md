@@ -50,7 +50,7 @@ The deliverer holds no Portal credential (P-01).
 
 | Action | Observable result | Failure | Evidence |
 |---|---|---|---|
-| Connect an object to its folders (owner, through the agent) | a connection record the owner has confirmed; delivery becomes possible for that project | a connection leaving its root folder is refused; an unconfirmed connection delivers nothing | unit tests |
+| Connect an object to its folders (owner, through the agent) | a connection record the owner has confirmed; delivery becomes possible for that project | a connection whose subfolder is written to leave its root is refused, a photo folder linked outside the root is refused when it is used, and an unconfirmed connection delivers nothing | unit tests |
 | See what can be delivered for a project | each file with a status: ready, placed, published, settling, duplicate or rejected with a reason | unknown project, unconfirmed connection or unavailable folder is refused; nothing is changed | unit tests, E2E |
 | Place chosen photos | a prepared image in the Portal store, its reference and the publication body | a bad file is reported on its own and the others proceed; a file that changed since it was scanned is not placed | unit tests, E2E |
 | Place the same photo again | the first result, nothing written | none | unit tests, E2E |

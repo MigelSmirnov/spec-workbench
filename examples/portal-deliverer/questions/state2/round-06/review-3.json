@@ -1,0 +1,169 @@
+{
+ "open_points": [
+  {
+   "subject": "A3 placement request validation",
+   "kind": "unspecified_refusal",
+   "text": "a defect of that form or of the project id is refused before the clock is read",
+   "question": "What exact status, error code and response body are returned for each request-form defect and for an invalid project id?",
+   "options": [
+    "Return one generic request-validation refusal for both cases.",
+    "Return distinct refusals for malformed JSON, wrong body shape, invalid list cardinality, non-string entries and invalid project id."
+   ],
+   "default_guess": "Return HTTP 400 with a generic `invalid_request` refusal for body defects and a distinct `invalid_project_id` refusal for the project id.",
+   "witness": {
+    "initial": "No connection or durable placement exists.",
+    "events": [
+     "The caller sends a valid token, an invalid project id and a body with an extra field."
+    ],
+    "outcomes": [
+     "The service returns a generic request-form refusal.",
+     "The service returns a project-id-specific refusal."
+    ],
+    "observer": "The calling flow sees a different refusal code or body."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 placement check precedence",
+   "kind": "ambiguous_order",
+   "text": "token, request form and project id, connection, photo folder, every source id",
+   "question": "Within the combined “request form and project id” step, which check takes precedence when both are invalid?",
+   "options": [
+    "Validate the request form before the project id.",
+    "Validate the project id before the request form.",
+    "Treat both as one validation phase with one common refusal."
+   ],
+   "default_guess": "Validate the request form first, then the project id.",
+   "witness": {
+    "initial": "The service is running with a valid token.",
+    "events": [
+     "The caller supplies a malformed body and a malformed project id in the same placement request."
+    ],
+    "outcomes": [
+     "The request is refused for its body.",
+     "The request is refused for its project id."
+    ],
+    "observer": "The calling flow sees a different refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 and A5 project-id validation",
+   "kind": "vague_condition",
+   "text": "A project id must be a UUID",
+   "question": "Which textual UUID representations are accepted, and is every accepted value canonicalized before connection lookup, locking and construction of stored paths?",
+   "options": [
+    "Accept only canonical hyphenated UUID text.",
+    "Accept every representation parsed by the UUID library and immediately canonicalize it.",
+    "Accept parseable representations without canonicalization."
+   ],
+   "default_guess": "Accept parseable UUID representations and immediately canonicalize them to the standard lowercase hyphenated form.",
+   "witness": {
+    "initial": "A connection exists under the canonical lowercase UUID.",
+    "events": [
+     "The caller submits the same UUID using uppercase hexadecimal or a noncanonical parseable representation."
+    ],
+    "outcomes": [
+     "The request is accepted and resolves the existing connection after canonicalization.",
+     "The request is refused, or is treated as a different connection/path key."
+    ],
+    "observer": "The caller sees success, `unknown_project`, or a validation refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 subfolder form",
+   "kind": "vague_condition",
+   "text": "the photo and invoice subfolders are non-empty relative paths without `..` and are not the root itself",
+   "question": "What exact path grammar and normalization define a valid subfolder, including whether `..` means a path component or any substring, whether `.` components are allowed, how separators are treated, and when equivalence to the root is tested?",
+   "options": [
+    "Apply platform path parsing, reject `..` components, normalize `.` components and separators, then require a non-root relative result.",
+    "Reject any textual occurrence of `..` and accept all other non-empty relative strings.",
+    "Define a platform-independent slash-separated grammar and canonical form."
+   ],
+   "default_guess": "Use a platform-independent slash-separated relative-path grammar, reject empty, `.` and `..` components, normalize no aliases, and require at least one ordinary component.",
+   "witness": {
+    "initial": "The connections file contains an otherwise valid confirmed record.",
+    "events": [
+     "The agent writes `photo_subfolder` as `photos..old`, `photos/./current`, or a path using a backslash."
+    ],
+    "outcomes": [
+     "The file is valid and the service starts.",
+     "The whole file is invalid and the service does not start."
+    ],
+    "observer": "The owner sees either a working service or `folder_unavailable`/startup failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M01 ObjectConnection and A5 invoice-folder validation",
+   "kind": "contradiction",
+   "text": "Both subfolders stay inside the root. / The deliverer never opens the invoice folder, so the resolved path of that folder is checked by the Cabinet Inbox when it moves to this record (R0-09).",
+   "question": "May the deliverer load and use a confirmed ObjectConnection whose syntactically valid invoice subfolder resolves outside the root, or must that record be rejected to preserve M01?",
+   "options": [
+    "Reject such a record as an invalid ObjectConnection before startup or operation.",
+    "Allow the deliverer to load it and leave resolved invoice-folder validation entirely to the later Cabinet Inbox.",
+    "Make containment an agent-side precondition that the deliverer deliberately does not enforce."
+   ],
+   "default_guess": "Treat M01 containment as a model invariant and reject the record, even though the deliverer never opens the invoice folder.",
+   "witness": {
+    "initial": "A confirmed record has an inside-root photo folder and an invoice subfolder that is a symlink to a directory outside the root.",
+    "events": [
+     "The service starts.",
+     "The caller scans the project."
+    ],
+    "outcomes": [
+     "M01 makes the record invalid because both subfolders must stay inside the root.",
+     "A5 permits startup and scanning because invoice resolution is deferred to the Cabinet Inbox."
+    ],
+    "observer": "The owner and the later Cabinet Inbox see whether the invalid connection was accepted."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 INV-10 required test",
+   "kind": "contradictory_test_scope",
+   "text": "A connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).",
+   "question": "Does “a connection leaving its root” cover the resolved invoice subfolder, or only syntactically escaping paths and the requested photo folder?",
+   "options": [
+    "It covers both photo and invoice subfolders, contradicting the rule that invoice resolution is deferred.",
+    "It covers only syntactic violations such as `..`; the second check covers a linked photo folder.",
+    "It covers every resolved photo folder but never the invoice folder."
+   ],
+   "default_guess": "Limit the first test to syntactic subfolder-form violations and state that limitation explicitly.",
+   "witness": {
+    "initial": "A record uses a syntactically valid invoice subfolder that is linked outside the root.",
+    "events": [
+     "The service loads the connections file."
+    ],
+    "outcomes": [
+     "The required test demands that the connection not be loaded.",
+     "The normative rule defers the invoice resolution check and allows the deliverer to load it."
+    ],
+    "observer": "The service operator sees startup success or failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 request limits",
+   "kind": "standard_violation",
+   "text": "a body holding only `source_ids`, a list of 1 to 50 strings",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The passage must assign the cardinality limits and request-field policy to their single permitted value domain and state the corresponding path by which generated code receives them.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 source-id format and refusal code",
+   "kind": "standard_violation",
+   "text": "A string that is not 64 lowercase hexadecimal characters is a malformed source id, and one malformed source\n   id refuses the whole call with `invalid_source_id` before anything is written.",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The passage must place the source-id format policy in its one permitted value domain and place the closed refusal code in a models enumeration, with the later note using the required path form.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A3 placement request validation\",\"kind\":\"unspecified_refusal\",\"text\":\"a defect of that form or of the project id is refused before the clock is read\",\"question\":\"What exact status, error code and response body are returned for each request-form defect and for an invalid project id?\",\"options\":[\"Return one generic request-validation refusal for both cases.\",\"Return distinct refusals for malformed JSON, wrong body shape, invalid list cardinality, non-string entries and invalid project id.\"],\"default_guess\":\"Return HTTP 400 with a generic `invalid_request` refusal for body defects and a distinct `invalid_project_id` refusal for the project id.\",\"witness\":{\"initial\":\"No connection or durable placement exists.\",\"events\":[\"The caller sends a valid token, an invalid project id and a body with an extra field.\"],\"outcomes\":[\"The service returns a generic request-form refusal.\",\"The service returns a project-id-specific refusal.\"],\"observer\":\"The calling flow sees a different refusal code or body.\"}},{\"subject\":\"A3 placement check precedence\",\"kind\":\"ambiguous_order\",\"text\":\"token, request form and project id, connection, photo folder, every source id\",\"question\":\"Within the combined “request form and project id” step, which check takes precedence when both are invalid?\",\"options\":[\"Validate the request form before the project id.\",\"Validate the project id before the request form.\",\"Treat both as one validation phase with one common refusal.\"],\"default_guess\":\"Validate the request form first, then the project id.\",\"witness\":{\"initial\":\"The service is running with a valid token.\",\"events\":[\"The caller supplies a malformed body and a malformed project id in the same placement request.\"],\"outcomes\":[\"The request is refused for its body.\",\"The request is refused for its project id.\"],\"observer\":\"The calling flow sees a different refusal.\"}},{\"subject\":\"A3 and A5 project-id validation\",\"kind\":\"vague_condition\",\"text\":\"A project id must be a UUID\",\"question\":\"Which textual UUID representations are accepted, and is every accepted value canonicalized before connection lookup, locking and construction of stored paths?\",\"options\":[\"Accept only canonical hyphenated UUID text.\",\"Accept every representation parsed by the UUID library and immediately canonicalize it.\",\"Accept parseable representations without canonicalization.\"],\"default_guess\":\"Accept parseable UUID representations and immediately canonicalize them to the standard lowercase hyphenated form.\",\"witness\":{\"initial\":\"A connection exists under the canonical lowercase UUID.\",\"events\":[\"The caller submits the same UUID using uppercase hexadecimal or a noncanonical parseable representation.\"],\"outcomes\":[\"The request is accepted and resolves the existing connection after canonicalization.\",\"The request is refused, or is treated as a different connection/path key.\"],\"observer\":\"The caller sees success, `unknown_project`, or a validation refusal.\"}},{\"subject\":\"A5 subfolder form\",\"kind\":\"vague_condition\",\"text\":\"the photo and invoice subfolders are non-empty relative paths without `..` and are not the root itself\",\"question\":\"What exact path grammar and normalization define a valid subfolder, including whether `..` means a path component or any substring, whether `.` components are allowed, how separators are treated, and when equivalence to the root is tested?\",\"options\":[\"Apply platform path parsing, reject `..` components, normalize `.` components and separators, then require a non-root relative result.\",\"Reject any textual occurrence of `..` and accept all other non-empty relative strings.\",\"Define a platform-independent slash-separated grammar and canonical form.\"],\"default_guess\":\"Use a platform-independent slash-separated relative-path grammar, reject empty, `.` and `..` components, normalize no aliases, and require at least one ordinary component.\",\"witness\":{\"initial\":\"The connections file contains an otherwise valid confirmed record.\",\"events\":[\"The agent writes `photo_subfolder` as `photos..old`, `photos/./current`, or a path using a backslash.\"],\"outcomes\":[\"The file is valid and the service starts.\",\"The whole file is invalid and the service does not start.\"],\"observer\":\"The owner sees either a working service or `folder_unavailable`/startup failure.\"}},{\"subject\":\"M01 ObjectConnection and A5 invoice-folder validation\",\"kind\":\"contradiction\",\"text\":\"Both subfolders stay inside the root. / The deliverer never opens the invoice folder, so the resolved path of that folder is checked by the Cabinet Inbox when it moves to this record (R0-09).\",\"question\":\"May the deliverer load and use a confirmed ObjectConnection whose syntactically valid invoice subfolder resolves outside the root, or must that record be rejected to preserve M01?\",\"options\":[\"Reject such a record as an invalid ObjectConnection before startup or operation.\",\"Allow the deliverer to load it and leave resolved invoice-folder validation entirely to the later Cabinet Inbox.\",\"Make containment an agent-side precondition that the deliverer deliberately does not enforce.\"],\"default_guess\":\"Treat M01 containment as a model invariant and reject the record, even though the deliverer never opens the invoice folder.\",\"witness\":{\"initial\":\"A confirmed record has an inside-root photo folder and an invoice subfolder that is a symlink to a directory outside the root.\",\"events\":[\"The service starts.\",\"The caller scans the project.\"],\"outcomes\":[\"M01 makes the record invalid because both subfolders must stay inside the root.\",\"A5 permits startup and scanning because invoice resolution is deferred to the Cabinet Inbox.\"],\"observer\":\"The owner and the later Cabinet Inbox see whether the invalid connection was accepted.\"}},{\"subject\":\"A5 INV-10 required test\",\"kind\":\"contradictory_test_scope\",\"text\":\"A connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).\",\"question\":\"Does “a connection leaving its root” cover the resolved invoice subfolder, or only syntactically escaping paths and the requested photo folder?\",\"options\":[\"It covers both photo and invoice subfolders, contradicting the rule that invoice resolution is deferred.\",\"It covers only syntactic violations such as `..`; the second check covers a linked photo folder.\",\"It covers every resolved photo folder but never the invoice folder.\"],\"default_guess\":\"Limit the first test to syntactic subfolder-form violations and state that limitation explicitly.\",\"witness\":{\"initial\":\"A record uses a syntactically valid invoice subfolder that is linked outside the root.\",\"events\":[\"The service loads the connections file.\"],\"outcomes\":[\"The required test demands that the connection not be loaded.\",\"The normative rule defers the invoice resolution check and allows the deliverer to load it.\"],\"observer\":\"The service operator sees startup success or failure.\"}},{\"subject\":\"A3 request limits\",\"kind\":\"standard_violation\",\"text\":\"a body holding only `source_ids`, a list of 1 to 50 strings\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The passage must assign the cardinality limits and request-field policy to their single permitted value domain and state the corresponding path by which generated code receives them.\"},{\"subject\":\"A3 source-id format and refusal code\",\"kind\":\"standard_violation\",\"text\":\"A string that is not 64 lowercase hexadecimal characters is a malformed source id, and one malformed source\\n   id refuses the whole call with `invalid_source_id` before anything is written.\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The passage must place the source-id format policy in its one permitted value domain and place the closed refusal code in a models enumeration, with the later note using the required path form.\"}]}",
+ "set_aside": []
+}
