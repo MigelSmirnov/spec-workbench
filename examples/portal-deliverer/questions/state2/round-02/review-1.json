@@ -1,0 +1,658 @@
+{
+ "open_points": [
+  {
+   "subject": "02_rules.md:preamble",
+   "kind": "deferred_decision",
+   "text": "OQ-07 is the one earlier question still open: A5 decides the HTTPS rule, and the host and route are carried to deployment.",
+   "question": "On which host does the service run, and what exact HTTPS route does the calling flow use?",
+   "options": [
+    "Run the service on the VPS behind a specified reverse-proxy route",
+    "Run it on another host with a specified route"
+   ],
+   "default_guess": "Run it on the VPS and expose a dedicated reverse-proxy path over HTTPS.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "overlapping_rules",
+   "text": "when opened it is no longer a regular file | `rejected` | `not_a_regular_file`\n\nopening or reading it fails, including a file that disappeared or became a link | `rejected` | `unreadable_file`",
+   "question": "Which reason applies when the path becomes a symbolic link between metadata inspection and opening?",
+   "options": [
+    "`not_a_regular_file` because rule 4 has precedence",
+    "`unreadable_file` because rule 6 explicitly includes becoming a link"
+   ],
+   "default_guess": "Return `not_a_regular_file` when the opened object can be identified as a link; use `unreadable_file` only when opening or reading fails without such identification.",
+   "witness": {
+    "initial": "A ready regular file has been reported by directory metadata.",
+    "events": [
+     "Syncthing replaces the file with a symbolic link before the deliverer opens it.",
+     "The deliverer attempts to open the requested path."
+    ],
+    "outcomes": [
+     "Rule 4 yields `rejected/not_a_regular_file`.",
+     "Rule 6 yields `rejected/unreadable_file` because the file became a link."
+    ],
+    "observer": "The owner sees a different rejection reason."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "uncovered_error",
+   "text": "A file that disappears before its metadata is read is not reported.",
+   "question": "What happens when metadata cannot be read for a reason other than disappearance, such as permission failure or an I/O error?",
+   "options": [
+    "Do not report the entry",
+    "Report it as `rejected/unreadable_file`",
+    "Refuse the whole scan"
+   ],
+   "default_guess": "Report the entry as `rejected/unreadable_file` when its relative name is known.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "uncovered_traversal",
+   "text": "A scan covers the photo folder and all its subfolders (R0-12).",
+   "question": "What happens if an entered subfolder cannot be listed or disappears during traversal?",
+   "options": [
+    "Refuse the whole scan with `folder_unavailable`",
+    "Skip that subfolder",
+    "Return a per-entry rejection"
+   ],
+   "default_guess": "Refuse the scan with `folder_unavailable`, because a complete scan cannot be produced.",
+   "witness": {
+    "initial": "The photo root is available and contains a subfolder.",
+    "events": [
+     "The subfolder becomes unreadable after the root has been accepted.",
+     "The calling flow requests a scan."
+    ],
+    "outcomes": [
+     "The scan is refused as incomplete.",
+     "The unreadable subfolder is silently skipped and the remaining observations are returned."
+    ],
+    "observer": "The calling flow and owner see either a refusal or an apparently complete partial list."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "filename_representation",
+   "text": "the files of a folder in order of their names, then its subfolders in order of their names, compared by Unicode code point",
+   "question": "How are filesystem names that cannot be decoded as Unicode represented, ordered and returned?",
+   "options": [
+    "Reject or skip non-Unicode names",
+    "Use the platform's surrogate representation and order those code points",
+    "Decode with a specified fixed encoding and error policy"
+   ],
+   "default_guess": "Use the platform filesystem decoding with surrogate escape and compare the resulting strings by code point.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "invariant_test_gap",
+   "text": "INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).",
+   "question": "Must the INV-01 test also show unchanged directory entries, directory metadata and access times, and cover every operation included by “no operation”?",
+   "options": [
+    "Assert a complete recursive snapshot including directories and all relevant metadata before and after every operation",
+    "Limit INV-01 explicitly to file names, bytes, modification times and modes"
+   ],
+   "default_guess": "Narrow the invariant to the properties listed by the test and separately state that access-time changes caused by reads are permitted.",
+   "witness": {
+    "initial": "The source filesystem is mounted with strict access-time updates.",
+    "events": [
+     "The deliverer scans and reads a source file."
+    ],
+    "outcomes": [
+     "INV-01 is violated because the file's access time changes.",
+     "The required test passes because it compares bytes, modification time and mode but not access time."
+    ],
+    "observer": "An operator inspecting filesystem metadata sees the difference while the required test does not."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2",
+   "kind": "encoding_policy",
+   "text": "A stored image is a newly encoded JPEG made from the decoded pixels of the source.",
+   "question": "Which color conversion, ICC-profile handling, JPEG subsampling, progressive/optimization settings and encoder options define the stored bytes?",
+   "options": [
+    "Specify one deterministic JPEG encoding recipe",
+    "Allow any encoder output satisfying the pixel, metadata and size rules"
+   ],
+   "default_guess": "Convert to sRGB RGB pixels, discard profiles and metadata, and use a fixed non-progressive JPEG recipe with explicitly fixed subsampling and optimization settings.",
+   "witness": {
+    "initial": "A color-managed PNG is ready for placement.",
+    "events": [
+     "One implementation honors its ICC profile before converting to JPEG.",
+     "Another discards the profile and treats component values as sRGB."
+    ],
+    "outcomes": [
+     "The stored JPEG has one set of visible colors and bytes.",
+     "The stored JPEG has different visible colors and bytes."
+    ],
+    "observer": "The owner and client see different rendered colors."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2",
+   "kind": "resize_policy",
+   "text": "the longest side is reduced to the limit when it is larger",
+   "question": "Which resampling algorithm and dimension-rounding rule are used when reducing an image?",
+   "options": [
+    "Use a specified filter and floor dimensions",
+    "Use a specified filter and nearest-integer dimensions",
+    "Permit any result whose longest side is within the limit"
+   ],
+   "default_guess": "Preserve aspect ratio using a high-quality Lanczos filter and round the shorter side to the nearest integer.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2",
+   "kind": "date_precedence",
+   "text": "The photo moment is the first usable value of: EXIF `DateTimeOriginal` with `OffsetTimeOriginal` when that offset has the form `+HH:MM` or `-HH:MM`, EXIF `DateTime`, then the file's modification time.\n\nA camera time with no offset is read in the configured time zone.",
+   "question": "When `DateTimeOriginal` is valid but `OffsetTimeOriginal` is absent or malformed, is `DateTimeOriginal` interpreted in the configured time zone or skipped in favor of EXIF `DateTime`?",
+   "options": [
+    "Use `DateTimeOriginal` as a local camera time",
+    "Skip it unless it has a valid `OffsetTimeOriginal`"
+   ],
+   "default_guess": "Use `DateTimeOriginal` in the configured time zone when no valid offset is present.",
+   "witness": {
+    "initial": "A file has valid `DateTimeOriginal`, no usable `OffsetTimeOriginal`, a different valid `DateTime`, and a modification time.",
+    "events": [
+     "The file is placed."
+    ],
+    "outcomes": [
+     "The photo date is derived from local `DateTimeOriginal`.",
+     "`DateTimeOriginal` is skipped and the photo date is derived from `DateTime`."
+    ],
+    "observer": "The owner sees a different photo date and the stored placement has a different `date_source` interpretation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "identity_collision",
+   "text": "the deliverer derives it from the placement identity as `deliverer-photo-<project_id>-<first 32 characters of source_id>`, so a repeated publication is recognised by the Portal",
+   "question": "What happens when two different SHA-256 source ids in the same project share their first 32 characters and therefore produce the same `intake_id`?",
+   "options": [
+    "Use the complete source id in `intake_id`",
+    "Treat the truncated-prefix collision as a refusal",
+    "Accept that the Portal may identify two placements as one publication"
+   ],
+   "default_guess": "Use the complete source id so each placement has a distinct `intake_id`.",
+   "witness": {
+    "initial": "One project has two distinct source hashes with the same first 32 hexadecimal characters.",
+    "events": [
+     "The first placement is published.",
+     "The second placement is published with the M05-derived `intake_id`."
+    ],
+    "outcomes": [
+     "The Portal treats the second request as a replay of the first publication.",
+     "The Portal creates a second photo because placement identity is the full source hash."
+    ],
+    "observer": "The calling flow and owner see one Portal photo instead of two."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "field_semantics",
+   "text": "`size: int`",
+   "question": "Does `PhotoPlacement.size` hold the source-file size or the newly encoded stored JPEG size?",
+   "options": [
+    "Source content size",
+    "Stored JPEG size"
+   ],
+   "default_guess": "Store the encoded JPEG size because the record describes the binary placed in the Portal store.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "duplicate_selection",
+   "text": "A source reported `ready` whose bytes no longer have the requested hash when it is read for placing fails with `source_changed`.",
+   "question": "When several paths had the requested content and the first is now changed or absent, must placement fail for that selected path or may it use another duplicate that still has the requested bytes?",
+   "options": [
+    "Bind placement to the first non-duplicate path from the scan",
+    "Try duplicate paths in scan order until one still matches",
+    "Refuse ambiguous content selection"
+   ],
+   "default_guess": "Bind the request to the first path that reached rule 8 and fail with `source_changed` if that path no longer matches.",
+   "witness": {
+    "initial": "Files `a.jpg` and `b.jpg` have identical content; the scan reports `a.jpg` ready and `b.jpg` duplicate.",
+    "events": [
+     "After the scan within placement, `a.jpg` is replaced while `b.jpg` remains unchanged.",
+     "The requested source hash is processed."
+    ],
+    "outcomes": [
+     "The item fails with `source_changed` because `a.jpg` was the selected source.",
+     "The item is placed from `b.jpg`, whose bytes still match the requested hash."
+    ],
+    "observer": "The calling flow sees either failure or successful placement."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "refusal_mapping",
+   "text": "A call holds from 1 to 50 source ids, otherwise it is refused whole. Checks run in this order: token, request form and project id, connection, photo folder, every source id.",
+   "question": "What status, response shape and refusal code are returned for an empty or oversized list, malformed request form, and malformed project id?",
+   "options": [
+    "Use HTTP validation responses outside `RefusalCode`",
+    "Add explicit members to `RefusalCode` for each condition",
+    "Map all such failures to one request-validation refusal"
+   ],
+   "default_guess": "Use a single documented HTTP 422 validation response outside the domain `RefusalCode` enumeration.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "storage_failure",
+   "text": "A read or storage failure of one photo is reported in its item as `unreadable_file` and the others proceed.",
+   "question": "If the image was durably renamed but writing its placement record fails, must the orphan image remain, be removed, or be reused on retry, and is that state-record failure really reported as `unreadable_file`?",
+   "options": [
+    "Keep the orphan image and overwrite or reuse it on retry",
+    "Remove the image before returning the item failure",
+    "Refuse the whole call because durable state is uncertain"
+   ],
+   "default_guess": "Keep the complete orphan image, report an explicit storage failure rather than `unreadable_file`, and safely reuse or replace it on retry.",
+   "witness": {
+    "initial": "No placement or stored image exists for the requested content.",
+    "events": [
+     "The encoded image is successfully renamed and its directory synchronized.",
+     "Writing the placement record fails.",
+     "The caller retries."
+    ],
+    "outcomes": [
+     "The first call reports `unreadable_file` while an orphan image remains and the retry completes the placement.",
+     "The implementation removes the image, so the retry encodes and writes it again."
+    ],
+    "observer": "An operator inspecting the binary store sees different durable state after the failed call."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A4",
+   "kind": "identifier_canonicalization",
+   "text": "A `photo_id` is a UUID, kept in lowercase hyphenated form.",
+   "question": "Are valid UUIDs received in uppercase, compact or braced form accepted and canonicalized, or refused as malformed?",
+   "options": [
+    "Accept every UUID spelling and canonicalize it",
+    "Accept only lowercase hyphenated input"
+   ],
+   "default_guess": "Accept any syntactically valid UUID and persist and return its lowercase hyphenated canonical form.",
+   "witness": {
+    "initial": "A placement exists and has no mark.",
+    "events": [
+     "The calling flow submits an uppercase spelling of a valid Portal UUID."
+    ],
+    "outcomes": [
+     "The mark is accepted and stored in lowercase hyphenated form.",
+     "The request is refused because the input was not already canonical."
+    ],
+    "observer": "The calling flow sees success or refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5",
+   "kind": "authorization_parsing",
+   "text": "Every operation except the health answer requires the header `Authorization: Bearer <token>`, compared whole, case-sensitively and in constant time. Any other value is refused with 401",
+   "question": "How are zero, duplicate or comma-combined Authorization headers handled, and what exact byte or character representation is compared in constant time?",
+   "options": [
+    "Require exactly one header and compare its encoded bytes",
+    "Use the web framework's combined header value",
+    "Reject duplicate headers before comparison"
+   ],
+   "default_guess": "Require exactly one Authorization field and compare its UTF-8 bytes to the exact expected value in constant time.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5",
+   "kind": "token_encoding",
+   "text": "The token is generated with 256 bits from a cryptographic random source and is kept in a UTF-8 file.",
+   "question": "Which textual encoding represents the 256 random bits, and therefore what is the exact token alphabet and length?",
+   "options": [
+    "64 lowercase hexadecimal characters",
+    "Base64 with padding",
+    "URL-safe base64 without padding"
+   ],
+   "default_guess": "Use 64 lowercase hexadecimal characters.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5",
+   "kind": "whitespace_definition",
+   "text": "Whitespace around it is removed when it is read.",
+   "question": "Which characters count as surrounding whitespace, and are internal whitespace and additional lines permitted?",
+   "options": [
+    "Strip ASCII spaces and line endings only",
+    "Apply Unicode `str.strip()`",
+    "Require exactly one nonblank line and reject all other whitespace"
+   ],
+   "default_guess": "Allow one trailing line ending, reject internal whitespace or additional lines, and otherwise preserve the token exactly.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5",
+   "kind": "path_validation",
+   "text": "The photo and invoice subfolders are non-empty relative paths without `..`.",
+   "question": "Are `.`, repeated separators, backslashes, absolute-looking platform forms and normalized empty paths accepted, and which path syntax is authoritative?",
+   "options": [
+    "Validate POSIX relative-path components and reject `.`, `..`, empty components and backslashes",
+    "Use the host operating system's path parser",
+    "Normalize first and accept any result inside the root"
+   ],
+   "default_guess": "Use POSIX-style components, reject `.`, `..`, empty components, backslashes and absolute forms.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5",
+   "kind": "boundary_definition",
+   "text": "the photo folder must be a folder whose resolved path is inside the resolved root",
+   "question": "Does “inside” include equality with the root itself?",
+   "options": [
+    "The resolved photo folder may equal the root",
+    "It must be a strict descendant of the root"
+   ],
+   "default_guess": "Require a strict descendant because the configured value is a non-empty subfolder.",
+   "witness": {
+    "initial": "The photo subfolder is configured as `.` and resolves to the connection root.",
+    "events": [
+     "The calling flow requests a scan."
+    ],
+    "outcomes": [
+     "The root is accepted as being inside itself and all eligible files under it are scanned.",
+     "The operation is refused with `folder_unavailable` because the photo folder is not a strict descendant."
+    ],
+    "observer": "The calling flow and owner see either the root's photos or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5",
+   "kind": "path_race",
+   "text": "On each scan and placement the photo folder must be a folder whose resolved path is inside the resolved root, otherwise the operation is refused with `folder_unavailable`.",
+   "question": "How must the service prevent a folder or descendant from being replaced by a link outside the root after resolution but before or during traversal and opening?",
+   "options": [
+    "Use descriptor-relative traversal that refuses links at every component",
+    "Resolve once and accept the residual race",
+    "Re-resolve each path immediately before opening"
+   ],
+   "default_guess": "Use directory descriptors and no-follow operations for every component so the checked tree cannot escape the root.",
+   "witness": {
+    "initial": "The resolved photo folder and a child directory are inside the root when validation runs.",
+    "events": [
+     "An untrusted actor replaces the child directory with a link to an outside directory.",
+     "The scan continues into that name."
+    ],
+    "outcomes": [
+     "Descriptor-relative no-follow traversal refuses or skips the replaced child.",
+     "Path-based traversal reads files outside the confirmed root."
+    ],
+    "observer": "The owner may be offered photos belonging to another directory or client."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "reference_representation",
+   "text": "A stored image is named only from the project id and the source hash: `photos/<project_id>/<source_id>.jpg`. The reference must stay inside the binary store.",
+   "question": "What exact canonical project-id spelling and reference representation are persisted and returned, and is containment lexical or resolved-filesystem containment?",
+   "options": [
+    "Persist a POSIX relative reference with a lowercase hyphenated UUID and validate both components",
+    "Persist an absolute resolved path",
+    "Allow the UUID spelling supplied by the caller"
+   ],
+   "default_guess": "Persist a POSIX relative reference using the canonical lowercase hyphenated UUID and validate containment relative to the opened binary-store root.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "atomic_write_recovery",
+   "text": "Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised",
+   "question": "How are temporary names chosen, what permissions do they have before rename, and what happens to stale temporary files after a crash or failed synchronization?",
+   "options": [
+    "Use collision-resistant private temporary files and clean recognized stale files on startup",
+    "Leave stale temporary files indefinitely",
+    "Use one fixed temporary name protected by the project lock"
+   ],
+   "default_guess": "Use collision-resistant temporary files with final-mode permissions from creation and remove recognized stale temporaries during recovery.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "lock_scope",
+   "text": "Placements and marks of one project run one at a time, across processes, under an operating system lock on one lock file of that project in the state folder.",
+   "question": "Does one placement call hold the project lock for its entire ordered item list, or acquire and release it separately for each item, and when relative to the clock reading is it acquired?",
+   "options": [
+    "Hold one lock for the whole call",
+    "Lock separately around each item",
+    "Use separate placement and mark critical sections"
+   ],
+   "default_guess": "Hold the project lock for the entire placement or mark call and read the clock after acquiring it.",
+   "witness": {
+    "initial": "A placement call contains two items for one project, and a mark call for that project is waiting concurrently.",
+    "events": [
+     "The placement call completes its first item.",
+     "The mark caller acquires the lock if per-item locking is used.",
+     "The placement call processes its second item."
+    ],
+    "outcomes": [
+     "With a call-wide lock, the mark occurs only after both placement items.",
+     "With per-item locking, the mark may occur between the two placement items."
+    ],
+    "observer": "The calling flows observe different completion order and scan or replay state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7",
+   "kind": "contradiction",
+   "text": "Scan, placement and mark each read it once, after the request is accepted and before any file is examined. The health answer and a refused request do not read it.",
+   "question": "How can a mark refused as `not_placed` or `publication_conflict` avoid reading the clock when determining that refusal requires examining placement or mark state, while the required reading must occur before any file is examined?",
+   "options": [
+    "Read state first for refusal checks, then read the clock only for an accepted mark",
+    "Read the clock before state and therefore also for these refused marks",
+    "Define “file examined” to exclude state-backend reads and specify that distinction"
+   ],
+   "default_guess": "Perform all refusal checks first, then read the clock exactly once only for a mark that will be written or replayed.",
+   "witness": {
+    "initial": "A placement already has a mark for photo id A.",
+    "events": [
+     "The caller submits different photo id B.",
+     "The service must inspect the existing mark to detect `publication_conflict`."
+    ],
+    "outcomes": [
+     "The clock is read before inspecting the mark, contradicting “a refused request do not read it”.",
+     "The mark is inspected before the clock, contradicting “before any file is examined” if the state record is a file."
+    ],
+    "observer": "A counting clock used by a test or operator records either zero or one read."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7",
+   "kind": "clock_ordering",
+   "text": "after the request is accepted and before any file is examined",
+   "question": "Is the clock read before waiting for the project lock or after the lock is acquired, and does `marked_at` represent request acceptance or the instant the mark can actually be written?",
+   "options": [
+    "Read before waiting for the lock",
+    "Read after acquiring the lock",
+    "Define separate accepted and committed instants"
+   ],
+   "default_guess": "Acquire the lock first and then read the clock immediately before examining or writing state.",
+   "witness": {
+    "initial": "Another process holds the project lock for a long time.",
+    "events": [
+     "A mark request is accepted and waits for the lock.",
+     "The lock is later acquired and the mark is written."
+    ],
+    "outcomes": [
+     "`marked_at` records the time before the wait.",
+     "`marked_at` records the time after the wait, near the durable write."
+    ],
+    "observer": "The owner sees a materially different `marked_at` value."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7",
+   "kind": "time_serialization",
+   "text": "The current time is a `datetime` in UTC without an offset, with microsecond precision and no rounding, written in ISO 8601 form.",
+   "question": "Which exact ISO 8601 spelling is written, including separator, fixed fractional digits and whether a `Z` or offset suffix is forbidden?",
+   "options": [
+    "`YYYY-MM-DDTHH:MM:SS.ffffff` with no suffix",
+    "`YYYY-MM-DD HH:MM:SS.ffffff` with no suffix",
+    "`YYYY-MM-DDTHH:MM:SS.ffffffZ`"
+   ],
+   "default_guess": "Write exactly `YYYY-MM-DDTHH:MM:SS.ffffff` with no suffix.",
+   "unit": "?"
+  },
+  {
+   "subject": "A7",
+   "kind": "precision_conversion",
+   "text": "A file's modification time is converted to the same form before it is compared or delivered.",
+   "question": "When a filesystem modification time has finer than microsecond precision, how is it reduced without rounding, especially for instants before the epoch?",
+   "options": [
+    "Floor to the preceding microsecond",
+    "Truncate the fractional representation toward zero",
+    "Reject unsupported precision"
+   ],
+   "default_guess": "Floor the instant to the preceding microsecond before comparison and serialization.",
+   "witness": {
+    "initial": "A file's modification time is 119.9999995 seconds before the operation's clock reading.",
+    "events": [
+     "The timestamp is converted to microsecond precision.",
+     "The settling-time comparison is performed."
+    ],
+    "outcomes": [
+     "Flooring makes the age 120.000000 seconds and the file passes settling.",
+     "Rounding or truncating differently makes the age 119.999999 seconds and the file remains `settling`."
+    ],
+    "observer": "The owner sees `ready` or `settling` at the boundary."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7",
+   "kind": "invariant_test_gap",
+   "text": "INV-13: a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Must the required tests also show the stated behavior for refused requests and a replayed mark?",
+   "options": [
+    "Add refused scan/place/mark cases expecting zero reads and a replayed mark expecting one read",
+    "Remove those cases from the normative rule",
+    "State that the existing named test already exercises each case"
+   ],
+   "default_guess": "Add explicit refused-request and replayed-mark assertions.",
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "standard_violation",
+   "text": "| `min_age_seconds` | `int` | 120 |",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "Make the fixed settling threshold an imported data-provider constant, or state that it genuinely varies by environment and define it as such rather than placing a decided policy threshold in run settings.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9",
+   "kind": "missing_values",
+   "text": "The direct libraries are pinned to exact versions: pillow, fastapi, pydantic and uvicorn.",
+   "question": "What exact version is selected for each direct library?",
+   "options": [
+    "List four exact versions in this decision",
+    "Name an authoritative generated lock or manifest that supplies the exact versions"
+   ],
+   "default_guess": "List the four exact versions explicitly in the dependency decision.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9",
+   "kind": "missing_threshold",
+   "text": "no older than the deploy route's maximum snapshot age",
+   "question": "What is the maximum permitted snapshot age, in what unit, and from which decided code-visible symbol does the deployment check obtain it?",
+   "options": [
+    "A named imported policy constant with a fixed duration",
+    "A deployment configuration field that varies by environment"
+   ],
+   "default_guess": "Define a named imported policy constant expressed as an integer number of seconds.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9",
+   "kind": "standard_violation",
+   "text": "no older than the deploy route's maximum snapshot age",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Replace the unnamed maximum age with a decided value having exactly one permitted path to generated deployment code, normally an imported data-provider constant for this policy threshold.",
+   "unit": "?"
+  },
+  {
+   "subject": "A11",
+   "kind": "list_completeness",
+   "text": "Before placing anything for a project, the calling flow reads that project's staff photo list in the Portal.",
+   "question": "Must the flow read every page of a paginated photo list, and what constitutes completion of that read?",
+   "options": [
+    "Traverse all pages before allowing delivery",
+    "Check only the first/default page",
+    "Use a Portal operation that guarantees an unpaginated complete list"
+   ],
+   "default_guess": "Traverse all pages and treat failure of any page as a failed read.",
+   "witness": {
+    "initial": "An old offset-bearing photo date exists only on a later page of the project's staff photo list.",
+    "events": [
+     "The owner starts delivery.",
+     "The calling flow reads the list."
+    ],
+    "outcomes": [
+     "A complete paginated read finds the old date and stops delivery.",
+     "A first-page-only read misses it and delivery proceeds."
+    ],
+    "observer": "The owner and Portal see either a stopped delivery or a newly published photo."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A11",
+   "kind": "invariant_test_gap",
+   "text": "INV-17: a project holding a date with an offset is detected before delivery, and a project holding only UTC dates passes (E2E, `the flow can see an old date before it delivers`, `a project with UTC dates passes that check`). The calling flow's own stop is shown when that flow exists.",
+   "question": "What must the Required tests assert to demonstrate INV-17's actual prohibition on publication, rather than only detection, and when must that witness exist?",
+   "options": [
+    "Assert that neither placement nor Portal publication is invoked when an old date is found",
+    "Assert only that publication is not invoked",
+    "Defer the witness but state the exact future check and binding"
+   ],
+   "default_guess": "Require a flow-level test showing zero placement and zero publication calls when any old date is found.",
+   "unit": "?"
+  },
+  {
+   "subject": "A11",
+   "kind": "date_classification",
+   "text": "A `photo_date` ending in `Z` or in an offset `+HH:MM` or `-HH:MM` is an old date.\n\nINV-17: a project holding a date with an offset is detected before delivery, and a project holding only UTC dates passes",
+   "question": "Does a UTC value ending in `Z` count as an old date or as a UTC date that passes?",
+   "options": [
+    "Every `Z`-terminated value is old and must be repaired to offset-free UTC",
+    "`Z` is an acceptable UTC representation and passes",
+    "Only nonzero numeric offsets are old"
+   ],
+   "default_guess": "Treat `Z` as old because the Portal's decided representation is UTC without an offset.",
+   "witness": {
+    "initial": "A project's only staff photo has `photo_date` ending in `Z`.",
+    "events": [
+     "The owner starts a delivery and the flow checks the photo list."
+    ],
+    "outcomes": [
+     "Rule 1 classifies the `Z` value as old and stops delivery.",
+     "The Required-tests phrase “only UTC dates passes” is read to allow the UTC `Z` value, so delivery proceeds."
+    ],
+    "observer": "The owner sees either a repair warning or a normal delivery."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"02_rules.md:preamble\",\"kind\":\"deferred_decision\",\"text\":\"OQ-07 is the one earlier question still open: A5 decides the HTTPS rule, and the host and route are carried to deployment.\",\"question\":\"On which host does the service run, and what exact HTTPS route does the calling flow use?\",\"options\":[\"Run the service on the VPS behind a specified reverse-proxy route\",\"Run it on another host with a specified route\"],\"default_guess\":\"Run it on the VPS and expose a dedicated reverse-proxy path over HTTPS.\"},{\"subject\":\"A1\",\"kind\":\"overlapping_rules\",\"text\":\"when opened it is no longer a regular file | `rejected` | `not_a_regular_file`\\n\\nopening or reading it fails, including a file that disappeared or became a link | `rejected` | `unreadable_file`\",\"question\":\"Which reason applies when the path becomes a symbolic link between metadata inspection and opening?\",\"options\":[\"`not_a_regular_file` because rule 4 has precedence\",\"`unreadable_file` because rule 6 explicitly includes becoming a link\"],\"default_guess\":\"Return `not_a_regular_file` when the opened object can be identified as a link; use `unreadable_file` only when opening or reading fails without such identification.\",\"witness\":{\"initial\":\"A ready regular file has been reported by directory metadata.\",\"events\":[\"Syncthing replaces the file with a symbolic link before the deliverer opens it.\",\"The deliverer attempts to open the requested path.\"],\"outcomes\":[\"Rule 4 yields `rejected/not_a_regular_file`.\",\"Rule 6 yields `rejected/unreadable_file` because the file became a link.\"],\"observer\":\"The owner sees a different rejection reason.\"}},{\"subject\":\"A1\",\"kind\":\"uncovered_error\",\"text\":\"A file that disappears before its metadata is read is not reported.\",\"question\":\"What happens when metadata cannot be read for a reason other than disappearance, such as permission failure or an I/O error?\",\"options\":[\"Do not report the entry\",\"Report it as `rejected/unreadable_file`\",\"Refuse the whole scan\"],\"default_guess\":\"Report the entry as `rejected/unreadable_file` when its relative name is known.\"},{\"subject\":\"A1\",\"kind\":\"uncovered_traversal\",\"text\":\"A scan covers the photo folder and all its subfolders (R0-12).\",\"question\":\"What happens if an entered subfolder cannot be listed or disappears during traversal?\",\"options\":[\"Refuse the whole scan with `folder_unavailable`\",\"Skip that subfolder\",\"Return a per-entry rejection\"],\"default_guess\":\"Refuse the scan with `folder_unavailable`, because a complete scan cannot be produced.\",\"witness\":{\"initial\":\"The photo root is available and contains a subfolder.\",\"events\":[\"The subfolder becomes unreadable after the root has been accepted.\",\"The calling flow requests a scan.\"],\"outcomes\":[\"The scan is refused as incomplete.\",\"The unreadable subfolder is silently skipped and the remaining observations are returned.\"],\"observer\":\"The calling flow and owner see either a refusal or an apparently complete partial list.\"}},{\"subject\":\"A1\",\"kind\":\"filename_representation\",\"text\":\"the files of a folder in order of their names, then its subfolders in order of their names, compared by Unicode code point\",\"question\":\"How are filesystem names that cannot be decoded as Unicode represented, ordered and returned?\",\"options\":[\"Reject or skip non-Unicode names\",\"Use the platform's surrogate representation and order those code points\",\"Decode with a specified fixed encoding and error policy\"],\"default_guess\":\"Use the platform filesystem decoding with surrogate escape and compare the resulting strings by code point.\"},{\"subject\":\"A1\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).\",\"question\":\"Must the INV-01 test also show unchanged directory entries, directory metadata and access times, and cover every operation included by “no operation”?\",\"options\":[\"Assert a complete recursive snapshot including directories and all relevant metadata before and after every operation\",\"Limit INV-01 explicitly to file names, bytes, modification times and modes\"],\"default_guess\":\"Narrow the invariant to the properties listed by the test and separately state that access-time changes caused by reads are permitted.\",\"witness\":{\"initial\":\"The source filesystem is mounted with strict access-time updates.\",\"events\":[\"The deliverer scans and reads a source file.\"],\"outcomes\":[\"INV-01 is violated because the file's access time changes.\",\"The required test passes because it compares bytes, modification time and mode but not access time.\"],\"observer\":\"An operator inspecting filesystem metadata sees the difference while the required test does not.\"}},{\"subject\":\"A2\",\"kind\":\"encoding_policy\",\"text\":\"A stored image is a newly encoded JPEG made from the decoded pixels of the source.\",\"question\":\"Which color conversion, ICC-profile handling, JPEG subsampling, progressive/optimization settings and encoder options define the stored bytes?\",\"options\":[\"Specify one deterministic JPEG encoding recipe\",\"Allow any encoder output satisfying the pixel, metadata and size rules\"],\"default_guess\":\"Convert to sRGB RGB pixels, discard profiles and metadata, and use a fixed non-progressive JPEG recipe with explicitly fixed subsampling and optimization settings.\",\"witness\":{\"initial\":\"A color-managed PNG is ready for placement.\",\"events\":[\"One implementation honors its ICC profile before converting to JPEG.\",\"Another discards the profile and treats component values as sRGB.\"],\"outcomes\":[\"The stored JPEG has one set of visible colors and bytes.\",\"The stored JPEG has different visible colors and bytes.\"],\"observer\":\"The owner and client see different rendered colors.\"}},{\"subject\":\"A2\",\"kind\":\"resize_policy\",\"text\":\"the longest side is reduced to the limit when it is larger\",\"question\":\"Which resampling algorithm and dimension-rounding rule are used when reducing an image?\",\"options\":[\"Use a specified filter and floor dimensions\",\"Use a specified filter and nearest-integer dimensions\",\"Permit any result whose longest side is within the limit\"],\"default_guess\":\"Preserve aspect ratio using a high-quality Lanczos filter and round the shorter side to the nearest integer.\"},{\"subject\":\"A2\",\"kind\":\"date_precedence\",\"text\":\"The photo moment is the first usable value of: EXIF `DateTimeOriginal` with `OffsetTimeOriginal` when that offset has the form `+HH:MM` or `-HH:MM`, EXIF `DateTime`, then the file's modification time.\\n\\nA camera time with no offset is read in the configured time zone.\",\"question\":\"When `DateTimeOriginal` is valid but `OffsetTimeOriginal` is absent or malformed, is `DateTimeOriginal` interpreted in the configured time zone or skipped in favor of EXIF `DateTime`?\",\"options\":[\"Use `DateTimeOriginal` as a local camera time\",\"Skip it unless it has a valid `OffsetTimeOriginal`\"],\"default_guess\":\"Use `DateTimeOriginal` in the configured time zone when no valid offset is present.\",\"witness\":{\"initial\":\"A file has valid `DateTimeOriginal`, no usable `OffsetTimeOriginal`, a different valid `DateTime`, and a modification time.\",\"events\":[\"The file is placed.\"],\"outcomes\":[\"The photo date is derived from local `DateTimeOriginal`.\",\"`DateTimeOriginal` is skipped and the photo date is derived from `DateTime`.\"],\"observer\":\"The owner sees a different photo date and the stored placement has a different `date_source` interpretation.\"}},{\"subject\":\"context\",\"kind\":\"identity_collision\",\"text\":\"the deliverer derives it from the placement identity as `deliverer-photo-<project_id>-<first 32 characters of source_id>`, so a repeated publication is recognised by the Portal\",\"question\":\"What happens when two different SHA-256 source ids in the same project share their first 32 characters and therefore produce the same `intake_id`?\",\"options\":[\"Use the complete source id in `intake_id`\",\"Treat the truncated-prefix collision as a refusal\",\"Accept that the Portal may identify two placements as one publication\"],\"default_guess\":\"Use the complete source id so each placement has a distinct `intake_id`.\",\"witness\":{\"initial\":\"One project has two distinct source hashes with the same first 32 hexadecimal characters.\",\"events\":[\"The first placement is published.\",\"The second placement is published with the M05-derived `intake_id`.\"],\"outcomes\":[\"The Portal treats the second request as a replay of the first publication.\",\"The Portal creates a second photo because placement identity is the full source hash.\"],\"observer\":\"The calling flow and owner see one Portal photo instead of two.\"}},{\"subject\":\"context\",\"kind\":\"field_semantics\",\"text\":\"`size: int`\",\"question\":\"Does `PhotoPlacement.size` hold the source-file size or the newly encoded stored JPEG size?\",\"options\":[\"Source content size\",\"Stored JPEG size\"],\"default_guess\":\"Store the encoded JPEG size because the record describes the binary placed in the Portal store.\"},{\"subject\":\"A3\",\"kind\":\"duplicate_selection\",\"text\":\"A source reported `ready` whose bytes no longer have the requested hash when it is read for placing fails with `source_changed`.\",\"question\":\"When several paths had the requested content and the first is now changed or absent, must placement fail for that selected path or may it use another duplicate that still has the requested bytes?\",\"options\":[\"Bind placement to the first non-duplicate path from the scan\",\"Try duplicate paths in scan order until one still matches\",\"Refuse ambiguous content selection\"],\"default_guess\":\"Bind the request to the first path that reached rule 8 and fail with `source_changed` if that path no longer matches.\",\"witness\":{\"initial\":\"Files `a.jpg` and `b.jpg` have identical content; the scan reports `a.jpg` ready and `b.jpg` duplicate.\",\"events\":[\"After the scan within placement, `a.jpg` is replaced while `b.jpg` remains unchanged.\",\"The requested source hash is processed.\"],\"outcomes\":[\"The item fails with `source_changed` because `a.jpg` was the selected source.\",\"The item is placed from `b.jpg`, whose bytes still match the requested hash.\"],\"observer\":\"The calling flow sees either failure or successful placement.\"}},{\"subject\":\"A3\",\"kind\":\"refusal_mapping\",\"text\":\"A call holds from 1 to 50 source ids, otherwise it is refused whole. Checks run in this order: token, request form and project id, connection, photo folder, every source id.\",\"question\":\"What status, response shape and refusal code are returned for an empty or oversized list, malformed request form, and malformed project id?\",\"options\":[\"Use HTTP validation responses outside `RefusalCode`\",\"Add explicit members to `RefusalCode` for each condition\",\"Map all such failures to one request-validation refusal\"],\"default_guess\":\"Use a single documented HTTP 422 validation response outside the domain `RefusalCode` enumeration.\"},{\"subject\":\"A3\",\"kind\":\"storage_failure\",\"text\":\"A read or storage failure of one photo is reported in its item as `unreadable_file` and the others proceed.\",\"question\":\"If the image was durably renamed but writing its placement record fails, must the orphan image remain, be removed, or be reused on retry, and is that state-record failure really reported as `unreadable_file`?\",\"options\":[\"Keep the orphan image and overwrite or reuse it on retry\",\"Remove the image before returning the item failure\",\"Refuse the whole call because durable state is uncertain\"],\"default_guess\":\"Keep the complete orphan image, report an explicit storage failure rather than `unreadable_file`, and safely reuse or replace it on retry.\",\"witness\":{\"initial\":\"No placement or stored image exists for the requested content.\",\"events\":[\"The encoded image is successfully renamed and its directory synchronized.\",\"Writing the placement record fails.\",\"The caller retries.\"],\"outcomes\":[\"The first call reports `unreadable_file` while an orphan image remains and the retry completes the placement.\",\"The implementation removes the image, so the retry encodes and writes it again.\"],\"observer\":\"An operator inspecting the binary store sees different durable state after the failed call.\"}},{\"subject\":\"A4\",\"kind\":\"identifier_canonicalization\",\"text\":\"A `photo_id` is a UUID, kept in lowercase hyphenated form.\",\"question\":\"Are valid UUIDs received in uppercase, compact or braced form accepted and canonicalized, or refused as malformed?\",\"options\":[\"Accept every UUID spelling and canonicalize it\",\"Accept only lowercase hyphenated input\"],\"default_guess\":\"Accept any syntactically valid UUID and persist and return its lowercase hyphenated canonical form.\",\"witness\":{\"initial\":\"A placement exists and has no mark.\",\"events\":[\"The calling flow submits an uppercase spelling of a valid Portal UUID.\"],\"outcomes\":[\"The mark is accepted and stored in lowercase hyphenated form.\",\"The request is refused because the input was not already canonical.\"],\"observer\":\"The calling flow sees success or refusal.\"}},{\"subject\":\"A5\",\"kind\":\"authorization_parsing\",\"text\":\"Every operation except the health answer requires the header `Authorization: Bearer <token>`, compared whole, case-sensitively and in constant time. Any other value is refused with 401\",\"question\":\"How are zero, duplicate or comma-combined Authorization headers handled, and what exact byte or character representation is compared in constant time?\",\"options\":[\"Require exactly one header and compare its encoded bytes\",\"Use the web framework's combined header value\",\"Reject duplicate headers before comparison\"],\"default_guess\":\"Require exactly one Authorization field and compare its UTF-8 bytes to the exact expected value in constant time.\"},{\"subject\":\"A5\",\"kind\":\"token_encoding\",\"text\":\"The token is generated with 256 bits from a cryptographic random source and is kept in a UTF-8 file.\",\"question\":\"Which textual encoding represents the 256 random bits, and therefore what is the exact token alphabet and length?\",\"options\":[\"64 lowercase hexadecimal characters\",\"Base64 with padding\",\"URL-safe base64 without padding\"],\"default_guess\":\"Use 64 lowercase hexadecimal characters.\"},{\"subject\":\"A5\",\"kind\":\"whitespace_definition\",\"text\":\"Whitespace around it is removed when it is read.\",\"question\":\"Which characters count as surrounding whitespace, and are internal whitespace and additional lines permitted?\",\"options\":[\"Strip ASCII spaces and line endings only\",\"Apply Unicode `str.strip()`\",\"Require exactly one nonblank line and reject all other whitespace\"],\"default_guess\":\"Allow one trailing line ending, reject internal whitespace or additional lines, and otherwise preserve the token exactly.\"},{\"subject\":\"A5\",\"kind\":\"path_validation\",\"text\":\"The photo and invoice subfolders are non-empty relative paths without `..`.\",\"question\":\"Are `.`, repeated separators, backslashes, absolute-looking platform forms and normalized empty paths accepted, and which path syntax is authoritative?\",\"options\":[\"Validate POSIX relative-path components and reject `.`, `..`, empty components and backslashes\",\"Use the host operating system's path parser\",\"Normalize first and accept any result inside the root\"],\"default_guess\":\"Use POSIX-style components, reject `.`, `..`, empty components, backslashes and absolute forms.\"},{\"subject\":\"A5\",\"kind\":\"boundary_definition\",\"text\":\"the photo folder must be a folder whose resolved path is inside the resolved root\",\"question\":\"Does “inside” include equality with the root itself?\",\"options\":[\"The resolved photo folder may equal the root\",\"It must be a strict descendant of the root\"],\"default_guess\":\"Require a strict descendant because the configured value is a non-empty subfolder.\",\"witness\":{\"initial\":\"The photo subfolder is configured as `.` and resolves to the connection root.\",\"events\":[\"The calling flow requests a scan.\"],\"outcomes\":[\"The root is accepted as being inside itself and all eligible files under it are scanned.\",\"The operation is refused with `folder_unavailable` because the photo folder is not a strict descendant.\"],\"observer\":\"The calling flow and owner see either the root's photos or a refusal.\"}},{\"subject\":\"A5\",\"kind\":\"path_race\",\"text\":\"On each scan and placement the photo folder must be a folder whose resolved path is inside the resolved root, otherwise the operation is refused with `folder_unavailable`.\",\"question\":\"How must the service prevent a folder or descendant from being replaced by a link outside the root after resolution but before or during traversal and opening?\",\"options\":[\"Use descriptor-relative traversal that refuses links at every component\",\"Resolve once and accept the residual race\",\"Re-resolve each path immediately before opening\"],\"default_guess\":\"Use directory descriptors and no-follow operations for every component so the checked tree cannot escape the root.\",\"witness\":{\"initial\":\"The resolved photo folder and a child directory are inside the root when validation runs.\",\"events\":[\"An untrusted actor replaces the child directory with a link to an outside directory.\",\"The scan continues into that name.\"],\"outcomes\":[\"Descriptor-relative no-follow traversal refuses or skips the replaced child.\",\"Path-based traversal reads files outside the confirmed root.\"],\"observer\":\"The owner may be offered photos belonging to another directory or client.\"}},{\"subject\":\"A6\",\"kind\":\"reference_representation\",\"text\":\"A stored image is named only from the project id and the source hash: `photos/<project_id>/<source_id>.jpg`. The reference must stay inside the binary store.\",\"question\":\"What exact canonical project-id spelling and reference representation are persisted and returned, and is containment lexical or resolved-filesystem containment?\",\"options\":[\"Persist a POSIX relative reference with a lowercase hyphenated UUID and validate both components\",\"Persist an absolute resolved path\",\"Allow the UUID spelling supplied by the caller\"],\"default_guess\":\"Persist a POSIX relative reference using the canonical lowercase hyphenated UUID and validate containment relative to the opened binary-store root.\"},{\"subject\":\"A6\",\"kind\":\"atomic_write_recovery\",\"text\":\"Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised\",\"question\":\"How are temporary names chosen, what permissions do they have before rename, and what happens to stale temporary files after a crash or failed synchronization?\",\"options\":[\"Use collision-resistant private temporary files and clean recognized stale files on startup\",\"Leave stale temporary files indefinitely\",\"Use one fixed temporary name protected by the project lock\"],\"default_guess\":\"Use collision-resistant temporary files with final-mode permissions from creation and remove recognized stale temporaries during recovery.\"},{\"subject\":\"A6\",\"kind\":\"lock_scope\",\"text\":\"Placements and marks of one project run one at a time, across processes, under an operating system lock on one lock file of that project in the state folder.\",\"question\":\"Does one placement call hold the project lock for its entire ordered item list, or acquire and release it separately for each item, and when relative to the clock reading is it acquired?\",\"options\":[\"Hold one lock for the whole call\",\"Lock separately around each item\",\"Use separate placement and mark critical sections\"],\"default_guess\":\"Hold the project lock for the entire placement or mark call and read the clock after acquiring it.\",\"witness\":{\"initial\":\"A placement call contains two items for one project, and a mark call for that project is waiting concurrently.\",\"events\":[\"The placement call completes its first item.\",\"The mark caller acquires the lock if per-item locking is used.\",\"The placement call processes its second item.\"],\"outcomes\":[\"With a call-wide lock, the mark occurs only after both placement items.\",\"With per-item locking, the mark may occur between the two placement items.\"],\"observer\":\"The calling flows observe different completion order and scan or replay state.\"}},{\"subject\":\"A7\",\"kind\":\"contradiction\",\"text\":\"Scan, placement and mark each read it once, after the request is accepted and before any file is examined. The health answer and a refused request do not read it.\",\"question\":\"How can a mark refused as `not_placed` or `publication_conflict` avoid reading the clock when determining that refusal requires examining placement or mark state, while the required reading must occur before any file is examined?\",\"options\":[\"Read state first for refusal checks, then read the clock only for an accepted mark\",\"Read the clock before state and therefore also for these refused marks\",\"Define “file examined” to exclude state-backend reads and specify that distinction\"],\"default_guess\":\"Perform all refusal checks first, then read the clock exactly once only for a mark that will be written or replayed.\",\"witness\":{\"initial\":\"A placement already has a mark for photo id A.\",\"events\":[\"The caller submits different photo id B.\",\"The service must inspect the existing mark to detect `publication_conflict`.\"],\"outcomes\":[\"The clock is read before inspecting the mark, contradicting “a refused request do not read it”.\",\"The mark is inspected before the clock, contradicting “before any file is examined” if the state record is a file.\"],\"observer\":\"A counting clock used by a test or operator records either zero or one read.\"}},{\"subject\":\"A7\",\"kind\":\"clock_ordering\",\"text\":\"after the request is accepted and before any file is examined\",\"question\":\"Is the clock read before waiting for the project lock or after the lock is acquired, and does `marked_at` represent request acceptance or the instant the mark can actually be written?\",\"options\":[\"Read before waiting for the lock\",\"Read after acquiring the lock\",\"Define separate accepted and committed instants\"],\"default_guess\":\"Acquire the lock first and then read the clock immediately before examining or writing state.\",\"witness\":{\"initial\":\"Another process holds the project lock for a long time.\",\"events\":[\"A mark request is accepted and waits for the lock.\",\"The lock is later acquired and the mark is written.\"],\"outcomes\":[\"`marked_at` records the time before the wait.\",\"`marked_at` records the time after the wait, near the durable write.\"],\"observer\":\"The owner sees a materially different `marked_at` value.\"}},{\"subject\":\"A7\",\"kind\":\"time_serialization\",\"text\":\"The current time is a `datetime` in UTC without an offset, with microsecond precision and no rounding, written in ISO 8601 form.\",\"question\":\"Which exact ISO 8601 spelling is written, including separator, fixed fractional digits and whether a `Z` or offset suffix is forbidden?\",\"options\":[\"`YYYY-MM-DDTHH:MM:SS.ffffff` with no suffix\",\"`YYYY-MM-DD HH:MM:SS.ffffff` with no suffix\",\"`YYYY-MM-DDTHH:MM:SS.ffffffZ`\"],\"default_guess\":\"Write exactly `YYYY-MM-DDTHH:MM:SS.ffffff` with no suffix.\"},{\"subject\":\"A7\",\"kind\":\"precision_conversion\",\"text\":\"A file's modification time is converted to the same form before it is compared or delivered.\",\"question\":\"When a filesystem modification time has finer than microsecond precision, how is it reduced without rounding, especially for instants before the epoch?\",\"options\":[\"Floor to the preceding microsecond\",\"Truncate the fractional representation toward zero\",\"Reject unsupported precision\"],\"default_guess\":\"Floor the instant to the preceding microsecond before comparison and serialization.\",\"witness\":{\"initial\":\"A file's modification time is 119.9999995 seconds before the operation's clock reading.\",\"events\":[\"The timestamp is converted to microsecond precision.\",\"The settling-time comparison is performed.\"],\"outcomes\":[\"Flooring makes the age 120.000000 seconds and the file passes settling.\",\"Rounding or truncating differently makes the age 119.999999 seconds and the file remains `settling`.\"],\"observer\":\"The owner sees `ready` or `settling` at the boundary.\"}},{\"subject\":\"A7\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-13: a counting clock is read exactly once by each of scan, placement and mark and not at all by the health answer (`test_each_operation_reads_the_clock_once`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Must the required tests also show the stated behavior for refused requests and a replayed mark?\",\"options\":[\"Add refused scan/place/mark cases expecting zero reads and a replayed mark expecting one read\",\"Remove those cases from the normative rule\",\"State that the existing named test already exercises each case\"],\"default_guess\":\"Add explicit refused-request and replayed-mark assertions.\"},{\"subject\":\"A8\",\"kind\":\"standard_violation\",\"text\":\"| `min_age_seconds` | `int` | 120 |\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"Make the fixed settling threshold an imported data-provider constant, or state that it genuinely varies by environment and define it as such rather than placing a decided policy threshold in run settings.\"},{\"subject\":\"A9\",\"kind\":\"missing_values\",\"text\":\"The direct libraries are pinned to exact versions: pillow, fastapi, pydantic and uvicorn.\",\"question\":\"What exact version is selected for each direct library?\",\"options\":[\"List four exact versions in this decision\",\"Name an authoritative generated lock or manifest that supplies the exact versions\"],\"default_guess\":\"List the four exact versions explicitly in the dependency decision.\"},{\"subject\":\"A9\",\"kind\":\"missing_threshold\",\"text\":\"no older than the deploy route's maximum snapshot age\",\"question\":\"What is the maximum permitted snapshot age, in what unit, and from which decided code-visible symbol does the deployment check obtain it?\",\"options\":[\"A named imported policy constant with a fixed duration\",\"A deployment configuration field that varies by environment\"],\"default_guess\":\"Define a named imported policy constant expressed as an integer number of seconds.\"},{\"subject\":\"A9\",\"kind\":\"standard_violation\",\"text\":\"no older than the deploy route's maximum snapshot age\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Replace the unnamed maximum age with a decided value having exactly one permitted path to generated deployment code, normally an imported data-provider constant for this policy threshold.\"},{\"subject\":\"A11\",\"kind\":\"list_completeness\",\"text\":\"Before placing anything for a project, the calling flow reads that project's staff photo list in the Portal.\",\"question\":\"Must the flow read every page of a paginated photo list, and what constitutes completion of that read?\",\"options\":[\"Traverse all pages before allowing delivery\",\"Check only the first/default page\",\"Use a Portal operation that guarantees an unpaginated complete list\"],\"default_guess\":\"Traverse all pages and treat failure of any page as a failed read.\",\"witness\":{\"initial\":\"An old offset-bearing photo date exists only on a later page of the project's staff photo list.\",\"events\":[\"The owner starts delivery.\",\"The calling flow reads the list.\"],\"outcomes\":[\"A complete paginated read finds the old date and stops delivery.\",\"A first-page-only read misses it and delivery proceeds.\"],\"observer\":\"The owner and Portal see either a stopped delivery or a newly published photo.\"}},{\"subject\":\"A11\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-17: a project holding a date with an offset is detected before delivery, and a project holding only UTC dates passes (E2E, `the flow can see an old date before it delivers`, `a project with UTC dates passes that check`). The calling flow's own stop is shown when that flow exists.\",\"question\":\"What must the Required tests assert to demonstrate INV-17's actual prohibition on publication, rather than only detection, and when must that witness exist?\",\"options\":[\"Assert that neither placement nor Portal publication is invoked when an old date is found\",\"Assert only that publication is not invoked\",\"Defer the witness but state the exact future check and binding\"],\"default_guess\":\"Require a flow-level test showing zero placement and zero publication calls when any old date is found.\"},{\"subject\":\"A11\",\"kind\":\"date_classification\",\"text\":\"A `photo_date` ending in `Z` or in an offset `+HH:MM` or `-HH:MM` is an old date.\\n\\nINV-17: a project holding a date with an offset is detected before delivery, and a project holding only UTC dates passes\",\"question\":\"Does a UTC value ending in `Z` count as an old date or as a UTC date that passes?\",\"options\":[\"Every `Z`-terminated value is old and must be repaired to offset-free UTC\",\"`Z` is an acceptable UTC representation and passes\",\"Only nonzero numeric offsets are old\"],\"default_guess\":\"Treat `Z` as old because the Portal's decided representation is UTC without an offset.\",\"witness\":{\"initial\":\"A project's only staff photo has `photo_date` ending in `Z`.\",\"events\":[\"The owner starts a delivery and the flow checks the photo list.\"],\"outcomes\":[\"Rule 1 classifies the `Z` value as old and stops delivery.\",\"The Required-tests phrase “only UTC dates passes” is read to allow the UTC `Z` value, so delivery proceeds.\"],\"observer\":\"The owner sees either a repair warning or a normal delivery.\"}}]}",
+ "set_aside": []
+}

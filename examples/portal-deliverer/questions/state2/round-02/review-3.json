@@ -1,0 +1,628 @@
+{
+ "open_points": [
+  {
+   "subject": "A1",
+   "kind": "unhandled traversal failure",
+   "text": "A scan covers the photo folder and all its subfolders (R0-12).",
+   "question": "What does a scan do when enumerating the photo folder or one of its non-ignored subfolders fails because it disappears, is unreadable, or becomes a non-folder?",
+   "options": [
+    "Refuse the whole scan with folder_unavailable",
+    "Skip the failed subtree and return the other observations",
+    "Return a rejected observation for the subtree"
+   ],
+   "default_guess": "Refuse the whole scan with folder_unavailable.",
+   "witness": {
+    "initial": "A confirmed project has a readable photo folder containing subfolder x.",
+    "events": [
+     "Syncthing removes x or revokes its permissions after the top-level enumeration",
+     "The calling flow scans the project"
+    ],
+    "outcomes": [
+     "The entire scan is refused with folder_unavailable",
+     "The scan succeeds and silently omits x"
+    ],
+    "observer": "The calling flow and owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "race semantics",
+   "text": "A file exactly at the settling time or exactly at the source limit passes that rule.",
+   "question": "Which metadata snapshot supplies age and size when the file changes between enumeration, metadata reading, opening, and reading, and must a non-growing change during that interval alter the result?",
+   "options": [
+    "Use the initial metadata snapshot",
+    "Restat after opening and use the later metadata",
+    "Reject any detected metadata change"
+   ],
+   "default_guess": "Use initial metadata for the ordered checks, but reject or reclassify changes detected while securely reading the file.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "field population",
+   "text": "A scan gives each regular file of the photo folder exactly one status.",
+   "question": "For each status, which optional M02 fields must be populated, especially size, source_id, reason, duplicate_of, file_ref, and photo_id?",
+   "options": [
+    "Define a field-presence matrix by status",
+    "Populate every value that happened to be computed",
+    "Leave all optional fields implementation-dependent"
+   ],
+   "default_guess": "Define a field-presence matrix; ready, duplicate, placed, and published should carry source_id, and only the status-specific fields should be non-null.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "duplicate reference",
+   "text": "`duplicate` | `duplicate_content`, with `duplicate_of`",
+   "question": "What exact value goes in duplicate_of: the earlier observation's relative name, source_id, or another identifier?",
+   "options": [
+    "Relative name",
+    "Source id",
+    "Placement identity"
+   ],
+   "default_guess": "Use the earlier observation's relative name, matching M02's statement that a duplicate names the earlier file.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "scan race classification",
+   "text": "opening or reading it fails, including a file that disappeared or became a link",
+   "question": "If a regular file is replaced by a symbolic link between metadata inspection and opening, what secure opening procedure is required and is the result always unreadable_file rather than not_a_regular_file?",
+   "options": [
+    "Open without following links and report unreadable_file if that open fails",
+    "Open without following links and report not_a_regular_file",
+    "Follow the link if its resolved target remains inside the photo folder"
+   ],
+   "default_guess": "Open without following links and report unreadable_file when the replacement prevents opening.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2",
+   "kind": "underspecified encoding",
+   "text": "A stored image is a newly encoded JPEG made from the decoded pixels of the source. Transparent areas become white. The camera orientation is applied, then the longest side is reduced to the limit when it is larger.",
+   "question": "Which color conversion, alpha-compositing color space, resize filter, JPEG subsampling, progressive/optimization settings, and metadata-stripping method define the stored bytes?",
+   "options": [
+    "Specify a deterministic encoding recipe",
+    "Permit any encoder output satisfying the visible constraints",
+    "Adopt the image library's version-dependent defaults"
+   ],
+   "default_guess": "Specify a deterministic RGB/sRGB conversion and encoding recipe using the declared quality, with all metadata omitted.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2",
+   "kind": "limit measurement",
+   "text": "a first frame above the pixel limit (width times height) fails with `too_many_pixels`",
+   "question": "Are width and height measured before or after applying camera orientation, and which dimensions are used when a decoder reports multiple candidate sizes or malformed metadata?",
+   "options": [
+    "Decoded first-frame dimensions before orientation",
+    "Oriented dimensions",
+    "Maximum dimensions reported anywhere in the container"
+   ],
+   "default_guess": "Use the securely parsed first-frame dimensions before orientation; rotation does not change their product.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2",
+   "kind": "camera-date parsing",
+   "text": "The photo moment is the first usable value of: EXIF `DateTimeOriginal` with `OffsetTimeOriginal` when that offset has the form `+HH:MM` or `-HH:MM`, EXIF `DateTime`, then the file's modification time.",
+   "question": "Which exact EXIF date syntax is accepted, whether surrounding NULs or whitespace are allowed, and whether DateTimeOriginal is discarded when its offset is absent or invalid rather than interpreted in the configured time zone?",
+   "options": [
+    "Accept a precisely specified EXIF syntax and require a valid OffsetTimeOriginal for DateTimeOriginal",
+    "Interpret DateTimeOriginal without a valid offset in the configured time zone",
+    "Use the imaging library's permissive parser"
+   ],
+   "default_guess": "Require the normal EXIF date syntax; use DateTimeOriginal only with a valid OffsetTimeOriginal, then try DateTime in the configured time zone.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2",
+   "kind": "timezone failure",
+   "text": "A camera time with no offset is read in the configured time zone.",
+   "question": "What happens at service startup or placement when the configured time-zone name is unknown or its zone data is unavailable?",
+   "options": [
+    "Fail service startup",
+    "Fail the affected item as unreadable_image",
+    "Fall back to UTC"
+   ],
+   "default_guess": "Fail service startup because the run setting is invalid.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2",
+   "kind": "date plausibility basis",
+   "text": "A camera value is unusable when it is malformed, when its UTC year is before 2000, or when it is more than 24 hours after the file's modification time.",
+   "question": "Is the 24-hour comparison made after resolving ambiguous/nonexistent local time, at full microsecond precision, and are camera values arbitrarily far before the modification time accepted?",
+   "options": [
+    "Compare resolved UTC instants exactly and impose no lower-distance bound",
+    "Compare local wall times",
+    "Reject values more than 24 hours in either direction"
+   ],
+   "default_guess": "Resolve to UTC first, compare exact instants, and accept arbitrarily earlier camera times because only a future bound is stated.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2",
+   "kind": "animated-image handling",
+   "text": "Only the first frame of an animated image is delivered.",
+   "question": "Does the first frame mean the raw first frame or the fully composited first displayed frame, and are frame-level orientation, transparency, and color profiles applied?",
+   "options": [
+    "Decode the library's fully rendered frame zero",
+    "Use raw frame-zero pixels",
+    "Reject animations requiring frame composition"
+   ],
+   "default_guess": "Use the fully decoded displayed frame zero and apply the same orientation and pixel conversion as for a still image.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "replay prerequisites",
+   "text": "Placing an existing placement answers `replayed` with the stored placement and the current `photo_id` of its mark, if any, and writes nothing, even when the source file has left the folder.",
+   "question": "Must an existing placement still pass the connection and photo-folder checks and participate in the call's mandatory scan, or may it replay when the folder is unavailable?",
+   "options": [
+    "Require connection and folder checks, then scan once",
+    "Replay after authentication and identifier validation without requiring the source folder",
+    "Require the connection but not the folder"
+   ],
+   "default_guess": "Apply the stated check order, requiring a confirmed connection and available folder before replay.",
+   "witness": {
+    "initial": "A placement and mark exist, but the project's photo folder is temporarily unavailable.",
+    "events": [
+     "The calling flow requests placement of the existing source_id"
+    ],
+    "outcomes": [
+     "The call is refused with folder_unavailable because folder checking precedes source processing",
+     "The item is returned as replayed because durable placement state is sufficient"
+    ],
+    "observer": "The calling flow and owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "refusal contract",
+   "text": "A call holds from 1 to 50 source ids, otherwise it is refused whole.",
+   "question": "Which refusal code and HTTP/result form are used for zero items, more than 50 items, malformed request form, malformed project id, and malformed token-authenticated JSON?",
+   "options": [
+    "Add closed refusal codes for each request-level error",
+    "Map them to framework HTTP validation errors outside RefusalCode",
+    "Use one invalid_request refusal"
+   ],
+   "default_guess": "Use a single explicit invalid_request refusal for shape and cardinality errors and an explicit invalid_project_id refusal for the project id.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "storage failure semantics",
+   "text": "A read or storage failure of one photo is reported in its item as `unreadable_file` and the others proceed.",
+   "question": "Which failures count as storage failures, what durable artifacts may remain after each one, and why is a destination write failure represented as unreadable_file rather than a distinct placement failure?",
+   "options": [
+    "All image/record write and sync failures become unreadable_file and any orphan image may remain",
+    "Introduce a storage_failure item reason and define cleanup",
+    "Refuse the whole call on durable-store failure"
+   ],
+   "default_guess": "Introduce a distinct storage_failure reason, continue other items only when durability invariants remain intact, and permit only the explicitly documented orphan-image crash state.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3/A6",
+   "kind": "orphan recovery",
+   "text": "The stored image is written before the placement record, so a crash between them repeats the placement and leaves no record without an image.",
+   "question": "When retry finds the complete stored image but no placement record, must it verify and reuse that image, overwrite it atomically, or treat it as a conflict?",
+   "options": [
+    "Verify and reuse it",
+    "Overwrite it atomically with the newly prepared image",
+    "Refuse because unrecorded durable state exists"
+   ],
+   "default_guess": "Reprepare, verify the expected destination, and atomically overwrite or reuse only if the bytes match.",
+   "unit": "?"
+  },
+  {
+   "subject": "A4",
+   "kind": "identifier validation order",
+   "text": "Checks run in this order: token, request form and identifiers, connection, placement.",
+   "question": "What is the precedence among malformed project_id, source_id, and photo_id, and which refusal code represents each malformed identifier?",
+   "options": [
+    "Specify a fixed identifier order and separate codes",
+    "Treat all malformed identifiers as one invalid_request",
+    "Leave precedence to request-model validation"
+   ],
+   "default_guess": "Validate project_id, then source_id, then photo_id, with explicit stable refusal codes.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5",
+   "kind": "token representation",
+   "text": "The token is generated with 256 bits from a cryptographic random source and is kept in a UTF-8 file.",
+   "question": "What textual encoding and canonical length are used for the 256 random bits, and may the file contain anything except that canonical token plus surrounding whitespace?",
+   "options": [
+    "64 lowercase hexadecimal characters",
+    "URL-safe base64 without padding",
+    "Any UTF-8 representation at least 32 characters long"
+   ],
+   "default_guess": "Use 64 lowercase hexadecimal characters followed optionally by one newline.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5",
+   "kind": "token-file validation",
+   "text": "The service does not start when the group or others have any permission on the file or the token has fewer than 32 characters.",
+   "question": "What happens for a missing, unreadable, non-UTF-8, empty, non-regular, symlinked, or wrong-owner token file, and are embedded whitespace/control characters legal?",
+   "options": [
+    "Fail startup for every such condition and require a regular owner-controlled file",
+    "Apply only the two stated checks",
+    "Follow symlinks and accept any decoded token of sufficient length"
+   ],
+   "default_guess": "Fail startup unless the token file is a regular, non-symlinked, owner-controlled UTF-8 file containing one nonempty canonical token.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5",
+   "kind": "path validation",
+   "text": "The photo and invoice subfolders are non-empty relative paths without `..`.",
+   "question": "Are `.`, absolute-path syntax, empty components, platform separators, NULs, and components merely containing two dots allowed, and is normalization performed before validation?",
+   "options": [
+    "Define validation on parsed path components and reject root-equivalent or absolute paths",
+    "Apply a literal substring ban on `..`",
+    "Accept anything the platform parses as relative"
+   ],
+   "default_guess": "Parse and normalize without filesystem traversal; reject absolute, root-equivalent, NUL-containing, empty-component, and parent-component paths while allowing ordinary names containing two dots.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5",
+   "kind": "filesystem race",
+   "text": "On each scan and placement the photo folder must be a folder whose resolved path is inside the resolved root, otherwise the operation is refused with `folder_unavailable`.",
+   "question": "How is containment preserved if a symlink or directory component changes after resolution but before or during file access?",
+   "options": [
+    "Use descriptor-relative, no-follow access anchored at the validated root",
+    "Resolve once and then use path strings",
+    "Re-resolve before each individual open"
+   ],
+   "default_guess": "Use descriptor-relative access anchored at the resolved root with no-follow checks for mutable components.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5",
+   "kind": "connection-file failure",
+   "text": "The service does not start with a connection that breaks this.",
+   "question": "Does the service also fail startup for a missing, unreadable, malformed, duplicate-project, or partially invalid connections file, or may it load the valid records and ignore the rest?",
+   "options": [
+    "Fail startup atomically for any invalid connections input",
+    "Ignore invalid records and load valid ones",
+    "Start with no connections on read/parse failure"
+   ],
+   "default_guess": "Fail startup atomically for any unreadable or invalid connections data.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "atomic-write details",
+   "text": "Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none.",
+   "question": "How are temporary names made collision-safe, what permissions are used before rename, whether rename may replace an existing destination, and when stale temporary files are removed?",
+   "options": [
+    "Unique same-directory temporary file, explicit final mode, atomic replace, startup cleanup",
+    "Fixed temporary suffix and no cleanup",
+    "Refuse if either temporary or destination file already exists"
+   ],
+   "default_guess": "Create a unique same-directory temporary file without following links, set its final mode explicitly, fsync it, atomically replace the destination, fsync the directory, and clean stale recognized temporaries safely.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "lock failure behavior",
+   "text": "A caller waits for the lock without a time limit, and the lock is released when its holder ends.",
+   "question": "What happens when the lock file cannot be created/opened, locking is unsupported, the state folder disappears, or the waiting caller is cancelled?",
+   "options": [
+    "Refuse without performing the mutation",
+    "Wait/retry every lock error indefinitely",
+    "Proceed without the lock"
+   ],
+   "default_guess": "Refuse the operation without mutation on lock setup or integrity failure; cancellation ends only that waiting call.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "lock identity",
+   "text": "under an operating system lock on one lock file of that project in the state folder",
+   "question": "What exact lock-file name and safe derivation from project_id are required, and what mode and ownership must the lock file have?",
+   "options": [
+    "Specify a deterministic UUID-derived filename and private mode",
+    "Allow any per-project lock convention",
+    "Reuse a state-record file as the lock"
+   ],
+   "default_guess": "Use a deterministic lowercase UUID-derived filename in a dedicated state lock directory with mode 0600.",
+   "unit": "?"
+  },
+  {
+   "subject": "A7",
+   "kind": "contradictory invariant scope",
+   "text": "INV-13: one operation uses one reading of the service clock.",
+   "question": "Does INV-13 apply to every operation, which contradicts the rule that health and refused requests read zero times, or only to accepted scan, placement, and mark operations?",
+   "options": [
+    "Limit INV-13 to accepted scan, placement, and mark operations",
+    "Make health and refused requests read once",
+    "State an operation-specific clock-read cardinality invariant"
+   ],
+   "default_guess": "Replace it with an operation-specific invariant: accepted scan, placement, and mark read exactly once; health and refused requests read zero times.",
+   "witness": {
+    "initial": "The service is running and its counting clock is at zero.",
+    "events": [
+     "A caller requests the health answer"
+    ],
+    "outcomes": [
+     "INV-13 requires one clock read because health is an operation",
+     "The normative rule and required test require zero clock reads"
+    ],
+    "observer": "The test suite and service operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7",
+   "kind": "acceptance boundary",
+   "text": "Scan, placement and mark each read it once, after the request is accepted and before any file is examined.",
+   "question": "Exactly which checks constitute acceptance, especially connection lookup, folder resolution, lock acquisition, and the existence check for a placement or mark?",
+   "options": [
+    "After all request-level refusal checks and lock acquisition, before source-file metadata or bytes",
+    "Immediately after authentication and request parsing",
+    "At operation entry before any validation"
+   ],
+   "default_guess": "Read after authentication, request validation, connection/folder validation, and lock acquisition, but before examining any source file or creating mutable state.",
+   "unit": "?"
+  },
+  {
+   "subject": "A7",
+   "kind": "per-item failure clock use",
+   "text": "The health answer and a refused request do not read it.",
+   "question": "Is a placement call that is accepted but whose every item fails still required to read the clock once, and what distinguishes a refused request from an accepted request returning failed items?",
+   "options": [
+    "Every accepted call reads once regardless of item outcomes",
+    "Read only if at least one item reaches preparation",
+    "Treat an all-failed result as a refusal and read zero times"
+   ],
+   "default_guess": "Every request-level accepted scan, placement, or mark call reads exactly once even if all placement items fail.",
+   "unit": "?"
+  },
+  {
+   "subject": "A7",
+   "kind": "clock normalization",
+   "text": "The current time is a `datetime` in UTC without an offset, with microsecond precision and no rounding, written in ISO 8601 form.",
+   "question": "If utc_now returns an aware datetime, a non-UTC datetime, or precision finer/coarser than microseconds, must the authority normalize it or reject it, and what exact ISO 8601 spelling is persisted?",
+   "options": [
+    "The backend guarantees a naive UTC datetime and canonical six-digit-microsecond text",
+    "Consumers normalize any datetime returned",
+    "Reject values that are not already in canonical form"
+   ],
+   "default_guess": "Make utc_now return naive UTC at Python datetime microsecond precision and serialize it in one canonical form with six fractional digits.",
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "incomplete closed refusal list",
+   "text": "`RefusalCode` is `unknown_project`, `connection_not_confirmed`, `folder_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed` and `publication_conflict`.",
+   "question": "Where are authentication failures, malformed project_id or photo_id, malformed request form, and invalid placement batch size represented if RefusalCode is the closed list?",
+   "options": [
+    "Extend RefusalCode",
+    "Define a separate closed HTTP/request-error model",
+    "State that framework errors are outside the service refusal model and give their exact forms"
+   ],
+   "default_guess": "Define a separate closed request/authentication error model with exact precedence and response forms.",
+   "witness": {
+    "initial": "An authenticated caller submits a placement request with 51 source ids.",
+    "events": [
+     "The service applies A3's whole-call refusal"
+    ],
+    "outcomes": [
+     "The response uses an unlisted refusal code invented by the implementer",
+     "The response is a framework validation error outside RefusalCode"
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "constant semantics",
+   "text": "| `PHOTO_QUALITY` | `int` | 85 |",
+   "question": "Which encoder parameter does PHOTO_QUALITY control, and are other JPEG parameters fixed or library defaults?",
+   "options": [
+    "Define the complete JPEG recipe and quality's exact role",
+    "Pass 85 to the library's quality option and accept all defaults",
+    "Treat it as an abstract target quality"
+   ],
+   "default_guess": "Pass it to a specified JPEG encoder quality parameter as part of a fully fixed encoding recipe.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9",
+   "kind": "missing dependency versions",
+   "text": "The direct libraries are pinned to exact versions: pillow, fastapi, pydantic and uvicorn.",
+   "question": "What exact version of each library is the accepted decision, and is capitalization/package naming canonical?",
+   "options": [
+    "List all four exact versions in State 2",
+    "Make the deployment manifest the authoritative decided-value table",
+    "Defer version selection to implementation"
+   ],
+   "default_guess": "List canonical distribution names and exact accepted versions in the dependency decision.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9",
+   "kind": "missing policy value",
+   "text": "no older than the deploy route's maximum snapshot age",
+   "question": "What is the maximum snapshot age, in what unit, which clock determines it, and through which decided-value path does the deployment check receive it?",
+   "options": [
+    "A named imported policy constant",
+    "A deployment configuration field",
+    "A fixed value owned by an external deployment route with an explicit contract"
+   ],
+   "default_guess": "Define a named imported policy constant measured in seconds and compare it using the deployment authority's UTC clock.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9",
+   "kind": "vulnerability matching",
+   "text": "Any known vulnerability listed for an installed version blocks the deployment, whatever its severity, and a check that cannot complete does not pass.",
+   "question": "What counts as listed and known when OSV records are withdrawn, disputed, ecosystem-mismatched, range-only, or lack a fixed version, and what exact result represents an incomplete check?",
+   "options": [
+    "Block every non-withdrawn matching OSV record and fail closed on any indeterminate package",
+    "Block every returned record including withdrawn records",
+    "Use the scanner's version-dependent default interpretation"
+   ],
+   "default_guess": "Block every non-withdrawn PyPI record whose affected ranges match the installed normalized version, and fail closed on any incomplete or indeterminate result.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9",
+   "kind": "deployment scope",
+   "text": "Before each deployment every distribution installed in the image is checked against a snapshot of the OSV database",
+   "question": "At which immutable image stage is the distribution inventory taken, and must OS packages also be checked even though the required ecosystem is stated as PyPI?",
+   "options": [
+    "Check every Python distribution in the final immutable runtime image",
+    "Check Python and OS packages",
+    "Check only the four direct libraries"
+   ],
+   "default_guess": "Check every Python distribution installed in the final immutable runtime image; OS packages require a separately specified ecosystem policy.",
+   "unit": "?"
+  },
+  {
+   "subject": "A11",
+   "kind": "UTC-format contradiction",
+   "text": "A `photo_date` ending in `Z` or in an offset `+HH:MM` or `-HH:MM` is an old date.",
+   "question": "How can the Required tests statement that a project holding only UTC dates passes be reconciled with this rule, since a date ending in Z is an explicit UTC date?",
+   "options": [
+    "Only naive UTC dates pass; rewrite the test to say that",
+    "Z dates pass and only nonzero numeric offsets are old",
+    "Both Z and numeric-offset dates are old, while 'UTC dates' means the Portal's naive UTC representation"
+   ],
+   "default_guess": "State explicitly that only the Portal's naive UTC representation passes and that Z is classified as an old serialized form.",
+   "witness": {
+    "initial": "A project's staff photo list contains only 2026-11-18T10:00:00Z.",
+    "events": [
+     "The calling flow performs the pre-delivery old-date check"
+    ],
+    "outcomes": [
+     "The normative rule classifies the Z date as old and stops delivery",
+     "The Required tests phrase 'holding only UTC dates passes' permits the flow to continue"
+    ],
+    "observer": "The owner and calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A11/context",
+   "kind": "earlier-state conflict",
+   "text": "When the list holds an old date, or cannot be read, the flow places and publishes nothing for that project and tells the owner which project needs the repair.",
+   "question": "Does the State 0 condition 'If a date still carries an offset' include the Z form newly classified as old here, or did State 2 broaden an accepted owner decision?",
+   "options": [
+    "Define Z as carrying an explicit zero offset and retain the broader rule",
+    "Treat only +HH:MM and -HH:MM as carrying an offset",
+    "Record a new owner decision that expressly adds Z"
+   ],
+   "default_guess": "Record expressly that Z is an explicit offset representation and is included in the accepted repair gate.",
+   "unit": "?"
+  },
+  {
+   "subject": "A11",
+   "kind": "insufficient required test",
+   "text": "The calling flow's own stop is shown when that flow exists.",
+   "question": "What must the future witness assert to prove INV-17 and rule 2: no placement call, no Portal publication call, no mark call, and an owner-visible repair notice identifying the project?",
+   "options": [
+    "Require all four negative/positive observations explicitly",
+    "Assert only that no Portal publication occurs",
+    "Treat detection of an old date as sufficient"
+   ],
+   "default_guess": "Require the witness to show no placement, publication, or mark attempt and an owner-visible notice naming the affected project.",
+   "unit": "?"
+  },
+  {
+   "subject": "A10",
+   "kind": "external closed-list dependency",
+   "text": "The closed list of categories is `SECURITY_REVIEW_EVIDENCE.md`.",
+   "question": "What exact category list is part of this State 2 decision, and how can later agents know that the displayed review is total when the referenced file's contents are not included?",
+   "options": [
+    "Copy the closed category list into State 2",
+    "Make a named generated/imported manifest authoritative and define its validation",
+    "Allow later tooling to choose the categories"
+   ],
+   "default_guess": "Copy or mechanically bind the exact closed category list into the decision and require every member to have one explicit outcome.",
+   "unit": "?"
+  },
+  {
+   "subject": "M02/A1",
+   "kind": "status precedence consequence",
+   "text": "The earlier file of rule 8 is the first file with that content in this order that reached rule 8.",
+   "question": "If the first occurrence already has a placement or publication mark, must every later same-content path still be duplicate rather than placed or published, and which path is returned by duplicate_of?",
+   "options": [
+    "Duplicate always wins before placement status",
+    "Placed/published status wins for every path sharing the content",
+    "Only the first path may be placed/published; later paths are duplicate"
+   ],
+   "default_guess": "Only the first path in scan order receives placed or published status; later same-content paths are duplicate and point to that first relative name.",
+   "witness": {
+    "initial": "Two paths a.jpg and b.jpg have identical bytes, and the content has an existing published placement.",
+    "events": [
+     "The scanner visits a.jpg then b.jpg"
+    ],
+    "outcomes": [
+     "a.jpg is published and b.jpg is duplicate because rule 8 precedes placement lookup for the later path",
+     "Both paths are published because placement identity is content-based"
+    ],
+    "observer": "The calling flow and owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M04/A3",
+   "kind": "field meaning",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `name: str`, `file_ref: str`, `sha256: str`, `size: int`, `media_type: str`, `date_source: DateSource`, `publication: PhotoPublication`.",
+   "question": "What do sha256 and size measure when source_id is already the SHA-256 of source content: source bytes, stored JPEG bytes, or something else, and is media_type invariably image/jpeg?",
+   "options": [
+    "sha256/source_id describe source bytes while size and media_type describe the stored JPEG",
+    "All three describe the stored JPEG",
+    "sha256 duplicates source_id and size describes source bytes"
+   ],
+   "default_guess": "source_id and sha256 are the same source-content digest; size and media_type describe the stored JPEG, whose media_type is image/jpeg.",
+   "unit": "?"
+  },
+  {
+   "subject": "M05/A3",
+   "kind": "identity collision",
+   "text": "the deliverer derives it from the placement identity as `deliverer-photo-<project_id>-<first 32 characters of source_id>`, so a repeated publication is recognised by the Portal.",
+   "question": "What happens when two different SHA-256 source ids in the same project share their first 32 hexadecimal characters and therefore produce the same intake_id?",
+   "options": [
+    "Use the full source_id in intake_id",
+    "Treat the truncated collision as a refusal",
+    "Assume a 128-bit prefix cannot collide"
+   ],
+   "default_guess": "Use the full source_id, or another injective encoding of the complete placement identity, in intake_id.",
+   "witness": {
+    "initial": "One project has two valid source files whose distinct SHA-256 hashes share the first 32 hexadecimal characters.",
+    "events": [
+     "The first placement is published with its derived intake_id",
+     "The second placement is published with its derived intake_id"
+    ],
+    "outcomes": [
+     "The Portal treats the second publication as a replay of the first because the intake_id is identical",
+     "The Portal creates a second photo because the two placements are distinct"
+    ],
+    "observer": "The owner and client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9",
+   "kind": "standard_violation",
+   "text": "no older than the deploy route's maximum snapshot age",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Replace this unnamed external value with a decided imported policy constant or a field of the deployment settings object, including its type and unit.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1\",\"kind\":\"unhandled traversal failure\",\"text\":\"A scan covers the photo folder and all its subfolders (R0-12).\",\"question\":\"What does a scan do when enumerating the photo folder or one of its non-ignored subfolders fails because it disappears, is unreadable, or becomes a non-folder?\",\"options\":[\"Refuse the whole scan with folder_unavailable\",\"Skip the failed subtree and return the other observations\",\"Return a rejected observation for the subtree\"],\"default_guess\":\"Refuse the whole scan with folder_unavailable.\",\"witness\":{\"initial\":\"A confirmed project has a readable photo folder containing subfolder x.\",\"events\":[\"Syncthing removes x or revokes its permissions after the top-level enumeration\",\"The calling flow scans the project\"],\"outcomes\":[\"The entire scan is refused with folder_unavailable\",\"The scan succeeds and silently omits x\"],\"observer\":\"The calling flow and owner\"}},{\"subject\":\"A1\",\"kind\":\"race semantics\",\"text\":\"A file exactly at the settling time or exactly at the source limit passes that rule.\",\"question\":\"Which metadata snapshot supplies age and size when the file changes between enumeration, metadata reading, opening, and reading, and must a non-growing change during that interval alter the result?\",\"options\":[\"Use the initial metadata snapshot\",\"Restat after opening and use the later metadata\",\"Reject any detected metadata change\"],\"default_guess\":\"Use initial metadata for the ordered checks, but reject or reclassify changes detected while securely reading the file.\"},{\"subject\":\"A1\",\"kind\":\"field population\",\"text\":\"A scan gives each regular file of the photo folder exactly one status.\",\"question\":\"For each status, which optional M02 fields must be populated, especially size, source_id, reason, duplicate_of, file_ref, and photo_id?\",\"options\":[\"Define a field-presence matrix by status\",\"Populate every value that happened to be computed\",\"Leave all optional fields implementation-dependent\"],\"default_guess\":\"Define a field-presence matrix; ready, duplicate, placed, and published should carry source_id, and only the status-specific fields should be non-null.\"},{\"subject\":\"A1\",\"kind\":\"duplicate reference\",\"text\":\"`duplicate` | `duplicate_content`, with `duplicate_of`\",\"question\":\"What exact value goes in duplicate_of: the earlier observation's relative name, source_id, or another identifier?\",\"options\":[\"Relative name\",\"Source id\",\"Placement identity\"],\"default_guess\":\"Use the earlier observation's relative name, matching M02's statement that a duplicate names the earlier file.\"},{\"subject\":\"A1\",\"kind\":\"scan race classification\",\"text\":\"opening or reading it fails, including a file that disappeared or became a link\",\"question\":\"If a regular file is replaced by a symbolic link between metadata inspection and opening, what secure opening procedure is required and is the result always unreadable_file rather than not_a_regular_file?\",\"options\":[\"Open without following links and report unreadable_file if that open fails\",\"Open without following links and report not_a_regular_file\",\"Follow the link if its resolved target remains inside the photo folder\"],\"default_guess\":\"Open without following links and report unreadable_file when the replacement prevents opening.\"},{\"subject\":\"A2\",\"kind\":\"underspecified encoding\",\"text\":\"A stored image is a newly encoded JPEG made from the decoded pixels of the source. Transparent areas become white. The camera orientation is applied, then the longest side is reduced to the limit when it is larger.\",\"question\":\"Which color conversion, alpha-compositing color space, resize filter, JPEG subsampling, progressive/optimization settings, and metadata-stripping method define the stored bytes?\",\"options\":[\"Specify a deterministic encoding recipe\",\"Permit any encoder output satisfying the visible constraints\",\"Adopt the image library's version-dependent defaults\"],\"default_guess\":\"Specify a deterministic RGB/sRGB conversion and encoding recipe using the declared quality, with all metadata omitted.\"},{\"subject\":\"A2\",\"kind\":\"limit measurement\",\"text\":\"a first frame above the pixel limit (width times height) fails with `too_many_pixels`\",\"question\":\"Are width and height measured before or after applying camera orientation, and which dimensions are used when a decoder reports multiple candidate sizes or malformed metadata?\",\"options\":[\"Decoded first-frame dimensions before orientation\",\"Oriented dimensions\",\"Maximum dimensions reported anywhere in the container\"],\"default_guess\":\"Use the securely parsed first-frame dimensions before orientation; rotation does not change their product.\"},{\"subject\":\"A2\",\"kind\":\"camera-date parsing\",\"text\":\"The photo moment is the first usable value of: EXIF `DateTimeOriginal` with `OffsetTimeOriginal` when that offset has the form `+HH:MM` or `-HH:MM`, EXIF `DateTime`, then the file's modification time.\",\"question\":\"Which exact EXIF date syntax is accepted, whether surrounding NULs or whitespace are allowed, and whether DateTimeOriginal is discarded when its offset is absent or invalid rather than interpreted in the configured time zone?\",\"options\":[\"Accept a precisely specified EXIF syntax and require a valid OffsetTimeOriginal for DateTimeOriginal\",\"Interpret DateTimeOriginal without a valid offset in the configured time zone\",\"Use the imaging library's permissive parser\"],\"default_guess\":\"Require the normal EXIF date syntax; use DateTimeOriginal only with a valid OffsetTimeOriginal, then try DateTime in the configured time zone.\"},{\"subject\":\"A2\",\"kind\":\"timezone failure\",\"text\":\"A camera time with no offset is read in the configured time zone.\",\"question\":\"What happens at service startup or placement when the configured time-zone name is unknown or its zone data is unavailable?\",\"options\":[\"Fail service startup\",\"Fail the affected item as unreadable_image\",\"Fall back to UTC\"],\"default_guess\":\"Fail service startup because the run setting is invalid.\"},{\"subject\":\"A2\",\"kind\":\"date plausibility basis\",\"text\":\"A camera value is unusable when it is malformed, when its UTC year is before 2000, or when it is more than 24 hours after the file's modification time.\",\"question\":\"Is the 24-hour comparison made after resolving ambiguous/nonexistent local time, at full microsecond precision, and are camera values arbitrarily far before the modification time accepted?\",\"options\":[\"Compare resolved UTC instants exactly and impose no lower-distance bound\",\"Compare local wall times\",\"Reject values more than 24 hours in either direction\"],\"default_guess\":\"Resolve to UTC first, compare exact instants, and accept arbitrarily earlier camera times because only a future bound is stated.\"},{\"subject\":\"A2\",\"kind\":\"animated-image handling\",\"text\":\"Only the first frame of an animated image is delivered.\",\"question\":\"Does the first frame mean the raw first frame or the fully composited first displayed frame, and are frame-level orientation, transparency, and color profiles applied?\",\"options\":[\"Decode the library's fully rendered frame zero\",\"Use raw frame-zero pixels\",\"Reject animations requiring frame composition\"],\"default_guess\":\"Use the fully decoded displayed frame zero and apply the same orientation and pixel conversion as for a still image.\"},{\"subject\":\"A3\",\"kind\":\"replay prerequisites\",\"text\":\"Placing an existing placement answers `replayed` with the stored placement and the current `photo_id` of its mark, if any, and writes nothing, even when the source file has left the folder.\",\"question\":\"Must an existing placement still pass the connection and photo-folder checks and participate in the call's mandatory scan, or may it replay when the folder is unavailable?\",\"options\":[\"Require connection and folder checks, then scan once\",\"Replay after authentication and identifier validation without requiring the source folder\",\"Require the connection but not the folder\"],\"default_guess\":\"Apply the stated check order, requiring a confirmed connection and available folder before replay.\",\"witness\":{\"initial\":\"A placement and mark exist, but the project's photo folder is temporarily unavailable.\",\"events\":[\"The calling flow requests placement of the existing source_id\"],\"outcomes\":[\"The call is refused with folder_unavailable because folder checking precedes source processing\",\"The item is returned as replayed because durable placement state is sufficient\"],\"observer\":\"The calling flow and owner\"}},{\"subject\":\"A3\",\"kind\":\"refusal contract\",\"text\":\"A call holds from 1 to 50 source ids, otherwise it is refused whole.\",\"question\":\"Which refusal code and HTTP/result form are used for zero items, more than 50 items, malformed request form, malformed project id, and malformed token-authenticated JSON?\",\"options\":[\"Add closed refusal codes for each request-level error\",\"Map them to framework HTTP validation errors outside RefusalCode\",\"Use one invalid_request refusal\"],\"default_guess\":\"Use a single explicit invalid_request refusal for shape and cardinality errors and an explicit invalid_project_id refusal for the project id.\"},{\"subject\":\"A3\",\"kind\":\"storage failure semantics\",\"text\":\"A read or storage failure of one photo is reported in its item as `unreadable_file` and the others proceed.\",\"question\":\"Which failures count as storage failures, what durable artifacts may remain after each one, and why is a destination write failure represented as unreadable_file rather than a distinct placement failure?\",\"options\":[\"All image/record write and sync failures become unreadable_file and any orphan image may remain\",\"Introduce a storage_failure item reason and define cleanup\",\"Refuse the whole call on durable-store failure\"],\"default_guess\":\"Introduce a distinct storage_failure reason, continue other items only when durability invariants remain intact, and permit only the explicitly documented orphan-image crash state.\"},{\"subject\":\"A3/A6\",\"kind\":\"orphan recovery\",\"text\":\"The stored image is written before the placement record, so a crash between them repeats the placement and leaves no record without an image.\",\"question\":\"When retry finds the complete stored image but no placement record, must it verify and reuse that image, overwrite it atomically, or treat it as a conflict?\",\"options\":[\"Verify and reuse it\",\"Overwrite it atomically with the newly prepared image\",\"Refuse because unrecorded durable state exists\"],\"default_guess\":\"Reprepare, verify the expected destination, and atomically overwrite or reuse only if the bytes match.\"},{\"subject\":\"A4\",\"kind\":\"identifier validation order\",\"text\":\"Checks run in this order: token, request form and identifiers, connection, placement.\",\"question\":\"What is the precedence among malformed project_id, source_id, and photo_id, and which refusal code represents each malformed identifier?\",\"options\":[\"Specify a fixed identifier order and separate codes\",\"Treat all malformed identifiers as one invalid_request\",\"Leave precedence to request-model validation\"],\"default_guess\":\"Validate project_id, then source_id, then photo_id, with explicit stable refusal codes.\"},{\"subject\":\"A5\",\"kind\":\"token representation\",\"text\":\"The token is generated with 256 bits from a cryptographic random source and is kept in a UTF-8 file.\",\"question\":\"What textual encoding and canonical length are used for the 256 random bits, and may the file contain anything except that canonical token plus surrounding whitespace?\",\"options\":[\"64 lowercase hexadecimal characters\",\"URL-safe base64 without padding\",\"Any UTF-8 representation at least 32 characters long\"],\"default_guess\":\"Use 64 lowercase hexadecimal characters followed optionally by one newline.\"},{\"subject\":\"A5\",\"kind\":\"token-file validation\",\"text\":\"The service does not start when the group or others have any permission on the file or the token has fewer than 32 characters.\",\"question\":\"What happens for a missing, unreadable, non-UTF-8, empty, non-regular, symlinked, or wrong-owner token file, and are embedded whitespace/control characters legal?\",\"options\":[\"Fail startup for every such condition and require a regular owner-controlled file\",\"Apply only the two stated checks\",\"Follow symlinks and accept any decoded token of sufficient length\"],\"default_guess\":\"Fail startup unless the token file is a regular, non-symlinked, owner-controlled UTF-8 file containing one nonempty canonical token.\"},{\"subject\":\"A5\",\"kind\":\"path validation\",\"text\":\"The photo and invoice subfolders are non-empty relative paths without `..`.\",\"question\":\"Are `.`, absolute-path syntax, empty components, platform separators, NULs, and components merely containing two dots allowed, and is normalization performed before validation?\",\"options\":[\"Define validation on parsed path components and reject root-equivalent or absolute paths\",\"Apply a literal substring ban on `..`\",\"Accept anything the platform parses as relative\"],\"default_guess\":\"Parse and normalize without filesystem traversal; reject absolute, root-equivalent, NUL-containing, empty-component, and parent-component paths while allowing ordinary names containing two dots.\"},{\"subject\":\"A5\",\"kind\":\"filesystem race\",\"text\":\"On each scan and placement the photo folder must be a folder whose resolved path is inside the resolved root, otherwise the operation is refused with `folder_unavailable`.\",\"question\":\"How is containment preserved if a symlink or directory component changes after resolution but before or during file access?\",\"options\":[\"Use descriptor-relative, no-follow access anchored at the validated root\",\"Resolve once and then use path strings\",\"Re-resolve before each individual open\"],\"default_guess\":\"Use descriptor-relative access anchored at the resolved root with no-follow checks for mutable components.\"},{\"subject\":\"A5\",\"kind\":\"connection-file failure\",\"text\":\"The service does not start with a connection that breaks this.\",\"question\":\"Does the service also fail startup for a missing, unreadable, malformed, duplicate-project, or partially invalid connections file, or may it load the valid records and ignore the rest?\",\"options\":[\"Fail startup atomically for any invalid connections input\",\"Ignore invalid records and load valid ones\",\"Start with no connections on read/parse failure\"],\"default_guess\":\"Fail startup atomically for any unreadable or invalid connections data.\"},{\"subject\":\"A6\",\"kind\":\"atomic-write details\",\"text\":\"Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none.\",\"question\":\"How are temporary names made collision-safe, what permissions are used before rename, whether rename may replace an existing destination, and when stale temporary files are removed?\",\"options\":[\"Unique same-directory temporary file, explicit final mode, atomic replace, startup cleanup\",\"Fixed temporary suffix and no cleanup\",\"Refuse if either temporary or destination file already exists\"],\"default_guess\":\"Create a unique same-directory temporary file without following links, set its final mode explicitly, fsync it, atomically replace the destination, fsync the directory, and clean stale recognized temporaries safely.\"},{\"subject\":\"A6\",\"kind\":\"lock failure behavior\",\"text\":\"A caller waits for the lock without a time limit, and the lock is released when its holder ends.\",\"question\":\"What happens when the lock file cannot be created/opened, locking is unsupported, the state folder disappears, or the waiting caller is cancelled?\",\"options\":[\"Refuse without performing the mutation\",\"Wait/retry every lock error indefinitely\",\"Proceed without the lock\"],\"default_guess\":\"Refuse the operation without mutation on lock setup or integrity failure; cancellation ends only that waiting call.\"},{\"subject\":\"A6\",\"kind\":\"lock identity\",\"text\":\"under an operating system lock on one lock file of that project in the state folder\",\"question\":\"What exact lock-file name and safe derivation from project_id are required, and what mode and ownership must the lock file have?\",\"options\":[\"Specify a deterministic UUID-derived filename and private mode\",\"Allow any per-project lock convention\",\"Reuse a state-record file as the lock\"],\"default_guess\":\"Use a deterministic lowercase UUID-derived filename in a dedicated state lock directory with mode 0600.\"},{\"subject\":\"A7\",\"kind\":\"contradictory invariant scope\",\"text\":\"INV-13: one operation uses one reading of the service clock.\",\"question\":\"Does INV-13 apply to every operation, which contradicts the rule that health and refused requests read zero times, or only to accepted scan, placement, and mark operations?\",\"options\":[\"Limit INV-13 to accepted scan, placement, and mark operations\",\"Make health and refused requests read once\",\"State an operation-specific clock-read cardinality invariant\"],\"default_guess\":\"Replace it with an operation-specific invariant: accepted scan, placement, and mark read exactly once; health and refused requests read zero times.\",\"witness\":{\"initial\":\"The service is running and its counting clock is at zero.\",\"events\":[\"A caller requests the health answer\"],\"outcomes\":[\"INV-13 requires one clock read because health is an operation\",\"The normative rule and required test require zero clock reads\"],\"observer\":\"The test suite and service operator\"}},{\"subject\":\"A7\",\"kind\":\"acceptance boundary\",\"text\":\"Scan, placement and mark each read it once, after the request is accepted and before any file is examined.\",\"question\":\"Exactly which checks constitute acceptance, especially connection lookup, folder resolution, lock acquisition, and the existence check for a placement or mark?\",\"options\":[\"After all request-level refusal checks and lock acquisition, before source-file metadata or bytes\",\"Immediately after authentication and request parsing\",\"At operation entry before any validation\"],\"default_guess\":\"Read after authentication, request validation, connection/folder validation, and lock acquisition, but before examining any source file or creating mutable state.\"},{\"subject\":\"A7\",\"kind\":\"per-item failure clock use\",\"text\":\"The health answer and a refused request do not read it.\",\"question\":\"Is a placement call that is accepted but whose every item fails still required to read the clock once, and what distinguishes a refused request from an accepted request returning failed items?\",\"options\":[\"Every accepted call reads once regardless of item outcomes\",\"Read only if at least one item reaches preparation\",\"Treat an all-failed result as a refusal and read zero times\"],\"default_guess\":\"Every request-level accepted scan, placement, or mark call reads exactly once even if all placement items fail.\"},{\"subject\":\"A7\",\"kind\":\"clock normalization\",\"text\":\"The current time is a `datetime` in UTC without an offset, with microsecond precision and no rounding, written in ISO 8601 form.\",\"question\":\"If utc_now returns an aware datetime, a non-UTC datetime, or precision finer/coarser than microseconds, must the authority normalize it or reject it, and what exact ISO 8601 spelling is persisted?\",\"options\":[\"The backend guarantees a naive UTC datetime and canonical six-digit-microsecond text\",\"Consumers normalize any datetime returned\",\"Reject values that are not already in canonical form\"],\"default_guess\":\"Make utc_now return naive UTC at Python datetime microsecond precision and serialize it in one canonical form with six fractional digits.\"},{\"subject\":\"A8\",\"kind\":\"incomplete closed refusal list\",\"text\":\"`RefusalCode` is `unknown_project`, `connection_not_confirmed`, `folder_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed` and `publication_conflict`.\",\"question\":\"Where are authentication failures, malformed project_id or photo_id, malformed request form, and invalid placement batch size represented if RefusalCode is the closed list?\",\"options\":[\"Extend RefusalCode\",\"Define a separate closed HTTP/request-error model\",\"State that framework errors are outside the service refusal model and give their exact forms\"],\"default_guess\":\"Define a separate closed request/authentication error model with exact precedence and response forms.\",\"witness\":{\"initial\":\"An authenticated caller submits a placement request with 51 source ids.\",\"events\":[\"The service applies A3's whole-call refusal\"],\"outcomes\":[\"The response uses an unlisted refusal code invented by the implementer\",\"The response is a framework validation error outside RefusalCode\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A8\",\"kind\":\"constant semantics\",\"text\":\"| `PHOTO_QUALITY` | `int` | 85 |\",\"question\":\"Which encoder parameter does PHOTO_QUALITY control, and are other JPEG parameters fixed or library defaults?\",\"options\":[\"Define the complete JPEG recipe and quality's exact role\",\"Pass 85 to the library's quality option and accept all defaults\",\"Treat it as an abstract target quality\"],\"default_guess\":\"Pass it to a specified JPEG encoder quality parameter as part of a fully fixed encoding recipe.\"},{\"subject\":\"A9\",\"kind\":\"missing dependency versions\",\"text\":\"The direct libraries are pinned to exact versions: pillow, fastapi, pydantic and uvicorn.\",\"question\":\"What exact version of each library is the accepted decision, and is capitalization/package naming canonical?\",\"options\":[\"List all four exact versions in State 2\",\"Make the deployment manifest the authoritative decided-value table\",\"Defer version selection to implementation\"],\"default_guess\":\"List canonical distribution names and exact accepted versions in the dependency decision.\"},{\"subject\":\"A9\",\"kind\":\"missing policy value\",\"text\":\"no older than the deploy route's maximum snapshot age\",\"question\":\"What is the maximum snapshot age, in what unit, which clock determines it, and through which decided-value path does the deployment check receive it?\",\"options\":[\"A named imported policy constant\",\"A deployment configuration field\",\"A fixed value owned by an external deployment route with an explicit contract\"],\"default_guess\":\"Define a named imported policy constant measured in seconds and compare it using the deployment authority's UTC clock.\"},{\"subject\":\"A9\",\"kind\":\"vulnerability matching\",\"text\":\"Any known vulnerability listed for an installed version blocks the deployment, whatever its severity, and a check that cannot complete does not pass.\",\"question\":\"What counts as listed and known when OSV records are withdrawn, disputed, ecosystem-mismatched, range-only, or lack a fixed version, and what exact result represents an incomplete check?\",\"options\":[\"Block every non-withdrawn matching OSV record and fail closed on any indeterminate package\",\"Block every returned record including withdrawn records\",\"Use the scanner's version-dependent default interpretation\"],\"default_guess\":\"Block every non-withdrawn PyPI record whose affected ranges match the installed normalized version, and fail closed on any incomplete or indeterminate result.\"},{\"subject\":\"A9\",\"kind\":\"deployment scope\",\"text\":\"Before each deployment every distribution installed in the image is checked against a snapshot of the OSV database\",\"question\":\"At which immutable image stage is the distribution inventory taken, and must OS packages also be checked even though the required ecosystem is stated as PyPI?\",\"options\":[\"Check every Python distribution in the final immutable runtime image\",\"Check Python and OS packages\",\"Check only the four direct libraries\"],\"default_guess\":\"Check every Python distribution installed in the final immutable runtime image; OS packages require a separately specified ecosystem policy.\"},{\"subject\":\"A11\",\"kind\":\"UTC-format contradiction\",\"text\":\"A `photo_date` ending in `Z` or in an offset `+HH:MM` or `-HH:MM` is an old date.\",\"question\":\"How can the Required tests statement that a project holding only UTC dates passes be reconciled with this rule, since a date ending in Z is an explicit UTC date?\",\"options\":[\"Only naive UTC dates pass; rewrite the test to say that\",\"Z dates pass and only nonzero numeric offsets are old\",\"Both Z and numeric-offset dates are old, while 'UTC dates' means the Portal's naive UTC representation\"],\"default_guess\":\"State explicitly that only the Portal's naive UTC representation passes and that Z is classified as an old serialized form.\",\"witness\":{\"initial\":\"A project's staff photo list contains only 2026-11-18T10:00:00Z.\",\"events\":[\"The calling flow performs the pre-delivery old-date check\"],\"outcomes\":[\"The normative rule classifies the Z date as old and stops delivery\",\"The Required tests phrase 'holding only UTC dates passes' permits the flow to continue\"],\"observer\":\"The owner and calling flow\"}},{\"subject\":\"A11/context\",\"kind\":\"earlier-state conflict\",\"text\":\"When the list holds an old date, or cannot be read, the flow places and publishes nothing for that project and tells the owner which project needs the repair.\",\"question\":\"Does the State 0 condition 'If a date still carries an offset' include the Z form newly classified as old here, or did State 2 broaden an accepted owner decision?\",\"options\":[\"Define Z as carrying an explicit zero offset and retain the broader rule\",\"Treat only +HH:MM and -HH:MM as carrying an offset\",\"Record a new owner decision that expressly adds Z\"],\"default_guess\":\"Record expressly that Z is an explicit offset representation and is included in the accepted repair gate.\"},{\"subject\":\"A11\",\"kind\":\"insufficient required test\",\"text\":\"The calling flow's own stop is shown when that flow exists.\",\"question\":\"What must the future witness assert to prove INV-17 and rule 2: no placement call, no Portal publication call, no mark call, and an owner-visible repair notice identifying the project?\",\"options\":[\"Require all four negative/positive observations explicitly\",\"Assert only that no Portal publication occurs\",\"Treat detection of an old date as sufficient\"],\"default_guess\":\"Require the witness to show no placement, publication, or mark attempt and an owner-visible notice naming the affected project.\"},{\"subject\":\"A10\",\"kind\":\"external closed-list dependency\",\"text\":\"The closed list of categories is `SECURITY_REVIEW_EVIDENCE.md`.\",\"question\":\"What exact category list is part of this State 2 decision, and how can later agents know that the displayed review is total when the referenced file's contents are not included?\",\"options\":[\"Copy the closed category list into State 2\",\"Make a named generated/imported manifest authoritative and define its validation\",\"Allow later tooling to choose the categories\"],\"default_guess\":\"Copy or mechanically bind the exact closed category list into the decision and require every member to have one explicit outcome.\"},{\"subject\":\"M02/A1\",\"kind\":\"status precedence consequence\",\"text\":\"The earlier file of rule 8 is the first file with that content in this order that reached rule 8.\",\"question\":\"If the first occurrence already has a placement or publication mark, must every later same-content path still be duplicate rather than placed or published, and which path is returned by duplicate_of?\",\"options\":[\"Duplicate always wins before placement status\",\"Placed/published status wins for every path sharing the content\",\"Only the first path may be placed/published; later paths are duplicate\"],\"default_guess\":\"Only the first path in scan order receives placed or published status; later same-content paths are duplicate and point to that first relative name.\",\"witness\":{\"initial\":\"Two paths a.jpg and b.jpg have identical bytes, and the content has an existing published placement.\",\"events\":[\"The scanner visits a.jpg then b.jpg\"],\"outcomes\":[\"a.jpg is published and b.jpg is duplicate because rule 8 precedes placement lookup for the later path\",\"Both paths are published because placement identity is content-based\"],\"observer\":\"The calling flow and owner\"}},{\"subject\":\"M04/A3\",\"kind\":\"field meaning\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `name: str`, `file_ref: str`, `sha256: str`, `size: int`, `media_type: str`, `date_source: DateSource`, `publication: PhotoPublication`.\",\"question\":\"What do sha256 and size measure when source_id is already the SHA-256 of source content: source bytes, stored JPEG bytes, or something else, and is media_type invariably image/jpeg?\",\"options\":[\"sha256/source_id describe source bytes while size and media_type describe the stored JPEG\",\"All three describe the stored JPEG\",\"sha256 duplicates source_id and size describes source bytes\"],\"default_guess\":\"source_id and sha256 are the same source-content digest; size and media_type describe the stored JPEG, whose media_type is image/jpeg.\"},{\"subject\":\"M05/A3\",\"kind\":\"identity collision\",\"text\":\"the deliverer derives it from the placement identity as `deliverer-photo-<project_id>-<first 32 characters of source_id>`, so a repeated publication is recognised by the Portal.\",\"question\":\"What happens when two different SHA-256 source ids in the same project share their first 32 hexadecimal characters and therefore produce the same intake_id?\",\"options\":[\"Use the full source_id in intake_id\",\"Treat the truncated collision as a refusal\",\"Assume a 128-bit prefix cannot collide\"],\"default_guess\":\"Use the full source_id, or another injective encoding of the complete placement identity, in intake_id.\",\"witness\":{\"initial\":\"One project has two valid source files whose distinct SHA-256 hashes share the first 32 hexadecimal characters.\",\"events\":[\"The first placement is published with its derived intake_id\",\"The second placement is published with its derived intake_id\"],\"outcomes\":[\"The Portal treats the second publication as a replay of the first because the intake_id is identical\",\"The Portal creates a second photo because the two placements are distinct\"],\"observer\":\"The owner and client\"}},{\"subject\":\"A9\",\"kind\":\"standard_violation\",\"text\":\"no older than the deploy route's maximum snapshot age\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Replace this unnamed external value with a decided imported policy constant or a field of the deployment settings object, including its type and unit.\"}]}",
+ "set_aside": []
+}
