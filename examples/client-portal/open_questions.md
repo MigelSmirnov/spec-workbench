@@ -86,6 +86,17 @@ Which boundary owns materialization?
 Until this is decided, a kernel scenario may publish and report an accepted
 snapshot, but must not claim that the client-visible budget was updated.
 
+Observed again on 2026-11-18 with estimate v2 of Guifré 9
+(`b13c5547-fe49-439d-a7d8-0a02b2c19a7b`): the producer received a grant, but
+the client budget could only be changed through the manual path. The project
+has one manual `BudgetVersion`; `put_section` edits it in place, so the v1
+amounts were overwritten and the portal keeps no client-visible trace of v1
+(only audit entries). Open question 5 and 8 are therefore live, not
+theoretical. Owner position 2026-11-18: delivering the approved estimate is the
+job of a separate deliverer, not of the portal; the open part is the
+materialization of an accepted snapshot into a candidate budget (questions 1–3
+above).
+
 ### Q12 — The binary intake the design relies on was never built
 
 The former `spec/30_modules.md` (State 3, "Binary storage boundary"; now `30_modules.md` `binary_storage`) makes
@@ -129,6 +140,12 @@ Questions this leaves to the portal contract:
 
 Until this is decided, operator placement stays the declared temporary route,
 marked as outside the API in `platform/manifest/client_portal.json`.
+
+Observed again on 2026-11-18 (Guifré 9): eight photos and five expense
+documents were placed by the operator the same way. Owner position
+2026-11-18: the object folders already reach the VPS through Syncthing-fork
+(`obras/<object>/foto`, `…/Facturas`); the deliverer connects those folders to
+the portal. Questions 1–5 above still define the contract it must meet.
 
 ### Q13 — A viewer's access codes cannot be listed
 
@@ -341,3 +358,67 @@ notes what its route table prevents.
 Kept for now (owner 2026-11-06: current service behaviour accepted; technical
 decisions delegated): `00_product.md` R0-25, `02_rules.md` A7, A12, A13 and
 `flow:import_estimate_snapshot` follow the route. Deferred until designed.
+
+### Q21 — Mixed photo date forms break the photo list
+
+Found 2026-11-18 on Guifré 9 (`b13c5547-…`). `photo.publish` now stores
+`photo_date` as naive UTC (`2026-11-09T16:15:12`); the photo published on
+2026-11-03 had been stored with its offset (`2026-11-04T00:02:25+01:00`).
+`list_progress_photos` sorts by `(photo_date, photo_id)` and raised
+`TypeError: can't compare offset-naive and offset-aware datetimes`:
+`GET /staff/projects/{id}/photos` answered 500 and the overview returned
+`photos: null`, so the client saw no photos. Ponent 13 and Proyecto Demo
+Facebook still hold only offset dates and fail the same way on their next
+photo. Worked around by rewriting the one old row to naive UTC after a database
+backup (`portal.sqlite3.bak-20261118-guifre9-photodate`); recorded as
+`photo-date-mixed-offsets` in `platform/manifest/client_portal.json`.
+
+1. Which single stored form does `photo_date` have, and how are existing rows
+   brought to it?
+2. Must ordering of derived views compare instants rather than stored
+   representations (see Q18)?
+
+This is a defect of the running service, not a product decision.
+
+### Q22 — A manual budget section cannot be removed
+
+Found 2026-11-18 on Guifré 9: the manual budget holds seven empty sections
+(sort order 101–107, zero amounts) left by an earlier import, next to the real
+ones. The surface offers `budget.open_manual`, `budget.put_section` and
+`budget.activate`; nothing removes or hides a section or its plan, so the
+client sees the zero rows.
+
+1. May staff remove a section plan, or mark a section not client-visible, and
+   under which conditions (no allocations, no progress)?
+
+### Q23 — The overview does not name a photo's section
+
+Found 2026-11-18 on Guifré 9: photos published with `section_id` keep it
+(`GET /staff/projects/{id}/photos`), but the project overview returns
+`section_display_name: null` for each of them.
+
+1. Is the section name of a photo part of the overview projection (defect), or
+   deliberately left out?
+
+### Q24 — Who paid for the materials
+
+Found 2026-11-18 on Guifré 9: the client paid most materials directly
+(1 534,47 €) and the contractor three receipts (58,29 €). The portal knows only
+client payments and completed work; the client's material purchases had to be
+recorded as a payment, and the work balance then shows them as an unused
+advance (−1 199,47 €). Pedreres 35 records materials the same way.
+
+1. Should an expense carry who paid it (client directly, contractor, refund to
+   contractor), and the balance distinguish work from materials? Owner
+   2026-11-18: a future feature, not a defect.
+
+### Q25 — The client cannot download the estimate
+
+Found 2026-11-18: an accepted snapshot carries only section totals and is not
+shown to the viewer; the viewer reads the overview, photos and expense
+documents only. The estimate document (PresuPro PDF) is therefore sent outside
+the portal (WhatsApp); v1 was shown as a summary image published as a photo.
+
+1. Should the portal show and serve the approved estimate document (lines and
+   PDF) per approved version, delivered by the same deliverer as Q11/Q12?
+   Owner 2026-11-18: a feature to record.
