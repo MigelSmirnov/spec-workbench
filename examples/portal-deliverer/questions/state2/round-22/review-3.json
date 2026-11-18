@@ -1,0 +1,223 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_rule",
+   "text": "`marked_at: datetime`",
+   "question": "What clock supplies `marked_at`, what datetime representation is stored, and how many times is that clock read by one mark operation?",
+   "options": [
+    "Read one injected system clock once and store a naive UTC datetime.",
+    "Read the ambient system clock when the record is written.",
+    "Use a timestamp supplied by the caller."
+   ],
+   "default_guess": "Read an injected system clock exactly once per mark operation and store a naive datetime representing UTC.",
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto.taken_at and M05 PhotoPublication.photo_date",
+   "kind": "vague_time_source",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "Which camera metadata fields are eligible, in what precedence, what makes a value unusable and causes fallback, and how is a camera value with no offset converted to UTC?",
+   "options": [
+    "Use a specified EXIF field priority and offset tags, falling back to file modification time when conversion is not unambiguous.",
+    "Treat an offset-less camera timestamp as already UTC.",
+    "Interpret an offset-less camera timestamp in the VPS local timezone."
+   ],
+   "default_guess": "Use an explicitly ordered set of EXIF date and offset fields; fall back to file modification time if no camera timestamp can be converted unambiguously to UTC.",
+   "unit": "?"
+  },
+  {
+   "subject": "M03 file modification time",
+   "kind": "time_read_race",
+   "text": "otherwise from the file's modification time",
+   "question": "Is the modification time taken from the pre-open path metadata or from the opened file descriptor, and is it read once before or after the source bytes are read?",
+   "options": [
+    "Read it once from the opened file descriptor before reading bytes.",
+    "Read it once from the opened file descriptor after reading bytes.",
+    "Use the path metadata already inspected for A3 condition 1."
+   ],
+   "default_guess": "Read it once from the opened file descriptor after opening and use that same value throughout preparation.",
+   "witness": {
+    "initial": "The requested path names file A; another file B can replace that path while delivery runs.",
+    "events": [
+     "The caller starts delivery.",
+     "The deliverer reads path metadata.",
+     "Another actor replaces the path with file B.",
+     "The deliverer opens and reads the source bytes."
+    ],
+    "outcomes": [
+     "The stored photo uses file B's bytes with file A's modification time.",
+     "The stored photo uses file B's bytes with file B's modification time."
+    ],
+    "observer": "The owner sees a different photo date in the Portal publication."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 2 and A6 rule 5",
+   "kind": "contradictory_outcome",
+   "text": "Delivering content that already has a placement answers `replayed` with the stored placement and the current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even when the source file has left the folder.\nA placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record: the operation is refused with the STATE_UNAVAILABLE member of = models.RefusalCode",
+   "question": "When a valid placement exists but its mark record is damaged, does delivery replay the placement without a photo id or refuse the whole operation with STATE_UNAVAILABLE?",
+   "options": [
+    "A6 takes precedence and delivery is refused.",
+    "A3 rule 2 takes precedence and delivery returns `replayed` without a photo id.",
+    "Replay the placement but attach a state warning."
+   ],
+   "default_guess": "A6 takes precedence and delivery is refused with STATE_UNAVAILABLE.",
+   "witness": {
+    "initial": "A valid placement record and stored image exist; the corresponding mark record exists but contains invalid JSON.",
+    "events": [
+     "The caller delivers the same source content again."
+    ],
+    "outcomes": [
+     "A3 rule 2 returns `replayed` with the stored placement and no current photo id.",
+     "A6 rule 5 returns M08 with STATE_UNAVAILABLE."
+    ],
+    "observer": "The calling flow sees either a successful replay or a whole-operation refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 5 refusal used by the changed A3 recovery rule",
+   "kind": "incomplete_refusal_conditions",
+   "text": "is not valid JSON, is not an object or lacks a field of its model",
+   "question": "Does a JSON object containing every field but having a wrong field type, invalid enum value, malformed UUID, or otherwise invalid model value also require STATE_UNAVAILABLE?",
+   "options": [
+    "Any model-validation failure is STATE_UNAVAILABLE.",
+    "Only the listed structural failures are STATE_UNAVAILABLE; invalid values receive another outcome.",
+    "Only missing fields are checked after JSON object parsing."
+   ],
+   "default_guess": "Treat every failure to validate an existing record against its complete model as STATE_UNAVAILABLE.",
+   "witness": {
+    "initial": "A stored image remains without a placement record, and a mark record exists with every required field but a non-UUID `photo_id`.",
+    "events": [
+     "The caller repeats delivery of the same source file.",
+     "The deliverer inspects the existing mark before completing the placement."
+    ],
+    "outcomes": [
+     "The malformed value counts as a damaged record and the call is refused under A6 rule 5.",
+     "Because no field is missing and the JSON is an object, A6 rule 5 does not apply and recovery continues or fails by an unspecified path."
+    ],
+    "observer": "The caller sees either STATE_UNAVAILABLE or a completed/otherwise failed placement."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 INV-06 Required tests",
+   "kind": "test_rule_mismatch",
+   "text": "A delivery repeated after a failed record write completes the placement (`test_a_delivery_repeated_after_a_failed_record_write_completes`).",
+   "question": "Must this Required tests item explicitly exclude every A6 rule 5 refusal, or must it instead demonstrate the newly added refusal branch as well as successful recovery?",
+   "options": [
+    "Qualify successful recovery with the absence of an A6 rule 5 refusal and add a separate refusal case.",
+    "Require completion even when A6 rule 5 would otherwise refuse.",
+    "Remove the recovery assertion from INV-06."
+   ],
+   "default_guess": "Qualify the completion case and add a separate assertion that an applicable A6 rule 5 condition returns STATE_UNAVAILABLE without changing the orphaned image.",
+   "witness": {
+    "initial": "A failed placement-record write has left an orphaned stored image.",
+    "events": [
+     "Before retry, another actor creates or damages the corresponding mark record.",
+     "The caller repeats delivery."
+    ],
+    "outcomes": [
+     "The changed normative rule applies A6 rule 5 and refuses the retry.",
+     "The unqualified Required tests sentence says the retry completes the placement."
+    ],
+    "observer": "The caller sees either STATE_UNAVAILABLE or a completed placement."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-01 Required tests",
+   "kind": "insufficient_invariant_test",
+   "text": "after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes",
+   "question": "How must the test show that no operation ever creates, changes, moves or deletes a source entry, rather than only showing that the final snapshot was restored?",
+   "options": [
+    "Instrument filesystem mutation operations and assert none target the source tree.",
+    "Observe the source directory throughout each operation.",
+    "Narrow INV-01 to final-state equality."
+   ],
+   "default_guess": "Instrument all mutation calls and assert none target the source tree, while retaining the final-state comparison.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "insufficient_invariant_test",
+   "text": "each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock",
+   "question": "How must the test show that delivery opens no failing path, since the stated outcome and durable-state assertions also pass if the implementation opens or reads the path before rejecting it?",
+   "options": [
+    "Instrument path and file opens and assert no rejected target is opened.",
+    "Use an operating-system audit or a sentinel filesystem to detect access.",
+    "Change the invariant to require only rejection and no durable writes."
+   ],
+   "default_guess": "Instrument filesystem opens and assert that none of the paths rejected by A3 condition 1 is opened.",
+   "witness": {
+    "initial": "A rejected symbolic-link path points to a readable sentinel file outside the photo folder.",
+    "events": [
+     "The caller requests delivery through that path.",
+     "An implementation opens and reads the target, then returns NOT_READY_OR_ABSENT without writing durable state."
+    ],
+    "outcomes": [
+     "The listed Required test passes because the answer and files are correct.",
+     "An access-observing test fails because INV-02 forbids opening the path."
+    ],
+    "observer": "A filesystem audit or sentinel-file owner sees the forbidden access."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "missing_test_case",
+   "text": "for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail",
+   "question": "Which Required test demonstrates the A3 condition-1 case where metadata of a segment cannot be read?",
+   "options": [
+    "Add an unreadable-metadata path case to this Required tests item.",
+    "Declare that the symbolic-link or folder case is intended to cover metadata-read failures.",
+    "Remove metadata-read failure from the invariant's referenced condition."
+   ],
+   "default_guess": "Add a case that makes metadata retrieval fail and asserts no target path is opened.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-07 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "a replaced file is reported as a new `ready` photo while the earlier image and mark stay",
+   "question": "Which assertion shows that the earlier placement record also stays unchanged, as INV-07 requires?",
+   "options": [
+    "Add an explicit unchanged-placement-record assertion to the replacement test.",
+    "State that “delivery” in the removal test includes placement, image and mark records.",
+    "Narrow INV-07 to the stored image and mark only."
+   ],
+   "default_guess": "Explicitly assert that the earlier placement record, stored image and mark all remain byte-for-byte unchanged.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "insufficient_invariant_test",
+   "text": "delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file",
+   "question": "How must the test prove that a new placement never reads a conflict copy, rather than merely proving that it rejects the request after reading it?",
+   "options": [
+    "Instrument source-file opens and reads and assert the conflict copy is never opened.",
+    "Use a sentinel filesystem that records access to the conflict copy.",
+    "Narrow INV-19 to rejection and absence of durable changes."
+   ],
+   "default_guess": "Instrument file access and assert that the conflict-copy file is neither opened nor read.",
+   "witness": {
+    "initial": "An unplaced conflict copy contains valid image bytes.",
+    "events": [
+     "The caller requests delivery using the conflict-copy name.",
+     "An implementation reads and hashes the file, then recognizes the ignored name and returns NOT_READY_OR_ABSENT without durable writes."
+    ],
+    "outcomes": [
+     "The stated Required test passes on outcome and stored state.",
+     "An access-observing test fails because INV-19 says the conflict copy is never read."
+    ],
+    "observer": "A filesystem audit sees whether the conflict copy was accessed."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_rule\",\"text\":\"`marked_at: datetime`\",\"question\":\"What clock supplies `marked_at`, what datetime representation is stored, and how many times is that clock read by one mark operation?\",\"options\":[\"Read one injected system clock once and store a naive UTC datetime.\",\"Read the ambient system clock when the record is written.\",\"Use a timestamp supplied by the caller.\"],\"default_guess\":\"Read an injected system clock exactly once per mark operation and store a naive datetime representing UTC.\"},{\"subject\":\"M03 PreparedPhoto.taken_at and M05 PhotoPublication.photo_date\",\"kind\":\"vague_time_source\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"Which camera metadata fields are eligible, in what precedence, what makes a value unusable and causes fallback, and how is a camera value with no offset converted to UTC?\",\"options\":[\"Use a specified EXIF field priority and offset tags, falling back to file modification time when conversion is not unambiguous.\",\"Treat an offset-less camera timestamp as already UTC.\",\"Interpret an offset-less camera timestamp in the VPS local timezone.\"],\"default_guess\":\"Use an explicitly ordered set of EXIF date and offset fields; fall back to file modification time if no camera timestamp can be converted unambiguously to UTC.\"},{\"subject\":\"M03 file modification time\",\"kind\":\"time_read_race\",\"text\":\"otherwise from the file's modification time\",\"question\":\"Is the modification time taken from the pre-open path metadata or from the opened file descriptor, and is it read once before or after the source bytes are read?\",\"options\":[\"Read it once from the opened file descriptor before reading bytes.\",\"Read it once from the opened file descriptor after reading bytes.\",\"Use the path metadata already inspected for A3 condition 1.\"],\"default_guess\":\"Read it once from the opened file descriptor after opening and use that same value throughout preparation.\",\"witness\":{\"initial\":\"The requested path names file A; another file B can replace that path while delivery runs.\",\"events\":[\"The caller starts delivery.\",\"The deliverer reads path metadata.\",\"Another actor replaces the path with file B.\",\"The deliverer opens and reads the source bytes.\"],\"outcomes\":[\"The stored photo uses file B's bytes with file A's modification time.\",\"The stored photo uses file B's bytes with file B's modification time.\"],\"observer\":\"The owner sees a different photo date in the Portal publication.\"}},{\"subject\":\"A3 rule 2 and A6 rule 5\",\"kind\":\"contradictory_outcome\",\"text\":\"Delivering content that already has a placement answers `replayed` with the stored placement and the current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even when the source file has left the folder.\\nA placement or mark record that exists but cannot be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent record: the operation is refused with the STATE_UNAVAILABLE member of = models.RefusalCode\",\"question\":\"When a valid placement exists but its mark record is damaged, does delivery replay the placement without a photo id or refuse the whole operation with STATE_UNAVAILABLE?\",\"options\":[\"A6 takes precedence and delivery is refused.\",\"A3 rule 2 takes precedence and delivery returns `replayed` without a photo id.\",\"Replay the placement but attach a state warning.\"],\"default_guess\":\"A6 takes precedence and delivery is refused with STATE_UNAVAILABLE.\",\"witness\":{\"initial\":\"A valid placement record and stored image exist; the corresponding mark record exists but contains invalid JSON.\",\"events\":[\"The caller delivers the same source content again.\"],\"outcomes\":[\"A3 rule 2 returns `replayed` with the stored placement and no current photo id.\",\"A6 rule 5 returns M08 with STATE_UNAVAILABLE.\"],\"observer\":\"The calling flow sees either a successful replay or a whole-operation refusal.\"}},{\"subject\":\"A6 rule 5 refusal used by the changed A3 recovery rule\",\"kind\":\"incomplete_refusal_conditions\",\"text\":\"is not valid JSON, is not an object or lacks a field of its model\",\"question\":\"Does a JSON object containing every field but having a wrong field type, invalid enum value, malformed UUID, or otherwise invalid model value also require STATE_UNAVAILABLE?\",\"options\":[\"Any model-validation failure is STATE_UNAVAILABLE.\",\"Only the listed structural failures are STATE_UNAVAILABLE; invalid values receive another outcome.\",\"Only missing fields are checked after JSON object parsing.\"],\"default_guess\":\"Treat every failure to validate an existing record against its complete model as STATE_UNAVAILABLE.\",\"witness\":{\"initial\":\"A stored image remains without a placement record, and a mark record exists with every required field but a non-UUID `photo_id`.\",\"events\":[\"The caller repeats delivery of the same source file.\",\"The deliverer inspects the existing mark before completing the placement.\"],\"outcomes\":[\"The malformed value counts as a damaged record and the call is refused under A6 rule 5.\",\"Because no field is missing and the JSON is an object, A6 rule 5 does not apply and recovery continues or fails by an unspecified path.\"],\"observer\":\"The caller sees either STATE_UNAVAILABLE or a completed/otherwise failed placement.\"}},{\"subject\":\"A3 INV-06 Required tests\",\"kind\":\"test_rule_mismatch\",\"text\":\"A delivery repeated after a failed record write completes the placement (`test_a_delivery_repeated_after_a_failed_record_write_completes`).\",\"question\":\"Must this Required tests item explicitly exclude every A6 rule 5 refusal, or must it instead demonstrate the newly added refusal branch as well as successful recovery?\",\"options\":[\"Qualify successful recovery with the absence of an A6 rule 5 refusal and add a separate refusal case.\",\"Require completion even when A6 rule 5 would otherwise refuse.\",\"Remove the recovery assertion from INV-06.\"],\"default_guess\":\"Qualify the completion case and add a separate assertion that an applicable A6 rule 5 condition returns STATE_UNAVAILABLE without changing the orphaned image.\",\"witness\":{\"initial\":\"A failed placement-record write has left an orphaned stored image.\",\"events\":[\"Before retry, another actor creates or damages the corresponding mark record.\",\"The caller repeats delivery.\"],\"outcomes\":[\"The changed normative rule applies A6 rule 5 and refuses the retry.\",\"The unqualified Required tests sentence says the retry completes the placement.\"],\"observer\":\"The caller sees either STATE_UNAVAILABLE or a completed placement.\"}},{\"subject\":\"INV-01 Required tests\",\"kind\":\"insufficient_invariant_test\",\"text\":\"after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes\",\"question\":\"How must the test show that no operation ever creates, changes, moves or deletes a source entry, rather than only showing that the final snapshot was restored?\",\"options\":[\"Instrument filesystem mutation operations and assert none target the source tree.\",\"Observe the source directory throughout each operation.\",\"Narrow INV-01 to final-state equality.\"],\"default_guess\":\"Instrument all mutation calls and assert none target the source tree, while retaining the final-state comparison.\"},{\"subject\":\"INV-02 Required tests\",\"kind\":\"insufficient_invariant_test\",\"text\":\"each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock\",\"question\":\"How must the test show that delivery opens no failing path, since the stated outcome and durable-state assertions also pass if the implementation opens or reads the path before rejecting it?\",\"options\":[\"Instrument path and file opens and assert no rejected target is opened.\",\"Use an operating-system audit or a sentinel filesystem to detect access.\",\"Change the invariant to require only rejection and no durable writes.\"],\"default_guess\":\"Instrument filesystem opens and assert that none of the paths rejected by A3 condition 1 is opened.\",\"witness\":{\"initial\":\"A rejected symbolic-link path points to a readable sentinel file outside the photo folder.\",\"events\":[\"The caller requests delivery through that path.\",\"An implementation opens and reads the target, then returns NOT_READY_OR_ABSENT without writing durable state.\"],\"outcomes\":[\"The listed Required test passes because the answer and files are correct.\",\"An access-observing test fails because INV-02 forbids opening the path.\"],\"observer\":\"A filesystem audit or sentinel-file owner sees the forbidden access.\"}},{\"subject\":\"INV-02 Required tests\",\"kind\":\"missing_test_case\",\"text\":\"for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail\",\"question\":\"Which Required test demonstrates the A3 condition-1 case where metadata of a segment cannot be read?\",\"options\":[\"Add an unreadable-metadata path case to this Required tests item.\",\"Declare that the symbolic-link or folder case is intended to cover metadata-read failures.\",\"Remove metadata-read failure from the invariant's referenced condition.\"],\"default_guess\":\"Add a case that makes metadata retrieval fail and asserts no target path is opened.\"},{\"subject\":\"INV-07 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"a replaced file is reported as a new `ready` photo while the earlier image and mark stay\",\"question\":\"Which assertion shows that the earlier placement record also stays unchanged, as INV-07 requires?\",\"options\":[\"Add an explicit unchanged-placement-record assertion to the replacement test.\",\"State that “delivery” in the removal test includes placement, image and mark records.\",\"Narrow INV-07 to the stored image and mark only.\"],\"default_guess\":\"Explicitly assert that the earlier placement record, stored image and mark all remain byte-for-byte unchanged.\"},{\"subject\":\"INV-19 Required tests\",\"kind\":\"insufficient_invariant_test\",\"text\":\"delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file\",\"question\":\"How must the test prove that a new placement never reads a conflict copy, rather than merely proving that it rejects the request after reading it?\",\"options\":[\"Instrument source-file opens and reads and assert the conflict copy is never opened.\",\"Use a sentinel filesystem that records access to the conflict copy.\",\"Narrow INV-19 to rejection and absence of durable changes.\"],\"default_guess\":\"Instrument file access and assert that the conflict-copy file is neither opened nor read.\",\"witness\":{\"initial\":\"An unplaced conflict copy contains valid image bytes.\",\"events\":[\"The caller requests delivery using the conflict-copy name.\",\"An implementation reads and hashes the file, then recognizes the ignored name and returns NOT_READY_OR_ABSENT without durable writes.\"],\"outcomes\":[\"The stated Required test passes on outcome and stored state.\",\"An access-observing test fails because INV-19 says the conflict copy is never read.\"],\"observer\":\"A filesystem audit sees whether the conflict copy was accessed.\"}}]}",
+ "set_aside": []
+}
