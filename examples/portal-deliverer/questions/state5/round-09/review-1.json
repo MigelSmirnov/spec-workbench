@@ -1,0 +1,211 @@
+{
+ "open_points": [
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "undefined_model",
+   "text": "| `source_folder` | `domain_models` | `DelivererError`, `ObservationReason`, `PlacementFailure`, `RefusalCode`, `Rejected`, `ScanStatus`, `SourceFile`, `SourceRead` |",
+   "question": "What is `SourceRead`, what fields and variants does it have, and how does it relate to the `SourceFile` that `read_named_source` promises to return with the judged bytes?",
+   "options": [
+    "`SourceRead` wraps a `SourceFile` and its bytes",
+    "`SourceRead` is a ready/rejected discriminated result",
+    "Remove `SourceRead` and put optional bytes directly on `SourceFile`"
+   ],
+   "default_guess": "Define a discriminated `SourceRead` result that carries the `SourceFile` metadata and bytes only for a ready read.",
+   "witness": {
+    "initial": "A requested regular source file exists and can be read.",
+    "events": [
+     "`module:photo_delivery` calls `public_op:source_folder.read_named_source`.",
+     "`module:source_folder` reads and judges the file."
+    ],
+    "outcomes": [
+     "The caller receives a `SourceFile` whose bytes are an optional field.",
+     "The caller receives a separate `SourceRead` wrapper containing a `SourceFile` and bytes."
+    ],
+    "observer": "The `photo_delivery` implementation and its contract tests."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "undefined_result_shape",
+   "text": "`ScanResult`",
+   "question": "What are the fields and serialization of `ScanResult`, including the collection of M02 observations and the counts of statuses?",
+   "options": [
+    "An object with `photos` and a status-to-count map",
+    "An object with `photos` and one integer field per status",
+    "A tuple of the observation list and a counts object"
+   ],
+   "default_guess": "Use an object with an ordered `photos` list and one explicit count field for each `ScanStatus`.",
+   "witness": {
+    "initial": "A project scan reports one ready file and one rejected file.",
+    "events": [
+     "The caller invokes the scan route.",
+     "`scan_project_photos` produces the observations and counts.",
+     "`deliverer_api` serializes the imported `ScanResult`."
+    ],
+    "outcomes": [
+     "The response is `{\"photos\":[...],\"counts\":{\"ready\":1,\"rejected\":1}}`.",
+     "The response is `{\"photos\":[...],\"ready\":1,\"rejected\":1,\"placed\":0,\"published\":0}`."
+    ],
+    "observer": "The authenticated API caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "undefined_result_shape",
+   "text": "`MarkOutcome`",
+   "question": "What are the fields and serialization of `MarkOutcome`, which must carry M07 together with `MarkStatus`?",
+   "options": [
+    "An object with `mark` and `status` fields",
+    "M07 extended with a non-persisted `status` field",
+    "A tuple of `PublicationMark` and `MarkStatus`"
+   ],
+   "default_guess": "Define `MarkOutcome` with `mark: PublicationMark` and `status: MarkStatus`.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The caller submits a valid mark request.",
+     "`mark_photo_published` writes M07 and returns M07 together with `marked`.",
+     "`deliverer_api` serializes the result."
+    ],
+    "outcomes": [
+     "The caller receives `{\"mark\":{...},\"status\":\"marked\"}`.",
+     "The caller receives the fields of M07 and `status` in one flat object."
+    ],
+    "observer": "The authenticated API caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "undefined_request_model",
+   "text": "`DeliverRequest`",
+   "question": "Does `DeliverRequest` contain exactly `name` and `source_id`, what are its field aliases and extra-field policy, and how is it assigned to the delivery route?",
+   "options": [
+    "A strict body model with only `name` and `source_id`",
+    "A body model that ignores extra fields",
+    "No model; validate the two values procedurally"
+   ],
+   "default_guess": "Define a strict body model with required string fields `name` and `source_id` and reject every extra field.",
+   "witness": {
+    "initial": "The caller is authenticated and addresses a valid project.",
+    "events": [
+     "The caller submits `{\"name\":\"a.jpg\",\"source_id\":\"<valid hash>\",\"extra\":1}` to the delivery route.",
+     "`deliverer_api` validates the imported `DeliverRequest`."
+    ],
+    "outcomes": [
+     "The request is malformed because the body must hold only `name` and `source_id`.",
+     "The extra field is ignored and the delivery proceeds."
+    ],
+    "observer": "The authenticated API caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "undefined_request_model",
+   "text": "`PublishedRequest`",
+   "question": "Which mark inputs belong to `PublishedRequest`, and which are path parameters: must its body contain `source_id`, `photo_id`, or both?",
+   "options": [
+    "The body contains both `source_id` and `photo_id`",
+    "The body contains `source_id` and `photo_id` is a path parameter",
+    "The body contains `photo_id` and `source_id` is a path parameter"
+   ],
+   "default_guess": "Put `source_id` and `photo_id` in a strict request body and keep only `project_id` in the route path.",
+   "witness": {
+    "initial": "The caller has a placed source and a Portal `photo_id`.",
+    "events": [
+     "The caller prepares a mark request.",
+     "The route generated by `create_app` parses `PublishedRequest`."
+    ],
+    "outcomes": [
+     "A body containing both identifiers is accepted.",
+     "The same body is rejected because one identifier was required in the path."
+    ],
+    "observer": "The authenticated API caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:`public_op:deliverer_api.create_app`",
+   "kind": "undefined_health_contract",
+   "text": "The HTTP surface with the health, scan, delivery and mark routes.",
+   "question": "What HTTP status and response body does the unauthenticated health route return, and what fields does the imported `HealthAnswer` contain?",
+   "options": [
+    "HTTP 200 with `{\"status\":\"ok\"}`",
+    "HTTP 200 with `{\"ok\":true}`",
+    "HTTP 204 with no body"
+   ],
+   "default_guess": "Return HTTP 200 with a `HealthAnswer` serialized as `{\"status\":\"ok\"}`.",
+   "witness": {
+    "initial": "The service has started successfully.",
+    "events": [
+     "An unauthenticated caller requests the health route."
+    ],
+    "outcomes": [
+     "The caller receives HTTP 200 and `{\"status\":\"ok\"}`.",
+     "The caller receives HTTP 204 with no body."
+    ],
+    "observer": "The health checker."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:`public_op:deliverer_api.create_app`",
+   "kind": "ambiguous_state_boundary",
+   "text": "Read-only.",
+   "question": "Does this prohibit only durable/domain writes, or all mutation including construction and route registration in an in-memory web-framework object?",
+   "options": [
+    "Only durable/domain state must remain unchanged",
+    "No pre-existing state may be mutated, but a fresh surface may be constructed",
+    "No mutation of any kind is permitted"
+   ],
+   "default_guess": "Treat it as prohibiting durable/domain writes while allowing construction of a fresh in-memory HTTP surface.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:`public_op:deliverer_api.run_service`",
+   "kind": "ambiguous_state_boundary",
+   "text": "Read-only.",
+   "question": "Does this prohibit only durable/domain writes, or does it also constrain process, socket, framework and logging state changed while the server is started and served?",
+   "options": [
+    "Only durable/domain state must remain unchanged",
+    "Process and socket state may change but framework-global state may not",
+    "No state may change beyond reads"
+   ],
+   "default_guess": "Treat it as prohibiting durable/domain writes while allowing the listener and ordinary web-server runtime state.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "standard_violation",
+   "text": "| `source_folder` | `domain_models` | `DelivererError`, `ObservationReason`, `PlacementFailure`, `RefusalCode`, `Rejected`, `ScanStatus`, `SourceFile`, `SourceRead` |",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список импортируемых символов. Имена consumer/provider — логические ключи из `module_functions`; каждый символ обязан принадлежать provider.",
+   "section": "7",
+   "question": "Define and assign `SourceRead` to `domain_models` in `module_functions`, or remove it from this import surface and rewrite the contract to use an owned symbol.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "standard_violation",
+   "text": "| `photo_delivery` | `domain_models` | `DelivererError`, `DeliveryContext`, `MarkOutcome`, `MarkStatus`, `PhotoPlacement`, `PlacementFailure`, `PlacementOutcome`, `PlacementStatus`, `PublicationMark`, `RefusalCode`, `Rejected`, `ScanResult`, `ScanStatus`, `SourceFile`, `SourcePhotoObservation` |",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список импортируемых символов. Имена consumer/provider — логические ключи из `module_functions`; каждый символ обязан принадлежать provider.",
+   "section": "7",
+   "question": "Define and assign `MarkOutcome` and `ScanResult` to `domain_models` in `module_functions`, or remove them from this import surface and express the operation results with symbols that the provider owns.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "standard_violation",
+   "text": "| `deliverer_api` | `domain_models` | `DeliverRequest`, `DelivererError`, `DeliveryContext`, `HealthAnswer`, `MarkOutcome`, `PlacementOutcome`, `PublishedRequest`, `Refusal`, `RefusalCode`, `RuntimeSettings`, `ScanResult` |",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список импортируемых символов. Имена consumer/provider — логические ключи из `module_functions`; каждый символ обязан принадлежать provider.",
+   "section": "7",
+   "question": "Define and assign `DeliverRequest`, `HealthAnswer`, `MarkOutcome`, `PublishedRequest` and `ScanResult` to `domain_models` in `module_functions`, or remove each undeclared symbol from this import surface and rewrite the API contracts accordingly.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"undefined_model\",\"text\":\"| `source_folder` | `domain_models` | `DelivererError`, `ObservationReason`, `PlacementFailure`, `RefusalCode`, `Rejected`, `ScanStatus`, `SourceFile`, `SourceRead` |\",\"question\":\"What is `SourceRead`, what fields and variants does it have, and how does it relate to the `SourceFile` that `read_named_source` promises to return with the judged bytes?\",\"options\":[\"`SourceRead` wraps a `SourceFile` and its bytes\",\"`SourceRead` is a ready/rejected discriminated result\",\"Remove `SourceRead` and put optional bytes directly on `SourceFile`\"],\"default_guess\":\"Define a discriminated `SourceRead` result that carries the `SourceFile` metadata and bytes only for a ready read.\",\"witness\":{\"initial\":\"A requested regular source file exists and can be read.\",\"events\":[\"`module:photo_delivery` calls `public_op:source_folder.read_named_source`.\",\"`module:source_folder` reads and judges the file.\"],\"outcomes\":[\"The caller receives a `SourceFile` whose bytes are an optional field.\",\"The caller receives a separate `SourceRead` wrapper containing a `SourceFile` and bytes.\"],\"observer\":\"The `photo_delivery` implementation and its contract tests.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"undefined_result_shape\",\"text\":\"`ScanResult`\",\"question\":\"What are the fields and serialization of `ScanResult`, including the collection of M02 observations and the counts of statuses?\",\"options\":[\"An object with `photos` and a status-to-count map\",\"An object with `photos` and one integer field per status\",\"A tuple of the observation list and a counts object\"],\"default_guess\":\"Use an object with an ordered `photos` list and one explicit count field for each `ScanStatus`.\",\"witness\":{\"initial\":\"A project scan reports one ready file and one rejected file.\",\"events\":[\"The caller invokes the scan route.\",\"`scan_project_photos` produces the observations and counts.\",\"`deliverer_api` serializes the imported `ScanResult`.\"],\"outcomes\":[\"The response is `{\\\"photos\\\":[...],\\\"counts\\\":{\\\"ready\\\":1,\\\"rejected\\\":1}}`.\",\"The response is `{\\\"photos\\\":[...],\\\"ready\\\":1,\\\"rejected\\\":1,\\\"placed\\\":0,\\\"published\\\":0}`.\"],\"observer\":\"The authenticated API caller.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"undefined_result_shape\",\"text\":\"`MarkOutcome`\",\"question\":\"What are the fields and serialization of `MarkOutcome`, which must carry M07 together with `MarkStatus`?\",\"options\":[\"An object with `mark` and `status` fields\",\"M07 extended with a non-persisted `status` field\",\"A tuple of `PublicationMark` and `MarkStatus`\"],\"default_guess\":\"Define `MarkOutcome` with `mark: PublicationMark` and `status: MarkStatus`.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The caller submits a valid mark request.\",\"`mark_photo_published` writes M07 and returns M07 together with `marked`.\",\"`deliverer_api` serializes the result.\"],\"outcomes\":[\"The caller receives `{\\\"mark\\\":{...},\\\"status\\\":\\\"marked\\\"}`.\",\"The caller receives the fields of M07 and `status` in one flat object.\"],\"observer\":\"The authenticated API caller.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"undefined_request_model\",\"text\":\"`DeliverRequest`\",\"question\":\"Does `DeliverRequest` contain exactly `name` and `source_id`, what are its field aliases and extra-field policy, and how is it assigned to the delivery route?\",\"options\":[\"A strict body model with only `name` and `source_id`\",\"A body model that ignores extra fields\",\"No model; validate the two values procedurally\"],\"default_guess\":\"Define a strict body model with required string fields `name` and `source_id` and reject every extra field.\",\"witness\":{\"initial\":\"The caller is authenticated and addresses a valid project.\",\"events\":[\"The caller submits `{\\\"name\\\":\\\"a.jpg\\\",\\\"source_id\\\":\\\"<valid hash>\\\",\\\"extra\\\":1}` to the delivery route.\",\"`deliverer_api` validates the imported `DeliverRequest`.\"],\"outcomes\":[\"The request is malformed because the body must hold only `name` and `source_id`.\",\"The extra field is ignored and the delivery proceeds.\"],\"observer\":\"The authenticated API caller.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"undefined_request_model\",\"text\":\"`PublishedRequest`\",\"question\":\"Which mark inputs belong to `PublishedRequest`, and which are path parameters: must its body contain `source_id`, `photo_id`, or both?\",\"options\":[\"The body contains both `source_id` and `photo_id`\",\"The body contains `source_id` and `photo_id` is a path parameter\",\"The body contains `photo_id` and `source_id` is a path parameter\"],\"default_guess\":\"Put `source_id` and `photo_id` in a strict request body and keep only `project_id` in the route path.\",\"witness\":{\"initial\":\"The caller has a placed source and a Portal `photo_id`.\",\"events\":[\"The caller prepares a mark request.\",\"The route generated by `create_app` parses `PublishedRequest`.\"],\"outcomes\":[\"A body containing both identifiers is accepted.\",\"The same body is rejected because one identifier was required in the path.\"],\"observer\":\"The authenticated API caller.\"}},{\"subject\":\"50_public_apis.md:`public_op:deliverer_api.create_app`\",\"kind\":\"undefined_health_contract\",\"text\":\"The HTTP surface with the health, scan, delivery and mark routes.\",\"question\":\"What HTTP status and response body does the unauthenticated health route return, and what fields does the imported `HealthAnswer` contain?\",\"options\":[\"HTTP 200 with `{\\\"status\\\":\\\"ok\\\"}`\",\"HTTP 200 with `{\\\"ok\\\":true}`\",\"HTTP 204 with no body\"],\"default_guess\":\"Return HTTP 200 with a `HealthAnswer` serialized as `{\\\"status\\\":\\\"ok\\\"}`.\",\"witness\":{\"initial\":\"The service has started successfully.\",\"events\":[\"An unauthenticated caller requests the health route.\"],\"outcomes\":[\"The caller receives HTTP 200 and `{\\\"status\\\":\\\"ok\\\"}`.\",\"The caller receives HTTP 204 with no body.\"],\"observer\":\"The health checker.\"}},{\"subject\":\"50_public_apis.md:`public_op:deliverer_api.create_app`\",\"kind\":\"ambiguous_state_boundary\",\"text\":\"Read-only.\",\"question\":\"Does this prohibit only durable/domain writes, or all mutation including construction and route registration in an in-memory web-framework object?\",\"options\":[\"Only durable/domain state must remain unchanged\",\"No pre-existing state may be mutated, but a fresh surface may be constructed\",\"No mutation of any kind is permitted\"],\"default_guess\":\"Treat it as prohibiting durable/domain writes while allowing construction of a fresh in-memory HTTP surface.\"},{\"subject\":\"50_public_apis.md:`public_op:deliverer_api.run_service`\",\"kind\":\"ambiguous_state_boundary\",\"text\":\"Read-only.\",\"question\":\"Does this prohibit only durable/domain writes, or does it also constrain process, socket, framework and logging state changed while the server is started and served?\",\"options\":[\"Only durable/domain state must remain unchanged\",\"Process and socket state may change but framework-global state may not\",\"No state may change beyond reads\"],\"default_guess\":\"Treat it as prohibiting durable/domain writes while allowing the listener and ordinary web-server runtime state.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"standard_violation\",\"text\":\"| `source_folder` | `domain_models` | `DelivererError`, `ObservationReason`, `PlacementFailure`, `RefusalCode`, `Rejected`, `ScanStatus`, `SourceFile`, `SourceRead` |\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список импортируемых символов. Имена consumer/provider — логические ключи из `module_functions`; каждый символ обязан принадлежать provider.\",\"section\":\"7\",\"question\":\"Define and assign `SourceRead` to `domain_models` in `module_functions`, or remove it from this import surface and rewrite the contract to use an owned symbol.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"standard_violation\",\"text\":\"| `photo_delivery` | `domain_models` | `DelivererError`, `DeliveryContext`, `MarkOutcome`, `MarkStatus`, `PhotoPlacement`, `PlacementFailure`, `PlacementOutcome`, `PlacementStatus`, `PublicationMark`, `RefusalCode`, `Rejected`, `ScanResult`, `ScanStatus`, `SourceFile`, `SourcePhotoObservation` |\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список импортируемых символов. Имена consumer/provider — логические ключи из `module_functions`; каждый символ обязан принадлежать provider.\",\"section\":\"7\",\"question\":\"Define and assign `MarkOutcome` and `ScanResult` to `domain_models` in `module_functions`, or remove them from this import surface and express the operation results with symbols that the provider owns.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"standard_violation\",\"text\":\"| `deliverer_api` | `domain_models` | `DeliverRequest`, `DelivererError`, `DeliveryContext`, `HealthAnswer`, `MarkOutcome`, `PlacementOutcome`, `PublishedRequest`, `Refusal`, `RefusalCode`, `RuntimeSettings`, `ScanResult` |\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список импортируемых символов. Имена consumer/provider — логические ключи из `module_functions`; каждый символ обязан принадлежать provider.\",\"section\":\"7\",\"question\":\"Define and assign `DeliverRequest`, `HealthAnswer`, `MarkOutcome`, `PublishedRequest` and `ScanResult` to `domain_models` in `module_functions`, or remove each undeclared symbol from this import surface and rewrite the API contracts accordingly.\"}]}",
+ "set_aside": []
+}

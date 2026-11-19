@@ -126,6 +126,10 @@ outbound call.
   of the file and never leaves the service; M02 is the form a caller sees;
 - the type of the run settings, and `DeliveryContext`, the context of the operations that `deliverer_api` builds from them:
   binary store, state folder, time zone and connections file;
+- the types that cross module boundaries without a meaning of their own in State 1: `SourceRead`, a `SourceFile`
+  with the bytes that were judged; `ScanResult`, the observations of one scan and the count of each status;
+  `MarkOutcome`, M07 with its `MarkStatus`; `DeliverRequest` and `PublishedRequest`, the bodies of two routes; and
+  `HealthAnswer`, the body of the health route;
 - the two refusal types: a refusal of the whole operation and a refusal of one file.
 
 ### Knows
