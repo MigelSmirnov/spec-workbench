@@ -362,7 +362,7 @@ Read-only.
 
 ### Inputs
 
-The bytes of the source, its modification time (`modified` of the ready `SourceFile` that came with those bytes) and the configured time zone.
+The bytes of the source, its modification time and the configured time zone.
 
 ### Outputs
 
