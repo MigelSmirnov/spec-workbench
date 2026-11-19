@@ -35,6 +35,7 @@ WITNESS = {"initial": "a thing exists", "events": ["the owner reads it"], "outco
            "observer": "the owner", "basis": ["Rule one keeps every thing."]}
 VERDICTS = {
     "gap": {"kind": "consequential_gap", "quotes": ["Rule one keeps every thing."], "divergence": "a or b; the owner notices",
+            "requirement": "Rule one keeps every thing.",
             "witness": WITNESS},
     "contradiction": {"kind": "contradiction", "quotes": ["Rule one keeps every thing.", "Rule two drops a thing."], "witness": WITNESS},
     "hypothesis": {"kind": "contradiction", "quotes": ["Rule one keeps every thing.", "Rule two drops a thing."]},   # no witness
@@ -475,5 +476,6 @@ def test_the_review_instruction_says_what_the_layer_decides_changes_and_receives
     for gone in ("Do not propose designs", "which existing check an item is bound to",
                  "ask the protocol's five questions", "its closed units are not audited again"):
         assert gone not in instruction
-    # main at 5bcdd685 built the same instruction in 4,224 characters; now 2,436
-    assert len(instruction) < 2600
+    # main at 5bcdd685 built the same instruction in 4,224 characters; 2,567 before the
+    # State 2 scope said what of a choice is State 2's (2026-11-20), 2,720 with it
+    assert len(instruction) < 2750

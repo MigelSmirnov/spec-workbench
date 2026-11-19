@@ -245,6 +245,11 @@ def topic_need(topic: dict[str, Any], summary: dict[str, Any]) -> str | None:
         return CONTRADICTION
     if not judgement.get("verified"):
         return DISPOSITION if judgement.get("blocking", True) else None
+    if kind == "later_state" and judgement.get("requirement"):
+        # a later state's question that a requirement of the texts bears on
+        # (judge.py, `gap_needs_requirement`): the author carries it with what
+        # every way of doing it must keep, or says why not
+        return DISPOSITION
     if kind in SETTLED_KINDS:
         return None
     return DISPOSITION  # consequential_gap (quoted, deferred or recorded), hypothesis

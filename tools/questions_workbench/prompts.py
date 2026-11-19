@@ -227,22 +227,71 @@ from those that need not.{scope_rule} Judge each topic by exactly one kind:
 
 - "contradiction": two passages of the texts say different things. Quote both,
   verbatim.{contradiction_extra}{standard_kind}
-- "consequential_gap": the texts leave a choice open, and two careful
-  implementers would build different behaviour that the owner, an agent, a
-  caller or an external service would notice. Name the two behaviours and who
-  notices in "divergence". Quote, verbatim, every passage of the texts that
+{gap_kind} Quote, verbatim, every passage of the texts that
   leaves the choice open or bears on it. {unquoted_gap}{witness_rule}
 - "answered": the texts already answer the question. Quote the passage that
   answers it, verbatim.
-{later_state}- "indifferent": any answer is acceptable, because no caller, owner or service
-  acts differently on the difference. Say why in "why".{preexisting}{answered_later}{judged_before}
+{later_state}{indifferent_kind}{preexisting}{answered_later}{judged_before}
 
 Quotes are checked mechanically against the texts: copy them character for
 character, without ellipsis, at least a full clause. A quote not found in the
-texts counts against your judgement, so never paraphrase. {unsure_rule}{state_files}
+texts counts against your judgement, so never paraphrase. {unsure_rule}{requirement_order}{state_files}
 
 Output strict JSON, nothing else:
-{{"judgements":[{{"id":"<topic id>","kind":"<kind>","quotes":["<verbatim passage>"],"later_state":<number or null>,"precedent":"<prior judgement id or null>","divergence":"<two behaviours and who notices, or empty>","why":"<one sentence>"{witness_schema}{standard_schema}}}]}}"""
+{{"judgements":[{{"id":"<topic id>","kind":"<kind>","quotes":["<verbatim passage>"],"later_state":<number or null>,"precedent":"<prior judgement id or null>","divergence":"<two behaviours and who notices, or empty>","why":"<one sentence>"{requirement_schema}{witness_schema}{standard_schema}}}]}}"""
+
+GAP_NOTICED = """- "consequential_gap": the texts leave a choice open, and two careful
+  implementers would build different behaviour that the owner, an agent, a
+  caller or an external service would notice. Name the two behaviours and who
+  notices in "divergence"."""
+
+INDIFFERENT_NOTICED = """- "indifferent": any answer is acceptable, because no caller, owner or service
+  acts differently on the difference. Say why in "why"."""
+
+# A state whose phase declares `gap_needs_requirement` (authoring_sequence.json;
+# State 2, experiment of 2026-11-20, docs/STATE2_REQUIRED_RESULTS_20261120.md).
+# "Who notices" held every topic open: an observer exists for every difference.
+# The gap is now a choice that breaks a requirement the texts state, quoted and
+# checked like any quote; a choice that keeps every requirement stays free, and
+# one written in the words of an implementation goes to the state that owns it.
+GAP_REQUIREMENT = """- "consequential_gap": the texts leave open a choice State {state} must make:
+  two careful implementers would build different behaviour, and one of the two
+  breaks a requirement the texts of States 0 to {state} state — a promise, an
+  invariant, a constraint or a safety guarantee. Quote that requirement
+  verbatim in "requirement", and in "divergence" name the two behaviours and
+  which of them breaks it. That someone could see a difference is not a
+  consequence: an observer exists for every difference."""
+
+INDIFFERENT_REQUIREMENT = """- "indifferent": both behaviours keep every requirement the texts state, so
+  the choice stays free for whoever builds it. Say in "why" which requirement
+  you looked for and did not find broken."""
+
+REQUIREMENT_ORDER = """
+
+Judge a topic that is neither a contradiction nor a violation of the standard
+in this order.
+1. Whose question is it? A question that can be put in the words of States 0
+   and 1 — their actors, models, statuses, refusals and promises — is State
+   {state}'s. A question that needs the words of an implementation — the files
+   and folders of the service's own state, locks, temporary names, modes,
+   system or library calls, the order of steps, the cases and instruments of a
+   test — belongs to the state that writes those: judge it later_state, even
+   when a passage of State {state} already uses such words. When a requirement
+   of the texts holds for one way of doing it and fails for another, quote
+   that requirement verbatim in "requirement": every way must keep it, and the
+   author carries the choice with it.
+2. If it is State {state}'s: must the two behaviours be told apart? Only when
+   one of them breaks a requirement you can quote: consequential_gap.
+   Otherwise indifferent.
+A topic is not more of State {state}'s for being important: an important
+choice is carried to its state with the requirement it must keep."""
+
+REQUIREMENT_SCHEMA = ',"requirement":"<the requirement one behaviour breaks or every way must keep, verbatim, or empty>"'
+
+UNSURE_REQUIREMENT = """When unsure between a
+blocking kind (contradiction, consequential_gap) and another, choose the
+blocking one if you can give its witness and, for a gap, quote its
+requirement; if you cannot, judge it a hypothesis."""
 
 UNSURE_BLOCKING = """When unsure between a
 blocking kind (contradiction, consequential_gap) and another, choose the
@@ -379,14 +428,16 @@ LAST_DESIGN_STATE = 7
 def judge_instruction(state: int, reopened: bool, later_files: list[str] | None = None,
                       precedents: bool = False, scope: str | None = None, witness: bool = False,
                       state_files: list[str] | None = None, closed_files: list[str] | None = None,
-                      standard: bool = False) -> str:
+                      standard: bool = False, requirement: bool = False) -> str:
     """`standard`: the round gives the state's SPEC_STANDARD sections, and a
     passage that breaks one of their rules is judged a standard_violation.
     `witness`: a blocking kind needs a witness and a contradiction its
     bases (document states; State 7 keeps its own rule). `state_files`: the
     judge reads the round text as files and gets only the topics' units and
     passages inline (judge_context.py); `closed_files`, the texts a reopened
-    state was closed with, likewise."""
+    state was closed with, likewise. `requirement`: the state's phase declares
+    `gap_needs_requirement` — a gap is a choice that breaks a quoted
+    requirement, and the judge first asks whose question a topic is."""
     answered_later = ANSWERED_LATER.format(files=", ".join(later_files), state=state) if later_files else ""
     unquoted_gap = DEFERRED_GAP if state <= LAST_DEFERRING_STATE else ANSWERING_STATE_GAP.format(state=state)
     scope_rule = SCOPE_RULE.format(state=state, scope=scope) if scope else ""
@@ -403,7 +454,12 @@ def judge_instruction(state: int, reopened: bool, later_files: list[str] | None 
                         later_state=LATER_STATE.format(state=state) if state < LAST_DESIGN_STATE else "",
                         scope_rule=scope_rule, contradiction_extra=bases,
                         witness_rule=WITNESS_RULE if witness else "",
-                        unsure_rule=UNSURE_WITNESS if witness else UNSURE_BLOCKING,
+                        unsure_rule=(UNSURE_REQUIREMENT if requirement and witness
+                                     else UNSURE_WITNESS if witness else UNSURE_BLOCKING),
+                        gap_kind=GAP_REQUIREMENT.format(state=state) if requirement else GAP_NOTICED,
+                        indifferent_kind=INDIFFERENT_REQUIREMENT if requirement else INDIFFERENT_NOTICED,
+                        requirement_order=REQUIREMENT_ORDER.format(state=state) if requirement else "",
+                        requirement_schema=REQUIREMENT_SCHEMA if requirement else "",
                         witness_schema=WITNESS_SCHEMA if witness else "", state_files=files,
                         standard_kind=STANDARD_KIND if standard else "",
                         standard_schema=STANDARD_SCHEMA if standard else "")
@@ -472,7 +528,9 @@ def _layer_lines(context: dict) -> tuple[str, str, str, str]:
     owns = "\n".join(f"- {item}" for item in context.get("owns") or []) or "- (nothing declared)"
     received = "\n".join([f"- [{r['outcome']}] {r['obligation']} (from {r['from']}, check {r['check']})"
                           for r in context.get("results") or []]
-                         + [f"- [carried by the author] {c['what']} (State {c['state']} {c['round']} {c['topic']})"
+                         + [f"- [carried by the author] {c['what']}"
+                            + (f" Every way must keep: {c['keeps']}." if c.get("keeps") else "")
+                            + f" (State {c['state']} {c['round']} {c['topic']})"
                             for c in context.get("carried_in") or []]) or "- (nothing)"
     carries = "\n".join(f"- {c.get('obligation', '')} -> {c.get('to')} (confirmed by {c.get('check')})"
                         for c in context.get("carries") or []) or "- (nothing)"

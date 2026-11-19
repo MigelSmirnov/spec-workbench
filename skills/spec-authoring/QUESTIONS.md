@@ -143,6 +143,64 @@ judgement inside State 2 stopped the round on 52 `partial` verdicts out of 68
 bindings and drove it to the ping-pong limit; those were gaps of Factory checks,
 not of the decisions.
 
+### A State 2 gap breaks a requirement
+
+Experiment of 2026-11-20, not yet confirmed by a probe with the standard
+provider (`docs/STATE2_REQUIRED_RESULTS_20261120.md`). The reviews of a round
+are a first trial of generation: where would the model have to choose, and
+what follows from its choice. That question stays wide. What went wrong came
+after it: every choice found became a decision State 2 had to make. Portal
+Deliverer State 2 ran 59 rounds on 207 blocking gaps; read again one by one,
+about a fifth were choices a requirement told apart, and 31 of those 41 came in
+the first twelve rounds. The rest asked how a result is reached (94), how a
+test proves it (53) or which of two acceptable ways is taken (19), and 84 of
+them were closed by a fix: `02_rules.md` grew from 22 000 to 45 000
+characters and now names file modes, a temporary-name prefix and library
+calls. The judge's rule was the cause. It asked who would notice a
+difference, and an observer exists for every difference: the owner who lists
+the state folder, the client who compares edge pixels. `indifferent` was
+given 3 times in 721 topics.
+
+The phase of State 2 therefore declares `gap_needs_requirement`
+(`authoring_sequence.json`), and its judge sorts a topic in this order:
+
+1. **Whose question is it?** One that can be put in the words of States 0 and
+   1 — their actors, models, statuses, refusals and promises — is State 2's.
+   One that needs the words of an implementation (the service's own files and
+   folders, locks, temporary names, modes, calls, the order of steps, the
+   cases of a test) is `later_state`, even when State 2 already uses such
+   words. When a requirement holds for one way and fails for another, the
+   judge quotes it in `requirement`; such a topic is the author's to carry
+   (below), so an important question leaves State 2 with what it must keep.
+2. **Must the two behaviours be told apart?** Only when one of them breaks a
+   requirement of the texts, quoted in `requirement` and checked like any
+   quote: `consequential_gap`. Otherwise `indifferent`: the choice stays free.
+
+A quoted gap that names no requirement is kept as a `hypothesis`; one whose
+requirement is not found verbatim blocks. A topic is not more of State 2's
+for being important.
+
+State 2 is closed when its required results are decided, the freedom that
+breaks none of them is left alone, and what a later layer must choose is
+addressed to it. It is not closed by leaving the implementer nothing to
+guess: that is what ran to 59 rounds.
+
+**Carrying a choice.** `dispose --carried <layer> --what <text>` says what
+the layer must decide: the options, and what to check of each. `--keeps`
+(repeatable) names what every option must keep — an invariant, a rule or a
+promise of the texts up to this state, by its identifier or verbatim; the
+tool finds each in the texts. Not "sort out the folders" but: `--what "create
+the folders ahead or as each file is written; check a crash and a repeated
+call" --keeps INV-06`. The receiving round reads it as an obligation with its
+bound.
+
+**Reading a fix.** `python tools/design_change_vocabulary.py <case> --state 2
+--since <ref>` reports what a change added that States 0 and 1 do not name:
+identifiers, and words of an implementation. It is a report, not a gate. Of
+the 30 fix commits of Portal Deliverer it reported none of the 4 that
+answered only required results, 13 of the 20 that answered none, and 5 of
+the 6 mixed ones.
+
 ### The Codex CLI is the standard provider
 
 Rounds ask through `codex exec` under the operator's ChatGPT login: `--provider codex`,
@@ -164,10 +222,10 @@ repeated topic into one kind, and only two kinds keep a state open:
 | kind | means | evidence the tool checks | blocks |
 |---|---|---|---|
 | `contradiction` | two passages say different things | two quotes, verbatim in the texts | yes |
-| `consequential_gap` | two careful implementers build different behaviour that the owner, an agent, a caller or a service notices | the two behaviours and who notices; any quote verbatim in the texts | yes, when it quotes a passage; deferred otherwise (below) |
+| `consequential_gap` | two careful implementers build different behaviour that the owner, an agent, a caller or a service notices; in State 2, one of the two breaks a requirement of the texts ("A State 2 gap breaks a requirement") | the two behaviours and who notices; any quote verbatim in the texts; in State 2 the requirement, verbatim | yes, when it quotes a passage; deferred otherwise (below) |
 | `answered` | the texts already answer it | the answering quote, verbatim in the texts | no |
 | `answered_later` | only with `--provider codex`: a later state's text already decides it | the deciding quote, verbatim in the later states' texts | no |
-| `later_state` | it is outside this state's `question_scope` and belongs to a later state | a state number after this one | no |
+| `later_state` | it is outside this state's `question_scope` and belongs to a later state | a state number after this one; in State 2, optionally the requirement every way must keep, verbatim | no; with a requirement it takes a disposition |
 | `judged_before` | the same question a recent round already judged non-blocking, on passages that have not changed | the prior judgement's id; its quotes still verbatim in the texts | no |
 | `indifferent` | no one acts differently on any answer | the reason | no |
 | `preexisting` | only with `--since`: about a passage the change did not touch | the quote, verbatim in both versions | no |

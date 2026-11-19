@@ -39,6 +39,17 @@ the texts, the rule in those sections. A verified one blocks like a
 contradiction, in every state and without a witness: the rule is the
 standard's, not an outcome the texts would have to allow.
 
+A state whose phase declares `gap_needs_requirement` (State 2, experiment of
+2026-11-20, docs/STATE2_REQUIRED_RESULTS_20261120.md) asks more of a gap than
+an observer, who exists for every difference: the requirement one of the two
+behaviours breaks, quoted verbatim from the texts and checked like any quote.
+A quoted gap that names none is kept as a `hypothesis` — recorded, not
+blocking, the author's to dispose of; one whose requirement is not found
+verbatim blocks, like every judgement whose evidence fails. A `later_state`
+topic may name the requirement every way of doing it must keep: a verified one
+makes the topic the author's to carry (units.topic_need), so an important
+question leaves the state with what it must keep and not as a title.
+
 In State 7 the text is the prompt the Factory builds for one module, and the
 rules the round gives (§2, §15.3.1, §7, §15.9) are the rules the module's
 notes are written by. Only the notes are design text there: every other
@@ -77,14 +88,20 @@ WITNESS_FIELDS = ("initial", "events", "outcomes", "observer", "basis")
 # kept verdict, and say here what changed:
 #   1  before versioning (rounds that keep no `judge_rules`)
 #   2  #175: a State 7 violation quoting no note of the module is generator_text
+# The requirement rule of a state (`requirement_required`) is not a version: it
+# changes no verdict of a state that does not declare it, and a version raised
+# for it would offer every open State 7 module to `rejudge`. A round of a
+# state that declares it says so in its record instead.
 RULES_VERSION = 2
 
 
-def rules_record(standard: str | None) -> dict[str, Any]:
-    """The judge rules a verdict is checked under: the version of `check` and
-    the digest of the standard sections it looked a violation's rule up in."""
+def rules_record(standard: str | None, requirement: bool = False) -> dict[str, Any]:
+    """The judge rules a verdict is checked under: the version of `check`, the
+    digest of the standard sections it looked a violation's rule up in, and,
+    for a state that declares it, that a gap needed its requirement."""
     return {"version": RULES_VERSION,
-            "standard": hashlib.sha256(standard.encode("utf-8")).hexdigest() if standard else None}
+            "standard": hashlib.sha256(standard.encode("utf-8")).hexdigest() if standard else None,
+            **({"gap_needs_requirement": True} if requirement else {})}
 
 
 def _norm(text: str) -> str:
@@ -167,7 +184,7 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
           later_texts: str | None = None, precedents: dict[str, dict[str, Any]] | None = None,
           own_texts: str | None = None, witness_required: bool = False,
           earlier_texts: str | None = None, standard: str | None = None,
-          violation_texts: str | None = None) -> dict[str, Any]:
+          violation_texts: str | None = None, requirement_required: bool = False) -> dict[str, Any]:
     """The judgement as kept in the round, with `verified` and `blocking`.
     `own_texts` are the asked state's own documents; without them every text
     counts as the state's own. With `witness_required`, a contradiction or a
@@ -177,7 +194,9 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
     SPEC_STANDARD sections the round gave, where a violation's rule is looked up.
     `violation_texts`, when given, are the only passages a violation may hold
     (State 7: the module's notes); a verified violation of any other passage
-    of the texts is kept as `generator_text`, not blocking."""
+    of the texts is kept as `generator_text`, not blocking. With
+    `requirement_required`, a quoted gap names the requirement one behaviour
+    breaks, found verbatim in the texts; without one it is a `hypothesis`."""
     if not isinstance(judgement, dict):
         return {"kind": None, "verified": False, "blocking": True, "failure": "the judge gave no judgement"}
     kind = judgement.get("kind")
@@ -191,6 +210,7 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
     }
     corpus = _norm(texts)
     failure = None
+    requirement = str(judgement.get("requirement") or "").strip() if requirement_required else ""
     if kind not in KINDS:
         failure = f"unknown kind {kind!r}"
     elif kind == "contradiction":
@@ -218,6 +238,11 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
                 own = _norm(own_texts) if own_texts is not None else corpus
                 if not any(_found(q, own) for q in quotes):
                     kept["quoted_elsewhere"] = True
+        if failure is None and requirement:
+            if _found(requirement, corpus):
+                kept["requirement"] = requirement
+            else:
+                failure = "the requirement of a consequential gap is not found verbatim in the texts"
     elif kind == "answered":
         if not quotes or not all(_found(q, corpus) for q in quotes):
             failure = "the answering quote is not found verbatim in the texts"
@@ -243,6 +268,9 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
         later = kept["later_state"]
         if not isinstance(later, int) or isinstance(later, bool) or later <= state:
             failure = f"later_state must be a state after {state}"
+        elif requirement:
+            # optional: a requirement not found is dropped, never a reason to block a later state's question
+            kept["requirement" if _found(requirement, corpus) else "requirement_unverified"] = requirement
     elif kind == "indifferent":
         if not kept["why"].strip():
             failure = "an indifferent topic needs the reason no one acts on the difference"
@@ -277,6 +305,12 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
     witness = _kept_witness(judgement.get("witness"))
     if witness:
         kept["witness"] = witness
+    if (failure is None and requirement_required and kind == "consequential_gap" and not deferred
+            and state != MODULE_STATE and "requirement" not in kept):
+        kept["claimed_kind"] = kind
+        kept["kind"] = kind = HYPOTHESIS
+        kept["requirement_missing"] = ("the gap names no requirement of the texts that one of its two behaviours "
+                                       "breaks: a difference someone could see is not a consequence")
     if failure is None and witness_required and kind in BLOCKING and not deferred:
         problem = witness_problem(judgement.get("witness"), corpus,
                                   _norm(later_texts) if later_texts is not None else "")

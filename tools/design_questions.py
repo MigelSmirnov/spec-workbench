@@ -131,7 +131,11 @@ def main(argv: list[str] | None = None) -> int:
     kind.add_argument("--carried", metavar="LAYER",
                       help="the receiving layer: a later state number, generation, factory_checks or deploy")
     kind.add_argument("--accepted", metavar="REASON", help="the author's reason to accept it as it stands")
-    dispose.add_argument("--what", help="with --carried: what the receiving layer must decide")
+    dispose.add_argument("--what", help="with --carried: what the receiving layer must decide — the options, and "
+                                        "what to check of each")
+    dispose.add_argument("--keeps", action="append",
+                         help="with --carried: what every option must keep — an invariant, rule or promise of the "
+                              "texts up to this state, by its identifier or verbatim (repeatable)")
     dispose.add_argument("--json", action="store_true")
     again = sub.add_parser("rejudge", help="check one unchanged module's kept verdicts under the current judge rules")
     again.add_argument("case", type=Path)
@@ -169,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
             disposition = "fixed" if args.fixed else "carried" if args.carried else "accepted"
             entry = service.dispose(args.case, args.state, args.topic, disposition, round_name=args.round_name,
                                     unit=args.unit, ref=args.fixed, to=args.carried, what=args.what,
-                                    reason=args.accepted)
+                                    reason=args.accepted, keeps=args.keeps)
             print(json.dumps(entry, ensure_ascii=False, indent=2) if args.json
                   else f"{entry['topic']}: {entry['disposition']}"
                        + (f" for {entry['unit']}" if entry.get("unit") else ""))
@@ -198,7 +202,8 @@ def main(argv: list[str] | None = None) -> int:
                 for row in rows:
                     print(f"State {row['state']} {row['round']} {row['topic']}"
                           + (f" ({row['unit']})" if row.get("unit") else "")
-                          + f" -> {row['to']}: {row['what']}")
+                          + f" -> {row['to']}: {row['what']}"
+                          + (f" [keeps: {row['keeps']}]" if row.get("keeps") else ""))
             return 0
         if args.command == "ask" and args.probe is not None:
             summary = service.probe_round(args.case, args.state, _provider(args), args.probe, args.runs,

@@ -296,6 +296,7 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
         question_scope = documents.question_scope(state)
     except documents.QuestionScopeError:
         question_scope = None
+    requirement = _needs_requirement(state)
     files: dict[str, str] = {}
     if searched:
         selected = judge_context.select(texts, state, repeated, scope or [], old, later)
@@ -305,7 +306,7 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
                         if old is not None else None)
         instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents),
                                                 question_scope, witness, state_files, closed_files,
-                                                standard=standard is not None)
+                                                standard=standard is not None, requirement=requirement)
         judge_text = prompts.judge_input(judge_context.render(selected, state), items, None, precedents, layer,
                                          standard)
     else:
@@ -316,7 +317,8 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
                 for _, name, body in texts
             )
         instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents),
-                                                question_scope, witness, standard=standard is not None)
+                                                question_scope, witness, standard=standard is not None,
+                                                requirement=requirement)
         judge_text = prompts.judge_input(text, items, change, precedents, layer, standard)
         files = {f"{LATER_DIR}/{name}": body for name, body in later.items()} if later else {}
     if files:
@@ -333,7 +335,7 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
                                          {p["id"]: p for p in precedents or []},
                                          "\n\n".join(b for s, _, b in texts if s == state),
                                          witness_required=witness, earlier_texts=earlier, standard=standard,
-                                         violation_texts=violation_texts)
+                                         violation_texts=violation_texts, requirement_required=requirement)
     if case is not None and state > 0:
         provenance = QuoteProvenance(case, [(s, n, b) for s, n, b in texts if s < state])
         for topic in repeated:
@@ -887,7 +889,8 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         **({"reviews_read": reviews_read} if reviews_read else {}),
         "judge": judged,
         # the rules its verdicts were checked under (judge.RULES_VERSION, the sections' digest)
-        "judge_rules": judge.rules_record(prompts.standard_text(documents.standard_sections(state)) or None),
+        "judge_rules": judge.rules_record(prompts.standard_text(documents.standard_sections(state)) or None,
+                                           _needs_requirement(state)),
         "repeated_topics": len(repeated),
         "witness_singletons": sum(1 for t in repeated if len(t["runs"]) < REPEATED),
         "hypothesis_topics": sum(1 for t in repeated if t["judgement"].get("kind") == judge.HYPOTHESIS),
@@ -936,11 +939,16 @@ def judge_checks(case: Path, state: int, provider: Provider) -> list[dict[str, A
     return witness_judgement.judge(case, provider, design_decision_witness.binding_material(case))
 
 
+def _needs_requirement(state: int) -> bool:
+    return state != documents.MODULE_STATE and documents.gap_needs_requirement(state)
+
+
 REJUDGE_PROVIDER = "rejudge: judge.check under the current rules, no model asked"
 
 
 def _current_rules(state: int) -> dict[str, Any]:
-    return judge.rules_record(prompts.standard_text(documents.standard_sections(state)) or None)
+    return judge.rules_record(prompts.standard_text(documents.standard_sections(state)) or None,
+                                           _needs_requirement(state))
 
 
 def _rejudgeable(state: int, summaries: list[dict[str, Any]], per_unit: dict[str, dict[str, Any]]) -> list[str]:
@@ -1327,11 +1335,15 @@ def _fix_ref(case: Path, directory: Path, ref: str) -> str:
 
 def dispose(case: Path, state: int, topic_id: str, disposition: str, *, round_name: str | None = None,
             unit: str | None = None, ref: str | None = None, to: str | None = None, what: str | None = None,
-            reason: str | None = None) -> dict[str, Any]:
+            reason: str | None = None, keeps: list[str] | None = None) -> dict[str, Any]:
     """Record the author's disposition of one topic of a round (owner decision
     2026-11-08, #147): `fixed` with the commit of the change, `carried` to a
     later state or to generation, factory_checks or deploy with what it must
-    decide there, or `accepted` with the author's reason. A contradiction takes
+    decide there, or `accepted` with the author's reason. A carried topic may
+    name what every way of deciding it must keep (`keeps`): identifiers or
+    passages of the case's texts up to this state — an invariant, a rule, a
+    promise — each found verbatim there, so the receiving layer is handed the
+    choice with its bound and not a title. A contradiction takes
     none: it closes by a change of the text and a round on it. Kept in
     questions/state<N>/round-<k>/dispositions.json; returns the entry."""
     summaries = _summaries(case, state)
@@ -1374,12 +1386,17 @@ def dispose(case: Path, state: int, topic_id: str, disposition: str, *, round_na
         if to is None or not (what or "").strip():
             raise QuestionRoundError("carried needs --to (the receiving layer) and --what (what it must decide)")
         entry["to"], entry["what"] = _carry_target(state, to), what.strip()
+        kept_bounds = _kept_bounds(case, state, keeps)
+        if kept_bounds:
+            entry["keeps"] = kept_bounds
     elif disposition == "accepted":
         if not (reason or "").strip():
             raise QuestionRoundError("accepted needs --reason: the author's reason")
         entry["reason"] = reason.strip()
     else:
         raise QuestionRoundError(f"unknown disposition {disposition!r}; one of {', '.join(DISPOSITION_KINDS)}")
+    if keeps and disposition != "carried":
+        raise QuestionRoundError("--keeps goes with --carried: what the receiving layer must keep")
     kept = [d for d in _dispositions(directory) if (d.get("topic"), d.get("unit")) != (topic_id, unit)]
     kept.append(entry)
     payload = {"schema_version": DISPOSITIONS_SCHEMA, "state": state, "round": summary["round"],
@@ -1387,6 +1404,22 @@ def dispose(case: Path, state: int, topic_id: str, disposition: str, *, round_na
     (directory / DISPOSITIONS_FILE).write_text(json.dumps(payload, ensure_ascii=False, indent=1) + "\n",
                                                encoding="utf-8")
     return entry
+
+
+def _kept_bounds(case: Path, state: int, keeps: list[str] | None) -> list[str]:
+    """What a carried topic must keep, each found verbatim (code marks and
+    whitespace aside) in the case's documents of States 0 to `state`."""
+    bounds = [k.strip() for k in keeps or [] if k and k.strip()]
+    if not bounds:
+        return []
+    corpus = judge._norm("\n\n".join(path.read_text(encoding="utf-8")
+                                     for found, path in documents.design_documents(case, state)
+                                     if found <= state))
+    missing = [b for b in bounds if len(judge._norm(b)) < 3 or judge._norm(b) not in corpus]
+    if missing:
+        raise QuestionRoundError("--keeps names what the texts up to State "
+                                 f"{state} do not hold verbatim: {'; '.join(missing)}")
+    return bounds
 
 
 def carried_items(case: Path, to: int | str | None = None) -> list[dict[str, Any]]:
@@ -1408,7 +1441,8 @@ def carried_items(case: Path, to: int | str | None = None) -> list[dict[str, Any
             if entry.get("rejudged_from"):  # listed once, in the round it was given in
                 continue
             found.append({"state": int(state_name), "round": directory.name,
-                          **{k: entry.get(k) for k in ("topic", "topic_text", "unit", "to", "what")}})
+                          **{k: entry.get(k) for k in ("topic", "topic_text", "unit", "to", "what")},
+                          **({"keeps": "; ".join(entry["keeps"])} if entry.get("keeps") else {})})
     return found
 
 

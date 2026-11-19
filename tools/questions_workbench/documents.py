@@ -62,6 +62,15 @@ def question_scope(state: int, sequence_path: Path = SEQUENCE) -> str:
     raise QuestionScopeError(f"no phase of State {state} declares a question_scope")
 
 
+def gap_needs_requirement(state: int, sequence_path: Path = SEQUENCE) -> bool:
+    """Whether the phase asked at `state` declares `gap_needs_requirement`: its
+    judge first asks whose question a topic is, and a gap blocks only on a
+    requirement of the texts that one of its two behaviours breaks (judge.py)."""
+    sequence = json.loads(sequence_path.read_text(encoding="utf-8"))
+    return any(phase.get("semantic_state") == state and phase.get("question_scope")
+               and phase.get("gap_needs_requirement") is True for phase in sequence["phases"])
+
+
 def question_states(sequence_path: Path = SEQUENCE) -> list[int]:
     """The states that declare a question_scope, in order."""
     sequence = json.loads(sequence_path.read_text(encoding="utf-8"))
