@@ -106,10 +106,11 @@ A replaced file is scanned again by its new content (A3).
    `RGBA` converts the decoded samples, without colour management and without a colour profile;
    `Image.thumbnail` with the `LANCZOS` filter and a box of the imported `PHOTO_MAX_SIDE` constant on
    each side reduces the image when a side is larger than that box, keeping its proportion; the result
-   is pasted onto a white `RGB` image of the same size with its own alpha channel as the mask, so
-   transparent areas become white; and `Image.save` writes a JPEG with the imported `PHOTO_QUALITY`
-   constant as `quality`, `optimize` true, `progressive` false and `subsampling` `4:2:0`, with no EXIF,
-   colour profile or other metadata. With one library version one source gives the same bytes. `sha256`
+   is pasted onto an `RGB` image of the same size filled with the colour of the imported
+   `PHOTO_BACKGROUND` constant, white, with its own alpha channel as the mask, so transparent areas
+   become white; and `Image.save` writes a JPEG with the imported constants `PHOTO_QUALITY` as
+   `quality`, `PHOTO_OPTIMIZE` as `optimize`, `PHOTO_PROGRESSIVE` as `progressive` and
+   `PHOTO_SUBSAMPLING` as `subsampling`, with no EXIF, colour profile or other metadata. With one library version one source gives the same bytes. `sha256`
    and `size` of M04 describe the bytes that were stored, and a repeated delivery returns that placement
    without encoding again (A3 rule 2).
 2. The source may be JPEG, PNG or WEBP. Checks run in this order: a first frame above the pixel
@@ -330,19 +331,25 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
    agent have no access to it. No other actor changes its folders, so the containment checked before a
    write holds for that write.
 2. A stored image has the mode of the imported `STORED_IMAGE_MODE` constant and a state record that of
-   `RECORD_MODE`, so neither is executable. A folder the service creates in the binary store has the mode
-   of `STORE_FOLDER_MODE`, and one in the state folder that of `STATE_FOLDER_MODE`. The Portal
+   the imported `RECORD_MODE` constant, so neither is executable. The installation creates the binary
+   store and the state folder themselves; the service never creates them, and when one is missing the
+   write that needs it fails. The service creates the missing folders below them, outermost first, with
+   the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported
+   `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask. The Portal
    reads a stored image and alone decides who may retrieve it. The deliverer has no operation that
    returns image bytes.
 3. Each file is written to a temporary name in its folder, synchronised to disk and renamed, and
    its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. The
    temporary name begins with the imported `TEMPORARY_NAME_PREFIX` constant and is chosen fresh for each
-   write; the temporary file is created exclusively, never reusing an existing entry, with mode 0600 and
-   takes its final mode before the rename. A file counts as written when the rename succeeds. A write
+   write; the temporary file is created exclusively, never reusing an existing entry, and a name already
+   taken is passed over for another. It takes the mode of the imported `TEMPORARY_FILE_MODE` constant at
+   once and its final mode before the rename. A file counts as written when the rename succeeds. A write
    that fails before the rename leaves the destination as it was, whether absent or holding an earlier
    complete file, and removes its temporary file. A stored image is written before a record that depends
-   on it, so a failure to synchronise its folder after the rename fails that write: the image stays, no
-   record is written, and A3 rule 5 condition 5 applies. A placement or mark record is the last write of
+   on it, so each folder created for it is synchronised in the folder that holds it, and its own folder
+   after the rename; a failure of any of these synchronisations fails that write: what was written
+   stays, no record is written, and A3 rule 5 condition 5 applies. The folders created for a record or
+   for the lock file are not synchronised. A placement or mark record is the last write of
    its operation, so a failure to synchronise its folder after the rename does not undo it and is not a
    failure of the operation; only its survival of a host crash is uncertain. A crash of the process or the
    host is not a failed write: the temporary file it interrupts stays under its temporary name, is never
@@ -450,6 +457,11 @@ Policy values are constants of the data provider:
 | `STATE_FOLDER_MODE` | `int` | 0o700 |
 | `LOCK_FILE_MODE` | `int` | 0o600 |
 | `TEMPORARY_NAME_PREFIX` | `str` | `.tmp-` |
+| `TEMPORARY_FILE_MODE` | `int` | 0o600 |
+| `PHOTO_OPTIMIZE` | `bool` | true |
+| `PHOTO_PROGRESSIVE` | `bool` | false |
+| `PHOTO_SUBSAMPLING` | `str` | `4:2:0` |
+| `PHOTO_BACKGROUND` | `tuple[int, int, int]` | (255, 255, 255) |
 
 Closed lists are enumerations: `= models.ScanStatus`, `= models.ObservationReason`,
 `= models.DateSource`, `= models.PlacementStatus`, `= models.PlacementFailure`,

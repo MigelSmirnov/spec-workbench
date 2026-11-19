@@ -19,7 +19,9 @@ the record read at each operation.
 
 ## Dependencies
 
-This table is the complete and minimal list of what each module names directly. There are no
+This table is the complete and minimal list of what each module names directly from the other modules
+of this service; the standard library and third-party libraries a module imports are declared by the
+imports closure (`65_imports.json`), not here. There are no
 cycles, and `domain_models` names no other module.
 
 | Consumer | Provider | Symbols |
@@ -29,8 +31,8 @@ cycles, and `domain_models` names no other module.
 | `source_folder` | `domain_models` | `DelivererError`, `ObservationReason`, `PlacementFailure`, `RefusalCode`, `Rejected`, `ScanStatus`, `SourceFile`, `SourceRead` |
 | `source_folder` | `data_provider` | `CONFLICT_COPY_MARK`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `MAX_SOURCE_BYTES` |
 | `photo_preparation` | `domain_models` | `DateSource`, `PhotoPublication`, `PlacementFailure`, `PreparedPhoto`, `Rejected` |
-| `photo_preparation` | `data_provider` | `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_MAX_SIDE`, `PHOTO_QUALITY` |
-| `delivery_store` | `data_provider` | `LOCK_FILE_MODE`, `RECORD_MODE`, `STATE_FOLDER_MODE`, `STORE_FOLDER_MODE`, `STORED_IMAGE_MODE`, `TEMPORARY_NAME_PREFIX` |
+| `photo_preparation` | `data_provider` | `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_BACKGROUND`, `PHOTO_MAX_SIDE`, `PHOTO_OPTIMIZE`, `PHOTO_PROGRESSIVE`, `PHOTO_QUALITY`, `PHOTO_SUBSAMPLING` |
+| `delivery_store` | `data_provider` | `LOCK_FILE_MODE`, `RECORD_MODE`, `STATE_FOLDER_MODE`, `STORE_FOLDER_MODE`, `STORED_IMAGE_MODE`, `TEMPORARY_FILE_MODE`, `TEMPORARY_NAME_PREFIX` |
 | `delivery_store` | `domain_models` | `DelivererError`, `DeliveryContext`, `PhotoPlacement`, `PublicationMark`, `RefusalCode` |
 | `photo_delivery` | `domain_models` | `DelivererError`, `DeliveryContext`, `MarkOutcome`, `MarkStatus`, `PhotoPlacement`, `PlacementFailure`, `PlacementOutcome`, `PlacementStatus`, `PublicationMark`, `RefusalCode`, `Rejected`, `ScanResult`, `ScanStatus`, `SourceFile`, `SourcePhotoObservation` |
 | `photo_delivery` | `data_provider` | `SOURCE_ID_PATTERN` |
@@ -197,6 +199,11 @@ RECORD_MODE
 STATE_FOLDER_MODE
 LOCK_FILE_MODE
 TEMPORARY_NAME_PREFIX
+TEMPORARY_FILE_MODE
+PHOTO_OPTIMIZE
+PHOTO_PROGRESSIVE
+PHOTO_SUBSAMPLING
+PHOTO_BACKGROUND
 ```
 
 ### Trace inputs
@@ -380,7 +387,8 @@ build_publication
 ### Owns
 
 - the names and modes of stored images and state records;
-- atomic writing of one file;
+- atomic writing of one file, and creating the missing folders below the binary store and the state
+  folder, which the installation creates;
 - the reference of a stored image and its containment in the binary store;
 - the per-project lock across processes;
 - reading and writing placement and mark records, and refusing with the STATE_UNAVAILABLE member of

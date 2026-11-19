@@ -438,7 +438,7 @@ A held lock for the duration of the caller's block.
 
 ### Observable effect
 
-Creates the project lock file on first use with the mode of `LOCK_FILE_MODE`, opens it without following a link, and holds an operating system lock.
+Creates the project lock file on first use with the mode of `LOCK_FILE_MODE`, and the missing folders below the state folder with `STATE_FOLDER_MODE`; a missing state folder is refused like a lock file that cannot be opened. It opens the lock file without following a link and holds an operating system lock.
 
 ### Enforces
 
@@ -472,7 +472,7 @@ The reference `photos/<project_id>/<source_id>.jpg`.
 
 ### Observable effect
 
-Writes the stored image atomically with the mode of `STORED_IMAGE_MODE`; its folder is synchronised before it returns, and a failure there is a failed write (A6 rule 3).
+Writes the stored image atomically with the mode of `STORED_IMAGE_MODE`, creating the missing folders below the binary store with `STORE_FOLDER_MODE`; each folder it creates and the image's own folder are synchronised before it returns, and a failure there is a failed write (A6 rules 2 and 3). A missing binary store is a failed write.
 
 ### Enforces
 
