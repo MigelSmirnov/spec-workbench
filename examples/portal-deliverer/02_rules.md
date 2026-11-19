@@ -107,8 +107,8 @@ A replaced file is scanned again by its new content (A3).
    `Image.thumbnail` with the `LANCZOS` filter and a box of the imported `PHOTO_MAX_SIDE` constant on
    each side reduces the image when a side is larger than that box, keeping its proportion; the result
    is pasted onto an `RGB` image of the same size filled with the colour of the imported
-   `PHOTO_BACKGROUND` constant, a colour name of white, with its own alpha channel as the mask, so transparent areas
-   become white; and `Image.save` writes a JPEG with the imported constants `PHOTO_QUALITY` as
+   `PHOTO_BACKGROUND` constant, with its own alpha channel as the mask, so transparent areas take that
+   colour; and `Image.save` writes a JPEG with the imported constants `PHOTO_QUALITY` as
    `quality`, `PHOTO_OPTIMIZE` as `optimize`, `PHOTO_PROGRESSIVE` as `progressive` and
    `PHOTO_SUBSAMPLING` as `subsampling`, with no EXIF, colour profile or other metadata. With one library version one source gives the same bytes. `sha256`
    and `size` of M04 describe the bytes that were stored, and a repeated delivery returns that placement
