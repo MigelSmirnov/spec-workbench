@@ -34,7 +34,7 @@ Reads the environment.
 
 ### Enforces
 
-A8: a required setting is present, an optional one takes its decided default, and the port is a positive integer.
+A8: a required setting is present and not empty, an optional one that is absent or empty takes its decided default, and the port is decimal digits for a number from 1 to 65535.
 
 ### Errors
 
@@ -102,7 +102,7 @@ Reads the token file.
 
 ### Enforces
 
-A5 rule 2: no group or other permission on the file, and at least 32 characters.
+A5 rule 2: no group or other permission on the file, UTF-8 content, and after the surrounding whitespace is removed at least 32 characters, all visible ASCII.
 
 ### Errors
 
@@ -162,7 +162,7 @@ The environment of the process.
 
 ### Outputs
 
-The exit status of the process.
+The exit status of the process: 0 when the service stops after it has served, 1 when the start fails, with the reason on the standard error stream and without listening.
 
 ### Observable effect
 
@@ -264,7 +264,7 @@ A confirmed M01.
 
 ### Outputs
 
-The path of the photo folder, for use inside the service only.
+The resolved path of the photo folder, the path whose containment below the root was checked, for use inside the service only.
 
 ### Observable effect
 
@@ -532,7 +532,7 @@ Read-only.
 
 ### Inputs
 
-The context of the operations, the project id, the source id and M04.
+The context of the operations and M04. The address of the record is taken from the `project_id` and `source_id` inside M04, so the two cannot disagree.
 
 ### Outputs
 
@@ -600,7 +600,7 @@ Read-only.
 
 ### Inputs
 
-The context of the operations, the project id, the source id and M07.
+The context of the operations and M07. The address of the record is taken from the `project_id` and `source_id` inside M07, so the two cannot disagree.
 
 ### Outputs
 

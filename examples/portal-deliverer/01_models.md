@@ -145,8 +145,9 @@ None.
 
 The record that one source photo of one project was placed in the Portal binary store. The
 deliverer creates it once when placing a photo. A repeated placement returns it and writes nothing
-(P-06). `name` is the source's relative path when it was placed and is not updated later. `sha256`,
-`size` and `media_type` describe the stored image, while `source_id` is the hash of the source.
+(P-06). `name` is the name M02 gave the source when it was placed, relative to the photo folder with
+`/` separators, and is not updated later. `sha256`, `size` and `media_type` describe the stored image:
+`size` is its length in bytes. `source_id` is the hash of the source.
 
 **Fields:** `project_id: UUID`, `source_id: str`, `name: str`, `file_ref: str`, `sha256: str`,
 `size: int`, `media_type: str`, `date_source: DateSource`, `publication: PhotoPublication`.

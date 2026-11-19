@@ -31,8 +31,8 @@ applies decides:
 | 8 | placed | `placed` | none |
 | 9 | anything else | `ready` | none |
 
-A scan covers the photo folder and all its subfolders (R0-12). When a subfolder that is not ignored
-cannot be listed, the whole operation is refused with `folder_unavailable`, so a partial scan is
+A scan covers the photo folder and all its subfolders (R0-12). When the photo folder, or a subfolder
+that is not ignored, cannot be opened or listed, the whole operation is refused with `folder_unavailable`, so a partial scan is
 never reported as complete. A file exactly at the source limit passes that rule. A file that
 disappears before its metadata is read is not reported. Files with the same content are each reported,
 with the same source id. A rejected file has no source id.
@@ -48,15 +48,24 @@ constant, the mark of a Syncthing conflict copy (R0-14). Names beginning with a 
 writing lies under such a temporary name. Ignored names are not reported, ignored folders are not entered,
 and an entry the listing shows as a symbolic link is neither reported nor followed.
 
-Syncthing may change the folder during a scan, so a scan is not a view of one instant. Each rule applies
+Syncthing may change the folder during a scan, so a scan is not a view of one instant. Each folder is
+listed once, in one pass over its entries; an entry added or removed during that pass may or may not be
+among them. Each rule applies
 to what its step finds when it runs, and the next scan sees the folder as it then stands. A file that
 changes while it is read is judged by the bytes that were read, once, without a retry. Syncthing replaces
 a finished file by renaming a new one over it; a later delivery judges what it then reads under A3 rule 5.
 
-When the listing reaches an entry, one metadata reading of its path, without following a link, decides
-that it is a regular file and gives its listed size and modification time; an entry that reading does not
-show as a regular file is not reported. Orders 1 and 2 are first decided by that size, before the file is
-opened. A file is then opened: an opening that fails, or a failed metadata reading of the opened file,
+Every folder is opened without following a link: the photo folder one folder at a time along its
+resolved path (A5 rule 8), and each subfolder in the folder that holds it. A folder is listed, its entries
+are read and its files are opened only through the folder that was opened, so an entry replaced by a link
+after a check is never followed. A subfolder the listing showed that is no longer that folder when it is
+opened, because it became a link or another object, is not entered; one that cannot be opened is refused
+as a subfolder that cannot be listed. When the listing reaches an entry, one metadata reading of that
+entry in its opened folder, without following a link, decides that it is a regular file and gives its
+listed size and modification time; an entry that reading does not show as a regular file is not
+reported, and a reading that fails other than for a file that disappeared refuses the scan with
+`folder_unavailable`. Orders 1 and 2 are first decided by that size, before the file is
+opened. A file is then opened in that same opened folder: an opening that fails, or a failed metadata reading of the opened file,
 is order 5, and an opened object that is not a regular file is order 3; either ends the work on that file
 before any byte is read. Otherwise it is read once, up to one byte past the imported `MAX_SOURCE_BYTES` constant: reaching
 that byte is order 4, and the read stops there. Read once means one pass over the opened file from its
@@ -88,8 +97,10 @@ A replaced file is scanned again by its new content (A3).
 
 ### Normative rules
 
-1. A stored image is a newly encoded JPEG made from the decoded pixels of the source. Transparent
-   areas become white. The camera orientation is applied, then the longest side is reduced to the
+1. A stored image is a newly encoded JPEG made from the decoded pixels of the source: baseline, not
+   progressive, three colour channels with the colour resolution halved in both directions (4:2:0), the
+   imported `PHOTO_QUALITY` constant as its quality, and no colour profile and no metadata. The pixels
+   are converted to RGB as decoded, without colour management. Transparent areas become white. The camera orientation is applied, then the longest side is reduced to the
    limit when it is larger.
 2. The source may be JPEG, PNG or WEBP. Checks run in this order: a first frame above the pixel
    limit (width times height) fails with `too_many_pixels`, a source that cannot be decoded with
@@ -97,7 +108,7 @@ A replaced file is scanned again by its new content (A3).
    to a limit passes. Only the first frame of an animated image is delivered.
 3. The photo moment is the first usable value of: EXIF `DateTimeOriginal`, EXIF `DateTime`, then
    the file's modification time. `DateTimeOriginal` uses `OffsetTimeOriginal` when that offset has
-   the form `+HH:MM` or `-HH:MM`; otherwise it is read in the configured time zone, and so is
+   the form `+HH:MM` or `-HH:MM` with hours up to 14 and minutes up to 59; otherwise it is read in the configured time zone, and so is
    `DateTime`. A camera value is unusable when it is malformed, when its UTC year
    is before 2000, or when it is more than 24 hours after the file's modification time.
 4. The photo date is delivered as UTC without an offset, as the Client Portal stores it. A camera
@@ -142,8 +153,12 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
    `source_id` that does not match the imported `SOURCE_ID_PATTERN` constant in full is refused with
    `invalid_source_id`.
 5. A photo that cannot be delivered is answered with status `failed` and one member of
-   `= models.PlacementFailure`. Condition 1 is decided from the name and the metadata of its path before
-   the file is opened. Condition 2 applies A1 as A1 decides it: orders 1 and 2 first from that same
+   `= models.PlacementFailure`. Condition 1 is decided from the name, then by opening the photo folder and
+   each folder of the name in turn, each in the one before it and without following a link, and by one
+   metadata reading of the last segment in the last folder opened, without following a link; the file is
+   then opened in that folder, so it is read from the folders that were checked. Inspecting a folder of
+   the path is opening it as a folder, never reading a file of it; only the last segment is opened for
+   reading (INV-02). Condition 2 applies A1 as A1 decides it: orders 1 and 2 first from that same
    metadata, before the file is opened, then the read. Conditions 3 and 4 follow the read. Conditions 1 to 4 write nothing except the
    project lock. After condition 5 a stored image may remain without a record: no caller has received
    its reference, and a repeated delivery of the same file writes it again and completes the placement,
@@ -151,7 +166,7 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
 
    | Order | Condition | Member |
    |---|---|---|
-   | 1 | `name` is not non-empty segments joined by single `/` characters, or a segment is `.` or `..`, or a segment is ignored under A1, or a folder on its path is absent or a symbolic link, or the last segment is absent or is not a regular file, or the metadata of a segment cannot be read. Names are compared exactly, without Unicode normalisation | `NOT_READY_OR_ABSENT` |
+   | 1 | `name` is not non-empty segments joined by single `/` characters, or a segment is `.` or `..`, or a segment is ignored under A1, or a folder on its path cannot be opened as a folder without following a link, because it is absent, is a symbolic link, is not a folder or the opening fails, or the last segment is absent or is not a regular file, or its metadata cannot be read. Names are compared exactly, without Unicode normalisation | `NOT_READY_OR_ABSENT` |
    | 2 | A1 orders 1 to 6 reject the file | `EMPTY` for order 1, `TOO_LARGE` for orders 2 and 4, `NOT_A_REGULAR_FILE` for order 3, `UNREADABLE_FILE` for order 5, `UNSUPPORTED_FORMAT` for order 6 |
    | 3 | the hash of the bytes differs from `source_id` | `SOURCE_CHANGED` |
    | 4 | A2 rule 2 fails | `TOO_MANY_PIXELS`, `UNREADABLE_IMAGE` or `TOO_LARGE`, as that rule decides |
@@ -225,8 +240,12 @@ A published photo is recognised without any change to the Portal.
    compared whole, case-sensitively and in constant time. Any other value is refused with 401 before
    the request's identifiers or body are examined.
 2. The token is generated with 256 bits from a cryptographic random source and is kept in a UTF-8
-   file. Whitespace around it is removed when it is read. The service does not start when the group
-   or others have any permission on the file or the token has fewer than 32 characters.
+   file: the 32 random bytes in URL-safe Base64, 43 characters of `A`-`Z`, `a`-`z`, `0`-`9`, `-` and `_`.
+   At the start the file is decoded as UTF-8, a byte sequence that is not UTF-8 ending the start, and the
+   Unicode whitespace at both ends is removed. The service does not start when the group or others have
+   any permission on the file, or when what remains has fewer than 32 characters or any character that
+   is not visible ASCII (`!` to `~`), since a token with such a character could not be presented in
+   the `Authorization` header.
 3. A token is replaced by writing a new file and restarting the service. The old token then stops
    working. The token is never written to logs, answers, repository files or the manifest.
 4. The service listens on the loopback interface. A reverse proxy on the same host terminates
@@ -254,8 +273,12 @@ A published photo is recognised without any change to the Portal.
 8. The form of a subfolder: the photo and invoice subfolders are non-empty relative paths without
    `..` and are not the root itself. Separately, on each scan and placement the photo folder of the
    requested project must be a folder whose resolved path is strictly below the resolved root,
-   otherwise the operation is refused with `folder_unavailable`. This second check does not run at
-   the start of the service or for other projects. The deliverer never opens the invoice folder, so
+   otherwise the operation is refused with `folder_unavailable`. The photo folder is then reached by that
+   resolved path, opened one folder at a time from the root of the file system without following a link
+   at any of them (A1), so the folder that is read is the folder whose containment was checked; a folder
+   on that path replaced after the check by a link or by anything that is not a folder cannot be opened,
+   and the scan is refused with `folder_unavailable` or the delivery fails under condition 1 of A3 rule 5.
+   This second check does not run at the start of the service or for other projects. The deliverer never opens the invoice folder, so
    the resolved path of that folder is checked by the Cabinet Inbox when it moves to this record
    (R0-09).
 9. A project id must be a UUID and a source id must match the imported `SOURCE_ID_PATTERN` constant in full. Neither a file
@@ -283,20 +306,30 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 ### Normative rules
 
 1. A stored image is named only from the project id and the source hash:
-   `photos/<project_id>/<source_id>.jpg`. The reference must stay inside the binary store.
+   `photos/<project_id>/<source_id>.jpg`. The reference must stay inside the binary store: its path,
+   resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery
+   is refused with `unsafe_reference`. A name built that way cannot leave the store, so the refusal is
+   reachable only when a folder of the store is a link that leads out of it.
 2. A stored image has mode 0644 and a state record mode 0600, so neither is executable. The Portal
    reads a stored image and alone decides who may retrieve it. The deliverer has no operation that
    returns image bytes.
 3. Each file is written to a temporary name in its folder, synchronised to disk and renamed, and
-   its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. A3
-   decides what a crash between the image and the record means.
+   its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. A
+   file counts as written when the rename succeeds. A failure before the rename leaves no file and
+   removes the temporary one; a failure to synchronise the folder after it is a failed write of that
+   operation, while the renamed file stays and a repeated call finds it (A3 rule 2, A4). A3 decides what
+   a crash between the image and the record means.
 4. Deliveries and marks of one project run one at a time, across processes, under an operating
    system lock on one lock file of that project in the state folder. A caller waits for the lock
-   without a time limit, and the lock is released when its holder ends. The check that a placement
+   without a time limit, and the lock is released when its holder ends. The lock file is created on
+   first use and never removed. A wait interrupted by a signal is resumed, not ended. The check that a placement
    or mark exists and its writing happen inside that lock.
-5. A record is absent only when its file does not exist. A placement or mark record that exists but cannot
-   be read, is not valid JSON, is not an object or lacks a field of its model is never taken for an absent
-   record: the operation is refused with the STATE_UNAVAILABLE member of = models.RefusalCode, whose value is
+5. A record is absent only when no entry exists at its address. A placement or mark record is opened
+   without following a link and validated as JSON against its closed model: every field present with its
+   type, every enumeration value a member, every nested model valid, and no other field. Its `project_id`
+   and `source_id` must equal those of its address. A record that is a link, even a dangling one, or that
+   cannot be opened or read, is not valid JSON, fails that validation or names another project or source
+   is never taken for an absent record: the operation is refused with the STATE_UNAVAILABLE member of = models.RefusalCode, whose value is
    `state_unavailable`, and changes no record and no stored image. The same refusal answers a
    failure to open or lock the lock file, which waiting for another holder is not, and a mark that cannot be
    written.
@@ -309,7 +342,7 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 ### Required tests
 
 - INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).
-- INV-20: with a damaged placement or mark record, scan, delivery and mark each answer M08 with the STATE_UNAVAILABLE member of = models.RefusalCode and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), a damaged mark without a placement stops a new placement (`test_a_damaged_mark_without_a_placement_stops_a_new_placement`), and a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`).
+- INV-20: with a damaged placement or mark record, scan, delivery and mark each answer M08 with the STATE_UNAVAILABLE member of = models.RefusalCode and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), a damaged mark without a placement stops a new placement (`test_a_damaged_mark_without_a_placement_stops_a_new_placement`), a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`), and a record that is a link, dangling or not, or that names another source is refused the same way (`test_a_record_not_written_at_its_address_is_refused`).
 
 ### Consequence
 
@@ -326,7 +359,9 @@ A repeated action from the workplace cannot duplicate a delivery.
    not read it. A mark refused after it, and a replayed mark, have read it and write nothing. Scan, delivery
    and the health answer never read it.
 3. The current time is a `datetime` in UTC without an offset, with microsecond precision and no
-   rounding, written in ISO 8601 form. It sets `marked_at`.
+   rounding, written in ISO 8601 form as `YYYY-MM-DDTHH:MM:SS`, followed by `.` and six digits when
+   the microseconds are not zero, with no offset. Every instant of a record and an answer is written
+   so. It sets `marked_at`.
 4. A file's modification time is converted to the same form before it is compared or delivered, dropping
    any fraction finer than a microsecond toward the earlier instant.
 5. The photo moment comes from the file, as A2 decides, and never from the service clock.
@@ -347,7 +382,10 @@ Every instant the deliverer writes has the form the Portal stores.
 
 ### Normative rules
 
-Run settings are fields of the settings object, read from the environment of the process:
+Run settings are fields of the settings object, read from the environment of the process. A variable
+that is set but empty counts as absent: a required one ends the start, an optional one takes its
+default. `PORTAL_DELIVERER_PORT` is decimal ASCII digits for a number from 1 to 65535, and anything else
+ends the start. A time zone the time zone database does not know ends the start:
 
 | Field | Type | Environment variable | Decided |
 |---|---|---|---|
