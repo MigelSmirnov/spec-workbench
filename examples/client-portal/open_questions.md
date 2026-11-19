@@ -391,6 +391,10 @@ client sees the zero rows.
 1. May staff remove a section plan, or mark a section not client-visible, and
    under which conditions (no allocations, no progress)?
 
+Owner 2026-11-18: add the removal of a section that no allocation or progress
+record references. INV-028 protects referenced sections only, so this removal
+does not contradict it. To be designed.
+
 ### Q23 — The overview does not name a photo's section
 
 Found 2026-11-18 on Guifré 9: photos published with `section_id` keep it
@@ -422,3 +426,33 @@ the portal (WhatsApp); v1 was shown as a summary image published as a photo.
 1. Should the portal show and serve the approved estimate document (lines and
    PDF) per approved version, delivered by the same deliverer as Q11/Q12?
    Owner 2026-11-18: a feature to record.
+
+### Q26 — A mistaken payment cannot be cancelled
+
+Found 2026-11-18 while reviewing what the portal can remove. A registered
+`WorkPayment` does not change (M33), `amount` must be positive and the surface
+offers only `payment.record` and `payment.list`. A payment recorded by mistake
+therefore stays in the payments total, and only a manual database edit removes it.
+
+Owner 2026-11-18: add a cancellation with a reason. A cancelled payment leaves
+the totals and stays in the history. To be designed.
+
+1. Who may cancel a payment, and does the client see a cancelled payment?
+2. May a payment of an archived project be cancelled? Archived records are
+   immutable today (`00_product.md`).
+
+### Q27 — A hidden photo cannot be removed
+
+Found 2026-11-18 while reviewing what the portal can remove. A `ProgressPhoto`
+can only be hidden (M35): its record and file stay on the server, even for a
+photo published by mistake or showing something it should not. No rule forbids
+removal; the operation was never designed, and external binary deletion and
+retention are still open in `00_product.md`.
+
+Owner 2026-11-18: add a real removal of a hidden photo, record and file
+together. To be designed, before real photos are first delivered to a client.
+
+1. What stays in the audit after the removal?
+2. May the same `intake_id` be published again after a removal? The Portal
+   Deliverer keeps a publication mark for each delivered photo (case
+   `portal-deliverer`), and it must not keep pointing at a removed photo.
