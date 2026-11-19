@@ -1,0 +1,147 @@
+{
+ "open_points": [
+  {
+   "subject": "A6: PublicationMark.marked_at",
+   "kind": "missing time policy",
+   "text": "`marked_at: datetime`",
+   "question": "Which time source supplies `marked_at`, what datetime representation is stored, and how many readings does one mark operation take, including replayed and refused calls?",
+   "options": [
+    "Read an injected UTC clock once only when creating a new mark; store naive UTC.",
+    "Read an injected UTC clock once at the start of every mark call; store timezone-aware UTC.",
+    "Read the ambient system clock when the record is written."
+   ],
+   "default_guess": "Read an injected clock once after validation and while holding the project lock, only for a new mark, and store naive UTC to match the product's existing UTC-without-offset convention.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark; the service clock and operating-system clock differ.",
+    "events": [
+     "The calling flow asks the deliverer to record a Portal photo_id.",
+     "The deliverer validates the request, acquires the project lock and creates the mark."
+    ],
+    "outcomes": [
+     "The record's marked_at is the injected clock's instant in naive UTC.",
+     "The record's marked_at is the operating-system clock's instant or an offset-aware datetime."
+    ],
+    "observer": "The calling flow or any later reader of the publication-mark record"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3: PreparedPhoto.taken_at and PhotoPublication.photo_date",
+   "kind": "underspecified instant source",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "Which camera timestamp fields are authoritative, in what precedence, what makes a camera timestamp unusable, and how is a timestamp with no recorded offset converted to UTC?",
+   "options": [
+    "Use EXIF DateTimeOriginal with OffsetTimeOriginal; fall back to modification time if either the timestamp or its offset is unavailable or invalid.",
+    "Use DateTimeOriginal and interpret an offsetless value in the server's local timezone.",
+    "Choose the first parseable camera-related timestamp, treating an offsetless value as already UTC."
+   ],
+   "default_guess": "Use DateTimeOriginal with its matching offset when both are valid; otherwise use the file modification time, then normalize to naive UTC.",
+   "witness": {
+    "initial": "A source JPEG has DateTimeOriginal `2026:07:01 12:00:00`, no EXIF offset, DateTimeDigitized `2026:07:01 12:05:00`, and a file modification instant of 10:10 UTC.",
+    "events": [
+     "The caller delivers the photo.",
+     "The deliverer prepares the image and writes the placement containing PhotoPublication.photo_date."
+    ],
+    "outcomes": [
+     "The photo_date is derived from 12:00 interpreted in the server timezone.",
+     "The camera timestamp is rejected as lacking an offset and photo_date is 10:10 UTC from file modification time."
+    ],
+    "observer": "The owner viewing the photo date in the Portal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3: file-modification photo date",
+   "kind": "unspecified reading identity",
+   "text": "and by one metadata reading of the last segment in the last folder opened, without following a link",
+   "question": "When camera time is unavailable, must the file-modification instant come from this one metadata reading, and must preparation keep that captured value rather than reading metadata again?",
+   "options": [
+    "Use the modification instant captured by the mandated metadata reading.",
+    "Read modification time again while preparing the image.",
+    "Read modification time after the file has been completely read."
+   ],
+   "default_guess": "Capture modification time in the mandated single metadata read and use that captured value throughout the delivery.",
+   "witness": {
+    "initial": "A source has no usable camera timestamp and initially has modification time T1.",
+    "events": [
+     "The deliverer performs the mandated metadata reading and sees T1.",
+     "Another process changes the file metadata to T2 without changing its bytes.",
+     "The deliverer reads and prepares the file."
+    ],
+    "outcomes": [
+     "The placement's photo_date is T1.",
+     "The placement's photo_date is T2."
+    ],
+    "observer": "The owner viewing the photo date and a test inspecting the placement"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6: crash-left folder creation",
+   "kind": "unclear failure classification",
+   "text": "A write cut short by a crash leaves, besides the folders created for it, which stay under rule 2, at most a temporary file",
+   "question": "Does failure to create or make durable one of those folders count as the A3 rule 5 condition 5 failed-photo outcome, as A6 rule 5 STATE_UNAVAILABLE, or as another refusal, separately for binary-store, state-record and project-lock folders?",
+   "options": [
+    "Binary-store or placement-record folder failure is A3 condition 5 UNREADABLE_FILE; lock-folder failure is STATE_UNAVAILABLE.",
+    "Every state-folder failure is STATE_UNAVAILABLE, while only binary-store folder failure is UNREADABLE_FILE.",
+    "Every folder-creation failure is UNREADABLE_FILE because it belongs to the attempted image or record write."
+   ],
+   "default_guess": "Classify binary-image and placement-record parent-folder failures as A3 condition 5 UNREADABLE_FILE, and classify failure to create or take the project lock as STATE_UNAVAILABLE.",
+   "witness": {
+    "initial": "A project has no placement, its binary-store project folder is absent, and permission denies creation of that folder.",
+    "events": [
+     "The caller delivers a valid source.",
+     "The deliverer acquires the project lock and attempts to create the folder needed for the stored image."
+    ],
+    "outcomes": [
+     "The delivery returns M06 failed with UNREADABLE_FILE under A3 condition 5.",
+     "The operation returns M08 with STATE_UNAVAILABLE because durable state infrastructure cannot be created."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6: recovery from crash-left project-lock folders",
+   "kind": "partial creation semantics",
+   "text": "The project lock is that lock file together with the folders below the state folder that lead to it. It is created on first use",
+   "question": "If a crash leaves only some or all lock-parent folders but no lock file, is the project lock still absent and safely created on the next call, and may that same call continue with its requested delivery or mark?",
+   "options": [
+    "Treat the lock as absent until the lock file exists; create it and continue the same operation.",
+    "Create the missing lock file but end the operation without performing its requested mutation.",
+    "Treat the partial lock structure as damaged state and return STATE_UNAVAILABLE."
+   ],
+   "default_guess": "Treat the lock as absent, create and acquire its file using the prescribed mode, and continue the same operation.",
+   "witness": {
+    "initial": "The project has never been used and has no project-lock path.",
+    "events": [
+     "A delivery creates the folders leading to the lock file.",
+     "The process crashes before creating the lock file.",
+     "The caller repeats the delivery."
+    ],
+    "outcomes": [
+     "The repeated call creates and acquires the lock, then completes the placement.",
+     "The repeated call refuses because the lock structure is partial, or creates only the lock and does not complete the placement."
+    ],
+    "observer": "The calling flow and the owner waiting for the placement"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A10: Security review",
+   "kind": "coverage ambiguity",
+   "text": "files_artifacts: APPLICABLE; references: A1, A2, A5, A6, A8; affected: M01, M02, M03, M04, connections file, source folders, Portal binary store",
+   "question": "Does the files/artifacts outcome cover the state folder, project-lock folders and crash-left temporary files merely through its A6 reference, or must those newly explicit persistent artifacts appear in the affected list?",
+   "options": [
+    "The reference to A6 covers every A6 artifact, so the affected list need not name them.",
+    "Add the state folder, project locks, crash-left folders and temporary files to the affected list.",
+    "Only the state folder and lock need naming; temporary files are already covered as part of the binary store."
+   ],
+   "default_guess": "Name the state folder, project-lock artifacts, crash-left folders and temporary files explicitly in the affected list.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A6: PublicationMark.marked_at\",\"kind\":\"missing time policy\",\"text\":\"`marked_at: datetime`\",\"question\":\"Which time source supplies `marked_at`, what datetime representation is stored, and how many readings does one mark operation take, including replayed and refused calls?\",\"options\":[\"Read an injected UTC clock once only when creating a new mark; store naive UTC.\",\"Read an injected UTC clock once at the start of every mark call; store timezone-aware UTC.\",\"Read the ambient system clock when the record is written.\"],\"default_guess\":\"Read an injected clock once after validation and while holding the project lock, only for a new mark, and store naive UTC to match the product's existing UTC-without-offset convention.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark; the service clock and operating-system clock differ.\",\"events\":[\"The calling flow asks the deliverer to record a Portal photo_id.\",\"The deliverer validates the request, acquires the project lock and creates the mark.\"],\"outcomes\":[\"The record's marked_at is the injected clock's instant in naive UTC.\",\"The record's marked_at is the operating-system clock's instant or an offset-aware datetime.\"],\"observer\":\"The calling flow or any later reader of the publication-mark record\"}},{\"subject\":\"A3: PreparedPhoto.taken_at and PhotoPublication.photo_date\",\"kind\":\"underspecified instant source\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"Which camera timestamp fields are authoritative, in what precedence, what makes a camera timestamp unusable, and how is a timestamp with no recorded offset converted to UTC?\",\"options\":[\"Use EXIF DateTimeOriginal with OffsetTimeOriginal; fall back to modification time if either the timestamp or its offset is unavailable or invalid.\",\"Use DateTimeOriginal and interpret an offsetless value in the server's local timezone.\",\"Choose the first parseable camera-related timestamp, treating an offsetless value as already UTC.\"],\"default_guess\":\"Use DateTimeOriginal with its matching offset when both are valid; otherwise use the file modification time, then normalize to naive UTC.\",\"witness\":{\"initial\":\"A source JPEG has DateTimeOriginal `2026:07:01 12:00:00`, no EXIF offset, DateTimeDigitized `2026:07:01 12:05:00`, and a file modification instant of 10:10 UTC.\",\"events\":[\"The caller delivers the photo.\",\"The deliverer prepares the image and writes the placement containing PhotoPublication.photo_date.\"],\"outcomes\":[\"The photo_date is derived from 12:00 interpreted in the server timezone.\",\"The camera timestamp is rejected as lacking an offset and photo_date is 10:10 UTC from file modification time.\"],\"observer\":\"The owner viewing the photo date in the Portal\"}},{\"subject\":\"A3: file-modification photo date\",\"kind\":\"unspecified reading identity\",\"text\":\"and by one metadata reading of the last segment in the last folder opened, without following a link\",\"question\":\"When camera time is unavailable, must the file-modification instant come from this one metadata reading, and must preparation keep that captured value rather than reading metadata again?\",\"options\":[\"Use the modification instant captured by the mandated metadata reading.\",\"Read modification time again while preparing the image.\",\"Read modification time after the file has been completely read.\"],\"default_guess\":\"Capture modification time in the mandated single metadata read and use that captured value throughout the delivery.\",\"witness\":{\"initial\":\"A source has no usable camera timestamp and initially has modification time T1.\",\"events\":[\"The deliverer performs the mandated metadata reading and sees T1.\",\"Another process changes the file metadata to T2 without changing its bytes.\",\"The deliverer reads and prepares the file.\"],\"outcomes\":[\"The placement's photo_date is T1.\",\"The placement's photo_date is T2.\"],\"observer\":\"The owner viewing the photo date and a test inspecting the placement\"}},{\"subject\":\"A6: crash-left folder creation\",\"kind\":\"unclear failure classification\",\"text\":\"A write cut short by a crash leaves, besides the folders created for it, which stay under rule 2, at most a temporary file\",\"question\":\"Does failure to create or make durable one of those folders count as the A3 rule 5 condition 5 failed-photo outcome, as A6 rule 5 STATE_UNAVAILABLE, or as another refusal, separately for binary-store, state-record and project-lock folders?\",\"options\":[\"Binary-store or placement-record folder failure is A3 condition 5 UNREADABLE_FILE; lock-folder failure is STATE_UNAVAILABLE.\",\"Every state-folder failure is STATE_UNAVAILABLE, while only binary-store folder failure is UNREADABLE_FILE.\",\"Every folder-creation failure is UNREADABLE_FILE because it belongs to the attempted image or record write.\"],\"default_guess\":\"Classify binary-image and placement-record parent-folder failures as A3 condition 5 UNREADABLE_FILE, and classify failure to create or take the project lock as STATE_UNAVAILABLE.\",\"witness\":{\"initial\":\"A project has no placement, its binary-store project folder is absent, and permission denies creation of that folder.\",\"events\":[\"The caller delivers a valid source.\",\"The deliverer acquires the project lock and attempts to create the folder needed for the stored image.\"],\"outcomes\":[\"The delivery returns M06 failed with UNREADABLE_FILE under A3 condition 5.\",\"The operation returns M08 with STATE_UNAVAILABLE because durable state infrastructure cannot be created.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A6: recovery from crash-left project-lock folders\",\"kind\":\"partial creation semantics\",\"text\":\"The project lock is that lock file together with the folders below the state folder that lead to it. It is created on first use\",\"question\":\"If a crash leaves only some or all lock-parent folders but no lock file, is the project lock still absent and safely created on the next call, and may that same call continue with its requested delivery or mark?\",\"options\":[\"Treat the lock as absent until the lock file exists; create it and continue the same operation.\",\"Create the missing lock file but end the operation without performing its requested mutation.\",\"Treat the partial lock structure as damaged state and return STATE_UNAVAILABLE.\"],\"default_guess\":\"Treat the lock as absent, create and acquire its file using the prescribed mode, and continue the same operation.\",\"witness\":{\"initial\":\"The project has never been used and has no project-lock path.\",\"events\":[\"A delivery creates the folders leading to the lock file.\",\"The process crashes before creating the lock file.\",\"The caller repeats the delivery.\"],\"outcomes\":[\"The repeated call creates and acquires the lock, then completes the placement.\",\"The repeated call refuses because the lock structure is partial, or creates only the lock and does not complete the placement.\"],\"observer\":\"The calling flow and the owner waiting for the placement\"}},{\"subject\":\"A10: Security review\",\"kind\":\"coverage ambiguity\",\"text\":\"files_artifacts: APPLICABLE; references: A1, A2, A5, A6, A8; affected: M01, M02, M03, M04, connections file, source folders, Portal binary store\",\"question\":\"Does the files/artifacts outcome cover the state folder, project-lock folders and crash-left temporary files merely through its A6 reference, or must those newly explicit persistent artifacts appear in the affected list?\",\"options\":[\"The reference to A6 covers every A6 artifact, so the affected list need not name them.\",\"Add the state folder, project locks, crash-left folders and temporary files to the affected list.\",\"Only the state folder and lock need naming; temporary files are already covered as part of the binary store.\"],\"default_guess\":\"Name the state folder, project-lock artifacts, crash-left folders and temporary files explicitly in the affected list.\"}]}",
+ "set_aside": []
+}

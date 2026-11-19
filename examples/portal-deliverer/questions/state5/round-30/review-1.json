@@ -1,0 +1,127 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "public_op:delivery_store.store_image",
+   "kind": "state_effect_omission",
+   "text": "Writes one stored image.",
+   "question": "Must store_image create the folders needed for the image address, and must its state impact say that a crash can leave those folders behind even when no stored image is completed?",
+   "options": [
+    "store_image creates the required folders, never removes them, and a crash may leave only those folders plus the temporary file allowed by A6 rule 3",
+    "another operation creates the folders, so store_image itself affects only the image file"
+   ],
+   "default_guess": "Assign creation of the image-address folders to store_image and document that they can remain after a failed or crashed write.",
+   "witness": {
+    "initial": "The binary store exists, but the photos folder or the project folder below it does not.",
+    "events": [
+     "module:photo_delivery calls delivery_store.store_image.",
+     "The process crashes after the required folder is created but before the stored image is committed."
+    ],
+    "outcomes": [
+     "The new folder remains as an effect of store_image, as the changed A6 rule 3 permits.",
+     "store_image is treated as writing only the image, so an implementer makes another layer pre-create the folder or attempts to avoid leaving it as this operation's effect."
+    ],
+    "observer": "An integration test or operator inspecting the binary store after restart"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "public_op:delivery_store.write_placement",
+   "kind": "state_effect_omission",
+   "text": "Writes one placement record.",
+   "question": "Must write_placement create the folders leading to the placement record, and may those folders remain when a crash prevents the record from being committed?",
+   "options": [
+    "write_placement creates the required state folders and a crash may leave them without a placement record",
+    "the folders must already have been created by another operation and are outside write_placement's state impact"
+   ],
+   "default_guess": "Have write_placement create its required folders and retain them after failure or crash, consistently with A6 rules 2 and 3.",
+   "witness": {
+    "initial": "The state folder and project lock exist, but the placement-record folder for the project does not.",
+    "events": [
+     "module:photo_delivery calls delivery_store.write_placement.",
+     "The process crashes after creating a record folder and before committing the placement record."
+    ],
+    "outcomes": [
+     "The record folder remains with no placement record.",
+     "The storage method is implemented on the assumption that its state impact permits only the record, so folder creation is assigned elsewhere or the call fails when the folder is absent."
+    ],
+    "observer": "The restarted service or a persistence test inspecting the state folder"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "public_op:delivery_store.write_mark",
+   "kind": "state_effect_omission",
+   "text": "Writes one mark record.",
+   "question": "Must write_mark create the folders leading to the mark record, and may those folders remain when a crash prevents the mark from being committed?",
+   "options": [
+    "write_mark creates the required state folders and a crash may leave them without a mark record",
+    "the folders must already have been created by another operation and are outside write_mark's state impact"
+   ],
+   "default_guess": "Have write_mark create its required folders and retain them after failure or crash, consistently with A6 rules 2 and 3.",
+   "witness": {
+    "initial": "The state folder and project lock exist, but the mark-record folder for the project does not.",
+    "events": [
+     "module:photo_delivery calls delivery_store.write_mark.",
+     "The process crashes after creating a record folder and before committing the mark record."
+    ],
+    "outcomes": [
+     "The record folder remains with no mark record.",
+     "The storage method is implemented on the assumption that its state impact permits only the record, so folder creation is assigned elsewhere or the call fails when the folder is absent."
+    ],
+    "observer": "The restarted service or a persistence test inspecting the state folder"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "public_op:photo_delivery.deliver_project_photo",
+   "kind": "state_effect_omission",
+   "text": "Creates at most one placement of a project and content, and the project lock file on first use. After a failed record write a stored image may remain without a record (A3 rule 5).",
+   "question": "Must the delivery's state impact also include store and state folders that its image or record write creates and that remain after a crash, including when no image or placement record is completed?",
+   "options": [
+    "folder creation is a transitive effect of deliver_project_photo and may be the only durable residue besides its project lock after a crashed write",
+    "the listed placement, image and lock effects are exhaustive and folder creation belongs outside this operation"
+   ],
+   "default_guess": "State explicitly that deliver_project_photo may create and retain all folders needed by its lock, image and placement-record writes, including on a failed or crashed write.",
+   "witness": {
+    "initial": "The installation roots exist, but no project-specific store or placement folders exist.",
+    "events": [
+     "module:deliverer_api calls photo_delivery.deliver_project_photo.",
+     "The delivery reaches an image or record write and crashes after creating a required folder but before committing that file."
+    ],
+    "outcomes": [
+     "The call leaves a new folder without a completed image or placement record, as changed A6 rule 3 allows.",
+     "The state-impact list is treated as exhaustive, so the implementation is arranged to leave no such delivery-owned folder or assigns its creation to unspecified setup."
+    ],
+    "observer": "The operator or a recovery test inspecting durable state after restart"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "public_op:photo_delivery.mark_photo_published",
+   "kind": "state_effect_omission",
+   "text": "Creates at most one mark of a placement, and the project lock file on first use.",
+   "question": "Must the mark operation's state impact include folders created for the mark-record write that can remain after a crash even though no mark record exists?",
+   "options": [
+    "folder creation is a transitive effect of mark_photo_published and a crash may leave the folder without a mark",
+    "the listed mark and lock effects are exhaustive and the mark-record folders must be created outside this operation"
+   ],
+   "default_guess": "State explicitly that mark_photo_published may create and retain the folders needed for its lock and mark record, including when the record write is interrupted.",
+   "witness": {
+    "initial": "A placement exists and the project lock exists, but the mark-record folder for the project does not.",
+    "events": [
+     "module:deliverer_api calls photo_delivery.mark_photo_published.",
+     "The process crashes after the mark-record folder is created but before the mark record is committed."
+    ],
+    "outcomes": [
+     "The folder remains and a later mark still sees no record.",
+     "The state-impact list is treated as exhaustive, so folder creation is assigned to unspecified setup or the operation cannot proceed from this state."
+    ],
+    "observer": "The restarted service or an operator inspecting the state folder"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"public_op:delivery_store.store_image\",\"kind\":\"state_effect_omission\",\"text\":\"Writes one stored image.\",\"question\":\"Must store_image create the folders needed for the image address, and must its state impact say that a crash can leave those folders behind even when no stored image is completed?\",\"options\":[\"store_image creates the required folders, never removes them, and a crash may leave only those folders plus the temporary file allowed by A6 rule 3\",\"another operation creates the folders, so store_image itself affects only the image file\"],\"default_guess\":\"Assign creation of the image-address folders to store_image and document that they can remain after a failed or crashed write.\",\"witness\":{\"initial\":\"The binary store exists, but the photos folder or the project folder below it does not.\",\"events\":[\"module:photo_delivery calls delivery_store.store_image.\",\"The process crashes after the required folder is created but before the stored image is committed.\"],\"outcomes\":[\"The new folder remains as an effect of store_image, as the changed A6 rule 3 permits.\",\"store_image is treated as writing only the image, so an implementer makes another layer pre-create the folder or attempts to avoid leaving it as this operation's effect.\"],\"observer\":\"An integration test or operator inspecting the binary store after restart\"}},{\"unit\":\"context\",\"subject\":\"public_op:delivery_store.write_placement\",\"kind\":\"state_effect_omission\",\"text\":\"Writes one placement record.\",\"question\":\"Must write_placement create the folders leading to the placement record, and may those folders remain when a crash prevents the record from being committed?\",\"options\":[\"write_placement creates the required state folders and a crash may leave them without a placement record\",\"the folders must already have been created by another operation and are outside write_placement's state impact\"],\"default_guess\":\"Have write_placement create its required folders and retain them after failure or crash, consistently with A6 rules 2 and 3.\",\"witness\":{\"initial\":\"The state folder and project lock exist, but the placement-record folder for the project does not.\",\"events\":[\"module:photo_delivery calls delivery_store.write_placement.\",\"The process crashes after creating a record folder and before committing the placement record.\"],\"outcomes\":[\"The record folder remains with no placement record.\",\"The storage method is implemented on the assumption that its state impact permits only the record, so folder creation is assigned elsewhere or the call fails when the folder is absent.\"],\"observer\":\"The restarted service or a persistence test inspecting the state folder\"}},{\"unit\":\"context\",\"subject\":\"public_op:delivery_store.write_mark\",\"kind\":\"state_effect_omission\",\"text\":\"Writes one mark record.\",\"question\":\"Must write_mark create the folders leading to the mark record, and may those folders remain when a crash prevents the mark from being committed?\",\"options\":[\"write_mark creates the required state folders and a crash may leave them without a mark record\",\"the folders must already have been created by another operation and are outside write_mark's state impact\"],\"default_guess\":\"Have write_mark create its required folders and retain them after failure or crash, consistently with A6 rules 2 and 3.\",\"witness\":{\"initial\":\"The state folder and project lock exist, but the mark-record folder for the project does not.\",\"events\":[\"module:photo_delivery calls delivery_store.write_mark.\",\"The process crashes after creating a record folder and before committing the mark record.\"],\"outcomes\":[\"The record folder remains with no mark record.\",\"The storage method is implemented on the assumption that its state impact permits only the record, so folder creation is assigned elsewhere or the call fails when the folder is absent.\"],\"observer\":\"The restarted service or a persistence test inspecting the state folder\"}},{\"unit\":\"context\",\"subject\":\"public_op:photo_delivery.deliver_project_photo\",\"kind\":\"state_effect_omission\",\"text\":\"Creates at most one placement of a project and content, and the project lock file on first use. After a failed record write a stored image may remain without a record (A3 rule 5).\",\"question\":\"Must the delivery's state impact also include store and state folders that its image or record write creates and that remain after a crash, including when no image or placement record is completed?\",\"options\":[\"folder creation is a transitive effect of deliver_project_photo and may be the only durable residue besides its project lock after a crashed write\",\"the listed placement, image and lock effects are exhaustive and folder creation belongs outside this operation\"],\"default_guess\":\"State explicitly that deliver_project_photo may create and retain all folders needed by its lock, image and placement-record writes, including on a failed or crashed write.\",\"witness\":{\"initial\":\"The installation roots exist, but no project-specific store or placement folders exist.\",\"events\":[\"module:deliverer_api calls photo_delivery.deliver_project_photo.\",\"The delivery reaches an image or record write and crashes after creating a required folder but before committing that file.\"],\"outcomes\":[\"The call leaves a new folder without a completed image or placement record, as changed A6 rule 3 allows.\",\"The state-impact list is treated as exhaustive, so the implementation is arranged to leave no such delivery-owned folder or assigns its creation to unspecified setup.\"],\"observer\":\"The operator or a recovery test inspecting durable state after restart\"}},{\"unit\":\"context\",\"subject\":\"public_op:photo_delivery.mark_photo_published\",\"kind\":\"state_effect_omission\",\"text\":\"Creates at most one mark of a placement, and the project lock file on first use.\",\"question\":\"Must the mark operation's state impact include folders created for the mark-record write that can remain after a crash even though no mark record exists?\",\"options\":[\"folder creation is a transitive effect of mark_photo_published and a crash may leave the folder without a mark\",\"the listed mark and lock effects are exhaustive and the mark-record folders must be created outside this operation\"],\"default_guess\":\"State explicitly that mark_photo_published may create and retain the folders needed for its lock and mark record, including when the record write is interrupted.\",\"witness\":{\"initial\":\"A placement exists and the project lock exists, but the mark-record folder for the project does not.\",\"events\":[\"module:deliverer_api calls photo_delivery.mark_photo_published.\",\"The process crashes after the mark-record folder is created but before the mark record is committed.\"],\"outcomes\":[\"The folder remains and a later mark still sees no record.\",\"The state-impact list is treated as exhaustive, so folder creation is assigned to unspecified setup or the operation cannot proceed from this state.\"],\"observer\":\"The restarted service or an operator inspecting the state folder\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,182 @@
+{
+ "open_points": [
+  {
+   "subject": "context",
+   "kind": "folder scope",
+   "text": "besides the folders created for it, which stay under rule 2",
+   "question": "Which exact folders may each interrupted image, placement-record, or mark-record write create, and does “for it” permit only missing parent folders of that write or any service folder allowed by rule 2?",
+   "options": [
+    "Only the missing parent folders on the target file's path",
+    "Any standard store or state folders that the operation chooses to create eagerly",
+    "All folders created anywhere during the enclosing delivery or mark operation"
+   ],
+   "default_guess": "Only missing parent folders on the target file's path.",
+   "witness": {
+    "initial": "The installation roots and project lock exist, but the project-specific image and record folders do not.",
+    "events": [
+     "module:photo_delivery starts a delivery.",
+     "module:delivery_store begins the image write and the process crashes before the final file is installed."
+    ],
+    "outcomes": [
+     "One implementation creates only the image's parent folder, which remains.",
+     "Another eagerly creates the image, placement and mark folder hierarchy, all of which remain."
+    ],
+    "observer": "An operator or a later operation inspecting the store and state folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "crash model",
+   "text": "A write cut short by a crash leaves, besides the folders created for it, which stay under rule 2, at most a temporary file",
+   "question": "What kind of crash must preserve the created folders and the stated atomic-write outcome: termination of the service process only, or also an operating-system, machine, or power crash, and what directory-durability work is required?",
+   "options": [
+    "Only service-process termination; successful mkdir and rename calls may be assumed to persist",
+    "Host or power crash; created directories and relevant directory entries must be made durable",
+    "Both are covered but only the stored image, not directories or records, requires explicit durability"
+   ],
+   "default_guess": "Treat “crash” as service-process termination unless another passage explicitly requires durable filesystem metadata.",
+   "witness": {
+    "initial": "A required project directory is absent and its parent exists.",
+    "events": [
+     "module:delivery_store creates the directory and a temporary file.",
+     "The host loses power before any parent-directory synchronization."
+    ],
+    "outcomes": [
+     "Under a process-crash reading, the requirement is satisfied by ordinary filesystem calls.",
+     "Under a power-crash reading, the implementation must make the directory entry durable or it violates the promised post-crash state."
+    ],
+    "observer": "The service after restart and an operator inspecting durable storage."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "state impact conflict",
+   "text": "Writes one stored image.",
+   "question": "Is the State impact of delivery_store.store_image limited to a successful return, or must it also state that a failed or crashed write can leave newly created folders and a temporary file as allowed by changed A6 rule 3?",
+   "options": [
+    "It describes successful return only",
+    "It is exhaustive and must include residual folders and temporary files from unsuccessful writes"
+   ],
+   "default_guess": "Treat it as successful-return impact and apply A6 rule 3 separately to interrupted writes.",
+   "witness": {
+    "initial": "The image's project folder does not exist.",
+    "events": [
+     "module:photo_delivery calls delivery_store.store_image.",
+     "delivery_store creates the folder and temporary file.",
+     "The process crashes before installing the stored image."
+    ],
+    "outcomes": [
+     "Reading State impact as success-only allows the folder and temporary file to remain.",
+     "Reading State impact as exhaustive permits no state because no stored image was written, contradicting changed A6 rule 3."
+    ],
+    "observer": "A restart, filesystem test, or operator sees the residual folder and temporary file."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "state impact conflict",
+   "text": "Writes one placement record.",
+   "question": "Is the State impact of delivery_store.write_placement limited to a successful return, or must it include the folders and temporary file that an unsuccessful or crashed record write may leave?",
+   "options": [
+    "It describes successful return only",
+    "It is exhaustive and must enumerate residual folders and temporary files"
+   ],
+   "default_guess": "Treat it as successful-return impact and apply A6 rule 3 separately.",
+   "witness": {
+    "initial": "The placement-record project folder does not exist and the stored image is already durable.",
+    "events": [
+     "module:photo_delivery calls delivery_store.write_placement.",
+     "delivery_store creates record folders and begins an atomic temporary write.",
+     "The process crashes before the record is installed."
+    ],
+    "outcomes": [
+     "A success-only reading leaves the folders and temporary file while reporting no placement record.",
+     "An exhaustive reading says the operation may write only one placement record and therefore disallows those residual objects."
+    ],
+    "observer": "The repeated delivery or an operator inspecting the state folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "state impact conflict",
+   "text": "Writes one mark record.",
+   "question": "Is the State impact of delivery_store.write_mark limited to a successful return, or must it include the folders and temporary file that a failed or crashed mark write may leave?",
+   "options": [
+    "It describes successful return only",
+    "It is exhaustive and must enumerate residual folders and temporary files"
+   ],
+   "default_guess": "Treat it as successful-return impact and apply A6 rule 3 separately.",
+   "witness": {
+    "initial": "A placement exists but the mark-record project folder does not.",
+    "events": [
+     "module:photo_delivery calls delivery_store.write_mark.",
+     "delivery_store creates the folder and begins the atomic write.",
+     "The process crashes before installing the mark record."
+    ],
+    "outcomes": [
+     "A success-only reading allows the residual folder and temporary file.",
+     "An exhaustive reading allows only a completed mark record and conflicts with changed A6 rule 3."
+    ],
+    "observer": "The next mark call or an operator inspecting the state folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "aggregate state impact",
+   "text": "After a failed record write a stored image may remain without a record (A3 rule 5).",
+   "question": "Must photo_delivery.deliver_project_photo also report that failed or crashed image and record writes may leave newly created folders and a temporary file, or are such delivery_store artifacts intentionally excluded from the operation's State impact?",
+   "options": [
+    "Include all durable filesystem artifacts of called store operations",
+    "Mention only domain files; folders and temporary files are excluded from the aggregate State impact"
+   ],
+   "default_guess": "Include the residual folders and temporary file because they are observable durable state of the delivery.",
+   "witness": {
+    "initial": "The project lock exists, the image is durable, and the placement-record folder is absent.",
+    "events": [
+     "module:deliverer_api calls photo_delivery.deliver_project_photo.",
+     "photo_delivery calls delivery_store.write_placement.",
+     "The record write creates its folder and temporary file and then the process crashes."
+    ],
+    "outcomes": [
+     "One implementation-level contract permits the image, folder and temporary file to remain.",
+     "Another reading of the stated aggregate impact permits the image alone to remain without the record."
+    ],
+    "observer": "A filesystem conformance test or an operator after restart."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "aggregate state impact",
+   "text": "Creates at most one mark of a placement, and the project lock file on first use.",
+   "question": "When mark_photo_published fails or crashes during its record write, may its aggregate State impact also include newly created folders and a temporary file, or is the quoted list exhaustive?",
+   "options": [
+    "The list is not exhaustive; A6 residual folders and a temporary file may remain",
+    "The list is exhaustive; no state other than a completed mark and first-use lock may remain"
+   ],
+   "default_guess": "Treat the list as non-exhaustive and allow the residual artifacts required by A6 rule 3.",
+   "witness": {
+    "initial": "The placement and project lock exist, but the mark-record folder does not.",
+    "events": [
+     "module:deliverer_api calls photo_delivery.mark_photo_published.",
+     "photo_delivery calls delivery_store.write_mark.",
+     "The write creates a folder and temporary file and the process crashes."
+    ],
+    "outcomes": [
+     "Applying changed A6 rule 3 leaves the folder and temporary file without a mark.",
+     "Treating the State impact list as exhaustive permits neither artifact."
+    ],
+    "observer": "The next mark request, a filesystem test, or an operator after restart."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context\",\"kind\":\"folder scope\",\"text\":\"besides the folders created for it, which stay under rule 2\",\"question\":\"Which exact folders may each interrupted image, placement-record, or mark-record write create, and does “for it” permit only missing parent folders of that write or any service folder allowed by rule 2?\",\"options\":[\"Only the missing parent folders on the target file's path\",\"Any standard store or state folders that the operation chooses to create eagerly\",\"All folders created anywhere during the enclosing delivery or mark operation\"],\"default_guess\":\"Only missing parent folders on the target file's path.\",\"witness\":{\"initial\":\"The installation roots and project lock exist, but the project-specific image and record folders do not.\",\"events\":[\"module:photo_delivery starts a delivery.\",\"module:delivery_store begins the image write and the process crashes before the final file is installed.\"],\"outcomes\":[\"One implementation creates only the image's parent folder, which remains.\",\"Another eagerly creates the image, placement and mark folder hierarchy, all of which remain.\"],\"observer\":\"An operator or a later operation inspecting the store and state folder.\"}},{\"subject\":\"context\",\"kind\":\"crash model\",\"text\":\"A write cut short by a crash leaves, besides the folders created for it, which stay under rule 2, at most a temporary file\",\"question\":\"What kind of crash must preserve the created folders and the stated atomic-write outcome: termination of the service process only, or also an operating-system, machine, or power crash, and what directory-durability work is required?\",\"options\":[\"Only service-process termination; successful mkdir and rename calls may be assumed to persist\",\"Host or power crash; created directories and relevant directory entries must be made durable\",\"Both are covered but only the stored image, not directories or records, requires explicit durability\"],\"default_guess\":\"Treat “crash” as service-process termination unless another passage explicitly requires durable filesystem metadata.\",\"witness\":{\"initial\":\"A required project directory is absent and its parent exists.\",\"events\":[\"module:delivery_store creates the directory and a temporary file.\",\"The host loses power before any parent-directory synchronization.\"],\"outcomes\":[\"Under a process-crash reading, the requirement is satisfied by ordinary filesystem calls.\",\"Under a power-crash reading, the implementation must make the directory entry durable or it violates the promised post-crash state.\"],\"observer\":\"The service after restart and an operator inspecting durable storage.\"}},{\"subject\":\"context\",\"kind\":\"state impact conflict\",\"text\":\"Writes one stored image.\",\"question\":\"Is the State impact of delivery_store.store_image limited to a successful return, or must it also state that a failed or crashed write can leave newly created folders and a temporary file as allowed by changed A6 rule 3?\",\"options\":[\"It describes successful return only\",\"It is exhaustive and must include residual folders and temporary files from unsuccessful writes\"],\"default_guess\":\"Treat it as successful-return impact and apply A6 rule 3 separately to interrupted writes.\",\"witness\":{\"initial\":\"The image's project folder does not exist.\",\"events\":[\"module:photo_delivery calls delivery_store.store_image.\",\"delivery_store creates the folder and temporary file.\",\"The process crashes before installing the stored image.\"],\"outcomes\":[\"Reading State impact as success-only allows the folder and temporary file to remain.\",\"Reading State impact as exhaustive permits no state because no stored image was written, contradicting changed A6 rule 3.\"],\"observer\":\"A restart, filesystem test, or operator sees the residual folder and temporary file.\"}},{\"subject\":\"context\",\"kind\":\"state impact conflict\",\"text\":\"Writes one placement record.\",\"question\":\"Is the State impact of delivery_store.write_placement limited to a successful return, or must it include the folders and temporary file that an unsuccessful or crashed record write may leave?\",\"options\":[\"It describes successful return only\",\"It is exhaustive and must enumerate residual folders and temporary files\"],\"default_guess\":\"Treat it as successful-return impact and apply A6 rule 3 separately.\",\"witness\":{\"initial\":\"The placement-record project folder does not exist and the stored image is already durable.\",\"events\":[\"module:photo_delivery calls delivery_store.write_placement.\",\"delivery_store creates record folders and begins an atomic temporary write.\",\"The process crashes before the record is installed.\"],\"outcomes\":[\"A success-only reading leaves the folders and temporary file while reporting no placement record.\",\"An exhaustive reading says the operation may write only one placement record and therefore disallows those residual objects.\"],\"observer\":\"The repeated delivery or an operator inspecting the state folder.\"}},{\"subject\":\"context\",\"kind\":\"state impact conflict\",\"text\":\"Writes one mark record.\",\"question\":\"Is the State impact of delivery_store.write_mark limited to a successful return, or must it include the folders and temporary file that a failed or crashed mark write may leave?\",\"options\":[\"It describes successful return only\",\"It is exhaustive and must enumerate residual folders and temporary files\"],\"default_guess\":\"Treat it as successful-return impact and apply A6 rule 3 separately.\",\"witness\":{\"initial\":\"A placement exists but the mark-record project folder does not.\",\"events\":[\"module:photo_delivery calls delivery_store.write_mark.\",\"delivery_store creates the folder and begins the atomic write.\",\"The process crashes before installing the mark record.\"],\"outcomes\":[\"A success-only reading allows the residual folder and temporary file.\",\"An exhaustive reading allows only a completed mark record and conflicts with changed A6 rule 3.\"],\"observer\":\"The next mark call or an operator inspecting the state folder.\"}},{\"subject\":\"context\",\"kind\":\"aggregate state impact\",\"text\":\"After a failed record write a stored image may remain without a record (A3 rule 5).\",\"question\":\"Must photo_delivery.deliver_project_photo also report that failed or crashed image and record writes may leave newly created folders and a temporary file, or are such delivery_store artifacts intentionally excluded from the operation's State impact?\",\"options\":[\"Include all durable filesystem artifacts of called store operations\",\"Mention only domain files; folders and temporary files are excluded from the aggregate State impact\"],\"default_guess\":\"Include the residual folders and temporary file because they are observable durable state of the delivery.\",\"witness\":{\"initial\":\"The project lock exists, the image is durable, and the placement-record folder is absent.\",\"events\":[\"module:deliverer_api calls photo_delivery.deliver_project_photo.\",\"photo_delivery calls delivery_store.write_placement.\",\"The record write creates its folder and temporary file and then the process crashes.\"],\"outcomes\":[\"One implementation-level contract permits the image, folder and temporary file to remain.\",\"Another reading of the stated aggregate impact permits the image alone to remain without the record.\"],\"observer\":\"A filesystem conformance test or an operator after restart.\"}},{\"subject\":\"context\",\"kind\":\"aggregate state impact\",\"text\":\"Creates at most one mark of a placement, and the project lock file on first use.\",\"question\":\"When mark_photo_published fails or crashes during its record write, may its aggregate State impact also include newly created folders and a temporary file, or is the quoted list exhaustive?\",\"options\":[\"The list is not exhaustive; A6 residual folders and a temporary file may remain\",\"The list is exhaustive; no state other than a completed mark and first-use lock may remain\"],\"default_guess\":\"Treat the list as non-exhaustive and allow the residual artifacts required by A6 rule 3.\",\"witness\":{\"initial\":\"The placement and project lock exist, but the mark-record folder does not.\",\"events\":[\"module:deliverer_api calls photo_delivery.mark_photo_published.\",\"photo_delivery calls delivery_store.write_mark.\",\"The write creates a folder and temporary file and the process crashes.\"],\"outcomes\":[\"Applying changed A6 rule 3 leaves the folder and temporary file without a mark.\",\"Treating the State impact list as exhaustive permits neither artifact.\"],\"observer\":\"The next mark request, a filesystem test, or an operator after restart.\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,252 @@
+{
+ "open_points": [
+  {
+   "subject": "A6 rule 3 crash-created folders",
+   "kind": "unspecified durable side effect",
+   "text": "A write cut short by a crash leaves, besides the folders created for it, which stay under rule 2, at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.",
+   "question": "Exactly which folders may be created for a write, at what stage may each be created, and therefore which empty folders may remain after a crash?",
+   "options": [
+    "Only the minimum parent folders of the final image or record address, created lazily",
+    "All anticipated project and record folders, created eagerly before the file write",
+    "Any folders below the applicable store or state root, provided their modes satisfy rule 2"
+   ],
+   "default_guess": "Create only missing parent folders of the address being written, immediately before that write, and allow those folders to remain after a crash.",
+   "witness": {
+    "initial": "A project has no image directory and no state-record directory.",
+    "events": [
+     "The deliverer starts the project's first delivery.",
+     "The deliverer creates directories and crashes before installing a stored image or record."
+    ],
+    "outcomes": [
+     "Only the parent directory needed for the attempted stored-image address remains.",
+     "Both image and state-record directory trees remain because they were created eagerly for the operation."
+    ],
+    "observer": "The owner or a later operation inspecting the binary store and state folder"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A10 files_artifacts security outcome after the A6 change",
+   "kind": "review scope ambiguity",
+   "text": "- files_artifacts: APPLICABLE; references: A1, A2, A5, A6, A8; affected: M01, M02, M03, M04, connections file, source folders, Portal binary store",
+   "question": "Does this security outcome cover the state-folder directories that A6 now explicitly permits a crashed write to leave behind, or must those artifacts and their risks be named in the affected set?",
+   "options": [
+    "The reference to A6 implicitly covers every state-folder artifact",
+    "The affected list is exhaustive and must add the state folder and crash-left directories",
+    "Only model-bearing files are in scope, so empty directories are deliberately excluded"
+   ],
+   "default_guess": "Treat the affected list as needing to name the state folder and crash-left directories explicitly.",
+   "witness": {
+    "initial": "No state directories for a project exist.",
+    "events": [
+     "A delivery creates state-folder directories and crashes before installing its record.",
+     "A security reviewer relies on A10's affected list."
+    ],
+    "outcomes": [
+     "The leftover directories are covered implicitly through the reference to A6.",
+     "The leftover directories fall outside the stated affected artifacts and receive no explicit outcome."
+    ],
+    "observer": "The security reviewer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing time source",
+   "text": "`photo_id: UUID`, `marked_at: datetime`.",
+   "question": "What authority supplies the instant written to `marked_at` when a publication mark is created?",
+   "options": [
+    "An injected clock read by the mark operation",
+    "A datetime supplied by the caller",
+    "A declared authority module",
+    "The process's ambient system clock"
+   ],
+   "default_guess": "Use an injected UTC clock and read it inside the mark operation.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark; the caller and service clocks differ by five minutes.",
+    "events": [
+     "The caller reports a Portal `photo_id`.",
+     "The deliverer creates the publication mark."
+    ],
+    "outcomes": [
+     "`marked_at` records the caller-supplied instant.",
+     "`marked_at` records the deliverer's clock instant."
+    ],
+    "observer": "A reader of the stored publication mark"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing time representation",
+   "text": "`photo_id: UUID`, `marked_at: datetime`.",
+   "question": "In what representation is `marked_at` stored and returned: aware UTC, UTC without an offset, another timezone, and with what precision and normalization?",
+   "options": [
+    "Timezone-aware UTC datetime",
+    "Naive datetime whose meaning is UTC",
+    "Serialized UTC text with a `Z` suffix",
+    "Local wall time"
+   ],
+   "default_guess": "Store a timezone-aware UTC instant normalized to microsecond precision.",
+   "witness": {
+    "initial": "The clock returns 2026-11-19T10:15:30.123456+01:00.",
+    "events": [
+     "The deliverer creates a publication mark.",
+     "The mark is persisted and later read."
+    ],
+    "outcomes": [
+     "The record contains the equivalent aware UTC value 2026-11-19T09:15:30.123456Z.",
+     "The record contains the naive wall value 2026-11-19T10:15:30.123456."
+    ],
+    "observer": "The caller or record reader"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "publication-mark operation",
+   "kind": "unspecified clock-read count",
+   "text": "The calling flow reports the `photo_id` right after `photo.publish` answers, and the deliverer creates the mark.",
+   "question": "How many readings of the decided time source may one mark operation take, and which reading becomes `marked_at`?",
+   "options": [
+    "Exactly one reading for the whole operation",
+    "One reading per attempt to write the mark",
+    "Multiple readings are allowed, with the last successful-write reading stored"
+   ],
+   "default_guess": "Take exactly one clock reading after validation and while holding the project lock, and use it for the record write.",
+   "witness": {
+    "initial": "A clock returns a different instant on every read and no mark exists.",
+    "events": [
+     "A mark call validates the placement and obtains the project lock.",
+     "The implementation reads the clock before validation and again before writing."
+    ],
+    "outcomes": [
+     "The first reading is stored as `marked_at`.",
+     "The second reading is stored as `marked_at`."
+    ],
+    "observer": "A reader of the stored publication mark"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto.taken_at",
+   "kind": "vague instant source",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "Which camera metadata fields constitute the camera record, in what precedence order are they considered, and which invalid or incomplete values cause fallback to the file modification time?",
+   "options": [
+    "Use DateTimeOriginal, then DateTimeDigitized, then DateTime, with invalid values falling back to mtime",
+    "Use only DateTimeOriginal and otherwise mtime",
+    "Use the first parseable date-like metadata field supplied by the image library"
+   ],
+   "default_guess": "Use EXIF DateTimeOriginal with its matching offset field when valid; otherwise use the file modification time.",
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto.taken_at",
+   "kind": "undefined timezone conversion",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "When the camera record contains a wall-clock value without a UTC offset, how is it converted to the required UTC-without-offset value?",
+   "options": [
+    "Treat the offsetless camera value as already UTC",
+    "Apply a configured camera or project timezone",
+    "Apply the host timezone",
+    "Reject that camera value and fall back to file modification time"
+   ],
+   "default_guess": "Use a matching EXIF offset when present; if no offset is present, fall back to the file modification time rather than inventing a timezone.",
+   "witness": {
+    "initial": "A photo has DateTimeOriginal `2026:07:01 12:00:00`, no offset metadata, and an mtime representing 10:00 UTC.",
+    "events": [
+     "The deliverer prepares the photo."
+    ],
+    "outcomes": [
+     "`taken_at` is 12:00 UTC because the offsetless camera value is treated as UTC.",
+     "`taken_at` is 10:00 UTC because the camera value is unusable and mtime is used."
+    ],
+    "observer": "The caller reading `PhotoPublication.photo_date`"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 and M05 photo instant",
+   "kind": "missing value mapping",
+   "text": "`content: bytes`, `taken_at: datetime`, `date_source: DateSource`.",
+   "question": "Must `PhotoPublication.photo_date` equal `PreparedPhoto.taken_at` exactly, including its normalization and precision, or may publication construction transform or reread the instant?",
+   "options": [
+    "Copy `taken_at` exactly into `photo_date`",
+    "Normalize or truncate `taken_at` when building `photo_date`",
+    "Independently derive `photo_date` from the source metadata"
+   ],
+   "default_guess": "Copy `PreparedPhoto.taken_at` exactly into `PhotoPublication.photo_date`.",
+   "witness": {
+    "initial": "Preparation derives a `taken_at` value containing microseconds.",
+    "events": [
+     "The deliverer creates a PreparedPhoto.",
+     "The deliverer builds the PhotoPublication within M04."
+    ],
+    "outcomes": [
+     "`photo_date` preserves the exact prepared value.",
+     "`photo_date` is independently derived or truncated and differs from `taken_at`."
+    ],
+    "observer": "The calling flow sending the publication body"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-07 Required tests",
+   "kind": "incomplete invariant evidence",
+   "text": "INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).",
+   "question": "What must the tests assert to show the full invariant that replacement or removal changes no earlier placement, stored image, or mark, including byte-for-byte record and image stability?",
+   "options": [
+    "Assert the earlier placement record, stored-image bytes and mark record are all unchanged after both replacement and removal",
+    "Assert only that the earlier delivery can still be replayed",
+    "Assert existence but not unchanged contents of all three artifacts"
+   ],
+   "default_guess": "Require before-and-after equality of the earlier placement record, stored-image bytes and mark record for both replacement and removal.",
+   "witness": {
+    "initial": "A delivered and marked source has a placement record, stored image and mark record.",
+    "events": [
+     "The source file is replaced with new content.",
+     "An implementation silently rewrites the old placement record but preserves its image and mark.",
+     "The scan reports the replacement as `ready`."
+    ],
+    "outcomes": [
+     "The stated replacement assertions pass because the new file is `ready` and the old image and mark remain.",
+     "The formal invariant fails because the earlier placement changed."
+    ],
+    "observer": "A later replay or an audit of the placement record"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "unobserved invariant action",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "How must the test demonstrate the invariant's requirement that a new placement never reads a conflict copy, rather than merely demonstrating the same failure result and durable state?",
+   "options": [
+    "Instrument file opening or reading and assert the conflict copy is never opened for reading",
+    "Rely solely on the NOT_READY_OR_ABSENT outcome and unchanged durable files",
+    "Make the conflict copy unreadable and infer no read if the specified outcome is still returned"
+   ],
+   "default_guess": "Instrument the filesystem boundary and assert that the conflict copy is neither opened nor read.",
+   "witness": {
+    "initial": "An unplaced conflict-copy file contains valid photo bytes.",
+    "events": [
+     "A caller requests delivery under the conflict-copy name.",
+     "Implementation one rejects the name before opening it.",
+     "Implementation two opens and reads the file, then returns NOT_READY_OR_ABSENT without writing durable state."
+    ],
+    "outcomes": [
+     "Both implementations satisfy the Required tests item as written.",
+     "Only the first satisfies INV-19's statement that a new placement never reads a conflict copy."
+    ],
+    "observer": "A filesystem monitor, audit hook or test double"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A6 rule 3 crash-created folders\",\"kind\":\"unspecified durable side effect\",\"text\":\"A write cut short by a crash leaves, besides the folders created for it, which stay under rule 2, at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.\",\"question\":\"Exactly which folders may be created for a write, at what stage may each be created, and therefore which empty folders may remain after a crash?\",\"options\":[\"Only the minimum parent folders of the final image or record address, created lazily\",\"All anticipated project and record folders, created eagerly before the file write\",\"Any folders below the applicable store or state root, provided their modes satisfy rule 2\"],\"default_guess\":\"Create only missing parent folders of the address being written, immediately before that write, and allow those folders to remain after a crash.\",\"witness\":{\"initial\":\"A project has no image directory and no state-record directory.\",\"events\":[\"The deliverer starts the project's first delivery.\",\"The deliverer creates directories and crashes before installing a stored image or record.\"],\"outcomes\":[\"Only the parent directory needed for the attempted stored-image address remains.\",\"Both image and state-record directory trees remain because they were created eagerly for the operation.\"],\"observer\":\"The owner or a later operation inspecting the binary store and state folder\"}},{\"subject\":\"A10 files_artifacts security outcome after the A6 change\",\"kind\":\"review scope ambiguity\",\"text\":\"- files_artifacts: APPLICABLE; references: A1, A2, A5, A6, A8; affected: M01, M02, M03, M04, connections file, source folders, Portal binary store\",\"question\":\"Does this security outcome cover the state-folder directories that A6 now explicitly permits a crashed write to leave behind, or must those artifacts and their risks be named in the affected set?\",\"options\":[\"The reference to A6 implicitly covers every state-folder artifact\",\"The affected list is exhaustive and must add the state folder and crash-left directories\",\"Only model-bearing files are in scope, so empty directories are deliberately excluded\"],\"default_guess\":\"Treat the affected list as needing to name the state folder and crash-left directories explicitly.\",\"witness\":{\"initial\":\"No state directories for a project exist.\",\"events\":[\"A delivery creates state-folder directories and crashes before installing its record.\",\"A security reviewer relies on A10's affected list.\"],\"outcomes\":[\"The leftover directories are covered implicitly through the reference to A6.\",\"The leftover directories fall outside the stated affected artifacts and receive no explicit outcome.\"],\"observer\":\"The security reviewer\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing time source\",\"text\":\"`photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"What authority supplies the instant written to `marked_at` when a publication mark is created?\",\"options\":[\"An injected clock read by the mark operation\",\"A datetime supplied by the caller\",\"A declared authority module\",\"The process's ambient system clock\"],\"default_guess\":\"Use an injected UTC clock and read it inside the mark operation.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark; the caller and service clocks differ by five minutes.\",\"events\":[\"The caller reports a Portal `photo_id`.\",\"The deliverer creates the publication mark.\"],\"outcomes\":[\"`marked_at` records the caller-supplied instant.\",\"`marked_at` records the deliverer's clock instant.\"],\"observer\":\"A reader of the stored publication mark\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing time representation\",\"text\":\"`photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"In what representation is `marked_at` stored and returned: aware UTC, UTC without an offset, another timezone, and with what precision and normalization?\",\"options\":[\"Timezone-aware UTC datetime\",\"Naive datetime whose meaning is UTC\",\"Serialized UTC text with a `Z` suffix\",\"Local wall time\"],\"default_guess\":\"Store a timezone-aware UTC instant normalized to microsecond precision.\",\"witness\":{\"initial\":\"The clock returns 2026-11-19T10:15:30.123456+01:00.\",\"events\":[\"The deliverer creates a publication mark.\",\"The mark is persisted and later read.\"],\"outcomes\":[\"The record contains the equivalent aware UTC value 2026-11-19T09:15:30.123456Z.\",\"The record contains the naive wall value 2026-11-19T10:15:30.123456.\"],\"observer\":\"The caller or record reader\"}},{\"subject\":\"publication-mark operation\",\"kind\":\"unspecified clock-read count\",\"text\":\"The calling flow reports the `photo_id` right after `photo.publish` answers, and the deliverer creates the mark.\",\"question\":\"How many readings of the decided time source may one mark operation take, and which reading becomes `marked_at`?\",\"options\":[\"Exactly one reading for the whole operation\",\"One reading per attempt to write the mark\",\"Multiple readings are allowed, with the last successful-write reading stored\"],\"default_guess\":\"Take exactly one clock reading after validation and while holding the project lock, and use it for the record write.\",\"witness\":{\"initial\":\"A clock returns a different instant on every read and no mark exists.\",\"events\":[\"A mark call validates the placement and obtains the project lock.\",\"The implementation reads the clock before validation and again before writing.\"],\"outcomes\":[\"The first reading is stored as `marked_at`.\",\"The second reading is stored as `marked_at`.\"],\"observer\":\"A reader of the stored publication mark\"}},{\"subject\":\"M03 PreparedPhoto.taken_at\",\"kind\":\"vague instant source\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"Which camera metadata fields constitute the camera record, in what precedence order are they considered, and which invalid or incomplete values cause fallback to the file modification time?\",\"options\":[\"Use DateTimeOriginal, then DateTimeDigitized, then DateTime, with invalid values falling back to mtime\",\"Use only DateTimeOriginal and otherwise mtime\",\"Use the first parseable date-like metadata field supplied by the image library\"],\"default_guess\":\"Use EXIF DateTimeOriginal with its matching offset field when valid; otherwise use the file modification time.\"},{\"subject\":\"M03 PreparedPhoto.taken_at\",\"kind\":\"undefined timezone conversion\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"When the camera record contains a wall-clock value without a UTC offset, how is it converted to the required UTC-without-offset value?\",\"options\":[\"Treat the offsetless camera value as already UTC\",\"Apply a configured camera or project timezone\",\"Apply the host timezone\",\"Reject that camera value and fall back to file modification time\"],\"default_guess\":\"Use a matching EXIF offset when present; if no offset is present, fall back to the file modification time rather than inventing a timezone.\",\"witness\":{\"initial\":\"A photo has DateTimeOriginal `2026:07:01 12:00:00`, no offset metadata, and an mtime representing 10:00 UTC.\",\"events\":[\"The deliverer prepares the photo.\"],\"outcomes\":[\"`taken_at` is 12:00 UTC because the offsetless camera value is treated as UTC.\",\"`taken_at` is 10:00 UTC because the camera value is unusable and mtime is used.\"],\"observer\":\"The caller reading `PhotoPublication.photo_date`\"}},{\"subject\":\"M03 and M05 photo instant\",\"kind\":\"missing value mapping\",\"text\":\"`content: bytes`, `taken_at: datetime`, `date_source: DateSource`.\",\"question\":\"Must `PhotoPublication.photo_date` equal `PreparedPhoto.taken_at` exactly, including its normalization and precision, or may publication construction transform or reread the instant?\",\"options\":[\"Copy `taken_at` exactly into `photo_date`\",\"Normalize or truncate `taken_at` when building `photo_date`\",\"Independently derive `photo_date` from the source metadata\"],\"default_guess\":\"Copy `PreparedPhoto.taken_at` exactly into `PhotoPublication.photo_date`.\",\"witness\":{\"initial\":\"Preparation derives a `taken_at` value containing microseconds.\",\"events\":[\"The deliverer creates a PreparedPhoto.\",\"The deliverer builds the PhotoPublication within M04.\"],\"outcomes\":[\"`photo_date` preserves the exact prepared value.\",\"`photo_date` is independently derived or truncated and differs from `taken_at`.\"],\"observer\":\"The calling flow sending the publication body\"}},{\"subject\":\"INV-07 Required tests\",\"kind\":\"incomplete invariant evidence\",\"text\":\"INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).\",\"question\":\"What must the tests assert to show the full invariant that replacement or removal changes no earlier placement, stored image, or mark, including byte-for-byte record and image stability?\",\"options\":[\"Assert the earlier placement record, stored-image bytes and mark record are all unchanged after both replacement and removal\",\"Assert only that the earlier delivery can still be replayed\",\"Assert existence but not unchanged contents of all three artifacts\"],\"default_guess\":\"Require before-and-after equality of the earlier placement record, stored-image bytes and mark record for both replacement and removal.\",\"witness\":{\"initial\":\"A delivered and marked source has a placement record, stored image and mark record.\",\"events\":[\"The source file is replaced with new content.\",\"An implementation silently rewrites the old placement record but preserves its image and mark.\",\"The scan reports the replacement as `ready`.\"],\"outcomes\":[\"The stated replacement assertions pass because the new file is `ready` and the old image and mark remain.\",\"The formal invariant fails because the earlier placement changed.\"],\"observer\":\"A later replay or an audit of the placement record\"}},{\"subject\":\"INV-19 Required tests\",\"kind\":\"unobserved invariant action\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"How must the test demonstrate the invariant's requirement that a new placement never reads a conflict copy, rather than merely demonstrating the same failure result and durable state?\",\"options\":[\"Instrument file opening or reading and assert the conflict copy is never opened for reading\",\"Rely solely on the NOT_READY_OR_ABSENT outcome and unchanged durable files\",\"Make the conflict copy unreadable and infer no read if the specified outcome is still returned\"],\"default_guess\":\"Instrument the filesystem boundary and assert that the conflict copy is neither opened nor read.\",\"witness\":{\"initial\":\"An unplaced conflict-copy file contains valid photo bytes.\",\"events\":[\"A caller requests delivery under the conflict-copy name.\",\"Implementation one rejects the name before opening it.\",\"Implementation two opens and reads the file, then returns NOT_READY_OR_ABSENT without writing durable state.\"],\"outcomes\":[\"Both implementations satisfy the Required tests item as written.\",\"Only the first satisfies INV-19's statement that a new placement never reads a conflict copy.\"],\"observer\":\"A filesystem monitor, audit hook or test double\"}}]}",
+ "retried": [
+  "{\"open_points\":[{\"subject\":\"A6 rule 3 crash-created folders\",\"kind\":\"vague_scope\",\"text\":\"A write cut short by a crash leaves, besides the folders created for it, which stay under rule 2, at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.\",\"question\":\"Exactly which folders may the operation create and leave after a crash, at what stages may each be created, and does “stay” require those folders to be durable across the crash?\",\"options\":[\"Only the parent folders strictly needed by the file write reached before the crash, created just in time and made durable\",\"Every destination folder needed by the whole operation may be created eagerly and remain\",\"Folders may remain if the filesystem preserves them, without a durability guarantee\"],\"default_guess\":\"Create only required parent folders immediately before use, with the required mode, and durably persist them before relying on them.\",\"witness\":{\"initial\":\"The binary-store and state roots exist, but no folders for the project exist.\",\"events\":[\"A caller delivers a new source.\",\"The deliverer acquires or creates the project lock, begins the stored-image write, and crashes before the placement record is written.\",\"The service restarts and the operator inspects the roots.\"],\"outcomes\":[\"Only the lock path and the parent folder needed for the begun image write remain, and they survive the crash.\",\"Folders for the image, record, or other later steps were created eagerly or were not made durable, so a different set remains after restart.\"],\"observer\":\"The operator and the next delivery call\"},{\"subject\":\"A6 crash residue guarantee\",\"kind\":\"invariant_test_gap\",\"text\":\"A write cut short by a crash leaves, besides the folders created for it, which stay under rule 2, at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.\",\"question\":\"Which formal invariant owns the new guarantee about crash-created folders and temporary-file residue, and what Required tests item must show the permitted folders, their modes and durability, the maximum residue, and that the residue is never read?\",\"options\":[\"Add a formal invariant and a crash/fault-injection Required tests item\",\"Extend INV-12 and its Required tests to cover crash residue\",\"Declare this sentence non-invariant design information and remove its normative guarantee\"],\"default_guess\":\"Add a separate storage-atomicity invariant with fault-injection tests at every folder and file creation boundary.\"},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_decision\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"What authority supplies `marked_at`, in what datetime representation is it stored, at which point in the mark operation is it sampled, and exactly how many clock readings may that operation perform?\",\"options\":[\"Inject a UTC system clock, read it once after validation and before constructing the record, and store a timezone-aware UTC datetime\",\"Inject a UTC system clock, read it once and store naive UTC\",\"Let the persistence layer or operating system assign the time at commit\"],\"default_guess\":\"Inject a clock port, read it exactly once after all refusal checks while holding the project lock, and store a timezone-aware UTC datetime.\",\"witness\":{\"initial\":\"A placement exists without a publication mark; the supplied clock would return two different instants on successive reads.\",\"events\":[\"The calling flow submits a valid mark.\",\"One implementation samples time when the call begins; another samples immediately before the atomic record write.\",\"The stored mark is later inspected.\"],\"outcomes\":[\"The mark contains the call-entry instant.\",\"The mark contains the commit-adjacent instant.\"],\"observer\":\"A reader of the publication-mark record\"},{\"subject\":\"M03 PreparedPhoto.taken_at\",\"kind\":\"ambiguous_instant_meaning\",\"text\":\"The image made from a source file for the Portal: upright pixels only, at most 2000 px on the longest side, with the moment the photo was taken as UTC without an offset, and how that moment was obtained (P-03, P-05).\",\"question\":\"Which camera metadata fields and precedence constitute the “camera record,” how is a camera timestamp without timezone information converted to UTC, and what exact datetime representation does “UTC without an offset” require?\",\"options\":[\"Use a specified EXIF date/offset precedence and convert to naive UTC\",\"Treat an offset-less camera value as already UTC and store it without tzinfo\",\"Interpret an offset-less camera value in a configured timezone, convert it to UTC, and then remove the offset\",\"Reject unusable or ambiguous camera time and fall back to file modification time\"],\"default_guess\":\"Use an explicit EXIF date-and-offset precedence; when no usable offset accompanies the camera time, fall back to the file modification instant; normalize to UTC and store the specifically required datetime form.\",\"witness\":{\"initial\":\"A JPEG contains a camera date of 2026-07-01 12:00:00 with no offset metadata, and the file modification instant is known.\",\"events\":[\"A caller delivers the JPEG while the host is configured for Europe/Madrid.\",\"The deliverer prepares M03 and builds M05.photo_date.\"],\"outcomes\":[\"The camera value is treated as UTC, producing 12:00 UTC.\",\"The camera value is treated as Madrid civil time, producing 10:00 UTC, or is rejected as ambiguous and the file modification instant is used.\"],\"observer\":\"The Portal and the owner viewing the photo date\"},{\"subject\":\"State 2 time invariants\",\"kind\":\"invariant_test_gap\",\"text\":\"- INV-12: concurrent calls for one project never produce two placements or two marks for one source.\\n- INV-20: a damaged record never leads to a new placement or a new mark.\",\"question\":\"What formal invariant states the decided authority, representation, and per-operation reading count for every written or compared instant, and what Required tests item says how each part must be demonstrated?\",\"options\":[\"Add a time-source invariant with Required tests for `marked_at`, camera time, and file modification time\",\"Add separate invariants for fresh current timestamps and source-derived timestamps\",\"State that time behavior is not invariant and remove it from State 2's owned decisions\"],\"default_guess\":\"Add separate invariants for current-time acquisition and source-derived time interpretation, each with explicit witness tests.\"}]}"
+ ],
+ "set_aside": []
+}
