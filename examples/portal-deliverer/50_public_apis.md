@@ -124,7 +124,7 @@ Read-only.
 
 ### Inputs
 
-The context of the operations, the token and the clock function.
+The context of the operations and the token.
 
 ### Outputs
 
@@ -144,7 +144,7 @@ Building the surface raises no refusal. A served route answers a wrong token, a 
 
 ### State impact
 
-No state of its own.
+Read-only.
 
 ## `public_op:deliverer_api.run_service`
 
@@ -178,7 +178,7 @@ Any failure of the start ends the process without listening.
 
 ### State impact
 
-No durable state.
+Read-only.
 
 ## `public_op:object_connections.load_connections`
 
@@ -382,7 +382,7 @@ A2 rules 1 to 4, INV-03, INV-04 and INV-14.
 
 ### State impact
 
-No state.
+Read-only.
 
 ## `public_op:photo_preparation.build_publication`
 
@@ -416,7 +416,7 @@ None.
 
 ### State impact
 
-No state.
+Read-only.
 
 ## `public_op:delivery_store.project_lock`
 
@@ -702,7 +702,7 @@ Creates at most one placement of a project and content, and the project lock fil
 
 ### Inputs
 
-The context of the operations, the project id, the source id, the `photo_id` and the clock function.
+The context of the operations, the project id, the source id and the `photo_id`.
 
 ### Outputs
 
@@ -732,7 +732,7 @@ Creates at most one mark of a placement, and the project lock file on first use.
 
 ### Callers
 
-`module:deliverer_api`.
+`module:photo_delivery`.
 
 ### Inputs
 
@@ -744,7 +744,7 @@ The current time in UTC without an offset, in microseconds.
 
 ### Observable effect
 
-Reads the host clock at each call. `module:deliverer_api` passes this function to a mark, and `module:photo_delivery` calls it once, after the source id is accepted (A7 rule 2).
+Reads the host clock at each call. `module:photo_delivery` calls it once per mark, after the source id is accepted (A7 rule 2).
 
 ### Enforces
 
@@ -756,4 +756,4 @@ None.
 
 ### State impact
 
-No state.
+Read-only.

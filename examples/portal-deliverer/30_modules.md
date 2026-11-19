@@ -26,32 +26,27 @@ cycles, and `domain_models` names no other module.
 |---|---|---|
 | `runtime_settings` | `domain_models` | `RuntimeSettings` |
 | `object_connections` | `domain_models` | `DelivererError`, `ObjectConnection`, `RefusalCode` |
-| `source_folder` | `data_provider` | `MAX_SOURCE_BYTES`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `CONFLICT_COPY_MARK` |
-| `source_folder` | `domain_models` | `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `ObservationReason`, `RefusalCode` |
-| `photo_preparation` | `data_provider` | `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_MAX_SIDE`, `PHOTO_QUALITY`, `INTAKE_ID_PREFIX`, `INTAKE_SOURCE` |
-| `photo_preparation` | `domain_models` | `PreparedPhoto`, `Rejected`, `DateSource`, `PlacementFailure` |
-| `delivery_store` | `domain_models` | `Config`, `DelivererError`, `RefusalCode` |
+| `source_folder` | `domain_models` | `DelivererError`, `ObservationReason`, `PlacementFailure`, `RefusalCode`, `Rejected`, `ScanStatus`, `SourceFile`, `SourceRead` |
+| `source_folder` | `data_provider` | `CONFLICT_COPY_MARK`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `MAX_SOURCE_BYTES` |
+| `photo_preparation` | `domain_models` | `DateSource`, `PhotoPublication`, `PlacementFailure`, `PreparedPhoto`, `Rejected` |
+| `photo_preparation` | `data_provider` | `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_MAX_SIDE`, `PHOTO_QUALITY` |
+| `delivery_store` | `domain_models` | `DelivererError`, `DeliveryContext`, `PhotoPlacement`, `PublicationMark`, `RefusalCode` |
+| `photo_delivery` | `domain_models` | `DelivererError`, `DeliveryContext`, `MarkOutcome`, `MarkStatus`, `PhotoPlacement`, `PlacementFailure`, `PlacementOutcome`, `PlacementStatus`, `PublicationMark`, `RefusalCode`, `Rejected`, `ScanResult`, `ScanStatus`, `SourceFile`, `SourcePhotoObservation` |
 | `photo_delivery` | `data_provider` | `SOURCE_ID_PATTERN` |
-| `photo_delivery` | `domain_models` | `Config`, `DelivererError`, `Rejected`, `SourceFile`, `ScanStatus`, `PlacementStatus`, `PlacementFailure`, `MarkStatus`, `RefusalCode` |
-| `photo_delivery` | `object_connections` | `confirmed_connection`, `available_photo_folder` |
+| `photo_delivery` | `object_connections` | `available_photo_folder`, `confirmed_connection` |
 | `photo_delivery` | `source_folder` | `observe_source_files`, `read_named_source` |
-| `photo_delivery` | `photo_preparation` | `prepare_photo`, `build_publication` |
-| `photo_delivery` | `delivery_store` | `project_lock`, `store_image`, `read_placement`, `write_placement`, `read_mark`, `write_mark` |
-| `deliverer_api` | `domain_models` | `Config`, `DelivererError`, `RuntimeSettings`, `RefusalCode` |
+| `photo_delivery` | `photo_preparation` | `build_publication`, `prepare_photo` |
+| `photo_delivery` | `delivery_store` | `project_lock`, `read_mark`, `read_placement`, `store_image`, `write_mark`, `write_placement` |
+| `photo_delivery` | `system_clock` | `utc_now` |
+| `deliverer_api` | `domain_models` | `DeliverRequest`, `DelivererError`, `DeliveryContext`, `HealthAnswer`, `MarkOutcome`, `PlacementOutcome`, `PublishedRequest`, `Refusal`, `RefusalCode`, `RuntimeSettings`, `ScanResult` |
 | `deliverer_api` | `runtime_settings` | `load_runtime_settings` |
 | `deliverer_api` | `object_connections` | `load_connections` |
-| `deliverer_api` | `photo_delivery` | `scan_project_photos`, `deliver_project_photo`, `mark_photo_published` |
-| `deliverer_api` | `system_clock` | `utc_now` |
-
-The prototype writes the values of the enumerations as text, so its import test compares the other
-symbols of this table.
+| `deliverer_api` | `photo_delivery` | `deliver_project_photo`, `mark_photo_published`, `scan_project_photos` |
 
 `deliverer_api` names `load_connections` only to refuse a start with a broken record. The operations
 read the record themselves through `confirmed_connection`, so no module keeps connections in memory.
 
-`system_clock` is the module that `system_clock_backend` generates, and `deliverer_api` alone names it.
-`deliverer_api` passes the clock to an operation as a function, and `photo_delivery` calls the function
-it receives without naming the module.
+`system_clock` is the module that `system_clock_backend` generates, and `photo_delivery` alone names it.
 
 ## Order of one operation
 
@@ -129,7 +124,7 @@ outbound call.
 - the models M01 to M07 and their enumerations;
 - `SourceFile`, what `source_folder` reports about one file to `photo_delivery`. It holds the server path
   of the file and never leaves the service; M02 is the form a caller sees;
-- the type of the run settings, and `Config`, the context of the operations that `deliverer_api` builds from them:
+- the type of the run settings, and `DeliveryContext`, the context of the operations that `deliverer_api` builds from them:
   binary store, state folder, time zone and connections file;
 - the two refusal types: a refusal of the whole operation and a refusal of one file.
 
@@ -430,7 +425,7 @@ write_mark
 
 ### Knows
 
-- A3 and A4 without the two request forms given to `deliverer_api` above, rule 4 of A6, rule 2 of A7,
+- `system_clock` as its source of the current time, A3 and A4 without the two request forms given to `deliverer_api` above, rule 4 of A6, rule 2 of A7,
   orders 7 to 9 of A1, and the parts of rules 9 and 10 of A5 given to it above.
 
 ### Hides
@@ -474,7 +469,6 @@ mark_photo_published
 - the bearer token: reading its file, the start refusal and the constant-time comparison;
 - steps 1 and 2 of "Order of one operation";
 - the HTTP status and the content of every refusal answer;
-- handing the clock to the operations;
 - turning the run settings into the context of the operations when the service starts;
 - listening on the loopback interface only.
 

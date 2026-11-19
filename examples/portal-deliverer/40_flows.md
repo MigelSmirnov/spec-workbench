@@ -28,7 +28,7 @@ The deployment starts the service.
 3. `capability:deliverer_api.load_config` turns them into the context of the operations and calls
    `capability:object_connections.load_connections` once, to judge the connections file whole.
 4. `capability:deliverer_api.read_token` reads the token and checks its file permissions and length.
-5. `capability:deliverer_api.create_app` builds the HTTP surface with that context, the token and the clock.
+5. `capability:deliverer_api.create_app` builds the HTTP surface with that context and the token.
 6. `capability:deliverer_api.run_service` serves that surface in the web server, on the loopback interface and the `port` of the run
    settings.
 
@@ -127,8 +127,8 @@ The calling agent reports which Portal photo a delivered source became.
 
 ### Boundary
 
-`module:deliverer_api` accepts the token, the request form, the project id and the `photo_id`, and hands the clock
-to `module:photo_delivery` as a function. `module:system_clock` is its source. `module:object_connections` decides
+`module:deliverer_api` accepts the token, the request form, the project id and the `photo_id`, and calls
+`module:photo_delivery`. `module:system_clock` supplies the time. `module:object_connections` decides
 the connection and `module:delivery_store` keeps the mark. M07 crosses back to the caller.
 
 ### Steps
@@ -136,7 +136,7 @@ the connection and `module:delivery_store` keeps the mark. M07 crosses back to t
 1. The mark route that `capability:deliverer_api.create_app` built checks the token, the request form, the project id
    and the `photo_id`.
 2. `capability:photo_delivery.mark_photo_published` checks the form of the source id.
-3. It reads the clock once through the function it received, which is `capability:system_clock.utc_now`.
+3. It reads the clock once through `capability:system_clock.utc_now`.
 4. `capability:object_connections.confirmed_connection` checks the connection.
 5. It takes `capability:delivery_store.project_lock`.
 6. `capability:delivery_store.read_placement` requires a placement of this project.
