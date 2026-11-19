@@ -1,0 +1,359 @@
+{
+ "open_points": [
+  {
+   "subject": "50_public_apis.md:`public_op:deliverer_api.run_service`",
+   "kind": "unspecified_exit_status",
+   "text": "a status other than 0 when the web server fails after it has started listening",
+   "question": "Which exact exit status must be returned for a web-server failure after listening?",
+   "options": [
+    "Always 1",
+    "A fixed distinct status such as 2",
+    "Preserve the web server's own nonzero status"
+   ],
+   "default_guess": "Preserve the web server's nonzero status, mapping an unavailable or zero failure status to 1.",
+   "witness": {
+    "initial": "The service has started listening successfully.",
+    "events": [
+     "The web server later fails while deployment waits for the process.",
+     "One implementation preserves exit status 2; another maps every failure to 1."
+    ],
+    "outcomes": [
+     "The process exits with status 2.",
+     "The process exits with status 1."
+    ],
+    "observer": "The deployment supervisor sees different statuses and may apply different restart or alert policies."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:`public_op:deliverer_api.run_service`",
+   "kind": "ambiguous_signal_stop",
+   "text": "0 when it is stopped by a signal after it has served",
+   "question": "Which signals count, and does “after it has served” mean after listening begins or only after at least one request has been handled?",
+   "options": [
+    "Handled shutdown signals after listening begins",
+    "Handled shutdown signals only after a request was answered",
+    "Every terminating signal, including uncatchable signals"
+   ],
+   "default_guess": "Return 0 for handled SIGTERM or SIGINT received after the listening socket is ready, whether or not a request has been handled.",
+   "witness": {
+    "initial": "The process is listening but has handled no request.",
+    "events": [
+     "Deployment sends SIGTERM immediately after its readiness check.",
+     "One implementation treats listening as having served; another requires a handled request."
+    ],
+    "outcomes": [
+     "The process exits with status 0.",
+     "The process does not apply the stated zero-status rule and exits nonzero."
+    ],
+    "observer": "The deployment supervisor sees a different exit status for the same shutdown."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:`public_op:deliverer_api.run_service`",
+   "kind": "missing_stop_case",
+   "text": "The exit status of the process: 0 when it is stopped by a signal after it has served, 1 when the start fails, without listening, and a status other than 0 when the web server fails after it has started listening.",
+   "question": "What status is returned when the web server stops normally after listening without being stopped by a signal and without reporting a failure?",
+   "options": [
+    "0",
+    "Treat any unsignalled return as a failure",
+    "The web server's return status"
+   ],
+   "default_guess": "Return 0 when the web server returns normally.",
+   "witness": {
+    "initial": "The service has listened successfully.",
+    "events": [
+     "The web-server serving call returns normally without a signal or exception.",
+     "One implementation treats normal return as success; another treats an unexpected return as failure."
+    ],
+    "outcomes": [
+     "The process exits with status 0.",
+     "The process exits with a nonzero status."
+    ],
+    "observer": "The deployment supervisor sees success in one implementation and failure in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:`public_op:deliverer_api.run_service`",
+   "kind": "unspecified_error_report",
+   "text": "A failure is reported on the standard error stream; the text of that report is not part of the contract.",
+   "question": "What information may the report contain, and must its format or disclosure policy be fixed for start and post-listening failures?",
+   "options": [
+    "A fixed generic sentence with no paths or credentials",
+    "The underlying exception text, excluding credentials",
+    "Any implementation-selected diagnostic text"
+   ],
+   "default_guess": "Emit a stable generic category plus a sanitized diagnostic that contains no credential and no filesystem path.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_TOKEN_FILE names a path that cannot be opened.",
+    "events": [
+     "Deployment starts the service.",
+     "One implementation writes only “token file unavailable”; another writes the operating-system exception containing the configured server path."
+    ],
+    "outcomes": [
+     "Standard error contains no server path.",
+     "Standard error contains the token-file path."
+    ],
+    "observer": "The deployment log reader sees different information disclosure and different text."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:`public_op:delivery_store.project_lock`",
+   "kind": "lock_mode_policy",
+   "text": "Creates the project lock file on first use with mode 0600",
+   "question": "Must the resulting mode be exactly 0600 despite the process umask, and what must happen when an existing regular lock file has another mode?",
+   "options": [
+    "Force exactly 0600 on creation and on every open",
+    "Force exactly 0600 only when creating; accept an existing regular file",
+    "Reject an existing file whose mode is not 0600"
+   ],
+   "default_guess": "Create atomically and force exactly 0600; reject an existing regular lock file with a different mode rather than silently changing it.",
+   "witness": {
+    "initial": "The lock entry is absent and the process umask removes owner-write permission.",
+    "events": [
+     "A caller requests the project lock.",
+     "One implementation passes 0600 to the create call and accepts the umask result; another applies the required final mode explicitly."
+    ],
+    "outcomes": [
+     "The lock file is created with mode 0400.",
+     "The lock file is created with mode 0600."
+    ],
+    "observer": "The service owner inspecting the state folder, and a later process trying to open the lock for writing, see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:`public_op:delivery_store.project_lock`",
+   "kind": "existing_lock_content",
+   "text": "The lock file is created on first use with mode 0600 and never removed; it holds no content.",
+   "question": "What must project_lock do when its entry is a regular file but already contains bytes?",
+   "options": [
+    "Reject it with state_unavailable",
+    "Truncate it to empty before locking",
+    "Accept it and leave its content unchanged"
+   ],
+   "default_guess": "Reject it with state_unavailable; do not mutate an unexpected existing file.",
+   "witness": {
+    "initial": "A regular mode-0600 file already exists at the project's lock address and contains one byte.",
+    "events": [
+     "A delivery requests project_lock.",
+     "One implementation accepts and locks every regular file; another enforces that the lock file holds no content."
+    ],
+    "outcomes": [
+     "The call succeeds and the lock file remains nonempty.",
+     "The call is refused with state_unavailable, or the file is cleared before success."
+    ],
+    "observer": "The delivery caller and the service owner inspecting the lock file see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "contradictory_whitespace_rule",
+   "text": "The token with the whitespace around it removed.",
+   "question": "Must this become an explicit statement that only ASCII space, tab, line feed, carriage return, vertical tab and form feed are removed, and that no other Unicode whitespace is removed?",
+   "options": [
+    "Remove only the six ASCII whitespace characters named by A5 rule 2",
+    "Remove all Unicode whitespace recognized by the implementation"
+   ],
+   "default_guess": "Remove only the six ASCII whitespace characters named by A5 rule 2.",
+   "witness": {
+    "initial": "The token file contains a valid 43-character token followed by U+00A0 NO-BREAK SPACE.",
+    "events": [
+     "The service starts and read_token reads the file.",
+     "One implementation interprets “whitespace” using Unicode stripping; another follows A5 rule 2 and removes only ASCII whitespace."
+    ],
+    "outcomes": [
+     "The no-break space is removed and the service starts with the valid token.",
+     "The no-break space remains, is not visible ASCII, and the start fails."
+    ],
+    "observer": "Deployment sees the service start in one implementation and fail in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "resize_rounding",
+   "text": "the other side keeps the proportion, rounded to whole pixels",
+   "question": "Which rounding rule is used for fractional dimensions, and is the result clamped to at least one pixel?",
+   "options": [
+    "Nearest integer with halves upward, minimum 1",
+    "Nearest integer with ties to even, minimum 1",
+    "Floor, minimum 1",
+    "The pinned image library's dimension calculation"
+   ],
+   "default_guess": "Use nearest integer with halves upward and clamp each dimension to at least one pixel.",
+   "witness": {
+    "initial": "A decoded, correctly oriented image is 4000 by 2001 pixels and the longest-side limit is 2000.",
+    "events": [
+     "prepare_photo reduces the image.",
+     "One implementation rounds the proportional 1000.5-pixel side down; another rounds it up."
+    ],
+    "outcomes": [
+     "The stored image is 2000 by 1000 pixels.",
+     "The stored image is 2000 by 1001 pixels."
+    ],
+    "observer": "The Portal sees different pixels, and the caller sees different M04 size and sha256 values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "underspecified_resampling",
+   "text": "the image is reduced with a Lanczos filter",
+   "question": "Which Lanczos kernel definition, support, edge treatment, alpha treatment and sample-rounding rules determine the resized pixels?",
+   "options": [
+    "The exact behavior of a named pinned Pillow operation",
+    "A fully specified implementation-independent resampling algorithm",
+    "Any implementation described as Lanczos"
+   ],
+   "default_guess": "Specify the exact pinned Pillow resize operation and require premultiplied-alpha resampling before compositing.",
+   "witness": {
+    "initial": "A partly transparent image has a sharp opaque-to-transparent colour boundary and is larger than the side limit.",
+    "events": [
+     "prepare_photo resizes it with a library calling its filter Lanczos.",
+     "One implementation resamples straight colour and alpha channels; another resamples premultiplied colour."
+    ],
+    "outcomes": [
+     "The white-composited result has a coloured fringe at the boundary.",
+     "The white-composited result has no such fringe and therefore different pixels."
+    ],
+    "observer": "The Portal viewer sees the fringe, and the caller receives different stored-image hashes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "unspecified_rgb_conversion",
+   "text": "then transparent and partly transparent pixels are composited onto white by their alpha, and the result is three-channel RGB.",
+   "question": "How are grayscale, palette, CMYK, YCCK and other decoded source modes converted to three-channel RGB when colour management is disabled?",
+   "options": [
+    "Use a named pinned library's RGB conversion",
+    "Specify channel-conversion formulas for every accepted decoded mode",
+    "Reject decoded modes outside a stated set"
+   ],
+   "default_guess": "Use the pinned Pillow conversion to RGBA or RGB without applying embedded colour profiles, then follow the specified alpha-compositing order.",
+   "witness": {
+    "initial": "The source is a decodable CMYK JPEG without a colour profile.",
+    "events": [
+     "prepare_photo must produce three-channel RGB.",
+     "One implementation uses the image library's CMYK conversion; another uses a direct subtractive-channel formula."
+    ],
+    "outcomes": [
+     "One set of RGB pixels is stored.",
+     "A visibly different set of RGB pixels is stored."
+    ],
+    "observer": "The Portal viewer sees different colours, and the caller receives different M04 hashes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "nondeterministic_image_output",
+   "text": "The encoded bytes are not fixed beyond these rules: two implementations may store different bytes for one source.",
+   "question": "Which encoder, version and remaining JPEG settings must be selected, or is implementation-dependent stored content an intentional product contract despite changing M04 sha256 and size?",
+   "options": [
+    "Fix an exact encoder version and all encoding settings",
+    "Permit implementation-dependent bytes and treat M04 sha256 and size as per-placement facts",
+    "Require pixel equivalence but allow arbitrary conforming JPEG encoding"
+   ],
+   "default_guess": "Fix the pinned Pillow version and the complete save parameters so rebuilding the service does not silently change stored bytes.",
+   "witness": {
+    "initial": "A source has no existing placement and yields fixed prepared RGB pixels.",
+    "events": [
+     "Two conforming deployments encode it as baseline 4:2:0 JPEG at quality 85.",
+     "The encoders choose different valid Huffman tables or quantization details."
+    ],
+    "outcomes": [
+     "The first deployment stores one byte sequence, size and sha256.",
+     "The second deployment stores a different byte sequence, size and sha256 for the same project and source content."
+    ],
+    "observer": "The calling flow sees different M04 values, and the binary store contains different bytes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "internal_contradiction",
+   "text": "Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. A failure to synchronise the folder after the rename does not undo the write and is not a failure of the operation: the file is in place, and only its survival of a host crash is uncertain.",
+   "question": "Must successful completion require successful folder synchronisation, or must the first sentence be changed to say that folder synchronisation is merely attempted and may fail without failing the operation?",
+   "options": [
+    "Folder synchronisation is required for success",
+    "Folder synchronisation failure is ignored and success is reported",
+    "Return success with an explicit durability-warning result"
+   ],
+   "default_guess": "Require successful folder synchronisation for a successful durable write.",
+   "witness": {
+    "initial": "The temporary file has been synchronised and renamed to its destination.",
+    "events": [
+     "Synchronising the containing folder fails with an I/O error.",
+     "One passage requires the folder to be synchronised; the later passage directs the implementation to report success."
+    ],
+    "outcomes": [
+     "The operation fails because its required folder synchronisation did not complete.",
+     "The operation succeeds while crash survival remains uncertain."
+    ],
+    "observer": "The operation caller sees failure under one passage and success under the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "durability_contradiction",
+   "text": "A failure to synchronise the folder after the rename does not undo the write and is not a failure of the operation: the file is in place, and only its survival of a host crash is uncertain.",
+   "question": "How must this change so that A3 rule 6's guarantee that a crash leaves no placement record without its stored image remains true?",
+   "options": [
+    "Fail before writing the placement record unless the image directory is synchronised",
+    "Permit a record without an image after a crash and define its recovery",
+    "Synchronise the entire image and record transaction with a stronger protocol"
+   ],
+   "default_guess": "Do not write or acknowledge the placement record until the stored image and its directory entry are durably synchronised.",
+   "witness": {
+    "initial": "No placement exists; the image temporary file has been synchronised and renamed.",
+    "events": [
+     "Synchronising the image folder fails, but the operation treats this as success and writes and durably synchronises the placement record.",
+     "The host crashes before the image directory entry becomes durable.",
+     "After restart, the record survives while the image rename does not."
+    ],
+    "outcomes": [
+     "Under the new A6 passage, the call may have succeeded and leave a placement record without an image after the crash.",
+     "Under A3 rule 6, the ordering is asserted to leave no record without an image."
+    ],
+    "observer": "A later delivery or the Portal sees a surviving placement record whose referenced image is absent."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "temporary_name_policy",
+   "text": "A temporary file left by a crash stays under its temporary name beginning with `.tmp-`; it is never read and the service does not remove it.",
+   "question": "How are temporary names made collision-free, and what happens when a chosen temporary entry already exists?",
+   "options": [
+    "Exclusive creation with a cryptographically random suffix and retry on collision",
+    "A process-and-counter suffix with exclusive creation",
+    "Reuse or overwrite an existing `.tmp-` entry",
+    "Refuse the write on the first collision"
+   ],
+   "default_guess": "Create a fresh `.tmp-` name exclusively using a cryptographically random suffix and retry on collision without reading, replacing or removing an existing temporary file.",
+   "witness": {
+    "initial": "A crash has left `.tmp-fixed` in the destination folder.",
+    "events": [
+     "A later write chooses its temporary name.",
+     "One implementation reuses a fixed name; another creates a unique name exclusively."
+    ],
+    "outcomes": [
+     "The later write fails or overwrites the crash remnant.",
+     "The later write succeeds using a different temporary entry and leaves the remnant untouched."
+    ],
+    "observer": "The delivery caller and the service owner inspecting the store see the difference."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"50_public_apis.md:`public_op:deliverer_api.run_service`\",\"kind\":\"unspecified_exit_status\",\"text\":\"a status other than 0 when the web server fails after it has started listening\",\"question\":\"Which exact exit status must be returned for a web-server failure after listening?\",\"options\":[\"Always 1\",\"A fixed distinct status such as 2\",\"Preserve the web server's own nonzero status\"],\"default_guess\":\"Preserve the web server's nonzero status, mapping an unavailable or zero failure status to 1.\",\"witness\":{\"initial\":\"The service has started listening successfully.\",\"events\":[\"The web server later fails while deployment waits for the process.\",\"One implementation preserves exit status 2; another maps every failure to 1.\"],\"outcomes\":[\"The process exits with status 2.\",\"The process exits with status 1.\"],\"observer\":\"The deployment supervisor sees different statuses and may apply different restart or alert policies.\"}},{\"subject\":\"50_public_apis.md:`public_op:deliverer_api.run_service`\",\"kind\":\"ambiguous_signal_stop\",\"text\":\"0 when it is stopped by a signal after it has served\",\"question\":\"Which signals count, and does “after it has served” mean after listening begins or only after at least one request has been handled?\",\"options\":[\"Handled shutdown signals after listening begins\",\"Handled shutdown signals only after a request was answered\",\"Every terminating signal, including uncatchable signals\"],\"default_guess\":\"Return 0 for handled SIGTERM or SIGINT received after the listening socket is ready, whether or not a request has been handled.\",\"witness\":{\"initial\":\"The process is listening but has handled no request.\",\"events\":[\"Deployment sends SIGTERM immediately after its readiness check.\",\"One implementation treats listening as having served; another requires a handled request.\"],\"outcomes\":[\"The process exits with status 0.\",\"The process does not apply the stated zero-status rule and exits nonzero.\"],\"observer\":\"The deployment supervisor sees a different exit status for the same shutdown.\"}},{\"subject\":\"50_public_apis.md:`public_op:deliverer_api.run_service`\",\"kind\":\"missing_stop_case\",\"text\":\"The exit status of the process: 0 when it is stopped by a signal after it has served, 1 when the start fails, without listening, and a status other than 0 when the web server fails after it has started listening.\",\"question\":\"What status is returned when the web server stops normally after listening without being stopped by a signal and without reporting a failure?\",\"options\":[\"0\",\"Treat any unsignalled return as a failure\",\"The web server's return status\"],\"default_guess\":\"Return 0 when the web server returns normally.\",\"witness\":{\"initial\":\"The service has listened successfully.\",\"events\":[\"The web-server serving call returns normally without a signal or exception.\",\"One implementation treats normal return as success; another treats an unexpected return as failure.\"],\"outcomes\":[\"The process exits with status 0.\",\"The process exits with a nonzero status.\"],\"observer\":\"The deployment supervisor sees success in one implementation and failure in the other.\"}},{\"subject\":\"50_public_apis.md:`public_op:deliverer_api.run_service`\",\"kind\":\"unspecified_error_report\",\"text\":\"A failure is reported on the standard error stream; the text of that report is not part of the contract.\",\"question\":\"What information may the report contain, and must its format or disclosure policy be fixed for start and post-listening failures?\",\"options\":[\"A fixed generic sentence with no paths or credentials\",\"The underlying exception text, excluding credentials\",\"Any implementation-selected diagnostic text\"],\"default_guess\":\"Emit a stable generic category plus a sanitized diagnostic that contains no credential and no filesystem path.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_TOKEN_FILE names a path that cannot be opened.\",\"events\":[\"Deployment starts the service.\",\"One implementation writes only “token file unavailable”; another writes the operating-system exception containing the configured server path.\"],\"outcomes\":[\"Standard error contains no server path.\",\"Standard error contains the token-file path.\"],\"observer\":\"The deployment log reader sees different information disclosure and different text.\"}},{\"subject\":\"50_public_apis.md:`public_op:delivery_store.project_lock`\",\"kind\":\"lock_mode_policy\",\"text\":\"Creates the project lock file on first use with mode 0600\",\"question\":\"Must the resulting mode be exactly 0600 despite the process umask, and what must happen when an existing regular lock file has another mode?\",\"options\":[\"Force exactly 0600 on creation and on every open\",\"Force exactly 0600 only when creating; accept an existing regular file\",\"Reject an existing file whose mode is not 0600\"],\"default_guess\":\"Create atomically and force exactly 0600; reject an existing regular lock file with a different mode rather than silently changing it.\",\"witness\":{\"initial\":\"The lock entry is absent and the process umask removes owner-write permission.\",\"events\":[\"A caller requests the project lock.\",\"One implementation passes 0600 to the create call and accepts the umask result; another applies the required final mode explicitly.\"],\"outcomes\":[\"The lock file is created with mode 0400.\",\"The lock file is created with mode 0600.\"],\"observer\":\"The service owner inspecting the state folder, and a later process trying to open the lock for writing, see the difference.\"}},{\"subject\":\"50_public_apis.md:`public_op:delivery_store.project_lock`\",\"kind\":\"existing_lock_content\",\"text\":\"The lock file is created on first use with mode 0600 and never removed; it holds no content.\",\"question\":\"What must project_lock do when its entry is a regular file but already contains bytes?\",\"options\":[\"Reject it with state_unavailable\",\"Truncate it to empty before locking\",\"Accept it and leave its content unchanged\"],\"default_guess\":\"Reject it with state_unavailable; do not mutate an unexpected existing file.\",\"witness\":{\"initial\":\"A regular mode-0600 file already exists at the project's lock address and contains one byte.\",\"events\":[\"A delivery requests project_lock.\",\"One implementation accepts and locks every regular file; another enforces that the lock file holds no content.\"],\"outcomes\":[\"The call succeeds and the lock file remains nonempty.\",\"The call is refused with state_unavailable, or the file is cleared before success.\"],\"observer\":\"The delivery caller and the service owner inspecting the lock file see the difference.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"contradictory_whitespace_rule\",\"text\":\"The token with the whitespace around it removed.\",\"question\":\"Must this become an explicit statement that only ASCII space, tab, line feed, carriage return, vertical tab and form feed are removed, and that no other Unicode whitespace is removed?\",\"options\":[\"Remove only the six ASCII whitespace characters named by A5 rule 2\",\"Remove all Unicode whitespace recognized by the implementation\"],\"default_guess\":\"Remove only the six ASCII whitespace characters named by A5 rule 2.\",\"witness\":{\"initial\":\"The token file contains a valid 43-character token followed by U+00A0 NO-BREAK SPACE.\",\"events\":[\"The service starts and read_token reads the file.\",\"One implementation interprets “whitespace” using Unicode stripping; another follows A5 rule 2 and removes only ASCII whitespace.\"],\"outcomes\":[\"The no-break space is removed and the service starts with the valid token.\",\"The no-break space remains, is not visible ASCII, and the start fails.\"],\"observer\":\"Deployment sees the service start in one implementation and fail in the other.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"resize_rounding\",\"text\":\"the other side keeps the proportion, rounded to whole pixels\",\"question\":\"Which rounding rule is used for fractional dimensions, and is the result clamped to at least one pixel?\",\"options\":[\"Nearest integer with halves upward, minimum 1\",\"Nearest integer with ties to even, minimum 1\",\"Floor, minimum 1\",\"The pinned image library's dimension calculation\"],\"default_guess\":\"Use nearest integer with halves upward and clamp each dimension to at least one pixel.\",\"witness\":{\"initial\":\"A decoded, correctly oriented image is 4000 by 2001 pixels and the longest-side limit is 2000.\",\"events\":[\"prepare_photo reduces the image.\",\"One implementation rounds the proportional 1000.5-pixel side down; another rounds it up.\"],\"outcomes\":[\"The stored image is 2000 by 1000 pixels.\",\"The stored image is 2000 by 1001 pixels.\"],\"observer\":\"The Portal sees different pixels, and the caller sees different M04 size and sha256 values.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"underspecified_resampling\",\"text\":\"the image is reduced with a Lanczos filter\",\"question\":\"Which Lanczos kernel definition, support, edge treatment, alpha treatment and sample-rounding rules determine the resized pixels?\",\"options\":[\"The exact behavior of a named pinned Pillow operation\",\"A fully specified implementation-independent resampling algorithm\",\"Any implementation described as Lanczos\"],\"default_guess\":\"Specify the exact pinned Pillow resize operation and require premultiplied-alpha resampling before compositing.\",\"witness\":{\"initial\":\"A partly transparent image has a sharp opaque-to-transparent colour boundary and is larger than the side limit.\",\"events\":[\"prepare_photo resizes it with a library calling its filter Lanczos.\",\"One implementation resamples straight colour and alpha channels; another resamples premultiplied colour.\"],\"outcomes\":[\"The white-composited result has a coloured fringe at the boundary.\",\"The white-composited result has no such fringe and therefore different pixels.\"],\"observer\":\"The Portal viewer sees the fringe, and the caller receives different stored-image hashes.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"unspecified_rgb_conversion\",\"text\":\"then transparent and partly transparent pixels are composited onto white by their alpha, and the result is three-channel RGB.\",\"question\":\"How are grayscale, palette, CMYK, YCCK and other decoded source modes converted to three-channel RGB when colour management is disabled?\",\"options\":[\"Use a named pinned library's RGB conversion\",\"Specify channel-conversion formulas for every accepted decoded mode\",\"Reject decoded modes outside a stated set\"],\"default_guess\":\"Use the pinned Pillow conversion to RGBA or RGB without applying embedded colour profiles, then follow the specified alpha-compositing order.\",\"witness\":{\"initial\":\"The source is a decodable CMYK JPEG without a colour profile.\",\"events\":[\"prepare_photo must produce three-channel RGB.\",\"One implementation uses the image library's CMYK conversion; another uses a direct subtractive-channel formula.\"],\"outcomes\":[\"One set of RGB pixels is stored.\",\"A visibly different set of RGB pixels is stored.\"],\"observer\":\"The Portal viewer sees different colours, and the caller receives different M04 hashes.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"nondeterministic_image_output\",\"text\":\"The encoded bytes are not fixed beyond these rules: two implementations may store different bytes for one source.\",\"question\":\"Which encoder, version and remaining JPEG settings must be selected, or is implementation-dependent stored content an intentional product contract despite changing M04 sha256 and size?\",\"options\":[\"Fix an exact encoder version and all encoding settings\",\"Permit implementation-dependent bytes and treat M04 sha256 and size as per-placement facts\",\"Require pixel equivalence but allow arbitrary conforming JPEG encoding\"],\"default_guess\":\"Fix the pinned Pillow version and the complete save parameters so rebuilding the service does not silently change stored bytes.\",\"witness\":{\"initial\":\"A source has no existing placement and yields fixed prepared RGB pixels.\",\"events\":[\"Two conforming deployments encode it as baseline 4:2:0 JPEG at quality 85.\",\"The encoders choose different valid Huffman tables or quantization details.\"],\"outcomes\":[\"The first deployment stores one byte sequence, size and sha256.\",\"The second deployment stores a different byte sequence, size and sha256 for the same project and source content.\"],\"observer\":\"The calling flow sees different M04 values, and the binary store contains different bytes.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"internal_contradiction\",\"text\":\"Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. A failure to synchronise the folder after the rename does not undo the write and is not a failure of the operation: the file is in place, and only its survival of a host crash is uncertain.\",\"question\":\"Must successful completion require successful folder synchronisation, or must the first sentence be changed to say that folder synchronisation is merely attempted and may fail without failing the operation?\",\"options\":[\"Folder synchronisation is required for success\",\"Folder synchronisation failure is ignored and success is reported\",\"Return success with an explicit durability-warning result\"],\"default_guess\":\"Require successful folder synchronisation for a successful durable write.\",\"witness\":{\"initial\":\"The temporary file has been synchronised and renamed to its destination.\",\"events\":[\"Synchronising the containing folder fails with an I/O error.\",\"One passage requires the folder to be synchronised; the later passage directs the implementation to report success.\"],\"outcomes\":[\"The operation fails because its required folder synchronisation did not complete.\",\"The operation succeeds while crash survival remains uncertain.\"],\"observer\":\"The operation caller sees failure under one passage and success under the other.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"durability_contradiction\",\"text\":\"A failure to synchronise the folder after the rename does not undo the write and is not a failure of the operation: the file is in place, and only its survival of a host crash is uncertain.\",\"question\":\"How must this change so that A3 rule 6's guarantee that a crash leaves no placement record without its stored image remains true?\",\"options\":[\"Fail before writing the placement record unless the image directory is synchronised\",\"Permit a record without an image after a crash and define its recovery\",\"Synchronise the entire image and record transaction with a stronger protocol\"],\"default_guess\":\"Do not write or acknowledge the placement record until the stored image and its directory entry are durably synchronised.\",\"witness\":{\"initial\":\"No placement exists; the image temporary file has been synchronised and renamed.\",\"events\":[\"Synchronising the image folder fails, but the operation treats this as success and writes and durably synchronises the placement record.\",\"The host crashes before the image directory entry becomes durable.\",\"After restart, the record survives while the image rename does not.\"],\"outcomes\":[\"Under the new A6 passage, the call may have succeeded and leave a placement record without an image after the crash.\",\"Under A3 rule 6, the ordering is asserted to leave no record without an image.\"],\"observer\":\"A later delivery or the Portal sees a surviving placement record whose referenced image is absent.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"temporary_name_policy\",\"text\":\"A temporary file left by a crash stays under its temporary name beginning with `.tmp-`; it is never read and the service does not remove it.\",\"question\":\"How are temporary names made collision-free, and what happens when a chosen temporary entry already exists?\",\"options\":[\"Exclusive creation with a cryptographically random suffix and retry on collision\",\"A process-and-counter suffix with exclusive creation\",\"Reuse or overwrite an existing `.tmp-` entry\",\"Refuse the write on the first collision\"],\"default_guess\":\"Create a fresh `.tmp-` name exclusively using a cryptographically random suffix and retry on collision without reading, replacing or removing an existing temporary file.\",\"witness\":{\"initial\":\"A crash has left `.tmp-fixed` in the destination folder.\",\"events\":[\"A later write chooses its temporary name.\",\"One implementation reuses a fixed name; another creates a unique name exclusively.\"],\"outcomes\":[\"The later write fails or overwrites the crash remnant.\",\"The later write succeeds using a different temporary entry and leaves the remnant untouched.\"],\"observer\":\"The delivery caller and the service owner inspecting the store see the difference.\"}}]}",
+ "set_aside": []
+}

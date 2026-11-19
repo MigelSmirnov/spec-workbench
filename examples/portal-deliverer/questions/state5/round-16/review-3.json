@@ -1,0 +1,203 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:deliverer_api.run_service",
+   "kind": "ambiguous_exit_condition",
+   "text": "0 when it is stopped by a signal after it has served",
+   "question": "Does \"after it has served\" begin when the socket starts listening or only after the service has answered at least one request?",
+   "options": [
+    "Listening is sufficient, so a signal immediately after the socket opens produces status 0.",
+    "At least one request must have been handled; an earlier signal has another status."
+   ],
+   "default_guess": "Treat the start as successful once the web server is listening, and return 0 for a handled shutdown signal after that point.",
+   "witness": {
+    "initial": "The web server has started listening but has handled no request.",
+    "events": [
+     "The deployment sends a handled termination signal immediately after observing the listening socket."
+    ],
+    "outcomes": [
+     "The process exits with status 0 because the service has started serving.",
+     "The process does not exit with status 0 because it has not yet served a request."
+    ],
+    "observer": "The deployment supervisor"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.run_service",
+   "kind": "unspecified_signal_scope",
+   "text": "0 when it is stopped by a signal after it has served",
+   "question": "Which signals are graceful service-stop signals covered by status 0, and what status applies when a signal arrives before listening or cannot be handled?",
+   "options": [
+    "Only named handled signals such as SIGINT and SIGTERM produce status 0 after listening; other signals retain their operating-system status.",
+    "Every signal-mediated termination is intended to produce status 0 after listening, to the extent the operating system permits.",
+    "A signal before listening is a start failure with status 1.",
+    "A signal before listening retains its signal-derived status."
+   ],
+   "default_guess": "Handle SIGINT and SIGTERM as graceful stops after listening, return 1 only for ordinary startup failures, and leave unhandled signals to the operating system.",
+   "witness": {
+    "initial": "The process is starting and has not listened yet.",
+    "events": [
+     "The deployment sends SIGTERM while the web server is being initialized."
+    ],
+    "outcomes": [
+     "The signal is treated as a failed start and the process exits with status 1.",
+     "The process retains a signal-derived status because termination by the deployment is not a start failure."
+    ],
+    "observer": "The deployment supervisor"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.run_service",
+   "kind": "underspecified_exit_status",
+   "text": "a status other than 0 when the web server fails after it has started listening",
+   "question": "Which exact exit status must represent a web-server failure after listening, and may it be 1, the status also assigned to a failed start?",
+   "options": [
+    "Always return 1 for every failure.",
+    "Use a distinct fixed status for a post-listening server failure.",
+    "Propagate a nonzero status supplied by the web server or exception mapping."
+   ],
+   "default_guess": "Return 1 for any ordinary failure unless the deployment contract requires the two phases to be distinguishable.",
+   "witness": {
+    "initial": "The service is listening successfully.",
+    "events": [
+     "The web server then fails and terminates the service."
+    ],
+    "outcomes": [
+     "The process exits with status 1.",
+     "The process exits with a distinct nonzero status such as 70."
+    ],
+    "observer": "The deployment supervisor"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.run_service",
+   "kind": "unspecified_error_report",
+   "text": "A failure is reported on the standard error stream; the text of that report is not part of the contract.",
+   "question": "What minimum information and redaction rules apply to the standard-error report, particularly for server paths, environment values and credentials?",
+   "options": [
+    "Emit a fixed generic message containing no configuration values or server paths.",
+    "Emit diagnostic exception details and paths but redact credentials.",
+    "Permit framework-generated diagnostics subject only to the separate prohibition on exposing the token."
+   ],
+   "default_guess": "Emit a stable phase and error category, redact credentials and environment values, and omit absolute server paths.",
+   "witness": {
+    "initial": "The configured token file exists with forbidden permissions at an absolute server path.",
+    "events": [
+     "The deployment starts the service.",
+     "Token validation fails and run_service writes its required failure report to standard error."
+    ],
+    "outcomes": [
+     "The report is a generic message such as a token-file validation failure without the path or mode.",
+     "The report includes the absolute token-file path, its mode and an exception traceback."
+    ],
+    "observer": "An operator or log reader who can read the process standard error"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "contradiction",
+   "text": "The token with the whitespace around it removed.",
+   "question": "Must read_token remove only the six ASCII whitespace characters specified by A5 rule 2, or all characters treated as whitespace by the implementation's string library?",
+   "options": [
+    "Remove only space, tab, line feed, carriage return, vertical tab and form feed; remove no Unicode whitespace.",
+    "Use the language's general Unicode whitespace trimming operation."
+   ],
+   "default_guess": "Remove exactly the six ASCII whitespace characters named by A5 rule 2.",
+   "witness": {
+    "initial": "The token file contains U+00A0, followed by 32 visible ASCII letters, followed by U+00A0, and otherwise satisfies the file requirements.",
+    "events": [
+     "The deployment starts the service.",
+     "deliverer_api.read_token reads and trims the token file."
+    ],
+    "outcomes": [
+     "A5 rule 2 removes no U+00A0; the remaining token contains a non-visible-ASCII character, so the service does not start.",
+     "The State 5 output description is implemented with Unicode whitespace trimming; both U+00A0 characters are removed and the service starts."
+    ],
+    "observer": "The deployment, which sees whether the service listens"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "underspecified_rounding",
+   "text": "the other side keeps the proportion, rounded to whole pixels",
+   "question": "What rounding rule, tie rule and minimum dimension must be used for the resized side?",
+   "options": [
+    "Round to nearest with a specified tie rule and clamp the result to at least one pixel.",
+    "Take the floor and clamp to at least one pixel.",
+    "Take the ceiling and clamp to at least one pixel.",
+    "Delegate dimension calculation to the selected image library."
+   ],
+   "default_guess": "Round to nearest with half values rounded away from zero, then clamp to at least one pixel.",
+   "witness": {
+    "initial": "A valid source image is 3000 by 1000 pixels and therefore must be reduced to a longest side of 2000 pixels.",
+    "events": [
+     "The caller delivers the source.",
+     "photo_preparation resizes and encodes it."
+    ],
+    "outcomes": [
+     "The stored image is 2000 by 667 pixels when the proportional dimension is rounded to nearest.",
+     "The stored image is 2000 by 666 pixels when the proportional dimension is floored."
+    ],
+    "observer": "The Portal or a test reading the stored image dimensions, hash and size"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "contradiction",
+   "text": "`folder_unavailable` when the photo folder or a subfolder that is not ignored cannot be listed.",
+   "question": "When an entry listed as a subfolder is a symbolic link or non-folder by the time it is opened, must observe_source_files skip it and continue as A1 says, or refuse because that listed subfolder cannot be opened and listed?",
+   "options": [
+    "Skip an entry whose no-follow opening finds a symbolic link or non-folder, and continue the scan.",
+    "Refuse the whole scan with folder_unavailable because the listed subfolder cannot be listed."
+   ],
+   "default_guess": "Follow A1's specific race rule: skip a symbolic link or non-folder found by the no-follow opening, and refuse only disappearance or another opening failure.",
+   "witness": {
+    "initial": "A directory entry named sub is listed as a subfolder and is not ignored.",
+    "events": [
+     "Another actor replaces sub with a symbolic link before observe_source_files opens it.",
+     "observe_source_files opens the entry without following links."
+    ],
+    "outcomes": [
+     "A1's detailed rule skips sub and returns a complete scan of the remaining entries.",
+     "The State 5 Errors passage treats sub as a subfolder that cannot be listed and returns folder_unavailable."
+    ],
+    "observer": "The caller of the scan operation"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "unspecified_existing_state",
+   "text": "`state_unavailable` when the lock file cannot be opened or locked, or its entry is a symbolic link or not a regular file.",
+   "question": "What must project_lock do when an existing regular lock file contains data, although A6 says the lock file holds no content?",
+   "options": [
+    "Accept and lock the regular file without inspecting or changing its content.",
+    "Truncate the file to zero length before or while locking it.",
+    "Refuse it with state_unavailable.",
+    "Validate that it is empty and accept only if it is."
+   ],
+   "default_guess": "Require an existing lock file to be empty and return state_unavailable if it is not, avoiding an unexplained mutation of existing state.",
+   "witness": {
+    "initial": "The project's lock path contains an existing mode-0600 regular file holding one byte, and no process holds its operating-system lock.",
+    "events": [
+     "photo_delivery calls delivery_store.project_lock for the project."
+    ],
+    "outcomes": [
+     "The operation accepts and locks the file because it is regular and lockable, leaving content despite A6 saying it holds no content.",
+     "The operation truncates or refuses the file in order to enforce that the lock file holds no content."
+    ],
+    "observer": "The photo-delivery caller and an operator inspecting the state directory"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:deliverer_api.run_service\",\"kind\":\"ambiguous_exit_condition\",\"text\":\"0 when it is stopped by a signal after it has served\",\"question\":\"Does \\\"after it has served\\\" begin when the socket starts listening or only after the service has answered at least one request?\",\"options\":[\"Listening is sufficient, so a signal immediately after the socket opens produces status 0.\",\"At least one request must have been handled; an earlier signal has another status.\"],\"default_guess\":\"Treat the start as successful once the web server is listening, and return 0 for a handled shutdown signal after that point.\",\"witness\":{\"initial\":\"The web server has started listening but has handled no request.\",\"events\":[\"The deployment sends a handled termination signal immediately after observing the listening socket.\"],\"outcomes\":[\"The process exits with status 0 because the service has started serving.\",\"The process does not exit with status 0 because it has not yet served a request.\"],\"observer\":\"The deployment supervisor\"}},{\"subject\":\"public_op:deliverer_api.run_service\",\"kind\":\"unspecified_signal_scope\",\"text\":\"0 when it is stopped by a signal after it has served\",\"question\":\"Which signals are graceful service-stop signals covered by status 0, and what status applies when a signal arrives before listening or cannot be handled?\",\"options\":[\"Only named handled signals such as SIGINT and SIGTERM produce status 0 after listening; other signals retain their operating-system status.\",\"Every signal-mediated termination is intended to produce status 0 after listening, to the extent the operating system permits.\",\"A signal before listening is a start failure with status 1.\",\"A signal before listening retains its signal-derived status.\"],\"default_guess\":\"Handle SIGINT and SIGTERM as graceful stops after listening, return 1 only for ordinary startup failures, and leave unhandled signals to the operating system.\",\"witness\":{\"initial\":\"The process is starting and has not listened yet.\",\"events\":[\"The deployment sends SIGTERM while the web server is being initialized.\"],\"outcomes\":[\"The signal is treated as a failed start and the process exits with status 1.\",\"The process retains a signal-derived status because termination by the deployment is not a start failure.\"],\"observer\":\"The deployment supervisor\"}},{\"subject\":\"public_op:deliverer_api.run_service\",\"kind\":\"underspecified_exit_status\",\"text\":\"a status other than 0 when the web server fails after it has started listening\",\"question\":\"Which exact exit status must represent a web-server failure after listening, and may it be 1, the status also assigned to a failed start?\",\"options\":[\"Always return 1 for every failure.\",\"Use a distinct fixed status for a post-listening server failure.\",\"Propagate a nonzero status supplied by the web server or exception mapping.\"],\"default_guess\":\"Return 1 for any ordinary failure unless the deployment contract requires the two phases to be distinguishable.\",\"witness\":{\"initial\":\"The service is listening successfully.\",\"events\":[\"The web server then fails and terminates the service.\"],\"outcomes\":[\"The process exits with status 1.\",\"The process exits with a distinct nonzero status such as 70.\"],\"observer\":\"The deployment supervisor\"}},{\"subject\":\"public_op:deliverer_api.run_service\",\"kind\":\"unspecified_error_report\",\"text\":\"A failure is reported on the standard error stream; the text of that report is not part of the contract.\",\"question\":\"What minimum information and redaction rules apply to the standard-error report, particularly for server paths, environment values and credentials?\",\"options\":[\"Emit a fixed generic message containing no configuration values or server paths.\",\"Emit diagnostic exception details and paths but redact credentials.\",\"Permit framework-generated diagnostics subject only to the separate prohibition on exposing the token.\"],\"default_guess\":\"Emit a stable phase and error category, redact credentials and environment values, and omit absolute server paths.\",\"witness\":{\"initial\":\"The configured token file exists with forbidden permissions at an absolute server path.\",\"events\":[\"The deployment starts the service.\",\"Token validation fails and run_service writes its required failure report to standard error.\"],\"outcomes\":[\"The report is a generic message such as a token-file validation failure without the path or mode.\",\"The report includes the absolute token-file path, its mode and an exception traceback.\"],\"observer\":\"An operator or log reader who can read the process standard error\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"contradiction\",\"text\":\"The token with the whitespace around it removed.\",\"question\":\"Must read_token remove only the six ASCII whitespace characters specified by A5 rule 2, or all characters treated as whitespace by the implementation's string library?\",\"options\":[\"Remove only space, tab, line feed, carriage return, vertical tab and form feed; remove no Unicode whitespace.\",\"Use the language's general Unicode whitespace trimming operation.\"],\"default_guess\":\"Remove exactly the six ASCII whitespace characters named by A5 rule 2.\",\"witness\":{\"initial\":\"The token file contains U+00A0, followed by 32 visible ASCII letters, followed by U+00A0, and otherwise satisfies the file requirements.\",\"events\":[\"The deployment starts the service.\",\"deliverer_api.read_token reads and trims the token file.\"],\"outcomes\":[\"A5 rule 2 removes no U+00A0; the remaining token contains a non-visible-ASCII character, so the service does not start.\",\"The State 5 output description is implemented with Unicode whitespace trimming; both U+00A0 characters are removed and the service starts.\"],\"observer\":\"The deployment, which sees whether the service listens\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"underspecified_rounding\",\"text\":\"the other side keeps the proportion, rounded to whole pixels\",\"question\":\"What rounding rule, tie rule and minimum dimension must be used for the resized side?\",\"options\":[\"Round to nearest with a specified tie rule and clamp the result to at least one pixel.\",\"Take the floor and clamp to at least one pixel.\",\"Take the ceiling and clamp to at least one pixel.\",\"Delegate dimension calculation to the selected image library.\"],\"default_guess\":\"Round to nearest with half values rounded away from zero, then clamp to at least one pixel.\",\"witness\":{\"initial\":\"A valid source image is 3000 by 1000 pixels and therefore must be reduced to a longest side of 2000 pixels.\",\"events\":[\"The caller delivers the source.\",\"photo_preparation resizes and encodes it.\"],\"outcomes\":[\"The stored image is 2000 by 667 pixels when the proportional dimension is rounded to nearest.\",\"The stored image is 2000 by 666 pixels when the proportional dimension is floored.\"],\"observer\":\"The Portal or a test reading the stored image dimensions, hash and size\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"contradiction\",\"text\":\"`folder_unavailable` when the photo folder or a subfolder that is not ignored cannot be listed.\",\"question\":\"When an entry listed as a subfolder is a symbolic link or non-folder by the time it is opened, must observe_source_files skip it and continue as A1 says, or refuse because that listed subfolder cannot be opened and listed?\",\"options\":[\"Skip an entry whose no-follow opening finds a symbolic link or non-folder, and continue the scan.\",\"Refuse the whole scan with folder_unavailable because the listed subfolder cannot be listed.\"],\"default_guess\":\"Follow A1's specific race rule: skip a symbolic link or non-folder found by the no-follow opening, and refuse only disappearance or another opening failure.\",\"witness\":{\"initial\":\"A directory entry named sub is listed as a subfolder and is not ignored.\",\"events\":[\"Another actor replaces sub with a symbolic link before observe_source_files opens it.\",\"observe_source_files opens the entry without following links.\"],\"outcomes\":[\"A1's detailed rule skips sub and returns a complete scan of the remaining entries.\",\"The State 5 Errors passage treats sub as a subfolder that cannot be listed and returns folder_unavailable.\"],\"observer\":\"The caller of the scan operation\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"unspecified_existing_state\",\"text\":\"`state_unavailable` when the lock file cannot be opened or locked, or its entry is a symbolic link or not a regular file.\",\"question\":\"What must project_lock do when an existing regular lock file contains data, although A6 says the lock file holds no content?\",\"options\":[\"Accept and lock the regular file without inspecting or changing its content.\",\"Truncate the file to zero length before or while locking it.\",\"Refuse it with state_unavailable.\",\"Validate that it is empty and accept only if it is.\"],\"default_guess\":\"Require an existing lock file to be empty and return state_unavailable if it is not, avoiding an unexplained mutation of existing state.\",\"witness\":{\"initial\":\"The project's lock path contains an existing mode-0600 regular file holding one byte, and no process holds its operating-system lock.\",\"events\":[\"photo_delivery calls delivery_store.project_lock for the project.\"],\"outcomes\":[\"The operation accepts and locks the file because it is regular and lockable, leaving content despite A6 saying it holds no content.\",\"The operation truncates or refuses the file in order to enforce that the lock file holds no content.\"],\"observer\":\"The photo-delivery caller and an operator inspecting the state directory\"}}]}",
+ "set_aside": []
+}

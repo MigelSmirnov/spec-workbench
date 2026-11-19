@@ -1,0 +1,290 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 subfolder opening",
+   "kind": "contradictory_refusal",
+   "text": "A subfolder the listing showed is opened without following a link: when the opening finds a symbolic link, dangling or not, or an object that is not a folder, it is not entered and the scan goes on; when the subfolder is gone or the opening fails for any other reason, the scan is refused as for a subfolder that cannot be listed.",
+   "question": "When an unignored directory seen by the listing has become a symbolic link or non-folder before opening, does the earlier rule that an unopenable subfolder refuses the whole scan apply, or does this passage require the scan to continue?",
+   "options": [
+    "Refuse the whole scan with folder_unavailable",
+    "Skip the changed entry and complete the scan"
+   ],
+   "default_guess": "Apply the more specific changed passage and skip the entry.",
+   "witness": {
+    "initial": "The photo folder contains an unignored subfolder d, and the folder listing reports d as a directory.",
+    "events": [
+     "Syncthing replaces d with a symbolic link after the listing and before the deliverer opens it.",
+     "The deliverer opens d without following a link."
+    ],
+    "outcomes": [
+     "The general rule for a subfolder that cannot be opened refuses the whole scan with folder_unavailable.",
+     "The specific changed rule does not enter d and completes the scan."
+    ],
+    "observer": "The calling flow sees either a refusal or a completed scan."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 resized dimensions",
+   "kind": "rounding_rule",
+   "text": "the other side keeps the proportion, rounded to whole pixels",
+   "question": "Which rounding rule is used at an exact half, and may rounding ever produce zero pixels or must the result be clamped to at least one pixel?",
+   "options": [
+    "Round halves away from zero and clamp to at least one pixel",
+    "Round halves to even and clamp to at least one pixel",
+    "Use integer truncation",
+    "Use the image library's native dimension calculation"
+   ],
+   "default_guess": "Round to nearest with halves away from zero and clamp each dimension to at least one pixel.",
+   "witness": {
+    "initial": "A 2400-by-3 image is reduced to a longest-side limit of 2000 pixels.",
+    "events": [
+     "The deliverer computes the proportional other side as exactly 2.5 pixels."
+    ],
+    "outcomes": [
+     "Half-up rounding produces a 2000-by-3 stored image.",
+     "Half-even rounding produces a 2000-by-2 stored image."
+    ],
+    "observer": "The caller observes different M04 size and sha256 values, and the Portal stores different pixels."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 Lanczos resize",
+   "kind": "filter_semantics",
+   "text": "the image is reduced with a Lanczos filter",
+   "question": "Which Lanczos kernel radius, edge handling, sample coordinates and alpha treatment define the resized pixels?",
+   "options": [
+    "Fix all resize semantics explicitly",
+    "Name a particular imported implementation and its operation",
+    "Allow implementation-dependent resized pixels as part of the stated byte variability"
+   ],
+   "default_guess": "Use the selected image library's standard Lanczos operation and document that resized pixels may consequently vary between implementations.",
+   "witness": {
+    "initial": "A high-contrast image contains a sharp edge and partly transparent pixels and must be reduced.",
+    "events": [
+     "One implementation uses a three-lobe Lanczos kernel on straight RGBA channels.",
+     "Another uses a different Lanczos support or premultiplied-alpha filtering."
+    ],
+    "outcomes": [
+     "The first implementation stores one set of edge pixels.",
+     "The second implementation stores different edge pixels while still describing its filter as Lanczos."
+    ],
+    "observer": "The Portal and the placement's sha256 and size expose different stored images."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 alpha compositing",
+   "kind": "numeric_rounding",
+   "text": "transparent and partly transparent pixels are composited onto white by their alpha",
+   "question": "What arithmetic, alpha scale and integer rounding must be used when compositing a partly transparent decoded pixel onto white?",
+   "options": [
+    "Specify a formula and round to nearest",
+    "Specify a formula and truncate",
+    "Use the image library's native alpha-composite operation"
+   ],
+   "default_guess": "Use straight-alpha source-over composition in the decoded channel space and round to the nearest 8-bit value.",
+   "witness": {
+    "initial": "A decoded RGBA pixel has channel values for which source-over-white produces a fractional 8-bit result.",
+    "events": [
+     "The image needs no resizing.",
+     "The deliverer composites the pixel onto white."
+    ],
+    "outcomes": [
+     "An implementation that truncates stores channel value 127.",
+     "An implementation that rounds to nearest stores channel value 128."
+    ],
+    "observer": "The Portal receives different pixels and M04 reports a different sha256."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 conversion to RGB",
+   "kind": "colour_conversion",
+   "text": "the result is three-channel RGB",
+   "question": "How are decoded grayscale, palette, CMYK and other non-RGB pixel representations converted to three-channel RGB when colour management is forbidden?",
+   "options": [
+    "Define conversion formulas for every admitted decoded mode",
+    "Restrict admitted decoded modes",
+    "Name the image library conversion whose result is authoritative"
+   ],
+   "default_guess": "Use the selected decoder's ordinary non-colour-managed conversion to sRGB-like 8-bit RGB.",
+   "witness": {
+    "initial": "The source is a valid CMYK JPEG with no usable colour profile.",
+    "events": [
+     "The decoder returns CMYK pixels.",
+     "The deliverer converts them to the required three-channel RGB result."
+    ],
+    "outcomes": [
+     "One implementation uses a simple CMYK inversion formula.",
+     "Another uses its decoder library's CMYK-to-RGB conversion and stores different pixels."
+    ],
+    "observer": "The Portal receives visibly different pixels and M04 has a different sha256."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 token-file startup",
+   "kind": "missing_refusal_conditions",
+   "text": "At the start the path is opened once, without following a link; the permissions are those of the opened file and its content is read from it.",
+   "question": "What exactly happens when the token path is absent, cannot be opened, or the opened file cannot be read completely?",
+   "options": [
+    "Startup fails immediately",
+    "Startup retries or waits",
+    "The service starts but exposes only health until a token can be read"
+   ],
+   "default_guess": "Fail startup immediately for every open or read failure.",
+   "witness": {
+    "initial": "The configured token path is absent when the service starts.",
+    "events": [
+     "The service attempts its one required opening."
+    ],
+    "outcomes": [
+     "The process terminates with a startup configuration failure.",
+     "The process remains running and retries or serves only health."
+    ],
+    "observer": "The operator and health-check system see whether the service starts."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 token-path links",
+   "kind": "link_scope",
+   "text": "At the start the path is opened once, without following a link",
+   "question": "Does “without following a link” reject only a symbolic link at the final path component, or every symbolic-link component in the path?",
+   "options": [
+    "Reject a link in any path component",
+    "Reject only a final-component link",
+    "Resolve and pin the parent directory, then reject a final-component link"
+   ],
+   "default_guess": "Open from a trusted directory and reject symbolic links in every component.",
+   "witness": {
+    "initial": "The token itself is a regular file, but one parent directory in its configured path is a symbolic link.",
+    "events": [
+     "The service starts and opens the token path."
+    ],
+    "outcomes": [
+     "An O_NOFOLLOW-style final-component check accepts the file and starts the service.",
+     "A component-by-component no-follow opening rejects the path and the service does not start."
+    ],
+    "observer": "The operator sees startup success or failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 token-file location",
+   "kind": "value_source",
+   "text": "At the start the path is opened once",
+   "question": "Where does the token-file path come from, what is its settings-field name and type, and in what path representation is it supplied?",
+   "options": [
+    "A typed field of the runtime settings object",
+    "A fixed imported provider constant",
+    "A command-line argument translated into a typed settings field"
+   ],
+   "default_guess": "Use a typed token_file field on the runtime settings object.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 crash-left temporary files",
+   "kind": "temporary_file_permissions",
+   "text": "A temporary file left by a crash stays under its temporary name beginning with `.tmp-`; it is never read and the service does not remove it.",
+   "question": "With what mode is each temporary image or record file created, and must that mode already be final before any crash can leave the file behind?",
+   "options": [
+    "Create image temporaries as 0644 and record temporaries as 0600",
+    "Create every temporary as 0600 and change image mode before rename",
+    "Rely on the process umask"
+   ],
+   "default_guess": "Create every temporary as 0600, changing an image to 0644 only immediately before its durable rename.",
+   "witness": {
+    "initial": "The service runs with a permissive umask and begins writing a placement record to a temporary file.",
+    "events": [
+     "The process crashes after writing the temporary file but before renaming it.",
+     "The changed rule leaves the temporary file permanently in the state folder."
+    ],
+    "outcomes": [
+     "An explicit 0600 creation mode leaves the record readable only by its owner.",
+     "Creation using a default 0666 mode and the permissive umask leaves the record readable by other local users."
+    ],
+    "observer": "Another local user can or cannot read the crash-left state data."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 6 and A6 rule 3",
+   "kind": "contradictory_crash_durability",
+   "text": "A failure to synchronise the folder after the rename does not undo the write and is not a failure of the operation: the file is in place, and only its survival of a host crash is uncertain.",
+   "question": "May placement continue and durably write its record after synchronising the stored-image folder fails, even though a later crash can then leave the record without its image, or must record creation wait for durable image-directory synchronisation?",
+   "options": [
+    "Treat image-directory synchronisation failure as success and permit a record without an image after a crash",
+    "Do not write the record until the image rename is durably synchronised",
+    "Revise A3 rule 6 to allow and define recovery from a record without an image"
+   ],
+   "default_guess": "Do not write the placement record unless the stored-image rename and its directory entry have been durably synchronised.",
+   "witness": {
+    "initial": "No placement or stored image exists for a source.",
+    "events": [
+     "The deliverer writes and renames the stored image.",
+     "Synchronising the image folder fails; A6 says the operation does not fail.",
+     "The deliverer writes and durably synchronises the placement record.",
+     "The host crashes before the image directory entry becomes durable.",
+     "After restart, the record survives but the stored image does not."
+    ],
+    "outcomes": [
+     "A3 rule 6 says writing the image first leaves no record without an image.",
+     "A6 rule 3 permits success after the failed folder synchronisation, so the crash may leave a record without an image."
+    ],
+    "observer": "A repeated delivery and the Portal encounter a placement record whose referenced image is absent."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 longest-side policy",
+   "kind": "standard_violation",
+   "text": "the longest side is larger than the limit",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "The passage must name the imported constant that supplies the longest-side limit.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 token-file path",
+   "kind": "standard_violation",
+   "text": "At the start the path is opened once",
+   "rule": "| настройка запуска, зависящая от окружения | `config`, через модуль настроек (§6.11) | поле объекта настроек | поле модели настроек и его тип |",
+   "section": "15.3.1",
+   "question": "The passage must name the token-path field of the settings object and its type.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 token trimming",
+   "kind": "standard_violation",
+   "text": "the ASCII whitespace at both ends (space, tab, line feed, carriage return,\n   vertical tab and form feed) is removed; no other character is removed.",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "The passage must name an imported provider constant for the closed set of characters removed from the token.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 temporary-name prefix",
+   "kind": "standard_violation",
+   "text": "A temporary file\n   left by a crash stays under its temporary name beginning with `.tmp-`; it is never read and the\n   service does not remove it.",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "The passage must name an imported provider constant for the temporary-file prefix.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 project lock mode",
+   "kind": "standard_violation",
+   "text": "The lock file is created on\n   first use with mode 0600 and never removed; it holds no content.",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "The passage must name the imported provider constant that supplies the lock-file mode.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 subfolder opening\",\"kind\":\"contradictory_refusal\",\"text\":\"A subfolder the listing showed is opened without following a link: when the opening finds a symbolic link, dangling or not, or an object that is not a folder, it is not entered and the scan goes on; when the subfolder is gone or the opening fails for any other reason, the scan is refused as for a subfolder that cannot be listed.\",\"question\":\"When an unignored directory seen by the listing has become a symbolic link or non-folder before opening, does the earlier rule that an unopenable subfolder refuses the whole scan apply, or does this passage require the scan to continue?\",\"options\":[\"Refuse the whole scan with folder_unavailable\",\"Skip the changed entry and complete the scan\"],\"default_guess\":\"Apply the more specific changed passage and skip the entry.\",\"witness\":{\"initial\":\"The photo folder contains an unignored subfolder d, and the folder listing reports d as a directory.\",\"events\":[\"Syncthing replaces d with a symbolic link after the listing and before the deliverer opens it.\",\"The deliverer opens d without following a link.\"],\"outcomes\":[\"The general rule for a subfolder that cannot be opened refuses the whole scan with folder_unavailable.\",\"The specific changed rule does not enter d and completes the scan.\"],\"observer\":\"The calling flow sees either a refusal or a completed scan.\"}},{\"subject\":\"A2 resized dimensions\",\"kind\":\"rounding_rule\",\"text\":\"the other side keeps the proportion, rounded to whole pixels\",\"question\":\"Which rounding rule is used at an exact half, and may rounding ever produce zero pixels or must the result be clamped to at least one pixel?\",\"options\":[\"Round halves away from zero and clamp to at least one pixel\",\"Round halves to even and clamp to at least one pixel\",\"Use integer truncation\",\"Use the image library's native dimension calculation\"],\"default_guess\":\"Round to nearest with halves away from zero and clamp each dimension to at least one pixel.\",\"witness\":{\"initial\":\"A 2400-by-3 image is reduced to a longest-side limit of 2000 pixels.\",\"events\":[\"The deliverer computes the proportional other side as exactly 2.5 pixels.\"],\"outcomes\":[\"Half-up rounding produces a 2000-by-3 stored image.\",\"Half-even rounding produces a 2000-by-2 stored image.\"],\"observer\":\"The caller observes different M04 size and sha256 values, and the Portal stores different pixels.\"}},{\"subject\":\"A2 Lanczos resize\",\"kind\":\"filter_semantics\",\"text\":\"the image is reduced with a Lanczos filter\",\"question\":\"Which Lanczos kernel radius, edge handling, sample coordinates and alpha treatment define the resized pixels?\",\"options\":[\"Fix all resize semantics explicitly\",\"Name a particular imported implementation and its operation\",\"Allow implementation-dependent resized pixels as part of the stated byte variability\"],\"default_guess\":\"Use the selected image library's standard Lanczos operation and document that resized pixels may consequently vary between implementations.\",\"witness\":{\"initial\":\"A high-contrast image contains a sharp edge and partly transparent pixels and must be reduced.\",\"events\":[\"One implementation uses a three-lobe Lanczos kernel on straight RGBA channels.\",\"Another uses a different Lanczos support or premultiplied-alpha filtering.\"],\"outcomes\":[\"The first implementation stores one set of edge pixels.\",\"The second implementation stores different edge pixels while still describing its filter as Lanczos.\"],\"observer\":\"The Portal and the placement's sha256 and size expose different stored images.\"}},{\"subject\":\"A2 alpha compositing\",\"kind\":\"numeric_rounding\",\"text\":\"transparent and partly transparent pixels are composited onto white by their alpha\",\"question\":\"What arithmetic, alpha scale and integer rounding must be used when compositing a partly transparent decoded pixel onto white?\",\"options\":[\"Specify a formula and round to nearest\",\"Specify a formula and truncate\",\"Use the image library's native alpha-composite operation\"],\"default_guess\":\"Use straight-alpha source-over composition in the decoded channel space and round to the nearest 8-bit value.\",\"witness\":{\"initial\":\"A decoded RGBA pixel has channel values for which source-over-white produces a fractional 8-bit result.\",\"events\":[\"The image needs no resizing.\",\"The deliverer composites the pixel onto white.\"],\"outcomes\":[\"An implementation that truncates stores channel value 127.\",\"An implementation that rounds to nearest stores channel value 128.\"],\"observer\":\"The Portal receives different pixels and M04 reports a different sha256.\"}},{\"subject\":\"A2 conversion to RGB\",\"kind\":\"colour_conversion\",\"text\":\"the result is three-channel RGB\",\"question\":\"How are decoded grayscale, palette, CMYK and other non-RGB pixel representations converted to three-channel RGB when colour management is forbidden?\",\"options\":[\"Define conversion formulas for every admitted decoded mode\",\"Restrict admitted decoded modes\",\"Name the image library conversion whose result is authoritative\"],\"default_guess\":\"Use the selected decoder's ordinary non-colour-managed conversion to sRGB-like 8-bit RGB.\",\"witness\":{\"initial\":\"The source is a valid CMYK JPEG with no usable colour profile.\",\"events\":[\"The decoder returns CMYK pixels.\",\"The deliverer converts them to the required three-channel RGB result.\"],\"outcomes\":[\"One implementation uses a simple CMYK inversion formula.\",\"Another uses its decoder library's CMYK-to-RGB conversion and stores different pixels.\"],\"observer\":\"The Portal receives visibly different pixels and M04 has a different sha256.\"}},{\"subject\":\"A5 token-file startup\",\"kind\":\"missing_refusal_conditions\",\"text\":\"At the start the path is opened once, without following a link; the permissions are those of the opened file and its content is read from it.\",\"question\":\"What exactly happens when the token path is absent, cannot be opened, or the opened file cannot be read completely?\",\"options\":[\"Startup fails immediately\",\"Startup retries or waits\",\"The service starts but exposes only health until a token can be read\"],\"default_guess\":\"Fail startup immediately for every open or read failure.\",\"witness\":{\"initial\":\"The configured token path is absent when the service starts.\",\"events\":[\"The service attempts its one required opening.\"],\"outcomes\":[\"The process terminates with a startup configuration failure.\",\"The process remains running and retries or serves only health.\"],\"observer\":\"The operator and health-check system see whether the service starts.\"}},{\"subject\":\"A5 token-path links\",\"kind\":\"link_scope\",\"text\":\"At the start the path is opened once, without following a link\",\"question\":\"Does “without following a link” reject only a symbolic link at the final path component, or every symbolic-link component in the path?\",\"options\":[\"Reject a link in any path component\",\"Reject only a final-component link\",\"Resolve and pin the parent directory, then reject a final-component link\"],\"default_guess\":\"Open from a trusted directory and reject symbolic links in every component.\",\"witness\":{\"initial\":\"The token itself is a regular file, but one parent directory in its configured path is a symbolic link.\",\"events\":[\"The service starts and opens the token path.\"],\"outcomes\":[\"An O_NOFOLLOW-style final-component check accepts the file and starts the service.\",\"A component-by-component no-follow opening rejects the path and the service does not start.\"],\"observer\":\"The operator sees startup success or failure.\"}},{\"subject\":\"A5 token-file location\",\"kind\":\"value_source\",\"text\":\"At the start the path is opened once\",\"question\":\"Where does the token-file path come from, what is its settings-field name and type, and in what path representation is it supplied?\",\"options\":[\"A typed field of the runtime settings object\",\"A fixed imported provider constant\",\"A command-line argument translated into a typed settings field\"],\"default_guess\":\"Use a typed token_file field on the runtime settings object.\"},{\"subject\":\"A6 crash-left temporary files\",\"kind\":\"temporary_file_permissions\",\"text\":\"A temporary file left by a crash stays under its temporary name beginning with `.tmp-`; it is never read and the service does not remove it.\",\"question\":\"With what mode is each temporary image or record file created, and must that mode already be final before any crash can leave the file behind?\",\"options\":[\"Create image temporaries as 0644 and record temporaries as 0600\",\"Create every temporary as 0600 and change image mode before rename\",\"Rely on the process umask\"],\"default_guess\":\"Create every temporary as 0600, changing an image to 0644 only immediately before its durable rename.\",\"witness\":{\"initial\":\"The service runs with a permissive umask and begins writing a placement record to a temporary file.\",\"events\":[\"The process crashes after writing the temporary file but before renaming it.\",\"The changed rule leaves the temporary file permanently in the state folder.\"],\"outcomes\":[\"An explicit 0600 creation mode leaves the record readable only by its owner.\",\"Creation using a default 0666 mode and the permissive umask leaves the record readable by other local users.\"],\"observer\":\"Another local user can or cannot read the crash-left state data.\"}},{\"subject\":\"A3 rule 6 and A6 rule 3\",\"kind\":\"contradictory_crash_durability\",\"text\":\"A failure to synchronise the folder after the rename does not undo the write and is not a failure of the operation: the file is in place, and only its survival of a host crash is uncertain.\",\"question\":\"May placement continue and durably write its record after synchronising the stored-image folder fails, even though a later crash can then leave the record without its image, or must record creation wait for durable image-directory synchronisation?\",\"options\":[\"Treat image-directory synchronisation failure as success and permit a record without an image after a crash\",\"Do not write the record until the image rename is durably synchronised\",\"Revise A3 rule 6 to allow and define recovery from a record without an image\"],\"default_guess\":\"Do not write the placement record unless the stored-image rename and its directory entry have been durably synchronised.\",\"witness\":{\"initial\":\"No placement or stored image exists for a source.\",\"events\":[\"The deliverer writes and renames the stored image.\",\"Synchronising the image folder fails; A6 says the operation does not fail.\",\"The deliverer writes and durably synchronises the placement record.\",\"The host crashes before the image directory entry becomes durable.\",\"After restart, the record survives but the stored image does not.\"],\"outcomes\":[\"A3 rule 6 says writing the image first leaves no record without an image.\",\"A6 rule 3 permits success after the failed folder synchronisation, so the crash may leave a record without an image.\"],\"observer\":\"A repeated delivery and the Portal encounter a placement record whose referenced image is absent.\"}},{\"subject\":\"A2 longest-side policy\",\"kind\":\"standard_violation\",\"text\":\"the longest side is larger than the limit\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"The passage must name the imported constant that supplies the longest-side limit.\"},{\"subject\":\"A5 token-file path\",\"kind\":\"standard_violation\",\"text\":\"At the start the path is opened once\",\"rule\":\"| настройка запуска, зависящая от окружения | `config`, через модуль настроек (§6.11) | поле объекта настроек | поле модели настроек и его тип |\",\"section\":\"15.3.1\",\"question\":\"The passage must name the token-path field of the settings object and its type.\"},{\"subject\":\"A5 token trimming\",\"kind\":\"standard_violation\",\"text\":\"the ASCII whitespace at both ends (space, tab, line feed, carriage return,\\n   vertical tab and form feed) is removed; no other character is removed.\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"The passage must name an imported provider constant for the closed set of characters removed from the token.\"},{\"subject\":\"A6 temporary-name prefix\",\"kind\":\"standard_violation\",\"text\":\"A temporary file\\n   left by a crash stays under its temporary name beginning with `.tmp-`; it is never read and the\\n   service does not remove it.\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"The passage must name an imported provider constant for the temporary-file prefix.\"},{\"subject\":\"A6 project lock mode\",\"kind\":\"standard_violation\",\"text\":\"The lock file is created on\\n   first use with mode 0600 and never removed; it holds no content.\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"The passage must name the imported provider constant that supplies the lock-file mode.\"}]}",
+ "set_aside": []
+}
