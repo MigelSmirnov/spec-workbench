@@ -146,12 +146,18 @@ turns its refusal into an answer.
 
 ### Enforces
 
-The method and path of each route. The checks of A5 rules 1, 5, 9 and 10, A3 rule 4 and A4 rule 2 run in
-the handlers of `module:deliverer_api`.
+The method and path of each route. The token of A5 rules 1 and 5, the project id part of A5 rule 9, the
+refusal answer of A5 rule 10, the request form of A3 rule 4 and the `photo_id` form of A4 rule 2 are checked
+in the handlers of `module:deliverer_api`; every later check, the source id among them, is
+`module:photo_delivery`'s.
 
 ### Errors
 
 Building the surface raises no refusal. A served route answers a wrong token, a malformed request and every M08 refusal.
+A path that is not a route answers 404, and a route's path with another method answers 405, both with the
+framework's own body and not M08. The framework also serves its generated description of the four routes at
+`/docs`, `/redoc` and `/openapi.json` without a token; it names the routes and the forms of their bodies and
+answers, and holds no credential, server path or project data.
 
 ### State impact
 
