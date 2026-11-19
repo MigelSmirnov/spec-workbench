@@ -1134,10 +1134,16 @@ def layer_record(layer: dict[str, Any]) -> dict[str, Any]:
 
 
 def _closed_at(case: Path, state: int, summaries: list[dict[str, Any]]) -> str | None:
-    """The git ref the state was last closed at, for `ask --since`: the latest
-    commit of the round that closed every unit of its text (with the author's
-    dispositions, kept in the same directory), or that held a carried
-    closure's texts."""
+    """The git ref the state was last closed at, for `ask --since`: the commit
+    that holds the texts the closing round was asked on — the latest commit of
+    the round's directory when it still does — or that held a carried
+    closure's texts.
+
+    A round closed by a `fixed` disposition keeps that disposition in its
+    directory, committed after the fix: the directory's latest commit already
+    holds the changed text, and `--since` from it shows the judge no change,
+    so no topic about an untouched passage can be `preexisting` (portal-deliverer
+    State 2, rounds 27-31, 2026-11-19)."""
     for index in range(len(summaries) - 1, -1, -1):
         summary = summaries[index]
         if str(summary.get("round", "")).startswith(CARRIED):
@@ -1150,6 +1156,9 @@ def _closed_at(case: Path, state: int, summaries: list[dict[str, Any]]) -> str |
             directory = rounds_dir(case, state) / summary["round"]
             found = _git_out(case, "log", "-1", "--format=%H", "--", str(directory.resolve()))
             ref = (found or "").strip() or _added_at(case, directory / "summary.json")
+            held = _texts_with_digests(case, summary["documents"], ref) if summary.get("documents") else None
+            if held is not None and held[1]:
+                return held[1]
             if ref:
                 return ref
     return None
