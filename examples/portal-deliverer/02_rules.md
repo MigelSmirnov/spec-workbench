@@ -346,8 +346,8 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
    constant, which is never read. A3 decides what a crash between the image and the record means.
 4. Deliveries and marks of one project run one at a time, across processes, under an operating
    system lock on one lock file of that project in the state folder. The lock file is created on first
-   use, together with the folders below the state folder that lead to it, with the imported
-   `LOCK_FILE_MODE` constant, and is never changed or removed afterwards; that first creation is the
+   use with the imported `LOCK_FILE_MODE` constant, and the folders below the state folder that lead to
+   it with the mode rule 2 decides; the lock file is never changed or removed afterwards; that first creation is the
    only write of an operation that writes nothing else. A caller
    waits for the lock without a time limit, and the lock is released when its holder ends. The check
    that a placement or mark exists and its writing happen inside that lock.
