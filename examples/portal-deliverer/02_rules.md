@@ -333,23 +333,32 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 2. A stored image has the mode of the imported `STORED_IMAGE_MODE` constant and a state record that of
    the imported `RECORD_MODE` constant, so neither is executable. The installation creates the binary
    store and the state folder themselves; the service never creates them, and when one is missing the
-   write that needs it fails. The service creates the missing folders below them, outermost first, with
-   the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported
-   `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask. The Portal
+   write that needs it fails. In the state folder the lock file is `locks/<project_id>.lock`, a placement
+   record `ledger/<project_id>/<source_id>.json` and a mark record `published/<project_id>/<source_id>.json`.
+   The service makes the folders below the binary store and the state folder exist one at a time, from
+   the outermost: a folder it finds is accepted, whoever created it, also a concurrent call, when it is a
+   folder; a missing one is created with the mode of the imported `STORE_FOLDER_MODE` constant in the
+   binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the
+   process umask. In the binary store the folders are those of the path resolved under rule 1. In the state
+   folder an entry on the way that is a symbolic link or not a folder fails the write, and a failure to
+   create a folder or set its mode fails it too; for the lock file that is the refusal of rule 5. The Portal
    reads a stored image and alone decides who may retrieve it. The deliverer has no operation that
    returns image bytes.
 3. Each file is written to a temporary name in its folder, synchronised to disk and renamed, and
    its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. The
    temporary name begins with the imported `TEMPORARY_NAME_PREFIX` constant and is chosen fresh for each
-   write; the temporary file is created exclusively, never reusing an existing entry, and a name already
-   taken is passed over for another. It takes the mode of the imported `TEMPORARY_FILE_MODE` constant at
+   write; the temporary file is created exclusively, never reusing an existing entry, by the standard
+   library's `tempfile.mkstemp`, which draws random names and passes over one already taken; when it
+   finds no free name the write fails. It takes the mode of the imported `TEMPORARY_FILE_MODE` constant at
    once and its final mode before the rename. A file counts as written when the rename succeeds. A write
    that fails before the rename leaves the destination as it was, whether absent or holding an earlier
    complete file, and removes its temporary file. A stored image is written before a record that depends
-   on it, so each folder created for it is synchronised in the folder that holds it, and its own folder
-   after the rename; a failure of any of these synchronisations fails that write: what was written
-   stays, no record is written, and A3 rule 5 condition 5 applies. The folders created for a record or
-   for the lock file are not synchronised. A placement or mark record is the last write of
+   on it, so each folder created for it is synchronised in the folder that holds it before the next one
+   is created and before its temporary file is created, and its own folder after the rename; a failure of any of these synchronisations fails that write: what was written
+   stays, no record is written, and A3 rule 5 condition 5 applies. A folder created for a record or for
+   the lock file is not synchronised in the folder that holds it; a record's own folder is synchronised
+   after its rename, as every file's is, with the effect decided below for a record. A folder the
+   service has created stays: it is never removed, also when the write it was created for fails. A placement or mark record is the last write of
    its operation, so a failure to synchronise its folder after the rename does not undo it and is not a
    failure of the operation; only its survival of a host crash is uncertain. A crash of the process or the
    host is not a failed write: the temporary file it interrupts stays under its temporary name, is never
@@ -369,7 +378,7 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
    cannot be opened or read, is not valid JSON, fails that validation or names another project or source
    is never taken for an absent record: the operation is refused with the STATE_UNAVAILABLE member of = models.RefusalCode, whose value is
    `state_unavailable`, and changes no record and no stored image. The same refusal answers a
-   failure to open or lock the lock file, which waiting for another holder is not, and a mark that cannot be
+   failure to make the folders of the lock file exist under rule 2, a failure to open or lock the lock file, which waiting for another holder is not, and a mark that cannot be
    written.
 
 ### Formal invariants

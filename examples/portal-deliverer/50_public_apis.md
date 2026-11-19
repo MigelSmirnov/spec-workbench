@@ -446,11 +446,11 @@ A6 rule 4 and INV-12.
 
 ### Errors
 
-`state_unavailable` when the lock file cannot be opened or locked, or its entry is a symbolic link or not a regular file.
+`state_unavailable` when the state folder is missing, when a folder leading to the lock file cannot be created or given its mode or is a symbolic link or not a folder, when the lock file cannot be opened or locked, or when its entry is a symbolic link or not a regular file.
 
 ### State impact
 
-Writes only the project lock file.
+Writes only the project lock file `locks/<project_id>.lock` and the folders below the state folder that lead to it (A6 rule 2).
 
 ## `public_op:delivery_store.store_image`
 
