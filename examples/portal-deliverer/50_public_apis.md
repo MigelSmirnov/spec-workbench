@@ -480,7 +480,7 @@ A6 rules 1 to 3.
 
 ### Errors
 
-A `DelivererError` with the UNSAFE_REFERENCE member of `RefusalCode` when the reference leaves the binary store or cannot be resolved in it, before anything is written (A6 rule 1); `module:photo_delivery` passes it on as M08. A failed write raises the operating system error, which `module:photo_delivery` turns into the failure of that photo.
+A `DelivererError` with the UNSAFE_REFERENCE member of `RefusalCode` when the reference leaves the binary store or a link in the store cannot be resolved, before the image is written (A6 rule 1); `module:photo_delivery` passes it on as M08. A failed write raises the operating system error, which `module:photo_delivery` turns into the failure of that photo.
 
 ### State impact
 
