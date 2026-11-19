@@ -1,0 +1,232 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_source",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "What authoritative time source supplies `marked_at` when a new publication mark is written?",
+   "options": [
+    "A system wall-clock source",
+    "A clock supplied to the marking operation or service",
+    "A timestamp supplied by the caller"
+   ],
+   "default_guess": "Use an injected UTC system clock owned by the service.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The authenticated calling flow records a new Portal `photo_id`.",
+     "The deliverer creates the publication mark."
+    ],
+    "outcomes": [
+     "`marked_at` is read from the service's system clock.",
+     "`marked_at` is taken from a caller value or another ambient clock."
+    ],
+    "observer": "The caller receiving the mark and later readers of the stored mark"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_representation",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "In what representation is `marked_at` produced and persisted: aware UTC, naive UTC, local time, or another explicitly defined form?",
+   "options": [
+    "Timezone-aware UTC datetime",
+    "Naive UTC datetime",
+    "Local-time datetime with a configured zone"
+   ],
+   "default_guess": "Use a timezone-aware UTC datetime and a canonical persisted UTC representation.",
+   "witness": {
+    "initial": "A placement exists and the service runs in a non-UTC timezone.",
+    "events": [
+     "The calling flow records a new `photo_id`.",
+     "The deliverer writes and later returns the mark."
+    ],
+    "outcomes": [
+     "The stored instant is an aware UTC value.",
+     "The stored value is naive local time or naive UTC."
+    ],
+    "observer": "The caller and any process deserializing the mark"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "publication-mark operation",
+   "kind": "missing_clock_read_count",
+   "text": "A repeated mark keeps the first `marked_at`, and another `photo_id` is refused (`test_marking_again_changes_nothing_and_another_photo_is_refused`).",
+   "question": "How many times may a mark operation read the time source, and must replayed or conflicting mark calls avoid reading it entirely?",
+   "options": [
+    "Read exactly once only when creating a fresh mark",
+    "Read exactly once on every mark request",
+    "Permit any number of reads but persist only the creation reading"
+   ],
+   "default_guess": "Read exactly once after establishing that a fresh mark will be created; replayed and conflicting calls read it zero times.",
+   "witness": {
+    "initial": "A placement already has a publication mark.",
+    "events": [
+     "A clock whose reads are observable is installed.",
+     "The calling flow repeats the same `photo_id`."
+    ],
+    "outcomes": [
+     "The replay returns the first mark without reading the clock.",
+     "The replay returns the same mark but reads the clock before discovering it is a replay."
+    ],
+    "observer": "A test or clock adapter that counts reads"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-01",
+   "kind": "incomplete_required_test",
+   "text": "INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).",
+   "question": "What must the Required tests item observe to show that no operation creates, changes, moves or deletes anything in the source folder, rather than only that selected file attributes match again after each operation?",
+   "options": [
+    "Trap and assert the absence of every mutating filesystem operation in the source tree",
+    "Compare the complete source-tree state, including directories and entry identities, before and after",
+    "Limit INV-01 explicitly to the listed end-state properties"
+   ],
+   "default_guess": "Trap source-tree mutation calls and also compare the complete tree before and after.",
+   "witness": {
+    "initial": "The source folder contains one photo and one subfolder.",
+    "events": [
+     "A scan temporarily creates a file or changes the photo and then restores the listed files, bytes, modification times and modes.",
+     "The Required test performs only its stated final comparison."
+    ],
+    "outcomes": [
+     "An implementation that only reads the source passes.",
+     "An implementation that mutates and restores the measured state also passes."
+    ],
+    "observer": "A filesystem-operation monitor or a concurrent observer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02",
+   "kind": "incomplete_required_test",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What must the Required test observe to prove that the delivery opens no path failing A3 rule 5 condition 1, rather than merely returning the required failure after opening it?",
+   "options": [
+    "Trap opens and assert that no forbidden segment or target is opened",
+    "Change INV-02 to require only failure and no durable delivery",
+    "Use inaccessible sentinel targets whose attempted opening fails the test"
+   ],
+   "default_guess": "Instrument folder and file opens and assert that no path rejected by condition 1 is opened.",
+   "witness": {
+    "initial": "A rejected name resolves through a symbolic link to a readable sentinel file.",
+    "events": [
+     "The caller requests delivery under that name.",
+     "The implementation either rejects from path inspection or opens the sentinel before returning NOT_READY_OR_ABSENT."
+    ],
+    "outcomes": [
+     "The forbidden target is never opened.",
+     "The forbidden target is opened and possibly read, but the same failure is returned and no durable file is added."
+    ],
+    "observer": "A syscall/open monitor; the stated response-and-state test sees no difference"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-06",
+   "kind": "incomplete_required_test",
+   "text": "INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).",
+   "question": "How must the Required test show the invariant's unconditional claim that a repeated placement writes nothing, including durable state other than stored images and placement records?",
+   "options": [
+    "Snapshot and compare all durable state reachable by the service",
+    "Instrument every write and require zero writes during replay",
+    "Narrow the invariant to stored images and placement records"
+   ],
+   "default_guess": "Instrument durable writes and require zero writes for a replay after its project lock already exists.",
+   "witness": {
+    "initial": "A placement and its project lock already exist.",
+    "events": [
+     "The caller repeats the placement.",
+     "The implementation writes an unrelated state file while leaving every stored image and placement record unchanged."
+    ],
+    "outcomes": [
+     "No write occurs.",
+     "The extra durable write occurs, but the described assertions still pass."
+    ],
+    "observer": "A durable-store write monitor or an operator inspecting the extra state"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-08",
+   "kind": "incomplete_required_test",
+   "text": "INV-08: a repeated mark keeps the first `marked_at`, and another `photo_id` is refused (`test_marking_again_changes_nothing_and_another_photo_is_refused`). A mark for a source placed only in another project is refused (`test_a_photo_that_was_not_placed_cannot_be_marked`).",
+   "question": "What must the Required test assert to show that the existing mark never changes, rather than only that `marked_at` stays equal and a conflicting call is refused?",
+   "options": [
+    "Compare the complete mark record byte-for-byte before and after replay and conflict",
+    "Assert every mark field and the record count remain unchanged",
+    "Narrow the invariant to immutability of `marked_at` only"
+   ],
+   "default_guess": "Compare the complete persisted mark and assert that exactly one unchanged mark remains.",
+   "witness": {
+    "initial": "A placement has a mark containing `photo_id` A and its original `marked_at`.",
+    "events": [
+     "The caller submits conflicting `photo_id` B.",
+     "The implementation overwrites the stored `photo_id` with B, preserves `marked_at`, and returns PUBLICATION_CONFLICT."
+    ],
+    "outcomes": [
+     "The original complete mark remains unchanged.",
+     "The mark's `photo_id` changes while the assertions explicitly described for `marked_at` and refusal still hold."
+    ],
+    "observer": "A later scan or repeated placement that reads the stored mark"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-10",
+   "kind": "incomplete_required_test",
+   "text": "INV-10: scan, placement and mark each answer the CONNECTION_NOT_CONFIRMED member of = models.RefusalCode for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`).",
+   "question": "What must the Required test observe to show that nothing is scanned for an unconfirmed connection, rather than only that the operation ultimately returns CONNECTION_NOT_CONFIRMED?",
+   "options": [
+    "Trap all access to the project's photo folder and require zero accesses",
+    "Use a photo folder whose access raises a test failure",
+    "Narrow the invariant to absence of returned scan results and durable writes"
+   ],
+   "default_guess": "Make photo-folder access observable and assert that the connection refusal occurs before any such access.",
+   "witness": {
+    "initial": "The connections file contains an unconfirmed project whose photo folder is readable and instrumented.",
+    "events": [
+     "The caller requests a scan.",
+     "The implementation either refuses at the connection check or lists the photo folder before returning the same refusal."
+    ],
+    "outcomes": [
+     "No source-folder access occurs and CONNECTION_NOT_CONFIRMED is returned.",
+     "The folder is scanned, its results are discarded, and CONNECTION_NOT_CONFIRMED is returned."
+    ],
+    "observer": "A filesystem-access monitor; the caller sees the same refusal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19",
+   "kind": "incomplete_required_test",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "What must the Required test observe to prove that a new placement never reads a conflict copy, rather than only that it refuses after reading it?",
+   "options": [
+    "Trap opens and reads of the conflict-copy entry",
+    "Make any read of the conflict copy fail the test",
+    "Change the invariant from 'never reads' to 'never places'"
+   ],
+   "default_guess": "Instrument the conflict-copy file and assert that neither open-for-reading nor read occurs.",
+   "witness": {
+    "initial": "A conflict-copy file exists, has no placement, and contains readable bytes.",
+    "events": [
+     "The caller requests delivery using the conflict-copy name.",
+     "The implementation either rejects from the name or reads and hashes the file before rejecting."
+    ],
+    "outcomes": [
+     "The conflict copy is never opened or read.",
+     "The conflict copy is read, but NOT_READY_OR_ABSENT is returned and no durable state except the lock changes."
+    ],
+    "observer": "A filesystem-read monitor; the stated response-and-state assertions see no difference"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_source\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"What authoritative time source supplies `marked_at` when a new publication mark is written?\",\"options\":[\"A system wall-clock source\",\"A clock supplied to the marking operation or service\",\"A timestamp supplied by the caller\"],\"default_guess\":\"Use an injected UTC system clock owned by the service.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The authenticated calling flow records a new Portal `photo_id`.\",\"The deliverer creates the publication mark.\"],\"outcomes\":[\"`marked_at` is read from the service's system clock.\",\"`marked_at` is taken from a caller value or another ambient clock.\"],\"observer\":\"The caller receiving the mark and later readers of the stored mark\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_representation\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"In what representation is `marked_at` produced and persisted: aware UTC, naive UTC, local time, or another explicitly defined form?\",\"options\":[\"Timezone-aware UTC datetime\",\"Naive UTC datetime\",\"Local-time datetime with a configured zone\"],\"default_guess\":\"Use a timezone-aware UTC datetime and a canonical persisted UTC representation.\",\"witness\":{\"initial\":\"A placement exists and the service runs in a non-UTC timezone.\",\"events\":[\"The calling flow records a new `photo_id`.\",\"The deliverer writes and later returns the mark.\"],\"outcomes\":[\"The stored instant is an aware UTC value.\",\"The stored value is naive local time or naive UTC.\"],\"observer\":\"The caller and any process deserializing the mark\"}},{\"subject\":\"publication-mark operation\",\"kind\":\"missing_clock_read_count\",\"text\":\"A repeated mark keeps the first `marked_at`, and another `photo_id` is refused (`test_marking_again_changes_nothing_and_another_photo_is_refused`).\",\"question\":\"How many times may a mark operation read the time source, and must replayed or conflicting mark calls avoid reading it entirely?\",\"options\":[\"Read exactly once only when creating a fresh mark\",\"Read exactly once on every mark request\",\"Permit any number of reads but persist only the creation reading\"],\"default_guess\":\"Read exactly once after establishing that a fresh mark will be created; replayed and conflicting calls read it zero times.\",\"witness\":{\"initial\":\"A placement already has a publication mark.\",\"events\":[\"A clock whose reads are observable is installed.\",\"The calling flow repeats the same `photo_id`.\"],\"outcomes\":[\"The replay returns the first mark without reading the clock.\",\"The replay returns the same mark but reads the clock before discovering it is a replay.\"],\"observer\":\"A test or clock adapter that counts reads\"}},{\"subject\":\"INV-01\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).\",\"question\":\"What must the Required tests item observe to show that no operation creates, changes, moves or deletes anything in the source folder, rather than only that selected file attributes match again after each operation?\",\"options\":[\"Trap and assert the absence of every mutating filesystem operation in the source tree\",\"Compare the complete source-tree state, including directories and entry identities, before and after\",\"Limit INV-01 explicitly to the listed end-state properties\"],\"default_guess\":\"Trap source-tree mutation calls and also compare the complete tree before and after.\",\"witness\":{\"initial\":\"The source folder contains one photo and one subfolder.\",\"events\":[\"A scan temporarily creates a file or changes the photo and then restores the listed files, bytes, modification times and modes.\",\"The Required test performs only its stated final comparison.\"],\"outcomes\":[\"An implementation that only reads the source passes.\",\"An implementation that mutates and restores the measured state also passes.\"],\"observer\":\"A filesystem-operation monitor or a concurrent observer\"}},{\"subject\":\"INV-02\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What must the Required test observe to prove that the delivery opens no path failing A3 rule 5 condition 1, rather than merely returning the required failure after opening it?\",\"options\":[\"Trap opens and assert that no forbidden segment or target is opened\",\"Change INV-02 to require only failure and no durable delivery\",\"Use inaccessible sentinel targets whose attempted opening fails the test\"],\"default_guess\":\"Instrument folder and file opens and assert that no path rejected by condition 1 is opened.\",\"witness\":{\"initial\":\"A rejected name resolves through a symbolic link to a readable sentinel file.\",\"events\":[\"The caller requests delivery under that name.\",\"The implementation either rejects from path inspection or opens the sentinel before returning NOT_READY_OR_ABSENT.\"],\"outcomes\":[\"The forbidden target is never opened.\",\"The forbidden target is opened and possibly read, but the same failure is returned and no durable file is added.\"],\"observer\":\"A syscall/open monitor; the stated response-and-state test sees no difference\"}},{\"subject\":\"INV-06\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).\",\"question\":\"How must the Required test show the invariant's unconditional claim that a repeated placement writes nothing, including durable state other than stored images and placement records?\",\"options\":[\"Snapshot and compare all durable state reachable by the service\",\"Instrument every write and require zero writes during replay\",\"Narrow the invariant to stored images and placement records\"],\"default_guess\":\"Instrument durable writes and require zero writes for a replay after its project lock already exists.\",\"witness\":{\"initial\":\"A placement and its project lock already exist.\",\"events\":[\"The caller repeats the placement.\",\"The implementation writes an unrelated state file while leaving every stored image and placement record unchanged.\"],\"outcomes\":[\"No write occurs.\",\"The extra durable write occurs, but the described assertions still pass.\"],\"observer\":\"A durable-store write monitor or an operator inspecting the extra state\"}},{\"subject\":\"INV-08\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-08: a repeated mark keeps the first `marked_at`, and another `photo_id` is refused (`test_marking_again_changes_nothing_and_another_photo_is_refused`). A mark for a source placed only in another project is refused (`test_a_photo_that_was_not_placed_cannot_be_marked`).\",\"question\":\"What must the Required test assert to show that the existing mark never changes, rather than only that `marked_at` stays equal and a conflicting call is refused?\",\"options\":[\"Compare the complete mark record byte-for-byte before and after replay and conflict\",\"Assert every mark field and the record count remain unchanged\",\"Narrow the invariant to immutability of `marked_at` only\"],\"default_guess\":\"Compare the complete persisted mark and assert that exactly one unchanged mark remains.\",\"witness\":{\"initial\":\"A placement has a mark containing `photo_id` A and its original `marked_at`.\",\"events\":[\"The caller submits conflicting `photo_id` B.\",\"The implementation overwrites the stored `photo_id` with B, preserves `marked_at`, and returns PUBLICATION_CONFLICT.\"],\"outcomes\":[\"The original complete mark remains unchanged.\",\"The mark's `photo_id` changes while the assertions explicitly described for `marked_at` and refusal still hold.\"],\"observer\":\"A later scan or repeated placement that reads the stored mark\"}},{\"subject\":\"INV-10\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-10: scan, placement and mark each answer the CONNECTION_NOT_CONFIRMED member of = models.RefusalCode for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`).\",\"question\":\"What must the Required test observe to show that nothing is scanned for an unconfirmed connection, rather than only that the operation ultimately returns CONNECTION_NOT_CONFIRMED?\",\"options\":[\"Trap all access to the project's photo folder and require zero accesses\",\"Use a photo folder whose access raises a test failure\",\"Narrow the invariant to absence of returned scan results and durable writes\"],\"default_guess\":\"Make photo-folder access observable and assert that the connection refusal occurs before any such access.\",\"witness\":{\"initial\":\"The connections file contains an unconfirmed project whose photo folder is readable and instrumented.\",\"events\":[\"The caller requests a scan.\",\"The implementation either refuses at the connection check or lists the photo folder before returning the same refusal.\"],\"outcomes\":[\"No source-folder access occurs and CONNECTION_NOT_CONFIRMED is returned.\",\"The folder is scanned, its results are discarded, and CONNECTION_NOT_CONFIRMED is returned.\"],\"observer\":\"A filesystem-access monitor; the caller sees the same refusal\"}},{\"subject\":\"INV-19\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"What must the Required test observe to prove that a new placement never reads a conflict copy, rather than only that it refuses after reading it?\",\"options\":[\"Trap opens and reads of the conflict-copy entry\",\"Make any read of the conflict copy fail the test\",\"Change the invariant from 'never reads' to 'never places'\"],\"default_guess\":\"Instrument the conflict-copy file and assert that neither open-for-reading nor read occurs.\",\"witness\":{\"initial\":\"A conflict-copy file exists, has no placement, and contains readable bytes.\",\"events\":[\"The caller requests delivery using the conflict-copy name.\",\"The implementation either rejects from the name or reads and hashes the file before rejecting.\"],\"outcomes\":[\"The conflict copy is never opened or read.\",\"The conflict copy is read, but NOT_READY_OR_ABSENT is returned and no durable state except the lock changes.\"],\"observer\":\"A filesystem-read monitor; the stated response-and-state assertions see no difference\"}}]}",
+ "set_aside": []
+}
