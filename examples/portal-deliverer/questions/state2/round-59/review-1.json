@@ -1,0 +1,169 @@
+{
+ "open_points": [
+  {
+   "subject": "runtime settings presence and preprocessing",
+   "kind": "implementer-defined parsing",
+   "text": "Each run setting is a row of the start-up table that only the runtime settings module of SPEC_STANDARD 6.11\nreads, into a field of the settings object; that module decides how a value is read. A required setting that\nis absent ends the start, and an optional one that is absent takes its default.",
+   "question": "What exactly counts as absent, and are empty or whitespace-surrounded environment values preserved, trimmed, rejected, or treated as absent for each setting?",
+   "options": [
+    "Only an unset variable is absent; every set value is used verbatim.",
+    "An unset or empty variable is absent; other values are used verbatim.",
+    "Trim surrounding whitespace, then treat an empty result as absent."
+   ],
+   "default_guess": "Only an unset variable is absent; do not trim, and validate every set value exactly.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_PORT is set to the empty string while all required settings are valid.",
+    "events": [
+     "The operator starts the service.",
+     "The runtime settings module reads PORTAL_DELIVERER_PORT."
+    ],
+    "outcomes": [
+     "The empty value counts as absent, so the service starts on port 8850.",
+     "The empty value is present but is not a valid port, so startup ends."
+    ],
+    "observer": "The operator and any caller attempting to connect to port 8850."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "port setting",
+   "kind": "underspecified validation",
+   "text": "The port is a whole number from 1 to 65535",
+   "question": "Which environment-string spellings are valid ports, and what must startup do when the value is not one of them or is outside the range?",
+   "options": [
+    "Accept only non-empty ASCII decimal digits whose value is 1 through 65535; otherwise end startup.",
+    "Accept any integer syntax supported by the settings library, including signs or surrounding whitespace; reject only an out-of-range result.",
+    "On an invalid optional value, use the default port 8850."
+   ],
+   "default_guess": "Accept only ASCII decimal digits representing 1 through 65535 and end startup for every other present value.",
+   "witness": {
+    "initial": "All settings are valid and PORTAL_DELIVERER_PORT is set to `+8850`.",
+    "events": [
+     "The operator starts the service.",
+     "The settings module converts and validates the port."
+    ],
+    "outcomes": [
+     "Startup succeeds because `+8850` is accepted as an integer spelling.",
+     "Startup ends because the value is not an ASCII decimal representation."
+    ],
+    "observer": "The operator and callers of the service."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "RuntimeEnvironment setting",
+   "kind": "underspecified validation",
+   "text": "| `environment` | `RuntimeEnvironment` | `PORTAL_DELIVERER_ENVIRONMENT` | required: the DEVELOPMENT, TEST or PRODUCTION member of = models.RuntimeEnvironment (values `development`, `test`, `production`) |",
+   "question": "Must the environment variable equal one of the three lowercase values exactly, and what must startup do with another spelling or an unknown value?",
+   "options": [
+    "Accept exactly `development`, `test`, or `production`; otherwise end startup.",
+    "Accept member names and values case-insensitively.",
+    "Let the runtime settings library choose coercion and error behavior."
+   ],
+   "default_guess": "Accept exactly the three lowercase values and end startup for every other present value.",
+   "witness": {
+    "initial": "All settings are valid and PORTAL_DELIVERER_ENVIRONMENT is set to `DEVELOPMENT`.",
+    "events": [
+     "The operator starts the service.",
+     "The settings module reads the environment setting."
+    ],
+    "outcomes": [
+     "Startup succeeds with the DEVELOPMENT member by matching the member name or ignoring case.",
+     "Startup ends because only the lowercase value `development` is accepted."
+    ],
+    "observer": "The operator."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "timezone setting and photo-time interpretation",
+   "kind": "unspecified authority",
+   "text": "a time zone the time zone database does not know ends the\nstart",
+   "question": "Which time-zone database and version are authoritative for recognizing identifiers and resolving offsets, and may aliases be accepted?",
+   "options": [
+    "Use the host operating system's installed IANA database and accept every identifier it recognizes.",
+    "Use a pinned IANA/tzdata release and its identifiers and aliases.",
+    "Accept only canonical identifiers from a specified closed list."
+   ],
+   "default_guess": "Use a pinned IANA tzdata release through the runtime's zone-info implementation and accept the identifiers and aliases in that release.",
+   "witness": {
+    "initial": "The configured timezone is an identifier present in one deployed time-zone database release but absent from another.",
+    "events": [
+     "An operator starts two otherwise identical installations with different available time-zone database releases."
+    ],
+    "outcomes": [
+     "One installation accepts the setting and interprets local camera times using that database.",
+     "The other installation ends startup because its database does not know the identifier."
+    ],
+    "observer": "The operator, and later the owner observing delivered photo dates."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing time source and representation",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "From what authority is `marked_at` obtained, at what point in the mark operation, and is the stored datetime naive UTC, offset-aware UTC, local time, or another representation?",
+   "options": [
+    "Read the system wall clock and store naive UTC.",
+    "Read the system wall clock and store offset-aware UTC.",
+    "Receive an instant from the caller and store that representation."
+   ],
+   "default_guess": "Read an injected system wall clock when the mark is committed and store naive UTC, consistently with the product's other delivered datetimes.",
+   "witness": {
+    "initial": "A placement exists without a publication mark, and the host's local timezone is not UTC.",
+    "events": [
+     "The owner's calling flow reports a Portal photo id.",
+     "The deliverer creates the publication mark."
+    ],
+    "outcomes": [
+     "The record holds the current instant as naive UTC.",
+     "The record holds the same wall-clock reading as naive local time or as an offset-aware value."
+    ],
+    "observer": "The calling flow or a later operation reading the mark."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "mark operation clock readings",
+   "kind": "unspecified read count",
+   "text": "The calling flow reports the\n`photo_id` right after `photo.publish` answers, and the deliverer creates the mark.",
+   "question": "How many clock readings may creation of one publication mark take, and which reading supplies `marked_at` if time advances during the operation?",
+   "options": [
+    "Take exactly one reading for a newly created mark and use it everywhere in that operation.",
+    "Take separate readings for the durable record and returned result.",
+    "Take a reading at request receipt and another at commit, with the commit reading stored."
+   ],
+   "default_guess": "Take exactly one clock reading after validation and while holding the project lock, and use it for the durable mark and the answer.",
+   "witness": {
+    "initial": "A placement has no mark, and a controllable clock returns T1 and then T2.",
+    "events": [
+     "The caller submits a valid mark request.",
+     "The operation validates the request, writes the mark, and constructs its answer while the clock advances from T1 to T2."
+    ],
+    "outcomes": [
+     "A single reading makes every representation of `marked_at` equal T1.",
+     "Multiple readings allow the stored mark and the operation's result, or two generated records, to carry different instants T1 and T2."
+    ],
+    "observer": "The caller and any later reader of the durable mark."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "time-source invariant and Required tests",
+   "kind": "missing invariant test obligation",
+   "text": "- INV-16: every security category has an explicit outcome.",
+   "question": "What formal invariant states the source, representation, and per-operation reading count for every instant the product writes or compares, and what Required tests item says exactly how those properties must be demonstrated, including creation and replay of `marked_at`?",
+   "options": [
+    "Add one time invariant covering all written and compared instants, with a controllable-clock test and representation assertions.",
+    "Add a dedicated invariant for PublicationMark.marked_at and retain the existing A1/A2 rules as the guarantees for file and camera instants.",
+    "Leave time behavior only in normative prose without an invariant or Required tests item."
+   ],
+   "default_guess": "Add a formal invariant that every fresh product timestamp comes from the decided clock, has its decided UTC representation, and uses exactly one reading per operation; require a controllable-clock test showing mark creation uses that reading and replay preserves it unchanged.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"runtime settings presence and preprocessing\",\"kind\":\"implementer-defined parsing\",\"text\":\"Each run setting is a row of the start-up table that only the runtime settings module of SPEC_STANDARD 6.11\\nreads, into a field of the settings object; that module decides how a value is read. A required setting that\\nis absent ends the start, and an optional one that is absent takes its default.\",\"question\":\"What exactly counts as absent, and are empty or whitespace-surrounded environment values preserved, trimmed, rejected, or treated as absent for each setting?\",\"options\":[\"Only an unset variable is absent; every set value is used verbatim.\",\"An unset or empty variable is absent; other values are used verbatim.\",\"Trim surrounding whitespace, then treat an empty result as absent.\"],\"default_guess\":\"Only an unset variable is absent; do not trim, and validate every set value exactly.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_PORT is set to the empty string while all required settings are valid.\",\"events\":[\"The operator starts the service.\",\"The runtime settings module reads PORTAL_DELIVERER_PORT.\"],\"outcomes\":[\"The empty value counts as absent, so the service starts on port 8850.\",\"The empty value is present but is not a valid port, so startup ends.\"],\"observer\":\"The operator and any caller attempting to connect to port 8850.\"}},{\"subject\":\"port setting\",\"kind\":\"underspecified validation\",\"text\":\"The port is a whole number from 1 to 65535\",\"question\":\"Which environment-string spellings are valid ports, and what must startup do when the value is not one of them or is outside the range?\",\"options\":[\"Accept only non-empty ASCII decimal digits whose value is 1 through 65535; otherwise end startup.\",\"Accept any integer syntax supported by the settings library, including signs or surrounding whitespace; reject only an out-of-range result.\",\"On an invalid optional value, use the default port 8850.\"],\"default_guess\":\"Accept only ASCII decimal digits representing 1 through 65535 and end startup for every other present value.\",\"witness\":{\"initial\":\"All settings are valid and PORTAL_DELIVERER_PORT is set to `+8850`.\",\"events\":[\"The operator starts the service.\",\"The settings module converts and validates the port.\"],\"outcomes\":[\"Startup succeeds because `+8850` is accepted as an integer spelling.\",\"Startup ends because the value is not an ASCII decimal representation.\"],\"observer\":\"The operator and callers of the service.\"}},{\"subject\":\"RuntimeEnvironment setting\",\"kind\":\"underspecified validation\",\"text\":\"| `environment` | `RuntimeEnvironment` | `PORTAL_DELIVERER_ENVIRONMENT` | required: the DEVELOPMENT, TEST or PRODUCTION member of = models.RuntimeEnvironment (values `development`, `test`, `production`) |\",\"question\":\"Must the environment variable equal one of the three lowercase values exactly, and what must startup do with another spelling or an unknown value?\",\"options\":[\"Accept exactly `development`, `test`, or `production`; otherwise end startup.\",\"Accept member names and values case-insensitively.\",\"Let the runtime settings library choose coercion and error behavior.\"],\"default_guess\":\"Accept exactly the three lowercase values and end startup for every other present value.\",\"witness\":{\"initial\":\"All settings are valid and PORTAL_DELIVERER_ENVIRONMENT is set to `DEVELOPMENT`.\",\"events\":[\"The operator starts the service.\",\"The settings module reads the environment setting.\"],\"outcomes\":[\"Startup succeeds with the DEVELOPMENT member by matching the member name or ignoring case.\",\"Startup ends because only the lowercase value `development` is accepted.\"],\"observer\":\"The operator.\"}},{\"subject\":\"timezone setting and photo-time interpretation\",\"kind\":\"unspecified authority\",\"text\":\"a time zone the time zone database does not know ends the\\nstart\",\"question\":\"Which time-zone database and version are authoritative for recognizing identifiers and resolving offsets, and may aliases be accepted?\",\"options\":[\"Use the host operating system's installed IANA database and accept every identifier it recognizes.\",\"Use a pinned IANA/tzdata release and its identifiers and aliases.\",\"Accept only canonical identifiers from a specified closed list.\"],\"default_guess\":\"Use a pinned IANA tzdata release through the runtime's zone-info implementation and accept the identifiers and aliases in that release.\",\"witness\":{\"initial\":\"The configured timezone is an identifier present in one deployed time-zone database release but absent from another.\",\"events\":[\"An operator starts two otherwise identical installations with different available time-zone database releases.\"],\"outcomes\":[\"One installation accepts the setting and interprets local camera times using that database.\",\"The other installation ends startup because its database does not know the identifier.\"],\"observer\":\"The operator, and later the owner observing delivered photo dates.\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing time source and representation\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"From what authority is `marked_at` obtained, at what point in the mark operation, and is the stored datetime naive UTC, offset-aware UTC, local time, or another representation?\",\"options\":[\"Read the system wall clock and store naive UTC.\",\"Read the system wall clock and store offset-aware UTC.\",\"Receive an instant from the caller and store that representation.\"],\"default_guess\":\"Read an injected system wall clock when the mark is committed and store naive UTC, consistently with the product's other delivered datetimes.\",\"witness\":{\"initial\":\"A placement exists without a publication mark, and the host's local timezone is not UTC.\",\"events\":[\"The owner's calling flow reports a Portal photo id.\",\"The deliverer creates the publication mark.\"],\"outcomes\":[\"The record holds the current instant as naive UTC.\",\"The record holds the same wall-clock reading as naive local time or as an offset-aware value.\"],\"observer\":\"The calling flow or a later operation reading the mark.\"}},{\"subject\":\"mark operation clock readings\",\"kind\":\"unspecified read count\",\"text\":\"The calling flow reports the\\n`photo_id` right after `photo.publish` answers, and the deliverer creates the mark.\",\"question\":\"How many clock readings may creation of one publication mark take, and which reading supplies `marked_at` if time advances during the operation?\",\"options\":[\"Take exactly one reading for a newly created mark and use it everywhere in that operation.\",\"Take separate readings for the durable record and returned result.\",\"Take a reading at request receipt and another at commit, with the commit reading stored.\"],\"default_guess\":\"Take exactly one clock reading after validation and while holding the project lock, and use it for the durable mark and the answer.\",\"witness\":{\"initial\":\"A placement has no mark, and a controllable clock returns T1 and then T2.\",\"events\":[\"The caller submits a valid mark request.\",\"The operation validates the request, writes the mark, and constructs its answer while the clock advances from T1 to T2.\"],\"outcomes\":[\"A single reading makes every representation of `marked_at` equal T1.\",\"Multiple readings allow the stored mark and the operation's result, or two generated records, to carry different instants T1 and T2.\"],\"observer\":\"The caller and any later reader of the durable mark.\"}},{\"subject\":\"time-source invariant and Required tests\",\"kind\":\"missing invariant test obligation\",\"text\":\"- INV-16: every security category has an explicit outcome.\",\"question\":\"What formal invariant states the source, representation, and per-operation reading count for every instant the product writes or compares, and what Required tests item says exactly how those properties must be demonstrated, including creation and replay of `marked_at`?\",\"options\":[\"Add one time invariant covering all written and compared instants, with a controllable-clock test and representation assertions.\",\"Add a dedicated invariant for PublicationMark.marked_at and retain the existing A1/A2 rules as the guarantees for file and camera instants.\",\"Leave time behavior only in normative prose without an invariant or Required tests item.\"],\"default_guess\":\"Add a formal invariant that every fresh product timestamp comes from the decided clock, has its decided UTC representation, and uses exactly one reading per operation; require a controllable-clock test showing mark creation uses that reading and replay preserves it unchanged.\"}]}",
+ "set_aside": []
+}

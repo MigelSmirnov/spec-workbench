@@ -1,0 +1,153 @@
+{
+ "open_points": [
+  {
+   "subject": "02_rules.md:Status",
+   "kind": "missing_time_source",
+   "text": "`project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "What clock supplies `marked_at`, what datetime representation is stored, and how many clock readings does one mark operation take?",
+   "options": [
+    "Read an injected system clock once and store naive UTC.",
+    "Read an injected system clock once and store an offset-aware UTC datetime.",
+    "Let the mark implementation read an ambient or local clock, potentially more than once."
+   ],
+   "default_guess": "Use an injected system clock, read it exactly once when creating the first mark, convert that instant to UTC, and store naive UTC consistently with photo dates.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark; the host uses Europe/Madrid local time.",
+    "events": [
+     "The owner's calling flow records a Portal photo id.",
+     "The deliverer creates M07 and writes `marked_at`."
+    ],
+    "outcomes": [
+     "One implementation reads its injected clock once and stores `2026-11-19 11:00:00` as naive UTC.",
+     "Another calls the ambient local clock and stores `2026-11-19 12:00:00`, or stores an offset-aware value."
+    ],
+    "observer": "A reader of the mark record, the mark response, or a generated test comparing `marked_at` sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "setting_presence",
+   "text": "A required setting that is absent ends the start, and an optional one that is absent takes its default.",
+   "question": "Does an environment variable that is present but empty count as absent, or as a present value to be parsed and validated?",
+   "options": [
+    "Treat only an unset variable as absent; validate an empty value as present.",
+    "Treat an empty value as absent for every setting.",
+    "Treat an empty value as absent only for optional settings."
+   ],
+   "default_guess": "Treat only an unset variable as absent; an empty value is present and is validated according to the field type.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_TIMEZONE` is set to the empty string.",
+    "events": [
+     "The operator starts the service."
+    ],
+    "outcomes": [
+     "The empty value counts as absent, so the service starts with `Europe/Madrid`.",
+     "The empty value is present but is not a known time zone, so startup ends."
+    ],
+    "observer": "The operator sees whether the service starts and which time zone it uses."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "delegated_parsing",
+   "text": "that module decides how a value is read.",
+   "question": "For each string setting, does the runtime settings module preserve the environment text exactly, trim it, expand it, or otherwise normalise it before constructing the settings object?",
+   "options": [
+    "Preserve string values exactly as supplied.",
+    "Trim surrounding whitespace before validation and use.",
+    "Apply path expansion or normalisation to path-valued strings."
+   ],
+   "default_guess": "Preserve string settings exactly; do not trim, expand, or normalise them in the settings module.",
+   "witness": {
+    "initial": "A valid connections file exists at `/srv/connections.json`, and `PORTAL_DELIVERER_CONNECTIONS_FILE` is set to ` /srv/connections.json `.",
+    "events": [
+     "The operator starts the service."
+    ],
+    "outcomes": [
+     "An exact reader uses the spaces as part of the path and startup ends because that file is absent.",
+     "A trimming reader opens `/srv/connections.json` and the service starts."
+    ],
+    "observer": "The operator sees whether startup succeeds and which file is read."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "port_syntax",
+   "text": "The port is a whole number from 1 to 65535",
+   "question": "Which environment-variable spellings represent a whole-number port: only non-empty ASCII decimal digits, or also signs, surrounding whitespace, leading zeroes, Unicode digits, or integral numeric forms?",
+   "options": [
+    "Accept only ASCII decimal digits whose value is from 1 to 65535.",
+    "Use ordinary integer parsing, accepting such forms as `+8850` or surrounding whitespace.",
+    "Accept any numeric representation whose mathematical value is an integer in range."
+   ],
+   "default_guess": "Accept only non-empty ASCII decimal digits and then require a value from 1 to 65535; leading zeroes are allowed unless canonical spelling is separately required.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_PORT` is set to `+8850`.",
+    "events": [
+     "The operator starts the service."
+    ],
+    "outcomes": [
+     "An integer-coercing implementation accepts the value and listens on port 8850.",
+     "A strict decimal-ASCII implementation ends startup."
+    ],
+    "observer": "The operator sees whether the service starts."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "enum_parsing",
+   "text": "required: the DEVELOPMENT, TEST or PRODUCTION member of = models.RuntimeEnvironment (values `development`, `test`, `production`)",
+   "question": "Which environment text selects a `RuntimeEnvironment` member, and is matching exact and case-sensitive with no whitespace removal?",
+   "options": [
+    "Accept exactly the lowercase values `development`, `test`, and `production`.",
+    "Accept enum member names such as `PRODUCTION` as well as their values.",
+    "Trim or case-fold the input before matching."
+   ],
+   "default_guess": "Accept exactly the three lowercase values, case-sensitively and without trimming.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_ENVIRONMENT` is set to `PRODUCTION`.",
+    "events": [
+     "The operator starts the service."
+    ],
+    "outcomes": [
+     "A member-name-aware parser selects the PRODUCTION member and starts.",
+     "A value-only parser rejects the setting and ends startup."
+    ],
+    "observer": "The operator sees whether the service starts."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "timezone_authority",
+   "text": "a time zone the time zone database does not know ends the start",
+   "question": "Which time-zone database and version decide whether a name is known and which historical or future offsets are used?",
+   "options": [
+    "Use the host operating system's installed IANA database.",
+    "Use a dependency-pinned IANA database shipped with the service.",
+    "Define a fallback order between the host database and a packaged database."
+   ],
+   "default_guess": "Use one dependency-pinned IANA time-zone database so validation and conversions are reproducible across installations.",
+   "witness": {
+    "initial": "The configured zone name or one of its transition rules exists in one installed IANA database version but not another.",
+    "events": [
+     "Two installations start the same service configuration.",
+     "Each installation validates the configured zone and converts the same camera local time."
+    ],
+    "outcomes": [
+     "An implementation using the host database may reject the name or apply the host version's offset.",
+     "An implementation using a pinned packaged database accepts it and applies the pinned version's offset."
+    ],
+    "observer": "The operator sees a startup difference, or the caller sees a different UTC photo date."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"02_rules.md:Status\",\"kind\":\"missing_time_source\",\"text\":\"`project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"What clock supplies `marked_at`, what datetime representation is stored, and how many clock readings does one mark operation take?\",\"options\":[\"Read an injected system clock once and store naive UTC.\",\"Read an injected system clock once and store an offset-aware UTC datetime.\",\"Let the mark implementation read an ambient or local clock, potentially more than once.\"],\"default_guess\":\"Use an injected system clock, read it exactly once when creating the first mark, convert that instant to UTC, and store naive UTC consistently with photo dates.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark; the host uses Europe/Madrid local time.\",\"events\":[\"The owner's calling flow records a Portal photo id.\",\"The deliverer creates M07 and writes `marked_at`.\"],\"outcomes\":[\"One implementation reads its injected clock once and stores `2026-11-19 11:00:00` as naive UTC.\",\"Another calls the ambient local clock and stores `2026-11-19 12:00:00`, or stores an offset-aware value.\"],\"observer\":\"A reader of the mark record, the mark response, or a generated test comparing `marked_at` sees the difference.\"}},{\"subject\":\"A8\",\"kind\":\"setting_presence\",\"text\":\"A required setting that is absent ends the start, and an optional one that is absent takes its default.\",\"question\":\"Does an environment variable that is present but empty count as absent, or as a present value to be parsed and validated?\",\"options\":[\"Treat only an unset variable as absent; validate an empty value as present.\",\"Treat an empty value as absent for every setting.\",\"Treat an empty value as absent only for optional settings.\"],\"default_guess\":\"Treat only an unset variable as absent; an empty value is present and is validated according to the field type.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_TIMEZONE` is set to the empty string.\",\"events\":[\"The operator starts the service.\"],\"outcomes\":[\"The empty value counts as absent, so the service starts with `Europe/Madrid`.\",\"The empty value is present but is not a known time zone, so startup ends.\"],\"observer\":\"The operator sees whether the service starts and which time zone it uses.\"}},{\"subject\":\"A8\",\"kind\":\"delegated_parsing\",\"text\":\"that module decides how a value is read.\",\"question\":\"For each string setting, does the runtime settings module preserve the environment text exactly, trim it, expand it, or otherwise normalise it before constructing the settings object?\",\"options\":[\"Preserve string values exactly as supplied.\",\"Trim surrounding whitespace before validation and use.\",\"Apply path expansion or normalisation to path-valued strings.\"],\"default_guess\":\"Preserve string settings exactly; do not trim, expand, or normalise them in the settings module.\",\"witness\":{\"initial\":\"A valid connections file exists at `/srv/connections.json`, and `PORTAL_DELIVERER_CONNECTIONS_FILE` is set to ` /srv/connections.json `.\",\"events\":[\"The operator starts the service.\"],\"outcomes\":[\"An exact reader uses the spaces as part of the path and startup ends because that file is absent.\",\"A trimming reader opens `/srv/connections.json` and the service starts.\"],\"observer\":\"The operator sees whether startup succeeds and which file is read.\"}},{\"subject\":\"A8\",\"kind\":\"port_syntax\",\"text\":\"The port is a whole number from 1 to 65535\",\"question\":\"Which environment-variable spellings represent a whole-number port: only non-empty ASCII decimal digits, or also signs, surrounding whitespace, leading zeroes, Unicode digits, or integral numeric forms?\",\"options\":[\"Accept only ASCII decimal digits whose value is from 1 to 65535.\",\"Use ordinary integer parsing, accepting such forms as `+8850` or surrounding whitespace.\",\"Accept any numeric representation whose mathematical value is an integer in range.\"],\"default_guess\":\"Accept only non-empty ASCII decimal digits and then require a value from 1 to 65535; leading zeroes are allowed unless canonical spelling is separately required.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_PORT` is set to `+8850`.\",\"events\":[\"The operator starts the service.\"],\"outcomes\":[\"An integer-coercing implementation accepts the value and listens on port 8850.\",\"A strict decimal-ASCII implementation ends startup.\"],\"observer\":\"The operator sees whether the service starts.\"}},{\"subject\":\"A8\",\"kind\":\"enum_parsing\",\"text\":\"required: the DEVELOPMENT, TEST or PRODUCTION member of = models.RuntimeEnvironment (values `development`, `test`, `production`)\",\"question\":\"Which environment text selects a `RuntimeEnvironment` member, and is matching exact and case-sensitive with no whitespace removal?\",\"options\":[\"Accept exactly the lowercase values `development`, `test`, and `production`.\",\"Accept enum member names such as `PRODUCTION` as well as their values.\",\"Trim or case-fold the input before matching.\"],\"default_guess\":\"Accept exactly the three lowercase values, case-sensitively and without trimming.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_ENVIRONMENT` is set to `PRODUCTION`.\",\"events\":[\"The operator starts the service.\"],\"outcomes\":[\"A member-name-aware parser selects the PRODUCTION member and starts.\",\"A value-only parser rejects the setting and ends startup.\"],\"observer\":\"The operator sees whether the service starts.\"}},{\"subject\":\"A8\",\"kind\":\"timezone_authority\",\"text\":\"a time zone the time zone database does not know ends the start\",\"question\":\"Which time-zone database and version decide whether a name is known and which historical or future offsets are used?\",\"options\":[\"Use the host operating system's installed IANA database.\",\"Use a dependency-pinned IANA database shipped with the service.\",\"Define a fallback order between the host database and a packaged database.\"],\"default_guess\":\"Use one dependency-pinned IANA time-zone database so validation and conversions are reproducible across installations.\",\"witness\":{\"initial\":\"The configured zone name or one of its transition rules exists in one installed IANA database version but not another.\",\"events\":[\"Two installations start the same service configuration.\",\"Each installation validates the configured zone and converts the same camera local time.\"],\"outcomes\":[\"An implementation using the host database may reject the name or apply the host version's offset.\",\"An implementation using a pinned packaged database accepts it and applies the pinned version's offset.\"],\"observer\":\"The operator sees a startup difference, or the caller sees a different UTC photo date.\"}}]}",
+ "set_aside": []
+}
