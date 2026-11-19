@@ -8,7 +8,7 @@ service may call. Inputs and outputs name their meaning, and the exact signature
 module of the prototype offers any other public function.
 
 `boundary:deployment` is what launches the process. The calling agent
-reaches the service only through the routes that `public_op:deliverer_api.create_app` builds.
+reaches the service only through the routes that `public_op:deliverer_router.create_app` builds.
 
 ## `public_op:runtime_settings.load_runtime_settings`
 
@@ -18,7 +18,7 @@ reaches the service only through the routes that `public_op:deliverer_api.create
 
 ### Callers
 
-`module:deliverer_api`, through `public_op:deliverer_api.run_service`.
+`module:deliverer_service`, through `public_op:deliverer_service.run_service`.
 
 ### Inputs
 
@@ -44,15 +44,15 @@ A missing required setting or an invalid port ends the start.
 
 Read-only.
 
-## `public_op:deliverer_api.load_config`
+## `public_op:deliverer_service.load_config`
 
 ### Owner
 
-`module:deliverer_api`.
+`module:deliverer_service`.
 
 ### Callers
 
-`module:deliverer_api`, through `public_op:deliverer_api.run_service`.
+`module:deliverer_service`, through `public_op:deliverer_service.run_service`.
 
 ### Inputs
 
@@ -78,15 +78,15 @@ An unknown time zone or an invalid connections file ends the start.
 
 Read-only.
 
-## `public_op:deliverer_api.read_token`
+## `public_op:deliverer_service.read_token`
 
 ### Owner
 
-`module:deliverer_api`.
+`module:deliverer_service`.
 
 ### Callers
 
-`module:deliverer_api`, through `public_op:deliverer_api.run_service`.
+`module:deliverer_service`, through `public_op:deliverer_service.run_service`.
 
 ### Inputs
 
@@ -112,15 +112,15 @@ A file that breaks A5 rule 2 or cannot be read ends the start.
 
 Read-only.
 
-## `public_op:deliverer_api.create_app`
+## `public_op:deliverer_router.create_app`
 
 ### Owner
 
-`module:deliverer_api`.
+`module:deliverer_router`.
 
 ### Callers
 
-`module:deliverer_api`, through `public_op:deliverer_api.run_service`.
+`module:deliverer_service`, through `public_op:deliverer_service.run_service`.
 
 ### Inputs
 
@@ -128,15 +128,20 @@ The context of the operations and the token.
 
 ### Outputs
 
-The HTTP surface with the health, scan, delivery and mark routes.
+The HTTP surface with the health, scan, delivery and mark routes, each bound to its handler in
+`module:deliverer_api`.
 
 ### Observable effect
 
-None until the surface is served. The health route answers without a token. Every other route checks the token, the project id and the form of its body when it has one, calls one operation of `module:photo_delivery` and turns its refusal into an answer.
+None until the surface is served. The health route answers through `public_op:deliverer_api.answer_health`
+without a token. Every other route passes the request to its handler in `module:deliverer_api`, which checks the
+token, the project id and the form of its body when it has one, calls one operation of `module:photo_delivery` and
+turns its refusal into an answer.
 
 ### Enforces
 
-A5 rules 1 and 3 to 5, the project id part of rule 9 and the refusal part of rule 10, the request form of A3 rule 4 and the `photo_id` form of A4 rule 2.
+The method and path of each route of the manifest. The checks of A5 rules 1, 5, 9 and 10, A3 rule 4 and A4
+rule 2 run in the handlers of `module:deliverer_api`.
 
 ### Errors
 
@@ -146,11 +151,11 @@ Building the surface raises no refusal. A served route answers a wrong token, a 
 
 Read-only.
 
-## `public_op:deliverer_api.run_service`
+## `public_op:deliverer_service.run_service`
 
 ### Owner
 
-`module:deliverer_api`.
+`module:deliverer_service`.
 
 ### Callers
 
@@ -166,7 +171,7 @@ The exit status of the process: 0 when it is stopped by a signal after it has se
 
 ### Observable effect
 
-Calls `public_op:runtime_settings.load_runtime_settings`, `public_op:deliverer_api.load_config`, `public_op:deliverer_api.read_token` and `public_op:deliverer_api.create_app` in that order, then serves the surface on the loopback interface and the `port` of the run settings until it is stopped.
+Calls `public_op:runtime_settings.load_runtime_settings`, `public_op:deliverer_service.load_config`, `public_op:deliverer_service.read_token` and `public_op:deliverer_router.create_app` in that order, then serves the surface on the loopback interface and the `port` of the run settings until it is stopped.
 
 ### Enforces
 
@@ -180,6 +185,40 @@ Any failure of the start ends the process without listening.
 
 Read-only.
 
+## `public_op:deliverer_api.answer_health`
+
+### Owner
+
+`module:deliverer_api`.
+
+### Callers
+
+`boundary:deployment`, through the health route that `public_op:deliverer_router.create_app` builds.
+
+### Inputs
+
+None.
+
+### Outputs
+
+The health answer with the status `ok`.
+
+### Observable effect
+
+None. It reads no file, no setting and no token, and says nothing about any project.
+
+### Enforces
+
+A5 rule 1: the health answer is the one operation that requires no token.
+
+### Errors
+
+None.
+
+### State impact
+
+Read-only.
+
 ## `public_op:object_connections.load_connections`
 
 ### Owner
@@ -188,7 +227,7 @@ Read-only.
 
 ### Callers
 
-`module:deliverer_api`.
+`module:deliverer_service`.
 
 ### Inputs
 

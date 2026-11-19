@@ -18,18 +18,19 @@ The deployment starts the service.
 
 ### Boundary
 
-`module:runtime_settings` reads the environment. `module:deliverer_api` reads the token file, and
-`module:object_connections` judges the connections file. Nothing crosses to a caller until the start has succeeded.
+`module:runtime_settings` reads the environment. `module:deliverer_service` reads the token file, and
+`module:object_connections` judges the connections file, and `module:deliverer_router` binds the routes. Nothing
+crosses to a caller until the start has succeeded.
 
 ### Steps
 
-1. The deployment launches `capability:deliverer_api.run_service`, which owns the remaining steps.
+1. The deployment launches `capability:deliverer_service.run_service`, which owns the remaining steps.
 2. `capability:runtime_settings.load_runtime_settings` reads the run settings from the environment.
-3. `capability:deliverer_api.load_config` turns them into the context of the operations and calls
+3. `capability:deliverer_service.load_config` turns them into the context of the operations and calls
    `capability:object_connections.load_connections` once, to judge the connections file whole.
-4. `capability:deliverer_api.read_token` reads the token and checks its file permissions and length.
-5. `capability:deliverer_api.create_app` builds the HTTP surface with that context and the token.
-6. `capability:deliverer_api.run_service` serves that surface in the web server, on the loopback interface and the `port` of the run
+4. `capability:deliverer_service.read_token` reads the token and checks its file permissions and length.
+5. `capability:deliverer_router.create_app` builds the HTTP surface with that context and the token.
+6. `capability:deliverer_service.run_service` serves that surface in the web server, on the loopback interface and the `port` of the run
    settings.
 
 ### Outcomes
@@ -40,8 +41,31 @@ of the web server ends the process, and the deployment decides what happens next
 ### Errors
 
 A connections file that condition 1 of A5 rule 7 rejects, a missing setting, or a token file that A5 rule 2
-rejects ends the start. `module:deliverer_api` writes no token to its output. The start writes no state, so
+rejects ends the start. `module:deliverer_service` writes no token to its output. The start writes no state, so
 there is nothing to clean up.
+
+## `flow:answer_health`
+
+### Trigger
+
+The deployment asks whether the service is listening.
+
+### Boundary
+
+`module:deliverer_router` passes the request to `module:deliverer_api`. No token, setting, file or project crosses.
+
+### Steps
+
+1. The health route that `capability:deliverer_router.create_app` built calls `capability:deliverer_api.answer_health`.
+2. `capability:deliverer_api.answer_health` returns the health answer with the status `ok`.
+
+### Outcomes
+
+The caller learns that the service is listening, and nothing else.
+
+### Errors
+
+None. A service that is not listening gives no answer, and the deployment decides what happens next.
 
 ## `flow:scan_project_photos`
 
@@ -51,13 +75,14 @@ The calling agent asks what a project's folder holds.
 
 ### Boundary
 
-`module:deliverer_api` accepts the token and the project id and calls `module:photo_delivery`, which decides
+`module:deliverer_router` passes the request to `module:deliverer_api`, which accepts the token and the project id
+and calls `module:photo_delivery`, which decides
 every later step. `module:object_connections` decides whether the folder may be used, `module:source_folder`
 reports `SourceFile` values and `module:delivery_store` supplies the records. M02 crosses back to the caller.
 
 ### Steps
 
-1. The scan route that `capability:deliverer_api.create_app` built checks the token and the project id.
+1. The scan route that `capability:deliverer_router.create_app` built passes the request to `module:deliverer_api`, which checks the token and the project id.
 2. `capability:photo_delivery.scan_project_photos` asks `capability:object_connections.confirmed_connection` for
    the project's connection, reading the connections file once.
 3. `capability:object_connections.available_photo_folder` checks the photo folder.
@@ -84,14 +109,15 @@ The calling agent asks to deliver one photo by its name and source id.
 
 ### Boundary
 
-`module:deliverer_api` accepts the token, the request form and the project id. `module:photo_delivery` owns the
+`module:deliverer_router` passes the request to `module:deliverer_api`, which accepts the token, the request form
+and the project id. `module:photo_delivery` owns the
 order of every later step and holds the project lock. `module:source_folder` hands over one `SourceRead`, a `SourceFile` with the
 bytes it judged, `module:photo_preparation` returns M03 and M05, and `module:delivery_store` keeps the result. M06
 crosses back to the caller.
 
 ### Steps
 
-1. The delivery route that `capability:deliverer_api.create_app` built checks the token, the request form and the
+1. The delivery route that `capability:deliverer_router.create_app` built passes the request to `module:deliverer_api`, which checks the token, the request form and the
    project id.
 2. `capability:photo_delivery.deliver_project_photo` asks `capability:object_connections.confirmed_connection`
    and `capability:object_connections.available_photo_folder`, then checks the form of the source id.
@@ -127,13 +153,14 @@ The calling agent reports which Portal photo a delivered source became.
 
 ### Boundary
 
-`module:deliverer_api` accepts the token, the request form, the project id and the `photo_id`, and calls
+`module:deliverer_router` passes the request to `module:deliverer_api`, which accepts the token, the request form,
+the project id and the `photo_id`, and calls
 `module:photo_delivery`. `module:system_clock` supplies the time. `module:object_connections` decides
 the connection and `module:delivery_store` keeps the mark. M07 crosses back to the caller.
 
 ### Steps
 
-1. The mark route that `capability:deliverer_api.create_app` built checks the token, the request form, the project id
+1. The mark route that `capability:deliverer_router.create_app` built passes the request to `module:deliverer_api`, which checks the token, the request form, the project id
    and the `photo_id`.
 2. `capability:photo_delivery.mark_photo_published` checks the form of the source id.
 3. It reads the clock once through `capability:system_clock.utc_now`.

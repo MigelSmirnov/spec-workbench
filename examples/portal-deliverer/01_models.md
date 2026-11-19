@@ -311,13 +311,14 @@ hidden photo (client-portal Q27), the mark of a removed photo must be reconsider
 ### Meaning
 
 The answer to an operation the service refuses as a whole. `code` says why, and `detail` is a fixed sentence for
-people that holds no server path and no credential. Every refused mark is M08. A delivery is M08 for the refusals of
-A3 rule 4 and A6 rules 1 and 5, and M06 for the failures of A3 rule 5.
+people that holds no server path, no credential and nothing the caller sent. Every refused mark is M08. A delivery is M08 for the refusals of
+A3 rule 4 and A6 rules 1 and 5, and M06 for the failures of A3 rule 5. A request refused for its token (A5 rule 1) or for
+the form of its project id or body is M08 for every operation that requires the token.
 
 **Fields:** `code: RefusalCode`, `detail: str`.
 
-**Enumeration:** `RefusalCode` is `unknown_project`, `connection_not_confirmed`, `folder_unavailable`,
-`state_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed`, `publication_conflict`.
+**Enumeration:** `RefusalCode` is `unauthorized`, `invalid_request`, `unknown_project`, `connection_not_confirmed`,
+`folder_unavailable`, `state_unavailable`, `invalid_source_id`, `unsafe_reference`, `not_placed`, `publication_conflict`.
 
 ### Identity
 

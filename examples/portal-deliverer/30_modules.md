@@ -41,14 +41,24 @@ cycles, and `domain_models` names no other module.
 | `photo_delivery` | `photo_preparation` | `build_publication`, `prepare_photo` |
 | `photo_delivery` | `delivery_store` | `project_lock`, `read_mark`, `read_placement`, `store_image`, `write_mark`, `write_placement` |
 | `photo_delivery` | `system_clock` | `utc_now` |
-| `deliverer_api` | `data_provider` | `TOKEN_MIN_LENGTH`, `TOKEN_TRIM_CHARACTERS` |
-| `deliverer_api` | `domain_models` | `DeliverRequest`, `DelivererError`, `DeliveryContext`, `HealthAnswer`, `MarkOutcome`, `PlacementOutcome`, `PublishedRequest`, `Refusal`, `RefusalCode`, `RuntimeSettings`, `ScanResult` |
-| `deliverer_api` | `runtime_settings` | `load_runtime_settings` |
-| `deliverer_api` | `object_connections` | `load_connections` |
+| `deliverer_api` | `data_provider` | `REFUSAL_DETAIL`, `REFUSAL_STATUS` |
+| `deliverer_api` | `domain_models` | `AuthenticationRequired`, `DeliverRequest`, `DelivererError`, `DeliveryContext`, `HealthAnswer`, `MarkOutcome`, `PlacementOutcome`, `PublishedRequest`, `Refusal`, `RefusalCode`, `ScanResult` |
 | `deliverer_api` | `photo_delivery` | `deliver_project_photo`, `mark_photo_published`, `scan_project_photos` |
+| `deliverer_router` | `domain_models` | `AuthenticationRequired`, `DeliveryContext`, `HealthAnswer` |
+| `deliverer_router` | `deliverer_api` | `answer_health`, `check_token`, `deliver_route`, `mark_route`, `scan_route` |
+| `deliverer_service` | `data_provider` | `TOKEN_MIN_LENGTH`, `TOKEN_TRIM_CHARACTERS` |
+| `deliverer_service` | `domain_models` | `DeliveryContext`, `RuntimeSettings` |
+| `deliverer_service` | `runtime_settings` | `load_runtime_settings` |
+| `deliverer_service` | `object_connections` | `load_connections` |
+| `deliverer_service` | `deliverer_router` | `create_app` |
 
-`deliverer_api` names `load_connections` only to refuse a start with a broken record. The operations
+`deliverer_service` names `load_connections` only to refuse a start with a broken record. The operations
 read the record themselves through `confirmed_connection`, so no module keeps connections in memory.
+
+`deliverer_router` is the module that `http_router_backend/v1` generates, and it holds only what that
+backend emits. It imports the route handlers of `deliverer_api`, so `deliverer_api` cannot import it
+back: the handlers read the `Authorization` field themselves by the same rule as the extractor the
+router declares, and both pass the credential to the one comparison, `check_token`.
 
 `system_clock` is the module that `system_clock_backend` generates, and `photo_delivery` alone names it.
 
@@ -81,7 +91,8 @@ names the owner of each rule.
 |---|---|---|
 | A1 | orders 1 to 6, ignored names, walking order | `source_folder` |
 | A1 | orders 7 to 9, placed and published status | `photo_delivery` |
-| A5 | rules 1 to 4, token and listening address | `deliverer_api` |
+| A5 | rule 1, the `Authorization` field and the comparison of the token | `deliverer_api` |
+| A5 | rules 2 to 4, the token file, its replacement and the listening address | `deliverer_service` |
 | A3 | rule 4, the request form of a placement | `deliverer_api` |
 | A3 | rule 5, condition 1, whether a name is a path that may be opened | `source_folder` |
 | A3 | rule 4, every other check and its order; rules 2, 3, 6 to 10 and the rest of rule 5 | `photo_delivery` |
@@ -128,13 +139,14 @@ outbound call.
 - the models M01 to M07 and their enumerations;
 - `SourceFile`, what `source_folder` reports about one file to `photo_delivery`. It holds the server path
   of the file and never leaves the service; M02 is the form a caller sees;
-- the type of the run settings, and `DeliveryContext`, the context of the operations that `deliverer_api` builds from them:
+- the type of the run settings, and `DeliveryContext`, the context of the operations that `deliverer_service` builds from them:
   binary store, state folder, time zone and connections file;
 - the types that cross module boundaries without a meaning of their own in State 1: `SourceRead`, a `SourceFile`
   with the bytes that were judged; `ScanResult`, the observations of one scan and the count of each status;
   `MarkOutcome`, M07 with its `MarkStatus`; `DeliverRequest` and `PublishedRequest`, the bodies of two routes; and
   `HealthAnswer`, the body of the health route;
-- the two refusal types: a refusal of the whole operation and a refusal of one file.
+- the three refusal types: a refusal of the whole operation, a refusal of one file, and
+  `AuthenticationRequired`, a request that does not carry the token.
 
 ### Knows
 
@@ -493,36 +505,32 @@ mark_photo_published
 
 ### Owns
 
-- the HTTP surface declared in the manifest;
-- the bearer token: reading its file, the start refusal and the constant-time comparison;
-- steps 1 and 2 of "Order of one operation";
-- the HTTP status and the content of every refusal answer;
-- turning the run settings into the context of the operations when the service starts;
-- listening on the loopback interface only.
+- the answer of each route declared in the manifest: health, scan, delivery and mark;
+- steps 1 and 2 of "Order of one operation": the `Authorization` field, the comparison of the token in
+  constant time, the project id and the request form;
+- the status and the content of every refusal answer;
+- the one principal of A5 rule 5.
 
 ### Knows
 
-- rules 1 to 5, the project id part of rule 9 and the refusal part of rule 10 of A5;
+- rules 1 and 5, the project id part of rule 9 and the refusal part of rule 10 of A5;
 - the request form of A3 rule 4 and the `photo_id` form of A4 rule 2.
 
 ### Hides
 
-- the web framework;
-- how a refusal becomes an answer.
+- how a request is read and a refusal becomes an answer.
 
 ### Must not own
 
 - any delivery rule other than these two request forms, or the order of the checks of `photo_delivery`;
+- the token file, the run settings or the start of the service;
 - a Portal credential or client;
 - forwarded headers, which the service does not read.
 
 ### Candidate public capabilities
 
 ```text
-create_app
-read_token
-load_config
-run_service
+answer_health
 ```
 
 ### Trace inputs
@@ -530,12 +538,86 @@ run_service
 - A3
 - A4
 - A5
-- A7
+- A8
 
 ### Depth assessment
 
 - kind: deep
 - hidden mechanism: the authenticated boundary between one trusted caller and the delivery operations.
+
+## `deliverer_router`
+
+### Owns
+
+- the routes of the service and the context and token the routes read from the application.
+
+### Knows
+
+- the routes, their handlers and the token of the running service.
+
+### Hides
+
+- the web framework that serves the routes.
+
+### Must not own
+
+- any check of a request, a refusal answer or a delivery rule;
+- anything `http_router_backend/v1` does not emit.
+
+### Candidate public capabilities
+
+```text
+create_app
+```
+
+### Trace inputs
+
+- A5
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: the binding of handlers to methods and paths, generated from the route closure.
+
+## `deliverer_service`
+
+### Owns
+
+- the start of the service: the run settings, the context of the operations, the token file and the
+  refusals that end the start;
+- listening on the loopback interface only.
+
+### Knows
+
+- rules 2 to 4 of A5 and the run settings of A8.
+
+### Hides
+
+- how the token file is opened and judged, and the server that listens.
+
+### Must not own
+
+- any answer to a request;
+- the comparison of a presented token.
+
+### Candidate public capabilities
+
+```text
+read_token
+load_config
+run_service
+```
+
+### Trace inputs
+
+- A5
+- A7
+- A8
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: the single path from the environment and the token file to a listening service.
 
 ## `system_clock`
 

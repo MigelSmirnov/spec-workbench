@@ -162,7 +162,8 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
    are the bytes judged, hashed and prepared.
 4. Checks run in this order: token, request form and project id, connection, photo folder, source id,
    project lock, existing placement, named file. The request form is a body holding only `name` and
-   `source_id`, both strings. A defect of that form or of the project id is refused as a whole request. A
+   `source_id`, both strings. A defect of that form or of the project id refuses the whole request with
+   `invalid_request` (A5 rule 9). A
    `source_id` that does not match the imported `SOURCE_ID_PATTERN` constant in full is refused with
    `invalid_source_id`.
 5. A photo that cannot be delivered is answered with the FAILED member of = models.PlacementStatus and one member of
@@ -249,9 +250,11 @@ A published photo is recognised without any change to the Portal.
 
 ### Normative rules
 
-1. Every operation except the health answer requires the header `Authorization: Bearer <token>`,
-   compared whole, case-sensitively and in constant time. Any other value is refused with 401 before
-   the request's identifiers or body are examined.
+1. Every operation except the health answer requires exactly one `Authorization` field. Its value is
+   the scheme `Bearer`, compared without regard to case as HTTP defines an authentication scheme, one
+   space and the token, compared whole, case-sensitively and in constant time. A request without that
+   field, with more than one, or with any other value is refused with `unauthorized` before its
+   identifiers or body are examined.
 2. The token is generated with 256 bits from a cryptographic random source and is kept in a UTF-8
    file: the 32 random bytes in URL-safe Base64, 43 characters of `A`-`Z`, `a`-`z`, `0`-`9`, `-` and `_`.
    The path is the `token_file` run setting (A8). At the start it is opened once; its last component is
@@ -300,9 +303,15 @@ A published photo is recognised without any change to the Portal.
    This second check does not run at the start of the service or for other projects. The deliverer never opens the invoice folder, so
    the resolved path of that folder is checked by the Cabinet Inbox when it moves to this record
    (R0-09).
-9. A project id must be a UUID and a source id must match the imported `SOURCE_ID_PATTERN` constant in full. Neither a file
-   name nor any other received text becomes part of a stored path.
-10. An answer never holds a server path or a credential. File names are returned as plain data.
+9. A project id is accepted only in the canonical spelling of a UUID: 36 characters, lowercase
+   hexadecimal digits in groups of 8, 4, 4, 4 and 12 joined by hyphens. Any other project id, and a body
+   that is not the request form of its operation, is refused with `invalid_request`. A source id must
+   match the imported `SOURCE_ID_PATTERN` constant in full. Neither a file name nor any other received
+   text becomes part of a stored path.
+10. An answer never holds a server path, a credential or text the caller sent. File names are returned
+    as plain data. A refusal is answered with M08: its status is the entry of its code in the imported
+    `REFUSAL_STATUS` constant and its `detail` the entry of its code in the imported `REFUSAL_DETAIL`
+    constant.
 
 ### Formal invariants
 
@@ -312,9 +321,9 @@ A published photo is recognised without any change to the Portal.
 
 ### Required tests
 
-- INV-09: every declared route except the health answer refuses a request without the token (`test_every_route_except_health_requires_the_token`), and a wrong token or one without the `Bearer` prefix is refused (`test_the_api_requires_the_token`).
+- INV-09: every declared route except the health answer refuses a request without the token (`test_every_route_except_health_requires_the_token`); a wrong token, another scheme, a value without its single space and two `Authorization` fields are each refused with 401 and `unauthorized`, while the scheme written `bearer` is accepted (`test_the_api_requires_the_token`); a refused request with a malformed project id or body still answers `unauthorized` (`test_the_token_is_checked_before_the_request_form`).
 - INV-10: scan, placement and mark each answer `connection_not_confirmed` for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`). After a scan has succeeded on the running service, clearing the confirmation makes scan, placement and mark each answer `connection_not_confirmed` and write nothing (`test_a_cleared_confirmation_stops_the_running_service`). For a valid file with no record for the project, scan, placement and mark each answer `unknown_project` and write nothing (`test_a_project_without_a_connection_delivers_nothing`). For an absent file, a file that cannot be opened, a file that is not UTF-8 or JSON, a file of another form and a record that breaks the form of rule 8, also when that record is unconfirmed or belongs to another project, scan, placement and mark each answer `folder_unavailable` and write nothing (`test_unreadable_connections_deliver_nothing`), and the service does not start (`test_the_service_does_not_start_with_an_unreadable_connection_record`). A scan, placement or mark that reaches its connection check reads the file exactly once (`test_each_operation_reads_the_connection_record_once`), a request refused earlier reads it zero times (`test_a_request_refused_before_the_connection_check_does_not_read_the_file`), and a file replaced after the reading does not change the running operation (`test_an_operation_finishes_on_the_reading_it_made`). A connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).
-- INV-11: answers of scan, place, mark and a refusal contain neither the folder path, the store path nor the state path (`test_the_api_scans_and_places_without_showing_server_paths`), and the generated service has no Portal client, no outbound HTTP dependency and no Portal credential setting.
+- INV-11: answers of scan, place, mark and a refusal contain neither the folder path, the store path nor the state path (`test_the_api_scans_and_places_without_showing_server_paths`), and the generated service has no Portal client, no outbound HTTP dependency and no Portal credential setting. An uppercase or unhyphenated project id and a body that is not the request form each answer 422 with `invalid_request`, no answer repeats what the caller sent (`test_a_malformed_request_is_refused_as_invalid_request`), and every refusal code answers its entries of `REFUSAL_STATUS` and `REFUSAL_DETAIL` (`test_each_refusal_answers_its_status_and_detail`).
 
 ### Consequence
 
@@ -458,12 +467,27 @@ Policy values are constants of the data provider:
 | `PHOTO_PROGRESSIVE` | `bool` | false |
 | `PHOTO_SUBSAMPLING` | `str` | `4:2:0` |
 | `PHOTO_BACKGROUND` | `tuple[int, int, int]` | (255, 255, 255) |
+| `REFUSAL_STATUS` | `dict[RefusalCode, int]` | one entry per `RefusalCode` member, below |
+| `REFUSAL_DETAIL` | `dict[RefusalCode, str]` | one entry per `RefusalCode` member, below |
+
+| `RefusalCode` | `REFUSAL_STATUS` | `REFUSAL_DETAIL` |
+|---|---|---|
+| `unauthorized` | 401 | `the request does not carry the deliverer's token` |
+| `invalid_request` | 422 | `the project id or the body of the request has the wrong form` |
+| `unknown_project` | 404 | `the project has no object connection` |
+| `connection_not_confirmed` | 409 | `the owner has not confirmed the object's folders` |
+| `folder_unavailable` | 503 | `the object folders cannot be read` |
+| `state_unavailable` | 503 | `the delivery records cannot be read or written` |
+| `invalid_source_id` | 422 | `the source id has the wrong form` |
+| `unsafe_reference` | 422 | `the stored image would leave the binary store` |
+| `not_placed` | 409 | `the photo has not been delivered` |
+| `publication_conflict` | 409 | `the photo is already marked with another photo id` |
 
 Closed lists are enumerations: `= models.ScanStatus`, `= models.ObservationReason`,
 `= models.DateSource`, `= models.PlacementStatus`, `= models.PlacementFailure`,
-`= models.MarkStatus` and `= models.RefusalCode`. `RefusalCode` is `unknown_project`,
-`connection_not_confirmed`, `folder_unavailable`, `state_unavailable`, `invalid_source_id`,
-`unsafe_reference`, `not_placed` and `publication_conflict`.
+`= models.MarkStatus` and `= models.RefusalCode`. `RefusalCode` is `unauthorized`, `invalid_request`,
+`unknown_project`, `connection_not_confirmed`, `folder_unavailable`, `state_unavailable`,
+`invalid_source_id`, `unsafe_reference`, `not_placed` and `publication_conflict`.
 
 `MAX_OUTPUT_BYTES` equals the Portal's `BINARY_MAX_READ_BYTES`. A change of that Portal value is
 released together with a change of this constant. The deliverer does not ask the Portal for it.
