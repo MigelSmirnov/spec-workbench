@@ -1,0 +1,290 @@
+{
+ "open_points": [
+  {
+   "subject": "50_public_apis.md:`public_op:delivery_store.project_lock`",
+   "kind": "output protocol",
+   "text": "A held lock for the duration of the caller's block.",
+   "question": "What callable protocol represents the caller's block and guarantees release: a synchronous context manager, an acquired handle with an explicit release operation, or a callback-taking operation?",
+   "options": [
+    "Return a synchronous context manager that yields after acquisition and releases on exit.",
+    "Return an acquired lock handle whose release method the caller must invoke.",
+    "Accept the protected callback/block as an input and execute it while locked."
+   ],
+   "default_guess": "Return a synchronous context manager that yields nothing and releases in a finally path.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:`public_op:delivery_store.project_lock`",
+   "kind": "contradiction",
+   "text": "Writes only the project lock file, on first use.",
+   "question": "When the folder containing a first project's lock is absent, must project_lock create that folder as A6 rule 2 says the service does, or must it write only the lock file and therefore refuse because its parent is absent?",
+   "options": [
+    "Create the required folders below the state folder and then create the lock file.",
+    "Do not create folders; return state_unavailable when the lock's parent is absent.",
+    "Require the installation to pre-create the lock hierarchy, although A6 says it creates only the state folder itself."
+   ],
+   "default_guess": "Create the missing lock hierarchy with STATE_FOLDER_MODE and treat the State impact sentence as accidentally incomplete.",
+   "witness": {
+    "initial": "The configured state folder exists, but no folder for project lock files exists and this project has no lock file.",
+    "events": [
+     "module:photo_delivery starts the first delivery for the project and calls public_op:delivery_store.project_lock."
+    ],
+    "outcomes": [
+     "A6 rule 2 is followed: the service creates the missing folder below the state folder and then the lock file, so more than only the lock file is written.",
+     "The State impact is followed literally: no folder is created, the lock file cannot be created in its absent parent, and the delivery is refused with state_unavailable."
+    ],
+    "observer": "The delivery caller sees success versus refusal, and the installation sees different filesystem entries."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:`public_op:delivery_store.project_lock`",
+   "kind": "address layout",
+   "text": "Creates the project lock file on first use and holds an operating system lock (A6 rule 4).",
+   "question": "What exact address under state_dir is the one lock file for a project, including how LOCKS_FOLDER, LOCK_FILE_SUFFIX and the project id are combined?",
+   "options": [
+    "<state_dir>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX>",
+    "<state_dir>/<project_id>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX>",
+    "Another deterministic layout owned by delivery_store."
+   ],
+   "default_guess": "Use <state_dir>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX>.",
+   "witness": {
+    "initial": "state_dir exists and contains a lock file at <state_dir>/locks/<project_id>.lock held by one service process.",
+    "events": [
+     "A second service process implementing a different permitted layout requests the same project's lock."
+    ],
+    "outcomes": [
+     "An implementation using <state_dir>/locks/<project_id>.lock waits for the first process.",
+     "An implementation using a different deterministic address takes another operating-system lock and enters the project operation concurrently."
+    ],
+    "observer": "Concurrent callers can observe duplicate or conflicting project work, and INV-12 can fail."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:`public_op:delivery_store.store_image`",
+   "kind": "durability protocol",
+   "text": "Writes the stored image atomically and makes it durable before it returns (A6 rules 2 and 3).",
+   "question": "Which filesystem objects must be synchronised, and in what order, for the image and any newly created folder chain to count as durable?",
+   "options": [
+    "Synchronise the temporary file, rename it, synchronise the image folder, and synchronise every newly created folder in its parent.",
+    "Synchronise the file and only its immediate containing folder.",
+    "Synchronise only the file contents before rename and treat the rename as sufficient durability."
+   ],
+   "default_guess": "Synchronise each newly created directory entry through its parent, synchronise the completed temporary file, rename it, and synchronise the destination folder; any such failure is a failed image write.",
+   "witness": {
+    "initial": "The binary root exists, but the project's image folders do not.",
+    "events": [
+     "store_image creates the folders and image and returns.",
+     "The host loses power immediately after the return and restarts."
+    ],
+    "outcomes": [
+     "With the complete directory-synchronisation protocol, the returned image address and its bytes survive.",
+     "With file-only or partial synchronisation, the image or a newly created folder may be absent despite store_image having returned."
+    ],
+    "observer": "The repeated delivery and the Portal see whether the supposedly durable image still exists."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:`public_op:delivery_store.write_placement`",
+   "kind": "address layout",
+   "text": "The address of the record is taken from the `project_id` and `source_id` inside M04, so the two cannot disagree.",
+   "question": "What exact placement-record address is derived from project_id and source_id, including the use and nesting of PLACEMENTS_FOLDER and RECORD_FILE_SUFFIX?",
+   "options": [
+    "<state_dir>/<PLACEMENTS_FOLDER>/<project_id>/<source_id><RECORD_FILE_SUFFIX>",
+    "<state_dir>/<project_id>/<PLACEMENTS_FOLDER>/<source_id><RECORD_FILE_SUFFIX>",
+    "Another deterministic address derived from both identifiers."
+   ],
+   "default_guess": "Use <state_dir>/<PLACEMENTS_FOLDER>/<project_id>/<source_id><RECORD_FILE_SUFFIX>.",
+   "witness": {
+    "initial": "A valid placement record exists at <state_dir>/ledger/<project_id>/<source_id>.json and its stored image exists.",
+    "events": [
+     "A service implementation using a different permitted record layout receives a repeated delivery of the same project and source content."
+    ],
+    "outcomes": [
+     "The first layout finds M04 and returns replayed without writing.",
+     "The other layout treats the placement as absent, prepares and writes the delivery again, and creates a second record address."
+    ],
+    "observer": "The caller sees replayed versus placed, and the state folder contains different records."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:`public_op:delivery_store.write_placement`",
+   "kind": "commit and durability",
+   "text": "Writes the record atomically (A6 rules 2 and 3).",
+   "question": "Does a placement record require file and directory durability, and if a synchronisation after rename fails, has the write already succeeded or must module:photo_delivery receive a failed-write error?",
+   "options": [
+    "Rename is the commit point; once the record is in place the operation succeeds even if a later directory synchronisation fails.",
+    "The record must be durable; any required synchronisation failure is a failed write even if the record is already visible.",
+    "No record synchronisation is attempted; atomic visibility alone is required."
+   ],
+   "default_guess": "Treat rename as the commit point, report success once the record is in place, and make best-effort durability work unable to turn that committed placement into a failed M06.",
+   "witness": {
+    "initial": "No placement record exists; its destination folder exists and is writable.",
+    "events": [
+     "write_placement writes and renames a complete record into place.",
+     "Synchronising the destination folder returns an operating-system error."
+    ],
+    "outcomes": [
+     "The rename-commit interpretation returns success and the caller receives placed because the record is in place.",
+     "The durable-write interpretation raises the error and the caller receives failed even though a complete placement record is visible and a retry will replay it."
+    ],
+    "observer": "The delivery caller sees placed versus failed for the same resulting record."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:`public_op:delivery_store.write_mark`",
+   "kind": "address layout",
+   "text": "The address of the record is taken from the `project_id` and `source_id` inside M07, so the two cannot disagree.",
+   "question": "What exact mark-record address is derived from project_id and source_id, including the use and nesting of MARKS_FOLDER and RECORD_FILE_SUFFIX?",
+   "options": [
+    "<state_dir>/<MARKS_FOLDER>/<project_id>/<source_id><RECORD_FILE_SUFFIX>",
+    "<state_dir>/<project_id>/<MARKS_FOLDER>/<source_id><RECORD_FILE_SUFFIX>",
+    "Another deterministic address derived from both identifiers."
+   ],
+   "default_guess": "Use <state_dir>/<MARKS_FOLDER>/<project_id>/<source_id><RECORD_FILE_SUFFIX>.",
+   "witness": {
+    "initial": "A valid mark exists at <state_dir>/published/<project_id>/<source_id>.json.",
+    "events": [
+     "A scan or repeated delivery runs under an implementation using another permitted mark layout."
+    ],
+    "outcomes": [
+     "The first layout finds the mark and reports the photo as published or returns its photo_id.",
+     "The other layout treats the mark as absent and reports the placement merely as placed, allowing the calling flow to publish again."
+    ],
+    "observer": "The scan or delivery caller sees published information in one implementation and no publication mark in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:`public_op:delivery_store.write_mark`",
+   "kind": "commit and durability",
+   "text": "Writes the record atomically (A6 rules 2 and 3).",
+   "question": "Does a mark require file and directory durability, and if a synchronisation after rename fails, has the mark write succeeded or must it be refused with state_unavailable?",
+   "options": [
+    "Rename is the commit point; once the mark is in place the call succeeds even if a later directory synchronisation fails.",
+    "The mark must be durable; any required synchronisation failure produces state_unavailable even if the mark is already visible.",
+    "No record synchronisation is attempted; atomic visibility alone is required."
+   ],
+   "default_guess": "Treat rename as the commit point and return marked once the record is in place.",
+   "witness": {
+    "initial": "A placement exists and no mark exists; the mark folder is writable.",
+    "events": [
+     "write_mark renames the complete mark record into place.",
+     "Synchronising the mark folder returns an operating-system error."
+    ],
+    "outcomes": [
+     "The rename-commit interpretation returns marked because the mark is in place.",
+     "The durable-write interpretation returns state_unavailable even though a retry with the same photo_id will find the mark and answer replayed."
+    ],
+    "observer": "The mark caller sees marked versus a refusal for the same resulting state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "folder creation race",
+   "text": "the service creates only folders below them, with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants, and removes none.",
+   "question": "When concurrent calls both find the same required folder absent and one creates it first, must the other accept the now-existing folder or fail its operation; and what validation is required before accepting it?",
+   "options": [
+    "Treat an already-created entry as success if it is a folder and satisfies the applicable no-link rule.",
+    "Treat the losing create operation as a failed write.",
+    "Retry the whole operation after the creation collision."
+   ],
+   "default_guess": "Accept the concurrently created entry after verifying that it is an admissible folder.",
+   "witness": {
+    "initial": "The binary root exists, but the shared photos folder does not.",
+    "events": [
+     "Two callers for different projects concurrently call store_image.",
+     "Both observe the photos folder absent; one creates it before the other's create executes."
+    ],
+    "outcomes": [
+     "One implementation accepts the folder created by the other call and both images can be stored.",
+     "Another treats the create collision as an operating-system write failure, so one photo is returned as failed."
+    ],
+    "observer": "The two delivery callers see two successes versus one success and one failed M06."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "temporary name allocation",
+   "text": "A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.",
+   "question": "How are temporary names chosen and reserved, and what happens when a candidate already exists?",
+   "options": [
+    "Choose fresh unpredictable names and create them exclusively, retrying on a collision.",
+    "Use one deterministic temporary name per destination and fail when it already exists.",
+    "Use a deterministic name but replace or truncate an existing temporary entry."
+   ],
+   "default_guess": "Use an exclusively created fresh random name and retry collisions without opening or replacing an existing entry.",
+   "witness": {
+    "initial": "A prior crash left a temporary file with the required prefix in the destination folder.",
+    "events": [
+     "A later delivery writes the same destination.",
+     "Its temporary-name algorithm selects the leftover name."
+    ],
+    "outcomes": [
+     "A fresh-name implementation skips the occupied candidate and completes the delivery.",
+     "A single deterministic-name implementation fails the photo; an overwrite implementation changes the crash artifact."
+    ],
+    "observer": "The delivery caller sees success versus failure, and a filesystem observer sees whether the old temporary file was preserved."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "temporary file permissions",
+   "text": "A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.",
+   "question": "Must every temporary image and record file take TEMPORARY_FILE_MODE immediately on exclusive creation, or may it temporarily use an umask-derived or final-file mode before rename?",
+   "options": [
+    "Create every temporary file immediately with exactly TEMPORARY_FILE_MODE.",
+    "Use the destination's final mode from creation.",
+    "Create with an implementation-default mode and set only the final mode before rename."
+   ],
+   "default_guess": "Create every temporary file exclusively with exactly TEMPORARY_FILE_MODE, independent of umask, then set the required destination mode before rename.",
+   "witness": {
+    "initial": "The process umask permits group or other access, and a write remains in progress long enough to inspect its temporary file.",
+    "events": [
+     "delivery_store creates the temporary file and writes image or record bytes.",
+     "A local account able to list the storage folder inspects the temporary entry before rename."
+    ],
+    "outcomes": [
+     "Immediate TEMPORARY_FILE_MODE keeps the partial contents private.",
+     "An umask-derived or destination image mode can expose partial bytes to group or other users during the write."
+    ],
+    "observer": "A local filesystem user sees different permissions and may be able to read partial content."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "temporary cleanup lifecycle",
+   "text": "A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.",
+   "question": "After restart or during a later operation, are crash-left temporary files removed, retained forever, or garbage-collected under a stated safety rule?",
+   "options": [
+    "Retain crash-left temporary files forever and merely ignore them.",
+    "Remove recognised stale temporary files during startup or a later write.",
+    "Provide a separate cleanup operation or maintenance policy."
+   ],
+   "default_guess": "Retain and ignore them because no cleanup owner, age rule or safe deletion protocol is specified.",
+   "witness": {
+    "initial": "A host crash leaves a complete temporary file in an image or record folder.",
+    "events": [
+     "The service restarts and later performs successful operations in the same folder."
+    ],
+    "outcomes": [
+     "One implementation never removes the crash artifact, so such files accumulate.",
+     "Another identifies and deletes it during restart or the later write."
+    ],
+    "observer": "The installation operator sees different persistent disk contents and disk-space consumption."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"50_public_apis.md:`public_op:delivery_store.project_lock`\",\"kind\":\"output protocol\",\"text\":\"A held lock for the duration of the caller's block.\",\"question\":\"What callable protocol represents the caller's block and guarantees release: a synchronous context manager, an acquired handle with an explicit release operation, or a callback-taking operation?\",\"options\":[\"Return a synchronous context manager that yields after acquisition and releases on exit.\",\"Return an acquired lock handle whose release method the caller must invoke.\",\"Accept the protected callback/block as an input and execute it while locked.\"],\"default_guess\":\"Return a synchronous context manager that yields nothing and releases in a finally path.\"},{\"subject\":\"50_public_apis.md:`public_op:delivery_store.project_lock`\",\"kind\":\"contradiction\",\"text\":\"Writes only the project lock file, on first use.\",\"question\":\"When the folder containing a first project's lock is absent, must project_lock create that folder as A6 rule 2 says the service does, or must it write only the lock file and therefore refuse because its parent is absent?\",\"options\":[\"Create the required folders below the state folder and then create the lock file.\",\"Do not create folders; return state_unavailable when the lock's parent is absent.\",\"Require the installation to pre-create the lock hierarchy, although A6 says it creates only the state folder itself.\"],\"default_guess\":\"Create the missing lock hierarchy with STATE_FOLDER_MODE and treat the State impact sentence as accidentally incomplete.\",\"witness\":{\"initial\":\"The configured state folder exists, but no folder for project lock files exists and this project has no lock file.\",\"events\":[\"module:photo_delivery starts the first delivery for the project and calls public_op:delivery_store.project_lock.\"],\"outcomes\":[\"A6 rule 2 is followed: the service creates the missing folder below the state folder and then the lock file, so more than only the lock file is written.\",\"The State impact is followed literally: no folder is created, the lock file cannot be created in its absent parent, and the delivery is refused with state_unavailable.\"],\"observer\":\"The delivery caller sees success versus refusal, and the installation sees different filesystem entries.\"}},{\"subject\":\"50_public_apis.md:`public_op:delivery_store.project_lock`\",\"kind\":\"address layout\",\"text\":\"Creates the project lock file on first use and holds an operating system lock (A6 rule 4).\",\"question\":\"What exact address under state_dir is the one lock file for a project, including how LOCKS_FOLDER, LOCK_FILE_SUFFIX and the project id are combined?\",\"options\":[\"<state_dir>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX>\",\"<state_dir>/<project_id>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX>\",\"Another deterministic layout owned by delivery_store.\"],\"default_guess\":\"Use <state_dir>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX>.\",\"witness\":{\"initial\":\"state_dir exists and contains a lock file at <state_dir>/locks/<project_id>.lock held by one service process.\",\"events\":[\"A second service process implementing a different permitted layout requests the same project's lock.\"],\"outcomes\":[\"An implementation using <state_dir>/locks/<project_id>.lock waits for the first process.\",\"An implementation using a different deterministic address takes another operating-system lock and enters the project operation concurrently.\"],\"observer\":\"Concurrent callers can observe duplicate or conflicting project work, and INV-12 can fail.\"}},{\"subject\":\"50_public_apis.md:`public_op:delivery_store.store_image`\",\"kind\":\"durability protocol\",\"text\":\"Writes the stored image atomically and makes it durable before it returns (A6 rules 2 and 3).\",\"question\":\"Which filesystem objects must be synchronised, and in what order, for the image and any newly created folder chain to count as durable?\",\"options\":[\"Synchronise the temporary file, rename it, synchronise the image folder, and synchronise every newly created folder in its parent.\",\"Synchronise the file and only its immediate containing folder.\",\"Synchronise only the file contents before rename and treat the rename as sufficient durability.\"],\"default_guess\":\"Synchronise each newly created directory entry through its parent, synchronise the completed temporary file, rename it, and synchronise the destination folder; any such failure is a failed image write.\",\"witness\":{\"initial\":\"The binary root exists, but the project's image folders do not.\",\"events\":[\"store_image creates the folders and image and returns.\",\"The host loses power immediately after the return and restarts.\"],\"outcomes\":[\"With the complete directory-synchronisation protocol, the returned image address and its bytes survive.\",\"With file-only or partial synchronisation, the image or a newly created folder may be absent despite store_image having returned.\"],\"observer\":\"The repeated delivery and the Portal see whether the supposedly durable image still exists.\"}},{\"subject\":\"50_public_apis.md:`public_op:delivery_store.write_placement`\",\"kind\":\"address layout\",\"text\":\"The address of the record is taken from the `project_id` and `source_id` inside M04, so the two cannot disagree.\",\"question\":\"What exact placement-record address is derived from project_id and source_id, including the use and nesting of PLACEMENTS_FOLDER and RECORD_FILE_SUFFIX?\",\"options\":[\"<state_dir>/<PLACEMENTS_FOLDER>/<project_id>/<source_id><RECORD_FILE_SUFFIX>\",\"<state_dir>/<project_id>/<PLACEMENTS_FOLDER>/<source_id><RECORD_FILE_SUFFIX>\",\"Another deterministic address derived from both identifiers.\"],\"default_guess\":\"Use <state_dir>/<PLACEMENTS_FOLDER>/<project_id>/<source_id><RECORD_FILE_SUFFIX>.\",\"witness\":{\"initial\":\"A valid placement record exists at <state_dir>/ledger/<project_id>/<source_id>.json and its stored image exists.\",\"events\":[\"A service implementation using a different permitted record layout receives a repeated delivery of the same project and source content.\"],\"outcomes\":[\"The first layout finds M04 and returns replayed without writing.\",\"The other layout treats the placement as absent, prepares and writes the delivery again, and creates a second record address.\"],\"observer\":\"The caller sees replayed versus placed, and the state folder contains different records.\"}},{\"subject\":\"50_public_apis.md:`public_op:delivery_store.write_placement`\",\"kind\":\"commit and durability\",\"text\":\"Writes the record atomically (A6 rules 2 and 3).\",\"question\":\"Does a placement record require file and directory durability, and if a synchronisation after rename fails, has the write already succeeded or must module:photo_delivery receive a failed-write error?\",\"options\":[\"Rename is the commit point; once the record is in place the operation succeeds even if a later directory synchronisation fails.\",\"The record must be durable; any required synchronisation failure is a failed write even if the record is already visible.\",\"No record synchronisation is attempted; atomic visibility alone is required.\"],\"default_guess\":\"Treat rename as the commit point, report success once the record is in place, and make best-effort durability work unable to turn that committed placement into a failed M06.\",\"witness\":{\"initial\":\"No placement record exists; its destination folder exists and is writable.\",\"events\":[\"write_placement writes and renames a complete record into place.\",\"Synchronising the destination folder returns an operating-system error.\"],\"outcomes\":[\"The rename-commit interpretation returns success and the caller receives placed because the record is in place.\",\"The durable-write interpretation raises the error and the caller receives failed even though a complete placement record is visible and a retry will replay it.\"],\"observer\":\"The delivery caller sees placed versus failed for the same resulting record.\"}},{\"subject\":\"50_public_apis.md:`public_op:delivery_store.write_mark`\",\"kind\":\"address layout\",\"text\":\"The address of the record is taken from the `project_id` and `source_id` inside M07, so the two cannot disagree.\",\"question\":\"What exact mark-record address is derived from project_id and source_id, including the use and nesting of MARKS_FOLDER and RECORD_FILE_SUFFIX?\",\"options\":[\"<state_dir>/<MARKS_FOLDER>/<project_id>/<source_id><RECORD_FILE_SUFFIX>\",\"<state_dir>/<project_id>/<MARKS_FOLDER>/<source_id><RECORD_FILE_SUFFIX>\",\"Another deterministic address derived from both identifiers.\"],\"default_guess\":\"Use <state_dir>/<MARKS_FOLDER>/<project_id>/<source_id><RECORD_FILE_SUFFIX>.\",\"witness\":{\"initial\":\"A valid mark exists at <state_dir>/published/<project_id>/<source_id>.json.\",\"events\":[\"A scan or repeated delivery runs under an implementation using another permitted mark layout.\"],\"outcomes\":[\"The first layout finds the mark and reports the photo as published or returns its photo_id.\",\"The other layout treats the mark as absent and reports the placement merely as placed, allowing the calling flow to publish again.\"],\"observer\":\"The scan or delivery caller sees published information in one implementation and no publication mark in the other.\"}},{\"subject\":\"50_public_apis.md:`public_op:delivery_store.write_mark`\",\"kind\":\"commit and durability\",\"text\":\"Writes the record atomically (A6 rules 2 and 3).\",\"question\":\"Does a mark require file and directory durability, and if a synchronisation after rename fails, has the mark write succeeded or must it be refused with state_unavailable?\",\"options\":[\"Rename is the commit point; once the mark is in place the call succeeds even if a later directory synchronisation fails.\",\"The mark must be durable; any required synchronisation failure produces state_unavailable even if the mark is already visible.\",\"No record synchronisation is attempted; atomic visibility alone is required.\"],\"default_guess\":\"Treat rename as the commit point and return marked once the record is in place.\",\"witness\":{\"initial\":\"A placement exists and no mark exists; the mark folder is writable.\",\"events\":[\"write_mark renames the complete mark record into place.\",\"Synchronising the mark folder returns an operating-system error.\"],\"outcomes\":[\"The rename-commit interpretation returns marked because the mark is in place.\",\"The durable-write interpretation returns state_unavailable even though a retry with the same photo_id will find the mark and answer replayed.\"],\"observer\":\"The mark caller sees marked versus a refusal for the same resulting state.\"}},{\"subject\":\"context\",\"kind\":\"folder creation race\",\"text\":\"the service creates only folders below them, with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants, and removes none.\",\"question\":\"When concurrent calls both find the same required folder absent and one creates it first, must the other accept the now-existing folder or fail its operation; and what validation is required before accepting it?\",\"options\":[\"Treat an already-created entry as success if it is a folder and satisfies the applicable no-link rule.\",\"Treat the losing create operation as a failed write.\",\"Retry the whole operation after the creation collision.\"],\"default_guess\":\"Accept the concurrently created entry after verifying that it is an admissible folder.\",\"witness\":{\"initial\":\"The binary root exists, but the shared photos folder does not.\",\"events\":[\"Two callers for different projects concurrently call store_image.\",\"Both observe the photos folder absent; one creates it before the other's create executes.\"],\"outcomes\":[\"One implementation accepts the folder created by the other call and both images can be stored.\",\"Another treats the create collision as an operating-system write failure, so one photo is returned as failed.\"],\"observer\":\"The two delivery callers see two successes versus one success and one failed M06.\"}},{\"subject\":\"context\",\"kind\":\"temporary name allocation\",\"text\":\"A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.\",\"question\":\"How are temporary names chosen and reserved, and what happens when a candidate already exists?\",\"options\":[\"Choose fresh unpredictable names and create them exclusively, retrying on a collision.\",\"Use one deterministic temporary name per destination and fail when it already exists.\",\"Use a deterministic name but replace or truncate an existing temporary entry.\"],\"default_guess\":\"Use an exclusively created fresh random name and retry collisions without opening or replacing an existing entry.\",\"witness\":{\"initial\":\"A prior crash left a temporary file with the required prefix in the destination folder.\",\"events\":[\"A later delivery writes the same destination.\",\"Its temporary-name algorithm selects the leftover name.\"],\"outcomes\":[\"A fresh-name implementation skips the occupied candidate and completes the delivery.\",\"A single deterministic-name implementation fails the photo; an overwrite implementation changes the crash artifact.\"],\"observer\":\"The delivery caller sees success versus failure, and a filesystem observer sees whether the old temporary file was preserved.\"}},{\"subject\":\"context\",\"kind\":\"temporary file permissions\",\"text\":\"A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.\",\"question\":\"Must every temporary image and record file take TEMPORARY_FILE_MODE immediately on exclusive creation, or may it temporarily use an umask-derived or final-file mode before rename?\",\"options\":[\"Create every temporary file immediately with exactly TEMPORARY_FILE_MODE.\",\"Use the destination's final mode from creation.\",\"Create with an implementation-default mode and set only the final mode before rename.\"],\"default_guess\":\"Create every temporary file exclusively with exactly TEMPORARY_FILE_MODE, independent of umask, then set the required destination mode before rename.\",\"witness\":{\"initial\":\"The process umask permits group or other access, and a write remains in progress long enough to inspect its temporary file.\",\"events\":[\"delivery_store creates the temporary file and writes image or record bytes.\",\"A local account able to list the storage folder inspects the temporary entry before rename.\"],\"outcomes\":[\"Immediate TEMPORARY_FILE_MODE keeps the partial contents private.\",\"An umask-derived or destination image mode can expose partial bytes to group or other users during the write.\"],\"observer\":\"A local filesystem user sees different permissions and may be able to read partial content.\"}},{\"subject\":\"context\",\"kind\":\"temporary cleanup lifecycle\",\"text\":\"A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.\",\"question\":\"After restart or during a later operation, are crash-left temporary files removed, retained forever, or garbage-collected under a stated safety rule?\",\"options\":[\"Retain crash-left temporary files forever and merely ignore them.\",\"Remove recognised stale temporary files during startup or a later write.\",\"Provide a separate cleanup operation or maintenance policy.\"],\"default_guess\":\"Retain and ignore them because no cleanup owner, age rule or safe deletion protocol is specified.\",\"witness\":{\"initial\":\"A host crash leaves a complete temporary file in an image or record folder.\",\"events\":[\"The service restarts and later performs successful operations in the same folder.\"],\"outcomes\":[\"One implementation never removes the crash artifact, so such files accumulate.\",\"Another identifies and deletes it during restart or the later write.\"],\"observer\":\"The installation operator sees different persistent disk contents and disk-space consumption.\"}}]}",
+ "set_aside": []
+}

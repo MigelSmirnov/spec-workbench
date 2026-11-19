@@ -1,0 +1,284 @@
+{
+ "open_points": [
+  {
+   "subject": "A2 timezone setting",
+   "kind": "missing definition",
+   "text": "the time zone of the `timezone` field of the run settings (A8)",
+   "question": "What values and representation does `timezone` accept, which time-zone database and version interprets it, and what happens when the value is absent or invalid?",
+   "options": [
+    "An IANA zone name interpreted with the runtime tzdata, with invalid values preventing startup",
+    "A fixed UTC offset",
+    "An IANA zone name interpreted with a pinned time-zone database"
+   ],
+   "default_guess": "Require an IANA zone name, validate it at startup, and use the time-zone data supplied by the pinned runtime.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 replay versus A6 lock creation",
+   "kind": "contradiction",
+   "text": "Delivering content that already has a placement answers `replayed` with the stored placement and the current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even when the source file has left the folder.\n\nThe lock file is created on first use with the imported `LOCK_FILE_MODE` constant and is never changed or removed afterwards.",
+   "question": "If a valid placement exists but its project lock does not, must replay create the lock or write nothing?",
+   "options": [
+    "Create the lock and then return replayed",
+    "Return replayed without creating or taking a lock",
+    "Refuse because the lock is absent"
+   ],
+   "default_guess": "Create and take the lock before reading the placement, then return replayed.",
+   "witness": {
+    "initial": "A valid placement record and stored image exist for the project and source, but the project's lock file does not exist.",
+    "events": [
+     "The calling flow delivers the same source again."
+    ],
+    "outcomes": [
+     "A3 rule 2 returns replayed and leaves the lock absent because replay writes nothing.",
+     "A6 rule 4 creates the lock on first use, then returns replayed."
+    ],
+    "observer": "The owner or a later process inspecting the state folder sees whether the lock file was created."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-06 Required tests",
+   "kind": "incomplete invariant test",
+   "text": "INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).",
+   "question": "What must the Required tests item assert to demonstrate the invariant's full claim that a repeated placement writes nothing, including lock files, state folders, mark records and temporary files?",
+   "options": [
+    "Assert that every entry and metadata item in both stores is unchanged",
+    "Narrow the invariant to stored images and placement records",
+    "State an explicit lock-creation exception"
+   ],
+   "default_guess": "State an explicit lock-creation exception and otherwise assert that all durable entries are unchanged.",
+   "witness": {
+    "initial": "A placement exists and a repeat delivery can reach it.",
+    "events": [
+     "The calling flow repeats the delivery.",
+     "The test compares only stored images and placement records."
+    ],
+    "outcomes": [
+     "An implementation creates or changes some other durable state and still passes the described test.",
+     "An implementation changes no durable state at all."
+    ],
+    "observer": "The invariant check cannot distinguish the two implementations."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 state-record addresses",
+   "kind": "missing address rule",
+   "text": "A placement or mark record that exists is validated against its closed model, and its `project_id` and `source_id` must equal those of its address.",
+   "question": "What exact relative address, folder names and filename transformation identify each placement record and mark record?",
+   "options": [
+    "Separate placement and mark folders, each keyed by project id and source id",
+    "One per-project folder containing typed record filenames",
+    "A single state database or journal"
+   ],
+   "default_guess": "Use separate imported placement and mark folder constants, then `<project_id>/<source_id>` plus an imported record suffix.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 lock address",
+   "kind": "missing address rule",
+   "text": "under an operating system lock on one lock file of that project in the state folder",
+   "question": "What exact path and collision-free filename maps a project UUID to its lock file?",
+   "options": [
+    "A lock-folder constant plus the canonical project UUID and a lock suffix",
+    "A hash of the project UUID",
+    "A lock file inside the project's record folder"
+   ],
+   "default_guess": "Use an imported lock-folder constant and the canonical project UUID followed by an imported lock suffix.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 record representation",
+   "kind": "missing representation",
+   "text": "A placement or mark record that exists is validated against its closed model",
+   "question": "In which on-disk representation are records written and read, including character encoding, canonical field representation and duplicate-key handling?",
+   "options": [
+    "UTF-8 JSON with duplicate keys rejected",
+    "UTF-8 JSON using the validation library's normal parser behavior",
+    "A binary serialization"
+   ],
+   "default_guess": "Use UTF-8 JSON, reject duplicate keys, require every model field, reject extra fields, and use the model's declared serialized forms.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 folders below the state folder",
+   "kind": "underspecified creation and refusal",
+   "text": "the service creates only folders below them, with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants, and removes none. Below the state folder the service follows no symbolic link.",
+   "question": "Which folders are created, in what order, how are concurrent creations handled, what happens for an existing non-folder or symbolic link at any segment, and which answer is returned for each creation or mode-setting failure?",
+   "options": [
+    "Create each missing segment safely and accept an existing real directory",
+    "Require the installation to pre-create the full layout",
+    "Create only project directories and refuse when namespace directories are missing"
+   ],
+   "default_guess": "Create missing segments from outermost to innermost using no-follow directory-relative operations, accept concurrently created real directories, and map state-path failures to STATE_UNAVAILABLE and image-store failures to the placement write failure.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 existing folder modes",
+   "kind": "missing mode policy",
+   "text": "the service creates only folders below them, with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants",
+   "question": "Are the constants enforced only on newly created folders, or must existing folders be checked or changed to those modes?",
+   "options": [
+    "Set the exact mode only when creating a folder",
+    "Validate existing folder modes and refuse a mismatch",
+    "Reset existing folder modes on every use"
+   ],
+   "default_guess": "Set the exact mode on creation and accept an existing real directory without changing its mode.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 atomic temporary writes",
+   "kind": "underspecified atomic write",
+   "text": "Each stored image and record is written atomically: a reader sees the complete file or none, and a write that fails leaves the earlier state of its address as it was. A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.",
+   "question": "How is a fresh temporary name selected, must temporary creation be exclusive, may an existing destination be replaced, and are temporary files removed after ordinary failures?",
+   "options": [
+    "Exclusive random temporary files, atomic replacement, and best-effort cleanup on ordinary failure",
+    "Deterministic temporary names protected by the project lock",
+    "Fail whenever either a temporary entry or destination already exists"
+   ],
+   "default_guess": "Create a fresh temporary file exclusively in the destination directory, set its mode, atomically replace the destination, and remove the temporary file after non-crash failures when possible.",
+   "witness": {
+    "initial": "A crash has left a temporary file with the required prefix in a destination folder.",
+    "events": [
+     "A later delivery writes the same address."
+    ],
+    "outcomes": [
+     "A deterministic implementation collides with the old temporary file and fails.",
+     "An implementation choosing a fresh exclusive name succeeds and leaves or later cleans the old file."
+    ],
+    "observer": "The calling flow sees failure versus successful placement, and the owner sees different temporary-file residue."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 image address containing an existing link or non-regular entry",
+   "kind": "missing overwrite rule",
+   "text": "A stored image is named only from the project id and the source hash: `photos/<project_id>/<source_id>.jpg`. The reference must stay inside the binary store: its path, resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery is refused with `unsafe_reference`.",
+   "question": "When the final image address already contains a symbolic link, directory or other non-regular entry that resolves inside the store, is it replaced, followed, or refused, and with which result?",
+   "options": [
+    "Refuse every non-regular final entry",
+    "Atomically replace a final symbolic link but refuse directories",
+    "Follow a final symbolic link when containment remains inside the store"
+   ],
+   "default_guess": "Never follow the final entry; atomically replace a symbolic-link entry only if policy explicitly permits it, otherwise refuse all non-regular destinations.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 durability boundary",
+   "kind": "vague durability",
+   "text": "A stored image is made durable before the record that refers to it is written, so a crash never leaves a record without its image; a failure to make it durable fails that write and A3 rule 5 condition 5 applies. A record is the last write of its operation: once it is in place the operation has taken effect.",
+   "question": "Which file and directory synchronizations define “made durable” and “in place,” and what result follows if the record rename succeeds but synchronizing its directory fails?",
+   "options": [
+    "Synchronize each file and every directory entry, and treat record-directory sync failure as operation failure",
+    "Synchronize the image fully but treat record rename as the operation boundary without requiring record-directory synchronization",
+    "Use storage-system guarantees without explicit synchronization"
+   ],
+   "default_guess": "Synchronize the image file and all newly created directory entries before writing the record; atomically rename and synchronize the record's directory before reporting success.",
+   "witness": {
+    "initial": "The image has been renamed and made durable; a record temporary file is complete.",
+    "events": [
+     "The service renames the record into place.",
+     "Synchronizing the record's containing directory fails.",
+     "The host then crashes."
+    ],
+    "outcomes": [
+     "The operation reports success because the record was in place at rename, although the record may disappear after the crash.",
+     "The operation reports failure because durability was incomplete, although the record may remain visible."
+    ],
+    "observer": "The calling flow sees success versus failure, and after restart sees whether the placement or mark survived."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 pre-existing lock entry",
+   "kind": "missing lock validation",
+   "text": "The lock file is created on first use with the imported `LOCK_FILE_MODE` constant and is never changed or removed afterwards.",
+   "question": "When an entry already exists at the lock address, which entry types, modes and contents are acceptable, and must it be opened without following a symbolic link?",
+   "options": [
+    "Accept only a regular file opened without following links; ignore its mode and bytes",
+    "Accept only a regular file with exactly LOCK_FILE_MODE",
+    "Let the operating-system locking primitive decide whether the entry is usable"
+   ],
+   "default_guess": "Open without following links, require a regular file, do not read or change its bytes, and accept its existing mode.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 lock primitive",
+   "kind": "unspecified concurrency mechanism",
+   "text": "under an operating system lock on one lock file of that project in the state folder",
+   "question": "Which operating-system locking primitive and lock scope must all processes use, and when exactly is the lock released?",
+   "options": [
+    "An exclusive advisory flock held for the complete operation",
+    "A POSIX record lock held for the complete operation",
+    "An exclusive-create lock file removed after the operation"
+   ],
+   "default_guess": "Use an exclusive advisory flock held from immediately after the connection check through the final outcome, then close it at operation completion.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 lock refusal conditions",
+   "kind": "vague refusal conditions",
+   "text": "The same refusal answers a lock that cannot be taken, which waiting for another holder is not",
+   "question": "Exactly which open, type-check, permission, locking, interruption and resource-exhaustion failures count as a lock that cannot be taken, and which transient interruptions are retried?",
+   "options": [
+    "Retry interrupted calls and refuse every other open or lock error",
+    "Retry all transient operating-system errors indefinitely",
+    "Refuse immediately on every error, including interruption"
+   ],
+   "default_guess": "Retry interrupted system calls, wait indefinitely for contention, and return STATE_UNAVAILABLE for every other failure to create, validate, open or acquire the lock.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 damaged orphan mark check order",
+   "kind": "missing precedence",
+   "text": "a damaged mark without a placement stops a new placement (`test_a_damaged_mark_without_a_placement_stops_a_new_placement`)",
+   "question": "At what point is a mark checked when no placement exists, and does its STATE_UNAVAILABLE refusal take precedence over failures of the requested name or source file?",
+   "options": [
+    "Check the mark immediately after finding no placement, before opening the source",
+    "Validate the source first and check the mark only before writing",
+    "Check placement and mark together before examining the requested name"
+   ],
+   "default_guess": "Inside the project lock, read and validate both placement and mark addresses before opening the named source; any damaged record returns STATE_UNAVAILABLE.",
+   "witness": {
+    "initial": "No placement exists; a damaged mark exists for the requested source; the request name is absent or invalid.",
+    "events": [
+     "The calling flow requests delivery for that source and name."
+    ],
+    "outcomes": [
+     "Checking the damaged mark first refuses the whole delivery with STATE_UNAVAILABLE.",
+     "Checking the named source first returns NOT_READY_OR_ABSENT and never observes the damaged mark."
+    ],
+    "observer": "The calling flow sees a different response code."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 valid mark without a placement",
+   "kind": "uncovered state",
+   "text": "A placement or mark record that exists is validated against its closed model, and its `project_id` and `source_id` must equal those of its address.",
+   "question": "What happens when a mark is individually valid and at the correct address but its placement is absent?",
+   "options": [
+    "Treat the cross-record inconsistency as STATE_UNAVAILABLE",
+    "Allow a new placement and preserve the existing mark",
+    "Ignore the orphan mark until a placement exists"
+   ],
+   "default_guess": "Treat a mark without its placement as unavailable state and refuse scan, delivery and mark operations.",
+   "witness": {
+    "initial": "A valid mark record exists at the correct project and source address, but no placement record exists.",
+    "events": [
+     "The calling flow scans the project or delivers that source."
+    ],
+    "outcomes": [
+     "The service treats the orphan mark as corrupted state and returns STATE_UNAVAILABLE.",
+     "The service treats the placement as absent, creates it, and immediately exposes the pre-existing mark as the publication state."
+    ],
+    "observer": "The calling flow sees refusal versus a placement or published observation."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A2 timezone setting\",\"kind\":\"missing definition\",\"text\":\"the time zone of the `timezone` field of the run settings (A8)\",\"question\":\"What values and representation does `timezone` accept, which time-zone database and version interprets it, and what happens when the value is absent or invalid?\",\"options\":[\"An IANA zone name interpreted with the runtime tzdata, with invalid values preventing startup\",\"A fixed UTC offset\",\"An IANA zone name interpreted with a pinned time-zone database\"],\"default_guess\":\"Require an IANA zone name, validate it at startup, and use the time-zone data supplied by the pinned runtime.\"},{\"subject\":\"A3 replay versus A6 lock creation\",\"kind\":\"contradiction\",\"text\":\"Delivering content that already has a placement answers `replayed` with the stored placement and the current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even when the source file has left the folder.\\n\\nThe lock file is created on first use with the imported `LOCK_FILE_MODE` constant and is never changed or removed afterwards.\",\"question\":\"If a valid placement exists but its project lock does not, must replay create the lock or write nothing?\",\"options\":[\"Create the lock and then return replayed\",\"Return replayed without creating or taking a lock\",\"Refuse because the lock is absent\"],\"default_guess\":\"Create and take the lock before reading the placement, then return replayed.\",\"witness\":{\"initial\":\"A valid placement record and stored image exist for the project and source, but the project's lock file does not exist.\",\"events\":[\"The calling flow delivers the same source again.\"],\"outcomes\":[\"A3 rule 2 returns replayed and leaves the lock absent because replay writes nothing.\",\"A6 rule 4 creates the lock on first use, then returns replayed.\"],\"observer\":\"The owner or a later process inspecting the state folder sees whether the lock file was created.\"}},{\"subject\":\"INV-06 Required tests\",\"kind\":\"incomplete invariant test\",\"text\":\"INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).\",\"question\":\"What must the Required tests item assert to demonstrate the invariant's full claim that a repeated placement writes nothing, including lock files, state folders, mark records and temporary files?\",\"options\":[\"Assert that every entry and metadata item in both stores is unchanged\",\"Narrow the invariant to stored images and placement records\",\"State an explicit lock-creation exception\"],\"default_guess\":\"State an explicit lock-creation exception and otherwise assert that all durable entries are unchanged.\",\"witness\":{\"initial\":\"A placement exists and a repeat delivery can reach it.\",\"events\":[\"The calling flow repeats the delivery.\",\"The test compares only stored images and placement records.\"],\"outcomes\":[\"An implementation creates or changes some other durable state and still passes the described test.\",\"An implementation changes no durable state at all.\"],\"observer\":\"The invariant check cannot distinguish the two implementations.\"}},{\"subject\":\"A6 state-record addresses\",\"kind\":\"missing address rule\",\"text\":\"A placement or mark record that exists is validated against its closed model, and its `project_id` and `source_id` must equal those of its address.\",\"question\":\"What exact relative address, folder names and filename transformation identify each placement record and mark record?\",\"options\":[\"Separate placement and mark folders, each keyed by project id and source id\",\"One per-project folder containing typed record filenames\",\"A single state database or journal\"],\"default_guess\":\"Use separate imported placement and mark folder constants, then `<project_id>/<source_id>` plus an imported record suffix.\"},{\"subject\":\"A6 lock address\",\"kind\":\"missing address rule\",\"text\":\"under an operating system lock on one lock file of that project in the state folder\",\"question\":\"What exact path and collision-free filename maps a project UUID to its lock file?\",\"options\":[\"A lock-folder constant plus the canonical project UUID and a lock suffix\",\"A hash of the project UUID\",\"A lock file inside the project's record folder\"],\"default_guess\":\"Use an imported lock-folder constant and the canonical project UUID followed by an imported lock suffix.\"},{\"subject\":\"A6 record representation\",\"kind\":\"missing representation\",\"text\":\"A placement or mark record that exists is validated against its closed model\",\"question\":\"In which on-disk representation are records written and read, including character encoding, canonical field representation and duplicate-key handling?\",\"options\":[\"UTF-8 JSON with duplicate keys rejected\",\"UTF-8 JSON using the validation library's normal parser behavior\",\"A binary serialization\"],\"default_guess\":\"Use UTF-8 JSON, reject duplicate keys, require every model field, reject extra fields, and use the model's declared serialized forms.\"},{\"subject\":\"A6 folders below the state folder\",\"kind\":\"underspecified creation and refusal\",\"text\":\"the service creates only folders below them, with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants, and removes none. Below the state folder the service follows no symbolic link.\",\"question\":\"Which folders are created, in what order, how are concurrent creations handled, what happens for an existing non-folder or symbolic link at any segment, and which answer is returned for each creation or mode-setting failure?\",\"options\":[\"Create each missing segment safely and accept an existing real directory\",\"Require the installation to pre-create the full layout\",\"Create only project directories and refuse when namespace directories are missing\"],\"default_guess\":\"Create missing segments from outermost to innermost using no-follow directory-relative operations, accept concurrently created real directories, and map state-path failures to STATE_UNAVAILABLE and image-store failures to the placement write failure.\"},{\"subject\":\"A6 existing folder modes\",\"kind\":\"missing mode policy\",\"text\":\"the service creates only folders below them, with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants\",\"question\":\"Are the constants enforced only on newly created folders, or must existing folders be checked or changed to those modes?\",\"options\":[\"Set the exact mode only when creating a folder\",\"Validate existing folder modes and refuse a mismatch\",\"Reset existing folder modes on every use\"],\"default_guess\":\"Set the exact mode on creation and accept an existing real directory without changing its mode.\"},{\"subject\":\"A6 atomic temporary writes\",\"kind\":\"underspecified atomic write\",\"text\":\"Each stored image and record is written atomically: a reader sees the complete file or none, and a write that fails leaves the earlier state of its address as it was. A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.\",\"question\":\"How is a fresh temporary name selected, must temporary creation be exclusive, may an existing destination be replaced, and are temporary files removed after ordinary failures?\",\"options\":[\"Exclusive random temporary files, atomic replacement, and best-effort cleanup on ordinary failure\",\"Deterministic temporary names protected by the project lock\",\"Fail whenever either a temporary entry or destination already exists\"],\"default_guess\":\"Create a fresh temporary file exclusively in the destination directory, set its mode, atomically replace the destination, and remove the temporary file after non-crash failures when possible.\",\"witness\":{\"initial\":\"A crash has left a temporary file with the required prefix in a destination folder.\",\"events\":[\"A later delivery writes the same address.\"],\"outcomes\":[\"A deterministic implementation collides with the old temporary file and fails.\",\"An implementation choosing a fresh exclusive name succeeds and leaves or later cleans the old file.\"],\"observer\":\"The calling flow sees failure versus successful placement, and the owner sees different temporary-file residue.\"}},{\"subject\":\"A6 image address containing an existing link or non-regular entry\",\"kind\":\"missing overwrite rule\",\"text\":\"A stored image is named only from the project id and the source hash: `photos/<project_id>/<source_id>.jpg`. The reference must stay inside the binary store: its path, resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery is refused with `unsafe_reference`.\",\"question\":\"When the final image address already contains a symbolic link, directory or other non-regular entry that resolves inside the store, is it replaced, followed, or refused, and with which result?\",\"options\":[\"Refuse every non-regular final entry\",\"Atomically replace a final symbolic link but refuse directories\",\"Follow a final symbolic link when containment remains inside the store\"],\"default_guess\":\"Never follow the final entry; atomically replace a symbolic-link entry only if policy explicitly permits it, otherwise refuse all non-regular destinations.\"},{\"subject\":\"A6 durability boundary\",\"kind\":\"vague durability\",\"text\":\"A stored image is made durable before the record that refers to it is written, so a crash never leaves a record without its image; a failure to make it durable fails that write and A3 rule 5 condition 5 applies. A record is the last write of its operation: once it is in place the operation has taken effect.\",\"question\":\"Which file and directory synchronizations define “made durable” and “in place,” and what result follows if the record rename succeeds but synchronizing its directory fails?\",\"options\":[\"Synchronize each file and every directory entry, and treat record-directory sync failure as operation failure\",\"Synchronize the image fully but treat record rename as the operation boundary without requiring record-directory synchronization\",\"Use storage-system guarantees without explicit synchronization\"],\"default_guess\":\"Synchronize the image file and all newly created directory entries before writing the record; atomically rename and synchronize the record's directory before reporting success.\",\"witness\":{\"initial\":\"The image has been renamed and made durable; a record temporary file is complete.\",\"events\":[\"The service renames the record into place.\",\"Synchronizing the record's containing directory fails.\",\"The host then crashes.\"],\"outcomes\":[\"The operation reports success because the record was in place at rename, although the record may disappear after the crash.\",\"The operation reports failure because durability was incomplete, although the record may remain visible.\"],\"observer\":\"The calling flow sees success versus failure, and after restart sees whether the placement or mark survived.\"}},{\"subject\":\"A6 pre-existing lock entry\",\"kind\":\"missing lock validation\",\"text\":\"The lock file is created on first use with the imported `LOCK_FILE_MODE` constant and is never changed or removed afterwards.\",\"question\":\"When an entry already exists at the lock address, which entry types, modes and contents are acceptable, and must it be opened without following a symbolic link?\",\"options\":[\"Accept only a regular file opened without following links; ignore its mode and bytes\",\"Accept only a regular file with exactly LOCK_FILE_MODE\",\"Let the operating-system locking primitive decide whether the entry is usable\"],\"default_guess\":\"Open without following links, require a regular file, do not read or change its bytes, and accept its existing mode.\"},{\"subject\":\"A6 lock primitive\",\"kind\":\"unspecified concurrency mechanism\",\"text\":\"under an operating system lock on one lock file of that project in the state folder\",\"question\":\"Which operating-system locking primitive and lock scope must all processes use, and when exactly is the lock released?\",\"options\":[\"An exclusive advisory flock held for the complete operation\",\"A POSIX record lock held for the complete operation\",\"An exclusive-create lock file removed after the operation\"],\"default_guess\":\"Use an exclusive advisory flock held from immediately after the connection check through the final outcome, then close it at operation completion.\"},{\"subject\":\"A6 lock refusal conditions\",\"kind\":\"vague refusal conditions\",\"text\":\"The same refusal answers a lock that cannot be taken, which waiting for another holder is not\",\"question\":\"Exactly which open, type-check, permission, locking, interruption and resource-exhaustion failures count as a lock that cannot be taken, and which transient interruptions are retried?\",\"options\":[\"Retry interrupted calls and refuse every other open or lock error\",\"Retry all transient operating-system errors indefinitely\",\"Refuse immediately on every error, including interruption\"],\"default_guess\":\"Retry interrupted system calls, wait indefinitely for contention, and return STATE_UNAVAILABLE for every other failure to create, validate, open or acquire the lock.\"},{\"subject\":\"A6 damaged orphan mark check order\",\"kind\":\"missing precedence\",\"text\":\"a damaged mark without a placement stops a new placement (`test_a_damaged_mark_without_a_placement_stops_a_new_placement`)\",\"question\":\"At what point is a mark checked when no placement exists, and does its STATE_UNAVAILABLE refusal take precedence over failures of the requested name or source file?\",\"options\":[\"Check the mark immediately after finding no placement, before opening the source\",\"Validate the source first and check the mark only before writing\",\"Check placement and mark together before examining the requested name\"],\"default_guess\":\"Inside the project lock, read and validate both placement and mark addresses before opening the named source; any damaged record returns STATE_UNAVAILABLE.\",\"witness\":{\"initial\":\"No placement exists; a damaged mark exists for the requested source; the request name is absent or invalid.\",\"events\":[\"The calling flow requests delivery for that source and name.\"],\"outcomes\":[\"Checking the damaged mark first refuses the whole delivery with STATE_UNAVAILABLE.\",\"Checking the named source first returns NOT_READY_OR_ABSENT and never observes the damaged mark.\"],\"observer\":\"The calling flow sees a different response code.\"}},{\"subject\":\"A6 valid mark without a placement\",\"kind\":\"uncovered state\",\"text\":\"A placement or mark record that exists is validated against its closed model, and its `project_id` and `source_id` must equal those of its address.\",\"question\":\"What happens when a mark is individually valid and at the correct address but its placement is absent?\",\"options\":[\"Treat the cross-record inconsistency as STATE_UNAVAILABLE\",\"Allow a new placement and preserve the existing mark\",\"Ignore the orphan mark until a placement exists\"],\"default_guess\":\"Treat a mark without its placement as unavailable state and refuse scan, delivery and mark operations.\",\"witness\":{\"initial\":\"A valid mark record exists at the correct project and source address, but no placement record exists.\",\"events\":[\"The calling flow scans the project or delivers that source.\"],\"outcomes\":[\"The service treats the orphan mark as corrupted state and returns STATE_UNAVAILABLE.\",\"The service treats the placement as absent, creates it, and immediately exposes the pre-existing mark as the publication state.\"],\"observer\":\"The calling flow sees refusal versus a placement or published observation.\"}}]}",
+ "set_aside": []
+}

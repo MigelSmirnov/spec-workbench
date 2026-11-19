@@ -1,0 +1,351 @@
+{
+ "open_points": [
+  {
+   "subject": "50_public_apis.md:public_op:delivery_store.project_lock",
+   "kind": "contradictory_state_effect",
+   "text": "Writes only the project lock file, on first use.",
+   "question": "When the lock's containing folders below the state folder are absent, must project_lock create them as A6 rule 2 says the service does, or must it write only the lock file; and are those folder creations part of this operation's state impact?",
+   "options": [
+    "Create the missing folders with STATE_FOLDER_MODE and then create the lock file",
+    "Refuse with state_unavailable when any containing folder is absent",
+    "Place the lock directly in the state folder so no containing folder is needed"
+   ],
+   "default_guess": "Create the missing folders with STATE_FOLDER_MODE and include them in the state impact.",
+   "witness": {
+    "initial": "The installation-created state folder exists, but the folder intended to contain project locks does not.",
+    "events": [
+     "A caller starts the first delivery for project P.",
+     "module:photo_delivery calls project_lock for P."
+    ],
+    "outcomes": [
+     "project_lock creates the containing folder and lock file and the delivery continues",
+     "project_lock refuses with state_unavailable because its declared state impact permits only creation of the lock file"
+    ],
+    "observer": "The caller and an operator inspecting the state folder"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:public_op:delivery_store.project_lock",
+   "kind": "underspecified_error_boundary",
+   "text": "`state_unavailable` when the lock cannot be taken (A6 rule 5).",
+   "question": "Which failures count as the lock not being taken: absent or uncreatable parent folders, an existing non-regular entry, an existing symbolic link, open or permission failure, failure to establish LOCK_FILE_MODE, an operating-system locking error, or interruption while waiting?",
+   "options": [
+    "Map every preparation, validation, open, mode-setting and locking failure to state_unavailable",
+    "Map only the operating-system lock call's failure to state_unavailable and propagate other operating-system errors",
+    "Treat some existing entries as usable lock objects and refuse only when the OS lock operation fails"
+   ],
+   "default_guess": "Map every failure needed to safely open or create and lock a regular non-link lock file to state_unavailable.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:public_op:delivery_store.project_lock",
+   "kind": "underspecified_lock_entry",
+   "text": "Creates the project lock file on first use and holds an operating system lock (A6 rule 4).",
+   "question": "What must project_lock require when an entry already exists at the lock address: must it be a regular non-symbolic-link file, how is it opened, and are its bytes and mode accepted unchanged?",
+   "options": [
+    "Require a regular non-link file, open it without following links, and leave its bytes and mode unchanged",
+    "Accept any entry the operating system can lock",
+    "Reapply LOCK_FILE_MODE to an existing regular file before locking it"
+   ],
+   "default_guess": "Require and open a regular file without following links, leave existing bytes and mode unchanged, and otherwise return state_unavailable.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:public_op:delivery_store.project_lock",
+   "kind": "underspecified_creation_failure",
+   "text": "The lock file is created on first use with the imported `LOCK_FILE_MODE` constant and is never changed or removed afterwards.",
+   "question": "If creation succeeds but establishing LOCK_FILE_MODE or taking the first lock fails, does the newly created entry remain, is it removed, and what mode may an observer see?",
+   "options": [
+    "Create it with the final mode in one safe step and leave it on any later failure",
+    "Remove a newly created file when initialization or first locking fails",
+    "Leave the partially initialized file and return state_unavailable"
+   ],
+   "default_guess": "Create it exclusively with the final mode, leave it in place if later locking fails, and return state_unavailable.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "missing_storage_layout",
+   "text": "Deliveries and marks of one project run one at a time, across processes, under an operating system lock on one lock file of that project in the state folder.",
+   "question": "What are the exact addresses of the project lock, placement record and mark record under state_dir, including how LOCKS_FOLDER, PLACEMENTS_FOLDER, MARKS_FOLDER, LOCK_FILE_SUFFIX and RECORD_FILE_SUFFIX are combined with project_id and source_id?",
+   "options": [
+    "Use locks/<project_id>.lock, ledger/<project_id>/<source_id>.json and published/<project_id>/<source_id>.json",
+    "Put each project in one project directory and place its lock and records beneath it",
+    "Use the identifiers and imported constants in another collision-free layout owned by delivery_store"
+   ],
+   "default_guess": "Use locks/<project_id>.lock, ledger/<project_id>/<source_id>.json and published/<project_id>/<source_id>.json.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "underspecified_root_symlink_policy",
+   "text": "Below the state folder the service follows no symbolic link.",
+   "question": "Does this permit the configured state folder itself, or a component of its configured path, to be a symbolic link resolved as installed, or must the complete path including state_dir be opened without following links?",
+   "options": [
+    "Resolve the configured state_dir as installed and prohibit links only in entries below it",
+    "Reject any symbolic link in the complete path to state_dir",
+    "Resolve only parent components but require the final state_dir component not to be a link"
+   ],
+   "default_guess": "Resolve the configured state_dir as installed and prohibit links only below it.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_STATE_DIR names a symbolic link to an installation-owned state folder.",
+    "events": [
+     "The service starts with that run setting.",
+     "A caller performs the first delivery for a project."
+    ],
+    "outcomes": [
+     "The service accepts the configured root and creates state entries below its resolved target",
+     "The service refuses the operation because reaching state_dir follows a symbolic link"
+    ],
+    "observer": "The caller and the service operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "underspecified_folder_creation",
+   "text": "the service creates only folders below them, with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants, and removes none.",
+   "question": "For each missing folder, how must creation handle a concurrent creator, an existing non-folder, a symbolic link, a mode-setting failure and partial creation of earlier path components, and which operation-specific result follows from each failure?",
+   "options": [
+    "Create one component at a time, accept a concurrent creation only if the resulting entry is a permitted folder, and otherwise fail the current write or lock",
+    "Treat every already-existing result of a create attempt as success",
+    "Attempt to create the whole path recursively and propagate its raw operating-system behavior"
+   ],
+   "default_guess": "Create components one at a time, accept a concurrent creator only after validating the resulting folder, preserve already-created components, and map the failure according to the calling operation.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "concurrent_creation_policy",
+   "text": "Deliveries and marks of one project run one at a time, across processes, under an operating system lock on one lock file of that project in the state folder.",
+   "question": "How are simultaneous first operations for different projects serialized or made race-safe while they create a shared locks, ledger or published folder, since the per-project locks do not yet exist and do not serialize different projects?",
+   "options": [
+    "Treat another process's successful creation of the shared folder as success after validating it",
+    "Use an additional global initialization lock",
+    "Allow the losing operation to fail and require its caller to retry"
+   ],
+   "default_guess": "Treat a concurrent creation as success after validating the resulting folder and its no-link property.",
+   "witness": {
+    "initial": "The state folder exists and none of the shared state subfolders exists.",
+    "events": [
+     "Process A starts the first operation for project P.",
+     "At the same time process B starts the first operation for project Q.",
+     "Both attempt to create the same shared lock-folder entry."
+    ],
+    "outcomes": [
+     "Both accept the one resulting folder and continue",
+     "One process receives state_unavailable because its creation found the folder already present"
+    ],
+    "observer": "The two callers"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "underspecified_temporary_file_policy",
+   "text": "A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.",
+   "question": "How is a temporary name chosen, must creation be exclusive and fresh, what mode does the temporary file have, what happens on collisions or exhaustion, and may later operations remove temporary files left by crashes?",
+   "options": [
+    "Use exclusive fresh random names, apply TEMPORARY_FILE_MODE immediately, skip collisions, and leave crash remnants indefinitely",
+    "Use a deterministic name and fail if it already exists",
+    "Remove old prefix-matching temporary files before a new write"
+   ],
+   "default_guess": "Use an exclusively created fresh random name with TEMPORARY_FILE_MODE, skip existing names, fail if no name can be obtained, and never remove a remnant not known to belong to the current write.",
+   "witness": {
+    "initial": "A previous crashed write left a temporary file with a valid TEMPORARY_NAME_PREFIX in the destination folder.",
+    "events": [
+     "A later delivery writes another file in that folder.",
+     "Its writer selects a temporary name."
+    ],
+    "outcomes": [
+     "The writer skips the existing name and completes normally",
+     "The writer selects the existing deterministic name and either fails or replaces the remnant"
+    ],
+    "observer": "The delivery caller and an operator inspecting the store"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:public_op:delivery_store.store_image",
+   "kind": "undefined_durability",
+   "text": "Writes the stored image atomically and makes it durable before it returns (A6 rules 2 and 3).",
+   "question": "What exact persistence boundary constitutes durability: synchronising the temporary file, the renamed file, its containing folder, every newly created ancestor folder, or some stated subset; and which failed synchronisation makes the write fail?",
+   "options": [
+    "Synchronise file content and every directory entry needed to reach the final image, including newly created folders",
+    "Synchronise the file before rename and the immediate destination folder after rename",
+    "Synchronise only the file content and rely on the filesystem for directory persistence"
+   ],
+   "default_guess": "Synchronise the file before rename, every newly created folder in its parent, and the final image folder after rename; any such failure makes store_image fail.",
+   "witness": {
+    "initial": "The binary root exists, the image's project folder is newly created, the image has been renamed into place, and synchronising that folder reports an error.",
+    "events": [
+     "module:photo_delivery calls store_image.",
+     "store_image reaches its durability step after the rename."
+    ],
+    "outcomes": [
+     "store_image fails and photo_delivery returns a failed M06",
+     "store_image treats the file-content synchronisation as sufficient and returns the reference"
+    ],
+    "observer": "The delivery caller; after a host crash, the Portal may also observe whether the image address survived"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:public_op:delivery_store.store_image",
+   "kind": "contradictory_state_effect",
+   "text": "Writes one stored image.",
+   "question": "When the image's containing folders do not exist, must State impact include the folders A6 rule 2 requires the service to create and a temporary file that may remain after a crash, rather than only one stored image?",
+   "options": [
+    "The operation may also create persistent folders and may leave a temporary crash remnant",
+    "All required folders must already exist and no temporary name may remain",
+    "The listed State impact describes only the successful logical artifact and intentionally omits physical side effects"
+   ],
+   "default_guess": "Include newly created folders and possible temporary crash remnants as physical state effects.",
+   "witness": {
+    "initial": "The binary root exists but photos/<project_id> does not.",
+    "events": [
+     "A delivery reaches store_image and succeeds."
+    ],
+    "outcomes": [
+     "The operation leaves the new folders plus the stored image",
+     "The operation cannot create the folders because its stated impact is only one stored image and therefore fails"
+    ],
+    "observer": "The delivery caller and an operator inspecting the binary store"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:public_op:delivery_store.store_image",
+   "kind": "unspecified_exception_contract",
+   "text": "A failed write raises the operating system error, which `module:photo_delivery` turns into the failure of that photo.",
+   "question": "Which concrete exception types and payloads are part of this operation's contract, and does store_image propagate the original error from creation, writing, mode-setting, synchronisation, rename or cleanup, or normalize all of them?",
+   "options": [
+    "Propagate the original OSError subclass and details",
+    "Raise a single normalized storage-write exception",
+    "Return a typed failed-write result instead of raising"
+   ],
+   "default_guess": "Propagate the primary OSError while suppressing any secondary cleanup error, and let photo_delivery map it to the photo failure.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:public_op:delivery_store.write_placement",
+   "kind": "unspecified_exception_contract",
+   "text": "A failed write raises the operating system error, which `module:photo_delivery` turns into the failure of that photo.",
+   "question": "Which concrete exception is raised for folder creation, temporary-file creation, serialization, mode-setting, write, synchronization, rename or cleanup failures, and which error wins when the primary write and cleanup both fail?",
+   "options": [
+    "Propagate the original primary OSError and retain cleanup failure only as context",
+    "Normalize every failure to one storage-write exception",
+    "Allow serialization errors and operating-system errors to escape as different undeclared exception families"
+   ],
+   "default_guess": "Propagate the primary OSError, attach but do not replace it with a cleanup error, and have photo_delivery map it to UNREADABLE_FILE.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:public_op:delivery_store.write_placement",
+   "kind": "contradictory_state_effect",
+   "text": "Writes one placement record.",
+   "question": "May write_placement also create the placement-record folders required by A6 rule 2 and leave a temporary file after a crash, and must those effects be stated here?",
+   "options": [
+    "Yes, folders and a crash remnant are additional physical effects",
+    "No, every record folder must pre-exist",
+    "The State impact intentionally lists only the logical final record"
+   ],
+   "default_guess": "Allow creation of the required folders and a possible temporary crash remnant, and state those effects explicitly.",
+   "unit": "?"
+  },
+  {
+   "subject": "50_public_apis.md:public_op:delivery_store.write_mark",
+   "kind": "contradictory_state_effect",
+   "text": "Writes one mark record.",
+   "question": "May write_mark also create the mark-record folders required by A6 rule 2 and leave a temporary file after a crash, and must those effects be stated here?",
+   "options": [
+    "Yes, folders and a crash remnant are additional physical effects",
+    "No, every record folder must pre-exist",
+    "The State impact intentionally lists only the logical final record"
+   ],
+   "default_guess": "Allow creation of the required folders and a possible temporary crash remnant, and state those effects explicitly.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "unspecified_record_encoding",
+   "text": "A placement or mark record that exists is validated against its closed model, and its `project_id` and `source_id` must equal those of its address.",
+   "question": "What on-disk encoding do write_placement and write_mark produce and read_placement and read_mark consume, including character encoding and representations of UUIDs, datetimes, enumeration members and optional values?",
+   "options": [
+    "UTF-8 JSON using the model field names and the string forms stated by the models and A7",
+    "A framework-specific model serialization accepted by its default parser",
+    "Any encoding private to delivery_store as long as its own reader can reconstruct the model"
+   ],
+   "default_guess": "Use UTF-8 JSON with exact model field names, lowercase hyphenated UUID strings, A7 datetime strings, enumeration values as their declared strings, and JSON null for absent optional values.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "underspecified_validation",
+   "text": "validated against its closed model",
+   "question": "Does validation require every declared field, reject every extra field, enforce JSON value types without coercion, require exact enumeration strings and nested-model forms, and reject duplicate JSON object keys or non-standard numeric values?",
+   "options": [
+    "Strict closed validation with all fields required, no extras and no type coercion",
+    "Use the model library's default coercive validation while forbidding extras",
+    "Accept any representation the reader can coerce into the model"
+   ],
+   "default_guess": "Require strict JSON types, every field, no additional fields, exact enumeration values and valid nested models, and reject duplicate keys and non-standard JSON values.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "underspecified_record_durability",
+   "text": "A record is the last write of its operation: once it is in place the operation has taken effect.",
+   "question": "Does a successful record write promise survival of an immediate process or host crash, which synchronization establishes that promise, and is a failure to synchronize the containing folder after rename an operation failure or a success whose crash survival is uncertain?",
+   "options": [
+    "Synchronize the record and containing folder before returning success",
+    "Treat rename as the effect boundary; a later folder-sync failure cannot turn the operation into failure",
+    "Do not synchronize records and permit a successfully reported record to disappear after a host crash"
+   ],
+   "default_guess": "Synchronize record contents before rename; once rename succeeds treat the operation as successful, attempt folder synchronization without converting that success to failure, and explicitly state that host-crash survival is uncertain if it fails.",
+   "witness": {
+    "initial": "A mark record has been completely renamed into place, then synchronization of its containing folder fails.",
+    "events": [
+     "The caller records a publication mark.",
+     "write_mark reaches the post-rename synchronization failure.",
+     "The host crashes and restarts before another operation."
+    ],
+    "outcomes": [
+     "The mark call answered marked because placement in the directory was the effect boundary; after restart the mark may be absent",
+     "The mark call answered state_unavailable because durability was required; alternatively an implementation that returned success promises the mark remains"
+    ],
+    "observer": "The mark caller and the next scan or repeated delivery after restart"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "undefined_failure_rollback",
+   "text": "Each stored image and record is written atomically: a reader sees the complete file or none, and a write that fails leaves the earlier state of its address as it was.",
+   "question": "If rename has installed the destination but a later durability step fails, must the writer remove or restore the destination to recover the earlier address state, or is the write considered to have taken effect despite returning a failure?",
+   "options": [
+    "Rollback or restore the prior destination before reporting failure",
+    "Treat successful rename as success even if later durability work fails",
+    "Report failure while leaving the newly installed complete destination in place"
+   ],
+   "default_guess": "For stored images, do not report success until required durability steps pass and restore the prior address state on failure if that guarantee is retained; for records, define rename as the success boundary as the following sentence states.",
+   "witness": {
+    "initial": "No image exists at the destination; the temporary image is complete and renamed successfully, but the next durability operation fails.",
+    "events": [
+     "store_image performs the rename.",
+     "The post-rename durability call returns an error."
+    ],
+    "outcomes": [
+     "store_image reports failure and removes the new destination so the earlier absent state is restored",
+     "store_image reports failure but leaves the complete image at its destination"
+    ],
+    "observer": "The delivery caller and an operator or later retry inspecting the binary store"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"50_public_apis.md:public_op:delivery_store.project_lock\",\"kind\":\"contradictory_state_effect\",\"text\":\"Writes only the project lock file, on first use.\",\"question\":\"When the lock's containing folders below the state folder are absent, must project_lock create them as A6 rule 2 says the service does, or must it write only the lock file; and are those folder creations part of this operation's state impact?\",\"options\":[\"Create the missing folders with STATE_FOLDER_MODE and then create the lock file\",\"Refuse with state_unavailable when any containing folder is absent\",\"Place the lock directly in the state folder so no containing folder is needed\"],\"default_guess\":\"Create the missing folders with STATE_FOLDER_MODE and include them in the state impact.\",\"witness\":{\"initial\":\"The installation-created state folder exists, but the folder intended to contain project locks does not.\",\"events\":[\"A caller starts the first delivery for project P.\",\"module:photo_delivery calls project_lock for P.\"],\"outcomes\":[\"project_lock creates the containing folder and lock file and the delivery continues\",\"project_lock refuses with state_unavailable because its declared state impact permits only creation of the lock file\"],\"observer\":\"The caller and an operator inspecting the state folder\"}},{\"subject\":\"50_public_apis.md:public_op:delivery_store.project_lock\",\"kind\":\"underspecified_error_boundary\",\"text\":\"`state_unavailable` when the lock cannot be taken (A6 rule 5).\",\"question\":\"Which failures count as the lock not being taken: absent or uncreatable parent folders, an existing non-regular entry, an existing symbolic link, open or permission failure, failure to establish LOCK_FILE_MODE, an operating-system locking error, or interruption while waiting?\",\"options\":[\"Map every preparation, validation, open, mode-setting and locking failure to state_unavailable\",\"Map only the operating-system lock call's failure to state_unavailable and propagate other operating-system errors\",\"Treat some existing entries as usable lock objects and refuse only when the OS lock operation fails\"],\"default_guess\":\"Map every failure needed to safely open or create and lock a regular non-link lock file to state_unavailable.\"},{\"subject\":\"50_public_apis.md:public_op:delivery_store.project_lock\",\"kind\":\"underspecified_lock_entry\",\"text\":\"Creates the project lock file on first use and holds an operating system lock (A6 rule 4).\",\"question\":\"What must project_lock require when an entry already exists at the lock address: must it be a regular non-symbolic-link file, how is it opened, and are its bytes and mode accepted unchanged?\",\"options\":[\"Require a regular non-link file, open it without following links, and leave its bytes and mode unchanged\",\"Accept any entry the operating system can lock\",\"Reapply LOCK_FILE_MODE to an existing regular file before locking it\"],\"default_guess\":\"Require and open a regular file without following links, leave existing bytes and mode unchanged, and otherwise return state_unavailable.\"},{\"subject\":\"50_public_apis.md:public_op:delivery_store.project_lock\",\"kind\":\"underspecified_creation_failure\",\"text\":\"The lock file is created on first use with the imported `LOCK_FILE_MODE` constant and is never changed or removed afterwards.\",\"question\":\"If creation succeeds but establishing LOCK_FILE_MODE or taking the first lock fails, does the newly created entry remain, is it removed, and what mode may an observer see?\",\"options\":[\"Create it with the final mode in one safe step and leave it on any later failure\",\"Remove a newly created file when initialization or first locking fails\",\"Leave the partially initialized file and return state_unavailable\"],\"default_guess\":\"Create it exclusively with the final mode, leave it in place if later locking fails, and return state_unavailable.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"missing_storage_layout\",\"text\":\"Deliveries and marks of one project run one at a time, across processes, under an operating system lock on one lock file of that project in the state folder.\",\"question\":\"What are the exact addresses of the project lock, placement record and mark record under state_dir, including how LOCKS_FOLDER, PLACEMENTS_FOLDER, MARKS_FOLDER, LOCK_FILE_SUFFIX and RECORD_FILE_SUFFIX are combined with project_id and source_id?\",\"options\":[\"Use locks/<project_id>.lock, ledger/<project_id>/<source_id>.json and published/<project_id>/<source_id>.json\",\"Put each project in one project directory and place its lock and records beneath it\",\"Use the identifiers and imported constants in another collision-free layout owned by delivery_store\"],\"default_guess\":\"Use locks/<project_id>.lock, ledger/<project_id>/<source_id>.json and published/<project_id>/<source_id>.json.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"underspecified_root_symlink_policy\",\"text\":\"Below the state folder the service follows no symbolic link.\",\"question\":\"Does this permit the configured state folder itself, or a component of its configured path, to be a symbolic link resolved as installed, or must the complete path including state_dir be opened without following links?\",\"options\":[\"Resolve the configured state_dir as installed and prohibit links only in entries below it\",\"Reject any symbolic link in the complete path to state_dir\",\"Resolve only parent components but require the final state_dir component not to be a link\"],\"default_guess\":\"Resolve the configured state_dir as installed and prohibit links only below it.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_STATE_DIR names a symbolic link to an installation-owned state folder.\",\"events\":[\"The service starts with that run setting.\",\"A caller performs the first delivery for a project.\"],\"outcomes\":[\"The service accepts the configured root and creates state entries below its resolved target\",\"The service refuses the operation because reaching state_dir follows a symbolic link\"],\"observer\":\"The caller and the service operator\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"underspecified_folder_creation\",\"text\":\"the service creates only folders below them, with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants, and removes none.\",\"question\":\"For each missing folder, how must creation handle a concurrent creator, an existing non-folder, a symbolic link, a mode-setting failure and partial creation of earlier path components, and which operation-specific result follows from each failure?\",\"options\":[\"Create one component at a time, accept a concurrent creation only if the resulting entry is a permitted folder, and otherwise fail the current write or lock\",\"Treat every already-existing result of a create attempt as success\",\"Attempt to create the whole path recursively and propagate its raw operating-system behavior\"],\"default_guess\":\"Create components one at a time, accept a concurrent creator only after validating the resulting folder, preserve already-created components, and map the failure according to the calling operation.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"concurrent_creation_policy\",\"text\":\"Deliveries and marks of one project run one at a time, across processes, under an operating system lock on one lock file of that project in the state folder.\",\"question\":\"How are simultaneous first operations for different projects serialized or made race-safe while they create a shared locks, ledger or published folder, since the per-project locks do not yet exist and do not serialize different projects?\",\"options\":[\"Treat another process's successful creation of the shared folder as success after validating it\",\"Use an additional global initialization lock\",\"Allow the losing operation to fail and require its caller to retry\"],\"default_guess\":\"Treat a concurrent creation as success after validating the resulting folder and its no-link property.\",\"witness\":{\"initial\":\"The state folder exists and none of the shared state subfolders exists.\",\"events\":[\"Process A starts the first operation for project P.\",\"At the same time process B starts the first operation for project Q.\",\"Both attempt to create the same shared lock-folder entry.\"],\"outcomes\":[\"Both accept the one resulting folder and continue\",\"One process receives state_unavailable because its creation found the folder already present\"],\"observer\":\"The two callers\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"underspecified_temporary_file_policy\",\"text\":\"A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.\",\"question\":\"How is a temporary name chosen, must creation be exclusive and fresh, what mode does the temporary file have, what happens on collisions or exhaustion, and may later operations remove temporary files left by crashes?\",\"options\":[\"Use exclusive fresh random names, apply TEMPORARY_FILE_MODE immediately, skip collisions, and leave crash remnants indefinitely\",\"Use a deterministic name and fail if it already exists\",\"Remove old prefix-matching temporary files before a new write\"],\"default_guess\":\"Use an exclusively created fresh random name with TEMPORARY_FILE_MODE, skip existing names, fail if no name can be obtained, and never remove a remnant not known to belong to the current write.\",\"witness\":{\"initial\":\"A previous crashed write left a temporary file with a valid TEMPORARY_NAME_PREFIX in the destination folder.\",\"events\":[\"A later delivery writes another file in that folder.\",\"Its writer selects a temporary name.\"],\"outcomes\":[\"The writer skips the existing name and completes normally\",\"The writer selects the existing deterministic name and either fails or replaces the remnant\"],\"observer\":\"The delivery caller and an operator inspecting the store\"}},{\"subject\":\"50_public_apis.md:public_op:delivery_store.store_image\",\"kind\":\"undefined_durability\",\"text\":\"Writes the stored image atomically and makes it durable before it returns (A6 rules 2 and 3).\",\"question\":\"What exact persistence boundary constitutes durability: synchronising the temporary file, the renamed file, its containing folder, every newly created ancestor folder, or some stated subset; and which failed synchronisation makes the write fail?\",\"options\":[\"Synchronise file content and every directory entry needed to reach the final image, including newly created folders\",\"Synchronise the file before rename and the immediate destination folder after rename\",\"Synchronise only the file content and rely on the filesystem for directory persistence\"],\"default_guess\":\"Synchronise the file before rename, every newly created folder in its parent, and the final image folder after rename; any such failure makes store_image fail.\",\"witness\":{\"initial\":\"The binary root exists, the image's project folder is newly created, the image has been renamed into place, and synchronising that folder reports an error.\",\"events\":[\"module:photo_delivery calls store_image.\",\"store_image reaches its durability step after the rename.\"],\"outcomes\":[\"store_image fails and photo_delivery returns a failed M06\",\"store_image treats the file-content synchronisation as sufficient and returns the reference\"],\"observer\":\"The delivery caller; after a host crash, the Portal may also observe whether the image address survived\"}},{\"subject\":\"50_public_apis.md:public_op:delivery_store.store_image\",\"kind\":\"contradictory_state_effect\",\"text\":\"Writes one stored image.\",\"question\":\"When the image's containing folders do not exist, must State impact include the folders A6 rule 2 requires the service to create and a temporary file that may remain after a crash, rather than only one stored image?\",\"options\":[\"The operation may also create persistent folders and may leave a temporary crash remnant\",\"All required folders must already exist and no temporary name may remain\",\"The listed State impact describes only the successful logical artifact and intentionally omits physical side effects\"],\"default_guess\":\"Include newly created folders and possible temporary crash remnants as physical state effects.\",\"witness\":{\"initial\":\"The binary root exists but photos/<project_id> does not.\",\"events\":[\"A delivery reaches store_image and succeeds.\"],\"outcomes\":[\"The operation leaves the new folders plus the stored image\",\"The operation cannot create the folders because its stated impact is only one stored image and therefore fails\"],\"observer\":\"The delivery caller and an operator inspecting the binary store\"}},{\"subject\":\"50_public_apis.md:public_op:delivery_store.store_image\",\"kind\":\"unspecified_exception_contract\",\"text\":\"A failed write raises the operating system error, which `module:photo_delivery` turns into the failure of that photo.\",\"question\":\"Which concrete exception types and payloads are part of this operation's contract, and does store_image propagate the original error from creation, writing, mode-setting, synchronisation, rename or cleanup, or normalize all of them?\",\"options\":[\"Propagate the original OSError subclass and details\",\"Raise a single normalized storage-write exception\",\"Return a typed failed-write result instead of raising\"],\"default_guess\":\"Propagate the primary OSError while suppressing any secondary cleanup error, and let photo_delivery map it to the photo failure.\"},{\"subject\":\"50_public_apis.md:public_op:delivery_store.write_placement\",\"kind\":\"unspecified_exception_contract\",\"text\":\"A failed write raises the operating system error, which `module:photo_delivery` turns into the failure of that photo.\",\"question\":\"Which concrete exception is raised for folder creation, temporary-file creation, serialization, mode-setting, write, synchronization, rename or cleanup failures, and which error wins when the primary write and cleanup both fail?\",\"options\":[\"Propagate the original primary OSError and retain cleanup failure only as context\",\"Normalize every failure to one storage-write exception\",\"Allow serialization errors and operating-system errors to escape as different undeclared exception families\"],\"default_guess\":\"Propagate the primary OSError, attach but do not replace it with a cleanup error, and have photo_delivery map it to UNREADABLE_FILE.\"},{\"subject\":\"50_public_apis.md:public_op:delivery_store.write_placement\",\"kind\":\"contradictory_state_effect\",\"text\":\"Writes one placement record.\",\"question\":\"May write_placement also create the placement-record folders required by A6 rule 2 and leave a temporary file after a crash, and must those effects be stated here?\",\"options\":[\"Yes, folders and a crash remnant are additional physical effects\",\"No, every record folder must pre-exist\",\"The State impact intentionally lists only the logical final record\"],\"default_guess\":\"Allow creation of the required folders and a possible temporary crash remnant, and state those effects explicitly.\"},{\"subject\":\"50_public_apis.md:public_op:delivery_store.write_mark\",\"kind\":\"contradictory_state_effect\",\"text\":\"Writes one mark record.\",\"question\":\"May write_mark also create the mark-record folders required by A6 rule 2 and leave a temporary file after a crash, and must those effects be stated here?\",\"options\":[\"Yes, folders and a crash remnant are additional physical effects\",\"No, every record folder must pre-exist\",\"The State impact intentionally lists only the logical final record\"],\"default_guess\":\"Allow creation of the required folders and a possible temporary crash remnant, and state those effects explicitly.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"unspecified_record_encoding\",\"text\":\"A placement or mark record that exists is validated against its closed model, and its `project_id` and `source_id` must equal those of its address.\",\"question\":\"What on-disk encoding do write_placement and write_mark produce and read_placement and read_mark consume, including character encoding and representations of UUIDs, datetimes, enumeration members and optional values?\",\"options\":[\"UTF-8 JSON using the model field names and the string forms stated by the models and A7\",\"A framework-specific model serialization accepted by its default parser\",\"Any encoding private to delivery_store as long as its own reader can reconstruct the model\"],\"default_guess\":\"Use UTF-8 JSON with exact model field names, lowercase hyphenated UUID strings, A7 datetime strings, enumeration values as their declared strings, and JSON null for absent optional values.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"underspecified_validation\",\"text\":\"validated against its closed model\",\"question\":\"Does validation require every declared field, reject every extra field, enforce JSON value types without coercion, require exact enumeration strings and nested-model forms, and reject duplicate JSON object keys or non-standard numeric values?\",\"options\":[\"Strict closed validation with all fields required, no extras and no type coercion\",\"Use the model library's default coercive validation while forbidding extras\",\"Accept any representation the reader can coerce into the model\"],\"default_guess\":\"Require strict JSON types, every field, no additional fields, exact enumeration values and valid nested models, and reject duplicate keys and non-standard JSON values.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"underspecified_record_durability\",\"text\":\"A record is the last write of its operation: once it is in place the operation has taken effect.\",\"question\":\"Does a successful record write promise survival of an immediate process or host crash, which synchronization establishes that promise, and is a failure to synchronize the containing folder after rename an operation failure or a success whose crash survival is uncertain?\",\"options\":[\"Synchronize the record and containing folder before returning success\",\"Treat rename as the effect boundary; a later folder-sync failure cannot turn the operation into failure\",\"Do not synchronize records and permit a successfully reported record to disappear after a host crash\"],\"default_guess\":\"Synchronize record contents before rename; once rename succeeds treat the operation as successful, attempt folder synchronization without converting that success to failure, and explicitly state that host-crash survival is uncertain if it fails.\",\"witness\":{\"initial\":\"A mark record has been completely renamed into place, then synchronization of its containing folder fails.\",\"events\":[\"The caller records a publication mark.\",\"write_mark reaches the post-rename synchronization failure.\",\"The host crashes and restarts before another operation.\"],\"outcomes\":[\"The mark call answered marked because placement in the directory was the effect boundary; after restart the mark may be absent\",\"The mark call answered state_unavailable because durability was required; alternatively an implementation that returned success promises the mark remains\"],\"observer\":\"The mark caller and the next scan or repeated delivery after restart\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"undefined_failure_rollback\",\"text\":\"Each stored image and record is written atomically: a reader sees the complete file or none, and a write that fails leaves the earlier state of its address as it was.\",\"question\":\"If rename has installed the destination but a later durability step fails, must the writer remove or restore the destination to recover the earlier address state, or is the write considered to have taken effect despite returning a failure?\",\"options\":[\"Rollback or restore the prior destination before reporting failure\",\"Treat successful rename as success even if later durability work fails\",\"Report failure while leaving the newly installed complete destination in place\"],\"default_guess\":\"For stored images, do not report success until required durability steps pass and restore the prior address state on failure if that guarantee is retained; for records, define rename as the success boundary as the following sentence states.\",\"witness\":{\"initial\":\"No image exists at the destination; the temporary image is complete and renamed successfully, but the next durability operation fails.\",\"events\":[\"store_image performs the rename.\",\"The post-rename durability call returns an error.\"],\"outcomes\":[\"store_image reports failure and removes the new destination so the earlier absent state is restored\",\"store_image reports failure but leaves the complete image at its destination\"],\"observer\":\"The delivery caller and an operator or later retry inspecting the binary store\"}}]}",
+ "set_aside": []
+}

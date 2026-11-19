@@ -1,0 +1,415 @@
+{
+ "open_points": [
+  {
+   "subject": "A2 camera time zone",
+   "kind": "time_zone_definition",
+   "text": "otherwise it is read in the time zone of the `timezone` field of the run settings (A8)",
+   "question": "Which time-zone identifier set and rule-data version interpret this field, and what happens when the identifier is missing or invalid?",
+   "options": [
+    "Use the host's installed IANA tzdata and refuse an invalid identifier",
+    "Pin an IANA tzdata version and validate the identifier at startup",
+    "Accept another offset or platform-specific time-zone representation"
+   ],
+   "default_guess": "Require an IANA zone name, validate it at startup and use the dependency version pinned for the service.",
+   "witness": {
+    "initial": "The run setting names a zone whose historical or future offset differs between installed tzdata versions.",
+    "events": [
+     "The owner delivers a photo whose offsetless EXIF time falls in the changed interval.",
+     "The deliverer converts that local camera time to UTC."
+    ],
+    "outcomes": [
+     "The photo date uses the offset from the host's tzdata.",
+     "The photo date uses the offset from a pinned or bundled tzdata version."
+    ],
+    "observer": "The calling flow and Portal see different photo dates."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 state-file layout",
+   "kind": "missing_address",
+   "text": "A placement or mark record that exists is validated against its closed model, and its `project_id` and `source_id` must equal those of its address.",
+   "question": "What are the exact addresses and file names of placement records and mark records under the state folder?",
+   "options": [
+    "Separate placement and mark folders, each partitioned by project and named by source id",
+    "One project folder containing differently suffixed placement and mark files",
+    "Another collision-free layout"
+   ],
+   "default_guess": "Use separate placement and mark namespaces, a project-id folder in each, and a source-id-derived record name.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 project lock identity",
+   "kind": "missing_address",
+   "text": "under an operating system lock on one lock file of that project in the state folder",
+   "question": "How is a project's lock-file address derived, and how is it guaranteed not to collide with another project or a record?",
+   "options": [
+    "A project-id file directly in the state folder",
+    "A project-id file in a dedicated locks folder",
+    "A hashed or escaped project-id name"
+   ],
+   "default_guess": "Use a dedicated locks folder and a canonical UUID file name.",
+   "witness": {
+    "initial": "Two projects are eligible for deliveries at the same time.",
+    "events": [
+     "A caller delivers a photo for the first project.",
+     "Another caller delivers a photo for the second project."
+    ],
+    "outcomes": [
+     "Distinct lock addresses allow the deliveries to run concurrently.",
+     "A colliding or shared address serializes otherwise independent projects."
+    ],
+    "observer": "The callers observe different concurrency and completion times."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 missing state root",
+   "kind": "absence_or_failure",
+   "text": "The installation creates the binary store and the state folder; the service creates only folders below them",
+   "question": "If the state folder or an ancestor of a record address is missing at runtime, is the record absent, is the operation refused as state unavailable, or does the service recreate anything?",
+   "options": [
+    "Treat a missing state root as STATE_UNAVAILABLE and never recreate it",
+    "Treat missing record subfolders as absence but a missing state root as STATE_UNAVAILABLE",
+    "Treat every missing ancestor as an absent record"
+   ],
+   "default_guess": "Refuse a missing state root as STATE_UNAVAILABLE; treat only missing service-owned record subfolders as absence.",
+   "witness": {
+    "initial": "The configured state folder has disappeared before a delivery.",
+    "events": [
+     "The caller delivers content with no known placement.",
+     "The service checks the placement-record address."
+    ],
+    "outcomes": [
+     "The service treats the missing address as absent and starts a new placement.",
+     "The service refuses with STATE_UNAVAILABLE."
+    ],
+    "observer": "The caller sees placement processing versus a refusal, and the filesystem may gain new state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 folder creation",
+   "kind": "directory_policy",
+   "text": "the service creates only folders below them, with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants",
+   "question": "In what order and with what collision, race, mode-setting and failure rules are missing folders created?",
+   "options": [
+    "Create each component outermost-first, accept an concurrently created directory, set the exact mode despite umask, and fail on every other entry",
+    "Attempt a recursive creation and accept whatever directories already exist",
+    "Reject any pre-existing service-owned directory whose mode differs from the constant"
+   ],
+   "default_guess": "Create components outermost-first without following state links, accept an existing real directory, enforce the exact mode on newly created directories, and fail the write on any other collision.",
+   "witness": {
+    "initial": "Two processes simultaneously need the same missing project record folder.",
+    "events": [
+     "Both attempt to create the folder.",
+     "One creation wins and the other observes that the address now exists."
+    ],
+    "outcomes": [
+     "The loser accepts the concurrently created directory and continues.",
+     "The loser treats the existing address as a creation failure and refuses."
+    ],
+    "observer": "One caller either succeeds or receives a failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 existing folder modes",
+   "kind": "mode_policy",
+   "text": "with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants",
+   "question": "Do those constants govern only folders newly created by the service, or must an existing folder be checked or changed to that mode?",
+   "options": [
+    "Apply the mode only when creating a folder",
+    "Validate an existing folder and refuse a mismatched mode",
+    "Change an existing folder to the required mode"
+   ],
+   "default_guess": "Apply the mode to newly created folders and accept an existing real folder without changing it.",
+   "witness": {
+    "initial": "A required service-owned folder already exists with a mode different from the constant.",
+    "events": [
+     "A delivery needs to write through that folder."
+    ],
+    "outcomes": [
+     "The delivery uses the folder as it stands.",
+     "The delivery refuses or changes the folder's mode."
+    ],
+    "observer": "The caller and the installation administrator see different results."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 replacement visibility",
+   "kind": "atomicity_semantics",
+   "text": "Each stored image and record is written atomically: a reader sees the complete file or none, and a write that fails leaves the earlier state of its address as it was.",
+   "question": "When a complete file already exists at the destination, must readers continuously see either the old or new complete file, or may they transiently see no file?",
+   "options": [
+    "Replacement is a single atomic rename, so readers see old or new and never an intervening absence",
+    "The writer may remove the old file before installing the new one, so a reader may see none",
+    "Existing destinations are never replaced"
+   ],
+   "default_guess": "Use atomic replacement so a reader sees the old or new complete file with no intervening absence.",
+   "witness": {
+    "initial": "An orphan stored image already exists at the final address and a repeated delivery writes the image again.",
+    "events": [
+     "The deliverer replaces the image.",
+     "The Portal reads the same reference during the replacement."
+    ],
+    "outcomes": [
+     "The Portal reads either the complete old image or the complete new image.",
+     "The Portal temporarily finds no image."
+    ],
+    "observer": "The Portal and its client request see success versus a missing binary."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 image durability",
+   "kind": "durability_boundary",
+   "text": "A stored image is made durable before the record that refers to it is written",
+   "question": "What filesystem actions constitute making the image durable, including newly created parent folders and the rename into its final address?",
+   "options": [
+    "Synchronize the file and every directory entry needed to reach it before writing the record",
+    "Synchronize only the image contents before rename",
+    "Treat a successful close or rename as durable"
+   ],
+   "default_guess": "Synchronize the image, rename it atomically, and synchronize all newly created and containing directories required for the final name.",
+   "witness": {
+    "initial": "Writing the image required new directories.",
+    "events": [
+     "The image is closed or renamed.",
+     "The placement record is written.",
+     "The host loses power immediately afterward and restarts."
+    ],
+    "outcomes": [
+     "Both the directories and image survive, so the record has its image.",
+     "The record survives while an unsynchronized directory entry or image does not."
+    ],
+    "observer": "The Portal observes a valid binary reference versus a record whose image is missing."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 failed durability after rename",
+   "kind": "contradictory_failure_effect",
+   "text": "a write that fails leaves the earlier state of its address as it was. A stored image is made durable before the record that refers to it is written, so a crash never leaves a record without its image; a failure to make it durable fails that write",
+   "question": "If the final rename succeeds but the subsequent durability synchronization fails, is the write reported as failed while the new file remains, is the old address restored, or is the operation treated as having taken effect?",
+   "options": [
+    "Report failure and leave the newly renamed orphan image",
+    "Restore the previous destination before reporting failure",
+    "Treat the installed image as successful despite the synchronization failure"
+   ],
+   "default_guess": "Report the write as failed, leave the complete orphan image, and write no record; the text must expressly exempt this case from the claim that a failed write preserves the earlier address.",
+   "witness": {
+    "initial": "The final image address is absent or contains an earlier file.",
+    "events": [
+     "The temporary image is renamed to the final address.",
+     "Synchronizing the containing directory fails."
+    ],
+    "outcomes": [
+     "The operation fails but the final address now contains the new image.",
+     "The operation fails and the final address has its earlier state."
+    ],
+    "observer": "The caller receives the same failure, but a filesystem observer and the next delivery see different durable state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 record durability",
+   "kind": "commit_point",
+   "text": "A record is the last write of its operation: once it is in place the operation has taken effect.",
+   "question": "Does “in place” mean that the rename succeeded, or that the record and its containing directory have also been synchronized so an acknowledged operation survives a host crash?",
+   "options": [
+    "The rename is the commit point even if directory durability is uncertain",
+    "The record and containing directory must be durable before success is returned",
+    "Placement records and mark records use different durability rules"
+   ],
+   "default_guess": "Return success only after the record and its final directory entry are durable.",
+   "witness": {
+    "initial": "A record has been renamed to its final address but the containing directory has not been synchronized.",
+    "events": [
+     "The operation returns success.",
+     "The host loses power and restarts."
+    ],
+    "outcomes": [
+     "The record may disappear although the caller was told the operation took effect.",
+     "The record is guaranteed to remain after restart."
+    ],
+    "observer": "The caller's retry sees replayed versus a fresh operation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 temporary files",
+   "kind": "temporary_lifecycle",
+   "text": "A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.",
+   "question": "How is a temporary name chosen and created, and what happens to it after an ordinary write failure or a failed cleanup?",
+   "options": [
+    "Create a fresh name exclusively, remove it after ordinary failure, and preserve the original write error if cleanup fails",
+    "Reuse a deterministic temporary name and overwrite it",
+    "Leave temporary files after both crashes and ordinary failures"
+   ],
+   "default_guess": "Create a fresh temporary file exclusively, remove it after non-crash failures, preserve the primary failure if removal also fails, and never treat a temporary file as state.",
+   "witness": {
+    "initial": "A write has created and partly filled its temporary file.",
+    "events": [
+     "The write fails before rename.",
+     "Removing the temporary file also fails."
+    ],
+    "outcomes": [
+     "The operation reports the original write failure and leaves the temporary file.",
+     "The cleanup failure replaces the result or the service retries/reuses the temporary file."
+    ],
+    "observer": "The caller may receive a different failure, and the administrator sees different residue."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 lock-file validation",
+   "kind": "lock_refusal_conditions",
+   "text": "The lock file is created on first use with the imported `LOCK_FILE_MODE` constant and is never changed or removed afterwards.",
+   "question": "What happens when the lock address already contains a symbolic link, directory, non-regular object, unreadable file, or regular file with an unexpected mode or content?",
+   "options": [
+    "Refuse every non-regular or linked entry, but use an existing regular file as it stands",
+    "Refuse an existing regular file unless its mode and content match prescribed values",
+    "Repair the mode of an existing regular file before locking it"
+   ],
+   "default_guess": "Open without following links, require a regular readable/writable file, ignore its bytes, and use its existing mode without changing it.",
+   "witness": {
+    "initial": "The lock address contains an existing regular file with a mode different from LOCK_FILE_MODE.",
+    "events": [
+     "A delivery attempts to take the project lock."
+    ],
+    "outcomes": [
+     "The existing file is locked as it stands.",
+     "The operation refuses or changes the file's mode."
+    ],
+    "observer": "The caller and filesystem administrator see different behavior."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 lock release",
+   "kind": "lock_lifetime",
+   "text": "the lock is released when its holder ends",
+   "question": "Does the holder end when the individual delivery or mark operation finishes, when its request task is cancelled, or only when the process exits?",
+   "options": [
+    "Release at the end of the operation, including exception or cancellation cleanup",
+    "Hold until the worker or process exits",
+    "Release after the response has been completely transmitted"
+   ],
+   "default_guess": "The operation owns the lock and releases it in guaranteed cleanup before returning its result.",
+   "witness": {
+    "initial": "One process remains alive after completing a delivery while another process waits for the same project's lock.",
+    "events": [
+     "The first delivery finishes.",
+     "The second caller continues waiting."
+    ],
+    "outcomes": [
+     "The lock is released at operation completion and the second call proceeds.",
+     "The process retains the lock and the second call remains blocked."
+    ],
+    "observer": "The second caller sees completion versus an indefinite wait."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 record absence",
+   "kind": "existence_check",
+   "text": "A record is absent only when nothing exists at its address.",
+   "question": "How is absence distinguished from an inability to inspect the address or one of its parent folders?",
+   "options": [
+    "Only a definite not-found result is absence; permission, I/O and traversal errors are STATE_UNAVAILABLE",
+    "Every failed lookup of the final address counts as absence",
+    "A missing parent is absence but other lookup failures are STATE_UNAVAILABLE"
+   ],
+   "default_guess": "Treat only definite not-found results, including a definitely missing service-owned parent, as absence; refuse indeterminate lookup errors as STATE_UNAVAILABLE.",
+   "witness": {
+    "initial": "The record's parent folder exists but cannot be searched because of an access or I/O error.",
+    "events": [
+     "A delivery checks whether its placement record exists."
+    ],
+    "outcomes": [
+     "The service treats the record as absent and attempts a new placement.",
+     "The service refuses with STATE_UNAVAILABLE."
+    ],
+    "observer": "The caller sees a new-placement path versus refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 record file type",
+   "kind": "record_refusal_conditions",
+   "text": "A record that is a symbolic link, that cannot be read, or that fails that validation is never taken for an absent record",
+   "question": "Must an existing record be a regular file opened without following links, and how are directories, devices, sockets and FIFOs handled?",
+   "options": [
+    "Require a regular file and refuse every other file type with STATE_UNAVAILABLE",
+    "Attempt to read any non-symbolic-link object and validate the resulting bytes",
+    "Treat non-regular objects as absent"
+   ],
+   "default_guess": "Open without following links, require a regular file before reading, and refuse every other existing type with STATE_UNAVAILABLE.",
+   "witness": {
+    "initial": "A FIFO exists at a placement-record address.",
+    "events": [
+     "A delivery checks the record."
+    ],
+    "outcomes": [
+     "The service rejects it immediately as STATE_UNAVAILABLE.",
+     "The service opens it for reading and can block waiting for a writer."
+    ],
+    "observer": "The caller sees an immediate refusal versus a hung request."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 closed-record validation",
+   "kind": "validation_semantics",
+   "text": "validated against its closed model",
+   "question": "What exact JSON conditions does closed-model validation impose, including UTF-8, duplicate object keys, additional fields, enumeration representation and numeric or UUID coercion?",
+   "options": [
+    "Strict JSON with unique keys, every declared field present with its exact type, valid enum members and no additional fields or coercion",
+    "Use the validation library's default duplicate-key and coercion behavior while forbidding additional fields",
+    "Accept any JSON that can be coerced into the model"
+   ],
+   "default_guess": "Require UTF-8 JSON with unique keys, all and only declared fields, exact field types, valid enum values and no coercion.",
+   "witness": {
+    "initial": "A record contains the `source_id` key twice, once with the address value and once with another value.",
+    "events": [
+     "The service parses and validates the record."
+    ],
+    "outcomes": [
+     "Duplicate keys make the record invalid and the operation is refused.",
+     "The JSON parser keeps one occurrence, which may let the record validate."
+    ],
+    "observer": "The caller sees STATE_UNAVAILABLE versus normal processing."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 valid mark without placement",
+   "kind": "orphan_state",
+   "text": "a damaged mark without a placement stops a new placement",
+   "question": "What must delivery do when a valid mark record exists but its placement record is absent?",
+   "options": [
+    "Refuse the inconsistent state with STATE_UNAVAILABLE",
+    "Create the missing placement and preserve or return the existing mark",
+    "Ignore or replace the orphan mark"
+   ],
+   "default_guess": "Refuse with STATE_UNAVAILABLE because a mark cannot validly exist without its placement.",
+   "witness": {
+    "initial": "A syntactically valid mark record exists for the project and source, but no placement record exists.",
+    "events": [
+     "The caller delivers matching source content."
+    ],
+    "outcomes": [
+     "The service refuses the inconsistent state.",
+     "The service writes a new placement and associates it with the pre-existing mark."
+    ],
+    "observer": "The caller sees refusal versus placed or replayed state, and the filesystem may gain a placement."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A2 camera time zone\",\"kind\":\"time_zone_definition\",\"text\":\"otherwise it is read in the time zone of the `timezone` field of the run settings (A8)\",\"question\":\"Which time-zone identifier set and rule-data version interpret this field, and what happens when the identifier is missing or invalid?\",\"options\":[\"Use the host's installed IANA tzdata and refuse an invalid identifier\",\"Pin an IANA tzdata version and validate the identifier at startup\",\"Accept another offset or platform-specific time-zone representation\"],\"default_guess\":\"Require an IANA zone name, validate it at startup and use the dependency version pinned for the service.\",\"witness\":{\"initial\":\"The run setting names a zone whose historical or future offset differs between installed tzdata versions.\",\"events\":[\"The owner delivers a photo whose offsetless EXIF time falls in the changed interval.\",\"The deliverer converts that local camera time to UTC.\"],\"outcomes\":[\"The photo date uses the offset from the host's tzdata.\",\"The photo date uses the offset from a pinned or bundled tzdata version.\"],\"observer\":\"The calling flow and Portal see different photo dates.\"}},{\"subject\":\"A6 state-file layout\",\"kind\":\"missing_address\",\"text\":\"A placement or mark record that exists is validated against its closed model, and its `project_id` and `source_id` must equal those of its address.\",\"question\":\"What are the exact addresses and file names of placement records and mark records under the state folder?\",\"options\":[\"Separate placement and mark folders, each partitioned by project and named by source id\",\"One project folder containing differently suffixed placement and mark files\",\"Another collision-free layout\"],\"default_guess\":\"Use separate placement and mark namespaces, a project-id folder in each, and a source-id-derived record name.\"},{\"subject\":\"A6 project lock identity\",\"kind\":\"missing_address\",\"text\":\"under an operating system lock on one lock file of that project in the state folder\",\"question\":\"How is a project's lock-file address derived, and how is it guaranteed not to collide with another project or a record?\",\"options\":[\"A project-id file directly in the state folder\",\"A project-id file in a dedicated locks folder\",\"A hashed or escaped project-id name\"],\"default_guess\":\"Use a dedicated locks folder and a canonical UUID file name.\",\"witness\":{\"initial\":\"Two projects are eligible for deliveries at the same time.\",\"events\":[\"A caller delivers a photo for the first project.\",\"Another caller delivers a photo for the second project.\"],\"outcomes\":[\"Distinct lock addresses allow the deliveries to run concurrently.\",\"A colliding or shared address serializes otherwise independent projects.\"],\"observer\":\"The callers observe different concurrency and completion times.\"}},{\"subject\":\"A6 missing state root\",\"kind\":\"absence_or_failure\",\"text\":\"The installation creates the binary store and the state folder; the service creates only folders below them\",\"question\":\"If the state folder or an ancestor of a record address is missing at runtime, is the record absent, is the operation refused as state unavailable, or does the service recreate anything?\",\"options\":[\"Treat a missing state root as STATE_UNAVAILABLE and never recreate it\",\"Treat missing record subfolders as absence but a missing state root as STATE_UNAVAILABLE\",\"Treat every missing ancestor as an absent record\"],\"default_guess\":\"Refuse a missing state root as STATE_UNAVAILABLE; treat only missing service-owned record subfolders as absence.\",\"witness\":{\"initial\":\"The configured state folder has disappeared before a delivery.\",\"events\":[\"The caller delivers content with no known placement.\",\"The service checks the placement-record address.\"],\"outcomes\":[\"The service treats the missing address as absent and starts a new placement.\",\"The service refuses with STATE_UNAVAILABLE.\"],\"observer\":\"The caller sees placement processing versus a refusal, and the filesystem may gain new state.\"}},{\"subject\":\"A6 folder creation\",\"kind\":\"directory_policy\",\"text\":\"the service creates only folders below them, with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants\",\"question\":\"In what order and with what collision, race, mode-setting and failure rules are missing folders created?\",\"options\":[\"Create each component outermost-first, accept an concurrently created directory, set the exact mode despite umask, and fail on every other entry\",\"Attempt a recursive creation and accept whatever directories already exist\",\"Reject any pre-existing service-owned directory whose mode differs from the constant\"],\"default_guess\":\"Create components outermost-first without following state links, accept an existing real directory, enforce the exact mode on newly created directories, and fail the write on any other collision.\",\"witness\":{\"initial\":\"Two processes simultaneously need the same missing project record folder.\",\"events\":[\"Both attempt to create the folder.\",\"One creation wins and the other observes that the address now exists.\"],\"outcomes\":[\"The loser accepts the concurrently created directory and continues.\",\"The loser treats the existing address as a creation failure and refuses.\"],\"observer\":\"One caller either succeeds or receives a failure.\"}},{\"subject\":\"A6 existing folder modes\",\"kind\":\"mode_policy\",\"text\":\"with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants\",\"question\":\"Do those constants govern only folders newly created by the service, or must an existing folder be checked or changed to that mode?\",\"options\":[\"Apply the mode only when creating a folder\",\"Validate an existing folder and refuse a mismatched mode\",\"Change an existing folder to the required mode\"],\"default_guess\":\"Apply the mode to newly created folders and accept an existing real folder without changing it.\",\"witness\":{\"initial\":\"A required service-owned folder already exists with a mode different from the constant.\",\"events\":[\"A delivery needs to write through that folder.\"],\"outcomes\":[\"The delivery uses the folder as it stands.\",\"The delivery refuses or changes the folder's mode.\"],\"observer\":\"The caller and the installation administrator see different results.\"}},{\"subject\":\"A6 replacement visibility\",\"kind\":\"atomicity_semantics\",\"text\":\"Each stored image and record is written atomically: a reader sees the complete file or none, and a write that fails leaves the earlier state of its address as it was.\",\"question\":\"When a complete file already exists at the destination, must readers continuously see either the old or new complete file, or may they transiently see no file?\",\"options\":[\"Replacement is a single atomic rename, so readers see old or new and never an intervening absence\",\"The writer may remove the old file before installing the new one, so a reader may see none\",\"Existing destinations are never replaced\"],\"default_guess\":\"Use atomic replacement so a reader sees the old or new complete file with no intervening absence.\",\"witness\":{\"initial\":\"An orphan stored image already exists at the final address and a repeated delivery writes the image again.\",\"events\":[\"The deliverer replaces the image.\",\"The Portal reads the same reference during the replacement.\"],\"outcomes\":[\"The Portal reads either the complete old image or the complete new image.\",\"The Portal temporarily finds no image.\"],\"observer\":\"The Portal and its client request see success versus a missing binary.\"}},{\"subject\":\"A6 image durability\",\"kind\":\"durability_boundary\",\"text\":\"A stored image is made durable before the record that refers to it is written\",\"question\":\"What filesystem actions constitute making the image durable, including newly created parent folders and the rename into its final address?\",\"options\":[\"Synchronize the file and every directory entry needed to reach it before writing the record\",\"Synchronize only the image contents before rename\",\"Treat a successful close or rename as durable\"],\"default_guess\":\"Synchronize the image, rename it atomically, and synchronize all newly created and containing directories required for the final name.\",\"witness\":{\"initial\":\"Writing the image required new directories.\",\"events\":[\"The image is closed or renamed.\",\"The placement record is written.\",\"The host loses power immediately afterward and restarts.\"],\"outcomes\":[\"Both the directories and image survive, so the record has its image.\",\"The record survives while an unsynchronized directory entry or image does not.\"],\"observer\":\"The Portal observes a valid binary reference versus a record whose image is missing.\"}},{\"subject\":\"A6 failed durability after rename\",\"kind\":\"contradictory_failure_effect\",\"text\":\"a write that fails leaves the earlier state of its address as it was. A stored image is made durable before the record that refers to it is written, so a crash never leaves a record without its image; a failure to make it durable fails that write\",\"question\":\"If the final rename succeeds but the subsequent durability synchronization fails, is the write reported as failed while the new file remains, is the old address restored, or is the operation treated as having taken effect?\",\"options\":[\"Report failure and leave the newly renamed orphan image\",\"Restore the previous destination before reporting failure\",\"Treat the installed image as successful despite the synchronization failure\"],\"default_guess\":\"Report the write as failed, leave the complete orphan image, and write no record; the text must expressly exempt this case from the claim that a failed write preserves the earlier address.\",\"witness\":{\"initial\":\"The final image address is absent or contains an earlier file.\",\"events\":[\"The temporary image is renamed to the final address.\",\"Synchronizing the containing directory fails.\"],\"outcomes\":[\"The operation fails but the final address now contains the new image.\",\"The operation fails and the final address has its earlier state.\"],\"observer\":\"The caller receives the same failure, but a filesystem observer and the next delivery see different durable state.\"}},{\"subject\":\"A6 record durability\",\"kind\":\"commit_point\",\"text\":\"A record is the last write of its operation: once it is in place the operation has taken effect.\",\"question\":\"Does “in place” mean that the rename succeeded, or that the record and its containing directory have also been synchronized so an acknowledged operation survives a host crash?\",\"options\":[\"The rename is the commit point even if directory durability is uncertain\",\"The record and containing directory must be durable before success is returned\",\"Placement records and mark records use different durability rules\"],\"default_guess\":\"Return success only after the record and its final directory entry are durable.\",\"witness\":{\"initial\":\"A record has been renamed to its final address but the containing directory has not been synchronized.\",\"events\":[\"The operation returns success.\",\"The host loses power and restarts.\"],\"outcomes\":[\"The record may disappear although the caller was told the operation took effect.\",\"The record is guaranteed to remain after restart.\"],\"observer\":\"The caller's retry sees replayed versus a fresh operation.\"}},{\"subject\":\"A6 temporary files\",\"kind\":\"temporary_lifecycle\",\"text\":\"A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.\",\"question\":\"How is a temporary name chosen and created, and what happens to it after an ordinary write failure or a failed cleanup?\",\"options\":[\"Create a fresh name exclusively, remove it after ordinary failure, and preserve the original write error if cleanup fails\",\"Reuse a deterministic temporary name and overwrite it\",\"Leave temporary files after both crashes and ordinary failures\"],\"default_guess\":\"Create a fresh temporary file exclusively, remove it after non-crash failures, preserve the primary failure if removal also fails, and never treat a temporary file as state.\",\"witness\":{\"initial\":\"A write has created and partly filled its temporary file.\",\"events\":[\"The write fails before rename.\",\"Removing the temporary file also fails.\"],\"outcomes\":[\"The operation reports the original write failure and leaves the temporary file.\",\"The cleanup failure replaces the result or the service retries/reuses the temporary file.\"],\"observer\":\"The caller may receive a different failure, and the administrator sees different residue.\"}},{\"subject\":\"A6 lock-file validation\",\"kind\":\"lock_refusal_conditions\",\"text\":\"The lock file is created on first use with the imported `LOCK_FILE_MODE` constant and is never changed or removed afterwards.\",\"question\":\"What happens when the lock address already contains a symbolic link, directory, non-regular object, unreadable file, or regular file with an unexpected mode or content?\",\"options\":[\"Refuse every non-regular or linked entry, but use an existing regular file as it stands\",\"Refuse an existing regular file unless its mode and content match prescribed values\",\"Repair the mode of an existing regular file before locking it\"],\"default_guess\":\"Open without following links, require a regular readable/writable file, ignore its bytes, and use its existing mode without changing it.\",\"witness\":{\"initial\":\"The lock address contains an existing regular file with a mode different from LOCK_FILE_MODE.\",\"events\":[\"A delivery attempts to take the project lock.\"],\"outcomes\":[\"The existing file is locked as it stands.\",\"The operation refuses or changes the file's mode.\"],\"observer\":\"The caller and filesystem administrator see different behavior.\"}},{\"subject\":\"A6 lock release\",\"kind\":\"lock_lifetime\",\"text\":\"the lock is released when its holder ends\",\"question\":\"Does the holder end when the individual delivery or mark operation finishes, when its request task is cancelled, or only when the process exits?\",\"options\":[\"Release at the end of the operation, including exception or cancellation cleanup\",\"Hold until the worker or process exits\",\"Release after the response has been completely transmitted\"],\"default_guess\":\"The operation owns the lock and releases it in guaranteed cleanup before returning its result.\",\"witness\":{\"initial\":\"One process remains alive after completing a delivery while another process waits for the same project's lock.\",\"events\":[\"The first delivery finishes.\",\"The second caller continues waiting.\"],\"outcomes\":[\"The lock is released at operation completion and the second call proceeds.\",\"The process retains the lock and the second call remains blocked.\"],\"observer\":\"The second caller sees completion versus an indefinite wait.\"}},{\"subject\":\"A6 record absence\",\"kind\":\"existence_check\",\"text\":\"A record is absent only when nothing exists at its address.\",\"question\":\"How is absence distinguished from an inability to inspect the address or one of its parent folders?\",\"options\":[\"Only a definite not-found result is absence; permission, I/O and traversal errors are STATE_UNAVAILABLE\",\"Every failed lookup of the final address counts as absence\",\"A missing parent is absence but other lookup failures are STATE_UNAVAILABLE\"],\"default_guess\":\"Treat only definite not-found results, including a definitely missing service-owned parent, as absence; refuse indeterminate lookup errors as STATE_UNAVAILABLE.\",\"witness\":{\"initial\":\"The record's parent folder exists but cannot be searched because of an access or I/O error.\",\"events\":[\"A delivery checks whether its placement record exists.\"],\"outcomes\":[\"The service treats the record as absent and attempts a new placement.\",\"The service refuses with STATE_UNAVAILABLE.\"],\"observer\":\"The caller sees a new-placement path versus refusal.\"}},{\"subject\":\"A6 record file type\",\"kind\":\"record_refusal_conditions\",\"text\":\"A record that is a symbolic link, that cannot be read, or that fails that validation is never taken for an absent record\",\"question\":\"Must an existing record be a regular file opened without following links, and how are directories, devices, sockets and FIFOs handled?\",\"options\":[\"Require a regular file and refuse every other file type with STATE_UNAVAILABLE\",\"Attempt to read any non-symbolic-link object and validate the resulting bytes\",\"Treat non-regular objects as absent\"],\"default_guess\":\"Open without following links, require a regular file before reading, and refuse every other existing type with STATE_UNAVAILABLE.\",\"witness\":{\"initial\":\"A FIFO exists at a placement-record address.\",\"events\":[\"A delivery checks the record.\"],\"outcomes\":[\"The service rejects it immediately as STATE_UNAVAILABLE.\",\"The service opens it for reading and can block waiting for a writer.\"],\"observer\":\"The caller sees an immediate refusal versus a hung request.\"}},{\"subject\":\"A6 closed-record validation\",\"kind\":\"validation_semantics\",\"text\":\"validated against its closed model\",\"question\":\"What exact JSON conditions does closed-model validation impose, including UTF-8, duplicate object keys, additional fields, enumeration representation and numeric or UUID coercion?\",\"options\":[\"Strict JSON with unique keys, every declared field present with its exact type, valid enum members and no additional fields or coercion\",\"Use the validation library's default duplicate-key and coercion behavior while forbidding additional fields\",\"Accept any JSON that can be coerced into the model\"],\"default_guess\":\"Require UTF-8 JSON with unique keys, all and only declared fields, exact field types, valid enum values and no coercion.\",\"witness\":{\"initial\":\"A record contains the `source_id` key twice, once with the address value and once with another value.\",\"events\":[\"The service parses and validates the record.\"],\"outcomes\":[\"Duplicate keys make the record invalid and the operation is refused.\",\"The JSON parser keeps one occurrence, which may let the record validate.\"],\"observer\":\"The caller sees STATE_UNAVAILABLE versus normal processing.\"}},{\"subject\":\"A6 valid mark without placement\",\"kind\":\"orphan_state\",\"text\":\"a damaged mark without a placement stops a new placement\",\"question\":\"What must delivery do when a valid mark record exists but its placement record is absent?\",\"options\":[\"Refuse the inconsistent state with STATE_UNAVAILABLE\",\"Create the missing placement and preserve or return the existing mark\",\"Ignore or replace the orphan mark\"],\"default_guess\":\"Refuse with STATE_UNAVAILABLE because a mark cannot validly exist without its placement.\",\"witness\":{\"initial\":\"A syntactically valid mark record exists for the project and source, but no placement record exists.\",\"events\":[\"The caller delivers matching source content.\"],\"outcomes\":[\"The service refuses the inconsistent state.\",\"The service writes a new placement and associates it with the pre-existing mark.\"],\"observer\":\"The caller sees refusal versus placed or replayed state, and the filesystem may gain a placement.\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,283 @@
+{
+ "open_points": [
+  {
+   "subject": "A2 photo moment",
+   "kind": "undefined_input_grammar",
+   "text": "A camera value is unusable when it is malformed",
+   "question": "What exact byte or text grammar is accepted for EXIF `DateTimeOriginal` and `DateTime`, including whitespace, fractional seconds, NUL padding, and out-of-range calendar fields?",
+   "options": [
+    "Accept only the canonical EXIF `YYYY:MM:DD HH:MM:SS` form",
+    "Accept forms the image library parses",
+    "Define an explicit broader grammar"
+   ],
+   "default_guess": "Accept exactly `YYYY:MM:DD HH:MM:SS` with valid calendar fields.",
+   "witness": {
+    "initial": "A source has `DateTimeOriginal` equal to `2026:11:19 10:20:30 ` and a different file modification time.",
+    "events": [
+     "The caller delivers the source."
+    ],
+    "outcomes": [
+     "A strict implementation rejects the camera value and uses the modification time.",
+     "A permissive implementation trims the value and uses the EXIF instant."
+    ],
+    "observer": "The caller sees a different `photo_date` and `date_source` in the placement."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 placement and mark records",
+   "kind": "address_unspecified",
+   "text": "A record is absent only when nothing exists at its address.",
+   "question": "What are the exact addresses and file names of placement and mark records under the state folder?",
+   "options": [
+    "Separate placement and mark folders keyed by project and source",
+    "One project folder with distinct record suffixes",
+    "Another deterministic layout"
+   ],
+   "default_guess": "Use separate placement and mark folders, then `<project_id>/<source_id>` plus a fixed record suffix.",
+   "witness": {
+    "initial": "A placement record already exists under one reasonable state-folder layout.",
+    "events": [
+     "A service generated from another continuation is deployed.",
+     "The caller delivers the same project and source again."
+    ],
+    "outcomes": [
+     "If both continuations chose the same address, the service finds the record and answers replayed.",
+     "If they chose different addresses, the service treats the placement as absent and attempts a new placement."
+    ],
+    "observer": "The caller and the operator inspecting durable state see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 project lock",
+   "kind": "address_unspecified",
+   "text": "under an operating system lock on one lock file of that project in the state folder",
+   "question": "What exact address and file name identifies the project lock, and is it directly in the state folder or in a service-created subfolder?",
+   "options": [
+    "`<state>/<project_id><suffix>`",
+    "`<state>/<locks-folder>/<project_id><suffix>`",
+    "Another deterministic address"
+   ],
+   "default_guess": "Use a dedicated locks folder and a file named from the project id plus an imported suffix.",
+   "witness": {
+    "initial": "Two compatible service versions are running during a rolling deployment.",
+    "events": [
+     "Each version receives a placement for the same project and source at the same time.",
+     "Each version computes the lock address according to its continuation of State 2."
+    ],
+    "outcomes": [
+     "If the addresses agree, the calls serialize and one placement is created.",
+     "If the addresses differ, both calls can enter their critical sections concurrently."
+    ],
+    "observer": "The callers and the durable-state operator can see duplicate work or conflicting outcomes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 record encoding",
+   "kind": "representation_unspecified",
+   "text": "A placement or mark record that exists is validated against its closed model",
+   "question": "In which file representation and character encoding are records stored and read, and how are duplicate JSON keys, invalid UTF-8, non-finite numbers and other parser edge cases classified?",
+   "options": [
+    "Strict UTF-8 JSON with duplicate keys rejected",
+    "Ordinary library JSON semantics",
+    "A non-JSON model serialization"
+   ],
+   "default_guess": "Use strict UTF-8 JSON, reject duplicate keys and non-standard numeric values, and require the closed model exactly.",
+   "witness": {
+    "initial": "A placement-record file contains valid UTF-8 JSON with two `source_id` keys, one matching its address and one not matching it.",
+    "events": [
+     "The caller scans or delivers that source."
+    ],
+    "outcomes": [
+     "A strict reader rejects the duplicate-key record with `state_unavailable`.",
+     "A last-key-wins reader may accept or reject it according to the order of the two keys."
+    ],
+    "observer": "The caller sees either a refusal or a normal placement state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 durable writes",
+   "kind": "durability_undefined",
+   "text": "A stored image is made durable before the record that refers to it is written, so a crash never leaves a record without its image",
+   "question": "Which file and directory synchronizations constitute “made durable,” including newly created parent folders, and at what point may the operation report success for a record?",
+   "options": [
+    "Synchronize the image, every newly created directory entry and the containing directory before writing the record; synchronize the record and its directory before success",
+    "Synchronize file contents only",
+    "Treat successful rename as durable"
+   ],
+   "default_guess": "Synchronize the image file and all directory entries needed to reach it before the record, then synchronize the record and its containing directory before reporting success.",
+   "witness": {
+    "initial": "The image and record addresses do not yet exist.",
+    "events": [
+     "A placement writes and renames the image and record.",
+     "The service reports success.",
+     "The host immediately loses power and restarts."
+    ],
+    "outcomes": [
+     "With directory durability, both files survive and the placement replays.",
+     "With rename-only durability, the record or its image directory entry can disappear despite the reported success."
+    ],
+    "observer": "The caller after restart and the Portal reading the stored image see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 failed atomic write",
+   "kind": "temporary_file_policy",
+   "text": "A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.",
+   "question": "How is the rest of a temporary name chosen, must creation be exclusive, what happens on a collision, and are temporary files removed after ordinary failures or later startup?",
+   "options": [
+    "Use fresh exclusive random names, retry collisions, remove them after ordinary failures, and retain crash leftovers",
+    "Fail on the first collision and retain every temporary file",
+    "Clean crash leftovers during startup"
+   ],
+   "default_guess": "Use exclusively created random names, retry collisions, remove the current temporary file after an ordinary failure, and leave crash leftovers untouched.",
+   "witness": {
+    "initial": "A crash leftover already occupies the first temporary name an implementation would choose.",
+    "events": [
+     "The caller performs another write in the same folder."
+    ],
+    "outcomes": [
+     "An implementation that retries a fresh exclusive name completes the write.",
+     "An implementation that treats the collision as write failure refuses the operation."
+    ],
+    "observer": "The caller sees success or failure, and the operator sees different temporary-file accumulation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 lock-file validation",
+   "kind": "refusal_conditions_unspecified",
+   "text": "The lock file is created on first use with the imported `LOCK_FILE_MODE` constant and is never changed or removed afterwards.",
+   "question": "When an existing regular lock file has a different mode, unexpected bytes, or another owner, is it accepted as-is or is taking the lock refused, and which properties are checked?",
+   "options": [
+    "Accept every existing regular non-link file as-is",
+    "Require the configured mode but ignore content",
+    "Require mode, ownership and an empty payload"
+   ],
+   "default_guess": "Accept an existing regular non-link file without reading or changing its bytes or mode.",
+   "witness": {
+    "initial": "The project lock is a regular file with a mode different from `LOCK_FILE_MODE`.",
+    "events": [
+     "The caller delivers a photo for that project."
+    ],
+    "outcomes": [
+     "One implementation locks the existing file and continues.",
+     "Another refuses with `state_unavailable` because the lock file does not have the required mode."
+    ],
+    "observer": "The caller sees a placement result or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 orphan damaged mark",
+   "kind": "check_precedence",
+   "text": "a damaged mark without a placement stops a new placement",
+   "question": "At what point is a mark record checked when no placement record exists, and does its `state_unavailable` refusal take precedence over failures of the requested source name or file?",
+   "options": [
+    "Check the mark with the existing-placement check, before examining the named file",
+    "Validate the named file first, then check the mark before writing",
+    "Check the mark only after a new placement record has been prepared"
+   ],
+   "default_guess": "Check both placement and mark state under the project lock before examining the named file, so damaged state answers `state_unavailable` first.",
+   "witness": {
+    "initial": "A damaged mark exists without a placement, and the delivery request names a missing source file.",
+    "events": [
+     "The caller submits the delivery."
+    ],
+    "outcomes": [
+     "Checking the mark first returns M08 with `state_unavailable`.",
+     "Checking the named file first returns M06 with `NOT_READY_OR_ABSENT`."
+    ],
+    "observer": "The caller sees a different answer and refusal class."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 folder creation and A3 failed delivery",
+   "kind": "write_scope_ambiguous",
+   "text": "Conditions 1 to 4 write nothing except the project lock (A6 rule 4).",
+   "question": "Does “the project lock” include any newly created parent folders, or must the chosen lock address require no additional folder write during a failed delivery?",
+   "options": [
+    "Count lock-parent folders as part of creating the project lock",
+    "Place lock files directly in the installation-created state folder",
+    "Refuse rather than create a missing lock-parent folder"
+   ],
+   "default_guess": "Treat service-created lock-parent folders as part of lock creation and state that exception explicitly.",
+   "witness": {
+    "initial": "The installation-created state folder is empty and the chosen lock layout uses a locks subfolder.",
+    "events": [
+     "The caller submits a delivery whose source name fails condition 1.",
+     "The service must take the project lock before examining the named file."
+    ],
+    "outcomes": [
+     "The service creates the locks folder and lock file, then returns `NOT_READY_OR_ABSENT`, writing more than the literal project-lock file.",
+     "The service avoids the extra folder write by choosing a direct lock address or refuses because the parent is absent."
+    ],
+    "observer": "The caller may see a different refusal, and the operator sees a different state-folder change."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 system clock",
+   "kind": "failure_behavior_unspecified",
+   "text": "The system clock is the one source of the current time, declared as `rules.time_source_policy` and reaching code through `system_clock_backend` as the operation `utc_now`.",
+   "question": "What must a mark do if `utc_now` fails or returns a value outside the required naive-UTC datetime contract?",
+   "options": [
+    "Fail the request as an internal service error without writing",
+    "Return an existing M08 refusal code",
+    "Validate and coerce the returned value"
+   ],
+   "default_guess": "Fail the request as an internal service error and write no mark; do not coerce or invent a time.",
+   "witness": {
+    "initial": "A valid mark request reaches the clock-reading point, but `utc_now` raises an error.",
+    "events": [
+     "The caller submits the mark."
+    ],
+    "outcomes": [
+     "One implementation returns a service error and writes nothing.",
+     "Another maps the failure to `state_unavailable` or substitutes a locally obtained time."
+    ],
+    "observer": "The caller sees a different response, and substitution can produce a mark with a different timestamp."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Which required checks show that every mark path reads the clock at most once and that marks refused before the specified point read it zero times, while marks refused after that point and replayed marks read it once?",
+   "options": [
+    "Add explicit cases for early refusal, later refusal, replay and successful creation",
+    "State that the named counting-clock test covers all those branches",
+    "Narrow the invariant to the one successful-mark path described"
+   ],
+   "default_guess": "Add explicit counting-clock assertions for early refusals, later refusals, replayed marks and newly created marks.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 INV-12 placement status reference",
+   "kind": "standard_violation",
+   "text": "the PLACED member of = models.PlacementStatus once and otherwise its REPLAYED member",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must name the second member beside the enumeration address, for example `the PLACED member of = models.PlacementStatus once and otherwise the REPLAYED member of = models.PlacementStatus`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 INV-12 mark status reference",
+   "kind": "standard_violation",
+   "text": "the MARKED member of = models.MarkStatus once, its REPLAYED member for the same value",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must name the second member beside the enumeration address, for example `the MARKED member of = models.MarkStatus once, the REPLAYED member of = models.MarkStatus for the same value`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A2 photo moment\",\"kind\":\"undefined_input_grammar\",\"text\":\"A camera value is unusable when it is malformed\",\"question\":\"What exact byte or text grammar is accepted for EXIF `DateTimeOriginal` and `DateTime`, including whitespace, fractional seconds, NUL padding, and out-of-range calendar fields?\",\"options\":[\"Accept only the canonical EXIF `YYYY:MM:DD HH:MM:SS` form\",\"Accept forms the image library parses\",\"Define an explicit broader grammar\"],\"default_guess\":\"Accept exactly `YYYY:MM:DD HH:MM:SS` with valid calendar fields.\",\"witness\":{\"initial\":\"A source has `DateTimeOriginal` equal to `2026:11:19 10:20:30 ` and a different file modification time.\",\"events\":[\"The caller delivers the source.\"],\"outcomes\":[\"A strict implementation rejects the camera value and uses the modification time.\",\"A permissive implementation trims the value and uses the EXIF instant.\"],\"observer\":\"The caller sees a different `photo_date` and `date_source` in the placement.\"}},{\"subject\":\"A6 placement and mark records\",\"kind\":\"address_unspecified\",\"text\":\"A record is absent only when nothing exists at its address.\",\"question\":\"What are the exact addresses and file names of placement and mark records under the state folder?\",\"options\":[\"Separate placement and mark folders keyed by project and source\",\"One project folder with distinct record suffixes\",\"Another deterministic layout\"],\"default_guess\":\"Use separate placement and mark folders, then `<project_id>/<source_id>` plus a fixed record suffix.\",\"witness\":{\"initial\":\"A placement record already exists under one reasonable state-folder layout.\",\"events\":[\"A service generated from another continuation is deployed.\",\"The caller delivers the same project and source again.\"],\"outcomes\":[\"If both continuations chose the same address, the service finds the record and answers replayed.\",\"If they chose different addresses, the service treats the placement as absent and attempts a new placement.\"],\"observer\":\"The caller and the operator inspecting durable state see the difference.\"}},{\"subject\":\"A6 project lock\",\"kind\":\"address_unspecified\",\"text\":\"under an operating system lock on one lock file of that project in the state folder\",\"question\":\"What exact address and file name identifies the project lock, and is it directly in the state folder or in a service-created subfolder?\",\"options\":[\"`<state>/<project_id><suffix>`\",\"`<state>/<locks-folder>/<project_id><suffix>`\",\"Another deterministic address\"],\"default_guess\":\"Use a dedicated locks folder and a file named from the project id plus an imported suffix.\",\"witness\":{\"initial\":\"Two compatible service versions are running during a rolling deployment.\",\"events\":[\"Each version receives a placement for the same project and source at the same time.\",\"Each version computes the lock address according to its continuation of State 2.\"],\"outcomes\":[\"If the addresses agree, the calls serialize and one placement is created.\",\"If the addresses differ, both calls can enter their critical sections concurrently.\"],\"observer\":\"The callers and the durable-state operator can see duplicate work or conflicting outcomes.\"}},{\"subject\":\"A6 record encoding\",\"kind\":\"representation_unspecified\",\"text\":\"A placement or mark record that exists is validated against its closed model\",\"question\":\"In which file representation and character encoding are records stored and read, and how are duplicate JSON keys, invalid UTF-8, non-finite numbers and other parser edge cases classified?\",\"options\":[\"Strict UTF-8 JSON with duplicate keys rejected\",\"Ordinary library JSON semantics\",\"A non-JSON model serialization\"],\"default_guess\":\"Use strict UTF-8 JSON, reject duplicate keys and non-standard numeric values, and require the closed model exactly.\",\"witness\":{\"initial\":\"A placement-record file contains valid UTF-8 JSON with two `source_id` keys, one matching its address and one not matching it.\",\"events\":[\"The caller scans or delivers that source.\"],\"outcomes\":[\"A strict reader rejects the duplicate-key record with `state_unavailable`.\",\"A last-key-wins reader may accept or reject it according to the order of the two keys.\"],\"observer\":\"The caller sees either a refusal or a normal placement state.\"}},{\"subject\":\"A6 durable writes\",\"kind\":\"durability_undefined\",\"text\":\"A stored image is made durable before the record that refers to it is written, so a crash never leaves a record without its image\",\"question\":\"Which file and directory synchronizations constitute “made durable,” including newly created parent folders, and at what point may the operation report success for a record?\",\"options\":[\"Synchronize the image, every newly created directory entry and the containing directory before writing the record; synchronize the record and its directory before success\",\"Synchronize file contents only\",\"Treat successful rename as durable\"],\"default_guess\":\"Synchronize the image file and all directory entries needed to reach it before the record, then synchronize the record and its containing directory before reporting success.\",\"witness\":{\"initial\":\"The image and record addresses do not yet exist.\",\"events\":[\"A placement writes and renames the image and record.\",\"The service reports success.\",\"The host immediately loses power and restarts.\"],\"outcomes\":[\"With directory durability, both files survive and the placement replays.\",\"With rename-only durability, the record or its image directory entry can disappear despite the reported success.\"],\"observer\":\"The caller after restart and the Portal reading the stored image see the difference.\"}},{\"subject\":\"A6 failed atomic write\",\"kind\":\"temporary_file_policy\",\"text\":\"A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.\",\"question\":\"How is the rest of a temporary name chosen, must creation be exclusive, what happens on a collision, and are temporary files removed after ordinary failures or later startup?\",\"options\":[\"Use fresh exclusive random names, retry collisions, remove them after ordinary failures, and retain crash leftovers\",\"Fail on the first collision and retain every temporary file\",\"Clean crash leftovers during startup\"],\"default_guess\":\"Use exclusively created random names, retry collisions, remove the current temporary file after an ordinary failure, and leave crash leftovers untouched.\",\"witness\":{\"initial\":\"A crash leftover already occupies the first temporary name an implementation would choose.\",\"events\":[\"The caller performs another write in the same folder.\"],\"outcomes\":[\"An implementation that retries a fresh exclusive name completes the write.\",\"An implementation that treats the collision as write failure refuses the operation.\"],\"observer\":\"The caller sees success or failure, and the operator sees different temporary-file accumulation.\"}},{\"subject\":\"A6 lock-file validation\",\"kind\":\"refusal_conditions_unspecified\",\"text\":\"The lock file is created on first use with the imported `LOCK_FILE_MODE` constant and is never changed or removed afterwards.\",\"question\":\"When an existing regular lock file has a different mode, unexpected bytes, or another owner, is it accepted as-is or is taking the lock refused, and which properties are checked?\",\"options\":[\"Accept every existing regular non-link file as-is\",\"Require the configured mode but ignore content\",\"Require mode, ownership and an empty payload\"],\"default_guess\":\"Accept an existing regular non-link file without reading or changing its bytes or mode.\",\"witness\":{\"initial\":\"The project lock is a regular file with a mode different from `LOCK_FILE_MODE`.\",\"events\":[\"The caller delivers a photo for that project.\"],\"outcomes\":[\"One implementation locks the existing file and continues.\",\"Another refuses with `state_unavailable` because the lock file does not have the required mode.\"],\"observer\":\"The caller sees a placement result or a refusal.\"}},{\"subject\":\"A6 orphan damaged mark\",\"kind\":\"check_precedence\",\"text\":\"a damaged mark without a placement stops a new placement\",\"question\":\"At what point is a mark record checked when no placement record exists, and does its `state_unavailable` refusal take precedence over failures of the requested source name or file?\",\"options\":[\"Check the mark with the existing-placement check, before examining the named file\",\"Validate the named file first, then check the mark before writing\",\"Check the mark only after a new placement record has been prepared\"],\"default_guess\":\"Check both placement and mark state under the project lock before examining the named file, so damaged state answers `state_unavailable` first.\",\"witness\":{\"initial\":\"A damaged mark exists without a placement, and the delivery request names a missing source file.\",\"events\":[\"The caller submits the delivery.\"],\"outcomes\":[\"Checking the mark first returns M08 with `state_unavailable`.\",\"Checking the named file first returns M06 with `NOT_READY_OR_ABSENT`.\"],\"observer\":\"The caller sees a different answer and refusal class.\"}},{\"subject\":\"A6 folder creation and A3 failed delivery\",\"kind\":\"write_scope_ambiguous\",\"text\":\"Conditions 1 to 4 write nothing except the project lock (A6 rule 4).\",\"question\":\"Does “the project lock” include any newly created parent folders, or must the chosen lock address require no additional folder write during a failed delivery?\",\"options\":[\"Count lock-parent folders as part of creating the project lock\",\"Place lock files directly in the installation-created state folder\",\"Refuse rather than create a missing lock-parent folder\"],\"default_guess\":\"Treat service-created lock-parent folders as part of lock creation and state that exception explicitly.\",\"witness\":{\"initial\":\"The installation-created state folder is empty and the chosen lock layout uses a locks subfolder.\",\"events\":[\"The caller submits a delivery whose source name fails condition 1.\",\"The service must take the project lock before examining the named file.\"],\"outcomes\":[\"The service creates the locks folder and lock file, then returns `NOT_READY_OR_ABSENT`, writing more than the literal project-lock file.\",\"The service avoids the extra folder write by choosing a direct lock address or refuses because the parent is absent.\"],\"observer\":\"The caller may see a different refusal, and the operator sees a different state-folder change.\"}},{\"subject\":\"A7 system clock\",\"kind\":\"failure_behavior_unspecified\",\"text\":\"The system clock is the one source of the current time, declared as `rules.time_source_policy` and reaching code through `system_clock_backend` as the operation `utc_now`.\",\"question\":\"What must a mark do if `utc_now` fails or returns a value outside the required naive-UTC datetime contract?\",\"options\":[\"Fail the request as an internal service error without writing\",\"Return an existing M08 refusal code\",\"Validate and coerce the returned value\"],\"default_guess\":\"Fail the request as an internal service error and write no mark; do not coerce or invent a time.\",\"witness\":{\"initial\":\"A valid mark request reaches the clock-reading point, but `utc_now` raises an error.\",\"events\":[\"The caller submits the mark.\"],\"outcomes\":[\"One implementation returns a service error and writes nothing.\",\"Another maps the failure to `state_unavailable` or substitutes a locally obtained time.\"],\"observer\":\"The caller sees a different response, and substitution can produce a mark with a different timestamp.\"}},{\"subject\":\"INV-13 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Which required checks show that every mark path reads the clock at most once and that marks refused before the specified point read it zero times, while marks refused after that point and replayed marks read it once?\",\"options\":[\"Add explicit cases for early refusal, later refusal, replay and successful creation\",\"State that the named counting-clock test covers all those branches\",\"Narrow the invariant to the one successful-mark path described\"],\"default_guess\":\"Add explicit counting-clock assertions for early refusals, later refusals, replayed marks and newly created marks.\"},{\"subject\":\"A6 INV-12 placement status reference\",\"kind\":\"standard_violation\",\"text\":\"the PLACED member of = models.PlacementStatus once and otherwise its REPLAYED member\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the second member beside the enumeration address, for example `the PLACED member of = models.PlacementStatus once and otherwise the REPLAYED member of = models.PlacementStatus`.\"},{\"subject\":\"A6 INV-12 mark status reference\",\"kind\":\"standard_violation\",\"text\":\"the MARKED member of = models.MarkStatus once, its REPLAYED member for the same value\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the second member beside the enumeration address, for example `the MARKED member of = models.MarkStatus once, the REPLAYED member of = models.MarkStatus for the same value`.\"}]}",
+ "set_aside": []
+}
