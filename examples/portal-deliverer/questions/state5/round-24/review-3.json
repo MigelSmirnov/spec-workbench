@@ -1,0 +1,106 @@
+{
+ "open_points": [
+  {
+   "subject": "context",
+   "kind": "lock_address",
+   "text": "one lock file of that project in the state folder",
+   "question": "What exact relative path and filename, including the UUID representation, folder constants and suffix, identifies a project's lock file?",
+   "options": [
+    "<state_dir>/<LOCKS_FOLDER>/<canonical-project-id><LOCK_FILE_SUFFIX>",
+    "<state_dir>/<canonical-project-id><LOCK_FILE_SUFFIX>",
+    "Another project-derived layout below the state folder"
+   ],
+   "default_guess": "Use <state_dir>/locks/<lowercase hyphenated UUID>.lock.",
+   "witness": {
+    "initial": "The state folder exists and contains no lock for project 123e4567-e89b-12d3-a456-426614174000.",
+    "events": [
+     "module:photo_delivery asks public_op:delivery_store.project_lock for that project."
+    ],
+    "outcomes": [
+     "The implementation creates state_dir/locks/123e4567-e89b-12d3-a456-426614174000.lock.",
+     "The implementation creates state_dir/123e4567-e89b-12d3-a456-426614174000.lock."
+    ],
+    "observer": "An operator inspecting or backing up the state folder sees different durable layouts; processes running implementations that chose differently also fail to contend on one file."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "lock_file_contents",
+   "text": "The lock file is created on first use with the imported `LOCK_FILE_MODE` constant, and the folders below the state folder that lead to it with the mode rule 2 decides; the lock file is never changed or removed afterwards",
+   "question": "What bytes must a newly created lock file contain, and must an existing file's contents or form be validated before it is locked?",
+   "options": [
+    "Create an empty regular file and ignore its contents thereafter",
+    "Write a fixed marker or project identifier once and validate it on later use",
+    "Accept any existing non-symbolic file without inspecting its contents"
+   ],
+   "default_guess": "Create an empty regular file with LOCK_FILE_MODE and later require only that it can be safely opened and locked without following a symbolic link.",
+   "witness": {
+    "initial": "The state folder has no lock file for a valid project.",
+    "events": [
+     "A delivery is the first operation to take that project's lock.",
+     "After the operation, an operator reads the lock file."
+    ],
+    "outcomes": [
+     "The lock file is zero bytes long.",
+     "The lock file permanently contains a project identifier or format marker."
+    ],
+    "observer": "The operator and any later implementation that validates the persistent lock file see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "failure_boundary",
+   "text": "`state_unavailable` when the lock cannot be taken (A6 rule 5).",
+   "question": "Which failures count as the lock being unable to be taken—creating a required folder, creating or opening the lock file, finding an invalid existing object, an interrupted lock call, and other operating-system errors—and which of them must be retried rather than returned?",
+   "options": [
+    "Every setup or acquisition failure becomes `state_unavailable`, while ordinary contention and interruptible waits are retried without a deadline",
+    "Only failure of the operating-system locking primitive becomes `state_unavailable`; folder and file I/O errors propagate separately",
+    "Some setup or acquisition errors are retried according to an explicitly enumerated policy"
+   ],
+   "default_guess": "Map every non-contention failure in safe folder traversal, folder creation, lock-file creation or opening, and lock acquisition to `state_unavailable`; retry ordinary contention indefinitely and retry interrupted waits.",
+   "witness": {
+    "initial": "The state folder exists, but the required lock subfolder does not and the process lacks permission to create it.",
+    "events": [
+     "module:photo_delivery begins a delivery and asks public_op:delivery_store.project_lock for the project."
+    ],
+    "outcomes": [
+     "The operation returns the `state_unavailable` refusal because preparing the lock failed.",
+     "A raw operating-system error escapes because no operating-system lock attempt occurred."
+    ],
+    "observer": "module:photo_delivery and its API caller see a defined M08 refusal in one implementation and an unclassified failure in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "calling_protocol",
+   "text": "A held lock for the duration of the caller's block.",
+   "question": "What is the exact calling protocol and type of `project_lock`, including whether it is a synchronous context manager, an asynchronous context manager, a callback-taking operation, or a separately releasable handle?",
+   "options": [
+    "A synchronous context manager entered with `with`",
+    "An asynchronous context manager entered with `async with`",
+    "An operation that receives and runs a callback while holding the lock",
+    "A returned handle that the caller must explicitly release"
+   ],
+   "default_guess": "Expose a synchronous context manager whose exit releases the lock even when the caller's block raises.",
+   "witness": {
+    "initial": "The project lock is free.",
+    "events": [
+     "module:photo_delivery needs to run the placement check and writes under the lock.",
+     "The protected code raises an exception."
+    ],
+    "outcomes": [
+     "A context-manager implementation releases the lock automatically during block exit.",
+     "A handle-based implementation keeps the lock until explicit cleanup, whose required timing is not specified."
+    ],
+    "observer": "A later delivery for the same project either acquires the lock or remains blocked."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context\",\"kind\":\"lock_address\",\"text\":\"one lock file of that project in the state folder\",\"question\":\"What exact relative path and filename, including the UUID representation, folder constants and suffix, identifies a project's lock file?\",\"options\":[\"<state_dir>/<LOCKS_FOLDER>/<canonical-project-id><LOCK_FILE_SUFFIX>\",\"<state_dir>/<canonical-project-id><LOCK_FILE_SUFFIX>\",\"Another project-derived layout below the state folder\"],\"default_guess\":\"Use <state_dir>/locks/<lowercase hyphenated UUID>.lock.\",\"witness\":{\"initial\":\"The state folder exists and contains no lock for project 123e4567-e89b-12d3-a456-426614174000.\",\"events\":[\"module:photo_delivery asks public_op:delivery_store.project_lock for that project.\"],\"outcomes\":[\"The implementation creates state_dir/locks/123e4567-e89b-12d3-a456-426614174000.lock.\",\"The implementation creates state_dir/123e4567-e89b-12d3-a456-426614174000.lock.\"],\"observer\":\"An operator inspecting or backing up the state folder sees different durable layouts; processes running implementations that chose differently also fail to contend on one file.\"}},{\"subject\":\"context\",\"kind\":\"lock_file_contents\",\"text\":\"The lock file is created on first use with the imported `LOCK_FILE_MODE` constant, and the folders below the state folder that lead to it with the mode rule 2 decides; the lock file is never changed or removed afterwards\",\"question\":\"What bytes must a newly created lock file contain, and must an existing file's contents or form be validated before it is locked?\",\"options\":[\"Create an empty regular file and ignore its contents thereafter\",\"Write a fixed marker or project identifier once and validate it on later use\",\"Accept any existing non-symbolic file without inspecting its contents\"],\"default_guess\":\"Create an empty regular file with LOCK_FILE_MODE and later require only that it can be safely opened and locked without following a symbolic link.\",\"witness\":{\"initial\":\"The state folder has no lock file for a valid project.\",\"events\":[\"A delivery is the first operation to take that project's lock.\",\"After the operation, an operator reads the lock file.\"],\"outcomes\":[\"The lock file is zero bytes long.\",\"The lock file permanently contains a project identifier or format marker.\"],\"observer\":\"The operator and any later implementation that validates the persistent lock file see the difference.\"}},{\"subject\":\"context\",\"kind\":\"failure_boundary\",\"text\":\"`state_unavailable` when the lock cannot be taken (A6 rule 5).\",\"question\":\"Which failures count as the lock being unable to be taken—creating a required folder, creating or opening the lock file, finding an invalid existing object, an interrupted lock call, and other operating-system errors—and which of them must be retried rather than returned?\",\"options\":[\"Every setup or acquisition failure becomes `state_unavailable`, while ordinary contention and interruptible waits are retried without a deadline\",\"Only failure of the operating-system locking primitive becomes `state_unavailable`; folder and file I/O errors propagate separately\",\"Some setup or acquisition errors are retried according to an explicitly enumerated policy\"],\"default_guess\":\"Map every non-contention failure in safe folder traversal, folder creation, lock-file creation or opening, and lock acquisition to `state_unavailable`; retry ordinary contention indefinitely and retry interrupted waits.\" ,\"witness\":{\"initial\":\"The state folder exists, but the required lock subfolder does not and the process lacks permission to create it.\",\"events\":[\"module:photo_delivery begins a delivery and asks public_op:delivery_store.project_lock for the project.\"],\"outcomes\":[\"The operation returns the `state_unavailable` refusal because preparing the lock failed.\",\"A raw operating-system error escapes because no operating-system lock attempt occurred.\"],\"observer\":\"module:photo_delivery and its API caller see a defined M08 refusal in one implementation and an unclassified failure in the other.\"}},{\"subject\":\"context\",\"kind\":\"calling_protocol\",\"text\":\"A held lock for the duration of the caller's block.\",\"question\":\"What is the exact calling protocol and type of `project_lock`, including whether it is a synchronous context manager, an asynchronous context manager, a callback-taking operation, or a separately releasable handle?\",\"options\":[\"A synchronous context manager entered with `with`\",\"An asynchronous context manager entered with `async with`\",\"An operation that receives and runs a callback while holding the lock\",\"A returned handle that the caller must explicitly release\"],\"default_guess\":\"Expose a synchronous context manager whose exit releases the lock even when the caller's block raises.\",\"witness\":{\"initial\":\"The project lock is free.\",\"events\":[\"module:photo_delivery needs to run the placement check and writes under the lock.\",\"The protected code raises an exception.\"],\"outcomes\":[\"A context-manager implementation releases the lock automatically during block exit.\",\"A handle-based implementation keeps the lock until explicit cleanup, whose required timing is not specified.\"],\"observer\":\"A later delivery for the same project either acquires the lock or remains blocked.\"}}]}",
+ "set_aside": []
+}

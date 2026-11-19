@@ -1,0 +1,231 @@
+{
+ "open_points": [
+  {
+   "subject": "A6 rule 4 lock initialization",
+   "kind": "contradictory write count",
+   "text": "the lock file is never changed or removed afterwards; that first creation is the\n   only write of an operation that writes nothing else.",
+   "question": "When folders leading to a first lock are absent, may the operation create those folders as well as the lock, or must “the only write” mean exactly one filesystem entry?",
+   "options": [
+    "Create every missing folder and the lock; treat the whole initialization as the permitted write",
+    "Require the folders to exist so that only the lock file is created",
+    "Create the folders in a separate operation before the operation that creates the lock"
+   ],
+   "default_guess": "Create the missing folders first and then the lock, treating all lock-infrastructure creation as the stated exception.",
+   "witness": {
+    "initial": "The installation-created state folder exists, but the folders leading to this project's lock and the lock file do not exist.",
+    "events": [
+     "A caller starts an operation for the project that will write no placement, mark, or stored image.",
+     "The service initializes the project lock path."
+    ],
+    "outcomes": [
+     "The service creates one or more folders and the lock file, making several filesystem writes.",
+     "The service refuses or requires separate initialization because this operation is allowed to create only the lock file."
+    ],
+    "observer": "The caller sees success versus refusal, and the owner sees different entries below the state folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto and M05 PhotoPublication photo instant",
+   "kind": "vague source selection",
+   "text": "The photo date comes from the camera record, otherwise from the file's\n  modification time",
+   "question": "Which exact camera metadata field supplies the photo instant, and what is the precedence when the file contains more than one camera date field?",
+   "options": [
+    "Use EXIF DateTimeOriginal, with its offset metadata when present",
+    "Use DateTimeDigitized",
+    "Use the first available field from a specified ordered list"
+   ],
+   "default_guess": "Use EXIF DateTimeOriginal and define an explicit ordered fallback list.",
+   "witness": {
+    "initial": "A valid image contains different DateTimeOriginal and DateTimeDigitized values.",
+    "events": [
+     "The caller delivers the image.",
+     "The deliverer prepares M03 and builds M05."
+    ],
+    "outcomes": [
+     "photo_date is derived from DateTimeOriginal.",
+     "photo_date is derived from DateTimeDigitized."
+    ],
+    "observer": "The owner sees a different photo date in the Portal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto photo-date fallback",
+   "kind": "vague fallback condition",
+   "text": "The photo date comes from the camera record, otherwise from the file's\n  modification time",
+   "question": "Exactly which camera-record conditions trigger the modification-time fallback: absence only, or also malformed, out-of-range, contradictory, or timezone-incomplete metadata?",
+   "options": [
+    "Fall back only when the selected camera field is absent",
+    "Fall back whenever the selected camera value cannot be converted unambiguously",
+    "Reject the image when camera metadata exists but is invalid"
+   ],
+   "default_guess": "Use the modification time when the selected camera instant is absent or invalid, with the invalid cases enumerated.",
+   "witness": {
+    "initial": "A readable supported image has a malformed camera timestamp and a valid file modification time.",
+    "events": [
+     "The caller delivers the image."
+    ],
+    "outcomes": [
+     "The service falls back to the modification time and places the image.",
+     "The service rejects the image because the present camera timestamp is malformed."
+    ],
+    "observer": "The caller sees a placement versus a failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 taken_at and M05 photo_date timezone conversion",
+   "kind": "missing timezone authority",
+   "text": "with the moment the photo was taken as UTC without an offset",
+   "question": "How is a camera timestamp that carries no UTC offset converted to UTC?",
+   "options": [
+    "Interpret it in a configured installation timezone and convert to UTC",
+    "Treat the camera's offsetless fields as already UTC",
+    "Use a separately stored EXIF offset and fall back to file modification time when it is absent",
+    "Reject or fall back whenever the camera timestamp has no offset"
+   ],
+   "default_guess": "Use an EXIF offset when present; otherwise fall back to the file modification instant rather than inventing a timezone.",
+   "witness": {
+    "initial": "An image has DateTimeOriginal 2026-07-01 12:00:00 but no EXIF offset, and the installation is in Europe/Madrid.",
+    "events": [
+     "The caller delivers the image.",
+     "The deliverer constructs the UTC photo date."
+    ],
+    "outcomes": [
+     "The stored UTC instant is 10:00:00 after interpreting the value as Europe/Madrid local time.",
+     "The stored UTC instant is 12:00:00 after treating the value as UTC."
+    ],
+    "observer": "The owner sees a two-hour difference in the Portal photo date."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing time source",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "What authoritative time source supplies marked_at when a publication mark is created?",
+   "options": [
+    "An injected system-clock backend decided by time_source_policy",
+    "The ambient process wall clock",
+    "A timestamp supplied by the caller",
+    "A filesystem timestamp of the record"
+   ],
+   "default_guess": "Use an injected UTC system-clock backend.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark; an injected test clock differs from the host wall clock.",
+    "events": [
+     "The calling flow reports the Portal photo_id.",
+     "The deliverer creates the mark."
+    ],
+    "outcomes": [
+     "marked_at is the injected clock's instant.",
+     "marked_at is the host wall-clock instant."
+    ],
+    "observer": "A later scan or direct record inspection exposes a different marked_at value."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing instant representation",
+   "text": "`photo_id: UUID`, `marked_at: datetime`.",
+   "question": "In which exact representation is marked_at held and persisted: offsetless UTC, offset-aware UTC, or another canonical form?",
+   "options": [
+    "A naive datetime whose fields are UTC",
+    "An offset-aware datetime normalized to +00:00",
+    "A canonical integer epoch value converted to datetime at the model boundary"
+   ],
+   "default_guess": "Use an offset-aware UTC datetime normalized to +00:00.",
+   "witness": {
+    "initial": "A mark is created at 2026-11-19T10:00:00Z.",
+    "events": [
+     "The deliverer writes the publication-mark record.",
+     "A later operation validates and reads it."
+    ],
+    "outcomes": [
+     "The record contains an offsetless 2026-11-19T10:00:00 value.",
+     "The record contains 2026-11-19T10:00:00+00:00."
+    ],
+    "observer": "The record validator and any consumer comparing marked_at see different datetime semantics."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "publication-mark operation",
+   "kind": "missing clock-read count",
+   "text": "The calling flow reports the\n`photo_id` right after `photo.publish` answers, and the deliverer creates the mark.",
+   "question": "How many readings of the decided time source may one mark operation take, and which reading becomes marked_at?",
+   "options": [
+    "Read the clock exactly once and reuse that instant throughout the operation",
+    "Permit multiple readings and persist the last one",
+    "Permit multiple readings and persist the first one"
+   ],
+   "default_guess": "Read the clock exactly once after the lock is held and reuse that instant.",
+   "witness": {
+    "initial": "A placement exists without a mark, and the clock advances between successive reads.",
+    "events": [
+     "The caller submits a valid photo_id.",
+     "The service validates the request, takes the project lock, and writes the mark."
+    ],
+    "outcomes": [
+     "marked_at contains the operation's single clock reading.",
+     "marked_at contains a later reading taken immediately before persistence."
+    ],
+    "observer": "A reader of the stored mark sees a different timestamp."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-06 Required tests",
+   "kind": "incomplete invariant test",
+   "text": "a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place",
+   "question": "What must the test assert to demonstrate the invariant's stronger requirement that a repeated placement “writes nothing,” including marks, lock infrastructure, temporary files, and any other durable state?",
+   "options": [
+    "Snapshot and compare all durable state touched by the service",
+    "Narrow INV-06 so it promises only unchanged stored images and placement records",
+    "Enumerate the exact permitted non-placement writes and assert that nothing else changes"
+   ],
+   "default_guess": "Snapshot all durable state after required lock infrastructure already exists and assert byte-for-byte and entry-for-entry equality after replay.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-07 Required tests",
+   "kind": "incomplete invariant test",
+   "text": "and a removed file keeps its delivery",
+   "question": "For the removal case, must the test explicitly show that the earlier placement record, stored image, and publication mark all remain unchanged, as INV-07 requires?",
+   "options": [
+    "Assert all three artifacts remain present and byte-for-byte unchanged",
+    "Assert only that replay still returns a placement",
+    "Narrow the invariant to the behavior actually asserted"
+   ],
+   "default_guess": "Assert that the placement record, stored image, and mark all remain unchanged.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "incomplete invariant test",
+   "text": "delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file",
+   "question": "What must the test observe to prove that a new placement never reads a conflict copy, rather than merely proving that the operation eventually refuses it?",
+   "options": [
+    "Instrument file opening or reading and assert that the conflict-copy last segment is never opened for reading",
+    "Treat the refusal and unchanged durable state as sufficient evidence",
+    "Rewrite INV-19 to require refusal without claiming that no read occurs"
+   ],
+   "default_guess": "Instrument the source filesystem boundary and assert that the conflict copy is not opened for reading.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 4 folder mode",
+   "kind": "standard_violation",
+   "text": "the folders below the state folder that lead to\n   it with the mode rule 2 decides",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must name the folder-mode supplier symbol as `the imported STATE_FOLDER_MODE constant` instead of referring indirectly to the value that another rule decides.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A6 rule 4 lock initialization\",\"kind\":\"contradictory write count\",\"text\":\"the lock file is never changed or removed afterwards; that first creation is the\\n   only write of an operation that writes nothing else.\",\"question\":\"When folders leading to a first lock are absent, may the operation create those folders as well as the lock, or must “the only write” mean exactly one filesystem entry?\",\"options\":[\"Create every missing folder and the lock; treat the whole initialization as the permitted write\",\"Require the folders to exist so that only the lock file is created\",\"Create the folders in a separate operation before the operation that creates the lock\"],\"default_guess\":\"Create the missing folders first and then the lock, treating all lock-infrastructure creation as the stated exception.\",\"witness\":{\"initial\":\"The installation-created state folder exists, but the folders leading to this project's lock and the lock file do not exist.\",\"events\":[\"A caller starts an operation for the project that will write no placement, mark, or stored image.\",\"The service initializes the project lock path.\"],\"outcomes\":[\"The service creates one or more folders and the lock file, making several filesystem writes.\",\"The service refuses or requires separate initialization because this operation is allowed to create only the lock file.\"],\"observer\":\"The caller sees success versus refusal, and the owner sees different entries below the state folder.\"}},{\"subject\":\"M03 PreparedPhoto and M05 PhotoPublication photo instant\",\"kind\":\"vague source selection\",\"text\":\"The photo date comes from the camera record, otherwise from the file's\\n  modification time\",\"question\":\"Which exact camera metadata field supplies the photo instant, and what is the precedence when the file contains more than one camera date field?\",\"options\":[\"Use EXIF DateTimeOriginal, with its offset metadata when present\",\"Use DateTimeDigitized\",\"Use the first available field from a specified ordered list\"],\"default_guess\":\"Use EXIF DateTimeOriginal and define an explicit ordered fallback list.\",\"witness\":{\"initial\":\"A valid image contains different DateTimeOriginal and DateTimeDigitized values.\",\"events\":[\"The caller delivers the image.\",\"The deliverer prepares M03 and builds M05.\"],\"outcomes\":[\"photo_date is derived from DateTimeOriginal.\",\"photo_date is derived from DateTimeDigitized.\"],\"observer\":\"The owner sees a different photo date in the Portal.\"}},{\"subject\":\"M03 PreparedPhoto photo-date fallback\",\"kind\":\"vague fallback condition\",\"text\":\"The photo date comes from the camera record, otherwise from the file's\\n  modification time\",\"question\":\"Exactly which camera-record conditions trigger the modification-time fallback: absence only, or also malformed, out-of-range, contradictory, or timezone-incomplete metadata?\",\"options\":[\"Fall back only when the selected camera field is absent\",\"Fall back whenever the selected camera value cannot be converted unambiguously\",\"Reject the image when camera metadata exists but is invalid\"],\"default_guess\":\"Use the modification time when the selected camera instant is absent or invalid, with the invalid cases enumerated.\",\"witness\":{\"initial\":\"A readable supported image has a malformed camera timestamp and a valid file modification time.\",\"events\":[\"The caller delivers the image.\"],\"outcomes\":[\"The service falls back to the modification time and places the image.\",\"The service rejects the image because the present camera timestamp is malformed.\"],\"observer\":\"The caller sees a placement versus a failure.\"}},{\"subject\":\"M03 taken_at and M05 photo_date timezone conversion\",\"kind\":\"missing timezone authority\",\"text\":\"with the moment the photo was taken as UTC without an offset\",\"question\":\"How is a camera timestamp that carries no UTC offset converted to UTC?\",\"options\":[\"Interpret it in a configured installation timezone and convert to UTC\",\"Treat the camera's offsetless fields as already UTC\",\"Use a separately stored EXIF offset and fall back to file modification time when it is absent\",\"Reject or fall back whenever the camera timestamp has no offset\"],\"default_guess\":\"Use an EXIF offset when present; otherwise fall back to the file modification instant rather than inventing a timezone.\",\"witness\":{\"initial\":\"An image has DateTimeOriginal 2026-07-01 12:00:00 but no EXIF offset, and the installation is in Europe/Madrid.\",\"events\":[\"The caller delivers the image.\",\"The deliverer constructs the UTC photo date.\"],\"outcomes\":[\"The stored UTC instant is 10:00:00 after interpreting the value as Europe/Madrid local time.\",\"The stored UTC instant is 12:00:00 after treating the value as UTC.\"],\"observer\":\"The owner sees a two-hour difference in the Portal photo date.\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing time source\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"What authoritative time source supplies marked_at when a publication mark is created?\",\"options\":[\"An injected system-clock backend decided by time_source_policy\",\"The ambient process wall clock\",\"A timestamp supplied by the caller\",\"A filesystem timestamp of the record\"],\"default_guess\":\"Use an injected UTC system-clock backend.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark; an injected test clock differs from the host wall clock.\",\"events\":[\"The calling flow reports the Portal photo_id.\",\"The deliverer creates the mark.\"],\"outcomes\":[\"marked_at is the injected clock's instant.\",\"marked_at is the host wall-clock instant.\"],\"observer\":\"A later scan or direct record inspection exposes a different marked_at value.\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing instant representation\",\"text\":\"`photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"In which exact representation is marked_at held and persisted: offsetless UTC, offset-aware UTC, or another canonical form?\",\"options\":[\"A naive datetime whose fields are UTC\",\"An offset-aware datetime normalized to +00:00\",\"A canonical integer epoch value converted to datetime at the model boundary\"],\"default_guess\":\"Use an offset-aware UTC datetime normalized to +00:00.\",\"witness\":{\"initial\":\"A mark is created at 2026-11-19T10:00:00Z.\",\"events\":[\"The deliverer writes the publication-mark record.\",\"A later operation validates and reads it.\"],\"outcomes\":[\"The record contains an offsetless 2026-11-19T10:00:00 value.\",\"The record contains 2026-11-19T10:00:00+00:00.\"],\"observer\":\"The record validator and any consumer comparing marked_at see different datetime semantics.\"}},{\"subject\":\"publication-mark operation\",\"kind\":\"missing clock-read count\",\"text\":\"The calling flow reports the\\n`photo_id` right after `photo.publish` answers, and the deliverer creates the mark.\",\"question\":\"How many readings of the decided time source may one mark operation take, and which reading becomes marked_at?\",\"options\":[\"Read the clock exactly once and reuse that instant throughout the operation\",\"Permit multiple readings and persist the last one\",\"Permit multiple readings and persist the first one\"],\"default_guess\":\"Read the clock exactly once after the lock is held and reuse that instant.\",\"witness\":{\"initial\":\"A placement exists without a mark, and the clock advances between successive reads.\",\"events\":[\"The caller submits a valid photo_id.\",\"The service validates the request, takes the project lock, and writes the mark.\"],\"outcomes\":[\"marked_at contains the operation's single clock reading.\",\"marked_at contains a later reading taken immediately before persistence.\"],\"observer\":\"A reader of the stored mark sees a different timestamp.\"}},{\"subject\":\"INV-06 Required tests\",\"kind\":\"incomplete invariant test\",\"text\":\"a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place\",\"question\":\"What must the test assert to demonstrate the invariant's stronger requirement that a repeated placement “writes nothing,” including marks, lock infrastructure, temporary files, and any other durable state?\",\"options\":[\"Snapshot and compare all durable state touched by the service\",\"Narrow INV-06 so it promises only unchanged stored images and placement records\",\"Enumerate the exact permitted non-placement writes and assert that nothing else changes\"],\"default_guess\":\"Snapshot all durable state after required lock infrastructure already exists and assert byte-for-byte and entry-for-entry equality after replay.\"},{\"subject\":\"INV-07 Required tests\",\"kind\":\"incomplete invariant test\",\"text\":\"and a removed file keeps its delivery\",\"question\":\"For the removal case, must the test explicitly show that the earlier placement record, stored image, and publication mark all remain unchanged, as INV-07 requires?\",\"options\":[\"Assert all three artifacts remain present and byte-for-byte unchanged\",\"Assert only that replay still returns a placement\",\"Narrow the invariant to the behavior actually asserted\"],\"default_guess\":\"Assert that the placement record, stored image, and mark all remain unchanged.\"},{\"subject\":\"INV-19 Required tests\",\"kind\":\"incomplete invariant test\",\"text\":\"delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file\",\"question\":\"What must the test observe to prove that a new placement never reads a conflict copy, rather than merely proving that the operation eventually refuses it?\",\"options\":[\"Instrument file opening or reading and assert that the conflict-copy last segment is never opened for reading\",\"Treat the refusal and unchanged durable state as sufficient evidence\",\"Rewrite INV-19 to require refusal without claiming that no read occurs\"],\"default_guess\":\"Instrument the source filesystem boundary and assert that the conflict copy is not opened for reading.\"},{\"subject\":\"A6 rule 4 folder mode\",\"kind\":\"standard_violation\",\"text\":\"the folders below the state folder that lead to\\n   it with the mode rule 2 decides\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the folder-mode supplier symbol as `the imported STATE_FOLDER_MODE constant` instead of referring indirectly to the value that another rule decides.\"}]}",
+ "set_aside": []
+}
