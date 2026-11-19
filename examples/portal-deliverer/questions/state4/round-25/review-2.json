@@ -1,0 +1,134 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "A8 optional and required run settings",
+   "kind": "empty-value semantics",
+   "text": "A required setting that is absent ends the start, and an optional one that is absent takes its default.",
+   "question": "Does an environment variable that is present with an empty value count as absent, or as a supplied value that must be validated?",
+   "options": [
+    "An empty value counts as absent for every setting.",
+    "An empty value is supplied and invalid for typed settings; string settings receive the empty string.",
+    "Empty handling is decided separately for each setting."
+   ],
+   "default_guess": "Treat an empty value as absent, preserving the earlier startup behavior.",
+   "witness": {
+    "initial": "All required settings are valid and PORTAL_DELIVERER_PORT is present with the empty value.",
+    "events": [
+     "The deployment launches capability:deliverer_service.run_service.",
+     "capability:runtime_settings.load_runtime_settings reads PORTAL_DELIVERER_PORT."
+    ],
+    "outcomes": [
+     "The empty value counts as absent, so port 8850 is used and the service can listen.",
+     "The empty value counts as a malformed supplied port, so the start ends without listening."
+    ],
+    "observer": "The deployment sees whether the service listens on port 8850."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "runtime setting value normalization",
+   "kind": "unspecified parsing",
+   "text": "that module decides how a value is read",
+   "question": "Before validation, are environment values used exactly as supplied, trimmed, case-normalized, or otherwise transformed?",
+   "options": [
+    "Use every value exactly as supplied.",
+    "Trim ASCII whitespace from every value.",
+    "Apply setting-specific normalization, including possible case normalization for environment."
+   ],
+   "default_guess": "Use values exactly as supplied; only the token file has an explicit trimming rule.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_TIMEZONE is set to ` Europe/Madrid ` and every other setting is valid.",
+    "events": [
+     "The deployment launches the service.",
+     "capability:runtime_settings.load_runtime_settings reads the timezone value."
+    ],
+    "outcomes": [
+     "Whitespace is trimmed, Europe/Madrid is recognized, and startup continues.",
+     "The value is used literally, the time-zone database does not know it, and startup ends."
+    ],
+    "observer": "The deployment sees whether the service starts."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "PORTAL_DELIVERER_PORT representation",
+   "kind": "vague value form",
+   "text": "The port is a whole number from 1 to 65535",
+   "question": "Which textual forms in the environment represent a whole-number port?",
+   "options": [
+    "Only non-empty ASCII decimal digits are accepted.",
+    "A leading plus sign and leading zeroes are also accepted.",
+    "The runtime integer parser decides, including its handling of whitespace and non-ASCII digits."
+   ],
+   "default_guess": "Accept only ASCII decimal digits, then require the parsed value to be from 1 through 65535.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_PORT is set to `+8850` and every other startup input is valid.",
+    "events": [
+     "The deployment launches the service.",
+     "capability:runtime_settings.load_runtime_settings reads the port."
+    ],
+    "outcomes": [
+     "`+8850` is accepted as the whole number 8850 and the service listens.",
+     "`+8850` has the wrong form and startup ends without listening."
+    ],
+    "observer": "The deployment sees whether the service listens."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ownership of semantic run-setting rejection",
+   "kind": "contradictory owner",
+   "text": "A8 | reading each run setting, its default, and the refusal of a missing required setting or of a value of the wrong form | `runtime_settings` / A8 | the refusal of a well-formed port above 65535 and of a time zone the database does not know | `deliverer_service` / the refusal of a value the start-up table does not accept",
+   "question": "Does runtime_settings or deliverer_service reject a well-formed but out-of-range port and a syntactically valid but unknown time zone?",
+   "options": [
+    "runtime_settings rejects every value the start-up table does not accept.",
+    "runtime_settings rejects missing or syntactically malformed values, while deliverer_service rejects an out-of-range port and an unknown time zone.",
+    "deliverer_service performs all run-setting validation after runtime_settings reads raw values."
+   ],
+   "default_guess": "Use the specific allocation: runtime_settings handles absence and form, while deliverer_service handles port range and time-zone existence.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_PORT is `70000`; all other environment values and files are valid.",
+    "events": [
+     "A startup test calls capability:runtime_settings.load_runtime_settings.",
+     "If that call returns, capability:deliverer_service.run_service continues startup."
+    ],
+    "outcomes": [
+     "load_runtime_settings rejects the value because the start-up table does not accept it.",
+     "load_runtime_settings returns a well-formed integer and deliverer_service rejects it later."
+    ],
+    "observer": "The startup caller and module-level tests see which capability fails."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "service_start validation step and failure precedence",
+   "kind": "unnamed operation",
+   "text": "capability:runtime_settings.load_runtime_settings reads the run settings from the environment. / capability:deliverer_service.load_config turns them into the context of the operations and calls capability:object_connections.load_connections once / capability:deliverer_service.run_service serves that surface in the web server, on the loopback interface and the `port` of the run settings.",
+   "question": "Which named deliverer_service capability checks an out-of-range port and an unknown time zone, and where do those checks occur relative to loading the connections file and reading the token?",
+   "options": [
+    "load_config validates both before load_connections.",
+    "load_config validates both after load_connections but before read_token.",
+    "load_config validates the time zone, while run_service validates the port immediately before binding.",
+    "run_service validates both only after the application and token have been built."
+   ],
+   "default_guess": "Have load_config validate both settings before it loads the connections file, so invalid startup configuration fails before installation files are read.",
+   "witness": {
+    "initial": "The port is 70000 and the connections file is invalid; the remaining startup inputs are valid.",
+    "events": [
+     "The deployment launches capability:deliverer_service.run_service.",
+     "capability:runtime_settings.load_runtime_settings returns the parsed settings.",
+     "Startup proceeds according to the chosen location of the port check."
+    ],
+    "outcomes": [
+     "The port is rejected before capability:object_connections.load_connections is called.",
+     "load_connections runs first and the invalid connections file ends startup before the port is rejected."
+    ],
+    "observer": "A startup test or filesystem audit sees whether the connections file was read and which failure won."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"A8 optional and required run settings\",\"kind\":\"empty-value semantics\",\"text\":\"A required setting that is absent ends the start, and an optional one that is absent takes its default.\",\"question\":\"Does an environment variable that is present with an empty value count as absent, or as a supplied value that must be validated?\",\"options\":[\"An empty value counts as absent for every setting.\",\"An empty value is supplied and invalid for typed settings; string settings receive the empty string.\",\"Empty handling is decided separately for each setting.\"],\"default_guess\":\"Treat an empty value as absent, preserving the earlier startup behavior.\",\"witness\":{\"initial\":\"All required settings are valid and PORTAL_DELIVERER_PORT is present with the empty value.\",\"events\":[\"The deployment launches capability:deliverer_service.run_service.\",\"capability:runtime_settings.load_runtime_settings reads PORTAL_DELIVERER_PORT.\"],\"outcomes\":[\"The empty value counts as absent, so port 8850 is used and the service can listen.\",\"The empty value counts as a malformed supplied port, so the start ends without listening.\"],\"observer\":\"The deployment sees whether the service listens on port 8850.\"}},{\"unit\":\"context\",\"subject\":\"runtime setting value normalization\",\"kind\":\"unspecified parsing\",\"text\":\"that module decides how a value is read\",\"question\":\"Before validation, are environment values used exactly as supplied, trimmed, case-normalized, or otherwise transformed?\",\"options\":[\"Use every value exactly as supplied.\",\"Trim ASCII whitespace from every value.\",\"Apply setting-specific normalization, including possible case normalization for environment.\"],\"default_guess\":\"Use values exactly as supplied; only the token file has an explicit trimming rule.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_TIMEZONE is set to ` Europe/Madrid ` and every other setting is valid.\",\"events\":[\"The deployment launches the service.\",\"capability:runtime_settings.load_runtime_settings reads the timezone value.\"],\"outcomes\":[\"Whitespace is trimmed, Europe/Madrid is recognized, and startup continues.\",\"The value is used literally, the time-zone database does not know it, and startup ends.\"],\"observer\":\"The deployment sees whether the service starts.\"}},{\"unit\":\"context\",\"subject\":\"PORTAL_DELIVERER_PORT representation\",\"kind\":\"vague value form\",\"text\":\"The port is a whole number from 1 to 65535\",\"question\":\"Which textual forms in the environment represent a whole-number port?\",\"options\":[\"Only non-empty ASCII decimal digits are accepted.\",\"A leading plus sign and leading zeroes are also accepted.\",\"The runtime integer parser decides, including its handling of whitespace and non-ASCII digits.\"],\"default_guess\":\"Accept only ASCII decimal digits, then require the parsed value to be from 1 through 65535.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_PORT is set to `+8850` and every other startup input is valid.\",\"events\":[\"The deployment launches the service.\",\"capability:runtime_settings.load_runtime_settings reads the port.\"],\"outcomes\":[\"`+8850` is accepted as the whole number 8850 and the service listens.\",\"`+8850` has the wrong form and startup ends without listening.\"],\"observer\":\"The deployment sees whether the service listens.\"}},{\"unit\":\"context\",\"subject\":\"ownership of semantic run-setting rejection\",\"kind\":\"contradictory owner\",\"text\":\"A8 | reading each run setting, its default, and the refusal of a missing required setting or of a value of the wrong form | `runtime_settings` / A8 | the refusal of a well-formed port above 65535 and of a time zone the database does not know | `deliverer_service` / the refusal of a value the start-up table does not accept\",\"question\":\"Does runtime_settings or deliverer_service reject a well-formed but out-of-range port and a syntactically valid but unknown time zone?\",\"options\":[\"runtime_settings rejects every value the start-up table does not accept.\",\"runtime_settings rejects missing or syntactically malformed values, while deliverer_service rejects an out-of-range port and an unknown time zone.\",\"deliverer_service performs all run-setting validation after runtime_settings reads raw values.\"],\"default_guess\":\"Use the specific allocation: runtime_settings handles absence and form, while deliverer_service handles port range and time-zone existence.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_PORT is `70000`; all other environment values and files are valid.\",\"events\":[\"A startup test calls capability:runtime_settings.load_runtime_settings.\",\"If that call returns, capability:deliverer_service.run_service continues startup.\"],\"outcomes\":[\"load_runtime_settings rejects the value because the start-up table does not accept it.\",\"load_runtime_settings returns a well-formed integer and deliverer_service rejects it later.\"],\"observer\":\"The startup caller and module-level tests see which capability fails.\"}},{\"unit\":\"context\",\"subject\":\"service_start validation step and failure precedence\",\"kind\":\"unnamed operation\",\"text\":\"capability:runtime_settings.load_runtime_settings reads the run settings from the environment. / capability:deliverer_service.load_config turns them into the context of the operations and calls capability:object_connections.load_connections once / capability:deliverer_service.run_service serves that surface in the web server, on the loopback interface and the `port` of the run settings.\",\"question\":\"Which named deliverer_service capability checks an out-of-range port and an unknown time zone, and where do those checks occur relative to loading the connections file and reading the token?\",\"options\":[\"load_config validates both before load_connections.\",\"load_config validates both after load_connections but before read_token.\",\"load_config validates the time zone, while run_service validates the port immediately before binding.\",\"run_service validates both only after the application and token have been built.\"],\"default_guess\":\"Have load_config validate both settings before it loads the connections file, so invalid startup configuration fails before installation files are read.\",\"witness\":{\"initial\":\"The port is 70000 and the connections file is invalid; the remaining startup inputs are valid.\",\"events\":[\"The deployment launches capability:deliverer_service.run_service.\",\"capability:runtime_settings.load_runtime_settings returns the parsed settings.\",\"Startup proceeds according to the chosen location of the port check.\"],\"outcomes\":[\"The port is rejected before capability:object_connections.load_connections is called.\",\"load_connections runs first and the invalid connections file ends startup before the port is rejected.\"],\"observer\":\"A startup test or filesystem audit sees whether the connections file was read and which failure won.\"}}]}",
+ "set_aside": []
+}
