@@ -1,0 +1,257 @@
+{
+ "open_points": [
+  {
+   "subject": "02_rules.md:Status",
+   "kind": "missing_time_decision",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "What is the source and meaning of `marked_at`, is its `datetime` aware or offset-free and in which time zone, and how many readings may one mark operation take?",
+   "options": [
+    "Read one UTC instant from an injected system clock and store it as offset-free UTC.",
+    "Read the host wall clock when the record is written, using its native datetime representation.",
+    "Use a caller-supplied instant and store it with an explicit UTC offset."
+   ],
+   "default_guess": "Inject a clock, read it exactly once per mark operation, convert the result to UTC, and store offset-free UTC to match the other persisted datetime convention.",
+   "witness": {
+    "initial": "A placement exists without a publication mark, and the host is configured for Europe/Madrid.",
+    "events": [
+     "The calling flow records the Portal photo id.",
+     "One implementation reads an injected UTC clock once; another calls the host wall clock while building and again while writing the mark."
+    ],
+    "outcomes": [
+     "The mark contains one deterministic offset-free UTC `marked_at`.",
+     "The mark contains a local or offset-aware value, or a value selected from a different clock reading."
+    ],
+    "observer": "A later scan, replayed mark, state-record reader or test comparing `marked_at` sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "contradictory_outcome",
+   "text": "A photo that cannot be delivered is answered with the FAILED member of = models.PlacementStatus and one member of\n   `= models.PlacementFailure`.",
+   "question": "Does this rule include deliveries refused under A6 rules 1 and 5, or are those always whole-request M08 refusals as A6 and M08 state?",
+   "options": [
+    "A6 rules 1 and 5 take precedence and return M08 with `UNSAFE_REFERENCE` or `STATE_UNAVAILABLE`.",
+    "Every inability to deliver returns M06 with `FAILED`, including A6 failures.",
+    "Only conditions 1–5 in A3 rule 5 are failed-photo outcomes; the opening sentence must say that explicitly."
+   ],
+   "default_guess": "Limit the sentence to conditions 1–5 of A3 rule 5 and keep A6 rules 1 and 5 as M08 refusals.",
+   "witness": {
+    "initial": "A confirmed project has a valid new source photo, but a binary-store folder on its target path is a symbolic-link loop.",
+    "events": [
+     "The caller submits a valid delivery request.",
+     "The deliverer reaches the binary-store containment check."
+    ],
+    "outcomes": [
+     "A6 returns M08 with the UNSAFE_REFERENCE member of `RefusalCode` and no failed-photo outcome.",
+     "A3 returns an M06 outcome with status FAILED, although no `PlacementFailure` member represents an unsafe reference."
+    ],
+    "observer": "The calling flow sees a different response model, status and reason."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "missing_check_precedence",
+   "text": "When it does not, or when a link in the store cannot be resolved,\n   the delivery is refused as a whole with the UNSAFE_REFERENCE member of = models.RefusalCode, an M08\n   and not a failed photo, and no stored image and no record is written.",
+   "question": "At what position in A3 rule 4's ordered checks is the binary-store containment and link-resolution check performed?",
+   "options": [
+    "After the project lock and existing-placement check but before the named file is examined.",
+    "Before the project lock and existing-placement check.",
+    "Only after the source has passed all named-file and image checks, immediately before writing."
+   ],
+   "default_guess": "Check it after determining that no placement exists and after validating the source, immediately before the first store write.",
+   "witness": {
+    "initial": "The project is confirmed, the requested source id is valid, the named source file is absent, and the target binary-store directory contains an unresolvable link.",
+    "events": [
+     "The caller requests delivery.",
+     "One implementation checks store safety before examining the named file; another follows A3's listed checks and reaches the named-file condition first."
+    ],
+    "outcomes": [
+     "The request is refused as M08 with `UNSAFE_REFERENCE`.",
+     "The photo fails as M06 with `NOT_READY_OR_ABSENT`."
+    ],
+    "observer": "The calling flow sees a different response type and reason."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "vague_refusal_condition",
+   "text": "When it does not, or when a link in the store cannot be resolved,",
+   "question": "Which links must be resolved—the links on the candidate reference's existing path components, the binary-store root itself, or every link anywhere below the store—and how is the not-yet-existing final image path resolved?",
+   "options": [
+    "Inspect only the resolved store and existing components of the candidate image path; the absent final filename is appended after resolving its parent.",
+    "Refuse if any unresolvable link exists anywhere below the binary store, even outside the candidate path.",
+    "Require strict resolution of the complete candidate path, including the final filename."
+   ],
+   "default_guess": "Resolve the store and each existing parent component on the candidate path, refuse unresolvable links on that path, and append the new filename to the resolved safe parent.",
+   "witness": {
+    "initial": "The candidate target path has ordinary safe parents and does not yet exist, while an unrelated directory elsewhere below the binary store contains a dangling link.",
+    "events": [
+     "The caller delivers a valid new photo.",
+     "One implementation resolves only the candidate path; another scans all links in the store."
+    ],
+    "outcomes": [
+     "The image and placement record are written.",
+     "The whole delivery is refused with `UNSAFE_REFERENCE` because of the unrelated dangling link."
+    ],
+    "observer": "The caller sees placement versus refusal, and the store owner sees whether the image was created."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "unspecified_refusal_payload",
+   "text": "`code` says why, and `detail` is a fixed sentence for\npeople that holds no server path and no credential.",
+   "question": "What exact fixed `detail` sentence accompanies the newly reachable `unsafe_reference` refusal?",
+   "options": [
+    "Define one exact sentence for `unsafe_reference`.",
+    "Use a single common fixed sentence for all refusal codes.",
+    "Let each implementation choose any safe sentence."
+   ],
+   "default_guess": "Define a stable sentence per refusal code, including a specified sentence for `unsafe_reference`.",
+   "witness": {
+    "initial": "A delivery encounters an unresolvable link in the binary store.",
+    "events": [
+     "The service returns the required M08 refusal.",
+     "Two implementations independently choose safe human-readable detail text."
+    ],
+    "outcomes": [
+     "The response contains `detail: \"The stored-file reference is unsafe.\"`.",
+     "The response contains `detail: \"The binary store is unavailable.\"`."
+    ],
+    "observer": "The calling flow, logs or contract tests comparing the response payload see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "insufficient_required_test",
+   "text": "INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).",
+   "question": "How must the test show that no operation ever creates, changes, moves or deletes a source-folder entry, rather than only showing that the final visible state is equal?",
+   "options": [
+    "Instrument all source-folder mutation calls and assert that none occurs.",
+    "Observe filesystem events during every operation and assert that no mutation event occurs.",
+    "Weaken INV-01 to require only equal final files, bytes, modification times and modes."
+   ],
+   "default_guess": "Keep INV-01 and require mutation-call instrumentation or filesystem-event evidence showing zero source-folder writes, renames and deletions.",
+   "witness": {
+    "initial": "The source folder contains one photo.",
+    "events": [
+     "A defective placement temporarily renames the source, then renames it back and restores its metadata before returning.",
+     "The required test compares only the folder's final files, bytes, modification times and modes."
+    ],
+    "outcomes": [
+     "The test passes because the final state is equal.",
+     "INV-01 is violated because the operation moved the source during execution."
+    ],
+    "observer": "A filesystem watcher or another process accessing the source during the operation sees the transient mutation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "insufficient_required_test",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "How must the test show that the delivery opens no path that fails condition 1, instead of merely checking the returned failure and durable writes?",
+   "options": [
+    "Instrument path-opening operations and assert that no rejected segment or symlink target is opened.",
+    "Use an inaccessible or monitored symlink target and assert that it receives no access.",
+    "Change INV-02 to promise only the failure result and absence of durable writes."
+   ],
+   "default_guess": "Keep INV-02 and instrument folder and file opens so the test proves that rejected paths and symlink targets are never opened.",
+   "witness": {
+    "initial": "A requested name traverses a symbolic link to a readable file outside the photo folder and has no existing placement.",
+    "events": [
+     "A defective implementation follows and opens the target, then notices the rejected name and returns `NOT_READY_OR_ABSENT`.",
+     "The stated test checks only the response and that no file except the lock was added."
+    ],
+    "outcomes": [
+     "The stated test passes.",
+     "INV-02 is violated because the external target was opened."
+    ],
+    "observer": "The target's owner or an access monitor sees the read; the API caller does not."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "insufficient_required_test",
+   "text": "INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).",
+   "question": "How must the test show that a repeated placement writes nothing, rather than only that durable files have equal final contents?",
+   "options": [
+    "Instrument binary-store and state-store write operations and assert zero writes during replay.",
+    "Observe filesystem write and replacement events during replay.",
+    "Weaken INV-06 to require only unchanged final durable state."
+   ],
+   "default_guess": "Keep the no-write invariant and require a write spy or filesystem-event assertion showing zero image and record writes during replay.",
+   "witness": {
+    "initial": "A valid placement and stored image already exist.",
+    "events": [
+     "A defective replay rewrites both files atomically with identical bytes.",
+     "The required test compares their contents and the record count after the call."
+    ],
+    "outcomes": [
+     "The stated test passes because the durable state is byte-for-byte unchanged.",
+     "INV-06 is violated because the repeated placement performed writes."
+    ],
+    "observer": "A filesystem event monitor, backup process or storage audit sees the rewrites."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "insufficient_required_test",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "How must the test show that a new placement never reads a conflict copy, rather than only that it eventually rejects the request and writes nothing durable?",
+   "options": [
+    "Instrument source-file opens and reads and assert that the conflict-copy file is never opened.",
+    "Make the conflict copy a monitored file and assert zero read access.",
+    "Change INV-19 to require only rejection before placement is written."
+   ],
+   "default_guess": "Keep INV-19 and require instrumentation proving that the conflict-copy path is rejected before any file open or read.",
+   "witness": {
+    "initial": "A conflict-copy file contains content with no placement.",
+    "events": [
+     "A defective implementation opens and hashes the conflict copy, then rejects its name and returns `NOT_READY_OR_ABSENT`.",
+     "The stated test checks the response and durable files only."
+    ],
+    "outcomes": [
+     "The stated test passes.",
+     "INV-19 is violated because the new-placement attempt read the conflict copy."
+    ],
+    "observer": "A source-access monitor sees the read; the API caller sees the same rejection either way."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5",
+   "kind": "insufficient_required_test",
+   "text": "After a scan has succeeded on the running service, clearing the confirmation makes scan, placement and mark each answer `connection_not_confirmed` and write nothing (`test_a_cleared_confirmation_stops_the_running_service`).",
+   "question": "How must the Required tests for INV-10 show that an unconfirmed or otherwise invalid connection causes nothing to be scanned, not merely that the operation returns a refusal and writes nothing?",
+   "options": [
+    "Instrument source-folder listing and opening and assert zero source access before and after each connection refusal.",
+    "Use a monitored source folder and assert that refused operations generate no access.",
+    "Narrow INV-10 to prohibit successful results and writes while allowing source reads before refusal."
+   ],
+   "default_guess": "Keep INV-10 and require assertions that no source folder is resolved, listed or opened when the connection check refuses the operation.",
+   "witness": {
+    "initial": "A project's connection is present but unconfirmed, and its photo folder is readable and monitored.",
+    "events": [
+     "A defective scan lists the photo folder before checking confirmation, then returns `connection_not_confirmed` and writes nothing.",
+     "The stated test checks only the answer and durable writes."
+    ],
+    "outcomes": [
+     "The stated test passes.",
+     "INV-10 is violated because content was scanned without a confirmed connection."
+    ],
+    "observer": "The source-folder owner or an access monitor sees the scan."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"02_rules.md:Status\",\"kind\":\"missing_time_decision\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"What is the source and meaning of `marked_at`, is its `datetime` aware or offset-free and in which time zone, and how many readings may one mark operation take?\",\"options\":[\"Read one UTC instant from an injected system clock and store it as offset-free UTC.\",\"Read the host wall clock when the record is written, using its native datetime representation.\",\"Use a caller-supplied instant and store it with an explicit UTC offset.\"],\"default_guess\":\"Inject a clock, read it exactly once per mark operation, convert the result to UTC, and store offset-free UTC to match the other persisted datetime convention.\",\"witness\":{\"initial\":\"A placement exists without a publication mark, and the host is configured for Europe/Madrid.\",\"events\":[\"The calling flow records the Portal photo id.\",\"One implementation reads an injected UTC clock once; another calls the host wall clock while building and again while writing the mark.\"],\"outcomes\":[\"The mark contains one deterministic offset-free UTC `marked_at`.\",\"The mark contains a local or offset-aware value, or a value selected from a different clock reading.\"],\"observer\":\"A later scan, replayed mark, state-record reader or test comparing `marked_at` sees the difference.\"}},{\"subject\":\"A3\",\"kind\":\"contradictory_outcome\",\"text\":\"A photo that cannot be delivered is answered with the FAILED member of = models.PlacementStatus and one member of\\n   `= models.PlacementFailure`.\",\"question\":\"Does this rule include deliveries refused under A6 rules 1 and 5, or are those always whole-request M08 refusals as A6 and M08 state?\",\"options\":[\"A6 rules 1 and 5 take precedence and return M08 with `UNSAFE_REFERENCE` or `STATE_UNAVAILABLE`.\",\"Every inability to deliver returns M06 with `FAILED`, including A6 failures.\",\"Only conditions 1–5 in A3 rule 5 are failed-photo outcomes; the opening sentence must say that explicitly.\"],\"default_guess\":\"Limit the sentence to conditions 1–5 of A3 rule 5 and keep A6 rules 1 and 5 as M08 refusals.\",\"witness\":{\"initial\":\"A confirmed project has a valid new source photo, but a binary-store folder on its target path is a symbolic-link loop.\",\"events\":[\"The caller submits a valid delivery request.\",\"The deliverer reaches the binary-store containment check.\"],\"outcomes\":[\"A6 returns M08 with the UNSAFE_REFERENCE member of `RefusalCode` and no failed-photo outcome.\",\"A3 returns an M06 outcome with status FAILED, although no `PlacementFailure` member represents an unsafe reference.\"],\"observer\":\"The calling flow sees a different response model, status and reason.\"}},{\"subject\":\"A6\",\"kind\":\"missing_check_precedence\",\"text\":\"When it does not, or when a link in the store cannot be resolved,\\n   the delivery is refused as a whole with the UNSAFE_REFERENCE member of = models.RefusalCode, an M08\\n   and not a failed photo, and no stored image and no record is written.\",\"question\":\"At what position in A3 rule 4's ordered checks is the binary-store containment and link-resolution check performed?\",\"options\":[\"After the project lock and existing-placement check but before the named file is examined.\",\"Before the project lock and existing-placement check.\",\"Only after the source has passed all named-file and image checks, immediately before writing.\"],\"default_guess\":\"Check it after determining that no placement exists and after validating the source, immediately before the first store write.\",\"witness\":{\"initial\":\"The project is confirmed, the requested source id is valid, the named source file is absent, and the target binary-store directory contains an unresolvable link.\",\"events\":[\"The caller requests delivery.\",\"One implementation checks store safety before examining the named file; another follows A3's listed checks and reaches the named-file condition first.\"],\"outcomes\":[\"The request is refused as M08 with `UNSAFE_REFERENCE`.\",\"The photo fails as M06 with `NOT_READY_OR_ABSENT`.\"],\"observer\":\"The calling flow sees a different response type and reason.\"}},{\"subject\":\"A6\",\"kind\":\"vague_refusal_condition\",\"text\":\"When it does not, or when a link in the store cannot be resolved,\",\"question\":\"Which links must be resolved—the links on the candidate reference's existing path components, the binary-store root itself, or every link anywhere below the store—and how is the not-yet-existing final image path resolved?\",\"options\":[\"Inspect only the resolved store and existing components of the candidate image path; the absent final filename is appended after resolving its parent.\",\"Refuse if any unresolvable link exists anywhere below the binary store, even outside the candidate path.\",\"Require strict resolution of the complete candidate path, including the final filename.\"],\"default_guess\":\"Resolve the store and each existing parent component on the candidate path, refuse unresolvable links on that path, and append the new filename to the resolved safe parent.\",\"witness\":{\"initial\":\"The candidate target path has ordinary safe parents and does not yet exist, while an unrelated directory elsewhere below the binary store contains a dangling link.\",\"events\":[\"The caller delivers a valid new photo.\",\"One implementation resolves only the candidate path; another scans all links in the store.\"],\"outcomes\":[\"The image and placement record are written.\",\"The whole delivery is refused with `UNSAFE_REFERENCE` because of the unrelated dangling link.\"],\"observer\":\"The caller sees placement versus refusal, and the store owner sees whether the image was created.\"}},{\"subject\":\"context\",\"kind\":\"unspecified_refusal_payload\",\"text\":\"`code` says why, and `detail` is a fixed sentence for\\npeople that holds no server path and no credential.\",\"question\":\"What exact fixed `detail` sentence accompanies the newly reachable `unsafe_reference` refusal?\",\"options\":[\"Define one exact sentence for `unsafe_reference`.\",\"Use a single common fixed sentence for all refusal codes.\",\"Let each implementation choose any safe sentence.\"],\"default_guess\":\"Define a stable sentence per refusal code, including a specified sentence for `unsafe_reference`.\",\"witness\":{\"initial\":\"A delivery encounters an unresolvable link in the binary store.\",\"events\":[\"The service returns the required M08 refusal.\",\"Two implementations independently choose safe human-readable detail text.\"],\"outcomes\":[\"The response contains `detail: \\\"The stored-file reference is unsafe.\\\"`.\",\"The response contains `detail: \\\"The binary store is unavailable.\\\"`.\"],\"observer\":\"The calling flow, logs or contract tests comparing the response payload see the difference.\"}},{\"subject\":\"A1\",\"kind\":\"insufficient_required_test\",\"text\":\"INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).\",\"question\":\"How must the test show that no operation ever creates, changes, moves or deletes a source-folder entry, rather than only showing that the final visible state is equal?\",\"options\":[\"Instrument all source-folder mutation calls and assert that none occurs.\",\"Observe filesystem events during every operation and assert that no mutation event occurs.\",\"Weaken INV-01 to require only equal final files, bytes, modification times and modes.\"],\"default_guess\":\"Keep INV-01 and require mutation-call instrumentation or filesystem-event evidence showing zero source-folder writes, renames and deletions.\",\"witness\":{\"initial\":\"The source folder contains one photo.\",\"events\":[\"A defective placement temporarily renames the source, then renames it back and restores its metadata before returning.\",\"The required test compares only the folder's final files, bytes, modification times and modes.\"],\"outcomes\":[\"The test passes because the final state is equal.\",\"INV-01 is violated because the operation moved the source during execution.\"],\"observer\":\"A filesystem watcher or another process accessing the source during the operation sees the transient mutation.\"}},{\"subject\":\"A1\",\"kind\":\"insufficient_required_test\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"How must the test show that the delivery opens no path that fails condition 1, instead of merely checking the returned failure and durable writes?\",\"options\":[\"Instrument path-opening operations and assert that no rejected segment or symlink target is opened.\",\"Use an inaccessible or monitored symlink target and assert that it receives no access.\",\"Change INV-02 to promise only the failure result and absence of durable writes.\"],\"default_guess\":\"Keep INV-02 and instrument folder and file opens so the test proves that rejected paths and symlink targets are never opened.\",\"witness\":{\"initial\":\"A requested name traverses a symbolic link to a readable file outside the photo folder and has no existing placement.\",\"events\":[\"A defective implementation follows and opens the target, then notices the rejected name and returns `NOT_READY_OR_ABSENT`.\",\"The stated test checks only the response and that no file except the lock was added.\"],\"outcomes\":[\"The stated test passes.\",\"INV-02 is violated because the external target was opened.\"],\"observer\":\"The target's owner or an access monitor sees the read; the API caller does not.\"}},{\"subject\":\"A3\",\"kind\":\"insufficient_required_test\",\"text\":\"INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).\",\"question\":\"How must the test show that a repeated placement writes nothing, rather than only that durable files have equal final contents?\",\"options\":[\"Instrument binary-store and state-store write operations and assert zero writes during replay.\",\"Observe filesystem write and replacement events during replay.\",\"Weaken INV-06 to require only unchanged final durable state.\"],\"default_guess\":\"Keep the no-write invariant and require a write spy or filesystem-event assertion showing zero image and record writes during replay.\",\"witness\":{\"initial\":\"A valid placement and stored image already exist.\",\"events\":[\"A defective replay rewrites both files atomically with identical bytes.\",\"The required test compares their contents and the record count after the call.\"],\"outcomes\":[\"The stated test passes because the durable state is byte-for-byte unchanged.\",\"INV-06 is violated because the repeated placement performed writes.\"],\"observer\":\"A filesystem event monitor, backup process or storage audit sees the rewrites.\"}},{\"subject\":\"A3\",\"kind\":\"insufficient_required_test\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"How must the test show that a new placement never reads a conflict copy, rather than only that it eventually rejects the request and writes nothing durable?\",\"options\":[\"Instrument source-file opens and reads and assert that the conflict-copy file is never opened.\",\"Make the conflict copy a monitored file and assert zero read access.\",\"Change INV-19 to require only rejection before placement is written.\"],\"default_guess\":\"Keep INV-19 and require instrumentation proving that the conflict-copy path is rejected before any file open or read.\",\"witness\":{\"initial\":\"A conflict-copy file contains content with no placement.\",\"events\":[\"A defective implementation opens and hashes the conflict copy, then rejects its name and returns `NOT_READY_OR_ABSENT`.\",\"The stated test checks the response and durable files only.\"],\"outcomes\":[\"The stated test passes.\",\"INV-19 is violated because the new-placement attempt read the conflict copy.\"],\"observer\":\"A source-access monitor sees the read; the API caller sees the same rejection either way.\"}},{\"subject\":\"A5\",\"kind\":\"insufficient_required_test\",\"text\":\"After a scan has succeeded on the running service, clearing the confirmation makes scan, placement and mark each answer `connection_not_confirmed` and write nothing (`test_a_cleared_confirmation_stops_the_running_service`).\",\"question\":\"How must the Required tests for INV-10 show that an unconfirmed or otherwise invalid connection causes nothing to be scanned, not merely that the operation returns a refusal and writes nothing?\",\"options\":[\"Instrument source-folder listing and opening and assert zero source access before and after each connection refusal.\",\"Use a monitored source folder and assert that refused operations generate no access.\",\"Narrow INV-10 to prohibit successful results and writes while allowing source reads before refusal.\"],\"default_guess\":\"Keep INV-10 and require assertions that no source folder is resolved, listed or opened when the connection check refuses the operation.\",\"witness\":{\"initial\":\"A project's connection is present but unconfirmed, and its photo folder is readable and monitored.\",\"events\":[\"A defective scan lists the photo folder before checking confirmation, then returns `connection_not_confirmed` and writes nothing.\",\"The stated test checks only the answer and durable writes.\"],\"outcomes\":[\"The stated test passes.\",\"INV-10 is violated because content was scanned without a confirmed connection.\"],\"observer\":\"The source-folder owner or an access monitor sees the scan.\"}}]}",
+ "set_aside": []
+}

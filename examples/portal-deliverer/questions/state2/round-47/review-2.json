@@ -1,0 +1,136 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing time decision",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "What time source creates `marked_at`, at what step of the mark operation is it read, how many times is it read, and is the stored datetime UTC-aware, UTC without an offset, local, or another representation?",
+   "options": [
+    "Read an injected clock once inside the project lock and store an aware UTC datetime.",
+    "Read an injected clock once and store UTC without an offset.",
+    "Read the process wall clock when the record is written.",
+    "Use a time supplied by the caller."
+   ],
+   "default_guess": "Read an injected clock once inside the project lock immediately before writing the mark and store an aware UTC datetime.",
+   "witness": {
+    "initial": "A confirmed project has a placement and no publication mark.",
+    "events": [
+     "The calling flow records a Portal photo_id.",
+     "The deliverer creates M07."
+    ],
+    "outcomes": [
+     "The record receives the single deterministic UTC instant returned by an injected clock.",
+     "The record receives the host wall-clock value or a differently represented datetime read at an implementation-chosen step."
+    ],
+    "observer": "A later reader of the mark record and a test that compares marked_at"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 5 and A6 rule 1",
+   "kind": "contradictory outcome",
+   "text": "A photo that cannot be delivered is answered with the FAILED member of = models.PlacementStatus and one member of\n   `= models.PlacementFailure`.",
+   "question": "Does this sentence apply only to conditions 1–5 in A3 rule 5, or also to a photo that cannot be delivered because A6 rule 1 requires a whole-request UNSAFE_REFERENCE refusal?",
+   "options": [
+    "It applies only to A3 rule 5 conditions 1–5; A6 rule 1 returns M08.",
+    "It applies to every inability to deliver, so A6 rule 1 must return an M06 failed outcome.",
+    "Add an explicit exception for all whole-request refusals."
+   ],
+   "default_guess": "Limit the sentence explicitly to conditions 1–5 and let A6 rule 1 return M08.",
+   "witness": {
+    "initial": "A confirmed project has no placement, the requested source is a valid deliverable image, and a binary-store folder is a symbolic link that resolves outside the store.",
+    "events": [
+     "The caller requests delivery.",
+     "The deliverer reaches the binary-store containment check."
+    ],
+    "outcomes": [
+     "A3 rule 5's unqualified sentence gives an M06 outcome with status FAILED, although no PlacementFailure member for this case is specified.",
+     "A6 rule 1 gives an M08 refusal with UNSAFE_REFERENCE and explicitly says it is not a failed photo."
+    ],
+    "observer": "The caller sees a different response model and status"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 4 check order and A6 rule 1 containment check",
+   "kind": "missing precedence",
+   "text": "Checks run in this order: token, request form and project id, connection, photo folder, source id,\n   project lock, existing placement, named file.",
+   "question": "Where in this order is the A6 rule 1 binary-store containment check performed, especially relative to replay detection and A3 rule 5 conditions 1–4?",
+   "options": [
+    "Before checking for an existing placement.",
+    "After replay detection but before examining the named file.",
+    "After the source passes A3 rule 5 conditions 1–4, immediately before writing.",
+    "At more than one stated point, with an explicit precedence rule."
+   ],
+   "default_guess": "Do not check it for a replay; for a new placement check it after conditions 1–4 and immediately before the first store write.",
+   "witness": {
+    "initial": "A confirmed project has no placement, the source has a valid name and signature but cannot be decoded, and a binary-store folder contains an unresolvable link loop.",
+    "events": [
+     "The caller requests delivery.",
+     "The implementation performs its chosen ordering of source preparation and store containment checks."
+    ],
+    "outcomes": [
+     "Checking the store first returns M08 with UNSAFE_REFERENCE.",
+     "Checking it only before writing first reaches A3 rule 5 condition 4 and returns M06 with UNREADABLE_IMAGE."
+    ],
+    "observer": "The caller sees a different failure model and reason"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 1 destination resolution",
+   "kind": "undefined resolution semantics",
+   "text": "The reference must stay inside the binary store: its path,\n   resolved with the links of the binary store, must lie below the resolved store.",
+   "question": "How is the destination resolved when its final file or service-created parent folders do not yet exist, and which existing path components must be resolved before containment is decided?",
+   "options": [
+    "Resolve existing ancestors strictly, reject unresolved links, and append validated nonexistent components lexically.",
+    "Use non-strict full-path resolution.",
+    "Require the entire destination path to exist before the containment check.",
+    "Create the destination folders first and then resolve them."
+   ],
+   "default_guess": "Resolve every existing ancestor strictly without following an unresolved link, then append the validated nonexistent suffix lexically and check that the resulting path is strictly below the resolved store.",
+   "witness": {
+    "initial": "The binary-store root exists and is safe, but this is the first delivery, so `photos/<project_id>/<source_id>.jpg` and some parent folders do not exist.",
+    "events": [
+     "The caller delivers a valid new photo.",
+     "The deliverer performs the containment check before creating or writing the destination."
+    ],
+    "outcomes": [
+     "A strict full-path resolver treats the nonexistent destination as unresolvable and refuses with UNSAFE_REFERENCE.",
+     "A resolver that checks existing ancestors and permits a validated nonexistent suffix accepts the path, creates the folders, and places the photo."
+    ],
+    "observer": "The caller sees refusal versus successful placement"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 1 unresolved non-link paths",
+   "kind": "incomplete refusal conditions",
+   "text": "When it does not, or when a link in the store cannot be resolved,\n   the delivery is refused as a whole with the UNSAFE_REFERENCE member of = models.RefusalCode, an M08\n   and not a failed photo, and no stored image and no record is written.",
+   "question": "What happens when containment cannot be established for a reason other than an unresolvable link, such as a permission or I/O failure while inspecting an existing store folder?",
+   "options": [
+    "Every inability to establish containment returns M08 UNSAFE_REFERENCE.",
+    "Only unresolvable links return UNSAFE_REFERENCE; other inspection failures become A3 condition 5 failures.",
+    "Use STATE_UNAVAILABLE for non-link failures.",
+    "Specify separate outcomes by failure class."
+   ],
+   "default_guess": "Every inability to establish containment should return M08 with UNSAFE_REFERENCE before any image or record write.",
+   "witness": {
+    "initial": "A confirmed project has no placement, its source is valid, and an existing binary-store folder cannot be inspected because of a permission or I/O error but is not known to be a symbolic link.",
+    "events": [
+     "The caller requests delivery.",
+     "The deliverer tries to establish destination containment."
+    ],
+    "outcomes": [
+     "The implementation treats failure to prove containment as M08 UNSAFE_REFERENCE.",
+     "The implementation applies the literal unresolvable-link condition only and later returns M06 UNREADABLE_FILE for a failed write."
+    ],
+    "observer": "The caller sees a different response model and reason"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing time decision\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"What time source creates `marked_at`, at what step of the mark operation is it read, how many times is it read, and is the stored datetime UTC-aware, UTC without an offset, local, or another representation?\",\"options\":[\"Read an injected clock once inside the project lock and store an aware UTC datetime.\",\"Read an injected clock once and store UTC without an offset.\",\"Read the process wall clock when the record is written.\",\"Use a time supplied by the caller.\"],\"default_guess\":\"Read an injected clock once inside the project lock immediately before writing the mark and store an aware UTC datetime.\",\"witness\":{\"initial\":\"A confirmed project has a placement and no publication mark.\",\"events\":[\"The calling flow records a Portal photo_id.\",\"The deliverer creates M07.\"],\"outcomes\":[\"The record receives the single deterministic UTC instant returned by an injected clock.\",\"The record receives the host wall-clock value or a differently represented datetime read at an implementation-chosen step.\"],\"observer\":\"A later reader of the mark record and a test that compares marked_at\"}},{\"subject\":\"A3 rule 5 and A6 rule 1\",\"kind\":\"contradictory outcome\",\"text\":\"A photo that cannot be delivered is answered with the FAILED member of = models.PlacementStatus and one member of\\n   `= models.PlacementFailure`.\",\"question\":\"Does this sentence apply only to conditions 1–5 in A3 rule 5, or also to a photo that cannot be delivered because A6 rule 1 requires a whole-request UNSAFE_REFERENCE refusal?\",\"options\":[\"It applies only to A3 rule 5 conditions 1–5; A6 rule 1 returns M08.\",\"It applies to every inability to deliver, so A6 rule 1 must return an M06 failed outcome.\",\"Add an explicit exception for all whole-request refusals.\"],\"default_guess\":\"Limit the sentence explicitly to conditions 1–5 and let A6 rule 1 return M08.\",\"witness\":{\"initial\":\"A confirmed project has no placement, the requested source is a valid deliverable image, and a binary-store folder is a symbolic link that resolves outside the store.\",\"events\":[\"The caller requests delivery.\",\"The deliverer reaches the binary-store containment check.\"],\"outcomes\":[\"A3 rule 5's unqualified sentence gives an M06 outcome with status FAILED, although no PlacementFailure member for this case is specified.\",\"A6 rule 1 gives an M08 refusal with UNSAFE_REFERENCE and explicitly says it is not a failed photo.\"],\"observer\":\"The caller sees a different response model and status\"}},{\"subject\":\"A3 rule 4 check order and A6 rule 1 containment check\",\"kind\":\"missing precedence\",\"text\":\"Checks run in this order: token, request form and project id, connection, photo folder, source id,\\n   project lock, existing placement, named file.\",\"question\":\"Where in this order is the A6 rule 1 binary-store containment check performed, especially relative to replay detection and A3 rule 5 conditions 1–4?\",\"options\":[\"Before checking for an existing placement.\",\"After replay detection but before examining the named file.\",\"After the source passes A3 rule 5 conditions 1–4, immediately before writing.\",\"At more than one stated point, with an explicit precedence rule.\"],\"default_guess\":\"Do not check it for a replay; for a new placement check it after conditions 1–4 and immediately before the first store write.\",\"witness\":{\"initial\":\"A confirmed project has no placement, the source has a valid name and signature but cannot be decoded, and a binary-store folder contains an unresolvable link loop.\",\"events\":[\"The caller requests delivery.\",\"The implementation performs its chosen ordering of source preparation and store containment checks.\"],\"outcomes\":[\"Checking the store first returns M08 with UNSAFE_REFERENCE.\",\"Checking it only before writing first reaches A3 rule 5 condition 4 and returns M06 with UNREADABLE_IMAGE.\"],\"observer\":\"The caller sees a different failure model and reason\"}},{\"subject\":\"A6 rule 1 destination resolution\",\"kind\":\"undefined resolution semantics\",\"text\":\"The reference must stay inside the binary store: its path,\\n   resolved with the links of the binary store, must lie below the resolved store.\",\"question\":\"How is the destination resolved when its final file or service-created parent folders do not yet exist, and which existing path components must be resolved before containment is decided?\",\"options\":[\"Resolve existing ancestors strictly, reject unresolved links, and append validated nonexistent components lexically.\",\"Use non-strict full-path resolution.\",\"Require the entire destination path to exist before the containment check.\",\"Create the destination folders first and then resolve them.\"],\"default_guess\":\"Resolve every existing ancestor strictly without following an unresolved link, then append the validated nonexistent suffix lexically and check that the resulting path is strictly below the resolved store.\",\"witness\":{\"initial\":\"The binary-store root exists and is safe, but this is the first delivery, so `photos/<project_id>/<source_id>.jpg` and some parent folders do not exist.\",\"events\":[\"The caller delivers a valid new photo.\",\"The deliverer performs the containment check before creating or writing the destination.\"],\"outcomes\":[\"A strict full-path resolver treats the nonexistent destination as unresolvable and refuses with UNSAFE_REFERENCE.\",\"A resolver that checks existing ancestors and permits a validated nonexistent suffix accepts the path, creates the folders, and places the photo.\"],\"observer\":\"The caller sees refusal versus successful placement\"}},{\"subject\":\"A6 rule 1 unresolved non-link paths\",\"kind\":\"incomplete refusal conditions\",\"text\":\"When it does not, or when a link in the store cannot be resolved,\\n   the delivery is refused as a whole with the UNSAFE_REFERENCE member of = models.RefusalCode, an M08\\n   and not a failed photo, and no stored image and no record is written.\",\"question\":\"What happens when containment cannot be established for a reason other than an unresolvable link, such as a permission or I/O failure while inspecting an existing store folder?\",\"options\":[\"Every inability to establish containment returns M08 UNSAFE_REFERENCE.\",\"Only unresolvable links return UNSAFE_REFERENCE; other inspection failures become A3 condition 5 failures.\",\"Use STATE_UNAVAILABLE for non-link failures.\",\"Specify separate outcomes by failure class.\"],\"default_guess\":\"Every inability to establish containment should return M08 with UNSAFE_REFERENCE before any image or record write.\",\"witness\":{\"initial\":\"A confirmed project has no placement, its source is valid, and an existing binary-store folder cannot be inspected because of a permission or I/O error but is not known to be a symbolic link.\",\"events\":[\"The caller requests delivery.\",\"The deliverer tries to establish destination containment.\"],\"outcomes\":[\"The implementation treats failure to prove containment as M08 UNSAFE_REFERENCE.\",\"The implementation applies the literal unresolvable-link condition only and later returns M06 UNREADABLE_FILE for a failed write.\"],\"observer\":\"The caller sees a different response model and reason\"}}]}",
+ "set_aside": []
+}

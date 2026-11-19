@@ -1,0 +1,168 @@
+{
+ "open_points": [
+  {
+   "subject": "A3 rule 5 and M08 refusal boundary",
+   "kind": "contradiction",
+   "text": "A photo that cannot be delivered is answered with the FAILED member of = models.PlacementStatus and one member of\n   `= models.PlacementFailure`.",
+   "question": "Does this sentence apply only after all whole-request checks in A3 rule 4 have passed, or does it replace those refusals with failed-photo outcomes? If the latter, which PlacementFailure represents `invalid_source_id`, for which the model has no member?",
+   "options": [
+    "A3 rule 4 defects remain M08 refusals, and the sentence applies only when processing reaches the named-photo conditions",
+    "Every unsuccessful delivery is M06 FAILED, requiring new PlacementFailure members for request-level defects"
+   ],
+   "default_guess": "Keep A3 rule 4 defects as M08 refusals and limit the new sentence to conditions 1–5 of A3 rule 5.",
+   "witness": {
+    "initial": "The token, project, connection and photo folder are valid.",
+    "events": [
+     "The caller requests delivery with a `source_id` that does not match SOURCE_ID_PATTERN."
+    ],
+    "outcomes": [
+     "Return M08 with `invalid_source_id`, as A3 rule 4 and M08 specify.",
+     "Return M06 with FAILED under the new first sentence of A3 rule 5, although no PlacementFailure member is specified."
+    ],
+    "observer": "The calling flow sees a different response model and code."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 5 versus A6 rule 1",
+   "kind": "contradiction",
+   "text": "A photo that cannot be delivered is answered with the FAILED member of = models.PlacementStatus and one member of\n   `= models.PlacementFailure`.",
+   "question": "Must an unsafe binary-store reference be the M08 UNSAFE_REFERENCE refusal required by A6 rule 1, or an M06 FAILED photo required by this unqualified sentence?",
+   "options": [
+    "A6 rule 1 is an explicit exception: return M08 UNSAFE_REFERENCE and no failed-photo outcome",
+    "Return M06 FAILED, using UNREADABLE_FILE as A3 condition 5 does for a failed stored-image write"
+   ],
+   "default_guess": "Treat A6 rule 1 as an explicit exception and return M08 UNSAFE_REFERENCE.",
+   "witness": {
+    "initial": "A valid new source is ready, but a folder traversed by its binary-store destination is a symbolic link leading outside the resolved store.",
+    "events": [
+     "The caller delivers the source.",
+     "The operation reaches the binary-store containment check."
+    ],
+    "outcomes": [
+     "A6 rule 1 returns M08 with UNSAFE_REFERENCE and says this is not a failed photo.",
+     "A3 rule 5 returns M06 with FAILED and a PlacementFailure member."
+    ],
+    "observer": "The calling flow sees different response models and decides retry or remediation differently."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 unsafe-reference check order",
+   "kind": "unspecified_precedence",
+   "text": "The reference must stay inside the binary store: its path,\n   resolved with the links of the binary store, must lie below the resolved store.",
+   "question": "At what exact point in A3's ordered delivery checks is binary-store containment checked, and which result wins when both an unsafe reference and a named-photo failure apply?",
+   "options": [
+    "Check containment immediately after source-id validation or after taking the project lock, so UNSAFE_REFERENCE can precede named-file checks",
+    "Check containment only immediately before writing, after all A3 rule 5 photo checks",
+    "Check it at another explicitly named position in A3 rule 4 or rule 5"
+   ],
+   "default_guess": "Check it after the source has passed conditions 1–4 and immediately before the first stored-image write.",
+   "witness": {
+    "initial": "The requested binary-store path resolves outside the store, and the named source's actual hash differs from the syntactically valid requested source_id.",
+    "events": [
+     "The caller requests delivery.",
+     "The service takes the project lock and finds no existing placement.",
+     "The service can either check store containment now or first read and hash the named source."
+    ],
+    "outcomes": [
+     "Return M08 UNSAFE_REFERENCE because containment is checked before the named source.",
+     "Return M06 FAILED with SOURCE_CHANGED because A3 condition 3 is evaluated before the pre-write containment check."
+    ],
+    "observer": "The calling flow sees a different failure category and reason."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 unresolved-link scope",
+   "kind": "ambiguous_scope",
+   "text": "When it does not, or when a link in the store cannot be resolved,",
+   "question": "Does “a link in the store” mean only a link traversed by this delivery's destination path, or every link anywhere below the binary-store root?",
+   "options": [
+    "Only links traversed while resolving the requested destination",
+    "Any unresolved link anywhere in the binary store",
+    "Links in the requested project's subtree, even when not on the destination path"
+   ],
+   "default_guess": "Only links traversed by the destination path being checked.",
+   "witness": {
+    "initial": "The destination for project A is an ordinary safe path; an unrelated folder for project B contains a dangling or looping symbolic link.",
+    "events": [
+     "The caller delivers a valid new photo for project A.",
+     "The service applies A6 rule 1."
+    ],
+    "outcomes": [
+     "Delivery for project A succeeds because its destination path traverses no unresolved link.",
+     "Delivery for project A is refused with M08 UNSAFE_REFERENCE because there is an unresolved link somewhere in the store."
+    ],
+    "observer": "The caller for project A sees success or an unrelated refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 non-link resolution failures",
+   "kind": "incomplete_refusal_conditions",
+   "text": "When it does not, or when a link in the store cannot be resolved,",
+   "question": "What outcome applies when containment cannot be established for a reason other than an unresolved symbolic link, such as an inspection or permission failure: UNSAFE_REFERENCE, A3 condition 5 UNREADABLE_FILE, or another refusal?",
+   "options": [
+    "Fail closed with M08 UNSAFE_REFERENCE whenever containment cannot be proved",
+    "Use M06 FAILED with UNREADABLE_FILE when the failure is not caused by a link",
+    "Use M08 STATE_UNAVAILABLE or another explicitly selected refusal code"
+   ],
+   "default_guess": "Fail closed with M08 UNSAFE_REFERENCE whenever the destination cannot be resolved sufficiently to prove containment.",
+   "witness": {
+    "initial": "The binary store exists, but the service cannot inspect a destination ancestor because of an access error; no symbolic link is known to be involved.",
+    "events": [
+     "The caller delivers a valid new photo.",
+     "The service attempts to resolve and verify the destination."
+    ],
+    "outcomes": [
+     "Treat inability to prove containment as unsafe and return M08 UNSAFE_REFERENCE without writing.",
+     "Treat the later write as failed and return M06 FAILED with UNREADABLE_FILE under A3 condition 5."
+    ],
+    "observer": "The calling flow sees a whole-request security refusal or a failed-photo outcome."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 1 invariant and Required tests",
+   "kind": "missing_required_test",
+   "text": "the delivery is refused as a whole with the UNSAFE_REFERENCE member of = models.RefusalCode, an M08\n   and not a failed photo, and no stored image and no record is written.",
+   "question": "Which formal invariant and Required tests item must demonstrate the new UNSAFE_REFERENCE classification, the unresolved-link cases, and the guarantee that neither a stored image nor a record is written?",
+   "options": [
+    "Add a dedicated formal invariant and tests for a link escaping the store, a dangling link and a link loop",
+    "Extend an existing invariant and its Required tests item to assert those cases and all stated non-write effects"
+   ],
+   "default_guess": "Add a dedicated invariant with tests covering an outward link, a dangling link and a loop, asserting M08 UNSAFE_REFERENCE, no M06 failed-photo result, and no stored-image or record change.",
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_policy",
+   "text": "`marked_at: datetime`",
+   "question": "What is the source of a newly written mark's `marked_at`, what datetime representation is stored, and exactly how many readings of that source occur for a mark operation, including replay and refusal paths?",
+   "options": [
+    "Read an injected system wall clock once only when creating a new mark and store naive UTC; replay and refusal read it zero times",
+    "Read an injected system wall clock once at the start of every mark call and store offset-aware UTC",
+    "Receive the instant from the caller as an operation parameter",
+    "Derive the instant from another authority or persisted value"
+   ],
+   "default_guess": "Use the injected system wall clock, read it exactly once after all checks and immediately before creating a new mark, store naive UTC, and take no reading for replayed or refused marks.",
+   "witness": {
+    "initial": "A placement exists and has no mark.",
+    "events": [
+     "The caller records a new Portal photo_id.",
+     "The service creates M07 and must populate marked_at."
+    ],
+    "outcomes": [
+     "One implementation reads its injected UTC clock once and stores a naive UTC datetime.",
+     "Another accepts or derives a caller/local-time datetime, or reads the clock at a different stage or more than once."
+    ],
+    "observer": "The caller and later readers of the persisted mark see different instants or datetime representations."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A3 rule 5 and M08 refusal boundary\",\"kind\":\"contradiction\",\"text\":\"A photo that cannot be delivered is answered with the FAILED member of = models.PlacementStatus and one member of\\n   `= models.PlacementFailure`.\",\"question\":\"Does this sentence apply only after all whole-request checks in A3 rule 4 have passed, or does it replace those refusals with failed-photo outcomes? If the latter, which PlacementFailure represents `invalid_source_id`, for which the model has no member?\",\"options\":[\"A3 rule 4 defects remain M08 refusals, and the sentence applies only when processing reaches the named-photo conditions\",\"Every unsuccessful delivery is M06 FAILED, requiring new PlacementFailure members for request-level defects\"],\"default_guess\":\"Keep A3 rule 4 defects as M08 refusals and limit the new sentence to conditions 1–5 of A3 rule 5.\",\"witness\":{\"initial\":\"The token, project, connection and photo folder are valid.\",\"events\":[\"The caller requests delivery with a `source_id` that does not match SOURCE_ID_PATTERN.\"],\"outcomes\":[\"Return M08 with `invalid_source_id`, as A3 rule 4 and M08 specify.\",\"Return M06 with FAILED under the new first sentence of A3 rule 5, although no PlacementFailure member is specified.\"],\"observer\":\"The calling flow sees a different response model and code.\"}},{\"subject\":\"A3 rule 5 versus A6 rule 1\",\"kind\":\"contradiction\",\"text\":\"A photo that cannot be delivered is answered with the FAILED member of = models.PlacementStatus and one member of\\n   `= models.PlacementFailure`.\",\"question\":\"Must an unsafe binary-store reference be the M08 UNSAFE_REFERENCE refusal required by A6 rule 1, or an M06 FAILED photo required by this unqualified sentence?\",\"options\":[\"A6 rule 1 is an explicit exception: return M08 UNSAFE_REFERENCE and no failed-photo outcome\",\"Return M06 FAILED, using UNREADABLE_FILE as A3 condition 5 does for a failed stored-image write\"],\"default_guess\":\"Treat A6 rule 1 as an explicit exception and return M08 UNSAFE_REFERENCE.\",\"witness\":{\"initial\":\"A valid new source is ready, but a folder traversed by its binary-store destination is a symbolic link leading outside the resolved store.\",\"events\":[\"The caller delivers the source.\",\"The operation reaches the binary-store containment check.\"],\"outcomes\":[\"A6 rule 1 returns M08 with UNSAFE_REFERENCE and says this is not a failed photo.\",\"A3 rule 5 returns M06 with FAILED and a PlacementFailure member.\"],\"observer\":\"The calling flow sees different response models and decides retry or remediation differently.\"}},{\"subject\":\"A6 unsafe-reference check order\",\"kind\":\"unspecified_precedence\",\"text\":\"The reference must stay inside the binary store: its path,\\n   resolved with the links of the binary store, must lie below the resolved store.\",\"question\":\"At what exact point in A3's ordered delivery checks is binary-store containment checked, and which result wins when both an unsafe reference and a named-photo failure apply?\",\"options\":[\"Check containment immediately after source-id validation or after taking the project lock, so UNSAFE_REFERENCE can precede named-file checks\",\"Check containment only immediately before writing, after all A3 rule 5 photo checks\",\"Check it at another explicitly named position in A3 rule 4 or rule 5\"],\"default_guess\":\"Check it after the source has passed conditions 1–4 and immediately before the first stored-image write.\",\"witness\":{\"initial\":\"The requested binary-store path resolves outside the store, and the named source's actual hash differs from the syntactically valid requested source_id.\",\"events\":[\"The caller requests delivery.\",\"The service takes the project lock and finds no existing placement.\",\"The service can either check store containment now or first read and hash the named source.\"],\"outcomes\":[\"Return M08 UNSAFE_REFERENCE because containment is checked before the named source.\",\"Return M06 FAILED with SOURCE_CHANGED because A3 condition 3 is evaluated before the pre-write containment check.\"],\"observer\":\"The calling flow sees a different failure category and reason.\"}},{\"subject\":\"A6 unresolved-link scope\",\"kind\":\"ambiguous_scope\",\"text\":\"When it does not, or when a link in the store cannot be resolved,\",\"question\":\"Does “a link in the store” mean only a link traversed by this delivery's destination path, or every link anywhere below the binary-store root?\",\"options\":[\"Only links traversed while resolving the requested destination\",\"Any unresolved link anywhere in the binary store\",\"Links in the requested project's subtree, even when not on the destination path\"],\"default_guess\":\"Only links traversed by the destination path being checked.\",\"witness\":{\"initial\":\"The destination for project A is an ordinary safe path; an unrelated folder for project B contains a dangling or looping symbolic link.\",\"events\":[\"The caller delivers a valid new photo for project A.\",\"The service applies A6 rule 1.\"],\"outcomes\":[\"Delivery for project A succeeds because its destination path traverses no unresolved link.\",\"Delivery for project A is refused with M08 UNSAFE_REFERENCE because there is an unresolved link somewhere in the store.\"],\"observer\":\"The caller for project A sees success or an unrelated refusal.\"}},{\"subject\":\"A6 non-link resolution failures\",\"kind\":\"incomplete_refusal_conditions\",\"text\":\"When it does not, or when a link in the store cannot be resolved,\",\"question\":\"What outcome applies when containment cannot be established for a reason other than an unresolved symbolic link, such as an inspection or permission failure: UNSAFE_REFERENCE, A3 condition 5 UNREADABLE_FILE, or another refusal?\",\"options\":[\"Fail closed with M08 UNSAFE_REFERENCE whenever containment cannot be proved\",\"Use M06 FAILED with UNREADABLE_FILE when the failure is not caused by a link\",\"Use M08 STATE_UNAVAILABLE or another explicitly selected refusal code\"],\"default_guess\":\"Fail closed with M08 UNSAFE_REFERENCE whenever the destination cannot be resolved sufficiently to prove containment.\",\"witness\":{\"initial\":\"The binary store exists, but the service cannot inspect a destination ancestor because of an access error; no symbolic link is known to be involved.\",\"events\":[\"The caller delivers a valid new photo.\",\"The service attempts to resolve and verify the destination.\"],\"outcomes\":[\"Treat inability to prove containment as unsafe and return M08 UNSAFE_REFERENCE without writing.\",\"Treat the later write as failed and return M06 FAILED with UNREADABLE_FILE under A3 condition 5.\"],\"observer\":\"The calling flow sees a whole-request security refusal or a failed-photo outcome.\"}},{\"subject\":\"A6 rule 1 invariant and Required tests\",\"kind\":\"missing_required_test\",\"text\":\"the delivery is refused as a whole with the UNSAFE_REFERENCE member of = models.RefusalCode, an M08\\n   and not a failed photo, and no stored image and no record is written.\",\"question\":\"Which formal invariant and Required tests item must demonstrate the new UNSAFE_REFERENCE classification, the unresolved-link cases, and the guarantee that neither a stored image nor a record is written?\",\"options\":[\"Add a dedicated formal invariant and tests for a link escaping the store, a dangling link and a link loop\",\"Extend an existing invariant and its Required tests item to assert those cases and all stated non-write effects\"],\"default_guess\":\"Add a dedicated invariant with tests covering an outward link, a dangling link and a loop, asserting M08 UNSAFE_REFERENCE, no M06 failed-photo result, and no stored-image or record change.\"},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_policy\",\"text\":\"`marked_at: datetime`\",\"question\":\"What is the source of a newly written mark's `marked_at`, what datetime representation is stored, and exactly how many readings of that source occur for a mark operation, including replay and refusal paths?\",\"options\":[\"Read an injected system wall clock once only when creating a new mark and store naive UTC; replay and refusal read it zero times\",\"Read an injected system wall clock once at the start of every mark call and store offset-aware UTC\",\"Receive the instant from the caller as an operation parameter\",\"Derive the instant from another authority or persisted value\"],\"default_guess\":\"Use the injected system wall clock, read it exactly once after all checks and immediately before creating a new mark, store naive UTC, and take no reading for replayed or refused marks.\",\"witness\":{\"initial\":\"A placement exists and has no mark.\",\"events\":[\"The caller records a new Portal photo_id.\",\"The service creates M07 and must populate marked_at.\"],\"outcomes\":[\"One implementation reads its injected UTC clock once and stores a naive UTC datetime.\",\"Another accepts or derives a caller/local-time datetime, or reads the clock at a different stage or more than once.\"],\"observer\":\"The caller and later readers of the persisted mark see different instants or datetime representations.\"}}]}",
+ "set_aside": []
+}
