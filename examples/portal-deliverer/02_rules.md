@@ -344,8 +344,8 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
    before the record that refers to it is written, so a crash never leaves a record without its image; a
    failure to make it durable fails that write and A3 rule 5 condition 5 applies. A record is the last
    write of its operation: once it is in place the operation has taken effect. A write cut short by a
-   crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX`
-   constant, which is never read. A3 decides what a crash between the image and the record means.
+   crash leaves, besides the folders created for it, which stay under rule 2, at most a temporary file
+   whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read. A3 decides what a crash between the image and the record means.
 4. Deliveries and marks of one project run one at a time, across processes, under an operating
    system lock on one lock file of that project in the state folder. The project lock is that lock file
    together with the folders below the state folder that lead to it. It is created on first use, the lock
