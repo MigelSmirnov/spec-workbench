@@ -128,8 +128,8 @@ names the owner of each rule.
 | A7 | rule 2, when an operation reads the clock | `photo_delivery` |
 | A7 | rule 4, a file's modification time | `source_folder` |
 | A7 | rule 5, the photo moment | `photo_preparation` |
-| A8 | reading each run setting, its default, and the refusal of a value the start-up table does not accept | `runtime_settings` |
-| A8 | the refusal of a port above 65535 and of a time zone the database does not know | `deliverer_service` |
+| A8 | reading each run setting, its default, and the refusal of a missing required setting or of a value of the wrong form | `runtime_settings` |
+| A8 | the refusal of a well-formed port above 65535 and of a time zone the database does not know | `deliverer_service` |
 
 ## Invariant owners
 
@@ -164,7 +164,7 @@ outbound call.
   `HealthAnswer`, the body of the health route;
 - `RefusalAnswerRule`, the row form of the refusal answers that `data_provider` holds: a refusal code with its
   status and `detail`;
-- no exception: the refusal types belong to `refusals`, and `AuthenticationRequired` to `deliverer_api`.
+- no exception type: those belong to `refusals` and `deliverer_api`.
 
 ### Knows
 
@@ -619,7 +619,8 @@ answer_health
 
 ### Must not own
 
-- any check of a request, a refusal answer or a delivery rule;
+- any check of a request or a delivery rule, and any answer a request receives: its empty 401 for
+  `AuthenticationRequired` is a mapping the backend emits that no request reaches;
 - anything `http_router_backend/v1` does not emit.
 
 ### Candidate public capabilities
