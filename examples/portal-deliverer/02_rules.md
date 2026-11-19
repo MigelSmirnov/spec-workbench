@@ -32,8 +32,9 @@ applies decides:
 | 9 | anything else | `ready` | none |
 
 A scan covers the photo folder and all its subfolders (R0-12). When the photo folder, or a subfolder
-that is not ignored, cannot be opened or listed, the whole operation is refused with `folder_unavailable`, so a partial scan is
-never reported as complete. A file exactly at the source limit passes that rule. A file that
+that is not ignored and is still a folder, cannot be opened or listed, the whole operation is refused
+with `folder_unavailable`, so a partial scan is never reported as complete; a listed subfolder that has
+become a symbolic link or another object is the one exception, decided below. A file exactly at the source limit passes that rule. A file that
 disappears before its metadata is read is not reported. Files with the same content are each reported,
 with the same source id. A rejected file has no source id.
 
@@ -98,16 +99,19 @@ A replaced file is scanned again by its new content (A3).
 
 ### Normative rules
 
-1. A stored image is a newly encoded JPEG made from the decoded pixels of the source: baseline, not
-   progressive, three colour channels with the colour resolution halved in both directions (4:2:0), the
-   imported `PHOTO_QUALITY` constant as its quality, and no colour profile and no metadata. The pixels
-   are taken as decoded, without colour management. The camera orientation is applied; then, when
-   the longest side is larger than the limit, the image is reduced with a Lanczos filter so that its
-   longest side equals the limit and the other side keeps the proportion, rounded to whole pixels;
-   then transparent and partly transparent pixels are composited onto white by their alpha, and the
-   result is three-channel RGB. The encoded bytes are not fixed beyond these rules: two implementations
-   may store different bytes for one source. `sha256` and `size` of M04 describe the bytes that were
-   stored, and a repeated delivery returns that placement without encoding again (A3 rule 2).
+1. A stored image is a newly encoded JPEG made from the decoded pixels of the source, by exactly these
+   operations of the image library at the version A9 pins, whose arithmetic (conversion formulas,
+   resampling, rounding of sizes, alpha compositing and encoding) is that library's:
+   `ImageOps.exif_transpose` applies the camera orientation to the first frame; `Image.convert` to
+   `RGBA` converts the decoded samples, without colour management and without a colour profile;
+   `Image.thumbnail` with the `LANCZOS` filter and a box of the imported `PHOTO_MAX_SIDE` constant on
+   each side reduces the image when a side is larger than that box, keeping its proportion; the result
+   is pasted onto a white `RGB` image of the same size with its own alpha channel as the mask, so
+   transparent areas become white; and `Image.save` writes a JPEG with the imported `PHOTO_QUALITY`
+   constant as `quality`, `optimize` true, `progressive` false and `subsampling` `4:2:0`, with no EXIF,
+   colour profile or other metadata. With one library version one source gives the same bytes. `sha256`
+   and `size` of M04 describe the bytes that were stored, and a repeated delivery returns that placement
+   without encoding again (A3 rule 2).
 2. The source may be JPEG, PNG or WEBP. Checks run in this order: a first frame above the pixel
    limit (width times height) fails with `too_many_pixels`, a source that cannot be decoded with
    `unreadable_image`, and a result above the Portal's read limit with `too_large`. A value equal
@@ -247,12 +251,14 @@ A published photo is recognised without any change to the Portal.
    the request's identifiers or body are examined.
 2. The token is generated with 256 bits from a cryptographic random source and is kept in a UTF-8
    file: the 32 random bytes in URL-safe Base64, 43 characters of `A`-`Z`, `a`-`z`, `0`-`9`, `-` and `_`.
-   At the start the path is opened once, without following a link; the permissions are those of the
-   opened file and its content is read from it. The file is decoded as UTF-8, a byte sequence that is not
-   UTF-8 ending the start, and the ASCII whitespace at both ends (space, tab, line feed, carriage return,
-   vertical tab and form feed) is removed; no other character is removed. The service does not start when
+   The path is the `token_file` run setting (A8). At the start it is opened once; its last component is
+   opened without following a link, while the folders above it belong to the installation and are
+   resolved as they stand. The permissions are those of the opened file and its content is read from it. The file is decoded as UTF-8, a byte sequence that is not
+   UTF-8 ending the start, and the characters of the imported `TOKEN_TRIM_CHARACTERS` constant (the ASCII
+   space, tab, line feed, carriage return, vertical tab and form feed) are removed at both ends; no other
+   character is removed. The service does not start when
    the path is a symbolic link or not a regular file, when the group or others have any permission on
-   the file, or when what remains has fewer than 32 characters or any character that
+   the file, or when what remains has fewer characters than the imported `TOKEN_MIN_LENGTH` constant or any character that
    is not visible ASCII (`!` to `~`), since a token with such a character could not be presented in
    the `Authorization` header.
 3. A token is replaced by writing a new file and restarting the service. The old token then stops
@@ -323,22 +329,29 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
    written only by the Portal and the deliverer, both installed by the owner; Syncthing and the calling
    agent have no access to it. No other actor changes its folders, so the containment checked before a
    write holds for that write.
-2. A stored image has mode 0644 and a state record mode 0600, so neither is executable. The Portal
+2. A stored image has the mode of the imported `STORED_IMAGE_MODE` constant and a state record that of
+   `RECORD_MODE`, so neither is executable. A folder the service creates in the binary store has the mode
+   of `STORE_FOLDER_MODE`, and one in the state folder that of `STATE_FOLDER_MODE`. The Portal
    reads a stored image and alone decides who may retrieve it. The deliverer has no operation that
    returns image bytes.
 3. Each file is written to a temporary name in its folder, synchronised to disk and renamed, and
-   its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. A
-   file counts as written when the rename succeeds. A failure before the rename leaves the destination
-   as it was, whether absent or holding an earlier complete file, and removes the temporary file. A
-   failure to synchronise the folder after the rename does not undo the write and is not a failure of the
-   operation: the file is in place, and only its survival of a host crash is uncertain. A temporary file
-   left by a crash stays under its temporary name beginning with `.tmp-`; it is never read and the
-   service does not remove it. A3 decides what
+   its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. The
+   temporary name begins with the imported `TEMPORARY_NAME_PREFIX` constant and is chosen fresh for each
+   write; the temporary file is created exclusively, never reusing an existing entry, with mode 0600 and
+   takes its final mode before the rename. A file counts as written when the rename succeeds. A write
+   that fails before the rename leaves the destination as it was, whether absent or holding an earlier
+   complete file, and removes its temporary file. A stored image is written before a record that depends
+   on it, so a failure to synchronise its folder after the rename fails that write: the image stays, no
+   record is written, and A3 rule 5 condition 5 applies. A placement or mark record is the last write of
+   its operation, so a failure to synchronise its folder after the rename does not undo it and is not a
+   failure of the operation; only its survival of a host crash is uncertain. A crash of the process or the
+   host is not a failed write: the temporary file it interrupts stays under its temporary name, is never
+   read, and the service does not remove it. A3 decides what
    a crash between the image and the record means.
 4. Deliveries and marks of one project run one at a time, across processes, under an operating
    system lock on one lock file of that project in the state folder. A caller waits for the lock
    without a time limit, and the lock is released when its holder ends. The lock file is created on
-   first use with mode 0600 and never removed; it holds no content. It is opened without following a
+   first use with the mode of the imported `LOCK_FILE_MODE` constant and never removed; it holds no content. It is opened without following a
    link, and an entry at its address that is a symbolic link or not a regular file is refused like a
    lock file that cannot be opened. A wait ends only when the lock is taken or the process ends. The check that a placement
    or mark exists and its writing happen inside that lock.
@@ -429,6 +442,14 @@ Policy values are constants of the data provider:
 | `IGNORED_NAME_SUFFIXES` | `tuple[str, ...]` | `.tmp`, `~` |
 | `CONFLICT_COPY_MARK` | `str` | `.sync-conflict-` |
 | `SOURCE_ID_PATTERN` | `str` | `[0-9a-f]{64}` |
+| `TOKEN_MIN_LENGTH` | `int` | 32 |
+| `TOKEN_TRIM_CHARACTERS` | `str` | space, tab, line feed, carriage return, vertical tab, form feed |
+| `STORED_IMAGE_MODE` | `int` | 0o644 |
+| `STORE_FOLDER_MODE` | `int` | 0o755 |
+| `RECORD_MODE` | `int` | 0o600 |
+| `STATE_FOLDER_MODE` | `int` | 0o700 |
+| `LOCK_FILE_MODE` | `int` | 0o600 |
+| `TEMPORARY_NAME_PREFIX` | `str` | `.tmp-` |
 
 Closed lists are enumerations: `= models.ScanStatus`, `= models.ObservationReason`,
 `= models.DateSource`, `= models.PlacementStatus`, `= models.PlacementFailure`,

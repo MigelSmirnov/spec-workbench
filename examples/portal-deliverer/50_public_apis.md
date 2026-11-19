@@ -438,7 +438,7 @@ A held lock for the duration of the caller's block.
 
 ### Observable effect
 
-Creates the project lock file on first use with mode 0600, opens it without following a link, and holds an operating system lock.
+Creates the project lock file on first use with the mode of `LOCK_FILE_MODE`, opens it without following a link, and holds an operating system lock.
 
 ### Enforces
 
@@ -472,7 +472,7 @@ The reference `photos/<project_id>/<source_id>.jpg`.
 
 ### Observable effect
 
-Writes the stored image atomically with mode 0644.
+Writes the stored image atomically with the mode of `STORED_IMAGE_MODE`; its folder is synchronised before it returns, and a failure there is a failed write (A6 rule 3).
 
 ### Enforces
 
@@ -540,7 +540,7 @@ Nothing.
 
 ### Observable effect
 
-Writes the record atomically with mode 0600.
+Writes the record atomically with the mode of `RECORD_MODE`; a failed synchronisation of its folder after the rename does not undo it (A6 rule 3).
 
 ### Enforces
 
@@ -608,7 +608,7 @@ Nothing.
 
 ### Observable effect
 
-Writes the record atomically with mode 0600.
+Writes the record atomically with the mode of `RECORD_MODE`; a failed synchronisation of its folder after the rename does not undo it (A6 rule 3).
 
 ### Enforces
 
