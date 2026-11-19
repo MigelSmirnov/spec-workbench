@@ -1,0 +1,220 @@
+{
+ "open_points": [
+  {
+   "subject": "A6",
+   "kind": "missing time decision",
+   "text": "`marked_at: datetime`",
+   "question": "What clock supplies a new publication mark's `marked_at`, in what datetime representation is it stored, and exactly how many clock readings may one mark operation take?",
+   "options": [
+    "Read a UTC system clock once for a newly created mark and store an offset-aware UTC datetime.",
+    "Read a UTC system clock once and store UTC without an offset, as P-05 specifies for photo dates.",
+    "Let the operation or persistence code choose its clock, representation and number of readings."
+   ],
+   "default_guess": "Read an injected UTC clock exactly once after taking the project lock, only when creating a new mark, and store an offset-aware UTC datetime.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The calling flow asks the deliverer to record a Portal photo id.",
+     "The deliverer creates the mark and must populate `marked_at`."
+    ],
+    "outcomes": [
+     "The record contains one offset-aware UTC instant obtained from a single clock reading.",
+     "The record contains a naive local or UTC instant, or values derived from more than one clock reading."
+    ],
+    "observer": "The caller replaying the mark, code validating the record, or an operator reading the persisted JSON."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "contradictory write side effect",
+   "text": "Conditions 1 to 4 write nothing except the\n   project lock.",
+   "question": "Does the exception for the project lock also permit creation and retention of the new `locks` folder required by A6, or must that folder already exist before conditions 1 to 4 can preserve A3's stated write boundary?",
+   "options": [
+    "Creating the project lock includes creating and retaining its `locks` folder.",
+    "Only the lock file may be added; the `locks` folder must already exist.",
+    "A failed delivery may add both the folder and lock despite A3's rule."
+   ],
+   "default_guess": "Treat creation of the `locks` folder as part of creating the project lock and state that explicitly.",
+   "witness": {
+    "initial": "The state-folder root exists, but `locks` does not, and the named source file will fail condition 1.",
+    "events": [
+     "A delivery call passes the checks preceding the project lock.",
+     "The service creates `locks` and the project lock under A6.",
+     "The named-file check then fails."
+    ],
+    "outcomes": [
+     "Only the project lock is an allowed durable side effect under A3, so the operation may not create the missing folder.",
+     "Both `locks` and the lock file remain under A6 rule 2 and rule 3."
+    ],
+    "observer": "A filesystem test or operator inspecting the state folder after the failed delivery."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "concurrent creation contradiction",
+   "text": "a folder it finds is accepted, whoever created it, also a concurrent call, when it is a\n   folder; a missing one is created with the mode of the imported `STORE_FOLDER_MODE` constant in the\n   binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the\n   process umask.",
+   "question": "When two calls both observe a folder as missing and one creates it before the other's creation attempt, must the losing call treat the already-created folder as success after rechecking it, or treat its failed creation call as a failed write?",
+   "options": [
+    "On an already-exists result, recheck without following a link and accept only if the entry is now a folder.",
+    "Any failed creation system call fails the write.",
+    "Serialize folder creation so the race cannot occur."
+   ],
+   "default_guess": "Recheck an already-exists result and accept the entry only if it satisfies the same folder and no-symbolic-link rules.",
+   "witness": {
+    "initial": "The relevant parent exists and the next required folder does not.",
+    "events": [
+     "Call A and call B concurrently inspect the missing folder.",
+     "Call A creates it.",
+     "Call B's creation attempt reports that the entry already exists."
+    ],
+    "outcomes": [
+     "Call B rechecks the entry, accepts Call A's folder and continues.",
+     "Call B treats the creation error as a failed write and returns the operation's failure or refusal."
+    ],
+    "observer": "The caller of Call B."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "cleanup failure unspecified",
+   "text": "A write\n   that fails before the rename leaves the destination as it was, whether absent or holding an earlier\n   complete file, and removes its temporary file.",
+   "question": "What result and durable state are required if the original write fails before rename and removal of its temporary file also fails?",
+   "options": [
+    "Return the original write failure and permit the temporary file to remain.",
+    "Return a distinct failure while permitting the temporary file to remain.",
+    "Retry removal until it succeeds, so the operation cannot finish while the temporary file remains."
+   ],
+   "default_guess": "Return the operation's ordinary write failure, retain the original failure as the cause, and permit the unremovable temporary file to remain under its temporary name.",
+   "witness": {
+    "initial": "The destination contains an earlier complete file or is absent, and a newly created temporary file exists.",
+    "events": [
+     "Writing, synchronising, or changing the temporary file's mode fails before rename.",
+     "The service attempts to remove the temporary file.",
+     "The removal also fails."
+    ],
+    "outcomes": [
+     "The operation returns the original failure and leaves an orphan temporary file.",
+     "The operation does not complete, retries cleanup, or reports a different failure until the temporary file is removed."
+    ],
+    "observer": "The caller and an operator inspecting the destination folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "record-sync precedence",
+   "text": "writing the stored image or the record fails",
+   "question": "For a placement record whose rename succeeds but whose containing-folder synchronisation fails, does A6's rule that the operation succeeds override A3 condition 5, or does that synchronisation mean that writing the record failed and require a failed PlacementOutcome?",
+   "options": [
+    "A6 overrides A3: the placement succeeds after the record rename despite the folder-sync failure.",
+    "A3 condition 5 applies: delivery answers `failed` with `UNREADABLE_FILE`.",
+    "The result depends on whether the record survives a subsequent host crash."
+   ],
+   "default_guess": "A6 overrides A3: rename commits the placement for operation-result purposes, and the folder-sync failure is recorded or logged without changing the successful result.",
+   "witness": {
+    "initial": "The stored image is durable and no placement record exists.",
+    "events": [
+     "The service writes and synchronises the placement record's temporary file.",
+     "It renames the temporary file to the placement-record address.",
+     "Synchronising the record's containing folder fails."
+    ],
+    "outcomes": [
+     "A6 rule 3 treats the placement as successful, although crash survival is uncertain.",
+     "A3 rule 5 treats record writing as failed and answers `failed` with `UNREADABLE_FILE`."
+    ],
+    "observer": "The delivery caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "mark refusal precedence",
+   "text": "a mark that cannot be\n   written.",
+   "question": "Does a containing-folder synchronisation failure after a mark-record rename make the mark one that “cannot be written” and therefore require STATE_UNAVAILABLE, or does rule 3 make the mark operation successful?",
+   "options": [
+    "Rule 3 controls: rename completes the mark and the operation succeeds despite the synchronisation failure.",
+    "Rule 5 controls: the operation is refused with STATE_UNAVAILABLE.",
+    "Return success only if a subsequent read confirms that the renamed mark is present."
+   ],
+   "default_guess": "Rule 3 controls because the record counts as written at rename; return the normal successful mark result.",
+   "witness": {
+    "initial": "A placement exists and no mark exists.",
+    "events": [
+     "The service writes and renames a new mark record.",
+     "Synchronising the mark record's containing folder fails."
+    ],
+    "outcomes": [
+     "The call answers `marked`, and only crash survival is uncertain.",
+     "The call answers M08 with STATE_UNAVAILABLE because the mark could not be durably written."
+    ],
+    "observer": "The calling flow that just published the Portal photo."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "insufficient invariant test",
+   "text": "INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).",
+   "question": "Must the required tests inspect durable state and write counts to show that concurrency produced only one placement and one mark, rather than checking only the returned statuses?",
+   "options": [
+    "Assert exactly one final placement record, stored-image identity and mark record, with no second successful durable write.",
+    "Assert only the listed response statuses.",
+    "Assert final records but not whether a replaying call rewrote them."
+   ],
+   "default_guess": "Assert both the listed responses and exactly one durable placement and mark, including that replaying and conflicting calls did not rewrite them.",
+   "witness": {
+    "initial": "No placement or mark exists for the source.",
+    "events": [
+     "Two implementations run the specified concurrent calls.",
+     "Both implementations return the exact statuses listed by the Required tests item."
+    ],
+    "outcomes": [
+     "One implementation performs one placement and one mark write.",
+     "The other performs an additional overwrite or transient second durable creation but returns `replayed` or `publication_conflict`; a response-only test still passes."
+    ],
+    "observer": "The invariant test inspecting write traces or persisted state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "insufficient invariant test",
+   "text": "INV-20: with a damaged placement or mark record, scan, delivery and mark each answer M08 with the STATE_UNAVAILABLE member of = models.RefusalCode and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), a damaged mark without a placement stops a new placement (`test_a_damaged_mark_without_a_placement_stops_a_new_placement`), a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`), and a record that is a link, dangling or not, or that names another source is refused the same way (`test_a_record_not_written_at_its_address_is_refused`).",
+   "question": "For every damaged-record case, must the tests also show that no new placement record, mark record or stored image was created, rather than showing only the refusal and preservation of the damaged record?",
+   "options": [
+    "For each operation and damage form, assert that all placement, mark and stored-image state is unchanged.",
+    "Only assert the response and that the damaged record itself is unchanged.",
+    "Assert absence of new placement records but allow stored images or unrelated mark records."
+   ],
+   "default_guess": "For every case, snapshot all placement records, mark records and stored images and assert the snapshot is unchanged after the refusal.",
+   "witness": {
+    "initial": "A target record is damaged and no valid counterpart record exists.",
+    "events": [
+     "An operation encounters the damaged record.",
+     "The implementation writes a new stored image or counterpart record but returns STATE_UNAVAILABLE and leaves the damaged record unchanged."
+    ],
+    "outcomes": [
+     "A test limited to the stated response and damaged record passes.",
+     "A test that proves INV-20's no-new-placement-or-mark requirement fails."
+    ],
+    "observer": "The invariant test and an operator inspecting durable state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "standard_violation",
+   "text": "In the state folder the lock file is `locks/<project_id>.lock`, a placement\n   record `ledger/<project_id>/<source_id>.json` and a mark record `published/<project_id>/<source_id>.json`.",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Replace the inline policy values for directory names, suffixes and path templates with named imported provider constants, or make them design facts that generated code does not read.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A6\",\"kind\":\"missing time decision\",\"text\":\"`marked_at: datetime`\",\"question\":\"What clock supplies a new publication mark's `marked_at`, in what datetime representation is it stored, and exactly how many clock readings may one mark operation take?\",\"options\":[\"Read a UTC system clock once for a newly created mark and store an offset-aware UTC datetime.\",\"Read a UTC system clock once and store UTC without an offset, as P-05 specifies for photo dates.\",\"Let the operation or persistence code choose its clock, representation and number of readings.\"],\"default_guess\":\"Read an injected UTC clock exactly once after taking the project lock, only when creating a new mark, and store an offset-aware UTC datetime.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The calling flow asks the deliverer to record a Portal photo id.\",\"The deliverer creates the mark and must populate `marked_at`.\"],\"outcomes\":[\"The record contains one offset-aware UTC instant obtained from a single clock reading.\",\"The record contains a naive local or UTC instant, or values derived from more than one clock reading.\"],\"observer\":\"The caller replaying the mark, code validating the record, or an operator reading the persisted JSON.\"}},{\"subject\":\"A3\",\"kind\":\"contradictory write side effect\",\"text\":\"Conditions 1 to 4 write nothing except the\\n   project lock.\",\"question\":\"Does the exception for the project lock also permit creation and retention of the new `locks` folder required by A6, or must that folder already exist before conditions 1 to 4 can preserve A3's stated write boundary?\",\"options\":[\"Creating the project lock includes creating and retaining its `locks` folder.\",\"Only the lock file may be added; the `locks` folder must already exist.\",\"A failed delivery may add both the folder and lock despite A3's rule.\"],\"default_guess\":\"Treat creation of the `locks` folder as part of creating the project lock and state that explicitly.\",\"witness\":{\"initial\":\"The state-folder root exists, but `locks` does not, and the named source file will fail condition 1.\",\"events\":[\"A delivery call passes the checks preceding the project lock.\",\"The service creates `locks` and the project lock under A6.\",\"The named-file check then fails.\"],\"outcomes\":[\"Only the project lock is an allowed durable side effect under A3, so the operation may not create the missing folder.\",\"Both `locks` and the lock file remain under A6 rule 2 and rule 3.\"],\"observer\":\"A filesystem test or operator inspecting the state folder after the failed delivery.\"}},{\"subject\":\"A6\",\"kind\":\"concurrent creation contradiction\",\"text\":\"a folder it finds is accepted, whoever created it, also a concurrent call, when it is a\\n   folder; a missing one is created with the mode of the imported `STORE_FOLDER_MODE` constant in the\\n   binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the\\n   process umask.\",\"question\":\"When two calls both observe a folder as missing and one creates it before the other's creation attempt, must the losing call treat the already-created folder as success after rechecking it, or treat its failed creation call as a failed write?\",\"options\":[\"On an already-exists result, recheck without following a link and accept only if the entry is now a folder.\",\"Any failed creation system call fails the write.\",\"Serialize folder creation so the race cannot occur.\"],\"default_guess\":\"Recheck an already-exists result and accept the entry only if it satisfies the same folder and no-symbolic-link rules.\",\"witness\":{\"initial\":\"The relevant parent exists and the next required folder does not.\",\"events\":[\"Call A and call B concurrently inspect the missing folder.\",\"Call A creates it.\",\"Call B's creation attempt reports that the entry already exists.\"],\"outcomes\":[\"Call B rechecks the entry, accepts Call A's folder and continues.\",\"Call B treats the creation error as a failed write and returns the operation's failure or refusal.\"],\"observer\":\"The caller of Call B.\"}},{\"subject\":\"A6\",\"kind\":\"cleanup failure unspecified\",\"text\":\"A write\\n   that fails before the rename leaves the destination as it was, whether absent or holding an earlier\\n   complete file, and removes its temporary file.\",\"question\":\"What result and durable state are required if the original write fails before rename and removal of its temporary file also fails?\",\"options\":[\"Return the original write failure and permit the temporary file to remain.\",\"Return a distinct failure while permitting the temporary file to remain.\",\"Retry removal until it succeeds, so the operation cannot finish while the temporary file remains.\"],\"default_guess\":\"Return the operation's ordinary write failure, retain the original failure as the cause, and permit the unremovable temporary file to remain under its temporary name.\",\"witness\":{\"initial\":\"The destination contains an earlier complete file or is absent, and a newly created temporary file exists.\",\"events\":[\"Writing, synchronising, or changing the temporary file's mode fails before rename.\",\"The service attempts to remove the temporary file.\",\"The removal also fails.\"],\"outcomes\":[\"The operation returns the original failure and leaves an orphan temporary file.\",\"The operation does not complete, retries cleanup, or reports a different failure until the temporary file is removed.\"],\"observer\":\"The caller and an operator inspecting the destination folder.\"}},{\"subject\":\"A3\",\"kind\":\"record-sync precedence\",\"text\":\"writing the stored image or the record fails\",\"question\":\"For a placement record whose rename succeeds but whose containing-folder synchronisation fails, does A6's rule that the operation succeeds override A3 condition 5, or does that synchronisation mean that writing the record failed and require a failed PlacementOutcome?\",\"options\":[\"A6 overrides A3: the placement succeeds after the record rename despite the folder-sync failure.\",\"A3 condition 5 applies: delivery answers `failed` with `UNREADABLE_FILE`.\",\"The result depends on whether the record survives a subsequent host crash.\"],\"default_guess\":\"A6 overrides A3: rename commits the placement for operation-result purposes, and the folder-sync failure is recorded or logged without changing the successful result.\",\"witness\":{\"initial\":\"The stored image is durable and no placement record exists.\",\"events\":[\"The service writes and synchronises the placement record's temporary file.\",\"It renames the temporary file to the placement-record address.\",\"Synchronising the record's containing folder fails.\"],\"outcomes\":[\"A6 rule 3 treats the placement as successful, although crash survival is uncertain.\",\"A3 rule 5 treats record writing as failed and answers `failed` with `UNREADABLE_FILE`.\"],\"observer\":\"The delivery caller.\"}},{\"subject\":\"A6\",\"kind\":\"mark refusal precedence\",\"text\":\"a mark that cannot be\\n   written.\",\"question\":\"Does a containing-folder synchronisation failure after a mark-record rename make the mark one that “cannot be written” and therefore require STATE_UNAVAILABLE, or does rule 3 make the mark operation successful?\",\"options\":[\"Rule 3 controls: rename completes the mark and the operation succeeds despite the synchronisation failure.\",\"Rule 5 controls: the operation is refused with STATE_UNAVAILABLE.\",\"Return success only if a subsequent read confirms that the renamed mark is present.\"],\"default_guess\":\"Rule 3 controls because the record counts as written at rename; return the normal successful mark result.\",\"witness\":{\"initial\":\"A placement exists and no mark exists.\",\"events\":[\"The service writes and renames a new mark record.\",\"Synchronising the mark record's containing folder fails.\"],\"outcomes\":[\"The call answers `marked`, and only crash survival is uncertain.\",\"The call answers M08 with STATE_UNAVAILABLE because the mark could not be durably written.\"],\"observer\":\"The calling flow that just published the Portal photo.\"}},{\"subject\":\"A6\",\"kind\":\"insufficient invariant test\",\"text\":\"INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).\",\"question\":\"Must the required tests inspect durable state and write counts to show that concurrency produced only one placement and one mark, rather than checking only the returned statuses?\",\"options\":[\"Assert exactly one final placement record, stored-image identity and mark record, with no second successful durable write.\",\"Assert only the listed response statuses.\",\"Assert final records but not whether a replaying call rewrote them.\"],\"default_guess\":\"Assert both the listed responses and exactly one durable placement and mark, including that replaying and conflicting calls did not rewrite them.\",\"witness\":{\"initial\":\"No placement or mark exists for the source.\",\"events\":[\"Two implementations run the specified concurrent calls.\",\"Both implementations return the exact statuses listed by the Required tests item.\"],\"outcomes\":[\"One implementation performs one placement and one mark write.\",\"The other performs an additional overwrite or transient second durable creation but returns `replayed` or `publication_conflict`; a response-only test still passes.\"],\"observer\":\"The invariant test inspecting write traces or persisted state.\"}},{\"subject\":\"A6\",\"kind\":\"insufficient invariant test\",\"text\":\"INV-20: with a damaged placement or mark record, scan, delivery and mark each answer M08 with the STATE_UNAVAILABLE member of = models.RefusalCode and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), a damaged mark without a placement stops a new placement (`test_a_damaged_mark_without_a_placement_stops_a_new_placement`), a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`), and a record that is a link, dangling or not, or that names another source is refused the same way (`test_a_record_not_written_at_its_address_is_refused`).\",\"question\":\"For every damaged-record case, must the tests also show that no new placement record, mark record or stored image was created, rather than showing only the refusal and preservation of the damaged record?\",\"options\":[\"For each operation and damage form, assert that all placement, mark and stored-image state is unchanged.\",\"Only assert the response and that the damaged record itself is unchanged.\",\"Assert absence of new placement records but allow stored images or unrelated mark records.\"],\"default_guess\":\"For every case, snapshot all placement records, mark records and stored images and assert the snapshot is unchanged after the refusal.\",\"witness\":{\"initial\":\"A target record is damaged and no valid counterpart record exists.\",\"events\":[\"An operation encounters the damaged record.\",\"The implementation writes a new stored image or counterpart record but returns STATE_UNAVAILABLE and leaves the damaged record unchanged.\"],\"outcomes\":[\"A test limited to the stated response and damaged record passes.\",\"A test that proves INV-20's no-new-placement-or-mark requirement fails.\"],\"observer\":\"The invariant test and an operator inspecting durable state.\"}},{\"subject\":\"A6\",\"kind\":\"standard_violation\",\"text\":\"In the state folder the lock file is `locks/<project_id>.lock`, a placement\\n   record `ledger/<project_id>/<source_id>.json` and a mark record `published/<project_id>/<source_id>.json`.\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Replace the inline policy values for directory names, suffixes and path templates with named imported provider constants, or make them design facts that generated code does not read.\"}]}",
+ "set_aside": []
+}

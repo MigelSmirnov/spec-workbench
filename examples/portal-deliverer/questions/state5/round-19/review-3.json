@@ -1,0 +1,82 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "state-folder boundary",
+   "text": "`state_unavailable` when the state folder is missing, when a folder leading to the lock file cannot be created or given its mode or is a symbolic link or not a folder",
+   "question": "Does “a folder leading to the lock file” include the configured state folder itself, and must an existing state folder that is a symbolic link or not a folder be refused?",
+   "options": [
+    "The state folder itself must be opened without following links and must be a real folder.",
+    "Only entries below the state folder are checked without following links; the configured state-folder path may resolve through symbolic links."
+   ],
+   "default_guess": "Treat the configured state folder as the installation boundary, follow its configured path as it stands, and apply the no-link rule only to entries below it.",
+   "witness": {
+    "initial": "The configured state-folder path is a symbolic link to an existing writable directory, and `locks` does not yet exist.",
+    "events": [
+     "`module:photo_delivery` calls `project_lock` for a valid project.",
+     "`module:delivery_store` examines the configured state-folder path and tries to create `locks`."
+    ],
+    "outcomes": [
+     "The implementation follows the state-folder link, creates `locks/<project_id>.lock`, and returns the held lock.",
+     "The implementation refuses with `state_unavailable` because the state-folder entry is a symbolic link."
+    ],
+    "observer": "The calling delivery or mark operation sees success versus an M08 refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "unspecified lock-file open mode",
+   "text": "It opens the lock file without following a link and holds an operating system lock.",
+   "question": "With which access mode must an existing lock file be opened before the exclusive operating-system lock is taken?",
+   "options": [
+    "Open read-only when that is sufficient for the locking primitive.",
+    "Open read-write.",
+    "Try read-write and fall back to read-only."
+   ],
+   "default_guess": "Open read-write without following links, then verify the opened object is a regular file and take an exclusive blocking lock.",
+   "witness": {
+    "initial": "`locks/<project_id>.lock` is an existing regular file readable but not writable by the service process.",
+    "events": [
+     "`module:photo_delivery` calls `project_lock`.",
+     "`module:delivery_store` opens the existing lock file and attempts the operating-system lock."
+    ],
+    "outcomes": [
+     "A read-only implementation opens and locks the file, so the operation continues.",
+     "A read-write implementation cannot open the file and returns `state_unavailable`."
+    ],
+    "observer": "The caller sees the operation continue versus an M08 refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "missing error mapping",
+   "text": "`state_unavailable` when the state folder is missing, when a folder leading to the lock file cannot be created or given its mode or is a symbolic link or not a folder, when the lock file cannot be opened or locked, or when its entry is a symbolic link or not a regular file.",
+   "question": "What result is required if the lock file is created or opened successfully but assigning its required `LOCK_FILE_MODE` fails?",
+   "options": [
+    "Refuse with `state_unavailable`.",
+    "Propagate the operating-system error outside the declared refusal contract.",
+    "Continue using the lock file with the mode it received after application of the process umask."
+   ],
+   "default_guess": "Refuse with `state_unavailable`, leave the created lock file in place, and do not enter the caller's block.",
+   "witness": {
+    "initial": "The lock folder exists and no lock file exists; creation succeeds, but the filesystem rejects the operation used to set the exact lock-file mode.",
+    "events": [
+     "`module:photo_delivery` calls `project_lock`.",
+     "`module:delivery_store` creates `locks/<project_id>.lock`.",
+     "Assigning `LOCK_FILE_MODE` fails before the lock is delivered to the caller."
+    ],
+    "outcomes": [
+     "The implementation maps the mode-setting failure to `state_unavailable`.",
+     "The implementation propagates an undeclared operating-system error."
+    ],
+    "observer": "The calling delivery or mark operation sees an M08 refusal versus an uncontracted exception."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"state-folder boundary\",\"text\":\"`state_unavailable` when the state folder is missing, when a folder leading to the lock file cannot be created or given its mode or is a symbolic link or not a folder\",\"question\":\"Does “a folder leading to the lock file” include the configured state folder itself, and must an existing state folder that is a symbolic link or not a folder be refused?\",\"options\":[\"The state folder itself must be opened without following links and must be a real folder.\",\"Only entries below the state folder are checked without following links; the configured state-folder path may resolve through symbolic links.\"],\"default_guess\":\"Treat the configured state folder as the installation boundary, follow its configured path as it stands, and apply the no-link rule only to entries below it.\",\"witness\":{\"initial\":\"The configured state-folder path is a symbolic link to an existing writable directory, and `locks` does not yet exist.\",\"events\":[\"`module:photo_delivery` calls `project_lock` for a valid project.\",\"`module:delivery_store` examines the configured state-folder path and tries to create `locks`.\"],\"outcomes\":[\"The implementation follows the state-folder link, creates `locks/<project_id>.lock`, and returns the held lock.\",\"The implementation refuses with `state_unavailable` because the state-folder entry is a symbolic link.\"],\"observer\":\"The calling delivery or mark operation sees success versus an M08 refusal.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"unspecified lock-file open mode\",\"text\":\"It opens the lock file without following a link and holds an operating system lock.\",\"question\":\"With which access mode must an existing lock file be opened before the exclusive operating-system lock is taken?\",\"options\":[\"Open read-only when that is sufficient for the locking primitive.\",\"Open read-write.\",\"Try read-write and fall back to read-only.\"],\"default_guess\":\"Open read-write without following links, then verify the opened object is a regular file and take an exclusive blocking lock.\",\"witness\":{\"initial\":\"`locks/<project_id>.lock` is an existing regular file readable but not writable by the service process.\",\"events\":[\"`module:photo_delivery` calls `project_lock`.\",\"`module:delivery_store` opens the existing lock file and attempts the operating-system lock.\"],\"outcomes\":[\"A read-only implementation opens and locks the file, so the operation continues.\",\"A read-write implementation cannot open the file and returns `state_unavailable`.\"],\"observer\":\"The caller sees the operation continue versus an M08 refusal.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"missing error mapping\",\"text\":\"`state_unavailable` when the state folder is missing, when a folder leading to the lock file cannot be created or given its mode or is a symbolic link or not a folder, when the lock file cannot be opened or locked, or when its entry is a symbolic link or not a regular file.\",\"question\":\"What result is required if the lock file is created or opened successfully but assigning its required `LOCK_FILE_MODE` fails?\",\"options\":[\"Refuse with `state_unavailable`.\",\"Propagate the operating-system error outside the declared refusal contract.\",\"Continue using the lock file with the mode it received after application of the process umask.\"],\"default_guess\":\"Refuse with `state_unavailable`, leave the created lock file in place, and do not enter the caller's block.\",\"witness\":{\"initial\":\"The lock folder exists and no lock file exists; creation succeeds, but the filesystem rejects the operation used to set the exact lock-file mode.\",\"events\":[\"`module:photo_delivery` calls `project_lock`.\",\"`module:delivery_store` creates `locks/<project_id>.lock`.\",\"Assigning `LOCK_FILE_MODE` fails before the lock is delivered to the caller.\"],\"outcomes\":[\"The implementation maps the mode-setting failure to `state_unavailable`.\",\"The implementation propagates an undeclared operating-system error.\"],\"observer\":\"The calling delivery or mark operation sees an M08 refusal versus an uncontracted exception.\"}}]}",
+ "set_aside": []
+}

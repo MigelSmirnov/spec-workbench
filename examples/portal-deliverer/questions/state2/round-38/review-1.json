@@ -1,0 +1,237 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing time authority",
+   "text": "`marked_at: datetime`",
+   "question": "Which authority supplies the fresh instant written to `marked_at`?",
+   "options": [
+    "an injected UTC system clock",
+    "an ambient system-clock call in the mark operation",
+    "an instant supplied by the caller"
+   ],
+   "default_guess": "Inject a UTC system clock into the mark operation and read it while holding the project lock.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The caller asks the service to record a Portal `photo_id`.",
+     "The deliverer creates the publication mark."
+    ],
+    "outcomes": [
+     "The deliverer obtains `marked_at` from an injected system clock.",
+     "The deliverer accepts a caller-provided instant or reads an ambient clock directly."
+    ],
+    "observer": "A reader of the stored publication mark sees a different timestamp and different trust boundary."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "undefined sampling instant",
+   "text": "The calling flow reports the `photo_id` right after `photo.publish` answers, and the deliverer creates the mark.",
+   "question": "At which event is `marked_at` sampled, and how many clock readings may one mark operation take—on request receipt, before waiting for the project lock, after taking the lock, immediately before writing, or after the rename?",
+   "options": [
+    "one reading after validation and lock acquisition, immediately before constructing the mark",
+    "one reading when the request arrives",
+    "multiple readings with one selected for the stored value"
+   ],
+   "default_guess": "Take exactly one reading inside the project lock after all refusal checks and immediately before constructing the mark.",
+   "witness": {
+    "initial": "Another process holds the project lock for several minutes while no mark exists.",
+    "events": [
+     "A caller submits a valid mark request.",
+     "The request waits for the project lock.",
+     "The lock becomes available and the mark is written."
+    ],
+    "outcomes": [
+     "`marked_at` records the time the request arrived.",
+     "`marked_at` records the later time at which the mark was committed."
+    ],
+    "observer": "The caller and every later scan or record reader can see timestamps separated by the lock wait."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "datetime representation",
+   "kind": "undefined representation",
+   "text": "`marked_at: datetime`",
+   "question": "What exact representation must every written or compared instant use, including timezone awareness, UTC normalization, JSON spelling, fractional-second precision and comparison precision?",
+   "options": [
+    "timezone-aware UTC datetimes serialized with `Z`",
+    "naive datetimes whose values are defined to be UTC, serialized without an offset",
+    "UTC datetimes serialized with an explicit `+00:00` offset"
+   ],
+   "default_guess": "Use timezone-aware UTC internally, serialize with `Z` at microsecond precision, and compare normalized UTC instants.",
+   "witness": {
+    "initial": "A mark is created at a UTC instant having non-zero microseconds.",
+    "events": [
+     "The deliverer serializes the mark record.",
+     "A later operation reads and validates the record."
+    ],
+    "outcomes": [
+     "The record contains an aware value such as `2026-11-19T10:00:00.123456Z` and preserves its precision.",
+     "The record contains a naive or rounded value such as `2026-11-19T10:00:00`."
+    ],
+    "observer": "Record readers and equality tests see different `marked_at` values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto.taken_at",
+   "kind": "undefined time meaning",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "When a camera record contains a local date and time but no UTC offset, how is it converted to the required UTC instant?",
+   "options": [
+    "treat the camera value as already UTC",
+    "interpret it in a configured camera or deployment timezone",
+    "use an EXIF offset when present and otherwise fall back to file modification time",
+    "preserve the wall-clock fields while merely omitting an offset"
+   ],
+   "default_guess": "Use a camera-record offset when present; if no offset makes the camera value an instant, fall back to the file modification time.",
+   "witness": {
+    "initial": "A source JPEG has EXIF date `2026-07-01 12:00:00` with no offset and a modification time corresponding to `10:00:00Z`.",
+    "events": [
+     "The caller delivers the JPEG.",
+     "The service prepares M03 and builds M05."
+    ],
+    "outcomes": [
+     "`photo_date` is `12:00:00` UTC because the EXIF fields are treated as UTC.",
+     "`photo_date` is `10:00:00` UTC because the EXIF fields are interpreted in Europe/Madrid or the modification time is used."
+    ],
+    "observer": "The Portal and owner see a two-hour difference in the photo date."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 folder creation",
+   "kind": "contradictory race handling",
+   "text": "a folder it finds is accepted, whoever created it, also a concurrent call, when it is a folder; a missing one is created with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask. In the state folder an entry on the way that is a symbolic link or not a folder fails the write, and a failure to create a folder or set its mode fails it too",
+   "question": "If a folder is absent when checked but a concurrent call creates it before this call's creation attempt, must the losing call re-check and accept the folder, or must its failed exclusive creation fail the write?",
+   "options": [
+    "treat an already-exists result as a race, re-open without following links, and accept it if it is a folder",
+    "treat every failed creation call, including already-exists, as a failed write"
+   ],
+   "default_guess": "Re-check after an already-exists result and accept only an actual folder; fail for every other creation error.",
+   "witness": {
+    "initial": "The state root exists but `locks` does not.",
+    "events": [
+     "Process A and process B both check for `locks` and find it absent.",
+     "Process A creates `locks` with the required mode.",
+     "Process B attempts to create `locks` and receives an already-exists error."
+    ],
+    "outcomes": [
+     "Process B re-checks the entry, accepts Process A's folder and continues to the project lock.",
+     "Process B treats its creation failure as `STATE_UNAVAILABLE` and refuses the operation."
+    ],
+    "observer": "Process B's caller sees success or a refusal for the same concurrent history."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 state-folder traversal",
+   "kind": "uncovered filesystem race",
+   "text": "In the state folder an entry on the way that is a symbolic link or not a folder fails the write",
+   "question": "What must happen if an entry changes between being checked and being used, and must traversal and creation be anchored to already-open parent directories so that a symbolic-link substitution cannot redirect the operation?",
+   "options": [
+    "open every segment relative to an already-open parent with no-follow semantics and fail on any substitution",
+    "perform path-based checks followed by ordinary path-based creation or opening",
+    "assume no actor can change state-folder entries and state that assumption explicitly"
+   ],
+   "default_guess": "Anchor each step to an open parent directory, use no-follow semantics, and fail the operation if the entry changes or cannot be verified.",
+   "witness": {
+    "initial": "The state root exists and an actor able to modify it can replace `ledger` during a delivery.",
+    "events": [
+     "The deliverer checks that `ledger` is a folder.",
+     "The actor replaces `ledger` with a symbolic link.",
+     "The deliverer creates or renames the placement record using the textual path."
+    ],
+    "outcomes": [
+     "The anchored traversal detects the replacement and refuses the write.",
+     "The path-based implementation follows the new link and writes outside the intended state folder."
+    ],
+    "observer": "The caller sees refusal versus success, and the filesystem owner sees the record at a different location."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 lock file",
+   "kind": "unclear protocol scope",
+   "text": "Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file.",
+   "question": "Does “Each file” include the lock file, or are lock files created and opened directly under rule 4 without the temporary-write, rename and folder-synchronisation protocol?",
+   "options": [
+    "the protocol applies only to stored images and placement or mark records",
+    "the protocol applies to the lock file as well",
+    "the lock file uses a separately specified exclusive-create protocol"
+   ],
+   "default_guess": "Exclude the lock file from rule 3 and create/open it directly with no-follow and exact-mode handling under rule 4.",
+   "witness": {
+    "initial": "The project has no lock file.",
+    "events": [
+     "Two processes attempt the project's first operation concurrently.",
+     "Each process needs to create and lock the lock file."
+    ],
+    "outcomes": [
+     "Both use one stable lock-file inode created directly, so the operating-system lock serializes them.",
+     "Each follows the temporary-file and rename wording, allowing the processes to open or lock different inodes before or across replacement."
+    ],
+    "observer": "The callers can observe serialized operations or two operations entering the protected section concurrently."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 temporary-file cleanup",
+   "kind": "undefined cleanup failure",
+   "text": "A write that fails before the rename leaves the destination as it was, whether absent or holding an earlier complete file, and removes its temporary file.",
+   "question": "If removing the temporary file also fails, what result is returned, which error controls the result, and may the temporary entry remain?",
+   "options": [
+    "return the original write failure and allow the unremovable temporary entry to remain",
+    "replace the original failure with a cleanup failure",
+    "retry cleanup until it succeeds",
+    "treat failure to remove the temporary file as an invariant breach with a specified refusal"
+   ],
+   "default_guess": "Preserve the original operation failure, make a bounded best-effort cleanup attempt, and permit the temporary entry to remain unread and ignored if cleanup fails.",
+   "witness": {
+    "initial": "A destination folder permits creating and writing a temporary file but removal later fails.",
+    "events": [
+     "The service creates the temporary file.",
+     "A pre-rename synchronisation or mode-setting operation fails.",
+     "The service attempts and fails to remove the temporary file."
+    ],
+    "outcomes": [
+     "The operation reports the original mapped failure and leaves an ignored temporary file.",
+     "The cleanup error changes the reported failure or the operation keeps retrying and does not return."
+    ],
+    "observer": "The caller sees a different result or delay, and the filesystem owner sees whether the temporary file remains."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-12 Required tests",
+   "kind": "insufficient invariant test",
+   "text": "INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).",
+   "question": "Must the placement test also run placements in separate processes and explicitly show that only one placement record and one stored image exist, as required by the across-process rule and the invariant that two placements are never produced?",
+   "options": [
+    "require a separate-process placement race and inspect the resulting durable files as well as responses",
+    "treat concurrent in-process calls and response statuses alone as sufficient",
+    "split the invariant into in-process placement and cross-process mark guarantees"
+   ],
+   "default_guess": "Require separate-process races for both placements and marks, assert the response partition, and inspect that exactly one valid placement record, stored image and mark remain.",
+   "witness": {
+    "initial": "No placement or mark exists for a source.",
+    "events": [
+     "Two independent service processes deliver the source concurrently.",
+     "Both return responses, after which the state and binary stores are inspected."
+    ],
+    "outcomes": [
+     "A test checks only responses from same-process concurrency and therefore does not exercise the operating-system lock across processes.",
+     "A test races separate processes and proves both the responses and the single durable placement."
+    ],
+    "observer": "The test suite can pass an implementation whose lock works between threads but not between processes."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing time authority\",\"text\":\"`marked_at: datetime`\",\"question\":\"Which authority supplies the fresh instant written to `marked_at`?\",\"options\":[\"an injected UTC system clock\",\"an ambient system-clock call in the mark operation\",\"an instant supplied by the caller\"],\"default_guess\":\"Inject a UTC system clock into the mark operation and read it while holding the project lock.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The caller asks the service to record a Portal `photo_id`.\",\"The deliverer creates the publication mark.\"],\"outcomes\":[\"The deliverer obtains `marked_at` from an injected system clock.\",\"The deliverer accepts a caller-provided instant or reads an ambient clock directly.\"],\"observer\":\"A reader of the stored publication mark sees a different timestamp and different trust boundary.\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"undefined sampling instant\",\"text\":\"The calling flow reports the `photo_id` right after `photo.publish` answers, and the deliverer creates the mark.\",\"question\":\"At which event is `marked_at` sampled, and how many clock readings may one mark operation take—on request receipt, before waiting for the project lock, after taking the lock, immediately before writing, or after the rename?\",\"options\":[\"one reading after validation and lock acquisition, immediately before constructing the mark\",\"one reading when the request arrives\",\"multiple readings with one selected for the stored value\"],\"default_guess\":\"Take exactly one reading inside the project lock after all refusal checks and immediately before constructing the mark.\",\"witness\":{\"initial\":\"Another process holds the project lock for several minutes while no mark exists.\",\"events\":[\"A caller submits a valid mark request.\",\"The request waits for the project lock.\",\"The lock becomes available and the mark is written.\"],\"outcomes\":[\"`marked_at` records the time the request arrived.\",\"`marked_at` records the later time at which the mark was committed.\"],\"observer\":\"The caller and every later scan or record reader can see timestamps separated by the lock wait.\"}},{\"subject\":\"datetime representation\",\"kind\":\"undefined representation\",\"text\":\"`marked_at: datetime`\",\"question\":\"What exact representation must every written or compared instant use, including timezone awareness, UTC normalization, JSON spelling, fractional-second precision and comparison precision?\",\"options\":[\"timezone-aware UTC datetimes serialized with `Z`\",\"naive datetimes whose values are defined to be UTC, serialized without an offset\",\"UTC datetimes serialized with an explicit `+00:00` offset\"],\"default_guess\":\"Use timezone-aware UTC internally, serialize with `Z` at microsecond precision, and compare normalized UTC instants.\",\"witness\":{\"initial\":\"A mark is created at a UTC instant having non-zero microseconds.\",\"events\":[\"The deliverer serializes the mark record.\",\"A later operation reads and validates the record.\"],\"outcomes\":[\"The record contains an aware value such as `2026-11-19T10:00:00.123456Z` and preserves its precision.\",\"The record contains a naive or rounded value such as `2026-11-19T10:00:00`.\"],\"observer\":\"Record readers and equality tests see different `marked_at` values.\"}},{\"subject\":\"M03 PreparedPhoto.taken_at\",\"kind\":\"undefined time meaning\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"When a camera record contains a local date and time but no UTC offset, how is it converted to the required UTC instant?\",\"options\":[\"treat the camera value as already UTC\",\"interpret it in a configured camera or deployment timezone\",\"use an EXIF offset when present and otherwise fall back to file modification time\",\"preserve the wall-clock fields while merely omitting an offset\"],\"default_guess\":\"Use a camera-record offset when present; if no offset makes the camera value an instant, fall back to the file modification time.\",\"witness\":{\"initial\":\"A source JPEG has EXIF date `2026-07-01 12:00:00` with no offset and a modification time corresponding to `10:00:00Z`.\",\"events\":[\"The caller delivers the JPEG.\",\"The service prepares M03 and builds M05.\"],\"outcomes\":[\"`photo_date` is `12:00:00` UTC because the EXIF fields are treated as UTC.\",\"`photo_date` is `10:00:00` UTC because the EXIF fields are interpreted in Europe/Madrid or the modification time is used.\"],\"observer\":\"The Portal and owner see a two-hour difference in the photo date.\"}},{\"subject\":\"A6 folder creation\",\"kind\":\"contradictory race handling\",\"text\":\"a folder it finds is accepted, whoever created it, also a concurrent call, when it is a folder; a missing one is created with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask. In the state folder an entry on the way that is a symbolic link or not a folder fails the write, and a failure to create a folder or set its mode fails it too\",\"question\":\"If a folder is absent when checked but a concurrent call creates it before this call's creation attempt, must the losing call re-check and accept the folder, or must its failed exclusive creation fail the write?\",\"options\":[\"treat an already-exists result as a race, re-open without following links, and accept it if it is a folder\",\"treat every failed creation call, including already-exists, as a failed write\"],\"default_guess\":\"Re-check after an already-exists result and accept only an actual folder; fail for every other creation error.\",\"witness\":{\"initial\":\"The state root exists but `locks` does not.\",\"events\":[\"Process A and process B both check for `locks` and find it absent.\",\"Process A creates `locks` with the required mode.\",\"Process B attempts to create `locks` and receives an already-exists error.\"],\"outcomes\":[\"Process B re-checks the entry, accepts Process A's folder and continues to the project lock.\",\"Process B treats its creation failure as `STATE_UNAVAILABLE` and refuses the operation.\"],\"observer\":\"Process B's caller sees success or a refusal for the same concurrent history.\"}},{\"subject\":\"A6 state-folder traversal\",\"kind\":\"uncovered filesystem race\",\"text\":\"In the state folder an entry on the way that is a symbolic link or not a folder fails the write\",\"question\":\"What must happen if an entry changes between being checked and being used, and must traversal and creation be anchored to already-open parent directories so that a symbolic-link substitution cannot redirect the operation?\",\"options\":[\"open every segment relative to an already-open parent with no-follow semantics and fail on any substitution\",\"perform path-based checks followed by ordinary path-based creation or opening\",\"assume no actor can change state-folder entries and state that assumption explicitly\"],\"default_guess\":\"Anchor each step to an open parent directory, use no-follow semantics, and fail the operation if the entry changes or cannot be verified.\",\"witness\":{\"initial\":\"The state root exists and an actor able to modify it can replace `ledger` during a delivery.\",\"events\":[\"The deliverer checks that `ledger` is a folder.\",\"The actor replaces `ledger` with a symbolic link.\",\"The deliverer creates or renames the placement record using the textual path.\"],\"outcomes\":[\"The anchored traversal detects the replacement and refuses the write.\",\"The path-based implementation follows the new link and writes outside the intended state folder.\"],\"observer\":\"The caller sees refusal versus success, and the filesystem owner sees the record at a different location.\"}},{\"subject\":\"A6 lock file\",\"kind\":\"unclear protocol scope\",\"text\":\"Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file.\",\"question\":\"Does “Each file” include the lock file, or are lock files created and opened directly under rule 4 without the temporary-write, rename and folder-synchronisation protocol?\",\"options\":[\"the protocol applies only to stored images and placement or mark records\",\"the protocol applies to the lock file as well\",\"the lock file uses a separately specified exclusive-create protocol\"],\"default_guess\":\"Exclude the lock file from rule 3 and create/open it directly with no-follow and exact-mode handling under rule 4.\",\"witness\":{\"initial\":\"The project has no lock file.\",\"events\":[\"Two processes attempt the project's first operation concurrently.\",\"Each process needs to create and lock the lock file.\"],\"outcomes\":[\"Both use one stable lock-file inode created directly, so the operating-system lock serializes them.\",\"Each follows the temporary-file and rename wording, allowing the processes to open or lock different inodes before or across replacement.\"],\"observer\":\"The callers can observe serialized operations or two operations entering the protected section concurrently.\"}},{\"subject\":\"A6 temporary-file cleanup\",\"kind\":\"undefined cleanup failure\",\"text\":\"A write that fails before the rename leaves the destination as it was, whether absent or holding an earlier complete file, and removes its temporary file.\",\"question\":\"If removing the temporary file also fails, what result is returned, which error controls the result, and may the temporary entry remain?\",\"options\":[\"return the original write failure and allow the unremovable temporary entry to remain\",\"replace the original failure with a cleanup failure\",\"retry cleanup until it succeeds\",\"treat failure to remove the temporary file as an invariant breach with a specified refusal\"],\"default_guess\":\"Preserve the original operation failure, make a bounded best-effort cleanup attempt, and permit the temporary entry to remain unread and ignored if cleanup fails.\",\"witness\":{\"initial\":\"A destination folder permits creating and writing a temporary file but removal later fails.\",\"events\":[\"The service creates the temporary file.\",\"A pre-rename synchronisation or mode-setting operation fails.\",\"The service attempts and fails to remove the temporary file.\"],\"outcomes\":[\"The operation reports the original mapped failure and leaves an ignored temporary file.\",\"The cleanup error changes the reported failure or the operation keeps retrying and does not return.\"],\"observer\":\"The caller sees a different result or delay, and the filesystem owner sees whether the temporary file remains.\"}},{\"subject\":\"INV-12 Required tests\",\"kind\":\"insufficient invariant test\",\"text\":\"INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).\",\"question\":\"Must the placement test also run placements in separate processes and explicitly show that only one placement record and one stored image exist, as required by the across-process rule and the invariant that two placements are never produced?\",\"options\":[\"require a separate-process placement race and inspect the resulting durable files as well as responses\",\"treat concurrent in-process calls and response statuses alone as sufficient\",\"split the invariant into in-process placement and cross-process mark guarantees\"],\"default_guess\":\"Require separate-process races for both placements and marks, assert the response partition, and inspect that exactly one valid placement record, stored image and mark remain.\",\"witness\":{\"initial\":\"No placement or mark exists for a source.\",\"events\":[\"Two independent service processes deliver the source concurrently.\",\"Both return responses, after which the state and binary stores are inspected.\"],\"outcomes\":[\"A test checks only responses from same-process concurrency and therefore does not exercise the operating-system lock across processes.\",\"A test races separate processes and proves both the responses and the single durable placement.\"],\"observer\":\"The test suite can pass an implementation whose lock works between threads but not between processes.\"}}]}",
+ "set_aside": []
+}
