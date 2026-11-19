@@ -1,0 +1,132 @@
+{
+ "open_points": [
+  {
+   "subject": "A8 validation ownership for port and time zone",
+   "kind": "contradictory_owners",
+   "text": "| A8 | reading each run setting, its default, and the refusal of a value the start-up table does not accept | `runtime_settings` |\n| A8 | the refusal of a port above 65535 and of a time zone the database does not know | `deliverer_service` |",
+   "question": "Which single module owns rejecting an out-of-range port and an unknown time zone: `runtime_settings` or `deliverer_service`?",
+   "options": [
+    "`runtime_settings` validates and refuses every unacceptable setting before returning `RuntimeSettings`",
+    "`runtime_settings` parses the values, while `deliverer_service` rejects an out-of-range port and an unknown time zone",
+    "Split the two checks explicitly between the modules"
+   ],
+   "default_guess": "Make `runtime_settings` the sole owner of all run-setting parsing and validation, and remove the second A8 ownership row.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_PORT=70000` is present when the service starts.",
+    "events": [
+     "`deliverer_service` calls `load_runtime_settings`.",
+     "The implementation applies the ownership table."
+    ],
+    "outcomes": [
+     "Following the first row and the `runtime_settings` Owns section, `load_runtime_settings` refuses the value and returns no `RuntimeSettings`.",
+     "Following the second row, `load_runtime_settings` returns a settings value and `deliverer_service` refuses it."
+    ],
+    "observer": "A unit test of `load_runtime_settings`, and any caller that uses it independently of `deliverer_service`, sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "missing required run setting",
+   "kind": "owner_missing",
+   "text": "A required setting that is absent ends the start",
+   "question": "Which module owns the decision and action that end startup when a required setting is absent?",
+   "options": [
+    "`runtime_settings` refuses absence while reading the environment",
+    "`runtime_settings` reports absence and `deliverer_service` ends startup",
+    "A separate startup-validation owner handles absence"
+   ],
+   "default_guess": "Assign absence of a required setting to `runtime_settings`, alongside its ownership of reading and validation.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_BINARY_ROOT` is absent.",
+    "events": [
+     "`deliverer_service` begins startup.",
+     "`load_runtime_settings` examines the environment."
+    ],
+    "outcomes": [
+     "`runtime_settings` ends or refuses the load before producing `RuntimeSettings`.",
+     "`runtime_settings` reports a missing value to `deliverer_service`, which owns the decision to end startup."
+    ],
+    "observer": "Tests and callers of `load_runtime_settings` see whether absence is already a terminal validation failure or a returned condition."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "environment value presence",
+   "kind": "input_semantics_unspecified",
+   "text": "that module decides how a value is read",
+   "question": "Does an environment variable that is present with an empty value count as absent, or as a present value that must be validated and refused?",
+   "options": [
+    "Empty counts as absent, so optional settings use defaults and required settings end startup as absent",
+    "Empty is present and invalid for every listed setting",
+    "The treatment is defined separately for each setting"
+   ],
+   "default_guess": "Treat an empty value as absent for every run setting.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_PORT` is set to the empty string and all required settings are valid.",
+    "events": [
+     "The process starts.",
+     "`runtime_settings` reads `PORTAL_DELIVERER_PORT`."
+    ],
+    "outcomes": [
+     "The empty value counts as absent, so the service starts on port 8850.",
+     "The empty value counts as present but invalid, so startup ends."
+    ],
+    "observer": "The operator sees whether the service starts and listens on port 8850."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "port parsing",
+   "kind": "input_grammar_unspecified",
+   "text": "The port is a whole number from 1 to 65535",
+   "question": "Which textual environment-variable spellings represent a whole-number port: only ASCII decimal digits, or also signs, surrounding whitespace, leading zeroes, or non-ASCII decimal digits?",
+   "options": [
+    "Only one or more ASCII digits are accepted, with no sign or whitespace",
+    "Any spelling accepted by the language's integer parser is accepted if its value is in range",
+    "A separately specified grammar defines the accepted spelling"
+   ],
+   "default_guess": "Accept only ASCII decimal digits, then require the parsed value to be from 1 through 65535.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_PORT=+8850` is present and every other setting is valid.",
+    "events": [
+     "The process starts.",
+     "`runtime_settings` reads and parses the port."
+    ],
+    "outcomes": [
+     "A strict decimal grammar rejects `+8850`, so startup ends.",
+     "A normal integer parser accepts `+8850`, so the service starts and listens on port 8850."
+    ],
+    "observer": "The operator sees whether the service starts."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "startup-setting refusal representation",
+   "kind": "failure_contract_missing",
+   "text": "the default of each optional setting, and the refusal of a value the start-up table does not accept.",
+   "question": "How does `runtime_settings` communicate a refused setting to `deliverer_service`, and which module performs the terminal startup action?",
+   "options": [
+    "`load_runtime_settings` raises a documented exception owned by `runtime_settings`, and `deliverer_service` converts it into startup termination",
+    "`load_runtime_settings` returns a typed failure result",
+    "`load_runtime_settings` terminates startup itself"
+   ],
+   "default_guess": "Have `runtime_settings` own and raise a specific configuration exception; `deliverer_service` catches it at the startup boundary and exits without listening.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_ENVIRONMENT=staging`, which is not one of the three accepted values.",
+    "events": [
+     "`deliverer_service` calls `load_runtime_settings`.",
+     "The invalid value is detected."
+    ],
+    "outcomes": [
+     "The loader raises a recoverable configuration exception, allowing the service boundary to perform cleanup and choose the process exit.",
+     "The loader terminates the process directly, so its caller cannot intercept or compose the failure."
+    ],
+    "observer": "A caller or unit test invoking `load_runtime_settings` observes an exception in one implementation and process termination in the other."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A8 validation ownership for port and time zone\",\"kind\":\"contradictory_owners\",\"text\":\"| A8 | reading each run setting, its default, and the refusal of a value the start-up table does not accept | `runtime_settings` |\\n| A8 | the refusal of a port above 65535 and of a time zone the database does not know | `deliverer_service` |\",\"question\":\"Which single module owns rejecting an out-of-range port and an unknown time zone: `runtime_settings` or `deliverer_service`?\",\"options\":[\"`runtime_settings` validates and refuses every unacceptable setting before returning `RuntimeSettings`\",\"`runtime_settings` parses the values, while `deliverer_service` rejects an out-of-range port and an unknown time zone\",\"Split the two checks explicitly between the modules\"],\"default_guess\":\"Make `runtime_settings` the sole owner of all run-setting parsing and validation, and remove the second A8 ownership row.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_PORT=70000` is present when the service starts.\",\"events\":[\"`deliverer_service` calls `load_runtime_settings`.\",\"The implementation applies the ownership table.\"],\"outcomes\":[\"Following the first row and the `runtime_settings` Owns section, `load_runtime_settings` refuses the value and returns no `RuntimeSettings`.\",\"Following the second row, `load_runtime_settings` returns a settings value and `deliverer_service` refuses it.\"],\"observer\":\"A unit test of `load_runtime_settings`, and any caller that uses it independently of `deliverer_service`, sees the difference.\"}},{\"subject\":\"missing required run setting\",\"kind\":\"owner_missing\",\"text\":\"A required setting that is absent ends the start\",\"question\":\"Which module owns the decision and action that end startup when a required setting is absent?\",\"options\":[\"`runtime_settings` refuses absence while reading the environment\",\"`runtime_settings` reports absence and `deliverer_service` ends startup\",\"A separate startup-validation owner handles absence\"],\"default_guess\":\"Assign absence of a required setting to `runtime_settings`, alongside its ownership of reading and validation.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_BINARY_ROOT` is absent.\",\"events\":[\"`deliverer_service` begins startup.\",\"`load_runtime_settings` examines the environment.\"],\"outcomes\":[\"`runtime_settings` ends or refuses the load before producing `RuntimeSettings`.\",\"`runtime_settings` reports a missing value to `deliverer_service`, which owns the decision to end startup.\"],\"observer\":\"Tests and callers of `load_runtime_settings` see whether absence is already a terminal validation failure or a returned condition.\"}},{\"subject\":\"environment value presence\",\"kind\":\"input_semantics_unspecified\",\"text\":\"that module decides how a value is read\",\"question\":\"Does an environment variable that is present with an empty value count as absent, or as a present value that must be validated and refused?\",\"options\":[\"Empty counts as absent, so optional settings use defaults and required settings end startup as absent\",\"Empty is present and invalid for every listed setting\",\"The treatment is defined separately for each setting\"],\"default_guess\":\"Treat an empty value as absent for every run setting.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_PORT` is set to the empty string and all required settings are valid.\",\"events\":[\"The process starts.\",\"`runtime_settings` reads `PORTAL_DELIVERER_PORT`.\"],\"outcomes\":[\"The empty value counts as absent, so the service starts on port 8850.\",\"The empty value counts as present but invalid, so startup ends.\"],\"observer\":\"The operator sees whether the service starts and listens on port 8850.\"}},{\"subject\":\"port parsing\",\"kind\":\"input_grammar_unspecified\",\"text\":\"The port is a whole number from 1 to 65535\",\"question\":\"Which textual environment-variable spellings represent a whole-number port: only ASCII decimal digits, or also signs, surrounding whitespace, leading zeroes, or non-ASCII decimal digits?\",\"options\":[\"Only one or more ASCII digits are accepted, with no sign or whitespace\",\"Any spelling accepted by the language's integer parser is accepted if its value is in range\",\"A separately specified grammar defines the accepted spelling\"],\"default_guess\":\"Accept only ASCII decimal digits, then require the parsed value to be from 1 through 65535.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_PORT=+8850` is present and every other setting is valid.\",\"events\":[\"The process starts.\",\"`runtime_settings` reads and parses the port.\"],\"outcomes\":[\"A strict decimal grammar rejects `+8850`, so startup ends.\",\"A normal integer parser accepts `+8850`, so the service starts and listens on port 8850.\"],\"observer\":\"The operator sees whether the service starts.\"}},{\"subject\":\"startup-setting refusal representation\",\"kind\":\"failure_contract_missing\",\"text\":\"the default of each optional setting, and the refusal of a value the start-up table does not accept.\",\"question\":\"How does `runtime_settings` communicate a refused setting to `deliverer_service`, and which module performs the terminal startup action?\",\"options\":[\"`load_runtime_settings` raises a documented exception owned by `runtime_settings`, and `deliverer_service` converts it into startup termination\",\"`load_runtime_settings` returns a typed failure result\",\"`load_runtime_settings` terminates startup itself\"],\"default_guess\":\"Have `runtime_settings` own and raise a specific configuration exception; `deliverer_service` catches it at the startup boundary and exits without listening.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_ENVIRONMENT=staging`, which is not one of the three accepted values.\",\"events\":[\"`deliverer_service` calls `load_runtime_settings`.\",\"The invalid value is detected.\"],\"outcomes\":[\"The loader raises a recoverable configuration exception, allowing the service boundary to perform cleanup and choose the process exit.\",\"The loader terminates the process directly, so its caller cannot intercept or compose the failure.\"],\"observer\":\"A caller or unit test invoking `load_runtime_settings` observes an exception in one implementation and process termination in the other.\"}}]}",
+ "set_aside": []
+}
