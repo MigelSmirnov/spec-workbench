@@ -1,0 +1,207 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "time_source_unspecified",
+   "text": "`marked_at: datetime`",
+   "question": "Which authority supplies `marked_at`, when is it read during a mark operation, how many readings occur, and is the stored datetime offset-aware UTC or UTC without an offset?",
+   "options": [
+    "Read the system clock once after the project lock is taken and store naive UTC.",
+    "Read the system clock once when the request begins and store naive UTC.",
+    "Read an injected clock once and store offset-aware UTC."
+   ],
+   "default_guess": "Use an injected clock, read it once after the lock is taken immediately before creating the mark, and store UTC without an offset to match the other persisted datetime convention.",
+   "witness": {
+    "initial": "A placement exists and another operation holds the project lock while no publication mark exists.",
+    "events": [
+     "The calling flow submits a mark request at 10:00.",
+     "The request waits for the project lock until 10:05.",
+     "The deliverer creates the mark."
+    ],
+    "outcomes": [
+     "`marked_at` is 10:00 because the clock is read on request entry.",
+     "`marked_at` is 10:05 because the clock is read after the lock is acquired."
+    ],
+    "observer": "The calling flow or an operator reading the persisted mark sees the different timestamp."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 2 and A6 rule 5",
+   "kind": "contradictory_outcome",
+   "text": "A3 says \"Delivering content that already has a placement answers `replayed`\"; A6 says a damaged mark record means \"the operation is refused with the STATE_UNAVAILABLE member of = models.RefusalCode\".",
+   "question": "When a valid placement exists but its mark record is damaged, must delivery return `replayed` without a `photo_id`, or refuse the whole operation with STATE_UNAVAILABLE?",
+   "options": [
+    "A6 takes precedence: refuse with STATE_UNAVAILABLE.",
+    "A3 takes precedence: return `replayed` and omit `photo_id`.",
+    "Return `replayed` only after separately reporting or repairing the damaged mark."
+   ],
+   "default_guess": "Refuse with STATE_UNAVAILABLE, matching INV-20's Required tests item.",
+   "witness": {
+    "initial": "A valid placement record and stored image exist; the corresponding mark record contains invalid JSON.",
+    "events": [
+     "The caller delivers the same source content again."
+    ],
+    "outcomes": [
+     "A3 rule 2 gives `replayed` with the stored placement.",
+     "A6 rule 5 and INV-20 give an M08 refusal with STATE_UNAVAILABLE."
+    ],
+    "observer": "The caller sees a successful replay in one implementation and a refusal in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 2 and INV-06",
+   "kind": "contradictory_invariant",
+   "text": "A3 rule 2 permits \"An absent project lock file and the folders leading to it\" as an exception that is created, while INV-06 says \"a repeated placement writes nothing.\"",
+   "question": "Does INV-06 exclude creation of the project lock file and its leading folders, or must a repeated placement truly make no durable filesystem change?",
+   "options": [
+    "Amend INV-06 so lock infrastructure is the sole permitted write.",
+    "Keep INV-06 literal and require lock infrastructure to exist before a replay.",
+    "Treat lock infrastructure as outside the meaning of a placement write and state that explicitly."
+   ],
+   "default_guess": "Amend INV-06 explicitly to allow creation of the lock file and its leading folders.",
+   "witness": {
+    "initial": "A placement record and stored image exist, but the project's lock file and lock folder are absent.",
+    "events": [
+     "The caller repeats delivery of the placed content."
+    ],
+    "outcomes": [
+     "A3 rule 2 creates the lock folder and lock file and returns `replayed`.",
+     "INV-06 permits no write, so the call must avoid creation or fail."
+    ],
+    "observer": "The caller may see a replay or failure, and an operator can see whether new filesystem entries appeared."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-06 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "\"a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place\"",
+   "question": "What must the INV-06 test show when the placement exists but the project lock file or its leading folders are absent: that they are created as the declared exception, or that no filesystem entry at all is added?",
+   "options": [
+    "Delete the lock infrastructure before replay and assert that only it is created.",
+    "Pre-create the lock infrastructure and test only image and record immutability.",
+    "Assert no new entry, which would reject A3 rule 2's exception."
+   ],
+   "default_guess": "Test the absent-lock case and assert that only the lock file and required leading folders are created while the image and records remain byte-for-byte unchanged.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 5 record lookup",
+   "kind": "ancestor_path_undefined",
+   "text": "\"A record is absent only when no entry exists at its address, also when a folder on its address does not exist; reading a record creates nothing. A placement or mark record is opened without following a link\"",
+   "question": "How must a record read handle an ancestor below the state folder that is a symbolic link or a non-folder, and does “without following a link” apply to every path component or only the record's final component?",
+   "options": [
+    "Open every ancestor without following links and refuse with STATE_UNAVAILABLE on a link or non-folder.",
+    "Follow ancestor links but do not follow a link at the record itself.",
+    "Treat an unusable ancestor as meaning the record is absent."
+   ],
+   "default_guess": "Open every component without following links; a symlink or non-folder ancestor is STATE_UNAVAILABLE, while a genuinely missing ancestor means the record is absent.",
+   "witness": {
+    "initial": "The placement-project folder is a symbolic link to an outside folder containing a valid-looking placement record.",
+    "events": [
+     "A caller scans or delivers the corresponding source."
+    ],
+    "outcomes": [
+     "The service follows the ancestor link and accepts the outside record.",
+     "The service refuses with STATE_UNAVAILABLE without following the link."
+    ],
+    "observer": "The caller sees a placement or replay in one implementation and a refusal in the other; the installation owner sees the security-boundary difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 INV-12 Required tests",
+   "kind": "concurrency_test_unspecified",
+   "text": "\"marks of two `photo_id` values, in one process and in separate processes, answer one `marked`, `replayed` for the same value and `publication_conflict` for the other\"",
+   "question": "Must the mark calls overlap and race for the lock, or is it sufficient to issue them sequentially merely from one or more processes?",
+   "options": [
+    "Require an overlap barrier so competing mark calls are concurrent.",
+    "Sequential calls from separate processes are sufficient.",
+    "Require both an overlapped race and sequential replay/conflict checks."
+   ],
+   "default_guess": "Require an overlapped race for the two competing values, followed by explicit replay and conflict checks.",
+   "witness": {
+    "initial": "A placement exists with no mark; an implementation has no effective inter-process exclusion for marks.",
+    "events": [
+     "A test invokes two different `photo_id` values sequentially from separate processes.",
+     "In production, two processes invoke those values concurrently."
+    ],
+    "outcomes": [
+     "The sequential test produces one `marked` and one `publication_conflict` and passes.",
+     "The concurrent calls both observe no mark and each answer `marked`, violating INV-12."
+    ],
+    "observer": "The test suite misses the defect; concurrent callers and the persisted mark expose it."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 INV-12 Required tests",
+   "kind": "test_history_unspecified",
+   "text": "\"answer one `marked`, `replayed` for the same value and `publication_conflict` for the other\"",
+   "question": "Which calls and ordering must produce these three outcomes when only two distinct `photo_id` values are named?",
+   "options": [
+    "Race one call for each value, then repeat the winning value to obtain `replayed`.",
+    "Race duplicate calls for both values and require the winner's duplicates to replay.",
+    "Choose one value in advance for duplicate calls and require it to win."
+   ],
+   "default_guess": "Race one call for each value, accept either as the winner, then repeat the winning value and the losing value to assert `replayed` and `publication_conflict` deterministically.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 record consistency",
+   "kind": "orphan_record_undefined",
+   "text": "\"A record is absent only when no entry exists at its address\" and \"Its `project_id` and `source_id` must equal those of its address.\"",
+   "question": "What must scan, delivery, and mark do when a valid mark record exists but the corresponding placement record is absent?",
+   "options": [
+    "Treat the cross-record inconsistency as STATE_UNAVAILABLE.",
+    "Treat the placement as absent and ignore the orphan mark.",
+    "Allow a new placement and then attach or replay the existing mark."
+   ],
+   "default_guess": "Treat a valid mark without its placement as damaged state and refuse with STATE_UNAVAILABLE.",
+   "witness": {
+    "initial": "A schema-valid mark record exists for a project and source, but no placement record exists at its address.",
+    "events": [
+     "The caller delivers a matching ordinary source file."
+    ],
+    "outcomes": [
+     "The service refuses because the mark is an orphan and state is inconsistent.",
+     "The service treats the placement as absent, creates it, and retains or uses the existing mark."
+    ],
+    "observer": "The caller sees a refusal versus a new or already-published placement, and the durable state differs."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 2",
+   "kind": "standard_violation",
+   "text": "answers `replayed`",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must name the REPLAYED member of = models.PlacementStatus, with `replayed` only as an optional value annotation.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 INV-12 Required tests",
+   "kind": "standard_violation",
+   "text": "answer one `placed` and otherwise `replayed`",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must name the PLACED and REPLAYED members of = models.PlacementStatus instead of naming them only by their values.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 INV-12 Required tests",
+   "kind": "standard_violation",
+   "text": "answer one `marked`, `replayed` for the same value and `publication_conflict` for the other, and leave one mark record holding the `photo_id` whose call answered `marked`",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must name the MARKED and REPLAYED members of = models.MarkStatus and the PUBLICATION_CONFLICT member of = models.RefusalCode, using their values only as optional annotations.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"time_source_unspecified\",\"text\":\"`marked_at: datetime`\",\"question\":\"Which authority supplies `marked_at`, when is it read during a mark operation, how many readings occur, and is the stored datetime offset-aware UTC or UTC without an offset?\",\"options\":[\"Read the system clock once after the project lock is taken and store naive UTC.\",\"Read the system clock once when the request begins and store naive UTC.\",\"Read an injected clock once and store offset-aware UTC.\"],\"default_guess\":\"Use an injected clock, read it once after the lock is taken immediately before creating the mark, and store UTC without an offset to match the other persisted datetime convention.\",\"witness\":{\"initial\":\"A placement exists and another operation holds the project lock while no publication mark exists.\",\"events\":[\"The calling flow submits a mark request at 10:00.\",\"The request waits for the project lock until 10:05.\",\"The deliverer creates the mark.\"],\"outcomes\":[\"`marked_at` is 10:00 because the clock is read on request entry.\",\"`marked_at` is 10:05 because the clock is read after the lock is acquired.\"],\"observer\":\"The calling flow or an operator reading the persisted mark sees the different timestamp.\"}},{\"subject\":\"A3 rule 2 and A6 rule 5\",\"kind\":\"contradictory_outcome\",\"text\":\"A3 says \\\"Delivering content that already has a placement answers `replayed`\\\"; A6 says a damaged mark record means \\\"the operation is refused with the STATE_UNAVAILABLE member of = models.RefusalCode\\\".\",\"question\":\"When a valid placement exists but its mark record is damaged, must delivery return `replayed` without a `photo_id`, or refuse the whole operation with STATE_UNAVAILABLE?\",\"options\":[\"A6 takes precedence: refuse with STATE_UNAVAILABLE.\",\"A3 takes precedence: return `replayed` and omit `photo_id`.\",\"Return `replayed` only after separately reporting or repairing the damaged mark.\"],\"default_guess\":\"Refuse with STATE_UNAVAILABLE, matching INV-20's Required tests item.\",\"witness\":{\"initial\":\"A valid placement record and stored image exist; the corresponding mark record contains invalid JSON.\",\"events\":[\"The caller delivers the same source content again.\"],\"outcomes\":[\"A3 rule 2 gives `replayed` with the stored placement.\",\"A6 rule 5 and INV-20 give an M08 refusal with STATE_UNAVAILABLE.\"],\"observer\":\"The caller sees a successful replay in one implementation and a refusal in the other.\"}},{\"subject\":\"A3 rule 2 and INV-06\",\"kind\":\"contradictory_invariant\",\"text\":\"A3 rule 2 permits \\\"An absent project lock file and the folders leading to it\\\" as an exception that is created, while INV-06 says \\\"a repeated placement writes nothing.\\\"\",\"question\":\"Does INV-06 exclude creation of the project lock file and its leading folders, or must a repeated placement truly make no durable filesystem change?\",\"options\":[\"Amend INV-06 so lock infrastructure is the sole permitted write.\",\"Keep INV-06 literal and require lock infrastructure to exist before a replay.\",\"Treat lock infrastructure as outside the meaning of a placement write and state that explicitly.\"],\"default_guess\":\"Amend INV-06 explicitly to allow creation of the lock file and its leading folders.\",\"witness\":{\"initial\":\"A placement record and stored image exist, but the project's lock file and lock folder are absent.\",\"events\":[\"The caller repeats delivery of the placed content.\"],\"outcomes\":[\"A3 rule 2 creates the lock folder and lock file and returns `replayed`.\",\"INV-06 permits no write, so the call must avoid creation or fail.\"],\"observer\":\"The caller may see a replay or failure, and an operator can see whether new filesystem entries appeared.\"}},{\"subject\":\"INV-06 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"\\\"a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place\\\"\",\"question\":\"What must the INV-06 test show when the placement exists but the project lock file or its leading folders are absent: that they are created as the declared exception, or that no filesystem entry at all is added?\",\"options\":[\"Delete the lock infrastructure before replay and assert that only it is created.\",\"Pre-create the lock infrastructure and test only image and record immutability.\",\"Assert no new entry, which would reject A3 rule 2's exception.\"],\"default_guess\":\"Test the absent-lock case and assert that only the lock file and required leading folders are created while the image and records remain byte-for-byte unchanged.\"},{\"subject\":\"A6 rule 5 record lookup\",\"kind\":\"ancestor_path_undefined\",\"text\":\"\\\"A record is absent only when no entry exists at its address, also when a folder on its address does not exist; reading a record creates nothing. A placement or mark record is opened without following a link\\\"\",\"question\":\"How must a record read handle an ancestor below the state folder that is a symbolic link or a non-folder, and does “without following a link” apply to every path component or only the record's final component?\",\"options\":[\"Open every ancestor without following links and refuse with STATE_UNAVAILABLE on a link or non-folder.\",\"Follow ancestor links but do not follow a link at the record itself.\",\"Treat an unusable ancestor as meaning the record is absent.\"],\"default_guess\":\"Open every component without following links; a symlink or non-folder ancestor is STATE_UNAVAILABLE, while a genuinely missing ancestor means the record is absent.\",\"witness\":{\"initial\":\"The placement-project folder is a symbolic link to an outside folder containing a valid-looking placement record.\",\"events\":[\"A caller scans or delivers the corresponding source.\"],\"outcomes\":[\"The service follows the ancestor link and accepts the outside record.\",\"The service refuses with STATE_UNAVAILABLE without following the link.\"],\"observer\":\"The caller sees a placement or replay in one implementation and a refusal in the other; the installation owner sees the security-boundary difference.\"}},{\"subject\":\"A6 INV-12 Required tests\",\"kind\":\"concurrency_test_unspecified\",\"text\":\"\\\"marks of two `photo_id` values, in one process and in separate processes, answer one `marked`, `replayed` for the same value and `publication_conflict` for the other\\\"\",\"question\":\"Must the mark calls overlap and race for the lock, or is it sufficient to issue them sequentially merely from one or more processes?\",\"options\":[\"Require an overlap barrier so competing mark calls are concurrent.\",\"Sequential calls from separate processes are sufficient.\",\"Require both an overlapped race and sequential replay/conflict checks.\"],\"default_guess\":\"Require an overlapped race for the two competing values, followed by explicit replay and conflict checks.\",\"witness\":{\"initial\":\"A placement exists with no mark; an implementation has no effective inter-process exclusion for marks.\",\"events\":[\"A test invokes two different `photo_id` values sequentially from separate processes.\",\"In production, two processes invoke those values concurrently.\"],\"outcomes\":[\"The sequential test produces one `marked` and one `publication_conflict` and passes.\",\"The concurrent calls both observe no mark and each answer `marked`, violating INV-12.\"],\"observer\":\"The test suite misses the defect; concurrent callers and the persisted mark expose it.\"}},{\"subject\":\"A6 INV-12 Required tests\",\"kind\":\"test_history_unspecified\",\"text\":\"\\\"answer one `marked`, `replayed` for the same value and `publication_conflict` for the other\\\"\",\"question\":\"Which calls and ordering must produce these three outcomes when only two distinct `photo_id` values are named?\",\"options\":[\"Race one call for each value, then repeat the winning value to obtain `replayed`.\",\"Race duplicate calls for both values and require the winner's duplicates to replay.\",\"Choose one value in advance for duplicate calls and require it to win.\"],\"default_guess\":\"Race one call for each value, accept either as the winner, then repeat the winning value and the losing value to assert `replayed` and `publication_conflict` deterministically.\"},{\"subject\":\"A6 record consistency\",\"kind\":\"orphan_record_undefined\",\"text\":\"\\\"A record is absent only when no entry exists at its address\\\" and \\\"Its `project_id` and `source_id` must equal those of its address.\\\"\",\"question\":\"What must scan, delivery, and mark do when a valid mark record exists but the corresponding placement record is absent?\",\"options\":[\"Treat the cross-record inconsistency as STATE_UNAVAILABLE.\",\"Treat the placement as absent and ignore the orphan mark.\",\"Allow a new placement and then attach or replay the existing mark.\"],\"default_guess\":\"Treat a valid mark without its placement as damaged state and refuse with STATE_UNAVAILABLE.\",\"witness\":{\"initial\":\"A schema-valid mark record exists for a project and source, but no placement record exists at its address.\",\"events\":[\"The caller delivers a matching ordinary source file.\"],\"outcomes\":[\"The service refuses because the mark is an orphan and state is inconsistent.\",\"The service treats the placement as absent, creates it, and retains or uses the existing mark.\"],\"observer\":\"The caller sees a refusal versus a new or already-published placement, and the durable state differs.\"}},{\"subject\":\"A3 rule 2\",\"kind\":\"standard_violation\",\"text\":\"answers `replayed`\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the REPLAYED member of = models.PlacementStatus, with `replayed` only as an optional value annotation.\"},{\"subject\":\"A6 INV-12 Required tests\",\"kind\":\"standard_violation\",\"text\":\"answer one `placed` and otherwise `replayed`\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the PLACED and REPLAYED members of = models.PlacementStatus instead of naming them only by their values.\"},{\"subject\":\"A6 INV-12 Required tests\",\"kind\":\"standard_violation\",\"text\":\"answer one `marked`, `replayed` for the same value and `publication_conflict` for the other, and leave one mark record holding the `photo_id` whose call answered `marked`\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the MARKED and REPLAYED members of = models.MarkStatus and the PUBLICATION_CONFLICT member of = models.RefusalCode, using their values only as optional annotations.\"}]}",
+ "set_aside": []
+}

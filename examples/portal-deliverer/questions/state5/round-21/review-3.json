@@ -1,0 +1,60 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "creation_race",
+   "text": "`state_unavailable` when the state folder is missing, when a folder leading to the lock file cannot be created or given its mode or is a symbolic link or not a folder, when the lock file cannot be created, opened, given its mode on creation or locked, or when its entry is a symbolic link or not a regular file.",
+   "question": "When two callers concurrently find no lock file and one caller's exclusive creation makes the other's creation fail because the entry now exists, must the losing caller open and lock the new existing file, retry, or answer `state_unavailable`?",
+   "options": [
+    "Treat an exclusive-create `already exists` result as a race, open the existing file, and wait for its lock.",
+    "Retry the create-or-open sequence until it reaches a stable entry.",
+    "Treat every failed creation, including concurrent creation by another caller, as `state_unavailable`."
+   ],
+   "default_guess": "Treat `already exists` as a concurrent winner and open the existing file, preserving INV-12.",
+   "witness": {
+    "initial": "The state folder exists, but the project's lock file does not.",
+    "events": [
+     "Process A and process B concurrently call delivery for the same project.",
+     "Both reach `project_lock`; process A creates the lock file exclusively.",
+     "Process B's exclusive creation reports that the entry already exists."
+    ],
+    "outcomes": [
+     "Process B opens the file created by A, waits, and later answers `replayed`.",
+     "Process B treats the failed creation as `state_unavailable`."
+    ],
+    "observer": "The two delivery callers."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "lock_entry_race",
+   "text": "It creates an absent lock file in place with the mode of `LOCK_FILE_MODE`, opens an existing one as it stands without changing it, never follows a link, and holds an operating system lock.",
+   "question": "Must the operation verify that the directory entry still names the same regular file after opening and while acquiring the lock, and what must it do if a regular lock file is replaced by another regular file during that interval?",
+   "options": [
+    "Lock the opened file without checking whether the path was replaced.",
+    "Compare the opened file with the current directory entry and retry if it changed.",
+    "Compare the opened file with the current directory entry and refuse with `state_unavailable` if it changed."
+   ],
+   "default_guess": "Verify entry identity and refuse with `state_unavailable` when it changes, so two callers cannot hold locks on different inodes for one project.",
+   "witness": {
+    "initial": "A regular project lock file exists and no process currently holds its lock.",
+    "events": [
+     "Process A opens the existing lock file.",
+     "Before A acquires its operating-system lock, an external actor replaces the path with a different regular file.",
+     "Process B opens and locks the replacement file.",
+     "Process A attempts to acquire a lock on the file it already opened."
+    ],
+    "outcomes": [
+     "A locks the old file and B locks the replacement, so both callers enter the supposedly serialised project operation.",
+     "A detects that its opened file is no longer the entry at the lock path and retries or refuses, so the callers do not proceed under different locks."
+    ],
+    "observer": "Concurrent delivery or mark callers, which can otherwise observe duplicate or conflicting work."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"creation_race\",\"text\":\"`state_unavailable` when the state folder is missing, when a folder leading to the lock file cannot be created or given its mode or is a symbolic link or not a folder, when the lock file cannot be created, opened, given its mode on creation or locked, or when its entry is a symbolic link or not a regular file.\",\"question\":\"When two callers concurrently find no lock file and one caller's exclusive creation makes the other's creation fail because the entry now exists, must the losing caller open and lock the new existing file, retry, or answer `state_unavailable`?\",\"options\":[\"Treat an exclusive-create `already exists` result as a race, open the existing file, and wait for its lock.\",\"Retry the create-or-open sequence until it reaches a stable entry.\",\"Treat every failed creation, including concurrent creation by another caller, as `state_unavailable`.\"],\"default_guess\":\"Treat `already exists` as a concurrent winner and open the existing file, preserving INV-12.\",\"witness\":{\"initial\":\"The state folder exists, but the project's lock file does not.\",\"events\":[\"Process A and process B concurrently call delivery for the same project.\",\"Both reach `project_lock`; process A creates the lock file exclusively.\",\"Process B's exclusive creation reports that the entry already exists.\"],\"outcomes\":[\"Process B opens the file created by A, waits, and later answers `replayed`.\",\"Process B treats the failed creation as `state_unavailable`.\"],\"observer\":\"The two delivery callers.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"lock_entry_race\",\"text\":\"It creates an absent lock file in place with the mode of `LOCK_FILE_MODE`, opens an existing one as it stands without changing it, never follows a link, and holds an operating system lock.\",\"question\":\"Must the operation verify that the directory entry still names the same regular file after opening and while acquiring the lock, and what must it do if a regular lock file is replaced by another regular file during that interval?\",\"options\":[\"Lock the opened file without checking whether the path was replaced.\",\"Compare the opened file with the current directory entry and retry if it changed.\",\"Compare the opened file with the current directory entry and refuse with `state_unavailable` if it changed.\"],\"default_guess\":\"Verify entry identity and refuse with `state_unavailable` when it changes, so two callers cannot hold locks on different inodes for one project.\",\"witness\":{\"initial\":\"A regular project lock file exists and no process currently holds its lock.\",\"events\":[\"Process A opens the existing lock file.\",\"Before A acquires its operating-system lock, an external actor replaces the path with a different regular file.\",\"Process B opens and locks the replacement file.\",\"Process A attempts to acquire a lock on the file it already opened.\"],\"outcomes\":[\"A locks the old file and B locks the replacement, so both callers enter the supposedly serialised project operation.\",\"A detects that its opened file is no longer the entry at the lock path and retries or refuses, so the callers do not proceed under different locks.\"],\"observer\":\"Concurrent delivery or mark callers, which can otherwise observe duplicate or conflicting work.\"}}]}",
+ "set_aside": []
+}

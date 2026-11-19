@@ -1,0 +1,260 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_source",
+   "text": "`marked_at: datetime`",
+   "question": "What authoritative time source supplies the fresh `marked_at` instant when a mark is created?",
+   "options": [
+    "an injected system clock",
+    "an ambient system clock",
+    "a timestamp supplied by the caller",
+    "a declared authority module"
+   ],
+   "default_guess": "Use an injected system UTC clock.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The calling flow asks the deliverer to record a publication.",
+     "The deliverer creates M07 and must populate `marked_at`."
+    ],
+    "outcomes": [
+     "The service reads its own system clock.",
+     "The service uses an instant supplied by the caller or another authority."
+    ],
+    "observer": "A caller or operator reading the stored mark"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_representation",
+   "text": "`marked_at: datetime`",
+   "question": "In what representation is `marked_at` stored: offset-aware UTC, UTC without an offset, local time, or another form?",
+   "options": [
+    "offset-aware UTC datetime",
+    "UTC datetime without an offset",
+    "configured local-time datetime"
+   ],
+   "default_guess": "Store UTC without an offset, consistently with the photo-date convention.",
+   "witness": {
+    "initial": "A mark is created at one absolute instant.",
+    "events": [
+     "The deliverer serializes the new mark.",
+     "The mark is read after creation."
+    ],
+    "outcomes": [
+     "`marked_at` is stored as an offset-aware UTC value such as `2026-11-19T10:00:00+00:00`.",
+     "`marked_at` is stored as a UTC value without an offset such as `2026-11-19T10:00:00`."
+    ],
+    "observer": "The mark reader and any generated model validator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "mark operation",
+   "kind": "missing_clock_read_count",
+   "text": "The deliverer creates the mark.",
+   "question": "How many readings of the time source does one mark operation take, and at what point relative to taking the project lock and writing the record?",
+   "options": [
+    "one reading after the lock is taken",
+    "one reading before waiting for the lock",
+    "multiple readings with one selected for `marked_at`"
+   ],
+   "default_guess": "Read the clock exactly once after taking the project lock and immediately before building the mark.",
+   "witness": {
+    "initial": "Another process holds the project lock while a mark request waits.",
+    "events": [
+     "A mark request begins.",
+     "The request waits for the project lock.",
+     "The lock is released and the mark is written."
+    ],
+    "outcomes": [
+     "`marked_at` records the instant before the wait.",
+     "`marked_at` records the instant after the wait when the mark is actually created."
+    ],
+    "observer": "The caller or operator comparing the request time with the stored mark"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 2 and A6 rule 2",
+   "kind": "folder_scope_contradiction",
+   "text": "An absent project lock file and the folders leading to it are the one exception: taking the lock creates them (A6 rules 2 and 4).",
+   "question": "Does “the folders leading to it” mean only folders below an already existing configured state folder, or does it include the configured state folder that A6 rule 2 says the service never creates?",
+   "options": [
+    "create only LOCKS_FOLDER and other descendants below the existing state folder",
+    "also create the configured state folder",
+    "refuse if the configured state folder is absent"
+   ],
+   "default_guess": "Require the configured state folder to exist and create only the lock-related descendants below it.",
+   "witness": {
+    "initial": "A placement record already exists, but the configured state folder and therefore the project lock are absent.",
+    "events": [
+     "A caller repeats delivery of the placed content.",
+     "The operation reaches the project-lock check."
+    ],
+    "outcomes": [
+     "A3 rule 2 is read to require creation of every folder leading to the lock, after which the placement is replayed.",
+     "A6 rule 2 is read to prohibit creation of the configured state folder, so the operation is refused with `state_unavailable`."
+    ],
+    "observer": "The caller and the installation operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 project lock creation",
+   "kind": "concurrent_creation_gap",
+   "text": "It is not written through a temporary name: it is created in place, exclusively, for reading and writing and without following a link, and once it is found to be a regular file it is given the mode of the imported `LOCK_FILE_MODE` constant, whatever the umask;",
+   "question": "When two processes both observe an absent lock and one exclusive creation succeeds while the other receives an already-exists result, must the loser reopen the new file as an existing lock and wait, or treat its creation failure as a refusal?",
+   "options": [
+    "reopen and validate the newly existing file, then wait for its lock",
+    "retry the entire lock-opening sequence",
+    "refuse the losing call as unable to open the lock file"
+   ],
+   "default_guess": "Reopen and validate the newly existing file, then wait for the operating-system lock.",
+   "witness": {
+    "initial": "The project lock file is absent and the folders containing it exist.",
+    "events": [
+     "Process A and process B begin deliveries for the same project.",
+     "Both attempt exclusive in-place creation.",
+     "Process A creates the file; process B receives an already-exists result."
+    ],
+    "outcomes": [
+     "Process B opens the file under the existing-file rule and waits, so both calls proceed serially.",
+     "Process B treats the failed exclusive creation as a lock-file failure and returns `state_unavailable`."
+    ],
+    "observer": "The caller of process B"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-06",
+   "kind": "rule_invariant_contradiction",
+   "text": "INV-06: at most one placement exists per project and source content, and a repeated placement writes nothing.",
+   "question": "Must INV-06 be qualified to allow creation of the absent project lock and its permitted folders, as A3 rule 2 now does?",
+   "options": [
+    "qualify “writes nothing” with the lock-scaffolding exception",
+    "remove the exception and require replay to create nothing",
+    "define lock creation as outside the invariant's meaning of writing"
+   ],
+   "default_guess": "Qualify INV-06 with the same explicit lock-scaffolding exception as A3 rule 2.",
+   "witness": {
+    "initial": "A placement exists, but its project lock and lock folder do not.",
+    "events": [
+     "The caller repeats delivery of that source content.",
+     "The operation takes the project lock before reading the existing placement."
+    ],
+    "outcomes": [
+     "A3 rule 2 creates the folder and lock file and returns `replayed`.",
+     "INV-06 permits no write by a repeated placement, so a conforming implementation must not create them."
+    ],
+    "observer": "The filesystem operator and an invariant check"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-06 Required tests",
+   "kind": "incomplete_required_test",
+   "text": "INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).",
+   "question": "What must the INV-06 test show about an initially absent project lock, its folders, marks, temporary files, and all other durable state now that replay has a stated lock-scaffolding exception?",
+   "options": [
+    "show that only the permitted lock file and required folders may be added and every other durable entry remains unchanged",
+    "pre-create the lock and show that absolutely no durable entry changes",
+    "retain the current assertions only for images and placement records"
+   ],
+   "default_guess": "Add a case with an absent lock and assert that only the permitted lock scaffolding is created, while every other durable entry remains byte-for-byte unchanged.",
+   "witness": {
+    "initial": "A placement exists while the project lock and lock folder are absent.",
+    "events": [
+     "The required test snapshots only stored images and placement records.",
+     "A repeated delivery creates the lock scaffolding and returns `replayed`."
+    ],
+    "outcomes": [
+     "The test passes because the image and placement record did not change, without demonstrating the revised invariant's exact exception.",
+     "A stronger test checks all durable state and proves that the lock scaffolding is the only change."
+    ],
+    "observer": "The design gate evaluating INV-06"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "R0-15 repeated delivery guarantee",
+   "kind": "cross_state_contradiction",
+   "text": "a repeated delivery creates nothing new",
+   "question": "Is the State 0 guarantee revised so that a repeated delivery may create the project lock and its required folders?",
+   "options": [
+    "revise the guarantee with the lock-scaffolding exception",
+    "forbid lock creation during replay",
+    "treat lock scaffolding as not covered by “nothing new”"
+   ],
+   "default_guess": "Revise the guarantee to state the lock-scaffolding exception explicitly.",
+   "witness": {
+    "initial": "A placement exists and the project lock does not.",
+    "events": [
+     "The caller repeats delivery.",
+     "The service takes the project lock."
+    ],
+    "outcomes": [
+     "The changed A3 rule creates a lock file and folders.",
+     "R0-15 says the repeated delivery creates nothing new."
+    ],
+    "observer": "The installation operator inspecting durable state"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "P-06 repeated placement guarantee",
+   "kind": "cross_state_contradiction",
+   "text": "One placement exists per project and source content; repeating it changes nothing.",
+   "question": "Does “changes nothing” exclude the newly permitted creation of a project lock and its folders, or must P-06 be amended?",
+   "options": [
+    "amend P-06 with the lock-scaffolding exception",
+    "remove the A3 exception",
+    "declare locking infrastructure outside the meaning of the accepted result"
+   ],
+   "default_guess": "Amend P-06 with the same explicit exception.",
+   "witness": {
+    "initial": "A placement exists with no project lock file.",
+    "events": [
+     "The placement is repeated.",
+     "Taking the lock creates the lock file and missing lock folders."
+    ],
+    "outcomes": [
+     "The changed A3 rule changes durable filesystem state.",
+     "P-06 says repeating the placement changes nothing."
+    ],
+    "observer": "The owner or a conformance test inspecting the state folder"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M04 PhotoPlacement",
+   "kind": "model_rule_contradiction",
+   "text": "A repeated placement returns it and writes nothing (P-06).",
+   "question": "Must M04's meaning permit the project-lock and folder creation introduced by A3 rule 2?",
+   "options": [
+    "change the model text to allow only the lock-scaffolding exception",
+    "require the lock to pre-exist before any replay",
+    "keep “writes nothing” and remove the A3 exception"
+   ],
+   "default_guess": "Change the model text to allow only the project-lock scaffolding exception.",
+   "witness": {
+    "initial": "M04 already exists, but its project has no lock file.",
+    "events": [
+     "A repeated placement is requested.",
+     "The service creates and takes the lock before returning M04."
+    ],
+    "outcomes": [
+     "A3 rule 2 permits the lock and folders to be written.",
+     "M04 says returning the repeated placement writes nothing."
+    ],
+    "observer": "A generated implementation or test using the model contract"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_source\",\"text\":\"`marked_at: datetime`\",\"question\":\"What authoritative time source supplies the fresh `marked_at` instant when a mark is created?\",\"options\":[\"an injected system clock\",\"an ambient system clock\",\"a timestamp supplied by the caller\",\"a declared authority module\"],\"default_guess\":\"Use an injected system UTC clock.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The calling flow asks the deliverer to record a publication.\",\"The deliverer creates M07 and must populate `marked_at`.\"],\"outcomes\":[\"The service reads its own system clock.\",\"The service uses an instant supplied by the caller or another authority.\"],\"observer\":\"A caller or operator reading the stored mark\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_representation\",\"text\":\"`marked_at: datetime`\",\"question\":\"In what representation is `marked_at` stored: offset-aware UTC, UTC without an offset, local time, or another form?\",\"options\":[\"offset-aware UTC datetime\",\"UTC datetime without an offset\",\"configured local-time datetime\"],\"default_guess\":\"Store UTC without an offset, consistently with the photo-date convention.\",\"witness\":{\"initial\":\"A mark is created at one absolute instant.\",\"events\":[\"The deliverer serializes the new mark.\",\"The mark is read after creation.\"],\"outcomes\":[\"`marked_at` is stored as an offset-aware UTC value such as `2026-11-19T10:00:00+00:00`.\",\"`marked_at` is stored as a UTC value without an offset such as `2026-11-19T10:00:00`.\"],\"observer\":\"The mark reader and any generated model validator\"}},{\"subject\":\"mark operation\",\"kind\":\"missing_clock_read_count\",\"text\":\"The deliverer creates the mark.\",\"question\":\"How many readings of the time source does one mark operation take, and at what point relative to taking the project lock and writing the record?\",\"options\":[\"one reading after the lock is taken\",\"one reading before waiting for the lock\",\"multiple readings with one selected for `marked_at`\"],\"default_guess\":\"Read the clock exactly once after taking the project lock and immediately before building the mark.\",\"witness\":{\"initial\":\"Another process holds the project lock while a mark request waits.\",\"events\":[\"A mark request begins.\",\"The request waits for the project lock.\",\"The lock is released and the mark is written.\"],\"outcomes\":[\"`marked_at` records the instant before the wait.\",\"`marked_at` records the instant after the wait when the mark is actually created.\"],\"observer\":\"The caller or operator comparing the request time with the stored mark\"}},{\"subject\":\"A3 rule 2 and A6 rule 2\",\"kind\":\"folder_scope_contradiction\",\"text\":\"An absent project lock file and the folders leading to it are the one exception: taking the lock creates them (A6 rules 2 and 4).\",\"question\":\"Does “the folders leading to it” mean only folders below an already existing configured state folder, or does it include the configured state folder that A6 rule 2 says the service never creates?\",\"options\":[\"create only LOCKS_FOLDER and other descendants below the existing state folder\",\"also create the configured state folder\",\"refuse if the configured state folder is absent\"],\"default_guess\":\"Require the configured state folder to exist and create only the lock-related descendants below it.\",\"witness\":{\"initial\":\"A placement record already exists, but the configured state folder and therefore the project lock are absent.\",\"events\":[\"A caller repeats delivery of the placed content.\",\"The operation reaches the project-lock check.\"],\"outcomes\":[\"A3 rule 2 is read to require creation of every folder leading to the lock, after which the placement is replayed.\",\"A6 rule 2 is read to prohibit creation of the configured state folder, so the operation is refused with `state_unavailable`.\"],\"observer\":\"The caller and the installation operator\"}},{\"subject\":\"A6 project lock creation\",\"kind\":\"concurrent_creation_gap\",\"text\":\"It is not written through a temporary name: it is created in place, exclusively, for reading and writing and without following a link, and once it is found to be a regular file it is given the mode of the imported `LOCK_FILE_MODE` constant, whatever the umask;\",\"question\":\"When two processes both observe an absent lock and one exclusive creation succeeds while the other receives an already-exists result, must the loser reopen the new file as an existing lock and wait, or treat its creation failure as a refusal?\",\"options\":[\"reopen and validate the newly existing file, then wait for its lock\",\"retry the entire lock-opening sequence\",\"refuse the losing call as unable to open the lock file\"],\"default_guess\":\"Reopen and validate the newly existing file, then wait for the operating-system lock.\",\"witness\":{\"initial\":\"The project lock file is absent and the folders containing it exist.\",\"events\":[\"Process A and process B begin deliveries for the same project.\",\"Both attempt exclusive in-place creation.\",\"Process A creates the file; process B receives an already-exists result.\"],\"outcomes\":[\"Process B opens the file under the existing-file rule and waits, so both calls proceed serially.\",\"Process B treats the failed exclusive creation as a lock-file failure and returns `state_unavailable`.\"],\"observer\":\"The caller of process B\"}},{\"subject\":\"INV-06\",\"kind\":\"rule_invariant_contradiction\",\"text\":\"INV-06: at most one placement exists per project and source content, and a repeated placement writes nothing.\",\"question\":\"Must INV-06 be qualified to allow creation of the absent project lock and its permitted folders, as A3 rule 2 now does?\",\"options\":[\"qualify “writes nothing” with the lock-scaffolding exception\",\"remove the exception and require replay to create nothing\",\"define lock creation as outside the invariant's meaning of writing\"],\"default_guess\":\"Qualify INV-06 with the same explicit lock-scaffolding exception as A3 rule 2.\",\"witness\":{\"initial\":\"A placement exists, but its project lock and lock folder do not.\",\"events\":[\"The caller repeats delivery of that source content.\",\"The operation takes the project lock before reading the existing placement.\"],\"outcomes\":[\"A3 rule 2 creates the folder and lock file and returns `replayed`.\",\"INV-06 permits no write by a repeated placement, so a conforming implementation must not create them.\"],\"observer\":\"The filesystem operator and an invariant check\"}},{\"subject\":\"INV-06 Required tests\",\"kind\":\"incomplete_required_test\",\"text\":\"INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).\",\"question\":\"What must the INV-06 test show about an initially absent project lock, its folders, marks, temporary files, and all other durable state now that replay has a stated lock-scaffolding exception?\",\"options\":[\"show that only the permitted lock file and required folders may be added and every other durable entry remains unchanged\",\"pre-create the lock and show that absolutely no durable entry changes\",\"retain the current assertions only for images and placement records\"],\"default_guess\":\"Add a case with an absent lock and assert that only the permitted lock scaffolding is created, while every other durable entry remains byte-for-byte unchanged.\",\"witness\":{\"initial\":\"A placement exists while the project lock and lock folder are absent.\",\"events\":[\"The required test snapshots only stored images and placement records.\",\"A repeated delivery creates the lock scaffolding and returns `replayed`.\"],\"outcomes\":[\"The test passes because the image and placement record did not change, without demonstrating the revised invariant's exact exception.\",\"A stronger test checks all durable state and proves that the lock scaffolding is the only change.\"],\"observer\":\"The design gate evaluating INV-06\"}},{\"subject\":\"R0-15 repeated delivery guarantee\",\"kind\":\"cross_state_contradiction\",\"text\":\"a repeated delivery creates nothing new\",\"question\":\"Is the State 0 guarantee revised so that a repeated delivery may create the project lock and its required folders?\",\"options\":[\"revise the guarantee with the lock-scaffolding exception\",\"forbid lock creation during replay\",\"treat lock scaffolding as not covered by “nothing new”\"],\"default_guess\":\"Revise the guarantee to state the lock-scaffolding exception explicitly.\",\"witness\":{\"initial\":\"A placement exists and the project lock does not.\",\"events\":[\"The caller repeats delivery.\",\"The service takes the project lock.\"],\"outcomes\":[\"The changed A3 rule creates a lock file and folders.\",\"R0-15 says the repeated delivery creates nothing new.\"],\"observer\":\"The installation operator inspecting durable state\"}},{\"subject\":\"P-06 repeated placement guarantee\",\"kind\":\"cross_state_contradiction\",\"text\":\"One placement exists per project and source content; repeating it changes nothing.\",\"question\":\"Does “changes nothing” exclude the newly permitted creation of a project lock and its folders, or must P-06 be amended?\",\"options\":[\"amend P-06 with the lock-scaffolding exception\",\"remove the A3 exception\",\"declare locking infrastructure outside the meaning of the accepted result\"],\"default_guess\":\"Amend P-06 with the same explicit exception.\",\"witness\":{\"initial\":\"A placement exists with no project lock file.\",\"events\":[\"The placement is repeated.\",\"Taking the lock creates the lock file and missing lock folders.\"],\"outcomes\":[\"The changed A3 rule changes durable filesystem state.\",\"P-06 says repeating the placement changes nothing.\"],\"observer\":\"The owner or a conformance test inspecting the state folder\"}},{\"subject\":\"M04 PhotoPlacement\",\"kind\":\"model_rule_contradiction\",\"text\":\"A repeated placement returns it and writes nothing (P-06).\",\"question\":\"Must M04's meaning permit the project-lock and folder creation introduced by A3 rule 2?\",\"options\":[\"change the model text to allow only the lock-scaffolding exception\",\"require the lock to pre-exist before any replay\",\"keep “writes nothing” and remove the A3 exception\"],\"default_guess\":\"Change the model text to allow only the project-lock scaffolding exception.\",\"witness\":{\"initial\":\"M04 already exists, but its project has no lock file.\",\"events\":[\"A repeated placement is requested.\",\"The service creates and takes the lock before returning M04.\"],\"outcomes\":[\"A3 rule 2 permits the lock and folders to be written.\",\"M04 says returning the repeated placement writes nothing.\"],\"observer\":\"A generated implementation or test using the model contract\"}}]}",
+ "set_aside": []
+}

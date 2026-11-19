@@ -1,0 +1,136 @@
+{
+ "open_points": [
+  {
+   "subject": "A3 repeated placement and INV-06",
+   "kind": "contradiction",
+   "text": "INV-06: at most one placement exists per project and source content, and a repeated placement writes nothing.",
+   "question": "Must INV-06, P-06, R0-15 and M04 permit creation of an absent project lock file and its folders during a repeated placement, or must a replay leave all durable state unchanged?",
+   "options": [
+    "The A3 rule 2 exception wins: a replay may create the lock file and its folders but changes nothing else.",
+    "The no-write promises win: an existing placement must be returned without taking or creating the project lock.",
+    "Change the invariant and earlier descriptions so they explicitly distinguish placement state from lock-management state."
+   ],
+   "default_guess": "Apply the A3 rule 2 exception and amend INV-06 and the earlier no-write descriptions to say that only an absent lock file and its required folders may be created.",
+   "witness": {
+    "initial": "A placement record and stored image exist, but a host crash has left the project lock file or its unsynchronised parent folder absent; the source file is also absent.",
+    "events": [
+     "The caller requests delivery with the existing source_id.",
+     "The service finds the existing placement after reaching the project-lock step."
+    ],
+    "outcomes": [
+     "A3 rule 2 creates the missing lock path and returns replayed with the stored placement.",
+     "INV-06, P-06, R0-15 and M04 require the repeated placement to write or create nothing."
+    ],
+    "observer": "The owner or a filesystem check sees whether the lock file and folders were created."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_decision",
+   "text": "`marked_at: datetime`.",
+   "question": "What instant does a fresh publication mark record, where does that instant come from, what datetime representation and precision are stored, and how many readings does one mark operation take?",
+   "options": [
+    "Read an injected clock once when the new mark is created and store that instant as UTC.",
+    "Use the time at which the Portal publication completed.",
+    "Use the request-arrival time or the host wall clock directly.",
+    "Store a naive UTC datetime or a timezone-aware UTC datetime."
+   ],
+   "default_guess": "Read an injected UTC clock exactly once after validation and while holding the project lock, only for a newly created mark; store a timezone-aware UTC datetime and take no clock reading for replayed or refused marks.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The Portal publishes the photo.",
+     "The calling flow later reports the Portal photo_id to the deliverer.",
+     "The deliverer creates M07."
+    ],
+    "outcomes": [
+     "One implementation stores the deliverer's current UTC clock value when M07 is created.",
+     "Another stores a request-arrival, Portal-publication, local-wall-clock or naive-UTC value."
+    ],
+    "observer": "A caller or later scan reading the persisted mark sees a different marked_at value or representation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 camera time zone",
+   "kind": "unnamed_time_source",
+   "text": "the configured time zone",
+   "question": "Which settings-model field supplies this zone, what representation it uses, and whether it is an IANA civil-time zone or a fixed offset must be stated.",
+   "options": [
+    "A named settings field containing an IANA time-zone identifier interpreted with civil-time transition rules.",
+    "A named settings field containing a fixed UTC offset.",
+    "The host process or operating-system local time zone."
+   ],
+   "default_guess": "Use a required named settings-model field containing an IANA time-zone identifier and resolve it with the pinned time-zone database.",
+   "witness": {
+    "initial": "A source has a usable offset-free EXIF DateTimeOriginal during a period when Europe/Madrid differs from UTC, and its modification time does not make the camera value unusable.",
+    "events": [
+     "The caller delivers the source.",
+     "The service interprets the offset-free camera value."
+    ],
+    "outcomes": [
+     "An implementation using Europe/Madrid converts the value with Madrid's applicable offset.",
+     "An implementation using UTC or the host's local zone produces a different UTC photo_date."
+    ],
+    "observer": "The Portal and the placement record expose the different photo_date."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 INV-12 Required tests",
+   "kind": "ambiguous_test_history",
+   "text": "marks of two `photo_id` values, in one process and in separate processes, answer one `marked`, `replayed` for the same value and `publication_conflict` for the other",
+   "question": "What exact calls and ordering must each INV-12 witness perform so that both replay of the winning photo_id and conflict for the other photo_id are required?",
+   "options": [
+    "Race two different photo_id calls, then repeat whichever value won and require replayed.",
+    "Run three concurrent calls using two photo_id values and prescribe which value is duplicated and which outcomes are allowed.",
+    "Create the mark first, then concurrently call once with the same photo_id and once with a different photo_id."
+   ],
+   "default_guess": "Race two distinct photo_id calls, require one marked and one publication_conflict, then call again with the winning photo_id and require replayed; perform this history once with in-process concurrency and once across processes.",
+   "witness": {
+    "initial": "One placement exists and has no publication mark.",
+    "events": [
+     "Two callers concurrently mark it with different photo_id values.",
+     "After the race, a caller sends the winning photo_id again."
+    ],
+    "outcomes": [
+     "A test interpreting the passage as only the two concurrent calls checks marked and publication_conflict but has no same-value replay.",
+     "A test interpreting it as a three-call history also checks replayed and preservation of the winner's marked_at."
+    ],
+    "observer": "The generated test suite and an implementation that mishandles replay after a race distinguish the interpretations."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 camera time zone",
+   "kind": "standard_violation",
+   "text": "the configured time zone",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Replace this phrase with the explicit field of the settings object, including the field's model type, that supplies the time zone.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 2",
+   "kind": "standard_violation",
+   "text": "answers `replayed`",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the REPLAYED member of = models.PlacementStatus instead of naming the member only by its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 INV-12 Required tests",
+   "kind": "standard_violation",
+   "text": "concurrent placements of one source, in one process and in separate processes, answer one `placed` and otherwise `replayed` and leave one placement record and one stored image (`test_separate_processes_leave_one_placement`), and marks of two `photo_id` values, in one process and in separate processes, answer one `marked`, `replayed` for the same value and `publication_conflict` for the other, and leave one mark record holding the `photo_id` whose call answered `marked` (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Replace every value-only enumeration reference with the member name and its model address: PLACED and REPLAYED of = models.PlacementStatus, MARKED and REPLAYED of = models.MarkStatus, and PUBLICATION_CONFLICT of = models.RefusalCode.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A3 repeated placement and INV-06\",\"kind\":\"contradiction\",\"text\":\"INV-06: at most one placement exists per project and source content, and a repeated placement writes nothing.\",\"question\":\"Must INV-06, P-06, R0-15 and M04 permit creation of an absent project lock file and its folders during a repeated placement, or must a replay leave all durable state unchanged?\",\"options\":[\"The A3 rule 2 exception wins: a replay may create the lock file and its folders but changes nothing else.\",\"The no-write promises win: an existing placement must be returned without taking or creating the project lock.\",\"Change the invariant and earlier descriptions so they explicitly distinguish placement state from lock-management state.\"],\"default_guess\":\"Apply the A3 rule 2 exception and amend INV-06 and the earlier no-write descriptions to say that only an absent lock file and its required folders may be created.\",\"witness\":{\"initial\":\"A placement record and stored image exist, but a host crash has left the project lock file or its unsynchronised parent folder absent; the source file is also absent.\",\"events\":[\"The caller requests delivery with the existing source_id.\",\"The service finds the existing placement after reaching the project-lock step.\"],\"outcomes\":[\"A3 rule 2 creates the missing lock path and returns replayed with the stored placement.\",\"INV-06, P-06, R0-15 and M04 require the repeated placement to write or create nothing.\"],\"observer\":\"The owner or a filesystem check sees whether the lock file and folders were created.\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_decision\",\"text\":\"`marked_at: datetime`.\",\"question\":\"What instant does a fresh publication mark record, where does that instant come from, what datetime representation and precision are stored, and how many readings does one mark operation take?\",\"options\":[\"Read an injected clock once when the new mark is created and store that instant as UTC.\",\"Use the time at which the Portal publication completed.\",\"Use the request-arrival time or the host wall clock directly.\",\"Store a naive UTC datetime or a timezone-aware UTC datetime.\"],\"default_guess\":\"Read an injected UTC clock exactly once after validation and while holding the project lock, only for a newly created mark; store a timezone-aware UTC datetime and take no clock reading for replayed or refused marks.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The Portal publishes the photo.\",\"The calling flow later reports the Portal photo_id to the deliverer.\",\"The deliverer creates M07.\"],\"outcomes\":[\"One implementation stores the deliverer's current UTC clock value when M07 is created.\",\"Another stores a request-arrival, Portal-publication, local-wall-clock or naive-UTC value.\"],\"observer\":\"A caller or later scan reading the persisted mark sees a different marked_at value or representation.\"}},{\"subject\":\"A2 camera time zone\",\"kind\":\"unnamed_time_source\",\"text\":\"the configured time zone\",\"question\":\"Which settings-model field supplies this zone, what representation it uses, and whether it is an IANA civil-time zone or a fixed offset must be stated.\",\"options\":[\"A named settings field containing an IANA time-zone identifier interpreted with civil-time transition rules.\",\"A named settings field containing a fixed UTC offset.\",\"The host process or operating-system local time zone.\"],\"default_guess\":\"Use a required named settings-model field containing an IANA time-zone identifier and resolve it with the pinned time-zone database.\",\"witness\":{\"initial\":\"A source has a usable offset-free EXIF DateTimeOriginal during a period when Europe/Madrid differs from UTC, and its modification time does not make the camera value unusable.\",\"events\":[\"The caller delivers the source.\",\"The service interprets the offset-free camera value.\"],\"outcomes\":[\"An implementation using Europe/Madrid converts the value with Madrid's applicable offset.\",\"An implementation using UTC or the host's local zone produces a different UTC photo_date.\"],\"observer\":\"The Portal and the placement record expose the different photo_date.\"}},{\"subject\":\"A6 INV-12 Required tests\",\"kind\":\"ambiguous_test_history\",\"text\":\"marks of two `photo_id` values, in one process and in separate processes, answer one `marked`, `replayed` for the same value and `publication_conflict` for the other\",\"question\":\"What exact calls and ordering must each INV-12 witness perform so that both replay of the winning photo_id and conflict for the other photo_id are required?\",\"options\":[\"Race two different photo_id calls, then repeat whichever value won and require replayed.\",\"Run three concurrent calls using two photo_id values and prescribe which value is duplicated and which outcomes are allowed.\",\"Create the mark first, then concurrently call once with the same photo_id and once with a different photo_id.\"],\"default_guess\":\"Race two distinct photo_id calls, require one marked and one publication_conflict, then call again with the winning photo_id and require replayed; perform this history once with in-process concurrency and once across processes.\",\"witness\":{\"initial\":\"One placement exists and has no publication mark.\",\"events\":[\"Two callers concurrently mark it with different photo_id values.\",\"After the race, a caller sends the winning photo_id again.\"],\"outcomes\":[\"A test interpreting the passage as only the two concurrent calls checks marked and publication_conflict but has no same-value replay.\",\"A test interpreting it as a three-call history also checks replayed and preservation of the winner's marked_at.\"],\"observer\":\"The generated test suite and an implementation that mishandles replay after a race distinguish the interpretations.\"}},{\"subject\":\"A2 camera time zone\",\"kind\":\"standard_violation\",\"text\":\"the configured time zone\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Replace this phrase with the explicit field of the settings object, including the field's model type, that supplies the time zone.\"},{\"subject\":\"A3 rule 2\",\"kind\":\"standard_violation\",\"text\":\"answers `replayed`\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the REPLAYED member of = models.PlacementStatus instead of naming the member only by its value.\"},{\"subject\":\"A6 INV-12 Required tests\",\"kind\":\"standard_violation\",\"text\":\"concurrent placements of one source, in one process and in separate processes, answer one `placed` and otherwise `replayed` and leave one placement record and one stored image (`test_separate_processes_leave_one_placement`), and marks of two `photo_id` values, in one process and in separate processes, answer one `marked`, `replayed` for the same value and `publication_conflict` for the other, and leave one mark record holding the `photo_id` whose call answered `marked` (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Replace every value-only enumeration reference with the member name and its model address: PLACED and REPLAYED of = models.PlacementStatus, MARKED and REPLAYED of = models.MarkStatus, and PUBLICATION_CONFLICT of = models.RefusalCode.\"}]}",
+ "set_aside": []
+}

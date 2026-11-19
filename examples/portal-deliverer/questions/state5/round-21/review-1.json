@@ -1,0 +1,83 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "lock semantics",
+   "text": "holds an operating system lock.",
+   "question": "Which operating-system locking primitive and ownership scope must implement the lock so that concurrent callers are serialized both across processes and within one process?",
+   "options": [
+    "Use a per-open-file-description exclusive lock such as BSD flock, so separate opens in one process contend.",
+    "Use a process-owned POSIX record lock, under which callers in the same process may not contend.",
+    "Add an in-process mutex around a specified cross-process lock."
+   ],
+   "default_guess": "Use an in-process mutex plus an exclusive BSD-style file lock, both held for the caller's block.",
+   "witness": {
+    "initial": "The project's regular lock file exists, and no placement exists for the requested source.",
+    "events": [
+     "Two threads in one service process call deliver_project_photo concurrently for the same project and source.",
+     "Each thread separately enters project_lock before checking the placement record."
+    ],
+    "outcomes": [
+     "With locks that contend between the two open file descriptions, one call places the photo and the other waits and then answers replayed.",
+     "With process-owned record locks, both calls can regard the lock as acquired and both can read the placement as absent and answer placed."
+    ],
+    "observer": "The calling flow sees either one placed result or two placed results, and INV-12 is affected."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "creation race contradiction",
+   "text": "It creates an absent lock file in place with the mode of `LOCK_FILE_MODE`, opens an existing one as it stands without changing it, never follows a link, and holds an operating system lock.",
+   "question": "When another process observes a newly created lock file before its creator has finished applying `LOCK_FILE_MODE`, must it retry until initialization completes, use the provisional file as it stands, or refuse with `state_unavailable`?",
+   "options": [
+    "Treat the file as initialization in progress and retry until its creator has set the mode.",
+    "Open it immediately as an existing file and use its provisional mode.",
+    "Attempt to open it immediately and answer state_unavailable if its provisional mode prevents opening."
+   ],
+   "default_guess": "Retry the open while concurrent creation is completing, then validate that the entry is regular and acquire the lock without changing its mode.",
+   "witness": {
+    "initial": "The project lock file is absent, the process umask removes permissions from mode 0o600, and two service processes begin the project's first operation.",
+    "events": [
+     "Process A creates the lock file exclusively; before it applies LOCK_FILE_MODE, the file temporarily has a more restrictive mode.",
+     "Process B's exclusive creation reports that the entry already exists.",
+     "Process B follows the existing-file path while process A has not yet finished initialization."
+    ],
+    "outcomes": [
+     "Process B waits for initialization, then opens the 0o600 file and eventually completes as placed or replayed, satisfying the concurrent-call requirement.",
+     "Process B opens the entry as it stands or cannot open it and answers state_unavailable, although the concurrent first operation is otherwise valid."
+    ],
+    "observer": "Process B's caller sees success or state_unavailable; the required INV-12 concurrent-placement result differs."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "record absence boundary",
+   "text": "A record is absent only when no entry exists at its address, also when a folder on its address does not exist; reading a record creates nothing.",
+   "question": "Does “a folder on its address does not exist” mean only an actually absent path component, or also a component occupied by a non-folder or a dangling symbolic link, and must those latter cases return absence or `state_unavailable`?",
+   "options": [
+    "Only an absent directory entry means absence; a non-folder or symbolic-link component is damaged state and returns state_unavailable.",
+    "Any lookup that reports the record path missing, including through a dangling parent link, means the record is absent.",
+    "A non-folder returns state_unavailable, but a dangling parent link counts as an absent folder."
+   ],
+   "default_guess": "Return absence only for a genuinely missing directory entry; refuse non-folder and symbolic-link components with state_unavailable.",
+   "witness": {
+    "initial": "The placement-record directory component for a project is a dangling symbolic link, and no placement record can be reached through it.",
+    "events": [
+     "photo_delivery takes the project lock and calls read_placement.",
+     "delivery_store resolves or opens the components leading to the record."
+    ],
+    "outcomes": [
+     "Treating the failed lookup as a missing folder returns no placement; delivery continues until a later record write fails as a per-photo failed M06.",
+     "Treating the symbolic-link component as damaged state makes read_placement immediately return an M08 state_unavailable refusal."
+    ],
+    "observer": "The delivery caller sees a failed M06 in one implementation and an M08 state_unavailable refusal in the other."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"lock semantics\",\"text\":\"holds an operating system lock.\",\"question\":\"Which operating-system locking primitive and ownership scope must implement the lock so that concurrent callers are serialized both across processes and within one process?\",\"options\":[\"Use a per-open-file-description exclusive lock such as BSD flock, so separate opens in one process contend.\",\"Use a process-owned POSIX record lock, under which callers in the same process may not contend.\",\"Add an in-process mutex around a specified cross-process lock.\"],\"default_guess\":\"Use an in-process mutex plus an exclusive BSD-style file lock, both held for the caller's block.\",\"witness\":{\"initial\":\"The project's regular lock file exists, and no placement exists for the requested source.\",\"events\":[\"Two threads in one service process call deliver_project_photo concurrently for the same project and source.\",\"Each thread separately enters project_lock before checking the placement record.\"],\"outcomes\":[\"With locks that contend between the two open file descriptions, one call places the photo and the other waits and then answers replayed.\",\"With process-owned record locks, both calls can regard the lock as acquired and both can read the placement as absent and answer placed.\"],\"observer\":\"The calling flow sees either one placed result or two placed results, and INV-12 is affected.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"creation race contradiction\",\"text\":\"It creates an absent lock file in place with the mode of `LOCK_FILE_MODE`, opens an existing one as it stands without changing it, never follows a link, and holds an operating system lock.\",\"question\":\"When another process observes a newly created lock file before its creator has finished applying `LOCK_FILE_MODE`, must it retry until initialization completes, use the provisional file as it stands, or refuse with `state_unavailable`?\",\"options\":[\"Treat the file as initialization in progress and retry until its creator has set the mode.\",\"Open it immediately as an existing file and use its provisional mode.\",\"Attempt to open it immediately and answer state_unavailable if its provisional mode prevents opening.\"],\"default_guess\":\"Retry the open while concurrent creation is completing, then validate that the entry is regular and acquire the lock without changing its mode.\",\"witness\":{\"initial\":\"The project lock file is absent, the process umask removes permissions from mode 0o600, and two service processes begin the project's first operation.\",\"events\":[\"Process A creates the lock file exclusively; before it applies LOCK_FILE_MODE, the file temporarily has a more restrictive mode.\",\"Process B's exclusive creation reports that the entry already exists.\",\"Process B follows the existing-file path while process A has not yet finished initialization.\"],\"outcomes\":[\"Process B waits for initialization, then opens the 0o600 file and eventually completes as placed or replayed, satisfying the concurrent-call requirement.\",\"Process B opens the entry as it stands or cannot open it and answers state_unavailable, although the concurrent first operation is otherwise valid.\"],\"observer\":\"Process B's caller sees success or state_unavailable; the required INV-12 concurrent-placement result differs.\"}},{\"subject\":\"context\",\"kind\":\"record absence boundary\",\"text\":\"A record is absent only when no entry exists at its address, also when a folder on its address does not exist; reading a record creates nothing.\",\"question\":\"Does “a folder on its address does not exist” mean only an actually absent path component, or also a component occupied by a non-folder or a dangling symbolic link, and must those latter cases return absence or `state_unavailable`?\",\"options\":[\"Only an absent directory entry means absence; a non-folder or symbolic-link component is damaged state and returns state_unavailable.\",\"Any lookup that reports the record path missing, including through a dangling parent link, means the record is absent.\",\"A non-folder returns state_unavailable, but a dangling parent link counts as an absent folder.\"],\"default_guess\":\"Return absence only for a genuinely missing directory entry; refuse non-folder and symbolic-link components with state_unavailable.\",\"witness\":{\"initial\":\"The placement-record directory component for a project is a dangling symbolic link, and no placement record can be reached through it.\",\"events\":[\"photo_delivery takes the project lock and calls read_placement.\",\"delivery_store resolves or opens the components leading to the record.\"],\"outcomes\":[\"Treating the failed lookup as a missing folder returns no placement; delivery continues until a later record write fails as a per-photo failed M06.\",\"Treating the symbolic-link component as damaged state makes read_placement immediately return an M08 state_unavailable refusal.\"],\"observer\":\"The delivery caller sees a failed M06 in one implementation and an M08 state_unavailable refusal in the other.\"}}]}",
+ "set_aside": []
+}
