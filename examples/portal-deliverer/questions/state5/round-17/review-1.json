@@ -1,0 +1,132 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:deliverer_api.read_token",
+   "kind": "contradiction",
+   "text": "The token with the whitespace around it removed.",
+   "question": "Does read_token remove only the characters in TOKEN_TRIM_CHARACTERS, or every character considered whitespace?",
+   "options": [
+    "Remove only TOKEN_TRIM_CHARACTERS, as A5 rule 2 requires.",
+    "Remove all Unicode or library-defined whitespace, as the output text permits."
+   ],
+   "default_guess": "Remove only TOKEN_TRIM_CHARACTERS.",
+   "witness": {
+    "initial": "A mode-0600 regular token file contains a non-breaking space, 32 visible ASCII token characters, and another non-breaking space.",
+    "events": [
+     "The deployment starts the service.",
+     "public_op:deliverer_api.read_token reads and trims the file."
+    ],
+    "outcomes": [
+     "Treating every whitespace character as removable yields a valid 32-character token and the service starts.",
+     "Removing only TOKEN_TRIM_CHARACTERS leaves the non-breaking spaces; they are not visible ASCII, so A5 rule 2 ends the start."
+    ],
+    "observer": "The deployment and a caller attempting to authenticate."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:source_folder.observe_source_files",
+   "kind": "contradiction",
+   "text": "`folder_unavailable` when the photo folder or a subfolder that is not ignored cannot be listed.",
+   "question": "When a listed, non-ignored subfolder has become a symbolic link or a non-folder before it is opened, must the scan skip it and continue or refuse with folder_unavailable?",
+   "options": [
+    "Skip it and continue, as the changed A1 exception requires.",
+    "Treat the inability to open and list it as folder_unavailable, as this Errors passage states."
+   ],
+   "default_guess": "Skip the replaced entry and continue.",
+   "witness": {
+    "initial": "A non-ignored entry is a real subfolder when its parent is listed.",
+    "events": [
+     "module:source_folder lists the parent folder.",
+     "Syncthing replaces the listed subfolder entry with a symbolic link before module:source_folder opens it.",
+     "module:source_folder opens the entry without following links."
+    ],
+    "outcomes": [
+     "The changed A1 text treats this as the exception, does not enter the entry, and completes the scan.",
+     "The public operation's Errors text treats the non-listable subfolder as folder_unavailable and refuses the whole scan."
+    ],
+    "observer": "The calling flow receives either a completed scan or an M08 folder_unavailable refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "delivery_store folder creation",
+   "kind": "unspecified effect",
+   "text": "A folder the service creates in the binary store has the mode of `STORE_FOLDER_MODE`, and one in the state folder that of `STATE_FOLDER_MODE`.",
+   "question": "Which missing binary-store and state-folder directories must each delivery_store operation create on demand, and which missing directories instead make the operation fail?",
+   "options": [
+    "Create every required intermediate and per-project directory on demand.",
+    "Require all directories to be provisioned before the operation.",
+    "Create only specified fixed or per-project directories and fail for the rest."
+   ],
+   "default_guess": "Require the configured roots to exist, then create all required service-owned intermediate and per-project directories on demand with the applicable mode.",
+   "witness": {
+    "initial": "The configured binary root, state folder, lock and record locations exist, but `photos/<project_id>` does not exist; the project is confirmed and the requested source is valid.",
+    "events": [
+     "The caller requests its first delivery for the project.",
+     "module:photo_delivery reaches public_op:delivery_store.store_image."
+    ],
+    "outcomes": [
+     "An implementation creates the missing store directories with STORE_FOLDER_MODE and places the photo.",
+     "An implementation treats the missing destination folder as a failed write and returns a failed M06."
+    ],
+    "observer": "The calling flow sees placed versus failed, and the installation owner sees different filesystem effects."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.store_image",
+   "kind": "unspecified durability",
+   "text": "Writes the stored image atomically with the mode of `STORED_IMAGE_MODE`; its folder is synchronised before it returns, and a failure there is a failed write (A6 rule 3).",
+   "question": "When store_image creates destination directories, which newly created directory entries and parent directories must be synchronised before success, and how is a failure of those synchronisations classified?",
+   "options": [
+    "Synchronise every newly created directory and its parent chain before reporting success.",
+    "Synchronise only the final image directory.",
+    "Do not synchronise directory creation separately; only synchronise the final image directory after its rename."
+   ],
+   "default_guess": "Synchronise each newly created directory entry through the configured existing root, treating any such failure like the image folder synchronisation failure.",
+   "witness": {
+    "initial": "The binary root exists, but the service-owned `photos` and project directories do not.",
+    "events": [
+     "A valid first delivery creates the missing directories and writes and renames the image.",
+     "The implementation reports success.",
+     "The host crashes immediately afterward and restarts."
+    ],
+    "outcomes": [
+     "An implementation that synchronises the created directory chain preserves the reported image and its path.",
+     "An implementation that synchronises only the leaf directory may lose a newly created ancestor entry and therefore the reportedly successful image path."
+    ],
+    "observer": "The Portal and a repeated delivery after restart observe whether the stored image remains."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 rule 1 image encoding",
+   "kind": "underconstrained determinism",
+   "text": "With one library version one source gives the same bytes.",
+   "question": "What complete encoder runtime must be fixed for this byte-determinism claim, including the Pillow build, native JPEG implementation and platform, or must the claim be weakened?",
+   "options": [
+    "Pin the complete deployment image and native codec build that determine JPEG bytes.",
+    "Define and verify a canonical encoder independently of platform builds.",
+    "Permit different encoded bytes across conforming builds and remove the same-bytes guarantee."
+   ],
+   "default_guess": "Pin the complete deployment image and native codec build, not only the Pillow package version.",
+   "witness": {
+    "initial": "Two permitted deployment images use the same pinned Pillow version but different supported platform wheels or native JPEG codec builds.",
+    "events": [
+     "Each deployment receives the same source bytes and applies the listed ImageOps, Image.convert, Image.thumbnail and Image.save operations.",
+     "Each stores its resulting JPEG and constructs M04."
+    ],
+    "outcomes": [
+     "One conforming build produces one JPEG byte sequence, sha256 and size.",
+     "The other conforming build produces a different JPEG byte sequence and potentially different sha256 or size despite using the same Pillow version."
+    ],
+    "observer": "The Portal observes different stored bytes, and the calling flow observes different M04 hashes or sizes."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:deliverer_api.read_token\",\"kind\":\"contradiction\",\"text\":\"The token with the whitespace around it removed.\",\"question\":\"Does read_token remove only the characters in TOKEN_TRIM_CHARACTERS, or every character considered whitespace?\",\"options\":[\"Remove only TOKEN_TRIM_CHARACTERS, as A5 rule 2 requires.\",\"Remove all Unicode or library-defined whitespace, as the output text permits.\"],\"default_guess\":\"Remove only TOKEN_TRIM_CHARACTERS.\",\"witness\":{\"initial\":\"A mode-0600 regular token file contains a non-breaking space, 32 visible ASCII token characters, and another non-breaking space.\",\"events\":[\"The deployment starts the service.\",\"public_op:deliverer_api.read_token reads and trims the file.\"],\"outcomes\":[\"Treating every whitespace character as removable yields a valid 32-character token and the service starts.\",\"Removing only TOKEN_TRIM_CHARACTERS leaves the non-breaking spaces; they are not visible ASCII, so A5 rule 2 ends the start.\"],\"observer\":\"The deployment and a caller attempting to authenticate.\"}},{\"subject\":\"public_op:source_folder.observe_source_files\",\"kind\":\"contradiction\",\"text\":\"`folder_unavailable` when the photo folder or a subfolder that is not ignored cannot be listed.\",\"question\":\"When a listed, non-ignored subfolder has become a symbolic link or a non-folder before it is opened, must the scan skip it and continue or refuse with folder_unavailable?\",\"options\":[\"Skip it and continue, as the changed A1 exception requires.\",\"Treat the inability to open and list it as folder_unavailable, as this Errors passage states.\"],\"default_guess\":\"Skip the replaced entry and continue.\",\"witness\":{\"initial\":\"A non-ignored entry is a real subfolder when its parent is listed.\",\"events\":[\"module:source_folder lists the parent folder.\",\"Syncthing replaces the listed subfolder entry with a symbolic link before module:source_folder opens it.\",\"module:source_folder opens the entry without following links.\"],\"outcomes\":[\"The changed A1 text treats this as the exception, does not enter the entry, and completes the scan.\",\"The public operation's Errors text treats the non-listable subfolder as folder_unavailable and refuses the whole scan.\"],\"observer\":\"The calling flow receives either a completed scan or an M08 folder_unavailable refusal.\"}},{\"subject\":\"delivery_store folder creation\",\"kind\":\"unspecified effect\",\"text\":\"A folder the service creates in the binary store has the mode of `STORE_FOLDER_MODE`, and one in the state folder that of `STATE_FOLDER_MODE`.\",\"question\":\"Which missing binary-store and state-folder directories must each delivery_store operation create on demand, and which missing directories instead make the operation fail?\",\"options\":[\"Create every required intermediate and per-project directory on demand.\",\"Require all directories to be provisioned before the operation.\",\"Create only specified fixed or per-project directories and fail for the rest.\"],\"default_guess\":\"Require the configured roots to exist, then create all required service-owned intermediate and per-project directories on demand with the applicable mode.\",\"witness\":{\"initial\":\"The configured binary root, state folder, lock and record locations exist, but `photos/<project_id>` does not exist; the project is confirmed and the requested source is valid.\",\"events\":[\"The caller requests its first delivery for the project.\",\"module:photo_delivery reaches public_op:delivery_store.store_image.\"],\"outcomes\":[\"An implementation creates the missing store directories with STORE_FOLDER_MODE and places the photo.\",\"An implementation treats the missing destination folder as a failed write and returns a failed M06.\"],\"observer\":\"The calling flow sees placed versus failed, and the installation owner sees different filesystem effects.\"}},{\"subject\":\"public_op:delivery_store.store_image\",\"kind\":\"unspecified durability\",\"text\":\"Writes the stored image atomically with the mode of `STORED_IMAGE_MODE`; its folder is synchronised before it returns, and a failure there is a failed write (A6 rule 3).\",\"question\":\"When store_image creates destination directories, which newly created directory entries and parent directories must be synchronised before success, and how is a failure of those synchronisations classified?\",\"options\":[\"Synchronise every newly created directory and its parent chain before reporting success.\",\"Synchronise only the final image directory.\",\"Do not synchronise directory creation separately; only synchronise the final image directory after its rename.\"],\"default_guess\":\"Synchronise each newly created directory entry through the configured existing root, treating any such failure like the image folder synchronisation failure.\",\"witness\":{\"initial\":\"The binary root exists, but the service-owned `photos` and project directories do not.\",\"events\":[\"A valid first delivery creates the missing directories and writes and renames the image.\",\"The implementation reports success.\",\"The host crashes immediately afterward and restarts.\"],\"outcomes\":[\"An implementation that synchronises the created directory chain preserves the reported image and its path.\",\"An implementation that synchronises only the leaf directory may lose a newly created ancestor entry and therefore the reportedly successful image path.\"],\"observer\":\"The Portal and a repeated delivery after restart observe whether the stored image remains.\"}},{\"subject\":\"A2 rule 1 image encoding\",\"kind\":\"underconstrained determinism\",\"text\":\"With one library version one source gives the same bytes.\",\"question\":\"What complete encoder runtime must be fixed for this byte-determinism claim, including the Pillow build, native JPEG implementation and platform, or must the claim be weakened?\",\"options\":[\"Pin the complete deployment image and native codec build that determine JPEG bytes.\",\"Define and verify a canonical encoder independently of platform builds.\",\"Permit different encoded bytes across conforming builds and remove the same-bytes guarantee.\"],\"default_guess\":\"Pin the complete deployment image and native codec build, not only the Pillow package version.\",\"witness\":{\"initial\":\"Two permitted deployment images use the same pinned Pillow version but different supported platform wheels or native JPEG codec builds.\",\"events\":[\"Each deployment receives the same source bytes and applies the listed ImageOps, Image.convert, Image.thumbnail and Image.save operations.\",\"Each stores its resulting JPEG and constructs M04.\"],\"outcomes\":[\"One conforming build produces one JPEG byte sequence, sha256 and size.\",\"The other conforming build produces a different JPEG byte sequence and potentially different sha256 or size despite using the same Pillow version.\"],\"observer\":\"The Portal observes different stored bytes, and the calling flow observes different M04 hashes or sizes.\"}}]}",
+ "set_aside": []
+}

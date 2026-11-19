@@ -1,0 +1,181 @@
+{
+ "open_points": [
+  {
+   "subject": "A5 token-file startup",
+   "kind": "missing refusal condition",
+   "text": "At the start it is opened once",
+   "question": "What happens when `token_file` is absent, cannot be opened, or cannot be read: must startup fail, or may the service create a token file?",
+   "options": [
+    "Startup fails for every open or read failure.",
+    "The service creates and persists a new token when the file is absent.",
+    "Absence creates a token, while other open or read failures stop startup."
+   ],
+   "default_guess": "Fail startup for every open or read failure; token provisioning belongs to the installation.",
+   "witness": {
+    "initial": "The required `token_file` setting names a path at which no entry exists.",
+    "events": [
+     "The operator starts the service."
+    ],
+    "outcomes": [
+     "The service refuses to start because the configured token cannot be read.",
+     "The service generates a token, creates the file and starts."
+    ],
+    "observer": "The operator and the first authenticated caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 encoded-byte determinism",
+   "kind": "scope ambiguity",
+   "text": "With one library version one source gives the same bytes.",
+   "question": "Does this require identical JPEG bytes only on repeated runs in one installed runtime, or across every installation that has the same image-library version, including different native codec builds and platforms?",
+   "options": [
+    "Deterministic within one installed runtime.",
+    "Deterministic across all installations with the pinned image-library version.",
+    "Deterministic across a fully pinned runtime including native codecs and platform details."
+   ],
+   "default_guess": "Require determinism for the fully pinned runtime used by the service, not merely the top-level image-library version.",
+   "witness": {
+    "initial": "Two hosts have the same source bytes and the same pinned image-library package version but different native JPEG codec builds.",
+    "events": [
+     "Host A prepares the photo.",
+     "Host B prepares the same photo."
+    ],
+    "outcomes": [
+     "Both stored images must have the same bytes and SHA-256.",
+     "Different encoded bytes are allowed because each host is internally repeatable."
+    ],
+    "observer": "The caller comparing M04 `sha256` values or a reproducibility check."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 temporary-name collision",
+   "kind": "unspecified failure handling",
+   "text": "The temporary name begins with the imported `TEMPORARY_NAME_PREFIX` constant and is chosen fresh for each write; the temporary file is created exclusively, never reusing an existing entry",
+   "question": "When exclusive creation finds that the chosen temporary name already exists, must the writer choose another name and retry, or fail the operation?",
+   "options": [
+    "Choose new names until exclusive creation succeeds.",
+    "Fail the write immediately.",
+    "Retry a fixed number of times and then fail."
+   ],
+   "default_guess": "Choose another name and retry, with a bounded implementation-level exhaustion guard.",
+   "witness": {
+    "initial": "A crash has left `.tmp-X` in the destination folder.",
+    "events": [
+     "A later delivery's temporary-name generator first selects `.tmp-X`.",
+     "Exclusive creation reports that the entry already exists."
+    ],
+    "outcomes": [
+     "The delivery selects another temporary name and continues.",
+     "The delivery fails even though the final destination could be written."
+    ],
+    "observer": "The calling flow receiving `placed` or a failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 newly created folders",
+   "kind": "durability ambiguity",
+   "text": "A folder the service creates in the binary store has the mode of `STORE_FOLDER_MODE`, and one in the state folder that of `STATE_FOLDER_MODE`.",
+   "question": "Must creation of a binary-store or state folder be made durable by synchronising the new folder and its parent, and how does a failure of either synchronisation affect the operation?",
+   "options": [
+    "Synchronise every new folder and its parent; map a failure according to the file whose write required the folder.",
+    "Create folders without parent-directory synchronisation; only the file-write synchronisation rules apply.",
+    "Synchronise folders, but treat failures as successful writes with crash survival uncertain."
+   ],
+   "default_guess": "Synchronise each newly created folder and its parent; treat failure before a placement is recorded as the corresponding write failure.",
+   "witness": {
+    "initial": "The project has no binary-store or state subfolder.",
+    "events": [
+     "A delivery creates the required folders and writes an image and placement record.",
+     "The operation reports success.",
+     "The host crashes immediately afterward."
+    ],
+    "outcomes": [
+     "The newly created directories and acknowledged placement survive because their parent entries were synchronised.",
+     "A directory and its contents may disappear because only the directory containing each file was synchronised."
+    ],
+    "observer": "The caller after restart and the Portal reading the stored reference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "invariant test gap",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What test observation must prove that delivery opened no path failing A3 rule 5 condition 1, rather than merely returning the right failure after opening such a path?",
+   "options": [
+    "Instrument path-opening operations and assert that prohibited paths and segments are never opened.",
+    "Treat the refusal and absence of durable writes as sufficient evidence.",
+    "Assert both the refusal result and an exact allowed sequence of filesystem opens."
+   ],
+   "default_guess": "Instrument filesystem opens and assert the exact permitted boundary: folders are opened only as specified and a prohibited final path is never opened for reading.",
+   "witness": {
+    "initial": "The request supplies an absolute name naming an existing readable file outside the photo folder.",
+    "events": [
+     "A delivery implementation opens that external file and then returns `NOT_READY_OR_ABSENT`.",
+     "The stated test checks only the answer and durable files."
+    ],
+    "outcomes": [
+     "The test passes even though INV-02 was violated.",
+     "A test that records open calls fails because the external path was opened."
+    ],
+    "observer": "The invariant's witness test or a filesystem audit."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13 Required tests",
+   "kind": "invariant test gap",
+   "text": "INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Which mark paths must the Required tests exercise to show the rule's zero-or-one reading boundary, including refusals before the clock point, refusals after it, and replayed marks?",
+   "options": [
+    "Test a successful mark only.",
+    "Test successful, replayed, refused-before-clock and refused-after-clock marks with their required counts.",
+    "Use a property or instrumentation check covering every exit from the mark operation."
+   ],
+   "default_guess": "Test every specified timing class: zero before the reading point and exactly one for success, replay, and every refusal after that point.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 record and folder mode constants",
+   "kind": "standard_violation",
+   "text": "A stored image has the mode of the imported `STORED_IMAGE_MODE` constant and a state record that of\n   `RECORD_MODE`, so neither is executable. A folder the service creates in the binary store has the mode\n   of `STORE_FOLDER_MODE`, and one in the state folder that of `STATE_FOLDER_MODE`.",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must name `RECORD_MODE`, `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` as imported constants.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 temporary-file mode",
+   "kind": "standard_violation",
+   "text": "the temporary file is created exclusively, never reusing an existing entry, with mode 0600 and\n   takes its final mode before the rename.",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The temporary-file creation mode must become a data-provider constant named in the passage as `the imported X constant`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 lock-file mode",
+   "kind": "standard_violation",
+   "text": "The lock file is created on\n   first use with the mode of the imported `LOCK_FILE_MODE` constant and never removed; it holds no content.",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must use the required form `the imported LOCK_FILE_MODE constant`, rather than placing `imported` before the code-form name.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2 JPEG encoder policy values",
+   "kind": "standard_violation",
+   "text": "and `Image.save` writes a JPEG with the imported `PHOTO_QUALITY`\n   constant as `quality`, `optimize` true, `progressive` false and `subsampling` `4:2:0`, with no EXIF,\n   colour profile or other metadata.",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The decided `optimize`, `progressive` and `subsampling` values must be supplied through data-provider constants named as imported constants, or the passage must instead name one emitted backend symbol that owns the complete encoding recipe.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A5 token-file startup\",\"kind\":\"missing refusal condition\",\"text\":\"At the start it is opened once\",\"question\":\"What happens when `token_file` is absent, cannot be opened, or cannot be read: must startup fail, or may the service create a token file?\",\"options\":[\"Startup fails for every open or read failure.\",\"The service creates and persists a new token when the file is absent.\",\"Absence creates a token, while other open or read failures stop startup.\"],\"default_guess\":\"Fail startup for every open or read failure; token provisioning belongs to the installation.\",\"witness\":{\"initial\":\"The required `token_file` setting names a path at which no entry exists.\",\"events\":[\"The operator starts the service.\"],\"outcomes\":[\"The service refuses to start because the configured token cannot be read.\",\"The service generates a token, creates the file and starts.\"],\"observer\":\"The operator and the first authenticated caller.\"}},{\"subject\":\"A2 encoded-byte determinism\",\"kind\":\"scope ambiguity\",\"text\":\"With one library version one source gives the same bytes.\",\"question\":\"Does this require identical JPEG bytes only on repeated runs in one installed runtime, or across every installation that has the same image-library version, including different native codec builds and platforms?\",\"options\":[\"Deterministic within one installed runtime.\",\"Deterministic across all installations with the pinned image-library version.\",\"Deterministic across a fully pinned runtime including native codecs and platform details.\"],\"default_guess\":\"Require determinism for the fully pinned runtime used by the service, not merely the top-level image-library version.\",\"witness\":{\"initial\":\"Two hosts have the same source bytes and the same pinned image-library package version but different native JPEG codec builds.\",\"events\":[\"Host A prepares the photo.\",\"Host B prepares the same photo.\"],\"outcomes\":[\"Both stored images must have the same bytes and SHA-256.\",\"Different encoded bytes are allowed because each host is internally repeatable.\"],\"observer\":\"The caller comparing M04 `sha256` values or a reproducibility check.\"}},{\"subject\":\"A6 temporary-name collision\",\"kind\":\"unspecified failure handling\",\"text\":\"The temporary name begins with the imported `TEMPORARY_NAME_PREFIX` constant and is chosen fresh for each write; the temporary file is created exclusively, never reusing an existing entry\",\"question\":\"When exclusive creation finds that the chosen temporary name already exists, must the writer choose another name and retry, or fail the operation?\",\"options\":[\"Choose new names until exclusive creation succeeds.\",\"Fail the write immediately.\",\"Retry a fixed number of times and then fail.\"],\"default_guess\":\"Choose another name and retry, with a bounded implementation-level exhaustion guard.\",\"witness\":{\"initial\":\"A crash has left `.tmp-X` in the destination folder.\",\"events\":[\"A later delivery's temporary-name generator first selects `.tmp-X`.\",\"Exclusive creation reports that the entry already exists.\"],\"outcomes\":[\"The delivery selects another temporary name and continues.\",\"The delivery fails even though the final destination could be written.\"],\"observer\":\"The calling flow receiving `placed` or a failure.\"}},{\"subject\":\"A6 newly created folders\",\"kind\":\"durability ambiguity\",\"text\":\"A folder the service creates in the binary store has the mode of `STORE_FOLDER_MODE`, and one in the state folder that of `STATE_FOLDER_MODE`.\",\"question\":\"Must creation of a binary-store or state folder be made durable by synchronising the new folder and its parent, and how does a failure of either synchronisation affect the operation?\",\"options\":[\"Synchronise every new folder and its parent; map a failure according to the file whose write required the folder.\",\"Create folders without parent-directory synchronisation; only the file-write synchronisation rules apply.\",\"Synchronise folders, but treat failures as successful writes with crash survival uncertain.\"],\"default_guess\":\"Synchronise each newly created folder and its parent; treat failure before a placement is recorded as the corresponding write failure.\",\"witness\":{\"initial\":\"The project has no binary-store or state subfolder.\",\"events\":[\"A delivery creates the required folders and writes an image and placement record.\",\"The operation reports success.\",\"The host crashes immediately afterward.\"],\"outcomes\":[\"The newly created directories and acknowledged placement survive because their parent entries were synchronised.\",\"A directory and its contents may disappear because only the directory containing each file was synchronised.\"],\"observer\":\"The caller after restart and the Portal reading the stored reference.\"}},{\"subject\":\"INV-02 Required tests\",\"kind\":\"invariant test gap\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What test observation must prove that delivery opened no path failing A3 rule 5 condition 1, rather than merely returning the right failure after opening such a path?\",\"options\":[\"Instrument path-opening operations and assert that prohibited paths and segments are never opened.\",\"Treat the refusal and absence of durable writes as sufficient evidence.\",\"Assert both the refusal result and an exact allowed sequence of filesystem opens.\"],\"default_guess\":\"Instrument filesystem opens and assert the exact permitted boundary: folders are opened only as specified and a prohibited final path is never opened for reading.\",\"witness\":{\"initial\":\"The request supplies an absolute name naming an existing readable file outside the photo folder.\",\"events\":[\"A delivery implementation opens that external file and then returns `NOT_READY_OR_ABSENT`.\",\"The stated test checks only the answer and durable files.\"],\"outcomes\":[\"The test passes even though INV-02 was violated.\",\"A test that records open calls fails because the external path was opened.\"],\"observer\":\"The invariant's witness test or a filesystem audit.\"}},{\"subject\":\"INV-13 Required tests\",\"kind\":\"invariant test gap\",\"text\":\"INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Which mark paths must the Required tests exercise to show the rule's zero-or-one reading boundary, including refusals before the clock point, refusals after it, and replayed marks?\",\"options\":[\"Test a successful mark only.\",\"Test successful, replayed, refused-before-clock and refused-after-clock marks with their required counts.\",\"Use a property or instrumentation check covering every exit from the mark operation.\"],\"default_guess\":\"Test every specified timing class: zero before the reading point and exactly one for success, replay, and every refusal after that point.\"},{\"subject\":\"A6 record and folder mode constants\",\"kind\":\"standard_violation\",\"text\":\"A stored image has the mode of the imported `STORED_IMAGE_MODE` constant and a state record that of\\n   `RECORD_MODE`, so neither is executable. A folder the service creates in the binary store has the mode\\n   of `STORE_FOLDER_MODE`, and one in the state folder that of `STATE_FOLDER_MODE`.\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must name `RECORD_MODE`, `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` as imported constants.\"},{\"subject\":\"A6 temporary-file mode\",\"kind\":\"standard_violation\",\"text\":\"the temporary file is created exclusively, never reusing an existing entry, with mode 0600 and\\n   takes its final mode before the rename.\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The temporary-file creation mode must become a data-provider constant named in the passage as `the imported X constant`.\"},{\"subject\":\"A6 lock-file mode\",\"kind\":\"standard_violation\",\"text\":\"The lock file is created on\\n   first use with the mode of the imported `LOCK_FILE_MODE` constant and never removed; it holds no content.\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must use the required form `the imported LOCK_FILE_MODE constant`, rather than placing `imported` before the code-form name.\"},{\"subject\":\"A2 JPEG encoder policy values\",\"kind\":\"standard_violation\",\"text\":\"and `Image.save` writes a JPEG with the imported `PHOTO_QUALITY`\\n   constant as `quality`, `optimize` true, `progressive` false and `subsampling` `4:2:0`, with no EXIF,\\n   colour profile or other metadata.\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The decided `optimize`, `progressive` and `subsampling` values must be supplied through data-provider constants named as imported constants, or the passage must instead name one emitted backend symbol that owns the complete encoding recipe.\"}]}",
+ "set_aside": []
+}

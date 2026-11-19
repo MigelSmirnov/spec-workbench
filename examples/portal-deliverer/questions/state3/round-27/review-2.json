@@ -1,0 +1,145 @@
+{
+ "open_points": [
+  {
+   "subject": "token provisioning",
+   "kind": "missing_owner",
+   "text": "The token is generated with 256 bits from a cryptographic random source and is kept in a UTF-8 file: the 32 random bytes in URL-safe Base64, 43 characters of `A`-`Z`, `a`-`z`, `0`-`9`, `-` and `_`.",
+   "question": "Which module or external installation actor generates and writes the initial token file, and what happens at startup when the file is absent?",
+   "options": [
+    "An installation/deployment actor creates it and the service refuses to start when it is absent",
+    "`deliverer_api` creates it when it is absent",
+    "Another named module creates and rotates it"
+   ],
+   "default_guess": "Treat provisioning as an installation responsibility and make `deliverer_api` refuse to start when the file is absent.",
+   "witness": {
+    "initial": "The configured `token_file` does not exist on first service start.",
+    "events": [
+     "The installer starts the service without first creating the token file.",
+     "`deliverer_api` processes the configured token path."
+    ],
+    "outcomes": [
+     "Startup fails because token provisioning belongs outside the service.",
+     "The service generates a token file and starts."
+    ],
+    "observer": "The installer and operator see whether the service starts and whether a new credential appears."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "token-file validation",
+   "kind": "conflicting_validity_rules",
+   "text": "The service does not start when the path is a symbolic link or not a regular file, when the group or others have any permission on the file, or when what remains has fewer characters than the imported `TOKEN_MIN_LENGTH` constant or any character that is not visible ASCII (`!` to `~`), since a token with such a character could not be presented in the `Authorization` header.",
+   "question": "Must a token read from the file have exactly the specified 43-character URL-safe Base64 form, or is every visible-ASCII token of at least `TOKEN_MIN_LENGTH` characters accepted?",
+   "options": [
+    "Accept every visible-ASCII token of at least 32 characters",
+    "Require exactly 43 URL-safe Base64 characters",
+    "Accept the broad form but require the narrow form only from the provisioning actor"
+   ],
+   "default_guess": "Accept every visible-ASCII token of at least 32 characters at startup, while requiring the provisioning actor to generate the stated 43-character form.",
+   "witness": {
+    "initial": "The token file has safe permissions and contains 32 exclamation marks.",
+    "events": [
+     "The operator starts the service.",
+     "`deliverer_api` trims and validates the token."
+    ],
+    "outcomes": [
+     "The service starts because all 32 characters are visible ASCII and meet `TOKEN_MIN_LENGTH`.",
+     "The service refuses to start because the token is not 43 URL-safe Base64 characters."
+    ],
+    "observer": "The operator sees whether startup succeeds."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "binary-store containment",
+   "kind": "unclear_actor_concurrency",
+   "text": "The binary store is written only by the Portal and the deliverer, both installed by the owner; Syncthing and the calling agent have no access to it. No other actor changes its folders, so the containment checked before a write holds for that write.",
+   "question": "May the Portal change or replace binary-store folders concurrently with a deliverer write, or is the Portal also forbidden from changing folders after installation?",
+   "options": [
+    "The Portal may write image files but never creates, replaces or changes store folders",
+    "The Portal may change folders, so the deliverer must protect the interval between containment check and write",
+    "Only the deliverer may write the relevant subtree"
+   ],
+   "default_guess": "Treat the folder topology as immutable to the Portal and allow the Portal to read or write only files under already established folders.",
+   "witness": {
+    "initial": "The deliverer has checked that a project folder resolves inside the binary store.",
+    "events": [
+     "Before the deliverer opens its temporary file, the Portal replaces that project folder with a link to a folder outside the store.",
+     "The deliverer continues the image write."
+    ],
+    "outcomes": [
+     "The write is safe because the stated actor restriction makes the replacement impossible.",
+     "The replacement is allowed because the Portal is a writer, so an implementation that relies only on the earlier check can write outside the store."
+    ],
+    "observer": "The owner sees whether a file can appear outside the binary store."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "record validation",
+   "kind": "cross_field_validation_unspecified",
+   "text": "Its `project_id` and `source_id` must equal those of its address.",
+   "question": "For a placement record, must the nested `publication.project_id` also equal the record's `project_id` and address, or is validating the top-level identifiers sufficient?",
+   "options": [
+    "Require the nested publication project id to match as part of nested-model validity",
+    "Check only the top-level placement identifiers",
+    "Remove or ignore the nested project id when reading the record"
+   ],
+   "default_guess": "Require `publication.project_id` to equal the placement's `project_id` and its address.",
+   "witness": {
+    "initial": "A placement record is valid JSON; its top-level `project_id` and `source_id` match its address, but `publication.project_id` names another project.",
+    "events": [
+     "A scan or repeated delivery reads the placement through `delivery_store`.",
+     "The record is validated and returned or refused."
+    ],
+    "outcomes": [
+     "The record is refused with `state_unavailable` because the nested publication contradicts its placement.",
+     "The record is accepted because only the top-level identifiers are required to match the address."
+    ],
+    "observer": "The caller sees either a refusal or a placement containing a publication for another project."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "existing file modes",
+   "kind": "validation_scope_unspecified",
+   "text": "A stored image has the mode of the imported `STORED_IMAGE_MODE` constant and a state record that of `RECORD_MODE`, so neither is executable.",
+   "question": "When an existing stored image or state record has another mode, must `delivery_store` refuse it, repair its mode, or accept it because mode is enforced only when the service writes the file?",
+   "options": [
+    "Validate modes on every read and refuse mismatches",
+    "Repair modes before using existing files",
+    "Enforce modes only on creation and accept existing files regardless of mode"
+   ],
+   "default_guess": "Enforce the modes when writing but refuse an existing state record with an unexpected mode rather than silently repairing it.",
+   "witness": {
+    "initial": "A syntactically and semantically valid placement record exists with mode 0644 instead of `RECORD_MODE` 0600.",
+    "events": [
+     "A caller repeats delivery of that source.",
+     "`delivery_store` opens and validates the existing placement record."
+    ],
+    "outcomes": [
+     "The operation is refused with `state_unavailable` because the record violates its required mode.",
+     "The placement is replayed because A6 rule 5's stated record validation does not inspect permissions."
+    ],
+    "observer": "The caller sees either `state_unavailable` or `replayed`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "mode policy ownership",
+   "kind": "overlapping_ownership",
+   "text": "the names and modes of stored images and state records;",
+   "question": "Does `delivery_store` own the numeric mode decisions, or does `data_provider` own those decisions while `delivery_store` owns only applying the imported constants?",
+   "options": [
+    "`data_provider` owns the numeric policy values and `delivery_store` owns their enforcement",
+    "`delivery_store` owns both the values and enforcement, with `data_provider` merely exporting them",
+    "Move the mode decisions wholly into `delivery_store`"
+   ],
+   "default_guess": "Treat `data_provider` as owner of the numeric values and narrow `delivery_store` ownership to applying and enforcing them.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"token provisioning\",\"kind\":\"missing_owner\",\"text\":\"The token is generated with 256 bits from a cryptographic random source and is kept in a UTF-8 file: the 32 random bytes in URL-safe Base64, 43 characters of `A`-`Z`, `a`-`z`, `0`-`9`, `-` and `_`.\",\"question\":\"Which module or external installation actor generates and writes the initial token file, and what happens at startup when the file is absent?\",\"options\":[\"An installation/deployment actor creates it and the service refuses to start when it is absent\",\"`deliverer_api` creates it when it is absent\",\"Another named module creates and rotates it\"],\"default_guess\":\"Treat provisioning as an installation responsibility and make `deliverer_api` refuse to start when the file is absent.\",\"witness\":{\"initial\":\"The configured `token_file` does not exist on first service start.\",\"events\":[\"The installer starts the service without first creating the token file.\",\"`deliverer_api` processes the configured token path.\"],\"outcomes\":[\"Startup fails because token provisioning belongs outside the service.\",\"The service generates a token file and starts.\"],\"observer\":\"The installer and operator see whether the service starts and whether a new credential appears.\"}},{\"subject\":\"token-file validation\",\"kind\":\"conflicting_validity_rules\",\"text\":\"The service does not start when the path is a symbolic link or not a regular file, when the group or others have any permission on the file, or when what remains has fewer characters than the imported `TOKEN_MIN_LENGTH` constant or any character that is not visible ASCII (`!` to `~`), since a token with such a character could not be presented in the `Authorization` header.\",\"question\":\"Must a token read from the file have exactly the specified 43-character URL-safe Base64 form, or is every visible-ASCII token of at least `TOKEN_MIN_LENGTH` characters accepted?\",\"options\":[\"Accept every visible-ASCII token of at least 32 characters\",\"Require exactly 43 URL-safe Base64 characters\",\"Accept the broad form but require the narrow form only from the provisioning actor\"],\"default_guess\":\"Accept every visible-ASCII token of at least 32 characters at startup, while requiring the provisioning actor to generate the stated 43-character form.\",\"witness\":{\"initial\":\"The token file has safe permissions and contains 32 exclamation marks.\",\"events\":[\"The operator starts the service.\",\"`deliverer_api` trims and validates the token.\"],\"outcomes\":[\"The service starts because all 32 characters are visible ASCII and meet `TOKEN_MIN_LENGTH`.\",\"The service refuses to start because the token is not 43 URL-safe Base64 characters.\"],\"observer\":\"The operator sees whether startup succeeds.\"}},{\"subject\":\"binary-store containment\",\"kind\":\"unclear_actor_concurrency\",\"text\":\"The binary store is written only by the Portal and the deliverer, both installed by the owner; Syncthing and the calling agent have no access to it. No other actor changes its folders, so the containment checked before a write holds for that write.\",\"question\":\"May the Portal change or replace binary-store folders concurrently with a deliverer write, or is the Portal also forbidden from changing folders after installation?\",\"options\":[\"The Portal may write image files but never creates, replaces or changes store folders\",\"The Portal may change folders, so the deliverer must protect the interval between containment check and write\",\"Only the deliverer may write the relevant subtree\"],\"default_guess\":\"Treat the folder topology as immutable to the Portal and allow the Portal to read or write only files under already established folders.\",\"witness\":{\"initial\":\"The deliverer has checked that a project folder resolves inside the binary store.\",\"events\":[\"Before the deliverer opens its temporary file, the Portal replaces that project folder with a link to a folder outside the store.\",\"The deliverer continues the image write.\"],\"outcomes\":[\"The write is safe because the stated actor restriction makes the replacement impossible.\",\"The replacement is allowed because the Portal is a writer, so an implementation that relies only on the earlier check can write outside the store.\"],\"observer\":\"The owner sees whether a file can appear outside the binary store.\"}},{\"subject\":\"record validation\",\"kind\":\"cross_field_validation_unspecified\",\"text\":\"Its `project_id` and `source_id` must equal those of its address.\",\"question\":\"For a placement record, must the nested `publication.project_id` also equal the record's `project_id` and address, or is validating the top-level identifiers sufficient?\",\"options\":[\"Require the nested publication project id to match as part of nested-model validity\",\"Check only the top-level placement identifiers\",\"Remove or ignore the nested project id when reading the record\"],\"default_guess\":\"Require `publication.project_id` to equal the placement's `project_id` and its address.\",\"witness\":{\"initial\":\"A placement record is valid JSON; its top-level `project_id` and `source_id` match its address, but `publication.project_id` names another project.\",\"events\":[\"A scan or repeated delivery reads the placement through `delivery_store`.\",\"The record is validated and returned or refused.\"],\"outcomes\":[\"The record is refused with `state_unavailable` because the nested publication contradicts its placement.\",\"The record is accepted because only the top-level identifiers are required to match the address.\"],\"observer\":\"The caller sees either a refusal or a placement containing a publication for another project.\"}},{\"subject\":\"existing file modes\",\"kind\":\"validation_scope_unspecified\",\"text\":\"A stored image has the mode of the imported `STORED_IMAGE_MODE` constant and a state record that of `RECORD_MODE`, so neither is executable.\",\"question\":\"When an existing stored image or state record has another mode, must `delivery_store` refuse it, repair its mode, or accept it because mode is enforced only when the service writes the file?\",\"options\":[\"Validate modes on every read and refuse mismatches\",\"Repair modes before using existing files\",\"Enforce modes only on creation and accept existing files regardless of mode\"],\"default_guess\":\"Enforce the modes when writing but refuse an existing state record with an unexpected mode rather than silently repairing it.\",\"witness\":{\"initial\":\"A syntactically and semantically valid placement record exists with mode 0644 instead of `RECORD_MODE` 0600.\",\"events\":[\"A caller repeats delivery of that source.\",\"`delivery_store` opens and validates the existing placement record.\"],\"outcomes\":[\"The operation is refused with `state_unavailable` because the record violates its required mode.\",\"The placement is replayed because A6 rule 5's stated record validation does not inspect permissions.\"],\"observer\":\"The caller sees either `state_unavailable` or `replayed`.\"}},{\"subject\":\"mode policy ownership\",\"kind\":\"overlapping_ownership\",\"text\":\"the names and modes of stored images and state records;\",\"question\":\"Does `delivery_store` own the numeric mode decisions, or does `data_provider` own those decisions while `delivery_store` owns only applying the imported constants?\",\"options\":[\"`data_provider` owns the numeric policy values and `delivery_store` owns their enforcement\",\"`delivery_store` owns both the values and enforcement, with `data_provider` merely exporting them\",\"Move the mode decisions wholly into `delivery_store`\"],\"default_guess\":\"Treat `data_provider` as owner of the numeric values and narrow `delivery_store` ownership to applying and enforcing them.\"}]}",
+ "set_aside": []
+}

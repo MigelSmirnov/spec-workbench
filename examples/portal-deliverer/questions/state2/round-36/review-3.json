@@ -1,0 +1,158 @@
+{
+ "open_points": [
+  {
+   "subject": "A2 stored-image byte determinism",
+   "kind": "determinism_scope",
+   "text": "With one library version one source gives the same bytes.",
+   "question": "What exactly belongs to the versioned determinism boundary: only the image-library package, or also its native JPEG codec, build options, platform and architecture?",
+   "options": [
+    "The pinned image-library package alone must produce identical bytes on every supported installation.",
+    "Identical bytes are guaranteed only when the image library, native codecs, build and platform are identical.",
+    "Byte identity is required only within one running installation; other installations may encode differently."
+   ],
+   "default_guess": "Treat the complete deployed image stack, including the native JPEG codec and build, as the pinned boundary.",
+   "witness": {
+    "initial": "Two installations use the same pinned image-library package but different native JPEG codec builds and receive the same source bytes.",
+    "events": [
+     "The calling flow delivers the source on the first installation.",
+     "The calling flow delivers the same source for the same project on the second installation."
+    ],
+    "outcomes": [
+     "Both installations must produce identical JPEG bytes, sha256 and size.",
+     "The installations may produce different JPEG bytes, sha256 and size because only their top-level library version matches."
+    ],
+    "observer": "The calling flow sees different placement sha256 or size, and the Portal reads different stored bytes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 image preparation failures",
+   "kind": "failure_mapping",
+   "text": "Checks run in this order: a first frame above the pixel limit (width times height) fails with `too_many_pixels`, a source that cannot be decoded with `unreadable_image`, and a result above the Portal's read limit with `too_large`.",
+   "question": "What outcome is required when decoding succeeds but orientation, conversion, resizing, alpha compositing or JPEG encoding raises an error?",
+   "options": [
+    "Answer M06 `failed` with `UNREADABLE_IMAGE` for every image-library processing failure.",
+    "Answer M06 `failed` with `UNREADABLE_FILE`.",
+    "Refuse the whole request with M08.",
+    "Let the request fail as an unmodelled service error."
+   ],
+   "default_guess": "Answer M06 `failed` with `UNREADABLE_IMAGE` and write no image or record.",
+   "witness": {
+    "initial": "A source passes the signature and pixel checks and its first frame decodes, but the image library raises while converting or encoding it.",
+    "events": [
+     "The calling flow requests delivery of that source."
+    ],
+    "outcomes": [
+     "The service returns M06 `failed` with `UNREADABLE_IMAGE` and writes nothing.",
+     "The service returns another failure or refusal, or exposes an internal server error."
+    ],
+    "observer": "The calling flow sees a different response status and reason."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 temporary-file creation",
+   "kind": "collision_handling",
+   "text": "The temporary name begins with the imported `TEMPORARY_NAME_PREFIX` constant and is chosen fresh for each write; the temporary file is created exclusively, never reusing an existing entry, with mode 0600 and takes its final mode before the rename.",
+   "question": "How is a fresh temporary name obtained, and what must happen when exclusive creation finds an existing entry with the chosen name?",
+   "options": [
+    "Choose another name and retry until exclusive creation succeeds.",
+    "Treat the collision as the write failure applicable to the image, placement record or mark record.",
+    "Use a deterministic collision-free allocation mechanism whose source and state are specified."
+   ],
+   "default_guess": "Use a random suffix and retry on an existing-entry collision; treat other creation errors as the applicable write failure.",
+   "witness": {
+    "initial": "A temporary entry left by a crash already has the first name selected for a later write.",
+    "events": [
+     "The calling flow starts a delivery or mark whose write selects that occupied name."
+    ],
+    "outcomes": [
+     "The service selects another temporary name and completes the operation.",
+     "The service treats exclusive creation as failed and returns the operation's failure or refusal."
+    ],
+    "observer": "The calling flow sees success in one implementation and failure in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13 Required tests",
+   "kind": "test_obligation",
+   "text": "INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Must the witness test also show the required clock counts for a mark refused before the reading point, a mark refused after it and a replayed mark, or is one successful mark sufficient to witness INV-13?",
+   "options": [
+    "Test successful, replayed, refused-before-reading and refused-after-reading marks, asserting zero or one reads as A7 rule 2 requires.",
+    "Test only one successful mark plus the non-mark operations named on the Required tests line."
+   ],
+   "default_guess": "Cover successful and replayed marks and refusals on both sides of the reading point, while also proving that no path reads the clock more than once.",
+   "witness": {
+    "initial": "A counting clock is installed and the project has either an invalid request, an invalid connection or an existing mark.",
+    "events": [
+     "The caller submits a mark refused before the specified reading point.",
+     "The caller submits a mark refused after that point.",
+     "The caller repeats an existing mark."
+    ],
+    "outcomes": [
+     "The checks assert respectively zero, one and one clock readings.",
+     "Only the successful-mark path is constrained, so implementations may read the clock on different refusal or replay paths without the required witness detecting it."
+    ],
+    "observer": "The generated-service test suite and a caller using a clock with observable reads see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 utc_now failure",
+   "kind": "failure_mapping",
+   "text": "Only a mark reads it, once, after the token, the request form and the identifiers are accepted and before the connection is examined or the project lock is taken.",
+   "question": "What response and write guarantees apply if `utc_now` cannot return a current time at that reading point?",
+   "options": [
+    "Fail the request as an internal service error and write nothing.",
+    "Return an existing M08 refusal code and write nothing.",
+    "Retry the clock read, despite the one-reading rule.",
+    "Terminate the process."
+   ],
+   "default_guess": "Fail the request as an internal service error without taking the project lock or writing state, and do not retry the clock read.",
+   "witness": {
+    "initial": "A valid mark request reaches the clock-reading point, and the clock backend raises instead of returning a datetime.",
+    "events": [
+     "The calling flow submits the mark."
+    ],
+    "outcomes": [
+     "The service returns an internal error and writes nothing.",
+     "The service returns a domain refusal, retries, or terminates."
+    ],
+    "observer": "The calling flow sees the response or lost connection, and an operator may see a stopped process."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 state-record mode",
+   "kind": "standard_violation",
+   "text": "A stored image has the mode of the imported `STORED_IMAGE_MODE` constant and a state record that of\n   `RECORD_MODE`, so neither is executable.",
+   "rule": "Таблица выше —\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must name `RECORD_MODE` as `the imported RECORD_MODE constant`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 created-folder modes",
+   "kind": "standard_violation",
+   "text": "A folder the service creates in the binary store has the mode\n   of `STORE_FOLDER_MODE`, and one in the state folder that of `STATE_FOLDER_MODE`.",
+   "rule": "Таблица выше —\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must name these values as `the imported STORE_FOLDER_MODE constant` and `the imported STATE_FOLDER_MODE constant`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 temporary-file mode",
+   "kind": "standard_violation",
+   "text": "the temporary file is created exclusively, never reusing an existing entry, with mode 0600 and\n   takes its final mode before the rename.",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The literal temporary-file mode must become a data-provider constant named in the passage as an imported constant, with that constant added to the decided policy values.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A2 stored-image byte determinism\",\"kind\":\"determinism_scope\",\"text\":\"With one library version one source gives the same bytes.\",\"question\":\"What exactly belongs to the versioned determinism boundary: only the image-library package, or also its native JPEG codec, build options, platform and architecture?\",\"options\":[\"The pinned image-library package alone must produce identical bytes on every supported installation.\",\"Identical bytes are guaranteed only when the image library, native codecs, build and platform are identical.\",\"Byte identity is required only within one running installation; other installations may encode differently.\"],\"default_guess\":\"Treat the complete deployed image stack, including the native JPEG codec and build, as the pinned boundary.\",\"witness\":{\"initial\":\"Two installations use the same pinned image-library package but different native JPEG codec builds and receive the same source bytes.\",\"events\":[\"The calling flow delivers the source on the first installation.\",\"The calling flow delivers the same source for the same project on the second installation.\"],\"outcomes\":[\"Both installations must produce identical JPEG bytes, sha256 and size.\",\"The installations may produce different JPEG bytes, sha256 and size because only their top-level library version matches.\"],\"observer\":\"The calling flow sees different placement sha256 or size, and the Portal reads different stored bytes.\"}},{\"subject\":\"A2 image preparation failures\",\"kind\":\"failure_mapping\",\"text\":\"Checks run in this order: a first frame above the pixel limit (width times height) fails with `too_many_pixels`, a source that cannot be decoded with `unreadable_image`, and a result above the Portal's read limit with `too_large`.\",\"question\":\"What outcome is required when decoding succeeds but orientation, conversion, resizing, alpha compositing or JPEG encoding raises an error?\",\"options\":[\"Answer M06 `failed` with `UNREADABLE_IMAGE` for every image-library processing failure.\",\"Answer M06 `failed` with `UNREADABLE_FILE`.\",\"Refuse the whole request with M08.\",\"Let the request fail as an unmodelled service error.\"],\"default_guess\":\"Answer M06 `failed` with `UNREADABLE_IMAGE` and write no image or record.\",\"witness\":{\"initial\":\"A source passes the signature and pixel checks and its first frame decodes, but the image library raises while converting or encoding it.\",\"events\":[\"The calling flow requests delivery of that source.\"],\"outcomes\":[\"The service returns M06 `failed` with `UNREADABLE_IMAGE` and writes nothing.\",\"The service returns another failure or refusal, or exposes an internal server error.\"],\"observer\":\"The calling flow sees a different response status and reason.\"}},{\"subject\":\"A6 temporary-file creation\",\"kind\":\"collision_handling\",\"text\":\"The temporary name begins with the imported `TEMPORARY_NAME_PREFIX` constant and is chosen fresh for each write; the temporary file is created exclusively, never reusing an existing entry, with mode 0600 and takes its final mode before the rename.\",\"question\":\"How is a fresh temporary name obtained, and what must happen when exclusive creation finds an existing entry with the chosen name?\",\"options\":[\"Choose another name and retry until exclusive creation succeeds.\",\"Treat the collision as the write failure applicable to the image, placement record or mark record.\",\"Use a deterministic collision-free allocation mechanism whose source and state are specified.\"],\"default_guess\":\"Use a random suffix and retry on an existing-entry collision; treat other creation errors as the applicable write failure.\",\"witness\":{\"initial\":\"A temporary entry left by a crash already has the first name selected for a later write.\",\"events\":[\"The calling flow starts a delivery or mark whose write selects that occupied name.\"],\"outcomes\":[\"The service selects another temporary name and completes the operation.\",\"The service treats exclusive creation as failed and returns the operation's failure or refusal.\"],\"observer\":\"The calling flow sees success in one implementation and failure in the other.\"}},{\"subject\":\"INV-13 Required tests\",\"kind\":\"test_obligation\",\"text\":\"INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Must the witness test also show the required clock counts for a mark refused before the reading point, a mark refused after it and a replayed mark, or is one successful mark sufficient to witness INV-13?\",\"options\":[\"Test successful, replayed, refused-before-reading and refused-after-reading marks, asserting zero or one reads as A7 rule 2 requires.\",\"Test only one successful mark plus the non-mark operations named on the Required tests line.\"],\"default_guess\":\"Cover successful and replayed marks and refusals on both sides of the reading point, while also proving that no path reads the clock more than once.\",\"witness\":{\"initial\":\"A counting clock is installed and the project has either an invalid request, an invalid connection or an existing mark.\",\"events\":[\"The caller submits a mark refused before the specified reading point.\",\"The caller submits a mark refused after that point.\",\"The caller repeats an existing mark.\"],\"outcomes\":[\"The checks assert respectively zero, one and one clock readings.\",\"Only the successful-mark path is constrained, so implementations may read the clock on different refusal or replay paths without the required witness detecting it.\"],\"observer\":\"The generated-service test suite and a caller using a clock with observable reads see the difference.\"}},{\"subject\":\"A7 utc_now failure\",\"kind\":\"failure_mapping\",\"text\":\"Only a mark reads it, once, after the token, the request form and the identifiers are accepted and before the connection is examined or the project lock is taken.\",\"question\":\"What response and write guarantees apply if `utc_now` cannot return a current time at that reading point?\",\"options\":[\"Fail the request as an internal service error and write nothing.\",\"Return an existing M08 refusal code and write nothing.\",\"Retry the clock read, despite the one-reading rule.\",\"Terminate the process.\"],\"default_guess\":\"Fail the request as an internal service error without taking the project lock or writing state, and do not retry the clock read.\",\"witness\":{\"initial\":\"A valid mark request reaches the clock-reading point, and the clock backend raises instead of returning a datetime.\",\"events\":[\"The calling flow submits the mark.\"],\"outcomes\":[\"The service returns an internal error and writes nothing.\",\"The service returns a domain refusal, retries, or terminates.\"],\"observer\":\"The calling flow sees the response or lost connection, and an operator may see a stopped process.\"}},{\"subject\":\"A6 state-record mode\",\"kind\":\"standard_violation\",\"text\":\"A stored image has the mode of the imported `STORED_IMAGE_MODE` constant and a state record that of\\n   `RECORD_MODE`, so neither is executable.\",\"rule\":\"Таблица выше —\\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must name `RECORD_MODE` as `the imported RECORD_MODE constant`.\"},{\"subject\":\"A6 created-folder modes\",\"kind\":\"standard_violation\",\"text\":\"A folder the service creates in the binary store has the mode\\n   of `STORE_FOLDER_MODE`, and one in the state folder that of `STATE_FOLDER_MODE`.\",\"rule\":\"Таблица выше —\\nисчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must name these values as `the imported STORE_FOLDER_MODE constant` and `the imported STATE_FOLDER_MODE constant`.\"},{\"subject\":\"A6 temporary-file mode\",\"kind\":\"standard_violation\",\"text\":\"the temporary file is created exclusively, never reusing an existing entry, with mode 0600 and\\n   takes its final mode before the rename.\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь\\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The literal temporary-file mode must become a data-provider constant named in the passage as an imported constant, with that constant added to the decided policy values.\"}]}",
+ "set_aside": []
+}
