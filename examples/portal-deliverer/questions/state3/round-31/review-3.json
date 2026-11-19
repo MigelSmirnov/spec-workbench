@@ -1,0 +1,82 @@
+{
+ "open_points": [
+  {
+   "subject": "replayed placement and first project-lock creation",
+   "kind": "contradiction",
+   "text": "Delivering content that already has a placement answers `replayed` with the stored placement and the\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\n   when the source file has left the folder.",
+   "question": "When a valid placement exists but its project lock does not, must replay create the lock as A6 rule 4 requires on first use, or must it perform no write as A3 rule 2 requires?",
+   "options": [
+    "Create the project lock and treat it as an exception to replay's writes-nothing guarantee",
+    "Return the replay without creating the project lock",
+    "Refuse because the missing lock makes state unavailable"
+   ],
+   "default_guess": "Create the project lock and restore the former explicit exception to A3 rule 2.",
+   "witness": {
+    "initial": "A confirmed project has a valid placement record and stored image, but no project lock or folders leading to it.",
+    "events": [
+     "The caller repeats delivery of that placement.",
+     "photo_delivery asks delivery_store to take the project lock before reading the placement."
+    ],
+    "outcomes": [
+     "delivery_store creates the lock and returns `replayed`, so the operation writes durable state.",
+     "The operation returns `replayed` without creating anything, so A6's first-use lock creation does not occur."
+    ],
+    "observer": "An operator inspecting the state folder, and a test asserting whether replay changed durable state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "temporary file after an ordinary failed write",
+   "kind": "vague cleanup requirement",
+   "text": "removing its own temporary file after a failed write (A6 rule 3) is not such a removal.",
+   "question": "Must delivery_store remove a temporary file after a non-crash write failure, or does this passage merely permit removal? The revised A6 rule 3 no longer decides that behavior.",
+   "options": [
+    "Always attempt to remove the temporary file after an ordinary failed write",
+    "Leave the temporary file in place",
+    "Attempt cleanup only for failures before the atomic replacement"
+   ],
+   "default_guess": "Attempt to remove it after every ordinary failed write, while preserving the original write failure if cleanup also fails.",
+   "witness": {
+    "initial": "delivery_store has created and partly written a temporary image or record, then the write fails before the final address is replaced.",
+    "events": [
+     "delivery_store reports the failed write.",
+     "An operator or later test inspects the containing folder."
+    ],
+    "outcomes": [
+     "The temporary entry has been removed.",
+     "The temporary entry remains and is ignored thereafter."
+    ],
+    "observer": "The operator, filesystem-level tests, and maintenance tooling."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-20 cross-record enforcement",
+   "kind": "owner mismatch",
+   "text": "| INV-20 | `delivery_store` |",
+   "question": "Which module owns the rule that a damaged mark without a placement must stop a new placement: must photo_delivery explicitly read the mark before creating a placement, or must a delivery_store capability validate the related placement and mark together?",
+   "options": [
+    "photo_delivery owns the cross-record check and calls read_mark even when read_placement reports absence",
+    "delivery_store owns the cross-record check and exposes a compound state-reading capability",
+    "read_placement implicitly checks the corresponding mark despite its name and separate read_mark capability"
+   ],
+   "default_guess": "Give photo_delivery ownership of the operation-level check while delivery_store owns record validation; photo_delivery should call read_mark before starting a new placement.",
+   "witness": {
+    "initial": "A confirmed project has no placement record for a source, but a damaged mark exists at that source's mark address.",
+    "events": [
+     "The caller requests delivery of a ready file with that source id.",
+     "The operation takes the project lock and checks durable state."
+    ],
+    "outcomes": [
+     "photo_delivery calls read_mark after finding no placement and receives STATE_UNAVAILABLE.",
+     "delivery_store's placement read internally examines the mark and raises STATE_UNAVAILABLE before photo_delivery can proceed."
+    ],
+    "observer": "Module-boundary tests and maintainers implementing or mocking the storage capabilities."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"replayed placement and first project-lock creation\",\"kind\":\"contradiction\",\"text\":\"Delivering content that already has a placement answers `replayed` with the stored placement and the\\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\\n   when the source file has left the folder.\",\"question\":\"When a valid placement exists but its project lock does not, must replay create the lock as A6 rule 4 requires on first use, or must it perform no write as A3 rule 2 requires?\",\"options\":[\"Create the project lock and treat it as an exception to replay's writes-nothing guarantee\",\"Return the replay without creating the project lock\",\"Refuse because the missing lock makes state unavailable\"],\"default_guess\":\"Create the project lock and restore the former explicit exception to A3 rule 2.\",\"witness\":{\"initial\":\"A confirmed project has a valid placement record and stored image, but no project lock or folders leading to it.\",\"events\":[\"The caller repeats delivery of that placement.\",\"photo_delivery asks delivery_store to take the project lock before reading the placement.\"],\"outcomes\":[\"delivery_store creates the lock and returns `replayed`, so the operation writes durable state.\",\"The operation returns `replayed` without creating anything, so A6's first-use lock creation does not occur.\"],\"observer\":\"An operator inspecting the state folder, and a test asserting whether replay changed durable state.\"}},{\"subject\":\"temporary file after an ordinary failed write\",\"kind\":\"vague cleanup requirement\",\"text\":\"removing its own temporary file after a failed write (A6 rule 3) is not such a removal.\",\"question\":\"Must delivery_store remove a temporary file after a non-crash write failure, or does this passage merely permit removal? The revised A6 rule 3 no longer decides that behavior.\",\"options\":[\"Always attempt to remove the temporary file after an ordinary failed write\",\"Leave the temporary file in place\",\"Attempt cleanup only for failures before the atomic replacement\"],\"default_guess\":\"Attempt to remove it after every ordinary failed write, while preserving the original write failure if cleanup also fails.\",\"witness\":{\"initial\":\"delivery_store has created and partly written a temporary image or record, then the write fails before the final address is replaced.\",\"events\":[\"delivery_store reports the failed write.\",\"An operator or later test inspects the containing folder.\"],\"outcomes\":[\"The temporary entry has been removed.\",\"The temporary entry remains and is ignored thereafter.\"],\"observer\":\"The operator, filesystem-level tests, and maintenance tooling.\"}},{\"subject\":\"INV-20 cross-record enforcement\",\"kind\":\"owner mismatch\",\"text\":\"| INV-20 | `delivery_store` |\",\"question\":\"Which module owns the rule that a damaged mark without a placement must stop a new placement: must photo_delivery explicitly read the mark before creating a placement, or must a delivery_store capability validate the related placement and mark together?\",\"options\":[\"photo_delivery owns the cross-record check and calls read_mark even when read_placement reports absence\",\"delivery_store owns the cross-record check and exposes a compound state-reading capability\",\"read_placement implicitly checks the corresponding mark despite its name and separate read_mark capability\"],\"default_guess\":\"Give photo_delivery ownership of the operation-level check while delivery_store owns record validation; photo_delivery should call read_mark before starting a new placement.\",\"witness\":{\"initial\":\"A confirmed project has no placement record for a source, but a damaged mark exists at that source's mark address.\",\"events\":[\"The caller requests delivery of a ready file with that source id.\",\"The operation takes the project lock and checks durable state.\"],\"outcomes\":[\"photo_delivery calls read_mark after finding no placement and receives STATE_UNAVAILABLE.\",\"delivery_store's placement read internally examines the mark and raises STATE_UNAVAILABLE before photo_delivery can proceed.\"],\"observer\":\"Module-boundary tests and maintainers implementing or mocking the storage capabilities.\"}}]}",
+ "set_aside": []
+}

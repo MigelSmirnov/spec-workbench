@@ -1,0 +1,184 @@
+{
+ "open_points": [
+  {
+   "subject": "delivery_store state-record layout",
+   "kind": "unspecified layout",
+   "text": "the names and modes of stored images and state records;",
+   "question": "At which exact relative addresses are lock files, placement records and mark records stored, using LOCKS_FOLDER, PLACEMENTS_FOLDER, MARKS_FOLDER, LOCK_FILE_SUFFIX and RECORD_FILE_SUFFIX?",
+   "options": [
+    "locks/<project_id>.lock, ledger/<project_id>/<source_id>.json and published/<project_id>/<source_id>.json",
+    "a different nesting or filename scheme using the same constants"
+   ],
+   "default_guess": "Use locks/<project_id>.lock, ledger/<project_id>/<source_id>.json and published/<project_id>/<source_id>.json.",
+   "witness": {
+    "initial": "A state folder contains a valid placement record written by one implementation.",
+    "events": [
+     "A second implementation starts against the same state folder and delivers the same project and source."
+    ],
+    "outcomes": [
+     "It finds the record at the first implementation's address and answers replayed.",
+     "It looks at a different permitted address, treats the placement as absent and attempts a new placement."
+    ],
+    "observer": "the caller and the operator inspecting the state folder"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 3 image durability",
+   "kind": "undefined durability boundary",
+   "text": "A stored image is made durable before the record that refers to it is written, so a crash never leaves a record without its image; a failure to make it durable fails that write and A3 rule 5 condition 5 applies.",
+   "question": "Which successful operations constitute making the image durable, particularly whether the image file and every newly created directory entry must be synchronised, and at what failure point write_placement must remain uncalled?",
+   "options": [
+    "synchronise image contents and the containing directory, including newly created ancestor directories, before writing the record",
+    "synchronise only the image file before writing the record",
+    "treat a successful rename as durable"
+   ],
+   "default_guess": "Synchronise the temporary image contents, rename it, synchronise its containing directory, and synchronise each newly created ancestor directory before writing the record.",
+   "witness": {
+    "initial": "The image's destination directory is newly created and the placement record is absent.",
+    "events": [
+     "The deliverer writes and renames the image.",
+     "Synchronising the new directory entry fails.",
+     "The caller receives the delivery result."
+    ],
+    "outcomes": [
+     "The delivery fails with UNREADABLE_FILE and no placement record is written.",
+     "The image is considered durable, the placement record is written and the delivery answers PLACED."
+    ],
+    "observer": "the caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 3 record commit",
+   "kind": "ambiguous commit point",
+   "text": "A record is the last write of its operation: once it is in place the operation has taken effect.",
+   "question": "Does “in place” mean that the rename succeeded, or that the record's directory entry has also been made durable; and what result is returned if the rename succeeds but a subsequent durability operation fails?",
+   "options": [
+    "the rename is the commit point and the operation succeeds despite a later directory-synchronisation failure",
+    "the record is in place only after directory synchronisation, so such a failure makes the operation fail",
+    "no directory synchronisation is attempted for records"
+   ],
+   "default_guess": "Treat the successful rename as the commit point and return success; attempt directory synchronisation only as best-effort durability that cannot reverse the committed operation.",
+   "witness": {
+    "initial": "No placement record exists, and the prepared image is already durable.",
+    "events": [
+     "delivery_store renames a complete placement record to its final address.",
+     "Synchronising the record directory fails.",
+     "photo_delivery forms the answer."
+    ],
+    "outcomes": [
+     "The call answers PLACED because the record was in place.",
+     "The call answers FAILED with UNREADABLE_FILE even though a valid placement record is now visible."
+    ],
+    "observer": "the caller, and a later caller that sees the record"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "delivery_store temporary files",
+   "kind": "contradictory cleanup implication",
+   "text": "removing its own temporary file after a failed write (A6 rule 3) is not such a removal.",
+   "question": "Must delivery_store remove a temporary file after an ordinary failed write, given that A6 rule 3 specifies only that a crash may leave one and does not state the non-crash cleanup rule?",
+   "options": [
+    "remove the temporary file after every handled pre-commit failure, leaving it only when cleanup itself fails or the process crashes",
+    "leave the temporary file after any failed write",
+    "make cleanup best-effort without defining whether a remaining temporary file changes the reported result"
+   ],
+   "default_guess": "Remove it after every handled pre-commit failure; preserve the original write failure if cleanup also fails.",
+   "witness": {
+    "initial": "A temporary image file has been created and the final image address is absent.",
+    "events": [
+     "Writing or synchronising the temporary file fails without a process crash.",
+     "The operation returns.",
+     "The operator lists the binary-store directory."
+    ],
+    "outcomes": [
+     "The temporary file has been removed.",
+     "The temporary file remains under TEMPORARY_NAME_PREFIX."
+    ],
+    "observer": "the operator and storage monitoring"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "photo_delivery project-lock scope",
+   "kind": "undecided critical section",
+   "text": "which checks and writes run inside the project lock;",
+   "question": "Exactly which steps after the project-lock position in A3 rule 4 remain under one uninterrupted acquisition: record reads, named-source reading, preparation, image storage, placement-record writing and mark-record writing?",
+   "options": [
+    "hold one acquisition from the existing-record checks through the final record write",
+    "hold it only while checking and writing records, releasing it during source reading and image preparation and then reacquiring and rechecking",
+    "use separate acquisitions for placement lookup, image storage and record writing"
+   ],
+   "default_guess": "Hold one acquisition from the existing placement and mark checks through the operation's final record write.",
+   "witness": {
+    "initial": "Two processes deliver the same previously unplaced source in one project.",
+    "events": [
+     "The first process passes the existing-placement check and begins slow image preparation.",
+     "The second process reaches the project lock before the first record is written."
+    ],
+    "outcomes": [
+     "The second process waits without reading or preparing the source, then answers REPLAYED.",
+     "The second process also reads and prepares the source before reacquiring the lock and answering REPLAYED."
+    ],
+    "observer": "filesystem instrumentation, resource monitoring and the second caller's latency"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 4 existing project lock",
+   "kind": "unspecified existing-entry policy",
+   "text": "It is created on first use, the lock file with the imported `LOCK_FILE_MODE` constant and those folders with the imported `STATE_FOLDER_MODE` constant, and is never changed or removed afterwards;",
+   "question": "When the lock file and its parent folders already exist, which attributes must be validated—regular-file or directory type, ownership, mode and lock-file contents—and does a wrong mode cause STATE_UNAVAILABLE or get accepted unchanged?",
+   "options": [
+    "require only nonsymlink directories and a nonsymlink regular lock file; accept their existing modes and ignore file contents",
+    "require the imported modes and refuse any mismatch without changing it",
+    "repair modes before taking the lock",
+    "require an empty lock file in addition to its type and mode"
+   ],
+   "default_guess": "Require nonsymlink directories and a nonsymlink regular lock file, ignore its bytes, and accept existing modes unchanged because the entries may never be changed after creation.",
+   "witness": {
+    "initial": "The project lock is a regular file with mode 0644 rather than LOCK_FILE_MODE, and no operation currently holds it.",
+    "events": [
+     "A caller makes an otherwise valid delivery.",
+     "delivery_store inspects and attempts to take the existing lock."
+    ],
+    "outcomes": [
+     "The operation takes the lock and continues.",
+     "The operation is refused with STATE_UNAVAILABLE."
+    ],
+    "observer": "the caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 1 unavailable binary root",
+   "kind": "ambiguous failure classification",
+   "text": "The reference must stay inside the binary store: its path, resolved with the links of the binary store, must lie below the resolved store. When it does not, or when a link in the store cannot be resolved, the delivery is refused as a whole with the UNSAFE_REFERENCE member of = models.RefusalCode",
+   "question": "What outcome applies when the configured binary root itself is absent, unreadable or otherwise cannot be resolved for a reason other than an unresolvable symbolic link: UNSAFE_REFERENCE under A6 rule 1 or FAILED/UNREADABLE_FILE under A3 rule 5 condition 5?",
+   "options": [
+    "refuse the whole operation with UNSAFE_REFERENCE because containment cannot be proved",
+    "return a failed-photo outcome with UNREADABLE_FILE because the image write cannot begin",
+    "treat the condition as a start-time settings failure"
+   ],
+   "default_guess": "Refuse with UNSAFE_REFERENCE whenever the binary root cannot be resolved and containment therefore cannot be proved.",
+   "witness": {
+    "initial": "The configured binary root existed at service start but is removed before a new placement.",
+    "events": [
+     "The caller requests delivery of a valid source with no existing placement.",
+     "delivery_store attempts the containment check and image write."
+    ],
+    "outcomes": [
+     "The API returns an M08 refusal with UNSAFE_REFERENCE.",
+     "The API returns an M06 outcome with FAILED and UNREADABLE_FILE."
+    ],
+    "observer": "the caller"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"delivery_store state-record layout\",\"kind\":\"unspecified layout\",\"text\":\"the names and modes of stored images and state records;\",\"question\":\"At which exact relative addresses are lock files, placement records and mark records stored, using LOCKS_FOLDER, PLACEMENTS_FOLDER, MARKS_FOLDER, LOCK_FILE_SUFFIX and RECORD_FILE_SUFFIX?\",\"options\":[\"locks/<project_id>.lock, ledger/<project_id>/<source_id>.json and published/<project_id>/<source_id>.json\",\"a different nesting or filename scheme using the same constants\"],\"default_guess\":\"Use locks/<project_id>.lock, ledger/<project_id>/<source_id>.json and published/<project_id>/<source_id>.json.\",\"witness\":{\"initial\":\"A state folder contains a valid placement record written by one implementation.\",\"events\":[\"A second implementation starts against the same state folder and delivers the same project and source.\"],\"outcomes\":[\"It finds the record at the first implementation's address and answers replayed.\",\"It looks at a different permitted address, treats the placement as absent and attempts a new placement.\"],\"observer\":\"the caller and the operator inspecting the state folder\"}},{\"subject\":\"A6 rule 3 image durability\",\"kind\":\"undefined durability boundary\",\"text\":\"A stored image is made durable before the record that refers to it is written, so a crash never leaves a record without its image; a failure to make it durable fails that write and A3 rule 5 condition 5 applies.\",\"question\":\"Which successful operations constitute making the image durable, particularly whether the image file and every newly created directory entry must be synchronised, and at what failure point write_placement must remain uncalled?\",\"options\":[\"synchronise image contents and the containing directory, including newly created ancestor directories, before writing the record\",\"synchronise only the image file before writing the record\",\"treat a successful rename as durable\"],\"default_guess\":\"Synchronise the temporary image contents, rename it, synchronise its containing directory, and synchronise each newly created ancestor directory before writing the record.\",\"witness\":{\"initial\":\"The image's destination directory is newly created and the placement record is absent.\",\"events\":[\"The deliverer writes and renames the image.\",\"Synchronising the new directory entry fails.\",\"The caller receives the delivery result.\"],\"outcomes\":[\"The delivery fails with UNREADABLE_FILE and no placement record is written.\",\"The image is considered durable, the placement record is written and the delivery answers PLACED.\"],\"observer\":\"the caller\"}},{\"subject\":\"A6 rule 3 record commit\",\"kind\":\"ambiguous commit point\",\"text\":\"A record is the last write of its operation: once it is in place the operation has taken effect.\",\"question\":\"Does “in place” mean that the rename succeeded, or that the record's directory entry has also been made durable; and what result is returned if the rename succeeds but a subsequent durability operation fails?\",\"options\":[\"the rename is the commit point and the operation succeeds despite a later directory-synchronisation failure\",\"the record is in place only after directory synchronisation, so such a failure makes the operation fail\",\"no directory synchronisation is attempted for records\"],\"default_guess\":\"Treat the successful rename as the commit point and return success; attempt directory synchronisation only as best-effort durability that cannot reverse the committed operation.\",\"witness\":{\"initial\":\"No placement record exists, and the prepared image is already durable.\",\"events\":[\"delivery_store renames a complete placement record to its final address.\",\"Synchronising the record directory fails.\",\"photo_delivery forms the answer.\"],\"outcomes\":[\"The call answers PLACED because the record was in place.\",\"The call answers FAILED with UNREADABLE_FILE even though a valid placement record is now visible.\"],\"observer\":\"the caller, and a later caller that sees the record\"}},{\"subject\":\"delivery_store temporary files\",\"kind\":\"contradictory cleanup implication\",\"text\":\"removing its own temporary file after a failed write (A6 rule 3) is not such a removal.\",\"question\":\"Must delivery_store remove a temporary file after an ordinary failed write, given that A6 rule 3 specifies only that a crash may leave one and does not state the non-crash cleanup rule?\",\"options\":[\"remove the temporary file after every handled pre-commit failure, leaving it only when cleanup itself fails or the process crashes\",\"leave the temporary file after any failed write\",\"make cleanup best-effort without defining whether a remaining temporary file changes the reported result\"],\"default_guess\":\"Remove it after every handled pre-commit failure; preserve the original write failure if cleanup also fails.\",\"witness\":{\"initial\":\"A temporary image file has been created and the final image address is absent.\",\"events\":[\"Writing or synchronising the temporary file fails without a process crash.\",\"The operation returns.\",\"The operator lists the binary-store directory.\"],\"outcomes\":[\"The temporary file has been removed.\",\"The temporary file remains under TEMPORARY_NAME_PREFIX.\"],\"observer\":\"the operator and storage monitoring\"}},{\"subject\":\"photo_delivery project-lock scope\",\"kind\":\"undecided critical section\",\"text\":\"which checks and writes run inside the project lock;\",\"question\":\"Exactly which steps after the project-lock position in A3 rule 4 remain under one uninterrupted acquisition: record reads, named-source reading, preparation, image storage, placement-record writing and mark-record writing?\",\"options\":[\"hold one acquisition from the existing-record checks through the final record write\",\"hold it only while checking and writing records, releasing it during source reading and image preparation and then reacquiring and rechecking\",\"use separate acquisitions for placement lookup, image storage and record writing\"],\"default_guess\":\"Hold one acquisition from the existing placement and mark checks through the operation's final record write.\",\"witness\":{\"initial\":\"Two processes deliver the same previously unplaced source in one project.\",\"events\":[\"The first process passes the existing-placement check and begins slow image preparation.\",\"The second process reaches the project lock before the first record is written.\"],\"outcomes\":[\"The second process waits without reading or preparing the source, then answers REPLAYED.\",\"The second process also reads and prepares the source before reacquiring the lock and answering REPLAYED.\"],\"observer\":\"filesystem instrumentation, resource monitoring and the second caller's latency\"}},{\"subject\":\"A6 rule 4 existing project lock\",\"kind\":\"unspecified existing-entry policy\",\"text\":\"It is created on first use, the lock file with the imported `LOCK_FILE_MODE` constant and those folders with the imported `STATE_FOLDER_MODE` constant, and is never changed or removed afterwards;\",\"question\":\"When the lock file and its parent folders already exist, which attributes must be validated—regular-file or directory type, ownership, mode and lock-file contents—and does a wrong mode cause STATE_UNAVAILABLE or get accepted unchanged?\",\"options\":[\"require only nonsymlink directories and a nonsymlink regular lock file; accept their existing modes and ignore file contents\",\"require the imported modes and refuse any mismatch without changing it\",\"repair modes before taking the lock\",\"require an empty lock file in addition to its type and mode\"],\"default_guess\":\"Require nonsymlink directories and a nonsymlink regular lock file, ignore its bytes, and accept existing modes unchanged because the entries may never be changed after creation.\",\"witness\":{\"initial\":\"The project lock is a regular file with mode 0644 rather than LOCK_FILE_MODE, and no operation currently holds it.\",\"events\":[\"A caller makes an otherwise valid delivery.\",\"delivery_store inspects and attempts to take the existing lock.\"],\"outcomes\":[\"The operation takes the lock and continues.\",\"The operation is refused with STATE_UNAVAILABLE.\"],\"observer\":\"the caller\"}},{\"subject\":\"A6 rule 1 unavailable binary root\",\"kind\":\"ambiguous failure classification\",\"text\":\"The reference must stay inside the binary store: its path, resolved with the links of the binary store, must lie below the resolved store. When it does not, or when a link in the store cannot be resolved, the delivery is refused as a whole with the UNSAFE_REFERENCE member of = models.RefusalCode\",\"question\":\"What outcome applies when the configured binary root itself is absent, unreadable or otherwise cannot be resolved for a reason other than an unresolvable symbolic link: UNSAFE_REFERENCE under A6 rule 1 or FAILED/UNREADABLE_FILE under A3 rule 5 condition 5?\",\"options\":[\"refuse the whole operation with UNSAFE_REFERENCE because containment cannot be proved\",\"return a failed-photo outcome with UNREADABLE_FILE because the image write cannot begin\",\"treat the condition as a start-time settings failure\"],\"default_guess\":\"Refuse with UNSAFE_REFERENCE whenever the binary root cannot be resolved and containment therefore cannot be proved.\",\"witness\":{\"initial\":\"The configured binary root existed at service start but is removed before a new placement.\",\"events\":[\"The caller requests delivery of a valid source with no existing placement.\",\"delivery_store attempts the containment check and image write.\"],\"outcomes\":[\"The API returns an M08 refusal with UNSAFE_REFERENCE.\",\"The API returns an M06 outcome with FAILED and UNREADABLE_FILE.\"],\"observer\":\"the caller\"}}]}",
+ "set_aside": []
+}

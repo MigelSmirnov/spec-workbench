@@ -1,0 +1,286 @@
+{
+ "open_points": [
+  {
+   "subject": "A2 timezone dependency",
+   "kind": "unclear dependency",
+   "text": "- choosing the photo moment and converting it to UTC without an offset;",
+   "question": "How does `photo_preparation` receive the `timezone` run-setting value when its declared dependencies include neither `RuntimeSettings` nor `DeliveryContext`?",
+   "options": [
+    "`photo_delivery` passes the timezone as a plain string argument",
+    "`photo_preparation` imports and receives `RuntimeSettings`",
+    "`photo_preparation` imports and receives `DeliveryContext`"
+   ],
+   "default_guess": "`photo_delivery` passes `DeliveryContext.timezone` as a plain string argument.",
+   "witness": {
+    "initial": "The configured timezone is `Europe/Madrid` and a source has an offset-free EXIF camera time.",
+    "events": [
+     "`deliverer_api` builds `DeliveryContext` from the run settings.",
+     "`photo_delivery` asks `photo_preparation` to prepare the source.",
+     "`photo_preparation` interprets the offset-free camera time."
+    ],
+    "outcomes": [
+     "The timezone string is passed to `prepare_photo`, and the camera time is converted using `Europe/Madrid`.",
+     "No timezone-bearing value is passed, so the implementation uses a process default or adds an undeclared model dependency."
+    ],
+    "observer": "The caller sees a different `photo_date` in the returned publication body."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 state-folder root handling",
+   "kind": "unclear boundary",
+   "text": "Below the state folder the service follows no symbolic link.",
+   "question": "May the configured state folder itself, or a component above it, be reached through a symbolic link, and if so which module resolves and validates it?",
+   "options": [
+    "Only entries below the configured state folder are link-free; the configured path is followed as it stands",
+    "No component of the configured state-folder path may be a symbolic link",
+    "The configured path is resolved once and containment is checked before every state operation"
+   ],
+   "default_guess": "Follow the configured state-folder path as it stands and prohibit symbolic links only in entries below it.",
+   "witness": {
+    "initial": "`state_dir` names a symbolic link to an installation-owned directory containing valid state.",
+    "events": [
+     "The service starts.",
+     "A caller performs the first delivery for a project."
+    ],
+    "outcomes": [
+     "The configured link is followed and the operation uses the target state directory.",
+     "The operation is refused because the state-folder path contains a symbolic link."
+    ],
+    "observer": "The caller sees a placement result in one implementation and `state_unavailable` in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 record absence",
+   "kind": "ambiguous absence",
+   "text": "A record is absent only when nothing exists at its address.",
+   "question": "Is a record absent when one or more parent folders of its address do not yet exist, or is that an unreadable state address requiring `state_unavailable`?",
+   "options": [
+    "A missing parent means the record is absent",
+    "A missing parent makes the record unreadable and causes `state_unavailable`"
+   ],
+   "default_guess": "Treat a missing parent as an absent record.",
+   "witness": {
+    "initial": "The installation-created state folder exists, but the placement and project subfolders have never been created.",
+    "events": [
+     "A caller delivers the first source for the project.",
+     "`read_placement` looks for its record address."
+    ],
+    "outcomes": [
+     "The placement is absent, so the image and record are created.",
+     "The address cannot be traversed, so the delivery is refused with `state_unavailable`."
+    ],
+    "observer": "The caller sees either a successful placement or an M08 refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 persistent layout",
+   "kind": "unspecified record layout",
+   "text": "- the layout of the state folder and the binary store;",
+   "question": "What exact addresses must `delivery_store` use for lock, placement and mark records now that the rules no longer map `LOCKS_FOLDER`, `PLACEMENTS_FOLDER`, `MARKS_FOLDER`, `LOCK_FILE_SUFFIX` and `RECORD_FILE_SUFFIX` to paths?",
+   "options": [
+    "Use `<state_dir>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX>` and project subfolders under the placement and mark folders",
+    "Use another layout that incorporates the same imported constants",
+    "Treat the constant names themselves as sufficient specification of the layout"
+   ],
+   "default_guess": "Use the former layout: a project lock under `LOCKS_FOLDER`, and records named by source id inside project folders under `PLACEMENTS_FOLDER` and `MARKS_FOLDER`.",
+   "witness": {
+    "initial": "A placement and mark written by one implementation already exist in the state folder.",
+    "events": [
+     "The service is restarted with another careful implementation of the same texts.",
+     "The caller scans or replays that source."
+    ],
+    "outcomes": [
+     "The second implementation uses the same addresses and finds the placement and mark.",
+     "The second implementation uses a different allowed arrangement and treats them as absent."
+    ],
+    "observer": "The caller sees `published` or `replayed` in one implementation and `ready`, a new placement, or `not_placed` in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 concurrent folder creation",
+   "kind": "unspecified concurrency rule",
+   "text": "the service creates only folders below them, with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants, and removes none.",
+   "question": "When concurrent operations for different projects both try to create the same missing ancestor folder, is an already-created folder accepted after verification or is the losing creation attempt a failed write?",
+   "options": [
+    "Treat an already-created verified directory as success",
+    "Treat any failed exclusive creation, including an `already exists` result, as a write failure",
+    "Serialize creation of shared ancestor folders with an additional lock"
+   ],
+   "default_guess": "Treat `already exists` as success after verifying that the entry is a real directory and not a symbolic link.",
+   "witness": {
+    "initial": "The shared placement-record parent folder is missing.",
+    "events": [
+     "Caller A begins the first delivery for project A.",
+     "Caller B concurrently begins the first delivery for project B.",
+     "Both operations attempt to create the shared parent."
+    ],
+    "outcomes": [
+     "Both accept the resulting directory and can complete.",
+     "One operation treats the creation race as a failure and returns a failed photo or refusal."
+    ],
+    "observer": "Caller A or B sees a spurious failure only in the second implementation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 directory modes",
+   "kind": "ambiguous mode enforcement",
+   "text": "the service creates only folders below them, with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants, and removes none.",
+   "question": "Must newly created folders have exactly those modes regardless of process umask, and what result follows if setting the exact mode fails?",
+   "options": [
+    "Create and explicitly set the exact mode; failure fails the operation",
+    "Pass the mode only to directory creation and allow umask to narrow it",
+    "Accept any existing or newly created directory mode"
+   ],
+   "default_guess": "Explicitly establish the exact mode regardless of umask and fail the operation if that cannot be done.",
+   "witness": {
+    "initial": "The process umask removes permissions present in `STORE_FOLDER_MODE`.",
+    "events": [
+     "A delivery creates a missing binary-store project folder.",
+     "The Portal later attempts to read the stored image."
+    ],
+    "outcomes": [
+     "The service corrects the folder mode and the Portal can traverse it.",
+     "The umask-narrowed mode remains and the Portal cannot traverse it."
+    ],
+    "observer": "The Portal and the owner see whether the stored image can be retrieved."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 stored-image durability",
+   "kind": "undefined durability point",
+   "text": "A stored image is made durable before the record that refers to it is written, so a crash never leaves a record without its image;",
+   "question": "Which persistence operations establish that the image and every newly created path component are durable before the placement record may be written?",
+   "options": [
+    "Synchronise the image and every directory entry needed to reach it",
+    "Synchronise only the image file",
+    "Treat successful close or rename as durable"
+   ],
+   "default_guess": "Synchronise the image file and the containing directories, including newly created ancestors, before writing the record.",
+   "witness": {
+    "initial": "The image's project folder does not exist and the host uses a filesystem where unsynchronised directory entries can disappear after a crash.",
+    "events": [
+     "A delivery creates the folder and image.",
+     "The implementation writes the placement record.",
+     "The host crashes before unsynchronised directory metadata reaches stable storage.",
+     "The service restarts."
+    ],
+    "outcomes": [
+     "Both image and record survive because the file and directories were synchronised.",
+     "The record survives while its image or an ancestor directory is lost."
+    ],
+    "observer": "The Portal and a replaying caller encounter either a valid placement or a record whose image is missing."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 record commit point",
+   "kind": "ambiguous operation outcome",
+   "text": "A record is the last write of its operation: once it is in place the operation has taken effect.",
+   "question": "Does “in place” mean that the rename has succeeded, or that the record's containing directory has also been made durable; and what answer is returned if directory synchronisation fails after the rename?",
+   "options": [
+    "Rename is the commit point; later directory-synchronisation failure does not fail the operation",
+    "Directory durability is the commit point; a post-rename synchronisation failure fails the operation even though the record is visible",
+    "The implementation must roll back the renamed record when directory synchronisation fails"
+   ],
+   "default_guess": "Treat successful rename as the operation's commit point and do not report a failure after the record is visible.",
+   "witness": {
+    "initial": "A placement record destination is absent and its directory allows rename but returns an error when synchronised.",
+    "events": [
+     "The stored image is made durable.",
+     "The placement record is renamed into its final address.",
+     "Synchronising the record directory fails."
+    ],
+    "outcomes": [
+     "The delivery answers `placed` because the record is already in place.",
+     "The delivery answers `failed` even though a replay immediately finds the completed record."
+    ],
+    "observer": "The caller sees success in one implementation and failure followed by replay in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 interrupted writes",
+   "kind": "contradiction",
+   "text": "A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.",
+   "question": "Reconcile this with the rule that the service creates missing folders and removes none: must folders created by an interrupted write remain, or must “at most a temporary file” exclude newly created folders from what the crash leaves?",
+   "options": [
+    "Newly created folders may remain; “at most” describes only files",
+    "No newly created folder may remain after a crash-cut write",
+    "Folders may remain only after a specified creation durability point"
+   ],
+   "default_guess": "Interpret the sentence as limiting leftover files only; created folders may remain.",
+   "witness": {
+    "initial": "A required project folder below the binary store is missing.",
+    "events": [
+     "A delivery creates the folder.",
+     "The process or host crashes while writing the temporary image."
+    ],
+    "outcomes": [
+     "The new folder and possibly one temporary file remain because created folders are never removed.",
+     "Only the temporary file may remain, so the folder must not remain or must be removed during recovery."
+    ],
+    "observer": "The owner or a subsequent delivery sees whether the newly created folder remains."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 pre-existing project lock",
+   "kind": "ambiguous existing state",
+   "text": "It is created on first use, the lock file with the imported `LOCK_FILE_MODE` constant and those folders with the imported `STATE_FOLDER_MODE` constant, and is never changed or removed afterwards;",
+   "question": "How must `delivery_store` handle a lock address that already contains a regular file it did not create, particularly when its mode differs from `LOCK_FILE_MODE`?",
+   "options": [
+    "Use the existing regular file without changing its mode",
+    "Refuse with `state_unavailable` unless the existing file already has the required mode",
+    "Change the existing file to `LOCK_FILE_MODE` before using it"
+   ],
+   "default_guess": "Use an existing regular non-link file without changing it, but refuse links and non-regular entries.",
+   "witness": {
+    "initial": "The lock address contains an otherwise usable regular file with mode `0644`.",
+    "events": [
+     "A caller begins an operation for that project.",
+     "`project_lock` opens and attempts to take the operating-system lock."
+    ],
+    "outcomes": [
+     "The existing file is accepted and the operation continues.",
+     "The operation is refused because the existing file was not created with `LOCK_FILE_MODE`."
+    ],
+    "observer": "The caller sees normal operation in one implementation and `state_unavailable` in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 temporary files",
+   "kind": "unspecified temporary lifecycle",
+   "text": "A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.",
+   "question": "How are temporary names chosen, are they created exclusively, and must a temporary file be removed after an ordinary write failure rather than a crash?",
+   "options": [
+    "Use fresh exclusive names and remove the temporary file after ordinary failures",
+    "Permit reuse or replacement of a prefixed name and leave it after any failure",
+    "Use fresh exclusive names but leave failed temporary files for later manual cleanup"
+   ],
+   "default_guess": "Create a fresh name exclusively for every attempt and remove it after an ordinary failure, leaving it only when cleanup fails or execution is interrupted.",
+   "witness": {
+    "initial": "A stale prefixed temporary file already exists at the name an implementation would otherwise choose.",
+    "events": [
+     "A new placement attempts an atomic image write.",
+     "The write then fails before the final rename."
+    ],
+    "outcomes": [
+     "Exclusive fresh-name creation avoids altering the stale file and cleans up the new temporary file.",
+     "The implementation reuses or overwrites the stale entry, or leaves an additional failed temporary file."
+    ],
+    "observer": "The owner inspecting the store and later write attempts see different state and possible failures."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A2 timezone dependency\",\"kind\":\"unclear dependency\",\"text\":\"- choosing the photo moment and converting it to UTC without an offset;\",\"question\":\"How does `photo_preparation` receive the `timezone` run-setting value when its declared dependencies include neither `RuntimeSettings` nor `DeliveryContext`?\",\"options\":[\"`photo_delivery` passes the timezone as a plain string argument\",\"`photo_preparation` imports and receives `RuntimeSettings`\",\"`photo_preparation` imports and receives `DeliveryContext`\"],\"default_guess\":\"`photo_delivery` passes `DeliveryContext.timezone` as a plain string argument.\",\"witness\":{\"initial\":\"The configured timezone is `Europe/Madrid` and a source has an offset-free EXIF camera time.\",\"events\":[\"`deliverer_api` builds `DeliveryContext` from the run settings.\",\"`photo_delivery` asks `photo_preparation` to prepare the source.\",\"`photo_preparation` interprets the offset-free camera time.\"],\"outcomes\":[\"The timezone string is passed to `prepare_photo`, and the camera time is converted using `Europe/Madrid`.\",\"No timezone-bearing value is passed, so the implementation uses a process default or adds an undeclared model dependency.\"],\"observer\":\"The caller sees a different `photo_date` in the returned publication body.\"}},{\"subject\":\"A6 state-folder root handling\",\"kind\":\"unclear boundary\",\"text\":\"Below the state folder the service follows no symbolic link.\",\"question\":\"May the configured state folder itself, or a component above it, be reached through a symbolic link, and if so which module resolves and validates it?\",\"options\":[\"Only entries below the configured state folder are link-free; the configured path is followed as it stands\",\"No component of the configured state-folder path may be a symbolic link\",\"The configured path is resolved once and containment is checked before every state operation\"],\"default_guess\":\"Follow the configured state-folder path as it stands and prohibit symbolic links only in entries below it.\",\"witness\":{\"initial\":\"`state_dir` names a symbolic link to an installation-owned directory containing valid state.\",\"events\":[\"The service starts.\",\"A caller performs the first delivery for a project.\"],\"outcomes\":[\"The configured link is followed and the operation uses the target state directory.\",\"The operation is refused because the state-folder path contains a symbolic link.\"],\"observer\":\"The caller sees a placement result in one implementation and `state_unavailable` in the other.\"}},{\"subject\":\"A6 record absence\",\"kind\":\"ambiguous absence\",\"text\":\"A record is absent only when nothing exists at its address.\",\"question\":\"Is a record absent when one or more parent folders of its address do not yet exist, or is that an unreadable state address requiring `state_unavailable`?\",\"options\":[\"A missing parent means the record is absent\",\"A missing parent makes the record unreadable and causes `state_unavailable`\"],\"default_guess\":\"Treat a missing parent as an absent record.\",\"witness\":{\"initial\":\"The installation-created state folder exists, but the placement and project subfolders have never been created.\",\"events\":[\"A caller delivers the first source for the project.\",\"`read_placement` looks for its record address.\"],\"outcomes\":[\"The placement is absent, so the image and record are created.\",\"The address cannot be traversed, so the delivery is refused with `state_unavailable`.\"],\"observer\":\"The caller sees either a successful placement or an M08 refusal.\"}},{\"subject\":\"A6 persistent layout\",\"kind\":\"unspecified record layout\",\"text\":\"- the layout of the state folder and the binary store;\",\"question\":\"What exact addresses must `delivery_store` use for lock, placement and mark records now that the rules no longer map `LOCKS_FOLDER`, `PLACEMENTS_FOLDER`, `MARKS_FOLDER`, `LOCK_FILE_SUFFIX` and `RECORD_FILE_SUFFIX` to paths?\",\"options\":[\"Use `<state_dir>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX>` and project subfolders under the placement and mark folders\",\"Use another layout that incorporates the same imported constants\",\"Treat the constant names themselves as sufficient specification of the layout\"],\"default_guess\":\"Use the former layout: a project lock under `LOCKS_FOLDER`, and records named by source id inside project folders under `PLACEMENTS_FOLDER` and `MARKS_FOLDER`.\",\"witness\":{\"initial\":\"A placement and mark written by one implementation already exist in the state folder.\",\"events\":[\"The service is restarted with another careful implementation of the same texts.\",\"The caller scans or replays that source.\"],\"outcomes\":[\"The second implementation uses the same addresses and finds the placement and mark.\",\"The second implementation uses a different allowed arrangement and treats them as absent.\"],\"observer\":\"The caller sees `published` or `replayed` in one implementation and `ready`, a new placement, or `not_placed` in the other.\"}},{\"subject\":\"A6 concurrent folder creation\",\"kind\":\"unspecified concurrency rule\",\"text\":\"the service creates only folders below them, with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants, and removes none.\",\"question\":\"When concurrent operations for different projects both try to create the same missing ancestor folder, is an already-created folder accepted after verification or is the losing creation attempt a failed write?\",\"options\":[\"Treat an already-created verified directory as success\",\"Treat any failed exclusive creation, including an `already exists` result, as a write failure\",\"Serialize creation of shared ancestor folders with an additional lock\"],\"default_guess\":\"Treat `already exists` as success after verifying that the entry is a real directory and not a symbolic link.\",\"witness\":{\"initial\":\"The shared placement-record parent folder is missing.\",\"events\":[\"Caller A begins the first delivery for project A.\",\"Caller B concurrently begins the first delivery for project B.\",\"Both operations attempt to create the shared parent.\"],\"outcomes\":[\"Both accept the resulting directory and can complete.\",\"One operation treats the creation race as a failure and returns a failed photo or refusal.\"],\"observer\":\"Caller A or B sees a spurious failure only in the second implementation.\"}},{\"subject\":\"A6 directory modes\",\"kind\":\"ambiguous mode enforcement\",\"text\":\"the service creates only folders below them, with the imported `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants, and removes none.\",\"question\":\"Must newly created folders have exactly those modes regardless of process umask, and what result follows if setting the exact mode fails?\",\"options\":[\"Create and explicitly set the exact mode; failure fails the operation\",\"Pass the mode only to directory creation and allow umask to narrow it\",\"Accept any existing or newly created directory mode\"],\"default_guess\":\"Explicitly establish the exact mode regardless of umask and fail the operation if that cannot be done.\",\"witness\":{\"initial\":\"The process umask removes permissions present in `STORE_FOLDER_MODE`.\",\"events\":[\"A delivery creates a missing binary-store project folder.\",\"The Portal later attempts to read the stored image.\"],\"outcomes\":[\"The service corrects the folder mode and the Portal can traverse it.\",\"The umask-narrowed mode remains and the Portal cannot traverse it.\"],\"observer\":\"The Portal and the owner see whether the stored image can be retrieved.\"}},{\"subject\":\"A6 stored-image durability\",\"kind\":\"undefined durability point\",\"text\":\"A stored image is made durable before the record that refers to it is written, so a crash never leaves a record without its image;\",\"question\":\"Which persistence operations establish that the image and every newly created path component are durable before the placement record may be written?\",\"options\":[\"Synchronise the image and every directory entry needed to reach it\",\"Synchronise only the image file\",\"Treat successful close or rename as durable\"],\"default_guess\":\"Synchronise the image file and the containing directories, including newly created ancestors, before writing the record.\",\"witness\":{\"initial\":\"The image's project folder does not exist and the host uses a filesystem where unsynchronised directory entries can disappear after a crash.\",\"events\":[\"A delivery creates the folder and image.\",\"The implementation writes the placement record.\",\"The host crashes before unsynchronised directory metadata reaches stable storage.\",\"The service restarts.\"],\"outcomes\":[\"Both image and record survive because the file and directories were synchronised.\",\"The record survives while its image or an ancestor directory is lost.\"],\"observer\":\"The Portal and a replaying caller encounter either a valid placement or a record whose image is missing.\"}},{\"subject\":\"A6 record commit point\",\"kind\":\"ambiguous operation outcome\",\"text\":\"A record is the last write of its operation: once it is in place the operation has taken effect.\",\"question\":\"Does “in place” mean that the rename has succeeded, or that the record's containing directory has also been made durable; and what answer is returned if directory synchronisation fails after the rename?\",\"options\":[\"Rename is the commit point; later directory-synchronisation failure does not fail the operation\",\"Directory durability is the commit point; a post-rename synchronisation failure fails the operation even though the record is visible\",\"The implementation must roll back the renamed record when directory synchronisation fails\"],\"default_guess\":\"Treat successful rename as the operation's commit point and do not report a failure after the record is visible.\",\"witness\":{\"initial\":\"A placement record destination is absent and its directory allows rename but returns an error when synchronised.\",\"events\":[\"The stored image is made durable.\",\"The placement record is renamed into its final address.\",\"Synchronising the record directory fails.\"],\"outcomes\":[\"The delivery answers `placed` because the record is already in place.\",\"The delivery answers `failed` even though a replay immediately finds the completed record.\"],\"observer\":\"The caller sees success in one implementation and failure followed by replay in the other.\"}},{\"subject\":\"A6 interrupted writes\",\"kind\":\"contradiction\",\"text\":\"A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.\",\"question\":\"Reconcile this with the rule that the service creates missing folders and removes none: must folders created by an interrupted write remain, or must “at most a temporary file” exclude newly created folders from what the crash leaves?\",\"options\":[\"Newly created folders may remain; “at most” describes only files\",\"No newly created folder may remain after a crash-cut write\",\"Folders may remain only after a specified creation durability point\"],\"default_guess\":\"Interpret the sentence as limiting leftover files only; created folders may remain.\",\"witness\":{\"initial\":\"A required project folder below the binary store is missing.\",\"events\":[\"A delivery creates the folder.\",\"The process or host crashes while writing the temporary image.\"],\"outcomes\":[\"The new folder and possibly one temporary file remain because created folders are never removed.\",\"Only the temporary file may remain, so the folder must not remain or must be removed during recovery.\"],\"observer\":\"The owner or a subsequent delivery sees whether the newly created folder remains.\"}},{\"subject\":\"A6 pre-existing project lock\",\"kind\":\"ambiguous existing state\",\"text\":\"It is created on first use, the lock file with the imported `LOCK_FILE_MODE` constant and those folders with the imported `STATE_FOLDER_MODE` constant, and is never changed or removed afterwards;\",\"question\":\"How must `delivery_store` handle a lock address that already contains a regular file it did not create, particularly when its mode differs from `LOCK_FILE_MODE`?\",\"options\":[\"Use the existing regular file without changing its mode\",\"Refuse with `state_unavailable` unless the existing file already has the required mode\",\"Change the existing file to `LOCK_FILE_MODE` before using it\"],\"default_guess\":\"Use an existing regular non-link file without changing it, but refuse links and non-regular entries.\",\"witness\":{\"initial\":\"The lock address contains an otherwise usable regular file with mode `0644`.\",\"events\":[\"A caller begins an operation for that project.\",\"`project_lock` opens and attempts to take the operating-system lock.\"],\"outcomes\":[\"The existing file is accepted and the operation continues.\",\"The operation is refused because the existing file was not created with `LOCK_FILE_MODE`.\"],\"observer\":\"The caller sees normal operation in one implementation and `state_unavailable` in the other.\"}},{\"subject\":\"A6 temporary files\",\"kind\":\"unspecified temporary lifecycle\",\"text\":\"A write cut short by a crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX` constant, which is never read.\",\"question\":\"How are temporary names chosen, are they created exclusively, and must a temporary file be removed after an ordinary write failure rather than a crash?\",\"options\":[\"Use fresh exclusive names and remove the temporary file after ordinary failures\",\"Permit reuse or replacement of a prefixed name and leave it after any failure\",\"Use fresh exclusive names but leave failed temporary files for later manual cleanup\"],\"default_guess\":\"Create a fresh name exclusively for every attempt and remove it after an ordinary failure, leaving it only when cleanup fails or execution is interrupted.\",\"witness\":{\"initial\":\"A stale prefixed temporary file already exists at the name an implementation would otherwise choose.\",\"events\":[\"A new placement attempts an atomic image write.\",\"The write then fails before the final rename.\"],\"outcomes\":[\"Exclusive fresh-name creation avoids altering the stale file and cleans up the new temporary file.\",\"The implementation reuses or overwrites the stale entry, or leaves an additional failed temporary file.\"],\"observer\":\"The owner inspecting the store and later write attempts see different state and possible failures.\"}}]}",
+ "set_aside": []
+}
