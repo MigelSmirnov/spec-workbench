@@ -40,8 +40,8 @@ of the web server ends the process, and the deployment decides what happens next
 
 ### Errors
 
-A connections file that condition 1 of A5 rule 7 rejects, a missing setting, or a token file that A5 rule 2
-rejects ends the start. `module:deliverer_service` writes no token to its output. The start writes no state, so
+A connections file that condition 1 of A5 rule 7 rejects, a run setting that A8 refuses, or a token file that A5
+rule 2 rejects ends the start. `module:deliverer_service` writes no token to its output. The start writes no state, so
 there is nothing to clean up.
 
 ## `flow:answer_health`
