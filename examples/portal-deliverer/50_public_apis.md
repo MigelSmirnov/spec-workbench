@@ -154,10 +154,11 @@ in the handlers of `module:deliverer_api`; every later check, the source id amon
 ### Errors
 
 Building the surface raises no refusal. A served route answers a wrong token, a malformed request and every M08 refusal.
-A path that is not a route answers 404, and a route's path with another method answers 405, both with the
-framework's own body and not M08. The framework also serves its generated description of the four routes at
-`/docs`, `/redoc` and `/openapi.json` without a token; it names the routes and the forms of their bodies and
-answers, and holds no credential, server path or project data.
+The surface serves nothing besides the four routes: no generated description of them and no documentation
+page. A path matches a route only as the table writes it, `{project_id}` and `{source_id}` each standing for
+one path segment, and a path with a trailing slash added is redirected to the route's path. Any other path
+answers 404, and a route's path with another method answers 405, both with the framework's own body and not
+M08.
 
 ### State impact
 
