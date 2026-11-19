@@ -1,0 +1,124 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "unspecified_state_layout",
+   "text": "Writes only the project lock file and the folders below the state folder that lead to it, on first use (A6 rule 4).",
+   "question": "What is the exact path of a project's lock file, which intervening folders may be created, and how is the project id encoded in that path?",
+   "options": [
+    "`<state_dir>/<LOCKS_FOLDER>/<canonical_project_id><LOCK_FILE_SUFFIX>` with only `LOCKS_FOLDER` created",
+    "A per-project folder below `LOCKS_FOLDER`, with the lock file inside it",
+    "Another delivery-store-private layout using the listed constants"
+   ],
+   "default_guess": "Use `<state_dir>/<LOCKS_FOLDER>/<canonical lowercase UUID><LOCK_FILE_SUFFIX>` and create only the missing `LOCKS_FOLDER` directory.",
+   "witness": {
+    "initial": "The installation-created state folder is empty, and the project id is `550e8400-e29b-41d4-a716-446655440000`.",
+    "events": [
+     "`module:photo_delivery` calls `project_lock` for the project.",
+     "`module:delivery_store` creates the state needed for the lock."
+    ],
+    "outcomes": [
+     "The filesystem contains `locks/550e8400-e29b-41d4-a716-446655440000.lock`.",
+     "The filesystem contains a project subfolder or a differently encoded lock-file name."
+    ],
+    "observer": "An operator inspecting durable state and another implementation or process that must find the same lock."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "unspecified_failure_mapping",
+   "text": "`state_unavailable` when the lock cannot be taken (A6 rule 5).",
+   "question": "Does every failure while creating or opening a missing leading folder map to `state_unavailable`, and what durable folders or lock file may remain after such a failure?",
+   "options": [
+    "Map every preparation failure to `state_unavailable` and retain anything already created because the service removes none",
+    "Map only operating-system lock acquisition failures to `state_unavailable` and propagate folder or file creation errors",
+    "Map every preparation failure to `state_unavailable` but remove newly created empty folders or the new lock file"
+   ],
+   "default_guess": "Map folder creation, lock-file creation or opening, and lock acquisition failures to `state_unavailable`; retain any successfully created folder or lock file.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "unspecified_crash_semantics",
+   "text": "Writes only the project lock file and the folders below the state folder that lead to it, on first use (A6 rule 4).",
+   "question": "What state may remain if the process ends during first creation, and must the leading folders and lock file become visible atomically as one unit?",
+   "options": [
+    "Partial first-use state is allowed, including leading folders without the lock file",
+    "The folders and lock file must appear atomically together",
+    "Only the lock file must be atomic; previously created leading folders may remain"
+   ],
+   "default_guess": "Allow leading folders to remain without the lock file after a crash, and let the next call complete creation.",
+   "witness": {
+    "initial": "The state folder exists, but neither the lock folder nor the project's lock file exists.",
+    "events": [
+     "A process calls `project_lock`.",
+     "The process creates a leading folder.",
+     "The process ends before creating or opening the lock file.",
+     "A second process calls `project_lock` for the same project."
+    ],
+    "outcomes": [
+     "The leading folder remains and the second process creates the missing lock file.",
+     "No part of the first creation is visible because the folders and lock file were published as one unit."
+    ],
+    "observer": "The second caller and an operator inspecting the state folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.deliver_project_photo",
+   "kind": "contradictory_state_impact",
+   "text": "Creates at most one placement of a project and content, and the project lock file on first use. After a failed record write a stored image may remain without a record (A3 rule 5).",
+   "question": "Must this state impact also say that first use may create the folders leading to the project lock file, as `public_op:delivery_store.project_lock` now specifies?",
+   "options": [
+    "Delivery may create both the lock file and its missing leading folders",
+    "Delivery may create the lock file only, so its call to `project_lock` must not create folders",
+    "The folders are created outside the delivery operation and are not part of its state impact"
+   ],
+   "default_guess": "State that delivery may create the project lock file and its missing leading folders on first use.",
+   "witness": {
+    "initial": "The state folder exists with no lock folder and the requested photo fails before any image or placement record is written.",
+    "events": [
+     "The caller invokes `deliver_project_photo`.",
+     "The operation reaches `project_lock`, which creates its leading folder and lock file.",
+     "The named source then fails an A3 condition."
+    ],
+    "outcomes": [
+     "The failed delivery leaves both the leading folder and project lock file, as the changed `project_lock` state impact allows.",
+     "The failed delivery leaves only the project lock file, as its own state impact says."
+    ],
+    "observer": "The caller's operator inspecting the state folder and tests asserting the operation's durable effects."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.mark_photo_published",
+   "kind": "contradictory_state_impact",
+   "text": "Creates at most one mark of a placement, and the project lock file on first use.",
+   "question": "Must this state impact also say that first use may create the folders leading to the project lock file, as `public_op:delivery_store.project_lock` now specifies?",
+   "options": [
+    "A mark may create both the lock file and its missing leading folders",
+    "A mark may create the lock file only, so its call to `project_lock` must not create folders",
+    "The folders are created outside the mark operation and are not part of its state impact"
+   ],
+   "default_guess": "State that marking may create the project lock file and its missing leading folders on first use.",
+   "witness": {
+    "initial": "A placement exists, the state folder has no lock folder, and the mark request will be refused after the lock is taken because an existing mark has another `photo_id`.",
+    "events": [
+     "The caller invokes `mark_photo_published`.",
+     "The operation reaches `project_lock`, which creates its leading folder and lock file.",
+     "The operation reads the existing mark and returns `publication_conflict`."
+    ],
+    "outcomes": [
+     "The refused mark leaves both the leading folder and project lock file, as the changed `project_lock` state impact allows.",
+     "The refused mark leaves only the project lock file, as its own state impact says."
+    ],
+    "observer": "The caller's operator inspecting the state folder and tests asserting that a refused mark writes only its documented state."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"unspecified_state_layout\",\"text\":\"Writes only the project lock file and the folders below the state folder that lead to it, on first use (A6 rule 4).\",\"question\":\"What is the exact path of a project's lock file, which intervening folders may be created, and how is the project id encoded in that path?\",\"options\":[\"`<state_dir>/<LOCKS_FOLDER>/<canonical_project_id><LOCK_FILE_SUFFIX>` with only `LOCKS_FOLDER` created\",\"A per-project folder below `LOCKS_FOLDER`, with the lock file inside it\",\"Another delivery-store-private layout using the listed constants\"],\"default_guess\":\"Use `<state_dir>/<LOCKS_FOLDER>/<canonical lowercase UUID><LOCK_FILE_SUFFIX>` and create only the missing `LOCKS_FOLDER` directory.\",\"witness\":{\"initial\":\"The installation-created state folder is empty, and the project id is `550e8400-e29b-41d4-a716-446655440000`.\",\"events\":[\"`module:photo_delivery` calls `project_lock` for the project.\",\"`module:delivery_store` creates the state needed for the lock.\"],\"outcomes\":[\"The filesystem contains `locks/550e8400-e29b-41d4-a716-446655440000.lock`.\",\"The filesystem contains a project subfolder or a differently encoded lock-file name.\"],\"observer\":\"An operator inspecting durable state and another implementation or process that must find the same lock.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"unspecified_failure_mapping\",\"text\":\"`state_unavailable` when the lock cannot be taken (A6 rule 5).\",\"question\":\"Does every failure while creating or opening a missing leading folder map to `state_unavailable`, and what durable folders or lock file may remain after such a failure?\",\"options\":[\"Map every preparation failure to `state_unavailable` and retain anything already created because the service removes none\",\"Map only operating-system lock acquisition failures to `state_unavailable` and propagate folder or file creation errors\",\"Map every preparation failure to `state_unavailable` but remove newly created empty folders or the new lock file\"],\"default_guess\":\"Map folder creation, lock-file creation or opening, and lock acquisition failures to `state_unavailable`; retain any successfully created folder or lock file.\"},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"unspecified_crash_semantics\",\"text\":\"Writes only the project lock file and the folders below the state folder that lead to it, on first use (A6 rule 4).\",\"question\":\"What state may remain if the process ends during first creation, and must the leading folders and lock file become visible atomically as one unit?\",\"options\":[\"Partial first-use state is allowed, including leading folders without the lock file\",\"The folders and lock file must appear atomically together\",\"Only the lock file must be atomic; previously created leading folders may remain\"],\"default_guess\":\"Allow leading folders to remain without the lock file after a crash, and let the next call complete creation.\",\"witness\":{\"initial\":\"The state folder exists, but neither the lock folder nor the project's lock file exists.\",\"events\":[\"A process calls `project_lock`.\",\"The process creates a leading folder.\",\"The process ends before creating or opening the lock file.\",\"A second process calls `project_lock` for the same project.\"],\"outcomes\":[\"The leading folder remains and the second process creates the missing lock file.\",\"No part of the first creation is visible because the folders and lock file were published as one unit.\"],\"observer\":\"The second caller and an operator inspecting the state folder.\"}},{\"subject\":\"public_op:photo_delivery.deliver_project_photo\",\"kind\":\"contradictory_state_impact\",\"text\":\"Creates at most one placement of a project and content, and the project lock file on first use. After a failed record write a stored image may remain without a record (A3 rule 5).\",\"question\":\"Must this state impact also say that first use may create the folders leading to the project lock file, as `public_op:delivery_store.project_lock` now specifies?\",\"options\":[\"Delivery may create both the lock file and its missing leading folders\",\"Delivery may create the lock file only, so its call to `project_lock` must not create folders\",\"The folders are created outside the delivery operation and are not part of its state impact\"],\"default_guess\":\"State that delivery may create the project lock file and its missing leading folders on first use.\",\"witness\":{\"initial\":\"The state folder exists with no lock folder and the requested photo fails before any image or placement record is written.\",\"events\":[\"The caller invokes `deliver_project_photo`.\",\"The operation reaches `project_lock`, which creates its leading folder and lock file.\",\"The named source then fails an A3 condition.\"],\"outcomes\":[\"The failed delivery leaves both the leading folder and project lock file, as the changed `project_lock` state impact allows.\",\"The failed delivery leaves only the project lock file, as its own state impact says.\"],\"observer\":\"The caller's operator inspecting the state folder and tests asserting the operation's durable effects.\"}},{\"subject\":\"public_op:photo_delivery.mark_photo_published\",\"kind\":\"contradictory_state_impact\",\"text\":\"Creates at most one mark of a placement, and the project lock file on first use.\",\"question\":\"Must this state impact also say that first use may create the folders leading to the project lock file, as `public_op:delivery_store.project_lock` now specifies?\",\"options\":[\"A mark may create both the lock file and its missing leading folders\",\"A mark may create the lock file only, so its call to `project_lock` must not create folders\",\"The folders are created outside the mark operation and are not part of its state impact\"],\"default_guess\":\"State that marking may create the project lock file and its missing leading folders on first use.\",\"witness\":{\"initial\":\"A placement exists, the state folder has no lock folder, and the mark request will be refused after the lock is taken because an existing mark has another `photo_id`.\",\"events\":[\"The caller invokes `mark_photo_published`.\",\"The operation reaches `project_lock`, which creates its leading folder and lock file.\",\"The operation reads the existing mark and returns `publication_conflict`.\"],\"outcomes\":[\"The refused mark leaves both the leading folder and project lock file, as the changed `project_lock` state impact allows.\",\"The refused mark leaves only the project lock file, as its own state impact says.\"],\"observer\":\"The caller's operator inspecting the state folder and tests asserting that a refused mark writes only its documented state.\"}}]}",
+ "set_aside": []
+}

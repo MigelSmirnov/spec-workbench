@@ -1,0 +1,109 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "unspecified_storage_layout",
+   "text": "Writes only the project lock file and the folders below the state folder that lead to it, on first use (A6 rule 4).",
+   "question": "What is the exact lock-file path, and therefore exactly which folders below the state folder does this operation create?",
+   "options": [
+    "`<state_dir>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX>` and only the missing `LOCKS_FOLDER` directory",
+    "`<state_dir>/<project_id><LOCK_FILE_SUFFIX>` with no intermediate folder",
+    "A sharded or otherwise nested project-specific path with multiple created folders"
+   ],
+   "default_guess": "Use `<state_dir>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX>` and create only the missing `LOCKS_FOLDER` directory with `STATE_FOLDER_MODE`.",
+   "witness": {
+    "initial": "The installation-created state folder exists, but no lock-related child exists for the project.",
+    "events": [
+     "The calling flow invokes `project_lock` for the project for the first time.",
+     "`delivery_store` must choose an address for the lock file and create the folders leading to it."
+    ],
+    "outcomes": [
+     "The store creates `locks/<project_id>.lock`.",
+     "The store creates `<project_id>.lock` directly in the state folder, or chooses another nested layout."
+    ],
+    "observer": "The operator inspecting or backing up the state folder, and any later implementation that must find the same lock."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "unspecified_error_boundary",
+   "text": "`state_unavailable` when the lock cannot be taken (A6 rule 5).",
+   "question": "Does failure to create a required folder or the lock file count as a lock that cannot be taken and therefore become `state_unavailable`, or does the filesystem error escape separately?",
+   "options": [
+    "Convert every folder-creation, lock-file creation/opening, and operating-system lock failure into `state_unavailable`",
+    "Convert only failure of the operating-system locking call into `state_unavailable` and propagate creation/opening errors",
+    "Convert lock-file failures but treat parent-folder failures as a different error"
+   ],
+   "default_guess": "Convert every failure required to prepare or acquire the project lock into `state_unavailable`.",
+   "witness": {
+    "initial": "The state folder exists, the required lock subfolder does not, and the process cannot create that subfolder.",
+    "events": [
+     "`module:photo_delivery` invokes `project_lock`.",
+     "Folder creation fails before an operating-system lock can be requested."
+    ],
+    "outcomes": [
+     "The caller receives M08 with `state_unavailable`.",
+     "A raw operating-system error escapes and the caller receives a different failure, such as an internal server error."
+    ],
+    "observer": "The calling flow."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.deliver_project_photo",
+   "kind": "contradictory_state_impact",
+   "text": "Creates at most one placement of a project and content, and the project lock file on first use. After a failed record write a stored image may remain without a record (A3 rule 5).",
+   "question": "Must this state impact also say that the first delivery may create the folders below the state folder leading to the project lock, or is it asserting that only the lock file is added?",
+   "options": [
+    "A first delivery may create both the lock file and its missing parent folders",
+    "A first delivery creates the lock file but no folders",
+    "The folders are installation state and are not created by the delivery operation"
+   ],
+   "default_guess": "A first delivery may create both the lock file and its missing parent folders, so this state impact should name both.",
+   "witness": {
+    "initial": "The state folder exists, but the lock file and its required child folders do not; the requested source will fail after the lock is acquired.",
+    "events": [
+     "The caller requests delivery.",
+     "`deliver_project_photo` reaches `project_lock`.",
+     "The later source check returns a failed M06."
+    ],
+    "outcomes": [
+     "The failed delivery leaves the new lock file and the folders leading to it, as `project_lock` states.",
+     "The failed delivery leaves only the project lock file, as this state-impact passage states."
+    ],
+    "observer": "The operator inspecting the state folder and a test asserting the durable changes of a failed delivery."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.mark_photo_published",
+   "kind": "contradictory_state_impact",
+   "text": "Creates at most one mark of a placement, and the project lock file on first use.",
+   "question": "Must this state impact also include creation of the folders below the state folder leading to the project lock?",
+   "options": [
+    "A first mark call may create both the lock file and its missing parent folders",
+    "A first mark call creates the lock file but no folders",
+    "The folders are installation state and are not created by the mark operation"
+   ],
+   "default_guess": "A first mark call may create both the lock file and its missing parent folders, so this state impact should name both.",
+   "witness": {
+    "initial": "A placement exists, while the project's lock file and its required child folders do not exist.",
+    "events": [
+     "The caller reports a Portal `photo_id`.",
+     "`mark_photo_published` reaches `project_lock` for the first time.",
+     "The mark operation then completes or is refused after taking the lock."
+    ],
+    "outcomes": [
+     "The call leaves the lock file and the folders leading to it, as `project_lock` states.",
+     "The call leaves only the lock file in addition to any mark, as this state-impact passage states."
+    ],
+    "observer": "The operator inspecting the state folder and a test asserting the durable changes of the mark call."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"unspecified_storage_layout\",\"text\":\"Writes only the project lock file and the folders below the state folder that lead to it, on first use (A6 rule 4).\",\"question\":\"What is the exact lock-file path, and therefore exactly which folders below the state folder does this operation create?\",\"options\":[\"`<state_dir>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX>` and only the missing `LOCKS_FOLDER` directory\",\"`<state_dir>/<project_id><LOCK_FILE_SUFFIX>` with no intermediate folder\",\"A sharded or otherwise nested project-specific path with multiple created folders\"],\"default_guess\":\"Use `<state_dir>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX>` and create only the missing `LOCKS_FOLDER` directory with `STATE_FOLDER_MODE`.\",\"witness\":{\"initial\":\"The installation-created state folder exists, but no lock-related child exists for the project.\",\"events\":[\"The calling flow invokes `project_lock` for the project for the first time.\",\"`delivery_store` must choose an address for the lock file and create the folders leading to it.\"],\"outcomes\":[\"The store creates `locks/<project_id>.lock`.\",\"The store creates `<project_id>.lock` directly in the state folder, or chooses another nested layout.\"],\"observer\":\"The operator inspecting or backing up the state folder, and any later implementation that must find the same lock.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"unspecified_error_boundary\",\"text\":\"`state_unavailable` when the lock cannot be taken (A6 rule 5).\",\"question\":\"Does failure to create a required folder or the lock file count as a lock that cannot be taken and therefore become `state_unavailable`, or does the filesystem error escape separately?\",\"options\":[\"Convert every folder-creation, lock-file creation/opening, and operating-system lock failure into `state_unavailable`\",\"Convert only failure of the operating-system locking call into `state_unavailable` and propagate creation/opening errors\",\"Convert lock-file failures but treat parent-folder failures as a different error\"],\"default_guess\":\"Convert every failure required to prepare or acquire the project lock into `state_unavailable`.\",\"witness\":{\"initial\":\"The state folder exists, the required lock subfolder does not, and the process cannot create that subfolder.\",\"events\":[\"`module:photo_delivery` invokes `project_lock`.\",\"Folder creation fails before an operating-system lock can be requested.\"],\"outcomes\":[\"The caller receives M08 with `state_unavailable`.\",\"A raw operating-system error escapes and the caller receives a different failure, such as an internal server error.\"],\"observer\":\"The calling flow.\"}},{\"subject\":\"public_op:photo_delivery.deliver_project_photo\",\"kind\":\"contradictory_state_impact\",\"text\":\"Creates at most one placement of a project and content, and the project lock file on first use. After a failed record write a stored image may remain without a record (A3 rule 5).\",\"question\":\"Must this state impact also say that the first delivery may create the folders below the state folder leading to the project lock, or is it asserting that only the lock file is added?\",\"options\":[\"A first delivery may create both the lock file and its missing parent folders\",\"A first delivery creates the lock file but no folders\",\"The folders are installation state and are not created by the delivery operation\"],\"default_guess\":\"A first delivery may create both the lock file and its missing parent folders, so this state impact should name both.\",\"witness\":{\"initial\":\"The state folder exists, but the lock file and its required child folders do not; the requested source will fail after the lock is acquired.\",\"events\":[\"The caller requests delivery.\",\"`deliver_project_photo` reaches `project_lock`.\",\"The later source check returns a failed M06.\"],\"outcomes\":[\"The failed delivery leaves the new lock file and the folders leading to it, as `project_lock` states.\",\"The failed delivery leaves only the project lock file, as this state-impact passage states.\"],\"observer\":\"The operator inspecting the state folder and a test asserting the durable changes of a failed delivery.\"}},{\"subject\":\"public_op:photo_delivery.mark_photo_published\",\"kind\":\"contradictory_state_impact\",\"text\":\"Creates at most one mark of a placement, and the project lock file on first use.\",\"question\":\"Must this state impact also include creation of the folders below the state folder leading to the project lock?\",\"options\":[\"A first mark call may create both the lock file and its missing parent folders\",\"A first mark call creates the lock file but no folders\",\"The folders are installation state and are not created by the mark operation\"],\"default_guess\":\"A first mark call may create both the lock file and its missing parent folders, so this state impact should name both.\",\"witness\":{\"initial\":\"A placement exists, while the project's lock file and its required child folders do not exist.\",\"events\":[\"The caller reports a Portal `photo_id`.\",\"`mark_photo_published` reaches `project_lock` for the first time.\",\"The mark operation then completes or is refused after taking the lock.\"],\"outcomes\":[\"The call leaves the lock file and the folders leading to it, as `project_lock` states.\",\"The call leaves only the lock file in addition to any mark, as this state-impact passage states.\"],\"observer\":\"The operator inspecting the state folder and a test asserting the durable changes of the mark call.\"}}]}",
+ "set_aside": []
+}

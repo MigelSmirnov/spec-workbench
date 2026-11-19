@@ -1,0 +1,187 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "unspecified_address",
+   "text": "the folders below the state folder that lead to it",
+   "question": "What is the exact lock-file path and therefore which folders must project_lock create for a project id?",
+   "options": [
+    "<state_dir>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX>",
+    "A lock file directly below state_dir",
+    "A nested or sharded per-project directory layout below state_dir"
+   ],
+   "default_guess": "Use <state_dir>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX> and create LOCKS_FOLDER when absent.",
+   "witness": {
+    "initial": "The state folder exists, but no lock-related child folder or lock file exists for the project.",
+    "events": [
+     "module:photo_delivery calls delivery_store.project_lock for the project.",
+     "module:delivery_store derives the lock address and creates the folders leading to it."
+    ],
+    "outcomes": [
+     "The service creates state_dir/locks/<project_id>.lock.",
+     "The service creates a different directory layout or a lock directly under state_dir."
+    ],
+    "observer": "The installer or operator inspecting and granting access to the state directory sees different paths and folders."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "unspecified_failure",
+   "text": "`state_unavailable` when the lock cannot be taken (A6 rule 5).",
+   "question": "Does failure to create a required parent folder or the lock file count as a lock that cannot be taken and therefore produce state_unavailable, and which newly created folders may remain after such a failure?",
+   "options": [
+    "Map every parent-folder or lock-file creation failure to state_unavailable and retain any folders already created because A6 removes none.",
+    "Propagate the operating-system error for folder creation, reserving state_unavailable for lock acquisition.",
+    "Map creation failure to state_unavailable but require creation to leave no new folder behind."
+   ],
+   "default_guess": "Return state_unavailable for any failure preparing or taking the lock, and retain any folders already created.",
+   "witness": {
+    "initial": "The state folder exists and is writable enough to create the lock folder, but creation of the lock file then fails.",
+    "events": [
+     "module:photo_delivery requests the project lock.",
+     "module:delivery_store creates the missing lock folder.",
+     "module:delivery_store fails to create or open the lock file."
+    ],
+    "outcomes": [
+     "The caller receives M08 state_unavailable and the new folder remains.",
+     "The caller receives a raw operating-system error, or the implementation attempts to remove the new folder."
+    ],
+    "observer": "module:photo_delivery and an operator inspecting the state folder see the different error and residual state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 4",
+   "kind": "contradiction",
+   "text": "that first creation is the only write of an operation that writes nothing else",
+   "question": "Must this say that creation of the lock file and all missing parent folders is the complete set of writes, rather than calling a multi-object creation the only write while saying the operation writes nothing else?",
+   "options": [
+    "Treat creation of the lock file and every missing parent folder collectively as the permitted lock-initialization writes.",
+    "Treat only creation of the lock file as a write and do not count directory creation.",
+    "Require the folders to pre-exist so that lock-file creation really is the only write."
+   ],
+   "default_guess": "Treat all lock-initialization filesystem changes collectively as the permitted writes.",
+   "witness": {
+    "initial": "Neither the lock folder nor the project lock file exists.",
+    "events": [
+     "module:photo_delivery calls project_lock.",
+     "module:delivery_store creates a folder and then creates the lock file."
+    ],
+    "outcomes": [
+     "The operation conforms because both creations collectively constitute its lock-initialization write.",
+     "The operation violates the passage because it performed at least two filesystem writes and wrote something besides the lock file."
+    ],
+    "observer": "A test or filesystem auditor counting state-directory changes sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 5",
+   "kind": "contradiction",
+   "text": "Conditions 1 to 4 write nothing except the project lock (A6 rule 4).",
+   "question": "Must this passage also permit creation of the folders leading to the project lock when one of conditions 1 to 4 occurs on first use?",
+   "options": [
+    "Change it to permit the project lock file and its missing parent folders.",
+    "Define “the project lock” to include its parent-folder creation.",
+    "Require parent folders to exist before these conditions can run."
+   ],
+   "default_guess": "Permit creation of the project lock file and its missing parent folders.",
+   "witness": {
+    "initial": "The project has no lock folder or lock file, and the requested source name fails condition 1.",
+    "events": [
+     "module:photo_delivery reaches project_lock.",
+     "module:delivery_store creates the missing folder and lock file.",
+     "module:photo_delivery rejects the source name under A3 rule 5 condition 1."
+    ],
+    "outcomes": [
+     "The failed delivery may leave both the folder and lock file, as the changed A6 rule requires.",
+     "The failed delivery may write nothing except the lock file, as A3 rule 5 states."
+    ],
+    "observer": "The caller's test or an operator inspecting the state folder sees whether the folder was added."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.deliver_project_photo",
+   "kind": "incomplete_effect",
+   "text": "Creates at most one placement of a project and content, and the project lock file on first use.",
+   "question": "Must the state impact also state that the operation can create the folders leading to the project lock on first use?",
+   "options": [
+    "Add the lock file and its missing parent folders to the state impact.",
+    "Use “project lock state” as a defined term that includes the file and folders.",
+    "Assert that the folders always pre-exist before deliver_project_photo runs."
+   ],
+   "default_guess": "Add the missing parent folders to the state impact.",
+   "witness": {
+    "initial": "The state folder exists, but the lock folder and project lock file do not; the photo cannot be delivered after the lock is taken.",
+    "events": [
+     "module:deliverer_api calls photo_delivery.deliver_project_photo.",
+     "module:photo_delivery takes project_lock, which creates the missing folder and lock file.",
+     "The delivery returns failed before writing an image or placement record."
+    ],
+    "outcomes": [
+     "The operation leaves a folder and a lock file.",
+     "Its stated impact is read as allowing only the lock file in addition to a placement."
+    ],
+    "observer": "The caller's state-impact test or an operator inspecting the state folder sees the additional folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.mark_photo_published",
+   "kind": "incomplete_effect",
+   "text": "Creates at most one mark of a placement, and the project lock file on first use.",
+   "question": "Must the state impact also state that the operation can create the folders leading to the project lock on first use?",
+   "options": [
+    "Add the lock file and its missing parent folders to the state impact.",
+    "Use “project lock state” as a defined term that includes the file and folders.",
+    "Assert that the folders always pre-exist before mark_photo_published runs."
+   ],
+   "default_guess": "Add the missing parent folders to the state impact.",
+   "witness": {
+    "initial": "A placement exists, but the lock folder and project lock file do not.",
+    "events": [
+     "module:deliverer_api calls photo_delivery.mark_photo_published.",
+     "module:photo_delivery takes project_lock, which creates the missing folder and lock file.",
+     "The mark is refused before a mark record is written."
+    ],
+    "outcomes": [
+     "The refused operation leaves a folder and a lock file.",
+     "Its stated impact is read as allowing only the lock file when no mark is created."
+    ],
+    "observer": "The caller's state-impact test or an operator inspecting the state folder sees the additional folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "unspecified_durability",
+   "text": "Creates the project lock file on first use and holds an operating system lock (A6 rule 4).",
+   "question": "Must creation of the lock file and its parent folders be made durable before the held lock is returned, or is ordinary filesystem creation without directory synchronisation sufficient?",
+   "options": [
+    "Synchronise the created file and affected directories before returning the held lock.",
+    "Rely on ordinary creation; durability is required only for stored images and records.",
+    "Require durability for the lock file but not for its parent folders."
+   ],
+   "default_guess": "Use ordinary creation because A6 explicitly requires durability only for stored images and their records.",
+   "witness": {
+    "initial": "The lock folder and file are absent.",
+    "events": [
+     "module:delivery_store creates them and returns the held lock.",
+     "The process or host crashes after the caller proceeds but before filesystem metadata is durable.",
+     "The service restarts and accesses the same project."
+    ],
+    "outcomes": [
+     "The folder and lock file are guaranteed to survive the crash.",
+     "Either may be absent and is recreated on the next use."
+    ],
+    "observer": "The restarted service and an operator inspecting the state folder see the difference."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"unspecified_address\",\"text\":\"the folders below the state folder that lead to it\",\"question\":\"What is the exact lock-file path and therefore which folders must project_lock create for a project id?\",\"options\":[\"<state_dir>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX>\",\"A lock file directly below state_dir\",\"A nested or sharded per-project directory layout below state_dir\"],\"default_guess\":\"Use <state_dir>/<LOCKS_FOLDER>/<project_id><LOCK_FILE_SUFFIX> and create LOCKS_FOLDER when absent.\",\"witness\":{\"initial\":\"The state folder exists, but no lock-related child folder or lock file exists for the project.\",\"events\":[\"module:photo_delivery calls delivery_store.project_lock for the project.\",\"module:delivery_store derives the lock address and creates the folders leading to it.\"],\"outcomes\":[\"The service creates state_dir/locks/<project_id>.lock.\",\"The service creates a different directory layout or a lock directly under state_dir.\"],\"observer\":\"The installer or operator inspecting and granting access to the state directory sees different paths and folders.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"unspecified_failure\",\"text\":\"`state_unavailable` when the lock cannot be taken (A6 rule 5).\",\"question\":\"Does failure to create a required parent folder or the lock file count as a lock that cannot be taken and therefore produce state_unavailable, and which newly created folders may remain after such a failure?\",\"options\":[\"Map every parent-folder or lock-file creation failure to state_unavailable and retain any folders already created because A6 removes none.\",\"Propagate the operating-system error for folder creation, reserving state_unavailable for lock acquisition.\",\"Map creation failure to state_unavailable but require creation to leave no new folder behind.\"],\"default_guess\":\"Return state_unavailable for any failure preparing or taking the lock, and retain any folders already created.\",\"witness\":{\"initial\":\"The state folder exists and is writable enough to create the lock folder, but creation of the lock file then fails.\",\"events\":[\"module:photo_delivery requests the project lock.\",\"module:delivery_store creates the missing lock folder.\",\"module:delivery_store fails to create or open the lock file.\"],\"outcomes\":[\"The caller receives M08 state_unavailable and the new folder remains.\",\"The caller receives a raw operating-system error, or the implementation attempts to remove the new folder.\"],\"observer\":\"module:photo_delivery and an operator inspecting the state folder see the different error and residual state.\"}},{\"subject\":\"A6 rule 4\",\"kind\":\"contradiction\",\"text\":\"that first creation is the only write of an operation that writes nothing else\",\"question\":\"Must this say that creation of the lock file and all missing parent folders is the complete set of writes, rather than calling a multi-object creation the only write while saying the operation writes nothing else?\",\"options\":[\"Treat creation of the lock file and every missing parent folder collectively as the permitted lock-initialization writes.\",\"Treat only creation of the lock file as a write and do not count directory creation.\",\"Require the folders to pre-exist so that lock-file creation really is the only write.\"],\"default_guess\":\"Treat all lock-initialization filesystem changes collectively as the permitted writes.\",\"witness\":{\"initial\":\"Neither the lock folder nor the project lock file exists.\",\"events\":[\"module:photo_delivery calls project_lock.\",\"module:delivery_store creates a folder and then creates the lock file.\"],\"outcomes\":[\"The operation conforms because both creations collectively constitute its lock-initialization write.\",\"The operation violates the passage because it performed at least two filesystem writes and wrote something besides the lock file.\"],\"observer\":\"A test or filesystem auditor counting state-directory changes sees the difference.\"}},{\"subject\":\"A3 rule 5\",\"kind\":\"contradiction\",\"text\":\"Conditions 1 to 4 write nothing except the project lock (A6 rule 4).\",\"question\":\"Must this passage also permit creation of the folders leading to the project lock when one of conditions 1 to 4 occurs on first use?\",\"options\":[\"Change it to permit the project lock file and its missing parent folders.\",\"Define “the project lock” to include its parent-folder creation.\",\"Require parent folders to exist before these conditions can run.\"],\"default_guess\":\"Permit creation of the project lock file and its missing parent folders.\",\"witness\":{\"initial\":\"The project has no lock folder or lock file, and the requested source name fails condition 1.\",\"events\":[\"module:photo_delivery reaches project_lock.\",\"module:delivery_store creates the missing folder and lock file.\",\"module:photo_delivery rejects the source name under A3 rule 5 condition 1.\"],\"outcomes\":[\"The failed delivery may leave both the folder and lock file, as the changed A6 rule requires.\",\"The failed delivery may write nothing except the lock file, as A3 rule 5 states.\"],\"observer\":\"The caller's test or an operator inspecting the state folder sees whether the folder was added.\"}},{\"subject\":\"public_op:photo_delivery.deliver_project_photo\",\"kind\":\"incomplete_effect\",\"text\":\"Creates at most one placement of a project and content, and the project lock file on first use.\",\"question\":\"Must the state impact also state that the operation can create the folders leading to the project lock on first use?\",\"options\":[\"Add the lock file and its missing parent folders to the state impact.\",\"Use “project lock state” as a defined term that includes the file and folders.\",\"Assert that the folders always pre-exist before deliver_project_photo runs.\"],\"default_guess\":\"Add the missing parent folders to the state impact.\",\"witness\":{\"initial\":\"The state folder exists, but the lock folder and project lock file do not; the photo cannot be delivered after the lock is taken.\",\"events\":[\"module:deliverer_api calls photo_delivery.deliver_project_photo.\",\"module:photo_delivery takes project_lock, which creates the missing folder and lock file.\",\"The delivery returns failed before writing an image or placement record.\"],\"outcomes\":[\"The operation leaves a folder and a lock file.\",\"Its stated impact is read as allowing only the lock file in addition to a placement.\"],\"observer\":\"The caller's state-impact test or an operator inspecting the state folder sees the additional folder.\"}},{\"subject\":\"public_op:photo_delivery.mark_photo_published\",\"kind\":\"incomplete_effect\",\"text\":\"Creates at most one mark of a placement, and the project lock file on first use.\",\"question\":\"Must the state impact also state that the operation can create the folders leading to the project lock on first use?\",\"options\":[\"Add the lock file and its missing parent folders to the state impact.\",\"Use “project lock state” as a defined term that includes the file and folders.\",\"Assert that the folders always pre-exist before mark_photo_published runs.\"],\"default_guess\":\"Add the missing parent folders to the state impact.\",\"witness\":{\"initial\":\"A placement exists, but the lock folder and project lock file do not.\",\"events\":[\"module:deliverer_api calls photo_delivery.mark_photo_published.\",\"module:photo_delivery takes project_lock, which creates the missing folder and lock file.\",\"The mark is refused before a mark record is written.\"],\"outcomes\":[\"The refused operation leaves a folder and a lock file.\",\"Its stated impact is read as allowing only the lock file when no mark is created.\"],\"observer\":\"The caller's state-impact test or an operator inspecting the state folder sees the additional folder.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"unspecified_durability\",\"text\":\"Creates the project lock file on first use and holds an operating system lock (A6 rule 4).\",\"question\":\"Must creation of the lock file and its parent folders be made durable before the held lock is returned, or is ordinary filesystem creation without directory synchronisation sufficient?\",\"options\":[\"Synchronise the created file and affected directories before returning the held lock.\",\"Rely on ordinary creation; durability is required only for stored images and records.\",\"Require durability for the lock file but not for its parent folders.\"],\"default_guess\":\"Use ordinary creation because A6 explicitly requires durability only for stored images and their records.\",\"witness\":{\"initial\":\"The lock folder and file are absent.\",\"events\":[\"module:delivery_store creates them and returns the held lock.\",\"The process or host crashes after the caller proceeds but before filesystem metadata is durable.\",\"The service restarts and accesses the same project.\"],\"outcomes\":[\"The folder and lock file are guaranteed to survive the crash.\",\"Either may be absent and is recreated on the next use.\"],\"observer\":\"The restarted service and an operator inspecting the state folder see the difference.\"}}]}",
+ "set_aside": []
+}
