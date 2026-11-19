@@ -1,0 +1,133 @@
+{
+ "open_points": [
+  {
+   "subject": "REFUSAL_STATUS and REFUSAL_DETAIL exports",
+   "kind": "contradictory_module_surface",
+   "text": "### Public surface\n\n```text\nMAX_SOURCE_BYTES\nMAX_OUTPUT_BYTES\nMAX_PIXELS\nPHOTO_MAX_SIDE\nPHOTO_QUALITY\nINTAKE_ID_PREFIX\nINTAKE_SOURCE\nIGNORED_NAME_PREFIXES\nIGNORED_NAME_SUFFIXES\nCONFLICT_COPY_MARK\nSOURCE_ID_PATTERN\nTOKEN_MIN_LENGTH\nTOKEN_TRIM_CHARACTERS\nSTORED_IMAGE_MODE\nSTORE_FOLDER_MODE\nRECORD_MODE\nSTATE_FOLDER_MODE\nLOCK_FILE_MODE\nTEMPORARY_NAME_PREFIX\nTEMPORARY_FILE_MODE\nPHOTO_OPTIMIZE\nPHOTO_PROGRESSIVE\nPHOTO_SUBSAMPLING\nPHOTO_BACKGROUND\nLOCKS_FOLDER\nPLACEMENTS_FOLDER\nMARKS_FOLDER\nLOCK_FILE_SUFFIX\nRECORD_FILE_SUFFIX\n```",
+   "question": "Are `REFUSAL_STATUS` and `REFUSAL_DETAIL` public exports of `data_provider`, as the dependency table requires, or are they owned and exported by another module?",
+   "options": [
+    "Add both constants to the public surface of `data_provider`",
+    "Move refusal mapping ownership to `deliverer_api` and remove the dependency",
+    "Introduce a separate refusal-policy provider"
+   ],
+   "default_guess": "Add both constants to the public surface of `data_provider`.",
+   "unit": "?"
+  },
+  {
+   "subject": "data_provider dependency on RefusalCode",
+   "kind": "missing_dependency",
+   "text": "- the policy constants of A8, as typed values.",
+   "question": "Because A8 types `REFUSAL_STATUS` and `REFUSAL_DETAIL` as dictionaries keyed by `RefusalCode`, must `data_provider` directly import `RefusalCode` from `domain_models`, or must the constants be represented without naming that model type?",
+   "options": [
+    "Add `data_provider` → `domain_models` for `RefusalCode`",
+    "Keep no dependency and use untyped or string-keyed mappings",
+    "Move the mappings to a module already allowed to know `RefusalCode`"
+   ],
+   "default_guess": "Add `data_provider` → `domain_models` for `RefusalCode`.",
+   "unit": "?"
+  },
+  {
+   "subject": "deliverer_api public capabilities",
+   "kind": "incomplete_export_surface",
+   "text": "### Candidate public capabilities\n\n```text\nanswer_health\n```",
+   "question": "Are `check_token`, `deliver_route`, `mark_route` and `scan_route` exported capabilities of `deliverer_api`, and if so why are they absent from its capability list even though `deliverer_router` imports them?",
+   "options": [
+    "Export all five symbols named by `deliverer_router`",
+    "Export only `answer_health` and move the other operations elsewhere",
+    "Make the router call one consolidated API capability"
+   ],
+   "default_guess": "Export all five symbols named by `deliverer_router` and list them as public capabilities.",
+   "unit": "?"
+  },
+  {
+   "subject": "Authorization extraction and token comparison",
+   "kind": "contradictory_ownership",
+   "text": "`deliverer_router` is the module that `http_router_backend/v1` generates, and it holds only what that\nbackend emits. It imports the route handlers of `deliverer_api`, so `deliverer_api` cannot import it\nback: the handlers read the `Authorization` field themselves by the same rule as the extractor the\nrouter declares, and both pass the credential to the one comparison, `check_token`.",
+   "question": "Does the generated router extract and validate the `Authorization` field and call `check_token`, or do the API handlers read the field and call `check_token`? The former conflicts with the router's prohibition on request checks and the latter leaves the router's direct import of `check_token` unexplained.",
+   "options": [
+    "The router only preserves and passes the raw field occurrences; `deliverer_api` performs the sole check",
+    "The router performs authentication and the ownership table is changed accordingly",
+    "Both call `check_token`, with an explicitly defined reason and order"
+   ],
+   "default_guess": "The router passes all raw `Authorization` field occurrences to `deliverer_api`, which alone calls `check_token`.",
+   "unit": "?"
+  },
+  {
+   "subject": "Authorization field representation",
+   "kind": "missing_boundary_contract",
+   "text": "- the routes of the service and the context and token the routes read from the application.",
+   "question": "What value crosses from `deliverer_router` to `deliverer_api` so the API can distinguish no `Authorization` field, exactly one field, and multiple fields without the web framework first collapsing them?",
+   "options": [
+    "An ordered list of all raw field values",
+    "A tagged value distinguishing absent, single and multiple fields",
+    "A framework request object inspected by `deliverer_api`"
+   ],
+   "default_guess": "Pass a tagged framework-neutral value that preserves absent, single and multiple fields.",
+   "witness": {
+    "initial": "The service is running with token `secret`, and the requested project is otherwise valid.",
+    "events": [
+     "The calling flow sends two `Authorization: Bearer secret` fields.",
+     "The router obtains the headers from a framework that may either preserve both occurrences or combine them into one value.",
+     "The API performs the token step using the value exposed by the router."
+    ],
+    "outcomes": [
+     "Both occurrences are preserved, so the request is refused with 401 and `unauthorized`.",
+     "The framework or router collapses them to one valid credential, so the request is accepted."
+    ],
+    "observer": "The calling flow sees either a successful operation or a 401 refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "AuthenticationRequired",
+   "kind": "unclear_model_role",
+   "text": "- the three refusal types: a refusal of the whole operation, a refusal of one file, and\n  `AuthenticationRequired`, a request that does not carry the token.",
+   "question": "Is `AuthenticationRequired` only the representation of an absent field, or the representation of every authentication failure including duplicate fields, a wrong scheme and a wrong token; and which module constructs and consumes it?",
+   "options": [
+    "A router-produced sentinel only for an absent field",
+    "A complete authentication-failure result produced by `deliverer_api`",
+    "An exception raised by the API and translated by the router"
+   ],
+   "default_guess": "Use it only as a framework-neutral sentinel for an absent field; pass present field occurrences unchanged to `deliverer_api` for the single comparison and refusal decision.",
+   "unit": "?"
+  },
+  {
+   "subject": "web-framework boundary",
+   "kind": "unclear_dependency_direction",
+   "text": "### Hides\n\n- the web framework that serves the routes.",
+   "question": "How can `deliverer_api` read the `Authorization` field and request form itself while `deliverer_router` hides the web framework? Must the API receive framework-neutral request values, or is it allowed to depend on framework request types?",
+   "options": [
+    "The router converts transport input into framework-neutral values",
+    "The API directly receives framework request objects, so the router does not exclusively hide the framework",
+    "Move all request reading to the router and revise ownership of request checks"
+   ],
+   "default_guess": "The router supplies framework-neutral raw values while `deliverer_api` owns their validation and interpretation.",
+   "unit": "?"
+  },
+  {
+   "subject": "invalid connections file at service start",
+   "kind": "dual_owner",
+   "text": "- the start of the service: the run settings, the context of the operations, the token file and the\n  refusals that end the start;",
+   "question": "Which module owns the decision and representation of an invalid-connections-file startup refusal, given that `object_connections` also owns “the refusal of a start when the file is not valid” while `deliverer_service` owns refusals ending startup?",
+   "options": [
+    "`object_connections` judges and returns a typed failure; `deliverer_service` alone decides to abort startup",
+    "`object_connections` owns and raises the startup refusal; `deliverer_service` only propagates it",
+    "`deliverer_service` owns the refusal and uses `object_connections` only for validation facts"
+   ],
+   "default_guess": "`object_connections` owns validation and returns a typed failure; `deliverer_service` owns the startup-abort decision.",
+   "unit": "?"
+  },
+  {
+   "subject": "Dependencies note for deliverer_service",
+   "kind": "standard_violation",
+   "text": "`deliverer_service` names `load_connections` only to refuse a start with a broken record. The operations\nread the record themselves through `confirmed_connection`, so no module keeps connections in memory.",
+   "rule": "- note, которая не должна создавать ребро, не называет чужой экспорт целым\n      словом",
+   "section": "7",
+   "question": "Rewrite the note so the `deliverer_service` passage does not name the foreign export `confirmed_connection` as a whole word, or declare that dependency if the service actually uses it.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"REFUSAL_STATUS and REFUSAL_DETAIL exports\",\"kind\":\"contradictory_module_surface\",\"text\":\"### Public surface\\n\\n```text\\nMAX_SOURCE_BYTES\\nMAX_OUTPUT_BYTES\\nMAX_PIXELS\\nPHOTO_MAX_SIDE\\nPHOTO_QUALITY\\nINTAKE_ID_PREFIX\\nINTAKE_SOURCE\\nIGNORED_NAME_PREFIXES\\nIGNORED_NAME_SUFFIXES\\nCONFLICT_COPY_MARK\\nSOURCE_ID_PATTERN\\nTOKEN_MIN_LENGTH\\nTOKEN_TRIM_CHARACTERS\\nSTORED_IMAGE_MODE\\nSTORE_FOLDER_MODE\\nRECORD_MODE\\nSTATE_FOLDER_MODE\\nLOCK_FILE_MODE\\nTEMPORARY_NAME_PREFIX\\nTEMPORARY_FILE_MODE\\nPHOTO_OPTIMIZE\\nPHOTO_PROGRESSIVE\\nPHOTO_SUBSAMPLING\\nPHOTO_BACKGROUND\\nLOCKS_FOLDER\\nPLACEMENTS_FOLDER\\nMARKS_FOLDER\\nLOCK_FILE_SUFFIX\\nRECORD_FILE_SUFFIX\\n```\",\"question\":\"Are `REFUSAL_STATUS` and `REFUSAL_DETAIL` public exports of `data_provider`, as the dependency table requires, or are they owned and exported by another module?\",\"options\":[\"Add both constants to the public surface of `data_provider`\",\"Move refusal mapping ownership to `deliverer_api` and remove the dependency\",\"Introduce a separate refusal-policy provider\"],\"default_guess\":\"Add both constants to the public surface of `data_provider`.\"},{\"subject\":\"data_provider dependency on RefusalCode\",\"kind\":\"missing_dependency\",\"text\":\"- the policy constants of A8, as typed values.\",\"question\":\"Because A8 types `REFUSAL_STATUS` and `REFUSAL_DETAIL` as dictionaries keyed by `RefusalCode`, must `data_provider` directly import `RefusalCode` from `domain_models`, or must the constants be represented without naming that model type?\",\"options\":[\"Add `data_provider` → `domain_models` for `RefusalCode`\",\"Keep no dependency and use untyped or string-keyed mappings\",\"Move the mappings to a module already allowed to know `RefusalCode`\"],\"default_guess\":\"Add `data_provider` → `domain_models` for `RefusalCode`.\"},{\"subject\":\"deliverer_api public capabilities\",\"kind\":\"incomplete_export_surface\",\"text\":\"### Candidate public capabilities\\n\\n```text\\nanswer_health\\n```\",\"question\":\"Are `check_token`, `deliver_route`, `mark_route` and `scan_route` exported capabilities of `deliverer_api`, and if so why are they absent from its capability list even though `deliverer_router` imports them?\",\"options\":[\"Export all five symbols named by `deliverer_router`\",\"Export only `answer_health` and move the other operations elsewhere\",\"Make the router call one consolidated API capability\"],\"default_guess\":\"Export all five symbols named by `deliverer_router` and list them as public capabilities.\"},{\"subject\":\"Authorization extraction and token comparison\",\"kind\":\"contradictory_ownership\",\"text\":\"`deliverer_router` is the module that `http_router_backend/v1` generates, and it holds only what that\\nbackend emits. It imports the route handlers of `deliverer_api`, so `deliverer_api` cannot import it\\nback: the handlers read the `Authorization` field themselves by the same rule as the extractor the\\nrouter declares, and both pass the credential to the one comparison, `check_token`.\",\"question\":\"Does the generated router extract and validate the `Authorization` field and call `check_token`, or do the API handlers read the field and call `check_token`? The former conflicts with the router's prohibition on request checks and the latter leaves the router's direct import of `check_token` unexplained.\",\"options\":[\"The router only preserves and passes the raw field occurrences; `deliverer_api` performs the sole check\",\"The router performs authentication and the ownership table is changed accordingly\",\"Both call `check_token`, with an explicitly defined reason and order\"],\"default_guess\":\"The router passes all raw `Authorization` field occurrences to `deliverer_api`, which alone calls `check_token`.\"},{\"subject\":\"Authorization field representation\",\"kind\":\"missing_boundary_contract\",\"text\":\"- the routes of the service and the context and token the routes read from the application.\",\"question\":\"What value crosses from `deliverer_router` to `deliverer_api` so the API can distinguish no `Authorization` field, exactly one field, and multiple fields without the web framework first collapsing them?\",\"options\":[\"An ordered list of all raw field values\",\"A tagged value distinguishing absent, single and multiple fields\",\"A framework request object inspected by `deliverer_api`\"],\"default_guess\":\"Pass a tagged framework-neutral value that preserves absent, single and multiple fields.\",\"witness\":{\"initial\":\"The service is running with token `secret`, and the requested project is otherwise valid.\",\"events\":[\"The calling flow sends two `Authorization: Bearer secret` fields.\",\"The router obtains the headers from a framework that may either preserve both occurrences or combine them into one value.\",\"The API performs the token step using the value exposed by the router.\"],\"outcomes\":[\"Both occurrences are preserved, so the request is refused with 401 and `unauthorized`.\",\"The framework or router collapses them to one valid credential, so the request is accepted.\"],\"observer\":\"The calling flow sees either a successful operation or a 401 refusal.\"}},{\"subject\":\"AuthenticationRequired\",\"kind\":\"unclear_model_role\",\"text\":\"- the three refusal types: a refusal of the whole operation, a refusal of one file, and\\n  `AuthenticationRequired`, a request that does not carry the token.\",\"question\":\"Is `AuthenticationRequired` only the representation of an absent field, or the representation of every authentication failure including duplicate fields, a wrong scheme and a wrong token; and which module constructs and consumes it?\",\"options\":[\"A router-produced sentinel only for an absent field\",\"A complete authentication-failure result produced by `deliverer_api`\",\"An exception raised by the API and translated by the router\"],\"default_guess\":\"Use it only as a framework-neutral sentinel for an absent field; pass present field occurrences unchanged to `deliverer_api` for the single comparison and refusal decision.\"},{\"subject\":\"web-framework boundary\",\"kind\":\"unclear_dependency_direction\",\"text\":\"### Hides\\n\\n- the web framework that serves the routes.\",\"question\":\"How can `deliverer_api` read the `Authorization` field and request form itself while `deliverer_router` hides the web framework? Must the API receive framework-neutral request values, or is it allowed to depend on framework request types?\",\"options\":[\"The router converts transport input into framework-neutral values\",\"The API directly receives framework request objects, so the router does not exclusively hide the framework\",\"Move all request reading to the router and revise ownership of request checks\"],\"default_guess\":\"The router supplies framework-neutral raw values while `deliverer_api` owns their validation and interpretation.\"},{\"subject\":\"invalid connections file at service start\",\"kind\":\"dual_owner\",\"text\":\"- the start of the service: the run settings, the context of the operations, the token file and the\\n  refusals that end the start;\",\"question\":\"Which module owns the decision and representation of an invalid-connections-file startup refusal, given that `object_connections` also owns “the refusal of a start when the file is not valid” while `deliverer_service` owns refusals ending startup?\",\"options\":[\"`object_connections` judges and returns a typed failure; `deliverer_service` alone decides to abort startup\",\"`object_connections` owns and raises the startup refusal; `deliverer_service` only propagates it\",\"`deliverer_service` owns the refusal and uses `object_connections` only for validation facts\"],\"default_guess\":\"`object_connections` owns validation and returns a typed failure; `deliverer_service` owns the startup-abort decision.\"},{\"subject\":\"Dependencies note for deliverer_service\",\"kind\":\"standard_violation\",\"text\":\"`deliverer_service` names `load_connections` only to refuse a start with a broken record. The operations\\nread the record themselves through `confirmed_connection`, so no module keeps connections in memory.\",\"rule\":\"- note, которая не должна создавать ребро, не называет чужой экспорт целым\\n      словом\",\"section\":\"7\",\"question\":\"Rewrite the note so the `deliverer_service` passage does not name the foreign export `confirmed_connection` as a whole word, or declare that dependency if the service actually uses it.\"}]}",
+ "set_aside": []
+}

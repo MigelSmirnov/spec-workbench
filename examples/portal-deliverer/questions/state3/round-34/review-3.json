@@ -1,0 +1,135 @@
+{
+ "open_points": [
+  {
+   "subject": "30_modules.md:`deliverer_api`",
+   "kind": "public_surface_contradiction",
+   "text": "| `deliverer_router` | `deliverer_api` | `answer_health`, `check_token`, `deliver_route`, `mark_route`, `scan_route` |\n\n### Candidate public capabilities\n\n```text\nanswer_health\n```",
+   "question": "Are `check_token`, `deliver_route`, `mark_route` and `scan_route` exported capabilities of `deliverer_api`, and if so what are their contracts?",
+   "options": [
+    "Export all five symbols and list them in the public capabilities",
+    "Export only `answer_health` and redesign the router dependency",
+    "Treat the candidate list as non-exhaustive and state where the complete public surface is defined"
+   ],
+   "default_guess": "Export all five symbols and add the four omitted capabilities to `deliverer_api`.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Dependencies",
+   "kind": "missing_provider_export",
+   "text": "| `deliverer_api` | `data_provider` | `REFUSAL_DETAIL`, `REFUSAL_STATUS` |",
+   "question": "Are `REFUSAL_DETAIL` and `REFUSAL_STATUS` exported by `data_provider`, whose stated Public surface omits both names?",
+   "options": [
+    "Add both constants to the `data_provider` Public surface",
+    "Move the mappings to another provider and change the dependency",
+    "Keep them private and expose a lookup capability instead"
+   ],
+   "default_guess": "Add both constants to the `data_provider` Public surface.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`deliverer_api`",
+   "kind": "request_boundary_contradiction",
+   "text": "- how a request is read and a refusal becomes an answer.\n\n- the routes of the service and the context and token the routes read from the application.\n\n- any check of a request, a refusal answer or a delivery rule;",
+   "question": "Which module reads raw headers, path parameters and the unvalidated body, and how is framework validation prevented from examining a malformed body before `deliverer_api` performs the token check?",
+   "options": [
+    "The router passes raw request data to `deliverer_api`, which performs all extraction and validation",
+    "The router extracts values without validation and `deliverer_api` performs all checks",
+    "The router performs framework validation and therefore owns part of request checking"
+   ],
+   "default_guess": "Have the router pass raw header occurrences, raw path text and raw body data to `deliverer_api`, with no framework validation before the token check.",
+   "witness": {
+    "initial": "A request targets a token-protected delivery route, has no Authorization field, and has a malformed body.",
+    "events": [
+     "The caller sends the request.",
+     "The generated router dispatches it.",
+     "The API boundary applies authentication and request-form handling."
+    ],
+    "outcomes": [
+     "The token check runs first and the caller receives 401 with `UNAUTHORIZED`.",
+     "Framework body validation runs first and the caller receives 422 with `INVALID_REQUEST` or a framework-generated error."
+    ],
+    "observer": "The calling flow and the INV-09 test `test_the_token_is_checked_before_the_request_form`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Dependencies",
+   "kind": "authorization_extraction_ambiguity",
+   "text": "the handlers read the `Authorization` field themselves by the same rule as the extractor the\nrouter declares, and both pass the credential to the one comparison, `check_token`.",
+   "question": "What do “the handlers” and “the extractor” each read or pass, which one preserves the number of Authorization fields, and is `check_token` invoked once or twice?",
+   "options": [
+    "The router extractor preserves all field occurrences and invokes the API comparison once",
+    "Each handler reads raw field occurrences and invokes `check_token`; the router declares no independently executing check",
+    "The extractor and handler both invoke `check_token` and their results must be reconciled"
+   ],
+   "default_guess": "Use one router extractor solely to preserve all Authorization field occurrences and call `check_token` exactly once before any other extraction.",
+   "witness": {
+    "initial": "A token-protected request carries two Authorization fields, one valid and one invalid.",
+    "events": [
+     "The caller sends both fields.",
+     "The router extractor and route handler obtain the Authorization input.",
+     "The API applies `check_token`."
+    ],
+    "outcomes": [
+     "Both occurrences are preserved, so the request is refused with 401 and `UNAUTHORIZED`.",
+     "The framework or one of the two readers collapses the fields to the valid value, so the request is accepted."
+    ],
+    "observer": "The calling flow and `test_the_api_requires_the_token`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`domain_models`",
+   "kind": "undefined_model",
+   "text": "`AuthenticationRequired`, a request that does not carry the token.",
+   "question": "What is the field structure and runtime role of `AuthenticationRequired`, and does it represent only an absent field or every Authorization extraction failure covered by A5 rule 1?",
+   "options": [
+    "A fieldless internal sentinel used only when the field is absent",
+    "A discriminated extraction result covering absent, duplicate and malformed fields",
+    "An exception raised by generated routing code",
+    "Remove the type and pass raw Authorization occurrences directly"
+   ],
+   "default_guess": "Replace it with a discriminated internal extraction result that preserves absent, duplicate and malformed-field cases without itself deciding the refusal.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`deliverer_service`",
+   "kind": "duplicate_ownership",
+   "text": "- the refusal of a start when the file is not valid;\n\n- the start of the service: the run settings, the context of the operations, the token file and the\n  refusals that end the start;",
+   "question": "Does `object_connections` own the decision that the connections record is invalid while `deliverer_service` merely terminates startup, or do both modules own the startup refusal?",
+   "options": [
+    "`object_connections` validates and returns a typed failure; `deliverer_service` owns termination",
+    "`object_connections` both validates and raises the startup-ending failure",
+    "`deliverer_service` validates the record and owns the refusal"
+   ],
+   "default_guess": "Let `object_connections` own validation and its typed failure, and let `deliverer_service` own only the decision to terminate startup on that failure.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`deliverer_service`",
+   "kind": "undefined_capability",
+   "text": "load_config",
+   "question": "What does `load_config` return or perform, and how is it distinct from the imported `load_runtime_settings`, `read_token`, connection validation and construction of `DeliveryContext`?",
+   "options": [
+    "It composes settings, token and startup connection validation into one service configuration",
+    "It is an alias or wrapper for `load_runtime_settings`",
+    "It constructs only `DeliveryContext` from `RuntimeSettings`",
+    "Remove it and let `run_service` orchestrate the named capabilities directly"
+   ],
+   "default_guess": "Remove `load_config`; let `run_service` call `load_runtime_settings`, `read_token`, `load_connections`, construct `DeliveryContext`, and then call `create_app`.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Dependencies",
+   "kind": "standard_violation",
+   "text": "`deliverer_service` names `load_connections` only to refuse a start with a broken record. The operations\nread the record themselves through `confirmed_connection`, so no module keeps connections in memory.",
+   "rule": "- note, которая не должна создавать ребро, не называет чужой экспорт целым\n      словом",
+   "section": "7",
+   "question": "Rewrite the `deliverer_service` note so it does not mention the foreign export `confirmed_connection` as a whole word, unless `deliverer_service` really calls it and declares that dependency.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"30_modules.md:`deliverer_api`\",\"kind\":\"public_surface_contradiction\",\"text\":\"| `deliverer_router` | `deliverer_api` | `answer_health`, `check_token`, `deliver_route`, `mark_route`, `scan_route` |\\n\\n### Candidate public capabilities\\n\\n```text\\nanswer_health\\n```\",\"question\":\"Are `check_token`, `deliver_route`, `mark_route` and `scan_route` exported capabilities of `deliverer_api`, and if so what are their contracts?\",\"options\":[\"Export all five symbols and list them in the public capabilities\",\"Export only `answer_health` and redesign the router dependency\",\"Treat the candidate list as non-exhaustive and state where the complete public surface is defined\"],\"default_guess\":\"Export all five symbols and add the four omitted capabilities to `deliverer_api`.\"},{\"subject\":\"30_modules.md:Dependencies\",\"kind\":\"missing_provider_export\",\"text\":\"| `deliverer_api` | `data_provider` | `REFUSAL_DETAIL`, `REFUSAL_STATUS` |\",\"question\":\"Are `REFUSAL_DETAIL` and `REFUSAL_STATUS` exported by `data_provider`, whose stated Public surface omits both names?\",\"options\":[\"Add both constants to the `data_provider` Public surface\",\"Move the mappings to another provider and change the dependency\",\"Keep them private and expose a lookup capability instead\"],\"default_guess\":\"Add both constants to the `data_provider` Public surface.\"},{\"subject\":\"30_modules.md:`deliverer_api`\",\"kind\":\"request_boundary_contradiction\",\"text\":\"- how a request is read and a refusal becomes an answer.\\n\\n- the routes of the service and the context and token the routes read from the application.\\n\\n- any check of a request, a refusal answer or a delivery rule;\",\"question\":\"Which module reads raw headers, path parameters and the unvalidated body, and how is framework validation prevented from examining a malformed body before `deliverer_api` performs the token check?\",\"options\":[\"The router passes raw request data to `deliverer_api`, which performs all extraction and validation\",\"The router extracts values without validation and `deliverer_api` performs all checks\",\"The router performs framework validation and therefore owns part of request checking\"],\"default_guess\":\"Have the router pass raw header occurrences, raw path text and raw body data to `deliverer_api`, with no framework validation before the token check.\",\"witness\":{\"initial\":\"A request targets a token-protected delivery route, has no Authorization field, and has a malformed body.\",\"events\":[\"The caller sends the request.\",\"The generated router dispatches it.\",\"The API boundary applies authentication and request-form handling.\"],\"outcomes\":[\"The token check runs first and the caller receives 401 with `UNAUTHORIZED`.\",\"Framework body validation runs first and the caller receives 422 with `INVALID_REQUEST` or a framework-generated error.\"],\"observer\":\"The calling flow and the INV-09 test `test_the_token_is_checked_before_the_request_form`.\"}},{\"subject\":\"30_modules.md:Dependencies\",\"kind\":\"authorization_extraction_ambiguity\",\"text\":\"the handlers read the `Authorization` field themselves by the same rule as the extractor the\\nrouter declares, and both pass the credential to the one comparison, `check_token`.\",\"question\":\"What do “the handlers” and “the extractor” each read or pass, which one preserves the number of Authorization fields, and is `check_token` invoked once or twice?\",\"options\":[\"The router extractor preserves all field occurrences and invokes the API comparison once\",\"Each handler reads raw field occurrences and invokes `check_token`; the router declares no independently executing check\",\"The extractor and handler both invoke `check_token` and their results must be reconciled\"],\"default_guess\":\"Use one router extractor solely to preserve all Authorization field occurrences and call `check_token` exactly once before any other extraction.\",\"witness\":{\"initial\":\"A token-protected request carries two Authorization fields, one valid and one invalid.\",\"events\":[\"The caller sends both fields.\",\"The router extractor and route handler obtain the Authorization input.\",\"The API applies `check_token`.\"],\"outcomes\":[\"Both occurrences are preserved, so the request is refused with 401 and `UNAUTHORIZED`.\",\"The framework or one of the two readers collapses the fields to the valid value, so the request is accepted.\"],\"observer\":\"The calling flow and `test_the_api_requires_the_token`.\"}},{\"subject\":\"30_modules.md:`domain_models`\",\"kind\":\"undefined_model\",\"text\":\"`AuthenticationRequired`, a request that does not carry the token.\",\"question\":\"What is the field structure and runtime role of `AuthenticationRequired`, and does it represent only an absent field or every Authorization extraction failure covered by A5 rule 1?\",\"options\":[\"A fieldless internal sentinel used only when the field is absent\",\"A discriminated extraction result covering absent, duplicate and malformed fields\",\"An exception raised by generated routing code\",\"Remove the type and pass raw Authorization occurrences directly\"],\"default_guess\":\"Replace it with a discriminated internal extraction result that preserves absent, duplicate and malformed-field cases without itself deciding the refusal.\"},{\"subject\":\"30_modules.md:`deliverer_service`\",\"kind\":\"duplicate_ownership\",\"text\":\"- the refusal of a start when the file is not valid;\\n\\n- the start of the service: the run settings, the context of the operations, the token file and the\\n  refusals that end the start;\",\"question\":\"Does `object_connections` own the decision that the connections record is invalid while `deliverer_service` merely terminates startup, or do both modules own the startup refusal?\",\"options\":[\"`object_connections` validates and returns a typed failure; `deliverer_service` owns termination\",\"`object_connections` both validates and raises the startup-ending failure\",\"`deliverer_service` validates the record and owns the refusal\"],\"default_guess\":\"Let `object_connections` own validation and its typed failure, and let `deliverer_service` own only the decision to terminate startup on that failure.\"},{\"subject\":\"30_modules.md:`deliverer_service`\",\"kind\":\"undefined_capability\",\"text\":\"load_config\",\"question\":\"What does `load_config` return or perform, and how is it distinct from the imported `load_runtime_settings`, `read_token`, connection validation and construction of `DeliveryContext`?\",\"options\":[\"It composes settings, token and startup connection validation into one service configuration\",\"It is an alias or wrapper for `load_runtime_settings`\",\"It constructs only `DeliveryContext` from `RuntimeSettings`\",\"Remove it and let `run_service` orchestrate the named capabilities directly\"],\"default_guess\":\"Remove `load_config`; let `run_service` call `load_runtime_settings`, `read_token`, `load_connections`, construct `DeliveryContext`, and then call `create_app`.\"},{\"subject\":\"30_modules.md:Dependencies\",\"kind\":\"standard_violation\",\"text\":\"`deliverer_service` names `load_connections` only to refuse a start with a broken record. The operations\\nread the record themselves through `confirmed_connection`, so no module keeps connections in memory.\",\"rule\":\"- note, которая не должна создавать ребро, не называет чужой экспорт целым\\n      словом\",\"section\":\"7\",\"question\":\"Rewrite the `deliverer_service` note so it does not mention the foreign export `confirmed_connection` as a whole word, unless `deliverer_service` really calls it and declares that dependency.\"}]}",
+ "set_aside": []
+}

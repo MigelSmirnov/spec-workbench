@@ -26,6 +26,7 @@ cycles, and `domain_models` names no other module.
 
 | Consumer | Provider | Symbols |
 |---|---|---|
+| `data_provider` | `domain_models` | `RefusalCode` |
 | `runtime_settings` | `domain_models` | `RuntimeSettings` |
 | `object_connections` | `domain_models` | `DelivererError`, `ObjectConnection`, `RefusalCode` |
 | `source_folder` | `domain_models` | `DelivererError`, `ObservationReason`, `PlacementFailure`, `RefusalCode`, `Rejected`, `ScanStatus`, `SourceFile`, `SourceRead` |
@@ -52,13 +53,15 @@ cycles, and `domain_models` names no other module.
 | `deliverer_service` | `object_connections` | `load_connections` |
 | `deliverer_service` | `deliverer_router` | `create_app` |
 
-`deliverer_service` names `load_connections` only to refuse a start with a broken record. The operations
-read the record themselves through `confirmed_connection`, so no module keeps connections in memory.
+`deliverer_service` names `load_connections` only to refuse a start with a broken record. Each operation
+reads the record itself at its connection check, so no module keeps connections in memory.
 
 `deliverer_router` is the module that `http_router_backend/v1` generates, and it holds only what that
 backend emits. It imports the route handlers of `deliverer_api`, so `deliverer_api` cannot import it
-back: the handlers read the `Authorization` field themselves by the same rule as the extractor the
-router declares, and both pass the credential to the one comparison, `check_token`.
+back. The router declares its extractor of the `Authorization` field and names `check_token` as the
+resolver of its one principal, but no route it serves calls them: the health route needs no token, and
+every route that does is a handler of `deliverer_api`, which reads the field and calls `check_token`
+itself, before the project id or the body.
 
 `system_clock` is the module that `system_clock_backend` generates, and `photo_delivery` alone names it.
 
@@ -205,6 +208,8 @@ CONFLICT_COPY_MARK
 SOURCE_ID_PATTERN
 TOKEN_MIN_LENGTH
 TOKEN_TRIM_CHARACTERS
+REFUSAL_STATUS
+REFUSAL_DETAIL
 STORED_IMAGE_MODE
 STORE_FOLDER_MODE
 RECORD_MODE
@@ -531,6 +536,10 @@ mark_photo_published
 
 ```text
 answer_health
+check_token
+scan_route
+deliver_route
+mark_route
 ```
 
 ### Trace inputs
