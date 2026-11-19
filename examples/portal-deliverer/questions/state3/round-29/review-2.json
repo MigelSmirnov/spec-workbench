@@ -1,0 +1,158 @@
+{
+ "open_points": [
+  {
+   "subject": "INV-20",
+   "kind": "owner_cannot_enforce",
+   "text": "| INV-20 | `delivery_store` |",
+   "question": "Which module owns the operation-level requirement to inspect a possibly damaged mark even when no placement exists, before any stored image or placement is written, and how is that requirement made known to that module?",
+   "options": [
+    "Make `photo_delivery` own the sequencing while `delivery_store` owns record validation and reports `STATE_UNAVAILABLE`.",
+    "Give `delivery_store` one compound operation that validates both records and conditionally performs the placement.",
+    "Split INV-20 into explicit storage-validation and operation-sequencing responsibilities."
+   ],
+   "default_guess": "Make `photo_delivery` own the sequencing and require it to call `read_placement` and `read_mark` under `project_lock` before `store_image`; keep record validation in `delivery_store`.",
+   "witness": {
+    "initial": "A project has no placement record, has a damaged mark record for the requested source, and has a valid source file.",
+    "events": [
+     "The caller requests delivery.",
+     "`photo_delivery` takes the project lock and decides whether a mark must be read when no placement exists."
+    ],
+    "outcomes": [
+     "The mark is read first; the operation returns M08 `state_unavailable` and changes no image or record.",
+     "Only the absent placement is checked; a stored image and placement record are created despite the damaged mark."
+    ],
+    "observer": "The caller and an operator inspecting the binary store and state folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "placement-record write failure",
+   "kind": "two_owners",
+   "text": "A placement record that cannot be written is the failure of that photo (A3 rule 5).",
+   "question": "Does `delivery_store` classify a failed placement-record write as `PlacementFailure.UNREADABLE_FILE`, or does it report a storage failure that `photo_delivery`, the stated owner of the rest of A3 rule 5, must classify?",
+   "options": [
+    "`delivery_store` returns or raises a storage-specific failure and `photo_delivery` maps it to M06 `failed` with `UNREADABLE_FILE`.",
+    "`delivery_store` constructs the photo failure directly and therefore imports and owns the required placement-outcome types.",
+    "All record-write failures become M08 `state_unavailable`."
+   ],
+   "default_guess": "Keep the policy mapping in `photo_delivery`; `delivery_store` should expose a distinct placement-write failure without importing `PlacementFailure`.",
+   "witness": {
+    "initial": "The source is valid and its stored image has been renamed, but creation or mode-setting of the placement-record folder fails.",
+    "events": [
+     "`delivery_store.write_placement` reports the failure.",
+     "The operation layer converts that report into its public answer."
+    ],
+    "outcomes": [
+     "The caller receives M06 `failed` with `UNREADABLE_FILE`, as A3 rule 5 says.",
+     "The caller receives M08 `state_unavailable`, as an implementation treating record-write failures uniformly could infer from `delivery_store`'s refusal responsibility."
+    ],
+    "observer": "The delivery caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "temporary-file cleanup",
+   "kind": "contradiction",
+   "text": "- removal of anything, which the first version does not offer (A3).",
+   "question": "Must this prohibition exclude internal temporary-file cleanup, or must the changed A6 rule that removes a temporary file before rename be changed?",
+   "options": [
+    "Limit the prohibition to removal of placements, marks, stored images and other committed state; allow temporary-file cleanup.",
+    "Prohibit even temporary-file cleanup and leave every failed temporary write behind.",
+    "Move temporary-file cleanup to another module."
+   ],
+   "default_guess": "Rewrite the prohibition to cover committed/domain state only and let `delivery_store` remove its own failed temporary files.",
+   "witness": {
+    "initial": "A temporary file has been created and written, and the write fails before rename.",
+    "events": [
+     "`delivery_store` handles the failed write.",
+     "Cleanup of the temporary entry is attempted or skipped."
+    ],
+    "outcomes": [
+     "The temporary file is removed as A6 rule 3 requires.",
+     "The temporary file remains because `delivery_store` must not own removal of anything."
+    ],
+    "observer": "An operator inspecting the destination folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "replayed placement and lock infrastructure",
+   "kind": "contradiction",
+   "text": "Delivering content that already has a placement answers `replayed` with the stored placement and the\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\n   when the source file has left the folder.",
+   "question": "Does “writes nothing” exclude creation or repair of the project lock file and its folders when they are absent, or must a replay refuse rather than create them?",
+   "options": [
+    "It excludes only stored images, placement records and mark records; lock infrastructure may be created.",
+    "It includes lock infrastructure, so a replay with no lock file must refuse or use a non-persistent lock.",
+    "The design must guarantee that a placement can never survive without its lock infrastructure."
+   ],
+   "default_guess": "Treat lock infrastructure as an exception to “writes nothing” and state that exception explicitly.",
+   "witness": {
+    "initial": "A placement record and stored image survived a host crash, while the unsynchronised lock folder or lock file did not.",
+    "events": [
+     "After restart, the caller repeats delivery of that source.",
+     "The service must acquire the project lock before checking the existing placement."
+    ],
+    "outcomes": [
+     "The service recreates the lock infrastructure and returns `replayed`, so the call writes durable state.",
+     "The service preserves the literal no-write rule and cannot safely follow the required lock-before-placement-check order, so it refuses."
+    ],
+    "observer": "The caller and an operator inspecting the state folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "state-folder traversal",
+   "kind": "race_semantics_missing",
+   "text": "In the state\n   folder an entry on the way that is a symbolic link or not a folder fails the write",
+   "question": "Must every state-folder segment remain anchored to an already opened parent and be opened without following links, or is a check followed by ordinary path-based creation and opening sufficient when an entry changes concurrently?",
+   "options": [
+    "Require descriptor-relative, no-follow traversal for every segment and refuse if the checked hierarchy changes.",
+    "Allow path-based check-then-open traversal and rely on state-folder access controls.",
+    "State explicitly that no actor may rename or replace entries below the state folder."
+   ],
+   "default_guess": "Require descriptor-relative traversal from opened directory handles, without following links at any segment.",
+   "witness": {
+    "initial": "A real project directory exists below the state folder, and another actor able to write there can replace it with a symbolic link to a directory outside the state folder.",
+    "events": [
+     "`delivery_store` checks that the project entry is a folder.",
+     "The other actor replaces that entry with the link.",
+     "`delivery_store` creates a temporary record or opens the destination."
+    ],
+    "outcomes": [
+     "A path-based implementation follows the replacement and writes outside the state folder.",
+     "An anchored no-follow implementation detects the replacement or continues in the originally opened directory and never writes through the link."
+    ],
+    "observer": "The host operator and any process monitoring the outside directory."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "project-id path spelling",
+   "kind": "canonicalization_missing",
+   "text": "In the state folder the lock file of a project is named by its project id with the\n   imported `LOCK_FILE_SUFFIX` constant",
+   "question": "Which textual representation of a UUID is used in lock-file and project-folder names, and must all accepted spellings of the same UUID map to that one representation?",
+   "options": [
+    "Use the canonical lowercase hyphenated `str(UUID)` representation.",
+    "Use the spelling received in the request.",
+    "Use the spelling stored as the key in the connections record and reject other request spellings."
+   ],
+   "default_guess": "Parse the identifier as a UUID and always use its canonical lowercase hyphenated representation for every stored path and lock key.",
+   "witness": {
+    "initial": "One confirmed connection exists for a UUID, and no placement exists.",
+    "events": [
+     "Two callers concurrently address the same UUID using two spellings that their UUID parsers accept, such as lowercase hyphenated and uppercase hyphenated.",
+     "Each call derives its project lock and record paths."
+    ],
+    "outcomes": [
+     "Both spellings normalize to one lock and one project folder, leaving one placement.",
+     "The raw spellings produce different lock files or project folders, allowing two independent placements for the same project and source."
+    ],
+    "observer": "The callers and an operator inspecting the state and binary stores."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"INV-20\",\"kind\":\"owner_cannot_enforce\",\"text\":\"| INV-20 | `delivery_store` |\",\"question\":\"Which module owns the operation-level requirement to inspect a possibly damaged mark even when no placement exists, before any stored image or placement is written, and how is that requirement made known to that module?\",\"options\":[\"Make `photo_delivery` own the sequencing while `delivery_store` owns record validation and reports `STATE_UNAVAILABLE`.\",\"Give `delivery_store` one compound operation that validates both records and conditionally performs the placement.\",\"Split INV-20 into explicit storage-validation and operation-sequencing responsibilities.\"],\"default_guess\":\"Make `photo_delivery` own the sequencing and require it to call `read_placement` and `read_mark` under `project_lock` before `store_image`; keep record validation in `delivery_store`.\",\"witness\":{\"initial\":\"A project has no placement record, has a damaged mark record for the requested source, and has a valid source file.\",\"events\":[\"The caller requests delivery.\",\"`photo_delivery` takes the project lock and decides whether a mark must be read when no placement exists.\"],\"outcomes\":[\"The mark is read first; the operation returns M08 `state_unavailable` and changes no image or record.\",\"Only the absent placement is checked; a stored image and placement record are created despite the damaged mark.\"],\"observer\":\"The caller and an operator inspecting the binary store and state folder.\"}},{\"subject\":\"placement-record write failure\",\"kind\":\"two_owners\",\"text\":\"A placement record that cannot be written is the failure of that photo (A3 rule 5).\",\"question\":\"Does `delivery_store` classify a failed placement-record write as `PlacementFailure.UNREADABLE_FILE`, or does it report a storage failure that `photo_delivery`, the stated owner of the rest of A3 rule 5, must classify?\",\"options\":[\"`delivery_store` returns or raises a storage-specific failure and `photo_delivery` maps it to M06 `failed` with `UNREADABLE_FILE`.\",\"`delivery_store` constructs the photo failure directly and therefore imports and owns the required placement-outcome types.\",\"All record-write failures become M08 `state_unavailable`.\"],\"default_guess\":\"Keep the policy mapping in `photo_delivery`; `delivery_store` should expose a distinct placement-write failure without importing `PlacementFailure`.\",\"witness\":{\"initial\":\"The source is valid and its stored image has been renamed, but creation or mode-setting of the placement-record folder fails.\",\"events\":[\"`delivery_store.write_placement` reports the failure.\",\"The operation layer converts that report into its public answer.\"],\"outcomes\":[\"The caller receives M06 `failed` with `UNREADABLE_FILE`, as A3 rule 5 says.\",\"The caller receives M08 `state_unavailable`, as an implementation treating record-write failures uniformly could infer from `delivery_store`'s refusal responsibility.\"],\"observer\":\"The delivery caller.\"}},{\"subject\":\"temporary-file cleanup\",\"kind\":\"contradiction\",\"text\":\"- removal of anything, which the first version does not offer (A3).\",\"question\":\"Must this prohibition exclude internal temporary-file cleanup, or must the changed A6 rule that removes a temporary file before rename be changed?\",\"options\":[\"Limit the prohibition to removal of placements, marks, stored images and other committed state; allow temporary-file cleanup.\",\"Prohibit even temporary-file cleanup and leave every failed temporary write behind.\",\"Move temporary-file cleanup to another module.\"],\"default_guess\":\"Rewrite the prohibition to cover committed/domain state only and let `delivery_store` remove its own failed temporary files.\",\"witness\":{\"initial\":\"A temporary file has been created and written, and the write fails before rename.\",\"events\":[\"`delivery_store` handles the failed write.\",\"Cleanup of the temporary entry is attempted or skipped.\"],\"outcomes\":[\"The temporary file is removed as A6 rule 3 requires.\",\"The temporary file remains because `delivery_store` must not own removal of anything.\"],\"observer\":\"An operator inspecting the destination folder.\"}},{\"subject\":\"replayed placement and lock infrastructure\",\"kind\":\"contradiction\",\"text\":\"Delivering content that already has a placement answers `replayed` with the stored placement and the\\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\\n   when the source file has left the folder.\",\"question\":\"Does “writes nothing” exclude creation or repair of the project lock file and its folders when they are absent, or must a replay refuse rather than create them?\",\"options\":[\"It excludes only stored images, placement records and mark records; lock infrastructure may be created.\",\"It includes lock infrastructure, so a replay with no lock file must refuse or use a non-persistent lock.\",\"The design must guarantee that a placement can never survive without its lock infrastructure.\"],\"default_guess\":\"Treat lock infrastructure as an exception to “writes nothing” and state that exception explicitly.\",\"witness\":{\"initial\":\"A placement record and stored image survived a host crash, while the unsynchronised lock folder or lock file did not.\",\"events\":[\"After restart, the caller repeats delivery of that source.\",\"The service must acquire the project lock before checking the existing placement.\"],\"outcomes\":[\"The service recreates the lock infrastructure and returns `replayed`, so the call writes durable state.\",\"The service preserves the literal no-write rule and cannot safely follow the required lock-before-placement-check order, so it refuses.\"],\"observer\":\"The caller and an operator inspecting the state folder.\"}},{\"subject\":\"state-folder traversal\",\"kind\":\"race_semantics_missing\",\"text\":\"In the state\\n   folder an entry on the way that is a symbolic link or not a folder fails the write\",\"question\":\"Must every state-folder segment remain anchored to an already opened parent and be opened without following links, or is a check followed by ordinary path-based creation and opening sufficient when an entry changes concurrently?\",\"options\":[\"Require descriptor-relative, no-follow traversal for every segment and refuse if the checked hierarchy changes.\",\"Allow path-based check-then-open traversal and rely on state-folder access controls.\",\"State explicitly that no actor may rename or replace entries below the state folder.\"],\"default_guess\":\"Require descriptor-relative traversal from opened directory handles, without following links at any segment.\",\"witness\":{\"initial\":\"A real project directory exists below the state folder, and another actor able to write there can replace it with a symbolic link to a directory outside the state folder.\",\"events\":[\"`delivery_store` checks that the project entry is a folder.\",\"The other actor replaces that entry with the link.\",\"`delivery_store` creates a temporary record or opens the destination.\"],\"outcomes\":[\"A path-based implementation follows the replacement and writes outside the state folder.\",\"An anchored no-follow implementation detects the replacement or continues in the originally opened directory and never writes through the link.\"],\"observer\":\"The host operator and any process monitoring the outside directory.\"}},{\"subject\":\"project-id path spelling\",\"kind\":\"canonicalization_missing\",\"text\":\"In the state folder the lock file of a project is named by its project id with the\\n   imported `LOCK_FILE_SUFFIX` constant\",\"question\":\"Which textual representation of a UUID is used in lock-file and project-folder names, and must all accepted spellings of the same UUID map to that one representation?\",\"options\":[\"Use the canonical lowercase hyphenated `str(UUID)` representation.\",\"Use the spelling received in the request.\",\"Use the spelling stored as the key in the connections record and reject other request spellings.\"],\"default_guess\":\"Parse the identifier as a UUID and always use its canonical lowercase hyphenated representation for every stored path and lock key.\",\"witness\":{\"initial\":\"One confirmed connection exists for a UUID, and no placement exists.\",\"events\":[\"Two callers concurrently address the same UUID using two spellings that their UUID parsers accept, such as lowercase hyphenated and uppercase hyphenated.\",\"Each call derives its project lock and record paths.\"],\"outcomes\":[\"Both spellings normalize to one lock and one project folder, leaving one placement.\",\"The raw spellings produce different lock files or project folders, allowing two independent placements for the same project and source.\"],\"observer\":\"The callers and an operator inspecting the state and binary stores.\"}}]}",
+ "set_aside": []
+}

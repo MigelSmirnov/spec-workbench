@@ -1,0 +1,165 @@
+{
+ "open_points": [
+  {
+   "subject": "02_rules.md:Status",
+   "kind": "missing_time_policy",
+   "text": "`marked_at: datetime`",
+   "question": "What source supplies `marked_at`, what datetime representation is stored, at what point in a successful mark operation is it read, and how many readings may that operation take?",
+   "options": [
+    "Read an aware UTC wall clock once after the project lock is acquired and store it with an offset.",
+    "Read the wall clock once and store naive UTC, matching photo dates.",
+    "Use another declared clock and reading point."
+   ],
+   "default_guess": "Inject a clock, read it exactly once after the lock is acquired and immediately before creating the mark, and store naive UTC.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The calling flow records a publication.",
+     "The deliverer creates M07 and writes `marked_at`."
+    ],
+    "outcomes": [
+     "The record contains naive UTC read once immediately before the write.",
+     "The record contains local or offset-aware time read at request start or after the write."
+    ],
+    "observer": "A caller or operator reading the publication mark sees a different instant or representation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "contradiction",
+   "text": "It is opened for reading and writing,\n   created when absent, without following a link, and given the mode of `LOCK_FILE_MODE` each time it is\n   opened, whatever the umask;",
+   "question": "Must a repeated placement perform the mode-setting write required here, or must it obey A3 rule 2 and INV-06, which say that a repeated placement writes nothing?",
+   "options": [
+    "Every lock-file open performs the mode-setting operation; lock-file metadata writes are exempt from A3 rule 2 and INV-06.",
+    "A replay may inspect but must not set the mode of an existing lock file.",
+    "The mode is set only when the lock file is first created."
+   ],
+   "default_guess": "Exempt the mandatory lock-file mode operation from the meaning of “writes nothing” and state that exemption explicitly.",
+   "witness": {
+    "initial": "A placement and its project lock file already exist; the lock file has mode 0o600.",
+    "events": [
+     "The calling flow repeats delivery of the placed source.",
+     "The service opens the project lock before checking the existing placement."
+    ],
+    "outcomes": [
+     "Following A6, it invokes the mode-setting operation and may change the lock file's metadata before returning `replayed`.",
+     "Following A3 rule 2 and INV-06 literally, it leaves the lock file untouched and returns `replayed`."
+    ],
+    "observer": "An operator observing the lock file's metadata sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "unspecified_lock_content",
+   "text": "it holds no content.",
+   "question": "What must happen when the lock address already contains a non-empty regular file: accept it without changing its bytes, truncate it, or refuse it?",
+   "options": [
+    "Accept any regular file and leave its existing content unchanged.",
+    "Truncate the file to zero length before locking.",
+    "Refuse a non-empty lock file as unavailable state."
+   ],
+   "default_guess": "Refuse a non-empty lock file with `state_unavailable` rather than silently destroying content.",
+   "witness": {
+    "initial": "The configured state folder contains a regular project lock file with non-empty bytes.",
+    "events": [
+     "The calling flow starts a delivery for that project.",
+     "The deliverer opens the existing lock file."
+    ],
+    "outcomes": [
+     "The service accepts and locks the file, leaving its bytes present.",
+     "The service truncates or refuses the file to enforce that a lock file holds no content."
+    ],
+    "observer": "The caller sees success versus refusal, or the operator sees whether the bytes remain."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "check_precedence",
+   "text": "a failure to set that mode is refused like a lock file that cannot be\n   opened. An entry at its address that is a symbolic link or not a regular file is refused like a\n   lock file that cannot be opened.",
+   "question": "After opening an existing non-regular entry, is regular-file validation performed before attempting to change its mode, or is the mode changed first?",
+   "options": [
+    "Validate that the opened object is a regular file before setting its mode.",
+    "Set the mode immediately after opening, then validate the object type."
+   ],
+   "default_guess": "Validate the opened object with descriptor-based metadata before changing its mode.",
+   "witness": {
+    "initial": "The lock address contains an openable non-regular object whose mode can be changed.",
+    "events": [
+     "The calling flow starts a project operation.",
+     "The deliverer opens the object without following a link and then refuses it as non-regular."
+    ],
+    "outcomes": [
+     "The object is refused without its mode being changed.",
+     "Its mode is changed before the same refusal is returned."
+    ],
+    "observer": "The operator inspecting the non-regular object sees whether its mode changed."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "path_representation",
+   "text": "the lock file of a project is named by its project id with the\n   imported `LOCK_FILE_SUFFIX` constant",
+   "question": "Which textual representation of the UUID project id is used in lock, placement-directory and mark-directory names?",
+   "options": [
+    "Canonical lowercase hyphenated UUID text.",
+    "The spelling received in the request.",
+    "Another normalized UUID representation, such as hexadecimal without hyphens."
+   ],
+   "default_guess": "Use canonical lowercase hyphenated UUID text.",
+   "witness": {
+    "initial": "A confirmed project has UUID 123E4567-E89B-12D3-A456-426614174000 and no state files.",
+    "events": [
+     "The caller supplies an accepted spelling of that UUID.",
+     "The deliverer creates the project lock and placement directories."
+    ],
+    "outcomes": [
+     "The lock is `locks/123e4567-e89b-12d3-a456-426614174000.lock`.",
+     "The lock uses the received spelling or an unhyphenated UUID, producing a different address."
+    ],
+    "observer": "The service on a later call and an operator inspecting the state folder see different state paths."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "incomplete_required_test",
+   "text": "and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other",
+   "question": "What Required tests case demonstrates INV-12 for concurrent marks within one process, rather than only marks from separate processes?",
+   "options": [
+    "Require a same-process concurrent-mark test in addition to the separate-process test.",
+    "Narrow INV-12 so that its mark guarantee covers only separate processes.",
+    "State that the named concurrent-calls test explicitly exercises same-process marks and give its required outcomes and durable-state assertion."
+   ],
+   "default_guess": "Add an explicit same-process concurrent-mark case and require both cases to leave exactly one mark record.",
+   "witness": {
+    "initial": "One placement exists without a mark.",
+    "events": [
+     "Two threads in one service process concurrently mark it with different `photo_id` values.",
+     "The existing Required tests cases for marks are run only across separate processes."
+    ],
+    "outcomes": [
+     "An implementation serializes same-process calls and leaves one mark, returning `marked` and `publication_conflict`.",
+     "An implementation relies on a process-scoped operating-system lock, allows both same-process calls through, and writes twice while all described separate-process checks still pass."
+    ],
+    "observer": "The callers and the durable mark record expose the duplicate-mark behavior."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "standard_violation",
+   "text": "It is opened for reading and writing,\n   created when absent, without following a link, and given the mode of `LOCK_FILE_MODE` each time it is\n   opened, whatever the umask;",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must name this value as `the imported LOCK_FILE_MODE constant`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"02_rules.md:Status\",\"kind\":\"missing_time_policy\",\"text\":\"`marked_at: datetime`\",\"question\":\"What source supplies `marked_at`, what datetime representation is stored, at what point in a successful mark operation is it read, and how many readings may that operation take?\",\"options\":[\"Read an aware UTC wall clock once after the project lock is acquired and store it with an offset.\",\"Read the wall clock once and store naive UTC, matching photo dates.\",\"Use another declared clock and reading point.\"],\"default_guess\":\"Inject a clock, read it exactly once after the lock is acquired and immediately before creating the mark, and store naive UTC.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The calling flow records a publication.\",\"The deliverer creates M07 and writes `marked_at`.\"],\"outcomes\":[\"The record contains naive UTC read once immediately before the write.\",\"The record contains local or offset-aware time read at request start or after the write.\"],\"observer\":\"A caller or operator reading the publication mark sees a different instant or representation.\"}},{\"subject\":\"A6\",\"kind\":\"contradiction\",\"text\":\"It is opened for reading and writing,\\n   created when absent, without following a link, and given the mode of `LOCK_FILE_MODE` each time it is\\n   opened, whatever the umask;\",\"question\":\"Must a repeated placement perform the mode-setting write required here, or must it obey A3 rule 2 and INV-06, which say that a repeated placement writes nothing?\",\"options\":[\"Every lock-file open performs the mode-setting operation; lock-file metadata writes are exempt from A3 rule 2 and INV-06.\",\"A replay may inspect but must not set the mode of an existing lock file.\",\"The mode is set only when the lock file is first created.\"],\"default_guess\":\"Exempt the mandatory lock-file mode operation from the meaning of “writes nothing” and state that exemption explicitly.\",\"witness\":{\"initial\":\"A placement and its project lock file already exist; the lock file has mode 0o600.\",\"events\":[\"The calling flow repeats delivery of the placed source.\",\"The service opens the project lock before checking the existing placement.\"],\"outcomes\":[\"Following A6, it invokes the mode-setting operation and may change the lock file's metadata before returning `replayed`.\",\"Following A3 rule 2 and INV-06 literally, it leaves the lock file untouched and returns `replayed`.\"],\"observer\":\"An operator observing the lock file's metadata sees the difference.\"}},{\"subject\":\"A6\",\"kind\":\"unspecified_lock_content\",\"text\":\"it holds no content.\",\"question\":\"What must happen when the lock address already contains a non-empty regular file: accept it without changing its bytes, truncate it, or refuse it?\",\"options\":[\"Accept any regular file and leave its existing content unchanged.\",\"Truncate the file to zero length before locking.\",\"Refuse a non-empty lock file as unavailable state.\"],\"default_guess\":\"Refuse a non-empty lock file with `state_unavailable` rather than silently destroying content.\",\"witness\":{\"initial\":\"The configured state folder contains a regular project lock file with non-empty bytes.\",\"events\":[\"The calling flow starts a delivery for that project.\",\"The deliverer opens the existing lock file.\"],\"outcomes\":[\"The service accepts and locks the file, leaving its bytes present.\",\"The service truncates or refuses the file to enforce that a lock file holds no content.\"],\"observer\":\"The caller sees success versus refusal, or the operator sees whether the bytes remain.\"}},{\"subject\":\"A6\",\"kind\":\"check_precedence\",\"text\":\"a failure to set that mode is refused like a lock file that cannot be\\n   opened. An entry at its address that is a symbolic link or not a regular file is refused like a\\n   lock file that cannot be opened.\",\"question\":\"After opening an existing non-regular entry, is regular-file validation performed before attempting to change its mode, or is the mode changed first?\",\"options\":[\"Validate that the opened object is a regular file before setting its mode.\",\"Set the mode immediately after opening, then validate the object type.\"],\"default_guess\":\"Validate the opened object with descriptor-based metadata before changing its mode.\",\"witness\":{\"initial\":\"The lock address contains an openable non-regular object whose mode can be changed.\",\"events\":[\"The calling flow starts a project operation.\",\"The deliverer opens the object without following a link and then refuses it as non-regular.\"],\"outcomes\":[\"The object is refused without its mode being changed.\",\"Its mode is changed before the same refusal is returned.\"],\"observer\":\"The operator inspecting the non-regular object sees whether its mode changed.\"}},{\"subject\":\"A6\",\"kind\":\"path_representation\",\"text\":\"the lock file of a project is named by its project id with the\\n   imported `LOCK_FILE_SUFFIX` constant\",\"question\":\"Which textual representation of the UUID project id is used in lock, placement-directory and mark-directory names?\",\"options\":[\"Canonical lowercase hyphenated UUID text.\",\"The spelling received in the request.\",\"Another normalized UUID representation, such as hexadecimal without hyphens.\"],\"default_guess\":\"Use canonical lowercase hyphenated UUID text.\",\"witness\":{\"initial\":\"A confirmed project has UUID 123E4567-E89B-12D3-A456-426614174000 and no state files.\",\"events\":[\"The caller supplies an accepted spelling of that UUID.\",\"The deliverer creates the project lock and placement directories.\"],\"outcomes\":[\"The lock is `locks/123e4567-e89b-12d3-a456-426614174000.lock`.\",\"The lock uses the received spelling or an unhyphenated UUID, producing a different address.\"],\"observer\":\"The service on a later call and an operator inspecting the state folder see different state paths.\"}},{\"subject\":\"A6\",\"kind\":\"incomplete_required_test\",\"text\":\"and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other\",\"question\":\"What Required tests case demonstrates INV-12 for concurrent marks within one process, rather than only marks from separate processes?\",\"options\":[\"Require a same-process concurrent-mark test in addition to the separate-process test.\",\"Narrow INV-12 so that its mark guarantee covers only separate processes.\",\"State that the named concurrent-calls test explicitly exercises same-process marks and give its required outcomes and durable-state assertion.\"],\"default_guess\":\"Add an explicit same-process concurrent-mark case and require both cases to leave exactly one mark record.\",\"witness\":{\"initial\":\"One placement exists without a mark.\",\"events\":[\"Two threads in one service process concurrently mark it with different `photo_id` values.\",\"The existing Required tests cases for marks are run only across separate processes.\"],\"outcomes\":[\"An implementation serializes same-process calls and leaves one mark, returning `marked` and `publication_conflict`.\",\"An implementation relies on a process-scoped operating-system lock, allows both same-process calls through, and writes twice while all described separate-process checks still pass.\"],\"observer\":\"The callers and the durable mark record expose the duplicate-mark behavior.\"}},{\"subject\":\"A6\",\"kind\":\"standard_violation\",\"text\":\"It is opened for reading and writing,\\n   created when absent, without following a link, and given the mode of `LOCK_FILE_MODE` each time it is\\n   opened, whatever the umask;\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must name this value as `the imported LOCK_FILE_MODE constant`.\"}]}",
+ "set_aside": []
+}

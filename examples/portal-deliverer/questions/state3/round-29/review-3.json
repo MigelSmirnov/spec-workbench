@@ -1,0 +1,107 @@
+{
+ "open_points": [
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "record_ancestor_handling",
+   "text": "In the state folder an entry on the way that is a symbolic link or not a folder fails the write",
+   "question": "When reading a placement or mark, must every folder below the state folder also be opened without following links and a symbolic-link or non-folder ancestor refused with state_unavailable, or may the read follow such an ancestor?",
+   "options": [
+    "Reject any symbolic-link or non-folder ancestor during both reads and writes",
+    "Apply the ancestor restriction only to writes and follow the configured filesystem path during reads"
+   ],
+   "default_guess": "Reject any symbolic-link or non-folder ancestor during both reads and writes.",
+   "witness": {
+    "initial": "The state folder contains ledger as a symbolic link to another directory holding a valid placement record.",
+    "events": [
+     "The caller delivers the source whose placement record is reachable through that link.",
+     "photo_delivery asks delivery_store to read the existing placement."
+    ],
+    "outcomes": [
+     "The read rejects the linked ancestor and the caller receives state_unavailable.",
+     "The read follows the linked ancestor and the caller receives replayed with the placement."
+    ],
+    "observer": "The caller sees a refusal in one implementation and a replay in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "missing_parent_semantics",
+   "text": "A record is absent only when no entry exists at its address. A placement or mark record is opened without following a link and validated as JSON against its closed model: every field present with its type, every enumeration value a member, every nested model valid, and no other field.",
+   "question": "If the record cannot be opened because one of its newly introduced parent folders does not yet exist, is the record absent or is the operation refused as state_unavailable?",
+   "options": [
+    "Treat a missing ancestor or missing final entry as an absent record",
+    "Treat only a missing final entry in an existing parent folder as absent; a missing ancestor is state_unavailable"
+   ],
+   "default_guess": "Treat a missing ancestor or missing final entry as an absent record.",
+   "witness": {
+    "initial": "The installation-created state folder exists, but ledger and its project folder have never been created because this is the project's first placement.",
+    "events": [
+     "The caller requests the first delivery for the project.",
+     "The project lock is acquired and delivery_store attempts to read the placement record before writing anything under ledger."
+    ],
+    "outcomes": [
+     "The missing ancestors mean the record is absent, so delivery continues and creates the placement.",
+     "Opening the record fails because an ancestor is absent, so the operation is refused with state_unavailable."
+    ],
+    "observer": "The caller sees placed in one implementation and state_unavailable in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "concurrent_mode_race",
+   "text": "a folder it finds is accepted, whoever created it, also a concurrent call, when it is a folder, and a creation that finds the folder already there is not a failure; a missing one is created with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.",
+   "question": "When a concurrent call finds a folder after another call has created it but before that call has set its required mode, must the finder set or verify the mode before using the folder, wait for the creator, or accept it immediately?",
+   "options": [
+    "Every call verifies and, when necessary, sets the required mode before using a found folder",
+    "Only the call that successfully creates the folder sets its mode; concurrent finders may use it immediately",
+    "Concurrent finders wait or retry until the creating call has set the mode"
+   ],
+   "default_guess": "Every call verifies and sets the required mode before using the folder, refusing if that cannot be done.",
+   "witness": {
+    "initial": "The locks folder is absent and its parent permits creation with a mode different from STATE_FOLDER_MODE because of the process umask.",
+    "events": [
+     "Process A creates the locks folder and is paused before setting its final mode.",
+     "Process B observes the folder and attempts a delivery for another project.",
+     "Setting the mode in process A then fails."
+    ],
+    "outcomes": [
+     "Process B accepts and uses the folder, so its operation can succeed although the folder never obtains the required mode.",
+     "Process B verifies or sets the mode, fails to do so, and refuses the operation."
+    ],
+    "observer": "The caller sees success versus state_unavailable, and the operator sees different permission guarantees."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "owner_knowledge_gap",
+   "text": "`system_clock` as its source of the current time, A3 and A4 without the two request forms given to `deliverer_api` above, rule 4 of A6, rule 2 of A7,\n  orders 7 to 9 of A1, and the parts of rules 9 and 10 of A5 given to it above.",
+   "question": "Which module owns and knows the requirement that a damaged mark record without a placement must be checked before a new placement writes its image or record: photo_delivery orchestration, an atomic delivery_store operation, or both through an explicit contract?",
+   "options": [
+    "photo_delivery knows A6 rule 5 and reads the mark before starting a new placement",
+    "delivery_store atomically checks the corresponding mark inside write_placement",
+    "A new delivery_store capability performs all integrity reads and placement writes under one contract"
+   ],
+   "default_guess": "Make photo_delivery explicitly know this part of A6 rule 5 and require it to read both placement and mark before store_image; delivery_store continues to own record validation.",
+   "witness": {
+    "initial": "A project has no placement record for a source, but its mark address contains damaged JSON.",
+    "events": [
+     "The caller requests delivery of that source.",
+     "photo_delivery acquires the project lock and reads the absent placement.",
+     "The implementation must decide whether to read the mark before storing the image."
+    ],
+    "outcomes": [
+     "The damaged mark is read first, so the operation returns state_unavailable and changes no image or record, as INV-20 requires.",
+     "The mark is not part of photo_delivery's stated A6 knowledge, so the implementation stores the image and placement without discovering it."
+    ],
+    "observer": "The caller and the state-folder operator see refusal with no changes versus a new placement and stored image."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"record_ancestor_handling\",\"text\":\"In the state folder an entry on the way that is a symbolic link or not a folder fails the write\",\"question\":\"When reading a placement or mark, must every folder below the state folder also be opened without following links and a symbolic-link or non-folder ancestor refused with state_unavailable, or may the read follow such an ancestor?\",\"options\":[\"Reject any symbolic-link or non-folder ancestor during both reads and writes\",\"Apply the ancestor restriction only to writes and follow the configured filesystem path during reads\"],\"default_guess\":\"Reject any symbolic-link or non-folder ancestor during both reads and writes.\",\"witness\":{\"initial\":\"The state folder contains ledger as a symbolic link to another directory holding a valid placement record.\",\"events\":[\"The caller delivers the source whose placement record is reachable through that link.\",\"photo_delivery asks delivery_store to read the existing placement.\"],\"outcomes\":[\"The read rejects the linked ancestor and the caller receives state_unavailable.\",\"The read follows the linked ancestor and the caller receives replayed with the placement.\"],\"observer\":\"The caller sees a refusal in one implementation and a replay in the other.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"missing_parent_semantics\",\"text\":\"A record is absent only when no entry exists at its address. A placement or mark record is opened without following a link and validated as JSON against its closed model: every field present with its type, every enumeration value a member, every nested model valid, and no other field.\",\"question\":\"If the record cannot be opened because one of its newly introduced parent folders does not yet exist, is the record absent or is the operation refused as state_unavailable?\",\"options\":[\"Treat a missing ancestor or missing final entry as an absent record\",\"Treat only a missing final entry in an existing parent folder as absent; a missing ancestor is state_unavailable\"],\"default_guess\":\"Treat a missing ancestor or missing final entry as an absent record.\",\"witness\":{\"initial\":\"The installation-created state folder exists, but ledger and its project folder have never been created because this is the project's first placement.\",\"events\":[\"The caller requests the first delivery for the project.\",\"The project lock is acquired and delivery_store attempts to read the placement record before writing anything under ledger.\"],\"outcomes\":[\"The missing ancestors mean the record is absent, so delivery continues and creates the placement.\",\"Opening the record fails because an ancestor is absent, so the operation is refused with state_unavailable.\"],\"observer\":\"The caller sees placed in one implementation and state_unavailable in the other.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"concurrent_mode_race\",\"text\":\"a folder it finds is accepted, whoever created it, also a concurrent call, when it is a folder, and a creation that finds the folder already there is not a failure; a missing one is created with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.\",\"question\":\"When a concurrent call finds a folder after another call has created it but before that call has set its required mode, must the finder set or verify the mode before using the folder, wait for the creator, or accept it immediately?\",\"options\":[\"Every call verifies and, when necessary, sets the required mode before using a found folder\",\"Only the call that successfully creates the folder sets its mode; concurrent finders may use it immediately\",\"Concurrent finders wait or retry until the creating call has set the mode\"],\"default_guess\":\"Every call verifies and sets the required mode before using the folder, refusing if that cannot be done.\",\"witness\":{\"initial\":\"The locks folder is absent and its parent permits creation with a mode different from STATE_FOLDER_MODE because of the process umask.\",\"events\":[\"Process A creates the locks folder and is paused before setting its final mode.\",\"Process B observes the folder and attempts a delivery for another project.\",\"Setting the mode in process A then fails.\"],\"outcomes\":[\"Process B accepts and uses the folder, so its operation can succeed although the folder never obtains the required mode.\",\"Process B verifies or sets the mode, fails to do so, and refuses the operation.\"],\"observer\":\"The caller sees success versus state_unavailable, and the operator sees different permission guarantees.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"owner_knowledge_gap\",\"text\":\"`system_clock` as its source of the current time, A3 and A4 without the two request forms given to `deliverer_api` above, rule 4 of A6, rule 2 of A7,\\n  orders 7 to 9 of A1, and the parts of rules 9 and 10 of A5 given to it above.\",\"question\":\"Which module owns and knows the requirement that a damaged mark record without a placement must be checked before a new placement writes its image or record: photo_delivery orchestration, an atomic delivery_store operation, or both through an explicit contract?\",\"options\":[\"photo_delivery knows A6 rule 5 and reads the mark before starting a new placement\",\"delivery_store atomically checks the corresponding mark inside write_placement\",\"A new delivery_store capability performs all integrity reads and placement writes under one contract\"],\"default_guess\":\"Make photo_delivery explicitly know this part of A6 rule 5 and require it to read both placement and mark before store_image; delivery_store continues to own record validation.\",\"witness\":{\"initial\":\"A project has no placement record for a source, but its mark address contains damaged JSON.\",\"events\":[\"The caller requests delivery of that source.\",\"photo_delivery acquires the project lock and reads the absent placement.\",\"The implementation must decide whether to read the mark before storing the image.\"],\"outcomes\":[\"The damaged mark is read first, so the operation returns state_unavailable and changes no image or record, as INV-20 requires.\",\"The mark is not part of photo_delivery's stated A6 knowledge, so the implementation stores the image and placement without discovering it.\"],\"observer\":\"The caller and the state-folder operator see refusal with no changes versus a new placement and stored image.\"}}]}",
+ "set_aside": []
+}

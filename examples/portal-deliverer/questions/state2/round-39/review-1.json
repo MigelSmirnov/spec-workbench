@@ -1,0 +1,167 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_source",
+   "text": "`marked_at: datetime`",
+   "question": "Which authoritative time source supplies the fresh instant written to `marked_at`?",
+   "options": [
+    "an injected system wall clock",
+    "a declared authority module wrapping the system clock",
+    "a timestamp supplied by the calling flow"
+   ],
+   "default_guess": "Use an injected UTC system wall clock.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The calling flow reports a Portal photo id.",
+     "The deliverer creates the publication mark."
+    ],
+    "outcomes": [
+     "One implementation obtains `marked_at` from an injected system clock.",
+     "Another implementation accepts or derives `marked_at` from the calling flow."
+    ],
+    "observer": "A reader of the publication-mark record sees different instants."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "undefined_instant_meaning",
+   "text": "`marked_at: datetime`",
+   "question": "Which event in the mark operation does `marked_at` denote: request receipt, acquisition of the project lock, successful Portal-photo validation, or creation of the mark record?",
+   "options": [
+    "request receipt",
+    "project-lock acquisition",
+    "immediately before the mark record is written"
+   ],
+   "default_guess": "Use the instant immediately before writing the new mark record.",
+   "witness": {
+    "initial": "A placement exists, no mark exists, and another operation holds the project lock.",
+    "events": [
+     "The calling flow submits a mark request.",
+     "The request waits for the project lock.",
+     "The lock is released much later and the mark is written."
+    ],
+    "outcomes": [
+     "An implementation records the request-receipt instant.",
+     "An implementation records the instant at which the mark is written after the wait."
+    ],
+    "observer": "A reader of the publication-mark record sees materially different `marked_at` values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "undefined_time_representation",
+   "text": "`marked_at: datetime`",
+   "question": "In which representation must `marked_at` be stored and returned, including time zone awareness, UTC offset, precision and serialization form?",
+   "options": [
+    "naive UTC datetime",
+    "UTC-aware datetime with `+00:00`",
+    "integer Unix time at a specified precision"
+   ],
+   "default_guess": "Store an aware UTC datetime serialized in ISO 8601 with `+00:00` and microsecond precision.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The calling flow records the publication.",
+     "The deliverer persists the new mark."
+    ],
+    "outcomes": [
+     "One implementation writes a naive UTC datetime.",
+     "Another writes an offset-aware UTC datetime."
+    ],
+    "observer": "The record validator, a replay reader or an administrator inspecting the record sees different representations."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "publication-mark operation",
+   "kind": "undefined_clock_reads",
+   "text": "`marked_at: datetime`",
+   "question": "How many readings of the decided time source may one mark operation take, and which reading supplies `marked_at`?",
+   "options": [
+    "exactly one reading",
+    "one reading before locking and another before writing, using the latter",
+    "an unrestricted number of readings"
+   ],
+   "default_guess": "Take exactly one reading, immediately before constructing the new mark record.",
+   "witness": {
+    "initial": "A placement exists, no mark exists, and the clock advances while a mark operation waits for its project lock.",
+    "events": [
+     "The mark operation begins and waits.",
+     "The clock advances.",
+     "The operation acquires the lock and writes the mark."
+    ],
+    "outcomes": [
+     "An implementation reads the clock once before waiting and stores that value.",
+     "Another reads it again after acquiring the lock and stores the later value."
+    ],
+    "observer": "A reader of the publication-mark record sees different `marked_at` values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 2 state-path naming",
+   "kind": "undefined_identifier_representation",
+   "text": "In the state folder the lock file of a project is named by its project id with the\n   imported `LOCK_FILE_SUFFIX` constant, in the folder of the imported `LOCKS_FOLDER` constant; a placement\n   record and a mark record are named by the source id with the imported `RECORD_FILE_SUFFIX` constant, in\n   a folder named by the project id inside the folder of the imported `PLACEMENTS_FOLDER` or `MARKS_FOLDER`\n   constant.",
+   "question": "Which textual representation of the UUID project id is used in lock-file names and project-folder names?",
+   "options": [
+    "canonical lowercase hyphenated UUID",
+    "lowercase 32-digit UUID without hyphens",
+    "the spelling received in the request"
+   ],
+   "default_guess": "Use the canonical lowercase hyphenated UUID representation.",
+   "witness": {
+    "initial": "A confirmed connection exists for UUID `123e4567-e89b-12d3-a456-426614174000`, and no state entries exist for it.",
+    "events": [
+     "A caller addresses the project and performs a delivery.",
+     "The service creates the project lock and state folders."
+    ],
+    "outcomes": [
+     "One implementation creates `locks/123e4567-e89b-12d3-a456-426614174000.lock` and matching hyphenated project folders.",
+     "Another creates `locks/123e4567e89b12d3a456426614174000.lock` and matching unhyphenated project folders."
+    ],
+    "observer": "The installer, an administrator, or a later compatible implementation sees different durable paths."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 4 lock-file opening",
+   "kind": "check_precedence",
+   "text": "It is opened for reading and writing,\n   created when absent, without following a link, and given the mode of `LOCK_FILE_MODE` each time it is\n   opened, whatever the umask; a failure to set that mode is refused like a lock file that cannot be\n   opened. An entry at its address that is a symbolic link or not a regular file is refused like a\n   lock file that cannot be opened.",
+   "question": "For an existing entry, must the service verify that it is a regular file before changing its mode, or may it set the mode first and then refuse it as non-regular?",
+   "options": [
+    "verify regular-file type before changing the mode",
+    "set the mode before verifying the type"
+   ],
+   "default_guess": "Open without following links, verify the opened object is a regular file, and only then set its mode.",
+   "witness": {
+    "initial": "The lock address contains a FIFO with mode 0666 rather than a regular file.",
+    "events": [
+     "A caller starts a delivery for the project.",
+     "The deliverer opens the existing FIFO for reading and writing without following links."
+    ],
+    "outcomes": [
+     "An implementation checks the opened type first, refuses it and leaves mode 0666.",
+     "An implementation sets mode 0600 first, then checks the type and refuses it."
+    ],
+    "observer": "The caller receives the same refusal, but an administrator inspecting the state folder sees whether the malformed entry was changed."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 4 lock-file mode",
+   "kind": "standard_violation",
+   "text": "given the mode of `LOCK_FILE_MODE` each time it is\n   opened",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must name this policy value as the imported `LOCK_FILE_MODE` constant.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_source\",\"text\":\"`marked_at: datetime`\",\"question\":\"Which authoritative time source supplies the fresh instant written to `marked_at`?\",\"options\":[\"an injected system wall clock\",\"a declared authority module wrapping the system clock\",\"a timestamp supplied by the calling flow\"],\"default_guess\":\"Use an injected UTC system wall clock.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The calling flow reports a Portal photo id.\",\"The deliverer creates the publication mark.\"],\"outcomes\":[\"One implementation obtains `marked_at` from an injected system clock.\",\"Another implementation accepts or derives `marked_at` from the calling flow.\"],\"observer\":\"A reader of the publication-mark record sees different instants.\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"undefined_instant_meaning\",\"text\":\"`marked_at: datetime`\",\"question\":\"Which event in the mark operation does `marked_at` denote: request receipt, acquisition of the project lock, successful Portal-photo validation, or creation of the mark record?\",\"options\":[\"request receipt\",\"project-lock acquisition\",\"immediately before the mark record is written\"],\"default_guess\":\"Use the instant immediately before writing the new mark record.\",\"witness\":{\"initial\":\"A placement exists, no mark exists, and another operation holds the project lock.\",\"events\":[\"The calling flow submits a mark request.\",\"The request waits for the project lock.\",\"The lock is released much later and the mark is written.\"],\"outcomes\":[\"An implementation records the request-receipt instant.\",\"An implementation records the instant at which the mark is written after the wait.\"],\"observer\":\"A reader of the publication-mark record sees materially different `marked_at` values.\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"undefined_time_representation\",\"text\":\"`marked_at: datetime`\",\"question\":\"In which representation must `marked_at` be stored and returned, including time zone awareness, UTC offset, precision and serialization form?\",\"options\":[\"naive UTC datetime\",\"UTC-aware datetime with `+00:00`\",\"integer Unix time at a specified precision\"],\"default_guess\":\"Store an aware UTC datetime serialized in ISO 8601 with `+00:00` and microsecond precision.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The calling flow records the publication.\",\"The deliverer persists the new mark.\"],\"outcomes\":[\"One implementation writes a naive UTC datetime.\",\"Another writes an offset-aware UTC datetime.\"],\"observer\":\"The record validator, a replay reader or an administrator inspecting the record sees different representations.\"}},{\"subject\":\"publication-mark operation\",\"kind\":\"undefined_clock_reads\",\"text\":\"`marked_at: datetime`\",\"question\":\"How many readings of the decided time source may one mark operation take, and which reading supplies `marked_at`?\",\"options\":[\"exactly one reading\",\"one reading before locking and another before writing, using the latter\",\"an unrestricted number of readings\"],\"default_guess\":\"Take exactly one reading, immediately before constructing the new mark record.\",\"witness\":{\"initial\":\"A placement exists, no mark exists, and the clock advances while a mark operation waits for its project lock.\",\"events\":[\"The mark operation begins and waits.\",\"The clock advances.\",\"The operation acquires the lock and writes the mark.\"],\"outcomes\":[\"An implementation reads the clock once before waiting and stores that value.\",\"Another reads it again after acquiring the lock and stores the later value.\"],\"observer\":\"A reader of the publication-mark record sees different `marked_at` values.\"}},{\"subject\":\"A6 rule 2 state-path naming\",\"kind\":\"undefined_identifier_representation\",\"text\":\"In the state folder the lock file of a project is named by its project id with the\\n   imported `LOCK_FILE_SUFFIX` constant, in the folder of the imported `LOCKS_FOLDER` constant; a placement\\n   record and a mark record are named by the source id with the imported `RECORD_FILE_SUFFIX` constant, in\\n   a folder named by the project id inside the folder of the imported `PLACEMENTS_FOLDER` or `MARKS_FOLDER`\\n   constant.\",\"question\":\"Which textual representation of the UUID project id is used in lock-file names and project-folder names?\",\"options\":[\"canonical lowercase hyphenated UUID\",\"lowercase 32-digit UUID without hyphens\",\"the spelling received in the request\"],\"default_guess\":\"Use the canonical lowercase hyphenated UUID representation.\",\"witness\":{\"initial\":\"A confirmed connection exists for UUID `123e4567-e89b-12d3-a456-426614174000`, and no state entries exist for it.\",\"events\":[\"A caller addresses the project and performs a delivery.\",\"The service creates the project lock and state folders.\"],\"outcomes\":[\"One implementation creates `locks/123e4567-e89b-12d3-a456-426614174000.lock` and matching hyphenated project folders.\",\"Another creates `locks/123e4567e89b12d3a456426614174000.lock` and matching unhyphenated project folders.\"],\"observer\":\"The installer, an administrator, or a later compatible implementation sees different durable paths.\"}},{\"subject\":\"A6 rule 4 lock-file opening\",\"kind\":\"check_precedence\",\"text\":\"It is opened for reading and writing,\\n   created when absent, without following a link, and given the mode of `LOCK_FILE_MODE` each time it is\\n   opened, whatever the umask; a failure to set that mode is refused like a lock file that cannot be\\n   opened. An entry at its address that is a symbolic link or not a regular file is refused like a\\n   lock file that cannot be opened.\",\"question\":\"For an existing entry, must the service verify that it is a regular file before changing its mode, or may it set the mode first and then refuse it as non-regular?\",\"options\":[\"verify regular-file type before changing the mode\",\"set the mode before verifying the type\"],\"default_guess\":\"Open without following links, verify the opened object is a regular file, and only then set its mode.\",\"witness\":{\"initial\":\"The lock address contains a FIFO with mode 0666 rather than a regular file.\",\"events\":[\"A caller starts a delivery for the project.\",\"The deliverer opens the existing FIFO for reading and writing without following links.\"],\"outcomes\":[\"An implementation checks the opened type first, refuses it and leaves mode 0666.\",\"An implementation sets mode 0600 first, then checks the type and refuses it.\"],\"observer\":\"The caller receives the same refusal, but an administrator inspecting the state folder sees whether the malformed entry was changed.\"}},{\"subject\":\"A6 rule 4 lock-file mode\",\"kind\":\"standard_violation\",\"text\":\"given the mode of `LOCK_FILE_MODE` each time it is\\n   opened\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must name this policy value as the imported `LOCK_FILE_MODE` constant.\"}]}",
+ "set_aside": []
+}

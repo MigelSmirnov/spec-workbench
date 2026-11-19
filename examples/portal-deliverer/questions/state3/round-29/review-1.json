@@ -1,0 +1,106 @@
+{
+ "open_points": [
+  {
+   "subject": "binary-store folder creation and containment",
+   "kind": "undefined path resolution",
+   "text": "In the binary store the folders are those of the path resolved under rule 1.",
+   "question": "How is rule 1 containment established when one or more folders in the stored-image path do not yet exist: resolve the existing prefix and append checked segments, permit non-strict resolution, or fail the delivery?",
+   "options": [
+    "Resolve the existing prefix, validate each missing segment, and create it",
+    "Use non-strict path resolution before creating the missing folders",
+    "Fail with `unsafe_reference` when the complete path cannot yet be resolved"
+   ],
+   "default_guess": "Resolve and validate the existing prefix, then create each fixed safe segment while preserving containment.",
+   "witness": {
+    "initial": "The configured binary store exists and is empty, so `photos/<project_id>` does not yet exist.",
+    "events": [
+     "The caller requests the first placement for a project.",
+     "`delivery_store` applies rule 1 before writing the stored image."
+    ],
+    "outcomes": [
+     "The implementation resolves the existing store plus lexical missing segments, creates the folders, and places the photo.",
+     "The implementation requires the complete path to resolve before creation and refuses the delivery because the folders are absent."
+    ],
+    "observer": "The caller sees `placed` in one implementation and `unsafe_reference` in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "state-record reads through parent entries",
+   "kind": "unclear read safety",
+   "text": "In the state folder an entry on the way that is a symbolic link or not a folder fails the write",
+   "question": "Must the same symbolic-link and non-folder rule be applied while reading a placement or mark record, or does it govern writes only?",
+   "options": [
+    "Reject a read with `state_unavailable` when any parent entry is a symbolic link or not a folder",
+    "Apply the restriction only to writes and allow ordinary path resolution during reads"
+   ],
+   "default_guess": "Apply the restriction to both reads and writes and return `state_unavailable`.",
+   "witness": {
+    "initial": "`ledger` below the state folder is a symbolic link to another folder containing a valid placement record at the expected project and source address.",
+    "events": [
+     "The caller delivers the same project and source again.",
+     "`delivery_store` reads the existing placement record."
+    ],
+    "outcomes": [
+     "The parent symbolic link is rejected and the operation answers `state_unavailable`.",
+     "The read follows the parent symbolic link, accepts the record, and the operation answers `replayed`."
+    ],
+    "observer": "The caller sees a refusal in one implementation and a replay in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "creation of state folders by read operations",
+   "kind": "unclear mutation boundary",
+   "text": "The service makes the folders below the binary store and the state folder exist one at a time, from the outermost",
+   "question": "Does a read operation such as scan or an absent-record lookup create missing `PLACEMENTS_FOLDER`, `MARKS_FOLDER`, and project folders, or are those folders created only when a file is about to be written?",
+   "options": [
+    "Reads treat a missing parent folder as an absent record and create nothing",
+    "Reads create the folder hierarchy before checking the record address",
+    "Create only the lock hierarchy during read-only lookups that occur under a project lock"
+   ],
+   "default_guess": "Reads create nothing; a missing parent means that the record is absent, and folders are created only for an impending write or lock acquisition.",
+   "witness": {
+    "initial": "The state folder exists but contains none of `locks`, `ledger`, or `published`; the source folder contains one ready photo.",
+    "events": [
+     "The caller requests a scan.",
+     "The scan checks for placement and publication records for the photo."
+    ],
+    "outcomes": [
+     "The scan reports the photo as `ready` and leaves the state folder empty.",
+     "The scan reports the photo as `ready` but creates `ledger`, `published`, and their project folders while checking for absent records."
+    ],
+    "observer": "The installer or operator inspecting the state folder sees different durable contents after the same scan."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "lock-file creation protocol",
+   "kind": "contradictory write protocol",
+   "text": "Each file is written to a temporary name in its folder, synchronised to disk and renamed, and\n   its folder is synchronised, so a reader sees a complete file or none.",
+   "question": "Is the project lock file an exception that must be opened or atomically created directly at its final address, or must it also use the temporary-file-and-rename protocol stated for each file?",
+   "options": [
+    "The lock file is an explicit exception and is directly opened with atomic create-at-final-path semantics",
+    "The lock file follows the temporary-file-and-rename protocol",
+    "The phrase `Each file` applies only to stored images and records and must say so"
+   ],
+   "default_guess": "Treat the lock file as an explicit exception and directly open or atomically create one stable inode at its final address.",
+   "witness": {
+    "initial": "The project has no lock file and two service processes begin its first delivery concurrently.",
+    "events": [
+     "Each process creates and locks the project lock file according to its reading of the file-write rules.",
+     "Each process checks for a placement and attempts to write one."
+    ],
+    "outcomes": [
+     "Direct atomic creation makes both processes open and lock the same inode, so one answers `placed` and the other `replayed`.",
+     "Temporary creation and rename lets the processes lock different inodes, so both can enter the critical section and attempt the placement concurrently."
+    ],
+    "observer": "The callers and the owner of the state store can see different outcomes and concurrency guarantees."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"binary-store folder creation and containment\",\"kind\":\"undefined path resolution\",\"text\":\"In the binary store the folders are those of the path resolved under rule 1.\",\"question\":\"How is rule 1 containment established when one or more folders in the stored-image path do not yet exist: resolve the existing prefix and append checked segments, permit non-strict resolution, or fail the delivery?\",\"options\":[\"Resolve the existing prefix, validate each missing segment, and create it\",\"Use non-strict path resolution before creating the missing folders\",\"Fail with `unsafe_reference` when the complete path cannot yet be resolved\"],\"default_guess\":\"Resolve and validate the existing prefix, then create each fixed safe segment while preserving containment.\",\"witness\":{\"initial\":\"The configured binary store exists and is empty, so `photos/<project_id>` does not yet exist.\",\"events\":[\"The caller requests the first placement for a project.\",\"`delivery_store` applies rule 1 before writing the stored image.\"],\"outcomes\":[\"The implementation resolves the existing store plus lexical missing segments, creates the folders, and places the photo.\",\"The implementation requires the complete path to resolve before creation and refuses the delivery because the folders are absent.\"],\"observer\":\"The caller sees `placed` in one implementation and `unsafe_reference` in the other.\"}},{\"subject\":\"state-record reads through parent entries\",\"kind\":\"unclear read safety\",\"text\":\"In the state folder an entry on the way that is a symbolic link or not a folder fails the write\",\"question\":\"Must the same symbolic-link and non-folder rule be applied while reading a placement or mark record, or does it govern writes only?\",\"options\":[\"Reject a read with `state_unavailable` when any parent entry is a symbolic link or not a folder\",\"Apply the restriction only to writes and allow ordinary path resolution during reads\"],\"default_guess\":\"Apply the restriction to both reads and writes and return `state_unavailable`.\",\"witness\":{\"initial\":\"`ledger` below the state folder is a symbolic link to another folder containing a valid placement record at the expected project and source address.\",\"events\":[\"The caller delivers the same project and source again.\",\"`delivery_store` reads the existing placement record.\"],\"outcomes\":[\"The parent symbolic link is rejected and the operation answers `state_unavailable`.\",\"The read follows the parent symbolic link, accepts the record, and the operation answers `replayed`.\"],\"observer\":\"The caller sees a refusal in one implementation and a replay in the other.\"}},{\"subject\":\"creation of state folders by read operations\",\"kind\":\"unclear mutation boundary\",\"text\":\"The service makes the folders below the binary store and the state folder exist one at a time, from the outermost\",\"question\":\"Does a read operation such as scan or an absent-record lookup create missing `PLACEMENTS_FOLDER`, `MARKS_FOLDER`, and project folders, or are those folders created only when a file is about to be written?\",\"options\":[\"Reads treat a missing parent folder as an absent record and create nothing\",\"Reads create the folder hierarchy before checking the record address\",\"Create only the lock hierarchy during read-only lookups that occur under a project lock\"],\"default_guess\":\"Reads create nothing; a missing parent means that the record is absent, and folders are created only for an impending write or lock acquisition.\",\"witness\":{\"initial\":\"The state folder exists but contains none of `locks`, `ledger`, or `published`; the source folder contains one ready photo.\",\"events\":[\"The caller requests a scan.\",\"The scan checks for placement and publication records for the photo.\"],\"outcomes\":[\"The scan reports the photo as `ready` and leaves the state folder empty.\",\"The scan reports the photo as `ready` but creates `ledger`, `published`, and their project folders while checking for absent records.\"],\"observer\":\"The installer or operator inspecting the state folder sees different durable contents after the same scan.\"}},{\"subject\":\"lock-file creation protocol\",\"kind\":\"contradictory write protocol\",\"text\":\"Each file is written to a temporary name in its folder, synchronised to disk and renamed, and\\n   its folder is synchronised, so a reader sees a complete file or none.\",\"question\":\"Is the project lock file an exception that must be opened or atomically created directly at its final address, or must it also use the temporary-file-and-rename protocol stated for each file?\",\"options\":[\"The lock file is an explicit exception and is directly opened with atomic create-at-final-path semantics\",\"The lock file follows the temporary-file-and-rename protocol\",\"The phrase `Each file` applies only to stored images and records and must say so\"],\"default_guess\":\"Treat the lock file as an explicit exception and directly open or atomically create one stable inode at its final address.\",\"witness\":{\"initial\":\"The project has no lock file and two service processes begin its first delivery concurrently.\",\"events\":[\"Each process creates and locks the project lock file according to its reading of the file-write rules.\",\"Each process checks for a placement and attempts to write one.\"],\"outcomes\":[\"Direct atomic creation makes both processes open and lock the same inode, so one answers `placed` and the other `replayed`.\",\"Temporary creation and rename lets the processes lock different inodes, so both can enter the critical section and attempt the placement concurrently.\"],\"observer\":\"The callers and the owner of the state store can see different outcomes and concurrency guarantees.\"}}]}",
+ "set_aside": []
+}

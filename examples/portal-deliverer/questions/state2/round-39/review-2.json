@@ -1,0 +1,189 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "time_source",
+   "text": "`marked_at: datetime`",
+   "question": "What authority supplies `marked_at`, what event does the instant mean, and at what point in a successful first mark is it read?",
+   "options": [
+    "Read the service wall clock after the project lock is acquired and all validation succeeds, immediately before the mark record is built",
+    "Read the service wall clock when the request begins, before waiting for the project lock",
+    "Use an instant derived from another value, such as the placement or source-file time"
+   ],
+   "default_guess": "Read an injected system clock exactly once after acquiring the project lock and validating the placement, immediately before building the new mark record.",
+   "witness": {
+    "initial": "A placement exists without a publication mark, and another operation holds the project's lock for several seconds.",
+    "events": [
+     "The calling flow requests that the placement be marked with a Portal photo id.",
+     "The mark request waits for the project lock and then writes a new PublicationMark."
+    ],
+    "outcomes": [
+     "`marked_at` is the instant at which the request arrived, before the wait.",
+     "`marked_at` is the instant at which the mark was committed after the wait."
+    ],
+    "observer": "The calling flow or a later scan that reads the stored mark sees the different timestamp."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "time_representation",
+   "text": "`marked_at: datetime`",
+   "question": "In which representation is `marked_at` stored and returned: aware UTC, naive UTC, configured local time, or another form?",
+   "options": [
+    "Timezone-aware UTC datetime",
+    "Naive UTC datetime",
+    "Naive datetime in the configured time zone"
+   ],
+   "default_guess": "Store and return a timezone-aware UTC datetime.",
+   "witness": {
+    "initial": "The service runs in Europe/Madrid while its UTC offset is not zero.",
+    "events": [
+     "The calling flow records a publication.",
+     "The deliverer writes and later reads `marked_at`."
+    ],
+    "outcomes": [
+     "The record contains an aware UTC instant.",
+     "The record contains a naive Europe/Madrid wall time."
+    ],
+    "observer": "The calling flow and any record reader see different serialized values and cannot interpret the naive value identically."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark timestamp invariant",
+   "kind": "missing_invariant_test",
+   "text": "`marked_at: datetime`",
+   "question": "What formal invariant and Required tests item must state and demonstrate the decided source, meaning, representation and number of clock readings for a newly written mark timestamp?",
+   "options": [
+    "Add an invariant requiring one clock reading for a new mark, with its exact timing and representation, and test creation plus replay",
+    "Declare that `marked_at` has no clock invariant"
+   ],
+   "default_guess": "Add an invariant and a Required tests item showing that a new mark reads the injected clock once after validation, stores the decided UTC representation, and replay reads no clock and preserves the first value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 4 project locking",
+   "kind": "lock_semantics",
+   "text": "“Deliveries and marks of one project run one at a time, across processes, under an operating system lock on one lock file of that project in the state folder.”",
+   "question": "Which locking primitive and descriptor discipline must be used so that concurrent calls in the same process, as well as calls in separate processes, actually exclude one another?",
+   "options": [
+    "Use an OS lock whose independently opened descriptors contend even within one process, such as `flock` with one open per operation",
+    "Combine a process-local per-project mutex with a cross-process file lock",
+    "Use POSIX process-associated record locks, which do not exclude another thread of the same process"
+   ],
+   "default_guess": "Use a process-local per-project mutex together with an OS file lock, or explicitly require equivalent semantics for both same-process and cross-process calls.",
+   "witness": {
+    "initial": "One project has no placement for a source, and two threads in the same service process can deliver it concurrently.",
+    "events": [
+     "Both threads open the project's lock file.",
+     "Both attempt to acquire the unspecified operating-system lock.",
+     "Each checks for the placement and continues according to the locking semantics chosen."
+    ],
+    "outcomes": [
+     "With same-process exclusion, one call answers `placed` and the other answers `replayed`.",
+     "With a process-associated lock that does not exclude sibling threads, both calls can pass the absent-record check and answer `placed`."
+    ],
+    "observer": "The two callers see different outcomes, and storage observers may see duplicate image writes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 INV-12 Required tests",
+   "kind": "incomplete_test_requirement",
+   "text": "“and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other”",
+   "question": "Must INV-12 also be demonstrated for concurrent mark calls within one process, as the invariant's unrestricted phrase “concurrent calls” requires?",
+   "options": [
+    "Require both same-process and separate-process concurrent mark tests",
+    "Limit the formal invariant to cross-process mark concurrency"
+   ],
+   "default_guess": "Require same-process and separate-process concurrent mark tests.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 INV-12 Required tests",
+   "kind": "incomplete_test_requirement",
+   "text": "“and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other”",
+   "question": "What durable-state assertions must the mark-concurrency test make to show that the calls never produced two marks and that the surviving mark contains the winning `photo_id`?",
+   "options": [
+    "Assert exactly one unchanged mark record containing the `photo_id` returned as `marked`",
+    "Treat the response statuses alone as sufficient"
+   ],
+   "default_guess": "Assert that exactly one mark record remains, that it contains the winning `photo_id`, and that no competing mark was written.",
+   "witness": {
+    "initial": "A placement exists without a mark, and two processes concurrently submit different `photo_id` values.",
+    "events": [
+     "The first implementation writes the first mark and returns `marked`.",
+     "A faulty but response-compatible implementation temporarily or finally overwrites it with the second value while returning `publication_conflict` to that caller.",
+     "The described test checks only the returned statuses."
+    ],
+    "outcomes": [
+     "The durable mark contains the `photo_id` whose call returned `marked`.",
+     "The returned statuses are identical, but the durable mark contains the conflicting `photo_id`."
+    ],
+    "observer": "A later scan or repeated placement reports a different Portal photo id."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 INV-02 Required tests",
+   "kind": "side_effect_terminology",
+   "text": "“add no file except the project lock”",
+   "question": "Does “file” exclude the newly created folders leading to the project lock, or must this assertion be changed to state explicitly that those folders are permitted by A3 rule 5 and A6 rule 2?",
+   "options": [
+    "Permit the project lock file and any missing ancestor folders required for it",
+    "Require the lock-folder hierarchy to pre-exist so that only the lock file is added"
+   ],
+   "default_guess": "Permit the project lock file and the missing folders leading to it, and say so explicitly in the Required tests item.",
+   "witness": {
+    "initial": "The installed state folder exists, but its configured locks subfolder does not.",
+    "events": [
+     "The caller attempts a delivery with an invalid name.",
+     "The service reaches the project-lock check before checking the name and creates the locks folder and lock file."
+    ],
+    "outcomes": [
+     "The test passes because the only added regular file is the project lock; the added folder is allowed.",
+     "The test fails because “file” is read as any filesystem entry and the locks folder was also added."
+    ],
+    "observer": "The test runner and an administrator inspecting the state folder see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 INV-19 Required tests",
+   "kind": "side_effect_terminology",
+   "text": "“adds no file except the project lock and changes no existing file”",
+   "question": "Does this permit creation of the folders leading to the project lock, or must the lock-folder hierarchy already exist for this test?",
+   "options": [
+    "Permit the project lock file and any required ancestor folders",
+    "Require no new filesystem entry other than the lock file"
+   ],
+   "default_guess": "Permit the lock file and its required ancestor folders, and state that explicitly.",
+   "witness": {
+    "initial": "The state folder exists without its locks subfolder, and an unplaced conflict-copy name is submitted for delivery.",
+    "events": [
+     "The delivery creates the lock hierarchy and project lock before checking the source name.",
+     "The conflict-copy name is refused."
+    ],
+    "outcomes": [
+     "The refusal satisfies INV-19 because no source-derived durable state was added and folders are not meant by “file”.",
+     "The refusal violates the stated test because an additional filesystem entry, the locks folder, was added."
+    ],
+    "observer": "The test runner sees a pass or failure depending on how “file” is interpreted."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 4 lock-file mode",
+   "kind": "standard_violation",
+   "text": "“and given the mode of `LOCK_FILE_MODE` each time it is opened”",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must name this value as “the imported `LOCK_FILE_MODE` constant”.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"time_source\",\"text\":\"`marked_at: datetime`\",\"question\":\"What authority supplies `marked_at`, what event does the instant mean, and at what point in a successful first mark is it read?\",\"options\":[\"Read the service wall clock after the project lock is acquired and all validation succeeds, immediately before the mark record is built\",\"Read the service wall clock when the request begins, before waiting for the project lock\",\"Use an instant derived from another value, such as the placement or source-file time\"],\"default_guess\":\"Read an injected system clock exactly once after acquiring the project lock and validating the placement, immediately before building the new mark record.\",\"witness\":{\"initial\":\"A placement exists without a publication mark, and another operation holds the project's lock for several seconds.\",\"events\":[\"The calling flow requests that the placement be marked with a Portal photo id.\",\"The mark request waits for the project lock and then writes a new PublicationMark.\"],\"outcomes\":[\"`marked_at` is the instant at which the request arrived, before the wait.\",\"`marked_at` is the instant at which the mark was committed after the wait.\"],\"observer\":\"The calling flow or a later scan that reads the stored mark sees the different timestamp.\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"time_representation\",\"text\":\"`marked_at: datetime`\",\"question\":\"In which representation is `marked_at` stored and returned: aware UTC, naive UTC, configured local time, or another form?\",\"options\":[\"Timezone-aware UTC datetime\",\"Naive UTC datetime\",\"Naive datetime in the configured time zone\"],\"default_guess\":\"Store and return a timezone-aware UTC datetime.\",\"witness\":{\"initial\":\"The service runs in Europe/Madrid while its UTC offset is not zero.\",\"events\":[\"The calling flow records a publication.\",\"The deliverer writes and later reads `marked_at`.\"],\"outcomes\":[\"The record contains an aware UTC instant.\",\"The record contains a naive Europe/Madrid wall time.\"],\"observer\":\"The calling flow and any record reader see different serialized values and cannot interpret the naive value identically.\"}},{\"subject\":\"M07 PublicationMark timestamp invariant\",\"kind\":\"missing_invariant_test\",\"text\":\"`marked_at: datetime`\",\"question\":\"What formal invariant and Required tests item must state and demonstrate the decided source, meaning, representation and number of clock readings for a newly written mark timestamp?\",\"options\":[\"Add an invariant requiring one clock reading for a new mark, with its exact timing and representation, and test creation plus replay\",\"Declare that `marked_at` has no clock invariant\"],\"default_guess\":\"Add an invariant and a Required tests item showing that a new mark reads the injected clock once after validation, stores the decided UTC representation, and replay reads no clock and preserves the first value.\"},{\"subject\":\"A6 rule 4 project locking\",\"kind\":\"lock_semantics\",\"text\":\"“Deliveries and marks of one project run one at a time, across processes, under an operating system lock on one lock file of that project in the state folder.”\",\"question\":\"Which locking primitive and descriptor discipline must be used so that concurrent calls in the same process, as well as calls in separate processes, actually exclude one another?\",\"options\":[\"Use an OS lock whose independently opened descriptors contend even within one process, such as `flock` with one open per operation\",\"Combine a process-local per-project mutex with a cross-process file lock\",\"Use POSIX process-associated record locks, which do not exclude another thread of the same process\"],\"default_guess\":\"Use a process-local per-project mutex together with an OS file lock, or explicitly require equivalent semantics for both same-process and cross-process calls.\",\"witness\":{\"initial\":\"One project has no placement for a source, and two threads in the same service process can deliver it concurrently.\",\"events\":[\"Both threads open the project's lock file.\",\"Both attempt to acquire the unspecified operating-system lock.\",\"Each checks for the placement and continues according to the locking semantics chosen.\"],\"outcomes\":[\"With same-process exclusion, one call answers `placed` and the other answers `replayed`.\",\"With a process-associated lock that does not exclude sibling threads, both calls can pass the absent-record check and answer `placed`.\"],\"observer\":\"The two callers see different outcomes, and storage observers may see duplicate image writes.\"}},{\"subject\":\"A6 INV-12 Required tests\",\"kind\":\"incomplete_test_requirement\",\"text\":\"“and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other”\",\"question\":\"Must INV-12 also be demonstrated for concurrent mark calls within one process, as the invariant's unrestricted phrase “concurrent calls” requires?\",\"options\":[\"Require both same-process and separate-process concurrent mark tests\",\"Limit the formal invariant to cross-process mark concurrency\"],\"default_guess\":\"Require same-process and separate-process concurrent mark tests.\"},{\"subject\":\"A6 INV-12 Required tests\",\"kind\":\"incomplete_test_requirement\",\"text\":\"“and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other”\",\"question\":\"What durable-state assertions must the mark-concurrency test make to show that the calls never produced two marks and that the surviving mark contains the winning `photo_id`?\",\"options\":[\"Assert exactly one unchanged mark record containing the `photo_id` returned as `marked`\",\"Treat the response statuses alone as sufficient\"],\"default_guess\":\"Assert that exactly one mark record remains, that it contains the winning `photo_id`, and that no competing mark was written.\",\"witness\":{\"initial\":\"A placement exists without a mark, and two processes concurrently submit different `photo_id` values.\",\"events\":[\"The first implementation writes the first mark and returns `marked`.\",\"A faulty but response-compatible implementation temporarily or finally overwrites it with the second value while returning `publication_conflict` to that caller.\",\"The described test checks only the returned statuses.\"],\"outcomes\":[\"The durable mark contains the `photo_id` whose call returned `marked`.\",\"The returned statuses are identical, but the durable mark contains the conflicting `photo_id`.\"],\"observer\":\"A later scan or repeated placement reports a different Portal photo id.\"}},{\"subject\":\"A1 INV-02 Required tests\",\"kind\":\"side_effect_terminology\",\"text\":\"“add no file except the project lock”\",\"question\":\"Does “file” exclude the newly created folders leading to the project lock, or must this assertion be changed to state explicitly that those folders are permitted by A3 rule 5 and A6 rule 2?\",\"options\":[\"Permit the project lock file and any missing ancestor folders required for it\",\"Require the lock-folder hierarchy to pre-exist so that only the lock file is added\"],\"default_guess\":\"Permit the project lock file and the missing folders leading to it, and say so explicitly in the Required tests item.\",\"witness\":{\"initial\":\"The installed state folder exists, but its configured locks subfolder does not.\",\"events\":[\"The caller attempts a delivery with an invalid name.\",\"The service reaches the project-lock check before checking the name and creates the locks folder and lock file.\"],\"outcomes\":[\"The test passes because the only added regular file is the project lock; the added folder is allowed.\",\"The test fails because “file” is read as any filesystem entry and the locks folder was also added.\"],\"observer\":\"The test runner and an administrator inspecting the state folder see the difference.\"}},{\"subject\":\"A3 INV-19 Required tests\",\"kind\":\"side_effect_terminology\",\"text\":\"“adds no file except the project lock and changes no existing file”\",\"question\":\"Does this permit creation of the folders leading to the project lock, or must the lock-folder hierarchy already exist for this test?\",\"options\":[\"Permit the project lock file and any required ancestor folders\",\"Require no new filesystem entry other than the lock file\"],\"default_guess\":\"Permit the lock file and its required ancestor folders, and state that explicitly.\",\"witness\":{\"initial\":\"The state folder exists without its locks subfolder, and an unplaced conflict-copy name is submitted for delivery.\",\"events\":[\"The delivery creates the lock hierarchy and project lock before checking the source name.\",\"The conflict-copy name is refused.\"],\"outcomes\":[\"The refusal satisfies INV-19 because no source-derived durable state was added and folders are not meant by “file”.\",\"The refusal violates the stated test because an additional filesystem entry, the locks folder, was added.\"],\"observer\":\"The test runner sees a pass or failure depending on how “file” is interpreted.\"}},{\"subject\":\"A6 rule 4 lock-file mode\",\"kind\":\"standard_violation\",\"text\":\"“and given the mode of `LOCK_FILE_MODE` each time it is opened”\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must name this value as “the imported `LOCK_FILE_MODE` constant”.\"}]}",
+ "set_aside": []
+}
