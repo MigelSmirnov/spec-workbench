@@ -164,7 +164,7 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
    `source_id`, both strings. A defect of that form or of the project id is refused as a whole request. A
    `source_id` that does not match the imported `SOURCE_ID_PATTERN` constant in full is refused with
    `invalid_source_id`.
-5. A refusal of the whole request under A5 or A6, an M08, is not a failed photo. Otherwise, a photo that cannot be delivered is answered with status `failed` and one member of
+5. A photo that cannot be delivered is answered with the FAILED member of = models.PlacementStatus and one member of
    `= models.PlacementFailure`. Condition 1 is decided from the name, then by opening the photo folder and
    each folder of the name in turn, each in the one before it and without following a link, and by one
    metadata reading of the last segment in the last folder opened, without following a link; the file is
@@ -325,10 +325,11 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 
 1. A stored image is named only from the project id and the source hash:
    `photos/<project_id>/<source_id>.jpg`. The reference must stay inside the binary store: its path,
-   resolved with the links of the binary store, must lie below the resolved store; otherwise, and also when the path cannot be resolved, the delivery
-   is refused as a whole request with the UNSAFE_REFERENCE member of = models.RefusalCode, an M08, and
-   nothing is written. A name built that way cannot leave the store, so the refusal is
-   reachable only when a folder of the store is a link that leads out of it. The binary store is
+   resolved with the links of the binary store, must lie below the resolved store. When it does not, or when a link in the store cannot be resolved,
+   the delivery is refused as a whole with the UNSAFE_REFERENCE member of = models.RefusalCode, an M08
+   and not a failed photo, and no stored image and no record is written. A name built that way cannot
+   leave the store, so the refusal is reachable only when a folder of the store is a link that leads out
+   of it or that cannot be resolved, such as a loop of links. The binary store is
    written only by the Portal and the deliverer, both installed by the owner; Syncthing and the calling
    agent have no access to it. No other actor changes its folders, so the containment checked before a
    write holds for that write.

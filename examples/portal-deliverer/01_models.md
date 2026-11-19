@@ -312,7 +312,7 @@ hidden photo (client-portal Q27), the mark of a removed photo must be reconsider
 
 The answer to an operation the service refuses as a whole. `code` says why, and `detail` is a fixed sentence for
 people that holds no server path and no credential. Every refused mark is M08. A delivery is M08 for the refusals of
-A3 rule 4 and A6 rule 5, and M06 for the failures of A3 rule 5.
+A3 rule 4 and A6 rules 1 and 5, and M06 for the failures of A3 rule 5.
 
 **Fields:** `code: RefusalCode`, `detail: str`.
 
