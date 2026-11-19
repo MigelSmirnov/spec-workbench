@@ -1,0 +1,263 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 modification time",
+   "kind": "time_sampling",
+   "text": "A file that is read takes its modification time from the file that was opened, the one whose bytes were read, and a delivery uses that time under A2 rule 3.",
+   "question": "At what point before, during or after the read is the opened file's modification time sampled, how many times is it read, at what precision, and how is it represented as UTC without an offset?",
+   "options": [
+    "Read opened-file metadata once immediately after opening and convert its timestamp to a naive UTC datetime at a specified precision.",
+    "Read opened-file metadata once after the byte read completes and convert its timestamp to a naive UTC datetime at a specified precision.",
+    "Use the modification time from the earlier path-metadata reading."
+   ],
+   "default_guess": "Read the opened descriptor's metadata once immediately after opening and convert its timestamp to a naive UTC datetime at microsecond precision.",
+   "witness": {
+    "initial": "A source image has no usable camera date, and another actor changes its modification time while the delivery is reading it.",
+    "events": [
+     "The deliverer opens the file.",
+     "The deliverer starts reading its bytes.",
+     "Syncthing or another writer changes the file's modification time.",
+     "The deliverer finishes reading and prepares the photo."
+    ],
+    "outcomes": [
+     "The photo date is the modification time observed when the file was opened.",
+     "The photo date is the modification time observed after the read."
+    ],
+    "observer": "The caller and Portal user see different photo dates for the same delivered bytes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 dependency on A2 rule 3",
+   "kind": "missing_rule",
+   "text": "A file that is read takes its modification time from the file that was opened, the one whose bytes were read, and a delivery uses that time under A2 rule 3.",
+   "question": "What does A2 rule 3 require the delivery to do with this modification time, including fallback precedence, conversion and precision? A2 rule 3 is not present in the supplied texts.",
+   "options": [
+    "A2 rule 3 converts this value directly to the prepared photo's UTC-without-offset taken_at.",
+    "A2 rule 3 uses it only when no acceptable camera date exists and defines the camera-date validity and conversion rules.",
+    "A2 rule 3 applies additional normalization or truncation before storing it."
+   ],
+   "default_guess": "Use it only when no usable camera date exists, converted to a naive UTC datetime without changing the instant.",
+   "unit": "?"
+  },
+  {
+   "subject": "M03 camera date",
+   "kind": "undefined_instant",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "When a camera record contains a local date without an offset or timezone, what instant does it denote, which camera fields are acceptable, and how is it converted to UTC?",
+   "options": [
+    "Reject an offsetless camera date and fall back to the opened file's modification time.",
+    "Interpret an offsetless camera date in a configured timezone.",
+    "Treat an offsetless camera date as already UTC."
+   ],
+   "default_guess": "Use only camera dates that determine an instant; otherwise fall back to the opened file's modification time.",
+   "witness": {
+    "initial": "A JPEG contains an EXIF date of 2026-07-01 12:00:00 with no offset, and its file modification time is 2026-07-01 10:00:00 UTC.",
+    "events": [
+     "The caller delivers the JPEG.",
+     "The deliverer prepares M03 and must assign taken_at."
+    ],
+    "outcomes": [
+     "The EXIF value is treated as 12:00 UTC.",
+     "The EXIF value is rejected as not defining an instant and the 10:00 UTC file modification time is used."
+    ],
+    "observer": "The caller and Portal user see different photo dates."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 marked_at",
+   "kind": "missing_time_source",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "Which authority supplies marked_at, what representation and precision it uses, and how many clock readings a successful mark operation takes?",
+   "options": [
+    "Read an injected system clock exactly once when the new mark is committed, storing a naive UTC datetime.",
+    "Accept marked_at from the caller.",
+    "Derive marked_at from filesystem metadata of the mark record."
+   ],
+   "default_guess": "Read an injected UTC system clock exactly once after validation and before writing the new mark, and store a naive UTC datetime at microsecond precision.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The calling flow submits a photo_id.",
+     "The deliverer creates the mark."
+    ],
+    "outcomes": [
+     "marked_at is the deliverer's current UTC time.",
+     "marked_at is supplied by the caller or derived from the record file's modification time."
+    ],
+    "observer": "A later scan or record reader sees a different marked_at value."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-01 Required tests",
+   "kind": "insufficient_invariant_test",
+   "text": "INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).",
+   "question": "Must the test prove that no source mutation is attempted or occurs at any time, and must it cover moves, directory entries, links and other metadata, rather than only comparing the listed final properties?",
+   "options": [
+    "Instrument source-folder operations and assert that no create, write, rename, move or delete is attempted.",
+    "Define INV-01 as final-state equality limited to files, bytes, modification times and modes.",
+    "Compare a complete before-and-after filesystem snapshot but permit transient mutations that are restored."
+   ],
+   "default_guess": "Instrument filesystem mutations and also compare a complete final snapshot.",
+   "witness": {
+    "initial": "The source folder contains one image.",
+    "events": [
+     "A placement temporarily renames the source image.",
+     "The placement restores the original name, bytes, modification time and mode before returning."
+    ],
+    "outcomes": [
+     "The described final-state test passes although INV-01 was violated.",
+     "A test observing mutation operations fails the placement."
+    ],
+    "observer": "A concurrent Syncthing process or filesystem audit observer sees the temporary move."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "insufficient_invariant_test",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "How must the test show that no failing path is opened, and where does it test condition 1's unreadable-metadata case?",
+   "options": [
+    "Instrument every open and assert no source path is opened for every condition-1 failure, including metadata-read failure.",
+    "Require only the stated failure result and durable-state outcome.",
+    "Add only the missing unreadable-metadata result case without observing opens."
+   ],
+   "default_guess": "Instrument opens and include every condition-1 branch, including metadata-read failure.",
+   "witness": {
+    "initial": "A request names a folder or a path whose metadata cannot be read, with no existing placement.",
+    "events": [
+     "The delivery performs an open attempt on the named path.",
+     "It then returns NOT_READY_OR_ABSENT and leaves no durable file except the lock."
+    ],
+    "outcomes": [
+     "The described test passes because the result and final files match.",
+     "A test asserting INV-02 directly fails because a forbidden open occurred."
+    ],
+    "observer": "A filesystem audit observer or a filesystem where opening has observable effects sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-06 Required tests",
+   "kind": "insufficient_invariant_test",
+   "text": "INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).",
+   "question": "Must the test assert that the repeated placement performs no write at all, or only that durable state is equal when the call ends?",
+   "options": [
+    "Instrument the binary and record stores and assert zero write, replace and synchronization calls.",
+    "Require only final byte-for-byte equality of durable state."
+   ],
+   "default_guess": "Instrument both stores and assert that no write-path operation is invoked.",
+   "witness": {
+    "initial": "One placement and its stored image already exist.",
+    "events": [
+     "A repeated delivery rewrites the stored image and placement record with identical bytes.",
+     "The call returns the existing placement."
+    ],
+    "outcomes": [
+     "A final-state comparison passes.",
+     "A zero-write assertion fails, as required by the invariant."
+    ],
+    "observer": "A storage audit log, backup system or concurrent observer sees the writes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-07 Required tests",
+   "kind": "vague_invariant_test",
+   "text": "and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).",
+   "question": "What must the removal test show about each of the earlier placement record, stored image and publication mark, rather than the undefined aggregate phrase “keeps its delivery”?",
+   "options": [
+    "Assert byte-for-byte that the placement record, stored image and mark all remain unchanged and that replay returns them.",
+    "Assert only that a repeated delivery result remains available.",
+    "Assert only that the Portal photo remains available."
+   ],
+   "default_guess": "Assert that the placement record, stored image and mark remain byte-for-byte unchanged and replay still returns the stored placement and current photo_id.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "insufficient_invariant_test",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "How must this test prove the invariant's “never reads a conflict copy” requirement rather than only its response and final-state effects?",
+   "options": [
+    "Instrument source reads and assert that the conflict-copy path is never opened or read.",
+    "Treat NOT_READY_OR_ABSENT and unchanged durable state as sufficient evidence.",
+    "Permit opening metadata and file content so long as no placement is written."
+   ],
+   "default_guess": "Instrument source access and assert that the conflict-copy file is never opened for content reading.",
+   "witness": {
+    "initial": "A conflict copy with content that has no placement exists in the source folder.",
+    "events": [
+     "The delivery opens and reads the conflict copy.",
+     "It notices the conflict-copy name afterward, returns NOT_READY_OR_ABSENT and writes only the project lock."
+    ],
+    "outcomes": [
+     "The described result-and-state test passes.",
+     "A direct no-read assertion fails."
+    ],
+    "observer": "A filesystem audit observer or storage device sees the read."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 status and reason table",
+   "kind": "standard_violation",
+   "text": "| Order | Condition | Status | Reason |\n|---|---|---|---|\n| 1 | empty | `rejected` | `empty` |\n| 2 | larger than the source limit | `rejected` | `too_large` |\n| 3 | opened in non-blocking mode without following a link, what it finds is not a regular file | `rejected` | `not_a_regular_file` |\n| 4 | it grew past the source limit while being read | `rejected` | `too_large` |\n| 5 | opening or reading it fails, which includes a file that disappeared and a path that became a symbolic link after the listing | `rejected` | `unreadable_file` |\n| 6 | does not begin with a JPEG, PNG or WEBP signature | `rejected` | `unsupported_format` |\n| 7 | placed and marked | `published` | none |\n| 8 | placed | `placed` | none |\n| 9 | anything else | `ready` | none |",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Replace every value-only ScanStatus and ObservationReason reference with its generated member name beside the address of its model enumeration; a value may appear only as an additional annotation.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 ready status",
+   "kind": "standard_violation",
+   "text": "A signature does not prove that an image can be decoded: a `ready`\nfile may still fail when it is delivered.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name this as the READY member of = models.ScanStatus, optionally adding its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 replay status",
+   "kind": "standard_violation",
+   "text": "Delivering content that already has a placement answers `replayed` with the stored placement and the\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\n   when the source file has left the folder.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name this as the REPLAYED member of = models.PlacementStatus, optionally adding its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 failed status",
+   "kind": "standard_violation",
+   "text": "A photo that cannot be delivered is answered with status `failed` and one member of\n   `= models.PlacementFailure`.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the status as the FAILED member of = models.PlacementStatus, optionally adding its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-07 ready status",
+   "kind": "standard_violation",
+   "text": "INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name this as the READY member of = models.ScanStatus, optionally adding its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-12 statuses and refusal code",
+   "kind": "standard_violation",
+   "text": "INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Replace each value-only reference with the corresponding named member and model-enumeration address: PlacementStatus.PLACED and REPLAYED, MarkStatus.MARKED and REPLAYED, and RefusalCode.PUBLICATION_CONFLICT.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 modification time\",\"kind\":\"time_sampling\",\"text\":\"A file that is read takes its modification time from the file that was opened, the one whose bytes were read, and a delivery uses that time under A2 rule 3.\",\"question\":\"At what point before, during or after the read is the opened file's modification time sampled, how many times is it read, at what precision, and how is it represented as UTC without an offset?\",\"options\":[\"Read opened-file metadata once immediately after opening and convert its timestamp to a naive UTC datetime at a specified precision.\",\"Read opened-file metadata once after the byte read completes and convert its timestamp to a naive UTC datetime at a specified precision.\",\"Use the modification time from the earlier path-metadata reading.\"],\"default_guess\":\"Read the opened descriptor's metadata once immediately after opening and convert its timestamp to a naive UTC datetime at microsecond precision.\",\"witness\":{\"initial\":\"A source image has no usable camera date, and another actor changes its modification time while the delivery is reading it.\",\"events\":[\"The deliverer opens the file.\",\"The deliverer starts reading its bytes.\",\"Syncthing or another writer changes the file's modification time.\",\"The deliverer finishes reading and prepares the photo.\"],\"outcomes\":[\"The photo date is the modification time observed when the file was opened.\",\"The photo date is the modification time observed after the read.\"],\"observer\":\"The caller and Portal user see different photo dates for the same delivered bytes.\"}},{\"subject\":\"A1 dependency on A2 rule 3\",\"kind\":\"missing_rule\",\"text\":\"A file that is read takes its modification time from the file that was opened, the one whose bytes were read, and a delivery uses that time under A2 rule 3.\",\"question\":\"What does A2 rule 3 require the delivery to do with this modification time, including fallback precedence, conversion and precision? A2 rule 3 is not present in the supplied texts.\",\"options\":[\"A2 rule 3 converts this value directly to the prepared photo's UTC-without-offset taken_at.\",\"A2 rule 3 uses it only when no acceptable camera date exists and defines the camera-date validity and conversion rules.\",\"A2 rule 3 applies additional normalization or truncation before storing it.\"],\"default_guess\":\"Use it only when no usable camera date exists, converted to a naive UTC datetime without changing the instant.\"},{\"subject\":\"M03 camera date\",\"kind\":\"undefined_instant\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"When a camera record contains a local date without an offset or timezone, what instant does it denote, which camera fields are acceptable, and how is it converted to UTC?\",\"options\":[\"Reject an offsetless camera date and fall back to the opened file's modification time.\",\"Interpret an offsetless camera date in a configured timezone.\",\"Treat an offsetless camera date as already UTC.\"],\"default_guess\":\"Use only camera dates that determine an instant; otherwise fall back to the opened file's modification time.\",\"witness\":{\"initial\":\"A JPEG contains an EXIF date of 2026-07-01 12:00:00 with no offset, and its file modification time is 2026-07-01 10:00:00 UTC.\",\"events\":[\"The caller delivers the JPEG.\",\"The deliverer prepares M03 and must assign taken_at.\"],\"outcomes\":[\"The EXIF value is treated as 12:00 UTC.\",\"The EXIF value is rejected as not defining an instant and the 10:00 UTC file modification time is used.\"],\"observer\":\"The caller and Portal user see different photo dates.\"}},{\"subject\":\"M07 marked_at\",\"kind\":\"missing_time_source\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"Which authority supplies marked_at, what representation and precision it uses, and how many clock readings a successful mark operation takes?\",\"options\":[\"Read an injected system clock exactly once when the new mark is committed, storing a naive UTC datetime.\",\"Accept marked_at from the caller.\",\"Derive marked_at from filesystem metadata of the mark record.\"],\"default_guess\":\"Read an injected UTC system clock exactly once after validation and before writing the new mark, and store a naive UTC datetime at microsecond precision.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The calling flow submits a photo_id.\",\"The deliverer creates the mark.\"],\"outcomes\":[\"marked_at is the deliverer's current UTC time.\",\"marked_at is supplied by the caller or derived from the record file's modification time.\"],\"observer\":\"A later scan or record reader sees a different marked_at value.\"}},{\"subject\":\"INV-01 Required tests\",\"kind\":\"insufficient_invariant_test\",\"text\":\"INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).\",\"question\":\"Must the test prove that no source mutation is attempted or occurs at any time, and must it cover moves, directory entries, links and other metadata, rather than only comparing the listed final properties?\",\"options\":[\"Instrument source-folder operations and assert that no create, write, rename, move or delete is attempted.\",\"Define INV-01 as final-state equality limited to files, bytes, modification times and modes.\",\"Compare a complete before-and-after filesystem snapshot but permit transient mutations that are restored.\"],\"default_guess\":\"Instrument filesystem mutations and also compare a complete final snapshot.\",\"witness\":{\"initial\":\"The source folder contains one image.\",\"events\":[\"A placement temporarily renames the source image.\",\"The placement restores the original name, bytes, modification time and mode before returning.\"],\"outcomes\":[\"The described final-state test passes although INV-01 was violated.\",\"A test observing mutation operations fails the placement.\"],\"observer\":\"A concurrent Syncthing process or filesystem audit observer sees the temporary move.\"}},{\"subject\":\"INV-02 Required tests\",\"kind\":\"insufficient_invariant_test\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"How must the test show that no failing path is opened, and where does it test condition 1's unreadable-metadata case?\",\"options\":[\"Instrument every open and assert no source path is opened for every condition-1 failure, including metadata-read failure.\",\"Require only the stated failure result and durable-state outcome.\",\"Add only the missing unreadable-metadata result case without observing opens.\"],\"default_guess\":\"Instrument opens and include every condition-1 branch, including metadata-read failure.\",\"witness\":{\"initial\":\"A request names a folder or a path whose metadata cannot be read, with no existing placement.\",\"events\":[\"The delivery performs an open attempt on the named path.\",\"It then returns NOT_READY_OR_ABSENT and leaves no durable file except the lock.\"],\"outcomes\":[\"The described test passes because the result and final files match.\",\"A test asserting INV-02 directly fails because a forbidden open occurred.\"],\"observer\":\"A filesystem audit observer or a filesystem where opening has observable effects sees the difference.\"}},{\"subject\":\"INV-06 Required tests\",\"kind\":\"insufficient_invariant_test\",\"text\":\"INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).\",\"question\":\"Must the test assert that the repeated placement performs no write at all, or only that durable state is equal when the call ends?\",\"options\":[\"Instrument the binary and record stores and assert zero write, replace and synchronization calls.\",\"Require only final byte-for-byte equality of durable state.\"],\"default_guess\":\"Instrument both stores and assert that no write-path operation is invoked.\",\"witness\":{\"initial\":\"One placement and its stored image already exist.\",\"events\":[\"A repeated delivery rewrites the stored image and placement record with identical bytes.\",\"The call returns the existing placement.\"],\"outcomes\":[\"A final-state comparison passes.\",\"A zero-write assertion fails, as required by the invariant.\"],\"observer\":\"A storage audit log, backup system or concurrent observer sees the writes.\"}},{\"subject\":\"INV-07 Required tests\",\"kind\":\"vague_invariant_test\",\"text\":\"and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).\",\"question\":\"What must the removal test show about each of the earlier placement record, stored image and publication mark, rather than the undefined aggregate phrase “keeps its delivery”?\",\"options\":[\"Assert byte-for-byte that the placement record, stored image and mark all remain unchanged and that replay returns them.\",\"Assert only that a repeated delivery result remains available.\",\"Assert only that the Portal photo remains available.\"],\"default_guess\":\"Assert that the placement record, stored image and mark remain byte-for-byte unchanged and replay still returns the stored placement and current photo_id.\"},{\"subject\":\"INV-19 Required tests\",\"kind\":\"insufficient_invariant_test\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"How must this test prove the invariant's “never reads a conflict copy” requirement rather than only its response and final-state effects?\",\"options\":[\"Instrument source reads and assert that the conflict-copy path is never opened or read.\",\"Treat NOT_READY_OR_ABSENT and unchanged durable state as sufficient evidence.\",\"Permit opening metadata and file content so long as no placement is written.\"],\"default_guess\":\"Instrument source access and assert that the conflict-copy file is never opened for content reading.\",\"witness\":{\"initial\":\"A conflict copy with content that has no placement exists in the source folder.\",\"events\":[\"The delivery opens and reads the conflict copy.\",\"It notices the conflict-copy name afterward, returns NOT_READY_OR_ABSENT and writes only the project lock.\"],\"outcomes\":[\"The described result-and-state test passes.\",\"A direct no-read assertion fails.\"],\"observer\":\"A filesystem audit observer or storage device sees the read.\"}},{\"subject\":\"A1 status and reason table\",\"kind\":\"standard_violation\",\"text\":\"| Order | Condition | Status | Reason |\\n|---|---|---|---|\\n| 1 | empty | `rejected` | `empty` |\\n| 2 | larger than the source limit | `rejected` | `too_large` |\\n| 3 | opened in non-blocking mode without following a link, what it finds is not a regular file | `rejected` | `not_a_regular_file` |\\n| 4 | it grew past the source limit while being read | `rejected` | `too_large` |\\n| 5 | opening or reading it fails, which includes a file that disappeared and a path that became a symbolic link after the listing | `rejected` | `unreadable_file` |\\n| 6 | does not begin with a JPEG, PNG or WEBP signature | `rejected` | `unsupported_format` |\\n| 7 | placed and marked | `published` | none |\\n| 8 | placed | `placed` | none |\\n| 9 | anything else | `ready` | none |\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Replace every value-only ScanStatus and ObservationReason reference with its generated member name beside the address of its model enumeration; a value may appear only as an additional annotation.\"},{\"subject\":\"A1 ready status\",\"kind\":\"standard_violation\",\"text\":\"A signature does not prove that an image can be decoded: a `ready`\\nfile may still fail when it is delivered.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name this as the READY member of = models.ScanStatus, optionally adding its value.\"},{\"subject\":\"A3 replay status\",\"kind\":\"standard_violation\",\"text\":\"Delivering content that already has a placement answers `replayed` with the stored placement and the\\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\\n   when the source file has left the folder.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name this as the REPLAYED member of = models.PlacementStatus, optionally adding its value.\"},{\"subject\":\"A3 failed status\",\"kind\":\"standard_violation\",\"text\":\"A photo that cannot be delivered is answered with status `failed` and one member of\\n   `= models.PlacementFailure`.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the status as the FAILED member of = models.PlacementStatus, optionally adding its value.\"},{\"subject\":\"INV-07 ready status\",\"kind\":\"standard_violation\",\"text\":\"INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name this as the READY member of = models.ScanStatus, optionally adding its value.\"},{\"subject\":\"INV-12 statuses and refusal code\",\"kind\":\"standard_violation\",\"text\":\"INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Replace each value-only reference with the corresponding named member and model-enumeration address: PlacementStatus.PLACED and REPLAYED, MarkStatus.MARKED and REPLAYED, and RefusalCode.PUBLICATION_CONFLICT.\"}]}",
+ "set_aside": []
+}

@@ -58,8 +58,9 @@ that it is a regular file and gives its listed size and modification time; an en
 show as a regular file is not reported. Orders 1 and 2 are first decided by that size, before the file is
 opened. A file is then read once, up to one byte past the imported `MAX_SOURCE_BYTES` constant: reaching
 that byte is order 4, and the read stops there. A read that reaches the end of the file with no bytes is
-order 1. A file that is read takes its modification time from the file that was opened, the one whose
-bytes were read, and a delivery uses that time under A2 rule 3.
+order 1. A file that is read takes its modification time from one metadata reading of the file that was
+opened, the one whose bytes are read, taken after the opening and before the read; A7 rule 4 gives its
+form, and a delivery uses that time under A2 rule 3.
 
 A scan only reads the source folder. A signature does not prove that an image can be decoded: a `ready`
 file may still fail when it is delivered.
@@ -129,8 +130,8 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
    when the source file has left the folder.
 3. One call delivers one photo, named by `name`, a relative path in the form a scan reports, and
    `source_id`. The service keeps no memory of earlier scans: it judges the name and the file when the call
-   runs. A named file that A1 orders 1 and 2 do not reject from its metadata is read once, and the bytes
-   that were read are the bytes judged, hashed and prepared.
+   runs. A named file that passes condition 1 of rule 5 and that A1 orders 1 and 2 do not reject from its
+   metadata is opened and read once, and the bytes that were read are the bytes judged, hashed and prepared.
 4. Checks run in this order: token, request form and project id, connection, photo folder, source id,
    project lock, existing placement, named file. The request form is a body holding only `name` and
    `source_id`, both strings. A defect of that form or of the project id is refused as a whole request. A
