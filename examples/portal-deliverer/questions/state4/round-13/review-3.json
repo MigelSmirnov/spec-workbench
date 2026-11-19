@@ -1,0 +1,159 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "SourceRead handoff",
+   "kind": "missing flow step",
+   "text": "`SourceRead`, a `SourceFile` with the bytes that were judged",
+   "question": "Which module capability creates `SourceRead`, which operation calls it, and does a read failure refuse only that file or the whole scan?",
+   "options": [
+    "`source_folder` reads one listed file for `photo_delivery`; failure becomes a per-file rejection.",
+    "`photo_delivery` reads the file itself; failure becomes a per-file rejection.",
+    "The read belongs to the scan operation as a whole; any read failure refuses the whole scan."
+   ],
+   "default_guess": "`photo_delivery` calls a `source_folder` read capability for each candidate, and a read failure rejects only that file.",
+   "witness": {
+    "initial": "A confirmed project contains one listed photo whose bytes cannot be read.",
+    "events": [
+     "The calling flow asks the deliverer to scan the project.",
+     "The scan reaches the unreadable listed file."
+    ],
+    "outcomes": [
+     "The scan completes with that file rejected as `unreadable_file`.",
+     "The entire scan fails and returns no `ScanResult`."
+    ],
+    "observer": "The calling flow that requested the scan."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ScanResult production",
+   "kind": "missing flow",
+   "text": "`ScanResult`, the observations of one scan and the count of each status",
+   "question": "What steps constitute the scan flow, which module operation produces `ScanResult`, who calls it, and what outcome is returned when connection, folder, or state access fails?",
+   "options": [
+    "A route delegate calls one scan capability; prerequisite failures refuse the whole operation.",
+    "An orchestrating caller resolves the connection and folder before calling a lower-level scan capability.",
+    "The scan returns a `ScanResult` even for prerequisite failures, representing them through observations or counts."
+   ],
+   "default_guess": "A route delegate calls a single project-scan operation; connection, folder, and state failures are whole-operation refusals, while individual file failures become rejected observations.",
+   "witness": {
+    "initial": "A project connection is confirmed, but its photo folder is unavailable.",
+    "events": [
+     "A caller requests a scan of the project.",
+     "The flow attempts to access the photo folder."
+    ],
+    "outcomes": [
+     "The operation fails with the whole-operation refusal `folder_unavailable`.",
+     "The operation succeeds with an empty or rejection-bearing `ScanResult`."
+    ],
+    "observer": "The caller receiving the scan response."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "MarkOutcome production",
+   "kind": "missing flow step",
+   "text": "`MarkOutcome`, M07 with its `MarkStatus`",
+   "question": "Which module capability records the publication mark, who calls it after Portal publication, and what does the flow do if recording fails or reports `publication_conflict`?",
+   "options": [
+    "The caller invokes a dedicated mark capability immediately and propagates any refusal.",
+    "A route delegate invokes the mark capability and translates refusals into route outcomes.",
+    "The failure is treated as retryable orchestration state, with a later retry required before further publication."
+   ],
+   "default_guess": "The publication-report route calls a dedicated deliverer mark operation immediately; replay succeeds with `replayed`, conflict is returned as `publication_conflict`, and storage failure fails the request so the caller retries.",
+   "witness": {
+    "initial": "A photo has been published in the Portal, but no M07 mark exists yet.",
+    "events": [
+     "The calling flow receives the Portal `photo_id`.",
+     "It reports that publication to the deliverer.",
+     "The deliverer's state storage is unavailable while the mark is to be written."
+    ],
+    "outcomes": [
+     "The report fails, causing the caller to retry until the mark is durable.",
+     "The report is treated as successful despite no mark, allowing a later scan to present the photo for publication again."
+    ],
+    "observer": "The calling flow and, after a later scan, the owner."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "DeliverRequest route flow",
+   "kind": "unoffered operation",
+   "text": "`DeliverRequest` and `PublishedRequest`, the bodies of two routes",
+   "question": "For the route whose body is `DeliverRequest`, which module operation does its delegate call, what are the ordered steps of delivering one photo, and what outcome does each step failure produce?",
+   "options": [
+    "The route calls the one-photo delivery capability directly using the request's source identity.",
+    "The route scans first, selects a matching ready observation, and then calls the one-photo delivery capability.",
+    "The route only validates or queues the request, leaving delivery to another caller."
+   ],
+   "default_guess": "The route delegate calls a one-photo delivery operation directly; the operation validates the confirmed connection and source, prepares and stores the image idempotently, and returns explicit whole-operation or per-file refusal outcomes.",
+   "witness": {
+    "initial": "A confirmed project's folder contains a ready photo, and no placement exists.",
+    "events": [
+     "A caller sends a `DeliverRequest` for that photo.",
+     "The route accepts the request."
+    ],
+    "outcomes": [
+     "The route synchronously creates or replays the placement and returns its publication body.",
+     "The route merely accepts or queues work, so no placement exists when the response arrives."
+    ],
+    "observer": "The caller of the delivery route."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "PublishedRequest route flow",
+   "kind": "unoffered operation",
+   "text": "`DeliverRequest` and `PublishedRequest`, the bodies of two routes",
+   "question": "For the route whose body is `PublishedRequest`, which module operation does its delegate call, and how are `marked`, `replayed`, `not_placed`, `publication_conflict`, and persistence failure exposed?",
+   "options": [
+    "The route synchronously calls the publication-mark operation and returns its `MarkOutcome` or refusal.",
+    "The route accepts the report before the mark is durably written.",
+    "The route delegates the report to an asynchronous caller and returns only acknowledgement."
+   ],
+   "default_guess": "The route synchronously calls the publication-mark operation and does not report success until M07 is durable; it returns `MarkOutcome` for `marked` or `replayed` and explicit refusals otherwise.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The Portal publishes it and returns a `photo_id`.",
+     "The caller sends a `PublishedRequest` to the deliverer.",
+     "The route responds successfully."
+    ],
+    "outcomes": [
+     "The M07 mark is already durable when success is returned.",
+     "Success only acknowledges receipt, and the mark may still be absent if later processing fails."
+    ],
+    "observer": "The caller and the next scan of the project."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "HealthAnswer route flow",
+   "kind": "missing flow",
+   "text": "`HealthAnswer`, the body of the health route",
+   "question": "What capability builds `HealthAnswer`, who calls it, which dependencies it checks, and whether a failed check produces an unhealthy answer or a failed route?",
+   "options": [
+    "The health route reports process liveness only and always constructs `HealthAnswer` while the process runs.",
+    "It checks configured state, connections, and binary storage and represents failures inside `HealthAnswer`.",
+    "It checks dependencies but turns any failed check into a route-level failure instead of `HealthAnswer`."
+   ],
+   "default_guess": "A health-route delegate calls a dedicated health capability that checks configuration plus required state and storage access and always returns a `HealthAnswer` describing health rather than failing for an unhealthy dependency.",
+   "witness": {
+    "initial": "The service process is running, but its state directory is unavailable.",
+    "events": [
+     "A monitor calls the health route.",
+     "The route evaluates, or declines to evaluate, the unavailable state directory."
+    ],
+    "outcomes": [
+     "It returns an unhealthy `HealthAnswer`.",
+     "It returns healthy because only process liveness is checked, or fails the route without a `HealthAnswer`."
+    ],
+    "observer": "The service monitor or operator."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"SourceRead handoff\",\"kind\":\"missing flow step\",\"text\":\"`SourceRead`, a `SourceFile` with the bytes that were judged\",\"question\":\"Which module capability creates `SourceRead`, which operation calls it, and does a read failure refuse only that file or the whole scan?\",\"options\":[\"`source_folder` reads one listed file for `photo_delivery`; failure becomes a per-file rejection.\",\"`photo_delivery` reads the file itself; failure becomes a per-file rejection.\",\"The read belongs to the scan operation as a whole; any read failure refuses the whole scan.\"],\"default_guess\":\"`photo_delivery` calls a `source_folder` read capability for each candidate, and a read failure rejects only that file.\",\"witness\":{\"initial\":\"A confirmed project contains one listed photo whose bytes cannot be read.\",\"events\":[\"The calling flow asks the deliverer to scan the project.\",\"The scan reaches the unreadable listed file.\"],\"outcomes\":[\"The scan completes with that file rejected as `unreadable_file`.\",\"The entire scan fails and returns no `ScanResult`.\"],\"observer\":\"The calling flow that requested the scan.\"}},{\"unit\":\"context\",\"subject\":\"ScanResult production\",\"kind\":\"missing flow\",\"text\":\"`ScanResult`, the observations of one scan and the count of each status\",\"question\":\"What steps constitute the scan flow, which module operation produces `ScanResult`, who calls it, and what outcome is returned when connection, folder, or state access fails?\",\"options\":[\"A route delegate calls one scan capability; prerequisite failures refuse the whole operation.\",\"An orchestrating caller resolves the connection and folder before calling a lower-level scan capability.\",\"The scan returns a `ScanResult` even for prerequisite failures, representing them through observations or counts.\"],\"default_guess\":\"A route delegate calls a single project-scan operation; connection, folder, and state failures are whole-operation refusals, while individual file failures become rejected observations.\",\"witness\":{\"initial\":\"A project connection is confirmed, but its photo folder is unavailable.\",\"events\":[\"A caller requests a scan of the project.\",\"The flow attempts to access the photo folder.\"],\"outcomes\":[\"The operation fails with the whole-operation refusal `folder_unavailable`.\",\"The operation succeeds with an empty or rejection-bearing `ScanResult`.\"],\"observer\":\"The caller receiving the scan response.\"}},{\"unit\":\"context\",\"subject\":\"MarkOutcome production\",\"kind\":\"missing flow step\",\"text\":\"`MarkOutcome`, M07 with its `MarkStatus`\",\"question\":\"Which module capability records the publication mark, who calls it after Portal publication, and what does the flow do if recording fails or reports `publication_conflict`?\",\"options\":[\"The caller invokes a dedicated mark capability immediately and propagates any refusal.\",\"A route delegate invokes the mark capability and translates refusals into route outcomes.\",\"The failure is treated as retryable orchestration state, with a later retry required before further publication.\"],\"default_guess\":\"The publication-report route calls a dedicated deliverer mark operation immediately; replay succeeds with `replayed`, conflict is returned as `publication_conflict`, and storage failure fails the request so the caller retries.\",\"witness\":{\"initial\":\"A photo has been published in the Portal, but no M07 mark exists yet.\",\"events\":[\"The calling flow receives the Portal `photo_id`.\",\"It reports that publication to the deliverer.\",\"The deliverer's state storage is unavailable while the mark is to be written.\"],\"outcomes\":[\"The report fails, causing the caller to retry until the mark is durable.\",\"The report is treated as successful despite no mark, allowing a later scan to present the photo for publication again.\"],\"observer\":\"The calling flow and, after a later scan, the owner.\"}},{\"unit\":\"context\",\"subject\":\"DeliverRequest route flow\",\"kind\":\"unoffered operation\",\"text\":\"`DeliverRequest` and `PublishedRequest`, the bodies of two routes\",\"question\":\"For the route whose body is `DeliverRequest`, which module operation does its delegate call, what are the ordered steps of delivering one photo, and what outcome does each step failure produce?\",\"options\":[\"The route calls the one-photo delivery capability directly using the request's source identity.\",\"The route scans first, selects a matching ready observation, and then calls the one-photo delivery capability.\",\"The route only validates or queues the request, leaving delivery to another caller.\"],\"default_guess\":\"The route delegate calls a one-photo delivery operation directly; the operation validates the confirmed connection and source, prepares and stores the image idempotently, and returns explicit whole-operation or per-file refusal outcomes.\",\"witness\":{\"initial\":\"A confirmed project's folder contains a ready photo, and no placement exists.\",\"events\":[\"A caller sends a `DeliverRequest` for that photo.\",\"The route accepts the request.\"],\"outcomes\":[\"The route synchronously creates or replays the placement and returns its publication body.\",\"The route merely accepts or queues work, so no placement exists when the response arrives.\"],\"observer\":\"The caller of the delivery route.\"}},{\"unit\":\"context\",\"subject\":\"PublishedRequest route flow\",\"kind\":\"unoffered operation\",\"text\":\"`DeliverRequest` and `PublishedRequest`, the bodies of two routes\",\"question\":\"For the route whose body is `PublishedRequest`, which module operation does its delegate call, and how are `marked`, `replayed`, `not_placed`, `publication_conflict`, and persistence failure exposed?\",\"options\":[\"The route synchronously calls the publication-mark operation and returns its `MarkOutcome` or refusal.\",\"The route accepts the report before the mark is durably written.\",\"The route delegates the report to an asynchronous caller and returns only acknowledgement.\"],\"default_guess\":\"The route synchronously calls the publication-mark operation and does not report success until M07 is durable; it returns `MarkOutcome` for `marked` or `replayed` and explicit refusals otherwise.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The Portal publishes it and returns a `photo_id`.\",\"The caller sends a `PublishedRequest` to the deliverer.\",\"The route responds successfully.\"],\"outcomes\":[\"The M07 mark is already durable when success is returned.\",\"Success only acknowledges receipt, and the mark may still be absent if later processing fails.\"],\"observer\":\"The caller and the next scan of the project.\"}},{\"unit\":\"context\",\"subject\":\"HealthAnswer route flow\",\"kind\":\"missing flow\",\"text\":\"`HealthAnswer`, the body of the health route\",\"question\":\"What capability builds `HealthAnswer`, who calls it, which dependencies it checks, and whether a failed check produces an unhealthy answer or a failed route?\",\"options\":[\"The health route reports process liveness only and always constructs `HealthAnswer` while the process runs.\",\"It checks configured state, connections, and binary storage and represents failures inside `HealthAnswer`.\",\"It checks dependencies but turns any failed check into a route-level failure instead of `HealthAnswer`.\"],\"default_guess\":\"A health-route delegate calls a dedicated health capability that checks configuration plus required state and storage access and always returns a `HealthAnswer` describing health rather than failing for an unhealthy dependency.\",\"witness\":{\"initial\":\"The service process is running, but its state directory is unavailable.\",\"events\":[\"A monitor calls the health route.\",\"The route evaluates, or declines to evaluate, the unavailable state directory.\"],\"outcomes\":[\"It returns an unhealthy `HealthAnswer`.\",\"It returns healthy because only process liveness is checked, or fails the route without a `HealthAnswer`.\"],\"observer\":\"The service monitor or operator.\"}}]}",
+ "set_aside": []
+}

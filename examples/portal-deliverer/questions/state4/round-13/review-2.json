@@ -1,0 +1,186 @@
+{
+ "open_points": [
+  {
+   "subject": "context: SourceRead handoff",
+   "kind": "unnamed operation",
+   "text": "`SourceRead`, a `SourceFile` with the bytes that were judged",
+   "question": "Which module capability reads the bytes, who calls it, at what point in scan or delivery, and what failure does it produce when the file cannot be read or changes during the read?",
+   "options": [
+    "`source_folder` reads and judges the bytes during scanning and returns `SourceRead` to `photo_delivery`.",
+    "`photo_delivery` asks `source_folder` for `SourceRead` only when delivering a selected observation.",
+    "Scanning and delivery each read the source independently."
+   ],
+   "default_guess": "Have `photo_delivery` request `SourceRead` from `source_folder` during delivery and turn an unavailable or changed file into a per-file refusal.",
+   "witness": {
+    "initial": "A confirmed project has a ready file which is replaced or becomes unreadable after a scan.",
+    "events": [
+     "The calling flow scans the folder.",
+     "The calling flow requests delivery of the earlier ready observation.",
+     "Either `source_folder` or `photo_delivery` attempts to obtain the bytes."
+    ],
+    "outcomes": [
+     "Delivery judges the current bytes and may deliver the replacement as a different source.",
+     "Delivery rejects the request because the bytes no longer match the scanned observation."
+    ],
+    "observer": "The owner and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: ScanResult flow",
+   "kind": "missing flow",
+   "text": "`ScanResult`, the observations of one scan and the count of each status",
+   "question": "Which capability produces `ScanResult`, who invokes it, which operations it calls to calculate observations, and what whole-operation failure ends the scan?",
+   "options": [
+    "A route delegate calls a `photo_delivery.scan` capability, which obtains connection, folder, placement and mark information.",
+    "A deterministic backend calls `source_folder` directly and assembles `ScanResult`.",
+    "The caller invokes several primitive capabilities and assembles `ScanResult` outside the service."
+   ],
+   "default_guess": "A scan route delegate calls one `photo_delivery.scan` capability; project, confirmation, folder and state failures refuse the whole scan.",
+   "witness": {
+    "initial": "A project connection is confirmed, but its photo folder is unavailable.",
+    "events": [
+     "A caller requests a scan.",
+     "The implementation attempts to produce `ScanResult`."
+    ],
+    "outcomes": [
+     "The scan refuses the whole operation with `folder_unavailable`.",
+     "The scan succeeds with no observations and zero counts."
+    ],
+    "observer": "The caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: DeliverRequest route",
+   "kind": "missing route flow",
+   "text": "`DeliverRequest` and `PublishedRequest`, the bodies of two routes",
+   "question": "For the route carrying `DeliverRequest`, which delegate and module capability execute the flow, what operations occur and in what order, and which failures are returned as whole-operation versus one-file refusals?",
+   "options": [
+    "The route delegates directly to the deliver-one-photo capability and returns its placement result or refusal.",
+    "The route first scans or rereads the project and then delegates delivery of the matching source.",
+    "The route only validates the request and queues work for another backend."
+   ],
+   "default_guess": "Delegate synchronously to the deliver-one-photo capability, reread and verify the requested source, prepare and store the image idempotently, and return explicit whole-operation or per-file refusals.",
+   "witness": {
+    "initial": "A confirmed project contains one ready photo.",
+    "events": [
+     "A caller sends `DeliverRequest`.",
+     "The route delegate handles the request."
+    ],
+    "outcomes": [
+     "The route synchronously returns the existing or newly created placement and publication body.",
+     "The route merely accepts work, so placement happens later and no placement is present in the response."
+    ],
+    "observer": "The caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: Portal publication step",
+   "kind": "capability not offered",
+   "text": "`DeliverRequest` and `PublishedRequest`, the bodies of two routes",
+   "question": "What named capability performs the required `photo.publish` step between the delivery route and the published route, and which actor calls it, given that the deliverer never calls the Portal?",
+   "options": [
+    "The route caller invokes the Portal's `photo.publish` operation using M05, then sends `PublishedRequest`.",
+    "A separate deterministic orchestration backend invokes both routes and the Portal operation.",
+    "A human or unspecified external agent performs the Portal call."
+   ],
+   "default_guess": "The route caller is the flow executor: it calls the delivery route, invokes Portal `photo.publish` with M05, then calls the published route with the returned `photo_id`.",
+   "witness": {
+    "initial": "A confirmed project has a placement with no publication mark.",
+    "events": [
+     "The caller obtains M05 from delivery.",
+     "The next required action is Portal `photo.publish`.",
+     "After a Portal answer, `PublishedRequest` must be sent."
+    ],
+    "outcomes": [
+     "The route caller owns and performs both external calls in order.",
+     "A separate backend owns publication, so the route caller stops after delivery."
+    ],
+    "observer": "The owner, the Portal and whichever component is expected to continue the flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: Portal publication failure",
+   "kind": "failure outcome missing",
+   "text": "The calling flow reports the `photo_id` right after `photo.publish` answers",
+   "question": "What does the flow do when `photo.publish` fails, times out, or its successful answer is lost before `PublishedRequest` can be sent?",
+   "options": [
+    "Stop without marking and retry the same publication body later.",
+    "Stop without marking and require manual reconciliation.",
+    "Treat an ambiguous response as published and attempt to recover the `photo_id` by another operation."
+   ],
+   "default_guess": "Keep the placement unmarked and retry the identical M05 publication body; send `PublishedRequest` only after obtaining a definite `photo_id`.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The caller invokes Portal `photo.publish`.",
+     "The Portal creates a hidden photo.",
+     "The response is lost before the caller learns its `photo_id`."
+    ],
+    "outcomes": [
+     "The caller retries the identical publication request and then records the returned `photo_id`.",
+     "The caller does not retry because publication may already have occurred, leaving the placement permanently unmarked."
+    ],
+    "observer": "The owner sees either a recoverable published photo or a stranded delivery"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: PublishedRequest and MarkOutcome flow",
+   "kind": "missing route flow",
+   "text": "`MarkOutcome`, M07 with its `MarkStatus`; `DeliverRequest` and `PublishedRequest`, the bodies of two routes",
+   "question": "Which route delegate calls which publication-mark capability, and what happens when marking fails after Portal publication has succeeded?",
+   "options": [
+    "The published route synchronously calls the record-publication capability and returns `MarkOutcome`; the caller retries this route on failure.",
+    "The route queues the mark and acknowledges before it is durable.",
+    "The caller treats a marking failure as a failure of the entire publication and republishes before trying to mark again."
+   ],
+   "default_guess": "The published route synchronously records the mark and returns `MarkOutcome`; after a failure the caller retries only this route with the same `photo_id`, never `photo.publish`.",
+   "witness": {
+    "initial": "The Portal has created a hidden photo, but the deliverer has no publication mark.",
+    "events": [
+     "The caller sends `PublishedRequest` with the Portal `photo_id`.",
+     "The state store is temporarily unavailable and the mark is not written.",
+     "The caller decides how to continue."
+    ],
+    "outcomes": [
+     "The caller retries the mark operation with the same `photo_id`, producing one mark and no new Portal photo.",
+     "The caller restarts at publication, risking a 409 or another Portal-side outcome while the placement remains unmarked."
+    ],
+    "observer": "The caller and the owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: health route",
+   "kind": "missing route flow",
+   "text": "`HealthAnswer`, the body of the health route",
+   "question": "Which capability executes the health route, what dependencies it checks, and what response or failure it produces when a dependency is unavailable?",
+   "options": [
+    "The route reports only process liveness and always returns a normal `HealthAnswer`.",
+    "The route checks configuration and required storage and reports unhealthy in `HealthAnswer`.",
+    "The route performs live checks of folders and state and fails the transport request when any check fails."
+   ],
+   "default_guess": "Use a named health capability that checks configuration plus required state and binary storage, returns a deterministic `HealthAnswer`, and reserves transport failure for inability to build that answer.",
+   "witness": {
+    "initial": "The service process is running but its state directory is unavailable.",
+    "events": [
+     "A monitor calls the health route.",
+     "The health delegate evaluates whatever checks the implementation selected."
+    ],
+    "outcomes": [
+     "The route reports healthy because it is a liveness check.",
+     "The route reports unhealthy because required state storage is unavailable."
+    ],
+    "observer": "The operator or health monitor"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context: SourceRead handoff\",\"kind\":\"unnamed operation\",\"text\":\"`SourceRead`, a `SourceFile` with the bytes that were judged\",\"question\":\"Which module capability reads the bytes, who calls it, at what point in scan or delivery, and what failure does it produce when the file cannot be read or changes during the read?\",\"options\":[\"`source_folder` reads and judges the bytes during scanning and returns `SourceRead` to `photo_delivery`.\",\"`photo_delivery` asks `source_folder` for `SourceRead` only when delivering a selected observation.\",\"Scanning and delivery each read the source independently.\"],\"default_guess\":\"Have `photo_delivery` request `SourceRead` from `source_folder` during delivery and turn an unavailable or changed file into a per-file refusal.\",\"witness\":{\"initial\":\"A confirmed project has a ready file which is replaced or becomes unreadable after a scan.\",\"events\":[\"The calling flow scans the folder.\",\"The calling flow requests delivery of the earlier ready observation.\",\"Either `source_folder` or `photo_delivery` attempts to obtain the bytes.\"],\"outcomes\":[\"Delivery judges the current bytes and may deliver the replacement as a different source.\",\"Delivery rejects the request because the bytes no longer match the scanned observation.\"],\"observer\":\"The owner and the calling flow\"}},{\"subject\":\"context: ScanResult flow\",\"kind\":\"missing flow\",\"text\":\"`ScanResult`, the observations of one scan and the count of each status\",\"question\":\"Which capability produces `ScanResult`, who invokes it, which operations it calls to calculate observations, and what whole-operation failure ends the scan?\",\"options\":[\"A route delegate calls a `photo_delivery.scan` capability, which obtains connection, folder, placement and mark information.\",\"A deterministic backend calls `source_folder` directly and assembles `ScanResult`.\",\"The caller invokes several primitive capabilities and assembles `ScanResult` outside the service.\"],\"default_guess\":\"A scan route delegate calls one `photo_delivery.scan` capability; project, confirmation, folder and state failures refuse the whole scan.\",\"witness\":{\"initial\":\"A project connection is confirmed, but its photo folder is unavailable.\",\"events\":[\"A caller requests a scan.\",\"The implementation attempts to produce `ScanResult`.\"],\"outcomes\":[\"The scan refuses the whole operation with `folder_unavailable`.\",\"The scan succeeds with no observations and zero counts.\"],\"observer\":\"The caller\"}},{\"subject\":\"context: DeliverRequest route\",\"kind\":\"missing route flow\",\"text\":\"`DeliverRequest` and `PublishedRequest`, the bodies of two routes\",\"question\":\"For the route carrying `DeliverRequest`, which delegate and module capability execute the flow, what operations occur and in what order, and which failures are returned as whole-operation versus one-file refusals?\",\"options\":[\"The route delegates directly to the deliver-one-photo capability and returns its placement result or refusal.\",\"The route first scans or rereads the project and then delegates delivery of the matching source.\",\"The route only validates the request and queues work for another backend.\"],\"default_guess\":\"Delegate synchronously to the deliver-one-photo capability, reread and verify the requested source, prepare and store the image idempotently, and return explicit whole-operation or per-file refusals.\",\"witness\":{\"initial\":\"A confirmed project contains one ready photo.\",\"events\":[\"A caller sends `DeliverRequest`.\",\"The route delegate handles the request.\"],\"outcomes\":[\"The route synchronously returns the existing or newly created placement and publication body.\",\"The route merely accepts work, so placement happens later and no placement is present in the response.\"],\"observer\":\"The caller\"}},{\"subject\":\"context: Portal publication step\",\"kind\":\"capability not offered\",\"text\":\"`DeliverRequest` and `PublishedRequest`, the bodies of two routes\",\"question\":\"What named capability performs the required `photo.publish` step between the delivery route and the published route, and which actor calls it, given that the deliverer never calls the Portal?\",\"options\":[\"The route caller invokes the Portal's `photo.publish` operation using M05, then sends `PublishedRequest`.\",\"A separate deterministic orchestration backend invokes both routes and the Portal operation.\",\"A human or unspecified external agent performs the Portal call.\"],\"default_guess\":\"The route caller is the flow executor: it calls the delivery route, invokes Portal `photo.publish` with M05, then calls the published route with the returned `photo_id`.\",\"witness\":{\"initial\":\"A confirmed project has a placement with no publication mark.\",\"events\":[\"The caller obtains M05 from delivery.\",\"The next required action is Portal `photo.publish`.\",\"After a Portal answer, `PublishedRequest` must be sent.\"],\"outcomes\":[\"The route caller owns and performs both external calls in order.\",\"A separate backend owns publication, so the route caller stops after delivery.\"],\"observer\":\"The owner, the Portal and whichever component is expected to continue the flow\"}},{\"subject\":\"context: Portal publication failure\",\"kind\":\"failure outcome missing\",\"text\":\"The calling flow reports the `photo_id` right after `photo.publish` answers\",\"question\":\"What does the flow do when `photo.publish` fails, times out, or its successful answer is lost before `PublishedRequest` can be sent?\",\"options\":[\"Stop without marking and retry the same publication body later.\",\"Stop without marking and require manual reconciliation.\",\"Treat an ambiguous response as published and attempt to recover the `photo_id` by another operation.\"],\"default_guess\":\"Keep the placement unmarked and retry the identical M05 publication body; send `PublishedRequest` only after obtaining a definite `photo_id`.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The caller invokes Portal `photo.publish`.\",\"The Portal creates a hidden photo.\",\"The response is lost before the caller learns its `photo_id`.\"],\"outcomes\":[\"The caller retries the identical publication request and then records the returned `photo_id`.\",\"The caller does not retry because publication may already have occurred, leaving the placement permanently unmarked.\"],\"observer\":\"The owner sees either a recoverable published photo or a stranded delivery\"}},{\"subject\":\"context: PublishedRequest and MarkOutcome flow\",\"kind\":\"missing route flow\",\"text\":\"`MarkOutcome`, M07 with its `MarkStatus`; `DeliverRequest` and `PublishedRequest`, the bodies of two routes\",\"question\":\"Which route delegate calls which publication-mark capability, and what happens when marking fails after Portal publication has succeeded?\",\"options\":[\"The published route synchronously calls the record-publication capability and returns `MarkOutcome`; the caller retries this route on failure.\",\"The route queues the mark and acknowledges before it is durable.\",\"The caller treats a marking failure as a failure of the entire publication and republishes before trying to mark again.\"],\"default_guess\":\"The published route synchronously records the mark and returns `MarkOutcome`; after a failure the caller retries only this route with the same `photo_id`, never `photo.publish`.\",\"witness\":{\"initial\":\"The Portal has created a hidden photo, but the deliverer has no publication mark.\",\"events\":[\"The caller sends `PublishedRequest` with the Portal `photo_id`.\",\"The state store is temporarily unavailable and the mark is not written.\",\"The caller decides how to continue.\"],\"outcomes\":[\"The caller retries the mark operation with the same `photo_id`, producing one mark and no new Portal photo.\",\"The caller restarts at publication, risking a 409 or another Portal-side outcome while the placement remains unmarked.\"],\"observer\":\"The caller and the owner\"}},{\"subject\":\"context: health route\",\"kind\":\"missing route flow\",\"text\":\"`HealthAnswer`, the body of the health route\",\"question\":\"Which capability executes the health route, what dependencies it checks, and what response or failure it produces when a dependency is unavailable?\",\"options\":[\"The route reports only process liveness and always returns a normal `HealthAnswer`.\",\"The route checks configuration and required storage and reports unhealthy in `HealthAnswer`.\",\"The route performs live checks of folders and state and fails the transport request when any check fails.\"],\"default_guess\":\"Use a named health capability that checks configuration plus required state and binary storage, returns a deterministic `HealthAnswer`, and reserves transport failure for inability to build that answer.\",\"witness\":{\"initial\":\"The service process is running but its state directory is unavailable.\",\"events\":[\"A monitor calls the health route.\",\"The health delegate evaluates whatever checks the implementation selected.\"],\"outcomes\":[\"The route reports healthy because it is a liveness check.\",\"The route reports unhealthy because required state storage is unavailable.\"],\"observer\":\"The operator or health monitor\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,181 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:source_folder.read_named_source",
+   "kind": "contradictory_return_type",
+   "text": "Otherwise a `SourceRead`: one `SourceFile`, and the bytes that were judged when it is ready.",
+   "question": "Does `read_named_source` hand `photo_delivery` a `SourceRead` or, as `flow:deliver_one_photo` says, a `SourceFile` with the judged bytes?",
+   "options": [
+    "Return `SourceRead` and change the flow to unwrap it.",
+    "Return an enriched `SourceFile` and remove `SourceRead` from this operation."
+   ],
+   "default_guess": "Return `SourceRead` and change the flow to unwrap it.",
+   "witness": {
+    "initial": "A confirmed project has a ready JPEG with no existing placement.",
+    "events": [
+     "The calling flow invokes `deliver_project_photo`.",
+     "`photo_delivery` calls `read_named_source`."
+    ],
+    "outcomes": [
+     "`source_folder` returns a `SourceRead`, as the public operation specifies.",
+     "`source_folder` returns a `SourceFile` carrying bytes, as `flow:deliver_one_photo` specifies."
+    ],
+    "observer": "The `photo_delivery` implementer and the delivery caller if the incompatible interpretation prevents delivery."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:source_folder.read_named_source",
+   "kind": "undefined_result_shape",
+   "text": "a `SourceRead`: one `SourceFile`, and the bytes that were judged when it is ready",
+   "question": "What are the exact fields and field types of `SourceRead`, and is the `SourceFile` nested, flattened or inherited?",
+   "options": [
+    "A record such as `source: SourceFile` and `content: bytes | None`.",
+    "A flattened record containing all `SourceFile` fields plus an optional bytes field.",
+    "A tagged union with distinct ready and rejected variants."
+   ],
+   "default_guess": "Use a tagged record with `source: SourceFile` and `content: bytes | None`, with validity determined by the `SourceFile` variant.",
+   "witness": {
+    "initial": "A requested name passes condition 1 and names a supported readable image.",
+    "events": [
+     "`read_named_source` reads and judges the file.",
+     "`photo_delivery` accesses the source metadata and bytes."
+    ],
+    "outcomes": [
+     "The consumer reads nested fields such as `result.source` and `result.content`.",
+     "The consumer reads flattened fields such as `result.path` and `result.content`."
+    ],
+    "observer": "The implementers of `source_folder` and `photo_delivery`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:source_folder.read_named_source",
+   "kind": "ambiguous_rejection_envelope",
+   "text": "A file that cannot be read is a rejected `SourceFile`.",
+   "question": "When a name passes condition 1 but A1 orders 1 to 6 reject the file, does the operation return a bare rejected `SourceFile`, a `SourceRead` containing that rejected file, or a distinct rejected `SourceRead` variant, and are any judged bytes retained?",
+   "options": [
+    "Always return `SourceRead`; its rejected case contains a rejected `SourceFile` and no bytes.",
+    "Return a bare rejected `SourceFile`, despite the Outputs section saying the otherwise branch is `SourceRead`.",
+    "Return a tagged `SourceRead` rejection variant that may retain bytes used to decide the rejection."
+   ],
+   "default_guess": "Always return `SourceRead`; rejected results contain the rejected `SourceFile` and no bytes.",
+   "witness": {
+    "initial": "A requested name passes condition 1 but the file has an unsupported signature.",
+    "events": [
+     "`read_named_source` reads enough bytes to apply A1 order 6.",
+     "It reports the rejection to `photo_delivery`."
+    ],
+    "outcomes": [
+     "The result is `SourceRead(source=rejected_source, content=None)`.",
+     "The result is a bare rejected `SourceFile`."
+    ],
+    "observer": "`photo_delivery`, which must translate the rejection into a failed M06."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "undefined_model_shape",
+   "text": "`ScanResult`, the observations of one scan and the count of each status",
+   "question": "What are the exact fields and field types of `ScanResult`, how are counts represented, and must zero counts for every `ScanStatus` be present?",
+   "options": [
+    "An observations sequence plus one explicit integer field per status.",
+    "An observations sequence plus a map from every `ScanStatus` to an integer.",
+    "An observations sequence plus a sparse map containing only statuses that occurred."
+   ],
+   "default_guess": "Use an observations list and a map containing an integer entry for every `ScanStatus`, including zeros.",
+   "witness": {
+    "initial": "A scan finds one ready photo and no placed, published or rejected photos.",
+    "events": [
+     "`photo_delivery` constructs `ScanResult`.",
+     "`deliverer_api` serializes it for the caller."
+    ],
+    "outcomes": [
+     "The answer contains explicit zero counts for all absent statuses.",
+     "The answer omits absent statuses from a sparse count map."
+    ],
+    "observer": "The scan-route caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "undefined_model_shape",
+   "text": "`MarkOutcome`, M07 with its `MarkStatus`",
+   "question": "What are the exact fields and serialization of `MarkOutcome`: a nested M07 plus status, a flattened copy of M07 fields plus status, or another form?",
+   "options": [
+    "`mark: PublicationMark` and `status: MarkStatus`.",
+    "The fields of M07 flattened alongside `status`.",
+    "A discriminated union with separate `marked` and `replayed` variants."
+   ],
+   "default_guess": "Use `mark: PublicationMark` and `status: MarkStatus`.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The calling flow reports a Portal `photo_id`.",
+     "The service creates M07 and returns `MarkOutcome`."
+    ],
+    "outcomes": [
+     "The caller receives a nested `mark` object and a sibling `status`.",
+     "The caller receives M07 fields and `status` at the same level."
+    ],
+    "observer": "The mark-route caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "undefined_request_shape",
+   "text": "`DeliverRequest` and `PublishedRequest`, the bodies of two routes",
+   "question": "What exact fields belong to `PublishedRequest`, and which identifiers are in the body rather than the route path?",
+   "options": [
+    "The body contains `source_id: str` and `photo_id: UUID`; `project_id` is in the path.",
+    "The body contains only `photo_id: UUID`; `project_id` and `source_id` are in the path.",
+    "The body contains `project_id`, `source_id` and `photo_id`."
+   ],
+   "default_guess": "Put `source_id: str` and `photo_id: UUID` in the body and `project_id` in the path.",
+   "witness": {
+    "initial": "A project has an unmarked placement.",
+    "events": [
+     "An authenticated caller sends a publication-mark request with `project_id` in the route and `source_id` and `photo_id` in the body.",
+     "The API validates `PublishedRequest`."
+    ],
+    "outcomes": [
+     "The request is accepted because both identifiers belong to `PublishedRequest`.",
+     "The request is rejected because this implementation expects `source_id` in the route and only `photo_id` in the body."
+    ],
+    "observer": "The calling flow."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "undefined_response_shape",
+   "text": "`HealthAnswer`, the body of the health route",
+   "question": "What are the exact fields, values and types of `HealthAnswer`?",
+   "options": [
+    "A fixed object such as `{\"status\":\"ok\"}`.",
+    "A boolean readiness field.",
+    "An empty object whose successful HTTP status is the entire health signal."
+   ],
+   "default_guess": "Use a fixed `status: str` field whose successful value is `ok`.",
+   "witness": {
+    "initial": "The service is running normally.",
+    "events": [
+     "A monitor calls the health route.",
+     "`deliverer_api` serializes `HealthAnswer`."
+    ],
+    "outcomes": [
+     "The monitor receives `{\"status\":\"ok\"}`.",
+     "The monitor receives an empty object or a differently shaped readiness answer."
+    ],
+    "observer": "The health monitor."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:source_folder.read_named_source\",\"kind\":\"contradictory_return_type\",\"text\":\"Otherwise a `SourceRead`: one `SourceFile`, and the bytes that were judged when it is ready.\",\"question\":\"Does `read_named_source` hand `photo_delivery` a `SourceRead` or, as `flow:deliver_one_photo` says, a `SourceFile` with the judged bytes?\",\"options\":[\"Return `SourceRead` and change the flow to unwrap it.\",\"Return an enriched `SourceFile` and remove `SourceRead` from this operation.\"],\"default_guess\":\"Return `SourceRead` and change the flow to unwrap it.\",\"witness\":{\"initial\":\"A confirmed project has a ready JPEG with no existing placement.\",\"events\":[\"The calling flow invokes `deliver_project_photo`.\",\"`photo_delivery` calls `read_named_source`.\"],\"outcomes\":[\"`source_folder` returns a `SourceRead`, as the public operation specifies.\",\"`source_folder` returns a `SourceFile` carrying bytes, as `flow:deliver_one_photo` specifies.\"],\"observer\":\"The `photo_delivery` implementer and the delivery caller if the incompatible interpretation prevents delivery.\"}},{\"subject\":\"public_op:source_folder.read_named_source\",\"kind\":\"undefined_result_shape\",\"text\":\"a `SourceRead`: one `SourceFile`, and the bytes that were judged when it is ready\",\"question\":\"What are the exact fields and field types of `SourceRead`, and is the `SourceFile` nested, flattened or inherited?\",\"options\":[\"A record such as `source: SourceFile` and `content: bytes | None`.\",\"A flattened record containing all `SourceFile` fields plus an optional bytes field.\",\"A tagged union with distinct ready and rejected variants.\"],\"default_guess\":\"Use a tagged record with `source: SourceFile` and `content: bytes | None`, with validity determined by the `SourceFile` variant.\",\"witness\":{\"initial\":\"A requested name passes condition 1 and names a supported readable image.\",\"events\":[\"`read_named_source` reads and judges the file.\",\"`photo_delivery` accesses the source metadata and bytes.\"],\"outcomes\":[\"The consumer reads nested fields such as `result.source` and `result.content`.\",\"The consumer reads flattened fields such as `result.path` and `result.content`.\"],\"observer\":\"The implementers of `source_folder` and `photo_delivery`.\"}},{\"subject\":\"public_op:source_folder.read_named_source\",\"kind\":\"ambiguous_rejection_envelope\",\"text\":\"A file that cannot be read is a rejected `SourceFile`.\",\"question\":\"When a name passes condition 1 but A1 orders 1 to 6 reject the file, does the operation return a bare rejected `SourceFile`, a `SourceRead` containing that rejected file, or a distinct rejected `SourceRead` variant, and are any judged bytes retained?\",\"options\":[\"Always return `SourceRead`; its rejected case contains a rejected `SourceFile` and no bytes.\",\"Return a bare rejected `SourceFile`, despite the Outputs section saying the otherwise branch is `SourceRead`.\",\"Return a tagged `SourceRead` rejection variant that may retain bytes used to decide the rejection.\"],\"default_guess\":\"Always return `SourceRead`; rejected results contain the rejected `SourceFile` and no bytes.\",\"witness\":{\"initial\":\"A requested name passes condition 1 but the file has an unsupported signature.\",\"events\":[\"`read_named_source` reads enough bytes to apply A1 order 6.\",\"It reports the rejection to `photo_delivery`.\"],\"outcomes\":[\"The result is `SourceRead(source=rejected_source, content=None)`.\",\"The result is a bare rejected `SourceFile`.\"],\"observer\":\"`photo_delivery`, which must translate the rejection into a failed M06.\"}},{\"subject\":\"context\",\"kind\":\"undefined_model_shape\",\"text\":\"`ScanResult`, the observations of one scan and the count of each status\",\"question\":\"What are the exact fields and field types of `ScanResult`, how are counts represented, and must zero counts for every `ScanStatus` be present?\",\"options\":[\"An observations sequence plus one explicit integer field per status.\",\"An observations sequence plus a map from every `ScanStatus` to an integer.\",\"An observations sequence plus a sparse map containing only statuses that occurred.\"],\"default_guess\":\"Use an observations list and a map containing an integer entry for every `ScanStatus`, including zeros.\",\"witness\":{\"initial\":\"A scan finds one ready photo and no placed, published or rejected photos.\",\"events\":[\"`photo_delivery` constructs `ScanResult`.\",\"`deliverer_api` serializes it for the caller.\"],\"outcomes\":[\"The answer contains explicit zero counts for all absent statuses.\",\"The answer omits absent statuses from a sparse count map.\"],\"observer\":\"The scan-route caller.\"}},{\"subject\":\"context\",\"kind\":\"undefined_model_shape\",\"text\":\"`MarkOutcome`, M07 with its `MarkStatus`\",\"question\":\"What are the exact fields and serialization of `MarkOutcome`: a nested M07 plus status, a flattened copy of M07 fields plus status, or another form?\",\"options\":[\"`mark: PublicationMark` and `status: MarkStatus`.\",\"The fields of M07 flattened alongside `status`.\",\"A discriminated union with separate `marked` and `replayed` variants.\"],\"default_guess\":\"Use `mark: PublicationMark` and `status: MarkStatus`.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The calling flow reports a Portal `photo_id`.\",\"The service creates M07 and returns `MarkOutcome`.\"],\"outcomes\":[\"The caller receives a nested `mark` object and a sibling `status`.\",\"The caller receives M07 fields and `status` at the same level.\"],\"observer\":\"The mark-route caller.\"}},{\"subject\":\"context\",\"kind\":\"undefined_request_shape\",\"text\":\"`DeliverRequest` and `PublishedRequest`, the bodies of two routes\",\"question\":\"What exact fields belong to `PublishedRequest`, and which identifiers are in the body rather than the route path?\",\"options\":[\"The body contains `source_id: str` and `photo_id: UUID`; `project_id` is in the path.\",\"The body contains only `photo_id: UUID`; `project_id` and `source_id` are in the path.\",\"The body contains `project_id`, `source_id` and `photo_id`.\"],\"default_guess\":\"Put `source_id: str` and `photo_id: UUID` in the body and `project_id` in the path.\",\"witness\":{\"initial\":\"A project has an unmarked placement.\",\"events\":[\"An authenticated caller sends a publication-mark request with `project_id` in the route and `source_id` and `photo_id` in the body.\",\"The API validates `PublishedRequest`.\"],\"outcomes\":[\"The request is accepted because both identifiers belong to `PublishedRequest`.\",\"The request is rejected because this implementation expects `source_id` in the route and only `photo_id` in the body.\"],\"observer\":\"The calling flow.\"}},{\"subject\":\"context\",\"kind\":\"undefined_response_shape\",\"text\":\"`HealthAnswer`, the body of the health route\",\"question\":\"What are the exact fields, values and types of `HealthAnswer`?\",\"options\":[\"A fixed object such as `{\\\"status\\\":\\\"ok\\\"}`.\",\"A boolean readiness field.\",\"An empty object whose successful HTTP status is the entire health signal.\"],\"default_guess\":\"Use a fixed `status: str` field whose successful value is `ok`.\",\"witness\":{\"initial\":\"The service is running normally.\",\"events\":[\"A monitor calls the health route.\",\"`deliverer_api` serializes `HealthAnswer`.\"],\"outcomes\":[\"The monitor receives `{\\\"status\\\":\\\"ok\\\"}`.\",\"The monitor receives an empty object or a differently shaped readiness answer.\"],\"observer\":\"The health monitor.\"}}]}",
+ "set_aside": []
+}

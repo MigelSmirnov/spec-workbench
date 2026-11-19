@@ -85,7 +85,7 @@ The calling agent asks to deliver one photo by its name and source id.
 ### Boundary
 
 `module:deliverer_api` accepts the token, the request form and the project id. `module:photo_delivery` owns the
-order of every later step and holds the project lock. `module:source_folder` hands over one `SourceFile` with the
+order of every later step and holds the project lock. `module:source_folder` hands over one `SourceRead`, a `SourceFile` with the
 bytes it judged, `module:photo_preparation` returns M03 and M05, and `module:delivery_store` keeps the result. M06
 crosses back to the caller.
 
