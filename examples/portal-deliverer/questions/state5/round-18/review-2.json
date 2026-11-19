@@ -1,0 +1,130 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "contradictory_state_effect",
+   "text": "Writes only the project lock file.",
+   "question": "Does project_lock also write the missing folders below the state folder, as its Observable effect and A6 rule 2 require, or is its durable state impact limited to the lock file?",
+   "options": [
+    "Create the missing folders and the lock file.",
+    "Write only the lock file and fail if any parent folder is missing."
+   ],
+   "default_guess": "Create the missing folders and the lock file, and revise State impact to include them.",
+   "witness": {
+    "initial": "The state folder exists, but a folder on the project lock file's path does not exist.",
+    "events": [
+     "module:photo_delivery calls project_lock for the project."
+    ],
+    "outcomes": [
+     "The missing folder is created with STATE_FOLDER_MODE and then the lock file is created.",
+     "No folder is created because the operation writes only the project lock file, so acquiring the lock fails."
+    ],
+    "observer": "The caller sees success versus state_unavailable, and the installation owner sees different filesystem entries."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "parent_symlink_policy",
+   "text": "It opens the lock file without following a link and holds an operating system lock.",
+   "question": "When an existing folder component below the state folder is a symbolic link, must project_lock follow it, reject it, or follow it only when its resolved target remains below the state folder?",
+   "options": [
+    "Reject every symbolic-link folder component.",
+    "Follow symbolic-link folder components; only the lock-file entry itself is opened without following a link.",
+    "Follow a folder link only when its resolved target remains below the resolved state folder."
+   ],
+   "default_guess": "Reject every symbolic-link folder component.",
+   "witness": {
+    "initial": "The state folder exists and a directory component of the project lock path is a symbolic link to a directory outside it; the final lock-file entry is absent.",
+    "events": [
+     "module:photo_delivery calls project_lock for the project."
+    ],
+    "outcomes": [
+     "The implementation follows the directory link, creates the lock file outside the state folder and acquires it.",
+     "The implementation refuses the linked directory component with state_unavailable and creates no lock file outside the state folder."
+    ],
+    "observer": "The caller sees an acquired lock versus a refusal, and the host administrator sees whether a file is created outside the state folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "partial_folder_failure",
+   "text": "Creates the project lock file on first use with the mode of `LOCK_FILE_MODE`, and the missing folders below the state folder with `STATE_FOLDER_MODE`; a missing state folder is refused like a lock file that cannot be opened.",
+   "question": "If project_lock creates one or more missing folders and then a later folder creation or lock-file operation fails, must the newly created folders remain or be removed?",
+   "options": [
+    "Leave every successfully created folder in place.",
+    "Remove empty folders created by this call when the later step fails.",
+    "The cleanup depends on which later step failed."
+   ],
+   "default_guess": "Leave successfully created folders in place and return state_unavailable.",
+   "witness": {
+    "initial": "Two parent folders of the project lock file are missing; creating the outer one succeeds, but creating the inner one fails.",
+    "events": [
+     "module:photo_delivery calls project_lock for the project.",
+     "project_lock creates the outer folder and encounters an operating-system error creating the inner folder."
+    ],
+    "outcomes": [
+     "The call is refused and the outer folder remains.",
+     "The call is refused and the implementation removes the outer folder it created."
+    ],
+    "observer": "The installation owner sees different state-folder contents after the same refused call."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.store_image",
+   "kind": "partial_folder_failure",
+   "text": "Writes the stored image atomically with the mode of `STORED_IMAGE_MODE`, creating the missing folders below the binary store with `STORE_FOLDER_MODE`; each folder it creates and the image's own folder are synchronised before it returns, and a failure there is a failed write (A6 rules 2 and 3). A missing binary store is a failed write.",
+   "question": "If store_image creates some missing folders but fails before renaming the image, must those newly created folders remain or be removed?",
+   "options": [
+    "Leave every successfully created folder in place.",
+    "Remove empty folders created by this call when the image write fails.",
+    "Retain or remove them according to the particular failure point."
+   ],
+   "default_guess": "Leave successfully created folders in place and remove only the temporary file, if one was created.",
+   "witness": {
+    "initial": "The binary store exists; two folders on the image path are missing, and creating the second folder will fail.",
+    "events": [
+     "module:photo_delivery calls store_image.",
+     "store_image creates the first missing folder and then fails to create the second."
+    ],
+    "outcomes": [
+     "The failed write leaves the first new folder in the binary store.",
+     "The failed write rolls back the first new folder, leaving the binary store as it was."
+    ],
+    "observer": "The installation owner sees different binary-store contents after the same failed delivery."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.store_image",
+   "kind": "folder_sync_sequence",
+   "text": "each folder it creates and the image's own folder are synchronised before it returns, and a failure there is a failed write",
+   "question": "Must each newly created folder be synchronised in its parent immediately before the next folder is created, or may all folders be created first and synchronised later; and in what exact order are those synchronisations performed relative to the image write and rename?",
+   "options": [
+    "Create and synchronise each folder in its parent, outermost first, before creating the next folder; then write and rename the image and synchronise its folder.",
+    "Create all missing folders outermost first, then synchronise their parent entries, then write the image.",
+    "Create the folders and image first, then perform all required folder synchronisations before returning."
+   ],
+   "default_guess": "Create and synchronise each folder in its parent, outermost first, before creating the next folder; then write, synchronise and rename the temporary image and synchronise the image folder.",
+   "witness": {
+    "initial": "Two image-path folders are missing, and an injected synchronisation failure occurs at the first parent-folder synchronisation.",
+    "events": [
+     "module:photo_delivery calls store_image.",
+     "store_image begins creating the missing folders.",
+     "The first attempted directory synchronisation fails."
+    ],
+    "outcomes": [
+     "With immediate synchronisation, only the outer folder has been created when the write fails.",
+     "With deferred synchronisation, both folders may already exist when the write fails."
+    ],
+    "observer": "The installation owner sees different residual folders after the same failed write."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"contradictory_state_effect\",\"text\":\"Writes only the project lock file.\",\"question\":\"Does project_lock also write the missing folders below the state folder, as its Observable effect and A6 rule 2 require, or is its durable state impact limited to the lock file?\",\"options\":[\"Create the missing folders and the lock file.\",\"Write only the lock file and fail if any parent folder is missing.\"],\"default_guess\":\"Create the missing folders and the lock file, and revise State impact to include them.\",\"witness\":{\"initial\":\"The state folder exists, but a folder on the project lock file's path does not exist.\",\"events\":[\"module:photo_delivery calls project_lock for the project.\"],\"outcomes\":[\"The missing folder is created with STATE_FOLDER_MODE and then the lock file is created.\",\"No folder is created because the operation writes only the project lock file, so acquiring the lock fails.\"],\"observer\":\"The caller sees success versus state_unavailable, and the installation owner sees different filesystem entries.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"parent_symlink_policy\",\"text\":\"It opens the lock file without following a link and holds an operating system lock.\",\"question\":\"When an existing folder component below the state folder is a symbolic link, must project_lock follow it, reject it, or follow it only when its resolved target remains below the state folder?\",\"options\":[\"Reject every symbolic-link folder component.\",\"Follow symbolic-link folder components; only the lock-file entry itself is opened without following a link.\",\"Follow a folder link only when its resolved target remains below the resolved state folder.\"],\"default_guess\":\"Reject every symbolic-link folder component.\",\"witness\":{\"initial\":\"The state folder exists and a directory component of the project lock path is a symbolic link to a directory outside it; the final lock-file entry is absent.\",\"events\":[\"module:photo_delivery calls project_lock for the project.\"],\"outcomes\":[\"The implementation follows the directory link, creates the lock file outside the state folder and acquires it.\",\"The implementation refuses the linked directory component with state_unavailable and creates no lock file outside the state folder.\"],\"observer\":\"The caller sees an acquired lock versus a refusal, and the host administrator sees whether a file is created outside the state folder.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"partial_folder_failure\",\"text\":\"Creates the project lock file on first use with the mode of `LOCK_FILE_MODE`, and the missing folders below the state folder with `STATE_FOLDER_MODE`; a missing state folder is refused like a lock file that cannot be opened.\",\"question\":\"If project_lock creates one or more missing folders and then a later folder creation or lock-file operation fails, must the newly created folders remain or be removed?\",\"options\":[\"Leave every successfully created folder in place.\",\"Remove empty folders created by this call when the later step fails.\",\"The cleanup depends on which later step failed.\"],\"default_guess\":\"Leave successfully created folders in place and return state_unavailable.\",\"witness\":{\"initial\":\"Two parent folders of the project lock file are missing; creating the outer one succeeds, but creating the inner one fails.\",\"events\":[\"module:photo_delivery calls project_lock for the project.\",\"project_lock creates the outer folder and encounters an operating-system error creating the inner folder.\"],\"outcomes\":[\"The call is refused and the outer folder remains.\",\"The call is refused and the implementation removes the outer folder it created.\"],\"observer\":\"The installation owner sees different state-folder contents after the same refused call.\"}},{\"subject\":\"public_op:delivery_store.store_image\",\"kind\":\"partial_folder_failure\",\"text\":\"Writes the stored image atomically with the mode of `STORED_IMAGE_MODE`, creating the missing folders below the binary store with `STORE_FOLDER_MODE`; each folder it creates and the image's own folder are synchronised before it returns, and a failure there is a failed write (A6 rules 2 and 3). A missing binary store is a failed write.\",\"question\":\"If store_image creates some missing folders but fails before renaming the image, must those newly created folders remain or be removed?\",\"options\":[\"Leave every successfully created folder in place.\",\"Remove empty folders created by this call when the image write fails.\",\"Retain or remove them according to the particular failure point.\"],\"default_guess\":\"Leave successfully created folders in place and remove only the temporary file, if one was created.\",\"witness\":{\"initial\":\"The binary store exists; two folders on the image path are missing, and creating the second folder will fail.\",\"events\":[\"module:photo_delivery calls store_image.\",\"store_image creates the first missing folder and then fails to create the second.\"],\"outcomes\":[\"The failed write leaves the first new folder in the binary store.\",\"The failed write rolls back the first new folder, leaving the binary store as it was.\"],\"observer\":\"The installation owner sees different binary-store contents after the same failed delivery.\"}},{\"subject\":\"public_op:delivery_store.store_image\",\"kind\":\"folder_sync_sequence\",\"text\":\"each folder it creates and the image's own folder are synchronised before it returns, and a failure there is a failed write\",\"question\":\"Must each newly created folder be synchronised in its parent immediately before the next folder is created, or may all folders be created first and synchronised later; and in what exact order are those synchronisations performed relative to the image write and rename?\",\"options\":[\"Create and synchronise each folder in its parent, outermost first, before creating the next folder; then write and rename the image and synchronise its folder.\",\"Create all missing folders outermost first, then synchronise their parent entries, then write the image.\",\"Create the folders and image first, then perform all required folder synchronisations before returning.\"],\"default_guess\":\"Create and synchronise each folder in its parent, outermost first, before creating the next folder; then write, synchronise and rename the temporary image and synchronise the image folder.\",\"witness\":{\"initial\":\"Two image-path folders are missing, and an injected synchronisation failure occurs at the first parent-folder synchronisation.\",\"events\":[\"module:photo_delivery calls store_image.\",\"store_image begins creating the missing folders.\",\"The first attempted directory synchronisation fails.\"],\"outcomes\":[\"With immediate synchronisation, only the outer folder has been created when the write fails.\",\"With deferred synchronisation, both folders may already exist when the write fails.\"],\"observer\":\"The installation owner sees different residual folders after the same failed write.\"}}]}",
+ "set_aside": []
+}

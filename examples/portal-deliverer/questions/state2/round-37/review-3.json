@@ -1,0 +1,138 @@
+{
+ "open_points": [
+  {
+   "subject": "A2 rule 1 PHOTO_BACKGROUND",
+   "kind": "standard_violation",
+   "text": "the colour of the imported\n   `PHOTO_BACKGROUND` constant, white",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Remove the repeated value `white` so the generated code receives this policy value only through the imported `PHOTO_BACKGROUND` constant.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 binary store root",
+   "kind": "missing_failure_mapping",
+   "text": "The reference must stay inside the binary store: its path, resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery is refused with `unsafe_reference`.",
+   "question": "When the binary store itself is missing and therefore cannot be resolved as an existing store, is the delivery refused with `unsafe_reference`, or does its image write fail under A3 rule 5 with `UNREADABLE_FILE`?",
+   "options": [
+    "Refuse with `unsafe_reference` during containment checking",
+    "Let containment pass for the intended path and return failed/`UNREADABLE_FILE` when the image write needs the missing root"
+   ],
+   "default_guess": "Treat the intended root path as the containment base and return failed with `UNREADABLE_FILE` when the write fails.",
+   "witness": {
+    "initial": "A confirmed project has a valid source with no placement, but `binary_root` is absent.",
+    "events": [
+     "The calling flow requests delivery.",
+     "The service prepares the image and evaluates the stored reference before writing it."
+    ],
+    "outcomes": [
+     "The unresolved or nonexistent store makes the containment check fail, so the whole operation is refused with `unsafe_reference`.",
+     "The intended reference is contained, but the missing installation-created store makes the write fail, so M06 is `failed` with `UNREADABLE_FILE`."
+    ],
+    "observer": "The calling flow sees a different answer model and failure code."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 state folder reads",
+   "kind": "missing_absence_semantics",
+   "text": "The installation creates the binary store and the state folder themselves; the service never creates them, and when one is missing the write that needs it fails.",
+   "question": "When the state folder is missing during a scan, do placement and mark addresses count as absent records, or is the scan refused because state cannot be read?",
+   "options": [
+    "Treat every record as absent and report source files as `ready`",
+    "Refuse the scan with the STATE_UNAVAILABLE member of `RefusalCode`"
+   ],
+   "default_guess": "Refuse with STATE_UNAVAILABLE because the configured state store itself is unavailable.",
+   "witness": {
+    "initial": "The connection and photo folder are valid and contain a deliverable file, but the configured state folder is absent.",
+    "events": [
+     "The calling flow requests a scan.",
+     "The scan looks for the file's placement and mark records."
+    ],
+    "outcomes": [
+     "The missing entries count as absent records, and the file is reported `ready`.",
+     "The missing state store is unavailable, and the scan returns M08 with STATE_UNAVAILABLE."
+    ],
+    "observer": "The calling flow sees either a scan result or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 concurrent folder creation",
+   "kind": "race_precedence",
+   "text": "The service creates the missing folders below them, outermost first, with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.",
+   "question": "If another process creates a folder after this operation found it missing but before this operation creates it, must this operation accept the concurrently created folder and continue, or treat the create collision as a failed write?",
+   "options": [
+    "Reinspect and use the concurrently created folder if it is a suitable folder",
+    "Treat the exclusive create collision as a write failure"
+   ],
+   "default_guess": "Reinspect and use it if it is a real folder with the required mode and containment.",
+   "witness": {
+    "initial": "The binary store exists but its shared `photos` folder does not; two confirmed projects each have a deliverable source.",
+    "events": [
+     "Caller A and caller B start deliveries in separate processes.",
+     "Both observe that `photos` is missing.",
+     "Caller A creates `photos` before caller B attempts to create it."
+    ],
+    "outcomes": [
+     "Caller B accepts the folder created by A and can complete its placement.",
+     "Caller B treats the collision as its image-write failure and returns failed with `UNREADABLE_FILE`."
+    ],
+    "observer": "Caller B sees success or failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 failed writes after folder creation",
+   "kind": "cleanup_unspecified",
+   "text": "A write that fails before the rename leaves the destination as it was, whether absent or holding an earlier complete file, and removes its temporary file.",
+   "question": "When the operation created one or more destination folders before a pre-rename failure, are those newly created folders retained or removed?",
+   "options": [
+    "Leave all newly created folders in place",
+    "Remove newly created empty folders while unwinding the failed write"
+   ],
+   "default_guess": "Leave the folders in place; remove only the temporary file.",
+   "witness": {
+    "initial": "The installation-created binary root exists, but the folders for the requested image do not.",
+    "events": [
+     "A delivery creates the missing folders.",
+     "It creates its temporary file.",
+     "Synchronising or changing the temporary file fails before rename, and the temporary file is removed."
+    ],
+    "outcomes": [
+     "The newly created empty folders remain.",
+     "The operation removes the empty folders it created."
+    ],
+    "observer": "The owner or a later delivery inspecting the binary store sees different durable contents."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 INV-13 Required tests",
+   "kind": "test_obligation_underspecified",
+   "text": "INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Must the witness test show the at-most-once rule for successful, replayed, early-refused and late-refused marks, including zero reads for a mark refused before the specified reading point?",
+   "options": [
+    "Exercise every mark control path and assert its required count",
+    "Exercise only a successful newly created mark, plus the non-mark operations named"
+   ],
+   "default_guess": "Exercise every mark control path because INV-13 applies to all marks and A7 rule 2 assigns different reading behavior to their refusal and replay paths.",
+   "witness": {
+    "initial": "A placement and an existing publication mark are present, and a counting clock is installed.",
+    "events": [
+     "The calling flow repeats the same mark.",
+     "The implementation returns the existing mark without writing."
+    ],
+    "outcomes": [
+     "The replay reads the clock exactly once as A7 rule 2 requires.",
+     "The replay reads it twice but still returns the stored `marked_at`; tests covering only a newly created mark do not detect this."
+    ],
+    "observer": "A complete INV-13 witness check distinguishes the implementations; the currently described successful-mark check may not."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A2 rule 1 PHOTO_BACKGROUND\",\"kind\":\"standard_violation\",\"text\":\"the colour of the imported\\n   `PHOTO_BACKGROUND` constant, white\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь\\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Remove the repeated value `white` so the generated code receives this policy value only through the imported `PHOTO_BACKGROUND` constant.\"},{\"subject\":\"A6 binary store root\",\"kind\":\"missing_failure_mapping\",\"text\":\"The reference must stay inside the binary store: its path, resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery is refused with `unsafe_reference`.\",\"question\":\"When the binary store itself is missing and therefore cannot be resolved as an existing store, is the delivery refused with `unsafe_reference`, or does its image write fail under A3 rule 5 with `UNREADABLE_FILE`?\",\"options\":[\"Refuse with `unsafe_reference` during containment checking\",\"Let containment pass for the intended path and return failed/`UNREADABLE_FILE` when the image write needs the missing root\"],\"default_guess\":\"Treat the intended root path as the containment base and return failed with `UNREADABLE_FILE` when the write fails.\",\"witness\":{\"initial\":\"A confirmed project has a valid source with no placement, but `binary_root` is absent.\",\"events\":[\"The calling flow requests delivery.\",\"The service prepares the image and evaluates the stored reference before writing it.\"],\"outcomes\":[\"The unresolved or nonexistent store makes the containment check fail, so the whole operation is refused with `unsafe_reference`.\",\"The intended reference is contained, but the missing installation-created store makes the write fail, so M06 is `failed` with `UNREADABLE_FILE`.\"],\"observer\":\"The calling flow sees a different answer model and failure code.\"}},{\"subject\":\"A6 state folder reads\",\"kind\":\"missing_absence_semantics\",\"text\":\"The installation creates the binary store and the state folder themselves; the service never creates them, and when one is missing the write that needs it fails.\",\"question\":\"When the state folder is missing during a scan, do placement and mark addresses count as absent records, or is the scan refused because state cannot be read?\",\"options\":[\"Treat every record as absent and report source files as `ready`\",\"Refuse the scan with the STATE_UNAVAILABLE member of `RefusalCode`\"],\"default_guess\":\"Refuse with STATE_UNAVAILABLE because the configured state store itself is unavailable.\",\"witness\":{\"initial\":\"The connection and photo folder are valid and contain a deliverable file, but the configured state folder is absent.\",\"events\":[\"The calling flow requests a scan.\",\"The scan looks for the file's placement and mark records.\"],\"outcomes\":[\"The missing entries count as absent records, and the file is reported `ready`.\",\"The missing state store is unavailable, and the scan returns M08 with STATE_UNAVAILABLE.\"],\"observer\":\"The calling flow sees either a scan result or a refusal.\"}},{\"subject\":\"A6 concurrent folder creation\",\"kind\":\"race_precedence\",\"text\":\"The service creates the missing folders below them, outermost first, with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.\",\"question\":\"If another process creates a folder after this operation found it missing but before this operation creates it, must this operation accept the concurrently created folder and continue, or treat the create collision as a failed write?\",\"options\":[\"Reinspect and use the concurrently created folder if it is a suitable folder\",\"Treat the exclusive create collision as a write failure\"],\"default_guess\":\"Reinspect and use it if it is a real folder with the required mode and containment.\",\"witness\":{\"initial\":\"The binary store exists but its shared `photos` folder does not; two confirmed projects each have a deliverable source.\",\"events\":[\"Caller A and caller B start deliveries in separate processes.\",\"Both observe that `photos` is missing.\",\"Caller A creates `photos` before caller B attempts to create it.\"],\"outcomes\":[\"Caller B accepts the folder created by A and can complete its placement.\",\"Caller B treats the collision as its image-write failure and returns failed with `UNREADABLE_FILE`.\"],\"observer\":\"Caller B sees success or failure.\"}},{\"subject\":\"A6 failed writes after folder creation\",\"kind\":\"cleanup_unspecified\",\"text\":\"A write that fails before the rename leaves the destination as it was, whether absent or holding an earlier complete file, and removes its temporary file.\",\"question\":\"When the operation created one or more destination folders before a pre-rename failure, are those newly created folders retained or removed?\",\"options\":[\"Leave all newly created folders in place\",\"Remove newly created empty folders while unwinding the failed write\"],\"default_guess\":\"Leave the folders in place; remove only the temporary file.\",\"witness\":{\"initial\":\"The installation-created binary root exists, but the folders for the requested image do not.\",\"events\":[\"A delivery creates the missing folders.\",\"It creates its temporary file.\",\"Synchronising or changing the temporary file fails before rename, and the temporary file is removed.\"],\"outcomes\":[\"The newly created empty folders remain.\",\"The operation removes the empty folders it created.\"],\"observer\":\"The owner or a later delivery inspecting the binary store sees different durable contents.\"}},{\"subject\":\"A7 INV-13 Required tests\",\"kind\":\"test_obligation_underspecified\",\"text\":\"INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Must the witness test show the at-most-once rule for successful, replayed, early-refused and late-refused marks, including zero reads for a mark refused before the specified reading point?\",\"options\":[\"Exercise every mark control path and assert its required count\",\"Exercise only a successful newly created mark, plus the non-mark operations named\"],\"default_guess\":\"Exercise every mark control path because INV-13 applies to all marks and A7 rule 2 assigns different reading behavior to their refusal and replay paths.\",\"witness\":{\"initial\":\"A placement and an existing publication mark are present, and a counting clock is installed.\",\"events\":[\"The calling flow repeats the same mark.\",\"The implementation returns the existing mark without writing.\"],\"outcomes\":[\"The replay reads the clock exactly once as A7 rule 2 requires.\",\"The replay reads it twice but still returns the stored `marked_at`; tests covering only a newly created mark do not detect this.\"],\"observer\":\"A complete INV-13 witness check distinguishes the implementations; the currently described successful-mark check may not.\"}}]}",
+ "set_aside": []
+}

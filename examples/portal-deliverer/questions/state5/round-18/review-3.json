@@ -1,0 +1,203 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "contradictory state impact",
+   "text": "Writes only the project lock file.",
+   "question": "Does project_lock also create missing directories below the state folder, as its observable effect says, or may it write only the lock file?",
+   "options": [
+    "Create the required directories and the lock file",
+    "Create only the lock file and fail if any required directory is absent"
+   ],
+   "default_guess": "Create the required directories and the lock file.",
+   "witness": {
+    "initial": "The state folder exists, but the directories leading to a project's lock file do not.",
+    "events": [
+     "module:photo_delivery calls project_lock for the project."
+    ],
+    "outcomes": [
+     "project_lock creates the missing directories and then the lock file.",
+     "project_lock creates no directories and cannot create the lock file."
+    ],
+    "observer": "The caller and an operator inspecting the state folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.store_image",
+   "kind": "contradictory state impact",
+   "text": "Writes one stored image.",
+   "question": "Does store_image also create directory entries below the binary store, or is its state impact limited to the image file?",
+   "options": [
+    "Create the required directories and write the image",
+    "Write only the image and fail when its directories are absent"
+   ],
+   "default_guess": "Create the required directories and write the image.",
+   "witness": {
+    "initial": "The binary store exists, but photos/<project_id> does not.",
+    "events": [
+     "module:photo_delivery calls store_image."
+    ],
+    "outcomes": [
+     "store_image creates photos and the project directory before writing the image.",
+     "store_image writes no directories and the write fails."
+    ],
+    "observer": "The caller and an operator inspecting the binary store."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "unspecified layout",
+   "text": "Creates the project lock file on first use with the mode of `LOCK_FILE_MODE`, and the missing folders below the state folder with `STATE_FOLDER_MODE`",
+   "question": "What is the lock file's path relative to the state folder, and therefore exactly which folders must project_lock create?",
+   "options": [
+    "Use a shared lock directory with one file per project",
+    "Use a project directory containing its lock file",
+    "Place each project lock directly in the state folder"
+   ],
+   "default_guess": "Use a shared lock directory with one file per project.",
+   "witness": {
+    "initial": "The state folder is empty.",
+    "events": [
+     "module:photo_delivery takes the lock for project P."
+    ],
+    "outcomes": [
+     "The operation creates state/locks/P.lock.",
+     "The operation creates state/P/lock."
+    ],
+    "observer": "An operator, backup process or later implementation reading the durable state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "unspecified error mapping",
+   "text": "and the missing folders below the state folder with `STATE_FOLDER_MODE`; a missing state folder is refused like a lock file that cannot be opened.",
+   "question": "What result is required when the state folder exists but a required child folder cannot be created?",
+   "options": [
+    "Refuse with `state_unavailable`",
+    "Propagate the operating-system error",
+    "Treat it as a distinct startup or configuration failure"
+   ],
+   "default_guess": "Refuse with `state_unavailable`.",
+   "witness": {
+    "initial": "The state folder exists, but permissions prevent creation of the required project-lock directory.",
+    "events": [
+     "module:photo_delivery calls project_lock."
+    ],
+    "outcomes": [
+     "The caller receives M08 with `state_unavailable`.",
+     "A raw operating-system error escapes and the caller receives a server failure."
+    ],
+    "observer": "The calling flow."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "delivery_store folder creation",
+   "kind": "concurrent creation race",
+   "text": "The service creates the missing folders below them, outermost first, with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.",
+   "question": "When another process creates a folder after this process found it missing but before this process creates it, must the operation accept the existing entry and continue, or fail; and what validation of that entry is required?",
+   "options": [
+    "Continue if the raced entry is a directory with an acceptable location and type",
+    "Fail on the creation collision",
+    "Continue for any existing filesystem entry"
+   ],
+   "default_guess": "Continue only after verifying that the raced entry is a directory and satisfies the applicable containment requirements.",
+   "witness": {
+    "initial": "A required shared child directory is absent.",
+    "events": [
+     "Process A and process B both find the directory absent.",
+     "Process A creates it.",
+     "Process B attempts to create the same directory."
+    ],
+    "outcomes": [
+     "Process B validates the directory and continues successfully.",
+     "Process B treats the creation collision as a failed write or `state_unavailable`."
+    ],
+    "observer": "The caller of process B."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.store_image",
+   "kind": "unspecified failure ordering",
+   "text": "each folder it creates and the image's own folder are synchronised before it returns, and a failure there is a failed write",
+   "question": "In what order are missing folders created and their containing folders synchronised, and after which step must creation stop when a synchronisation fails?",
+   "options": [
+    "Create and synchronise each directory entry before creating the next directory",
+    "Create all missing directories first, then synchronise their containing folders",
+    "Attempt all directory synchronisations even after one fails"
+   ],
+   "default_guess": "Create each directory and synchronise its containing folder before proceeding to the next directory.",
+   "witness": {
+    "initial": "Both photos and photos/<project_id> are absent, and synchronising the binary store will fail.",
+    "events": [
+     "module:photo_delivery calls store_image.",
+     "The operation creates photos.",
+     "The first required directory synchronisation fails."
+    ],
+    "outcomes": [
+     "The operation stops with only photos left behind.",
+     "The operation has already created photos/<project_id>, so both directories remain after the failed write."
+    ],
+    "observer": "An operator inspecting the binary store and a later delivery."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 image encoding",
+   "kind": "missing dependency value",
+   "text": "by exactly these operations of the image library at the version A9 pins",
+   "question": "Which exact image-library version defines decoding, conversion, resizing and JPEG bytes? A9 says the library is pinned but the supplied text gives no version.",
+   "options": [
+    "Name the exact Pillow version in the design",
+    "Make the deployment dependency manifest the explicit authoritative pin",
+    "Permit any Pillow version satisfying an unstated selection"
+   ],
+   "default_guess": "Name one exact Pillow version and use it in the deployment dependency manifest.",
+   "witness": {
+    "initial": "One source image is valid under two available Pillow versions whose encoder or resampling behavior differs.",
+    "events": [
+     "An implementer selects the first version and prepares the photo.",
+     "Another implementer selects the second version and prepares the same photo."
+    ],
+    "outcomes": [
+     "M03 and M04 contain the JPEG bytes, size and SHA-256 produced by the first version.",
+     "M03 and M04 contain different JPEG bytes, size or SHA-256 produced by the second version."
+    ],
+    "observer": "The Portal, the caller reading M04 and any replay or integrity check."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 temporary-file allocation",
+   "kind": "unbounded collision policy",
+   "text": "the temporary name begins with the imported `TEMPORARY_NAME_PREFIX` constant and is chosen fresh for each write; the temporary file is created exclusively, never reusing an existing entry, and a name already taken is passed over for another.",
+   "question": "How are fresh suffixes chosen, and after how many collisions, if any, does the write fail?",
+   "options": [
+    "Retry without a fixed limit until exclusive creation succeeds",
+    "Retry a fixed number of times and then fail",
+    "Use a collision-free per-process counter or UUID scheme with a defined exhaustion result"
+   ],
+   "default_guess": "Use a cryptographically random suffix and retry exclusive creation until success, propagating only non-collision operating-system errors.",
+   "witness": {
+    "initial": "Several entries beginning with `.tmp-` already exist in the destination folder.",
+    "events": [
+     "store_image or a record writer selects an occupied temporary name.",
+     "Exclusive creation reports that the entry exists."
+    ],
+    "outcomes": [
+     "The writer keeps choosing names until it succeeds.",
+     "The writer stops after an implementation-chosen retry limit and reports a failed write."
+    ],
+    "observer": "The calling flow."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"contradictory state impact\",\"text\":\"Writes only the project lock file.\",\"question\":\"Does project_lock also create missing directories below the state folder, as its observable effect says, or may it write only the lock file?\",\"options\":[\"Create the required directories and the lock file\",\"Create only the lock file and fail if any required directory is absent\"],\"default_guess\":\"Create the required directories and the lock file.\",\"witness\":{\"initial\":\"The state folder exists, but the directories leading to a project's lock file do not.\",\"events\":[\"module:photo_delivery calls project_lock for the project.\"],\"outcomes\":[\"project_lock creates the missing directories and then the lock file.\",\"project_lock creates no directories and cannot create the lock file.\"],\"observer\":\"The caller and an operator inspecting the state folder.\"}},{\"subject\":\"public_op:delivery_store.store_image\",\"kind\":\"contradictory state impact\",\"text\":\"Writes one stored image.\",\"question\":\"Does store_image also create directory entries below the binary store, or is its state impact limited to the image file?\",\"options\":[\"Create the required directories and write the image\",\"Write only the image and fail when its directories are absent\"],\"default_guess\":\"Create the required directories and write the image.\",\"witness\":{\"initial\":\"The binary store exists, but photos/<project_id> does not.\",\"events\":[\"module:photo_delivery calls store_image.\"],\"outcomes\":[\"store_image creates photos and the project directory before writing the image.\",\"store_image writes no directories and the write fails.\"],\"observer\":\"The caller and an operator inspecting the binary store.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"unspecified layout\",\"text\":\"Creates the project lock file on first use with the mode of `LOCK_FILE_MODE`, and the missing folders below the state folder with `STATE_FOLDER_MODE`\",\"question\":\"What is the lock file's path relative to the state folder, and therefore exactly which folders must project_lock create?\",\"options\":[\"Use a shared lock directory with one file per project\",\"Use a project directory containing its lock file\",\"Place each project lock directly in the state folder\"],\"default_guess\":\"Use a shared lock directory with one file per project.\",\"witness\":{\"initial\":\"The state folder is empty.\",\"events\":[\"module:photo_delivery takes the lock for project P.\"],\"outcomes\":[\"The operation creates state/locks/P.lock.\",\"The operation creates state/P/lock.\"],\"observer\":\"An operator, backup process or later implementation reading the durable state.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"unspecified error mapping\",\"text\":\"and the missing folders below the state folder with `STATE_FOLDER_MODE`; a missing state folder is refused like a lock file that cannot be opened.\",\"question\":\"What result is required when the state folder exists but a required child folder cannot be created?\",\"options\":[\"Refuse with `state_unavailable`\",\"Propagate the operating-system error\",\"Treat it as a distinct startup or configuration failure\"],\"default_guess\":\"Refuse with `state_unavailable`.\",\"witness\":{\"initial\":\"The state folder exists, but permissions prevent creation of the required project-lock directory.\",\"events\":[\"module:photo_delivery calls project_lock.\"],\"outcomes\":[\"The caller receives M08 with `state_unavailable`.\",\"A raw operating-system error escapes and the caller receives a server failure.\"],\"observer\":\"The calling flow.\"}},{\"subject\":\"delivery_store folder creation\",\"kind\":\"concurrent creation race\",\"text\":\"The service creates the missing folders below them, outermost first, with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.\",\"question\":\"When another process creates a folder after this process found it missing but before this process creates it, must the operation accept the existing entry and continue, or fail; and what validation of that entry is required?\",\"options\":[\"Continue if the raced entry is a directory with an acceptable location and type\",\"Fail on the creation collision\",\"Continue for any existing filesystem entry\"],\"default_guess\":\"Continue only after verifying that the raced entry is a directory and satisfies the applicable containment requirements.\",\"witness\":{\"initial\":\"A required shared child directory is absent.\",\"events\":[\"Process A and process B both find the directory absent.\",\"Process A creates it.\",\"Process B attempts to create the same directory.\"],\"outcomes\":[\"Process B validates the directory and continues successfully.\",\"Process B treats the creation collision as a failed write or `state_unavailable`.\"],\"observer\":\"The caller of process B.\"}},{\"subject\":\"public_op:delivery_store.store_image\",\"kind\":\"unspecified failure ordering\",\"text\":\"each folder it creates and the image's own folder are synchronised before it returns, and a failure there is a failed write\",\"question\":\"In what order are missing folders created and their containing folders synchronised, and after which step must creation stop when a synchronisation fails?\",\"options\":[\"Create and synchronise each directory entry before creating the next directory\",\"Create all missing directories first, then synchronise their containing folders\",\"Attempt all directory synchronisations even after one fails\"],\"default_guess\":\"Create each directory and synchronise its containing folder before proceeding to the next directory.\",\"witness\":{\"initial\":\"Both photos and photos/<project_id> are absent, and synchronising the binary store will fail.\",\"events\":[\"module:photo_delivery calls store_image.\",\"The operation creates photos.\",\"The first required directory synchronisation fails.\"],\"outcomes\":[\"The operation stops with only photos left behind.\",\"The operation has already created photos/<project_id>, so both directories remain after the failed write.\"],\"observer\":\"An operator inspecting the binary store and a later delivery.\"}},{\"subject\":\"A2 image encoding\",\"kind\":\"missing dependency value\",\"text\":\"by exactly these operations of the image library at the version A9 pins\",\"question\":\"Which exact image-library version defines decoding, conversion, resizing and JPEG bytes? A9 says the library is pinned but the supplied text gives no version.\",\"options\":[\"Name the exact Pillow version in the design\",\"Make the deployment dependency manifest the explicit authoritative pin\",\"Permit any Pillow version satisfying an unstated selection\"],\"default_guess\":\"Name one exact Pillow version and use it in the deployment dependency manifest.\",\"witness\":{\"initial\":\"One source image is valid under two available Pillow versions whose encoder or resampling behavior differs.\",\"events\":[\"An implementer selects the first version and prepares the photo.\",\"Another implementer selects the second version and prepares the same photo.\"],\"outcomes\":[\"M03 and M04 contain the JPEG bytes, size and SHA-256 produced by the first version.\",\"M03 and M04 contain different JPEG bytes, size or SHA-256 produced by the second version.\"],\"observer\":\"The Portal, the caller reading M04 and any replay or integrity check.\"}},{\"subject\":\"A6 temporary-file allocation\",\"kind\":\"unbounded collision policy\",\"text\":\"the temporary name begins with the imported `TEMPORARY_NAME_PREFIX` constant and is chosen fresh for each write; the temporary file is created exclusively, never reusing an existing entry, and a name already taken is passed over for another.\",\"question\":\"How are fresh suffixes chosen, and after how many collisions, if any, does the write fail?\",\"options\":[\"Retry without a fixed limit until exclusive creation succeeds\",\"Retry a fixed number of times and then fail\",\"Use a collision-free per-process counter or UUID scheme with a defined exhaustion result\"],\"default_guess\":\"Use a cryptographically random suffix and retry exclusive creation until success, propagating only non-collision operating-system errors.\",\"witness\":{\"initial\":\"Several entries beginning with `.tmp-` already exist in the destination folder.\",\"events\":[\"store_image or a record writer selects an occupied temporary name.\",\"Exclusive creation reports that the entry exists.\"],\"outcomes\":[\"The writer keeps choosing names until it succeeds.\",\"The writer stops after an implementation-chosen retry limit and reports a failed write.\"],\"observer\":\"The calling flow.\"}}]}",
+ "set_aside": []
+}

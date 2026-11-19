@@ -1,0 +1,219 @@
+{
+ "open_points": [
+  {
+   "subject": "A6: Accepted decision A6 — Stored files and concurrent calls",
+   "kind": "missing refusal condition",
+   "text": "The installation creates the binary store and the state folder themselves; the service never creates them, and when one is missing the write that needs it fails.",
+   "question": "When a root is missing, which exact operation result and refusal or failure code applies at each possible stage: opening the project lock, writing an image, writing a placement record, and writing a mark?",
+   "options": [
+    "A lock or state write failure is STATE_UNAVAILABLE, while an image or placement-record write failure is UNREADABLE_FILE under A3 rule 5.",
+    "Every missing-root case is STATE_UNAVAILABLE.",
+    "Every missing-root case is an A3 rule 5 UNREADABLE_FILE failure."
+   ],
+   "default_guess": "Use STATE_UNAVAILABLE for the lock and mark paths, and A3 rule 5 UNREADABLE_FILE for binary-image or placement-record writes.",
+   "witness": {
+    "initial": "A confirmed project has no state folder, and its source photo has no placement.",
+    "events": [
+     "The owner asks the calling flow to deliver the photo.",
+     "The delivery reaches the project-lock step."
+    ],
+    "outcomes": [
+     "The delivery is refused as a whole with STATE_UNAVAILABLE because the lock file cannot be opened.",
+     "The delivery returns failed with UNREADABLE_FILE because the missing state folder is treated as a failed placement write."
+    ],
+    "observer": "The calling flow and owner see different response models and codes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6: Accepted decision A6 — Stored files and concurrent calls",
+   "kind": "missing read behavior",
+   "text": "when one is missing the write that needs it fails",
+   "question": "What must a scan or another operation that only reads placement and mark records do when the state folder is missing: treat each record as absent or refuse the operation, and with which code?",
+   "options": [
+    "Treat records below a missing state folder as absent.",
+    "Refuse with STATE_UNAVAILABLE.",
+    "Refuse with FOLDER_UNAVAILABLE."
+   ],
+   "default_guess": "Refuse with STATE_UNAVAILABLE because the durable state cannot be inspected.",
+   "witness": {
+    "initial": "The service is running with a confirmed connection and a readable source photo; the installation-created state folder is then removed.",
+    "events": [
+     "The owner requests a scan of the project."
+    ],
+    "outcomes": [
+     "The scan treats the placement and mark entries as absent and reports the photo ready.",
+     "The scan refuses because the state needed to determine ready, placed or published is unavailable."
+    ],
+    "observer": "The owner sees either a ready photo or a refused scan."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6: Accepted decision A6 — Stored files and concurrent calls",
+   "kind": "unsafe intermediate path",
+   "text": "The service creates the missing folders below them, outermost first, with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.",
+   "question": "When traversing or creating folders below the state folder, must every existing component be opened without following links and verified as a directory, and what refusal applies to a link or other object?",
+   "options": [
+    "Follow existing intermediate links according to ordinary filesystem path resolution.",
+    "Refuse every symbolic-link or non-directory component with STATE_UNAVAILABLE.",
+    "Permit links that resolve below the state folder but refuse links that resolve outside it."
+   ],
+   "default_guess": "Open every state-path component without following links and refuse a link or non-directory with STATE_UNAVAILABLE.",
+   "witness": {
+    "initial": "The state folder exists, but the project-id entry below it is a symbolic link to a directory outside the state folder.",
+    "events": [
+     "The owner requests the first mark or placement for that project.",
+     "The service needs to create or open the lock and record below the project-id entry."
+    ],
+    "outcomes": [
+     "Ordinary path traversal follows the link and writes the lock or record outside the state folder.",
+     "No-follow traversal refuses the operation with STATE_UNAVAILABLE and writes nothing outside the state folder."
+    ],
+    "observer": "The caller sees success versus refusal, and the host owner sees whether an external directory was modified."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6: Accepted decision A6 — Stored files and concurrent calls",
+   "kind": "creation race",
+   "text": "The service creates the missing folders below them, outermost first",
+   "question": "If another process creates a required folder after this process observes it missing but before its creation call, must the process accept the newly existing valid folder and continue, or fail the operation?",
+   "options": [
+    "Re-open and validate the concurrently created folder, then continue.",
+    "Treat the creation collision as a write failure.",
+    "Retry the entire operation."
+   ],
+   "default_guess": "Re-open the entry without following links, validate that it is a directory with the required containment, and continue.",
+   "witness": {
+    "initial": "The per-project state folder does not yet exist and two service processes receive the first operations for that project.",
+    "events": [
+     "Both processes observe the project folder as missing.",
+     "The first process creates it.",
+     "The second process attempts to create the same folder."
+    ],
+    "outcomes": [
+     "The second process accepts the valid folder, proceeds to the shared lock and waits or continues normally.",
+     "The second process treats the already-existing entry as an error and refuses its call."
+    ],
+    "observer": "The second caller sees normal serialization versus a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6: Accepted decision A6 — Stored files and concurrent calls",
+   "kind": "temporary-name exhaustion",
+   "text": "the temporary name begins with the imported `TEMPORARY_NAME_PREFIX` constant and is chosen fresh for each write; the temporary file is created exclusively, never reusing an existing entry, and a name already taken is passed over for another.",
+   "question": "How are suffixes generated, how many collisions may be retried, and what exact result occurs if no acceptable temporary name is obtained?",
+   "options": [
+    "Retry without a limit until exclusive creation succeeds.",
+    "Use a specified bounded number of attempts and then report the enclosing write failure.",
+    "Use a deterministic counter and continue until an unused name is found."
+   ],
+   "default_guess": "Use cryptographically random suffixes and a specified finite retry bound, then return the failure prescribed for the enclosing write.",
+   "witness": {
+    "initial": "A destination folder contains stale temporary entries whose names collide with the implementation's candidates.",
+    "events": [
+     "A placement begins writing its stored image.",
+     "Exclusive creation reports that successive candidate names already exist."
+    ],
+    "outcomes": [
+     "The service keeps choosing names until it succeeds and completes the placement.",
+     "The service exhausts a bounded attempt count and returns a failed placement."
+    ],
+    "observer": "The calling flow sees success versus failure or an unbounded wait."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6: Accepted decision A6 — Stored files and concurrent calls",
+   "kind": "mode timing",
+   "text": "It takes the mode of the imported `TEMPORARY_FILE_MODE` constant at once and its final mode before the rename.",
+   "question": "Must the temporary file's effective mode equal TEMPORARY_FILE_MODE immediately regardless of the process umask, and does “at once” permit creation with an umask-reduced mode followed by `fchmod`?",
+   "options": [
+    "Create it with exactly TEMPORARY_FILE_MODE independent of umask.",
+    "Allow the umask-reduced creation mode until the final mode is set before rename.",
+    "Create exclusively and immediately apply TEMPORARY_FILE_MODE with `fchmod` before writing bytes."
+   ],
+   "default_guess": "Create exclusively, immediately apply TEMPORARY_FILE_MODE with `fchmod` before writing, and apply the final mode before rename.",
+   "witness": {
+    "initial": "The process umask removes permissions present in TEMPORARY_FILE_MODE.",
+    "events": [
+     "The service exclusively creates a temporary file.",
+     "Another local observer inspects its mode before the rename."
+    ],
+    "outcomes": [
+     "The file already has exactly TEMPORARY_FILE_MODE.",
+     "The file temporarily has the umask-reduced mode and receives another mode only later."
+    ],
+    "observer": "The host owner or another process able to inspect the store sees a different temporary-file mode."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6: Accepted decision A6 — Stored files and concurrent calls",
+   "kind": "contradictory synchronization rule",
+   "text": "Each file is written to a temporary name in its folder, synchronised to disk and renamed, and\n   its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file.\n\nThe folders created for a record or\n   for the lock file are not synchronised.",
+   "question": "For a placement or mark record written into a folder created by that operation, must that folder be synchronised after the record rename, or does the rule that created record folders are not synchronised forbid that synchronization?",
+   "options": [
+    "Synchronise the record's folder after rename; only persistence of the folder's entry in its parent is omitted.",
+    "Do not synchronise the newly created record folder at all.",
+    "Synchronise neither the new folder entry nor the record rename when the folder was created by this operation."
+   ],
+   "default_guess": "Synchronise the record's folder after the record rename, but do not synchronise the new folder's entry in its parent.",
+   "witness": {
+    "initial": "The project state folder is absent below the installation-created state root.",
+    "events": [
+     "A placement creates the project folder and writes the placement record into it.",
+     "The host crashes immediately after the operation reports success."
+    ],
+    "outcomes": [
+     "The record folder was synchronised after rename, so its contents have the stated durability while only the parent entry remains uncertain.",
+     "The created record folder was not synchronised, so both its existence and the renamed record have unspecified survival."
+    ],
+    "observer": "After restart, the owner and the next caller observe whether the placement record survived."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6: Accepted decision A6 — Stored files and concurrent calls",
+   "kind": "unspecified operation order",
+   "text": "so each folder created for it is synchronised in the folder that holds it, and its own folder after the rename; a failure of any of these synchronisations fails that write: what was written stays, no record is written",
+   "question": "What is the required order among creating each image folder, synchronising its parent, creating and writing the temporary image, renaming it, and synchronising the image folder?",
+   "options": [
+    "Synchronise each parent immediately after creating its child, before creating the next child or image file.",
+    "Create all folders and write and rename the image before synchronising the parent folders.",
+    "Any order is permitted as long as every named synchronization is attempted before the record is written."
+   ],
+   "default_guess": "After each folder creation, synchronise its parent immediately; then write and synchronise the temporary file, rename it, and finally synchronise the image folder.",
+   "witness": {
+    "initial": "The image's project folder must be created, and the first synchronization of a newly created folder is made to fail.",
+    "events": [
+     "A delivery creates the missing image folder.",
+     "The injected parent-folder synchronization failure occurs."
+    ],
+    "outcomes": [
+     "With immediate synchronization, the operation fails before any temporary image or final image is written.",
+     "With deferred synchronization, the image may already have been renamed and remains after the operation fails."
+    ],
+    "observer": "The host owner and a repeated delivery see whether an unreferenced stored image was left behind."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2: Accepted decision A2 — What reaches the Portal store",
+   "kind": "standard_violation",
+   "text": "`Image.save` writes a JPEG with the imported constants `PHOTO_QUALITY` as\n   `quality`, `PHOTO_OPTIMIZE` as `optimize`, `PHOTO_PROGRESSIVE` as `progressive` and\n   `PHOTO_SUBSAMPLING` as `subsampling`",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must name each provider constant in the required singular form, for example “the imported `PHOTO_QUALITY` constant”, “the imported `PHOTO_OPTIMIZE` constant”, “the imported `PHOTO_PROGRESSIVE` constant” and “the imported `PHOTO_SUBSAMPLING` constant”.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A6: Accepted decision A6 — Stored files and concurrent calls\",\"kind\":\"missing refusal condition\",\"text\":\"The installation creates the binary store and the state folder themselves; the service never creates them, and when one is missing the write that needs it fails.\",\"question\":\"When a root is missing, which exact operation result and refusal or failure code applies at each possible stage: opening the project lock, writing an image, writing a placement record, and writing a mark?\",\"options\":[\"A lock or state write failure is STATE_UNAVAILABLE, while an image or placement-record write failure is UNREADABLE_FILE under A3 rule 5.\",\"Every missing-root case is STATE_UNAVAILABLE.\",\"Every missing-root case is an A3 rule 5 UNREADABLE_FILE failure.\"],\"default_guess\":\"Use STATE_UNAVAILABLE for the lock and mark paths, and A3 rule 5 UNREADABLE_FILE for binary-image or placement-record writes.\",\"witness\":{\"initial\":\"A confirmed project has no state folder, and its source photo has no placement.\",\"events\":[\"The owner asks the calling flow to deliver the photo.\",\"The delivery reaches the project-lock step.\"],\"outcomes\":[\"The delivery is refused as a whole with STATE_UNAVAILABLE because the lock file cannot be opened.\",\"The delivery returns failed with UNREADABLE_FILE because the missing state folder is treated as a failed placement write.\"],\"observer\":\"The calling flow and owner see different response models and codes.\"}},{\"subject\":\"A6: Accepted decision A6 — Stored files and concurrent calls\",\"kind\":\"missing read behavior\",\"text\":\"when one is missing the write that needs it fails\",\"question\":\"What must a scan or another operation that only reads placement and mark records do when the state folder is missing: treat each record as absent or refuse the operation, and with which code?\",\"options\":[\"Treat records below a missing state folder as absent.\",\"Refuse with STATE_UNAVAILABLE.\",\"Refuse with FOLDER_UNAVAILABLE.\"],\"default_guess\":\"Refuse with STATE_UNAVAILABLE because the durable state cannot be inspected.\",\"witness\":{\"initial\":\"The service is running with a confirmed connection and a readable source photo; the installation-created state folder is then removed.\",\"events\":[\"The owner requests a scan of the project.\"],\"outcomes\":[\"The scan treats the placement and mark entries as absent and reports the photo ready.\",\"The scan refuses because the state needed to determine ready, placed or published is unavailable.\"],\"observer\":\"The owner sees either a ready photo or a refused scan.\"}},{\"subject\":\"A6: Accepted decision A6 — Stored files and concurrent calls\",\"kind\":\"unsafe intermediate path\",\"text\":\"The service creates the missing folders below them, outermost first, with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.\",\"question\":\"When traversing or creating folders below the state folder, must every existing component be opened without following links and verified as a directory, and what refusal applies to a link or other object?\",\"options\":[\"Follow existing intermediate links according to ordinary filesystem path resolution.\",\"Refuse every symbolic-link or non-directory component with STATE_UNAVAILABLE.\",\"Permit links that resolve below the state folder but refuse links that resolve outside it.\"],\"default_guess\":\"Open every state-path component without following links and refuse a link or non-directory with STATE_UNAVAILABLE.\",\"witness\":{\"initial\":\"The state folder exists, but the project-id entry below it is a symbolic link to a directory outside the state folder.\",\"events\":[\"The owner requests the first mark or placement for that project.\",\"The service needs to create or open the lock and record below the project-id entry.\"],\"outcomes\":[\"Ordinary path traversal follows the link and writes the lock or record outside the state folder.\",\"No-follow traversal refuses the operation with STATE_UNAVAILABLE and writes nothing outside the state folder.\"],\"observer\":\"The caller sees success versus refusal, and the host owner sees whether an external directory was modified.\"}},{\"subject\":\"A6: Accepted decision A6 — Stored files and concurrent calls\",\"kind\":\"creation race\",\"text\":\"The service creates the missing folders below them, outermost first\",\"question\":\"If another process creates a required folder after this process observes it missing but before its creation call, must the process accept the newly existing valid folder and continue, or fail the operation?\",\"options\":[\"Re-open and validate the concurrently created folder, then continue.\",\"Treat the creation collision as a write failure.\",\"Retry the entire operation.\"],\"default_guess\":\"Re-open the entry without following links, validate that it is a directory with the required containment, and continue.\",\"witness\":{\"initial\":\"The per-project state folder does not yet exist and two service processes receive the first operations for that project.\",\"events\":[\"Both processes observe the project folder as missing.\",\"The first process creates it.\",\"The second process attempts to create the same folder.\"],\"outcomes\":[\"The second process accepts the valid folder, proceeds to the shared lock and waits or continues normally.\",\"The second process treats the already-existing entry as an error and refuses its call.\"],\"observer\":\"The second caller sees normal serialization versus a refusal.\"}},{\"subject\":\"A6: Accepted decision A6 — Stored files and concurrent calls\",\"kind\":\"temporary-name exhaustion\",\"text\":\"the temporary name begins with the imported `TEMPORARY_NAME_PREFIX` constant and is chosen fresh for each write; the temporary file is created exclusively, never reusing an existing entry, and a name already taken is passed over for another.\",\"question\":\"How are suffixes generated, how many collisions may be retried, and what exact result occurs if no acceptable temporary name is obtained?\",\"options\":[\"Retry without a limit until exclusive creation succeeds.\",\"Use a specified bounded number of attempts and then report the enclosing write failure.\",\"Use a deterministic counter and continue until an unused name is found.\"],\"default_guess\":\"Use cryptographically random suffixes and a specified finite retry bound, then return the failure prescribed for the enclosing write.\",\"witness\":{\"initial\":\"A destination folder contains stale temporary entries whose names collide with the implementation's candidates.\",\"events\":[\"A placement begins writing its stored image.\",\"Exclusive creation reports that successive candidate names already exist.\"],\"outcomes\":[\"The service keeps choosing names until it succeeds and completes the placement.\",\"The service exhausts a bounded attempt count and returns a failed placement.\"],\"observer\":\"The calling flow sees success versus failure or an unbounded wait.\"}},{\"subject\":\"A6: Accepted decision A6 — Stored files and concurrent calls\",\"kind\":\"mode timing\",\"text\":\"It takes the mode of the imported `TEMPORARY_FILE_MODE` constant at once and its final mode before the rename.\",\"question\":\"Must the temporary file's effective mode equal TEMPORARY_FILE_MODE immediately regardless of the process umask, and does “at once” permit creation with an umask-reduced mode followed by `fchmod`?\",\"options\":[\"Create it with exactly TEMPORARY_FILE_MODE independent of umask.\",\"Allow the umask-reduced creation mode until the final mode is set before rename.\",\"Create exclusively and immediately apply TEMPORARY_FILE_MODE with `fchmod` before writing bytes.\"],\"default_guess\":\"Create exclusively, immediately apply TEMPORARY_FILE_MODE with `fchmod` before writing, and apply the final mode before rename.\",\"witness\":{\"initial\":\"The process umask removes permissions present in TEMPORARY_FILE_MODE.\",\"events\":[\"The service exclusively creates a temporary file.\",\"Another local observer inspects its mode before the rename.\"],\"outcomes\":[\"The file already has exactly TEMPORARY_FILE_MODE.\",\"The file temporarily has the umask-reduced mode and receives another mode only later.\"],\"observer\":\"The host owner or another process able to inspect the store sees a different temporary-file mode.\"}},{\"subject\":\"A6: Accepted decision A6 — Stored files and concurrent calls\",\"kind\":\"contradictory synchronization rule\",\"text\":\"Each file is written to a temporary name in its folder, synchronised to disk and renamed, and\\n   its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file.\\n\\nThe folders created for a record or\\n   for the lock file are not synchronised.\",\"question\":\"For a placement or mark record written into a folder created by that operation, must that folder be synchronised after the record rename, or does the rule that created record folders are not synchronised forbid that synchronization?\",\"options\":[\"Synchronise the record's folder after rename; only persistence of the folder's entry in its parent is omitted.\",\"Do not synchronise the newly created record folder at all.\",\"Synchronise neither the new folder entry nor the record rename when the folder was created by this operation.\"],\"default_guess\":\"Synchronise the record's folder after the record rename, but do not synchronise the new folder's entry in its parent.\",\"witness\":{\"initial\":\"The project state folder is absent below the installation-created state root.\",\"events\":[\"A placement creates the project folder and writes the placement record into it.\",\"The host crashes immediately after the operation reports success.\"],\"outcomes\":[\"The record folder was synchronised after rename, so its contents have the stated durability while only the parent entry remains uncertain.\",\"The created record folder was not synchronised, so both its existence and the renamed record have unspecified survival.\"],\"observer\":\"After restart, the owner and the next caller observe whether the placement record survived.\"}},{\"subject\":\"A6: Accepted decision A6 — Stored files and concurrent calls\",\"kind\":\"unspecified operation order\",\"text\":\"so each folder created for it is synchronised in the folder that holds it, and its own folder after the rename; a failure of any of these synchronisations fails that write: what was written stays, no record is written\",\"question\":\"What is the required order among creating each image folder, synchronising its parent, creating and writing the temporary image, renaming it, and synchronising the image folder?\",\"options\":[\"Synchronise each parent immediately after creating its child, before creating the next child or image file.\",\"Create all folders and write and rename the image before synchronising the parent folders.\",\"Any order is permitted as long as every named synchronization is attempted before the record is written.\"],\"default_guess\":\"After each folder creation, synchronise its parent immediately; then write and synchronise the temporary file, rename it, and finally synchronise the image folder.\",\"witness\":{\"initial\":\"The image's project folder must be created, and the first synchronization of a newly created folder is made to fail.\",\"events\":[\"A delivery creates the missing image folder.\",\"The injected parent-folder synchronization failure occurs.\"],\"outcomes\":[\"With immediate synchronization, the operation fails before any temporary image or final image is written.\",\"With deferred synchronization, the image may already have been renamed and remains after the operation fails.\"],\"observer\":\"The host owner and a repeated delivery see whether an unreferenced stored image was left behind.\"}},{\"subject\":\"A2: Accepted decision A2 — What reaches the Portal store\",\"kind\":\"standard_violation\",\"text\":\"`Image.save` writes a JPEG with the imported constants `PHOTO_QUALITY` as\\n   `quality`, `PHOTO_OPTIMIZE` as `optimize`, `PHOTO_PROGRESSIVE` as `progressive` and\\n   `PHOTO_SUBSAMPLING` as `subsampling`\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must name each provider constant in the required singular form, for example “the imported `PHOTO_QUALITY` constant”, “the imported `PHOTO_OPTIMIZE` constant”, “the imported `PHOTO_PROGRESSIVE` constant” and “the imported `PHOTO_SUBSAMPLING` constant”.\"}]}",
+ "retried": [
+  "{\"open_points\":[{\"subject\":\"A6 rule 2 — existing folders below the stores\",\"kind\":\"uncovered_case\",\"text\":\"The service creates the missing folders below them, outermost first, with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.\",\"question\":\"When a required folder already exists with a different mode, must the service use it unchanged, change it to the decided mode, or refuse the operation?\",\"options\":[\"Use an existing folder unchanged if it is otherwise usable.\",\"Change an existing folder to the applicable decided mode.\",\"Refuse when an existing folder does not have the applicable decided mode.\"],\"default_guess\":\"Use an existing folder unchanged; the mode requirement applies only to folders the service creates.\",\"witness\":{\"initial\":\"The installation roots exist, and a required project folder below one root already exists with mode 0777.\",\"events\":[\"The caller starts an operation that needs a file in that project folder.\",\"The service inspects or opens the existing folder.\"],\"outcomes\":[\"The service uses the folder with mode 0777 and continues.\",\"The service changes its mode or refuses because it is not the decided folder mode.\"],\"observer\":\"The caller and the host administrator see different success and permission outcomes.\"}},{\"subject\":\"A6 rule 2 — intermediate state-folder entries\",\"kind\":\"path_safety_gap\",\"text\":\"The service creates the missing folders below them, outermost first, with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.\",\"question\":\"When an existing intermediate entry below the state folder is a symbolic link or is not a directory, must it be followed, refused, or replaced, and must the resolved state path remain below the resolved state folder?\",\"options\":[\"Refuse every symbolic link or non-directory in an intermediate state path and require containment.\",\"Follow an intermediate symbolic link when it resolves to a directory.\",\"Replace an unsuitable entry with a directory.\"],\"default_guess\":\"Refuse symbolic links and non-directories and require the resolved path to remain below the state folder.\",\"witness\":{\"initial\":\"The state folder exists, but the project component below it is a symbolic link to a directory outside the state folder.\",\"events\":[\"A caller starts the first delivery or mark for that project.\",\"The service needs to create or open the project lock and record paths.\"],\"outcomes\":[\"The service follows the intermediate link and creates or reads state outside the configured state folder.\",\"The service refuses the operation without touching the linked directory.\"],\"observer\":\"The caller and host administrator see whether the operation succeeds and where state is accessed.\"}},{\"subject\":\"A6 rules 2 and 4 — concurrent first creation of state folders\",\"kind\":\"race_semantics\",\"text\":\"The service creates the missing folders below them, outermost first, with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.\",\"question\":\"If another process creates a required folder after this process found it missing but before this process creates it, does the process re-open and validate that folder, accept the creation race, or fail the operation?\",\"options\":[\"Treat an already-created directory as success after validating it.\",\"Fail the operation when creation reports that the entry already exists.\",\"Retry the entire folder walk.\"],\"default_guess\":\"Re-open the entry without following links, validate that it is a directory with the required containment, and continue.\",\"witness\":{\"initial\":\"The state folder exists and the project folder and project lock do not exist.\",\"events\":[\"Two processes start operations for the same project.\",\"Both reach creation of the project folder before either can take the project lock.\",\"One process creates the folder before the other's creation attempt.\"],\"outcomes\":[\"The losing process validates the folder, continues to the common lock and waits or proceeds normally.\",\"The losing process treats the creation collision as a write or state failure and refuses.\"],\"observer\":\"The two callers see either normal serialization or one unexplained refusal.\"}},{\"subject\":\"A6 rule 3 — temporary-name selection\",\"kind\":\"termination_and_refusal\",\"text\":\"the temporary name begins with the imported `TEMPORARY_NAME_PREFIX` constant and is chosen fresh for each write; the temporary file is created exclusively, never reusing an existing entry, and a name already taken is passed over for another.\",\"question\":\"How is a fresh suffix chosen, how many collisions are retried, and what externally visible result follows if no candidate can be created?\",\"options\":[\"Keep choosing new names without a retry limit.\",\"Use a fixed retry limit and then report the operation's applicable write failure.\",\"Use a deterministic search that continues until an unused name is found.\"],\"default_guess\":\"Use cryptographically random suffixes, retry a bounded number of exclusive-create collisions, and then return the operation's applicable write failure.\",\"witness\":{\"initial\":\"The destination folder contains entries for every temporary name produced by the first several candidate selections.\",\"events\":[\"A placement begins writing a stored image.\",\"Each exclusive temporary-file creation reports that its candidate already exists.\"],\"outcomes\":[\"The service keeps trying until it eventually creates a new temporary file and completes the placement.\",\"The service stops after an implementation-chosen number of collisions and returns a failed placement.\"],\"observer\":\"The caller sees success, failure, or an unbounded wait depending on the implementation.\"}},{\"subject\":\"A6 rules 3 and 4 — lock-file creation protocol\",\"kind\":\"scope_ambiguity\",\"text\":\"Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file.\",\"question\":\"Does “Each file” include the project lock file, or is the lock file created directly at its final name as an exception so all processes lock the same inode?\",\"options\":[\"Exclude the lock file and create/open it atomically at its final name.\",\"Apply the temporary-file-and-rename protocol to the lock file too.\",\"Specify a separate creation protocol that preserves one stable lock inode.\"],\"default_guess\":\"Exclude the lock file from rule 3 and create/open it at its final name without following links, using atomic create-if-absent semantics.\",\"witness\":{\"initial\":\"The project lock file does not yet exist and two processes begin operations for the same project.\",\"events\":[\"Both processes create separate temporary lock files.\",\"The first renames its file to the final lock name, opens it and takes its lock.\",\"The second renames its different file over the final lock name and opens the replacement.\"],\"outcomes\":[\"If rule 3 covers the lock file, the processes can lock different inodes and enter the protected section together.\",\"If the lock file is a direct-create exception, both processes open the same inode and one waits for the other.\"],\"observer\":\"The callers and the durable state see either proper serialization or concurrent placement or mark work.\"}},{\"subject\":\"A6 INV-12 Required tests\",\"kind\":\"test_scope_ambiguity\",\"text\":\"INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).\",\"question\":\"Must the placement part also be demonstrated with separate processes, including concurrent first creation of the project folder and lock file, or may it be demonstrated only by concurrent calls within one process?\",\"options\":[\"Require separate-process placement and mark witnesses.\",\"Require separate processes only for marks; in-process concurrency is sufficient for placements.\",\"Require both in-process and separate-process placement witnesses.\"],\"default_guess\":\"Require a separate-process placement witness as well as the mark witness, because the normative rule explicitly claims serialization across processes.\"}}]}"
+ ],
+ "set_aside": []
+}

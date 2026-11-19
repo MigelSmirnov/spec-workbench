@@ -1,0 +1,205 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "contradictory state impact",
+   "text": "Writes only the project lock file.",
+   "question": "Must the state impact also say that the operation may create folders below the state folder, as its observable effect and A6 rule 2 require?",
+   "options": [
+    "It creates the lock file and any missing ancestor folders below the state folder.",
+    "It writes only the lock file and folder creation belongs to another operation."
+   ],
+   "default_guess": "It creates the lock file and any missing ancestor folders below the state folder.",
+   "witness": {
+    "initial": "The state folder exists, but the folders containing a project's lock file do not.",
+    "events": [
+     "module:photo_delivery calls public_op:delivery_store.project_lock for the project.",
+     "module:delivery_store creates the missing folders and the lock file."
+    ],
+    "outcomes": [
+     "The operation's state impact includes the newly created folders and the lock file.",
+     "The operation's declared state impact says only the lock file was written."
+    ],
+    "observer": "An administrator inspecting the state folder, or a later operation that finds the folders already present."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "folder scope",
+   "text": "the missing folders below the state folder",
+   "question": "Exactly which missing folders may project_lock create: only the ancestor chain of this project's lock file, or some larger state-folder layout?",
+   "options": [
+    "Create only missing ancestors of this project's lock-file address.",
+    "Create every currently missing directory in delivery_store's state layout.",
+    "Create a fixed project directory and lock directory whose addresses must be specified."
+   ],
+   "default_guess": "Create only missing ancestors of this project's lock-file address, outermost first.",
+   "witness": {
+    "initial": "The state folder exists and none of the delivery_store subdirectories exists.",
+    "events": [
+     "A caller requests the first lock for one project."
+    ],
+    "outcomes": [
+     "Only directories on that lock file's ancestor chain are created.",
+     "The implementation initializes additional state directories that this lock does not need."
+    ],
+    "observer": "An administrator inspecting the state folder and later record operations."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "folder creation error",
+   "text": "`state_unavailable` when the lock file cannot be opened or locked, or its entry is a symbolic link or not a regular file.",
+   "question": "What result is required when creating or setting the mode of a missing folder below the state folder fails before the lock file is opened?",
+   "options": [
+    "Return `state_unavailable` as a failure to obtain the project lock.",
+    "Propagate the operating-system error.",
+    "Retry selected creation failures and return `state_unavailable` for the rest."
+   ],
+   "default_guess": "Return `state_unavailable` as a failure to obtain the project lock.",
+   "witness": {
+    "initial": "The state folder exists, a required child folder is absent, and permissions prevent its creation.",
+    "events": [
+     "module:photo_delivery calls project_lock.",
+     "module:delivery_store attempts to create the missing child folder and receives an operating-system error."
+    ],
+    "outcomes": [
+     "The caller receives M08 with `state_unavailable`.",
+     "The operating-system exception escapes the public operation."
+    ],
+    "observer": "module:photo_delivery and its API caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "partial creation cleanup",
+   "text": "Creates the project lock file on first use with the mode of `LOCK_FILE_MODE`, and the missing folders below the state folder with `STATE_FOLDER_MODE`",
+   "question": "If some folders are created and a later folder or lock-file step fails, must the folders already created remain or be removed?",
+   "options": [
+    "Leave every successfully created folder in place.",
+    "Remove newly created empty folders on failure.",
+    "Remove folders only when no concurrent operation has begun using them."
+   ],
+   "default_guess": "Leave every successfully created folder in place.",
+   "witness": {
+    "initial": "Two missing folders are needed below the state folder; creation of the first can succeed but creation of the second will fail.",
+    "events": [
+     "project_lock creates the outer folder.",
+     "Creation of the inner folder fails."
+    ],
+    "outcomes": [
+     "The outer folder remains after `state_unavailable`.",
+     "The implementation removes the outer folder before returning `state_unavailable`."
+    ],
+    "observer": "An administrator or the next project_lock call."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "parent-link policy",
+   "text": "It opens the lock file without following a link",
+   "question": "Does the no-follow requirement apply only to the lock-file entry, or must project_lock also refuse symbolic links in the folder chain below the state folder?",
+   "options": [
+    "Refuse every symbolic link in the folder chain and the lock-file entry.",
+    "Allow parent-folder links but do not follow the final lock-file entry.",
+    "Allow parent-folder links only when their resolved targets remain below the state folder."
+   ],
+   "default_guess": "Refuse every symbolic link in the folder chain and the lock-file entry.",
+   "witness": {
+    "initial": "The state folder exists, and an ancestor of the intended lock file below it is a symbolic link to an existing directory.",
+    "events": [
+     "module:photo_delivery requests the project lock.",
+     "module:delivery_store traverses the lock-file address."
+    ],
+    "outcomes": [
+     "The parent link is followed and the lock is acquired in its target directory.",
+     "The operation refuses with `state_unavailable` because a parent component is a link."
+    ],
+    "observer": "The API caller and an administrator inspecting where the lock file appears."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.store_image",
+   "kind": "contradictory state impact",
+   "text": "Writes one stored image.",
+   "question": "Must the state impact also include the missing folders that store_image creates below the binary store?",
+   "options": [
+    "It may create ancestor folders and writes one stored image.",
+    "It writes only the image and folder creation belongs to another operation."
+   ],
+   "default_guess": "It may create ancestor folders and writes one stored image.",
+   "witness": {
+    "initial": "The binary store exists, but `photos/<project_id>` does not.",
+    "events": [
+     "module:photo_delivery calls store_image.",
+     "store_image creates the missing folders and writes the JPEG."
+    ],
+    "outcomes": [
+     "The operation changes the filesystem by creating folders and the image.",
+     "The declared state impact accounts only for the image."
+    ],
+    "observer": "The Portal, an administrator, or a later delivery that finds the folders present."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.store_image",
+   "kind": "partial creation cleanup",
+   "text": "creating the missing folders below the binary store with `STORE_FOLDER_MODE`",
+   "question": "When store_image creates one or more folders and then fails before renaming the image, must those newly created folders remain or be removed?",
+   "options": [
+    "Leave successfully created folders in place.",
+    "Remove newly created empty folders when the image was not renamed.",
+    "Remove only the deepest newly created folder."
+   ],
+   "default_guess": "Leave successfully created folders in place.",
+   "witness": {
+    "initial": "The binary store exists, the image's ancestor folders are missing, and image creation will fail after those folders are created.",
+    "events": [
+     "store_image creates the missing folders.",
+     "Creation, writing, synchronisation, or renaming of the image fails before the destination image exists."
+    ],
+    "outcomes": [
+     "The failed write leaves the created folders in place.",
+     "The failed write removes the newly created empty folders."
+    ],
+    "observer": "An administrator or a later store_image call."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.store_image",
+   "kind": "concurrent folder creation",
+   "text": "creating the missing folders below the binary store with `STORE_FOLDER_MODE`",
+   "question": "When another process creates the same missing folder after store_image has observed it absent, does store_image accept the resulting existing directory and continue, or fail the image write?",
+   "options": [
+    "Accept it if it is now a suitable directory and continue.",
+    "Treat the creation collision as a failed write.",
+    "Retry the complete containment and folder-creation sequence before deciding."
+   ],
+   "default_guess": "Accept it if it is now a suitable directory, recheck containment, and continue.",
+   "witness": {
+    "initial": "The binary store exists, its shared `photos` folder is absent, and two processes are delivering images for different projects.",
+    "events": [
+     "Process A and process B both observe the shared folder absent.",
+     "Process A creates it first.",
+     "Process B's exclusive creation reports that the entry already exists."
+    ],
+    "outcomes": [
+     "Process B validates the directory and both image writes can succeed.",
+     "Process B reports a failed write solely because process A won the folder-creation race."
+    ],
+    "observer": "The two API callers."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"contradictory state impact\",\"text\":\"Writes only the project lock file.\",\"question\":\"Must the state impact also say that the operation may create folders below the state folder, as its observable effect and A6 rule 2 require?\",\"options\":[\"It creates the lock file and any missing ancestor folders below the state folder.\",\"It writes only the lock file and folder creation belongs to another operation.\"],\"default_guess\":\"It creates the lock file and any missing ancestor folders below the state folder.\",\"witness\":{\"initial\":\"The state folder exists, but the folders containing a project's lock file do not.\",\"events\":[\"module:photo_delivery calls public_op:delivery_store.project_lock for the project.\",\"module:delivery_store creates the missing folders and the lock file.\"],\"outcomes\":[\"The operation's state impact includes the newly created folders and the lock file.\",\"The operation's declared state impact says only the lock file was written.\"],\"observer\":\"An administrator inspecting the state folder, or a later operation that finds the folders already present.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"folder scope\",\"text\":\"the missing folders below the state folder\",\"question\":\"Exactly which missing folders may project_lock create: only the ancestor chain of this project's lock file, or some larger state-folder layout?\",\"options\":[\"Create only missing ancestors of this project's lock-file address.\",\"Create every currently missing directory in delivery_store's state layout.\",\"Create a fixed project directory and lock directory whose addresses must be specified.\"],\"default_guess\":\"Create only missing ancestors of this project's lock-file address, outermost first.\",\"witness\":{\"initial\":\"The state folder exists and none of the delivery_store subdirectories exists.\",\"events\":[\"A caller requests the first lock for one project.\"],\"outcomes\":[\"Only directories on that lock file's ancestor chain are created.\",\"The implementation initializes additional state directories that this lock does not need.\"],\"observer\":\"An administrator inspecting the state folder and later record operations.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"folder creation error\",\"text\":\"`state_unavailable` when the lock file cannot be opened or locked, or its entry is a symbolic link or not a regular file.\",\"question\":\"What result is required when creating or setting the mode of a missing folder below the state folder fails before the lock file is opened?\",\"options\":[\"Return `state_unavailable` as a failure to obtain the project lock.\",\"Propagate the operating-system error.\",\"Retry selected creation failures and return `state_unavailable` for the rest.\"],\"default_guess\":\"Return `state_unavailable` as a failure to obtain the project lock.\",\"witness\":{\"initial\":\"The state folder exists, a required child folder is absent, and permissions prevent its creation.\",\"events\":[\"module:photo_delivery calls project_lock.\",\"module:delivery_store attempts to create the missing child folder and receives an operating-system error.\"],\"outcomes\":[\"The caller receives M08 with `state_unavailable`.\",\"The operating-system exception escapes the public operation.\"],\"observer\":\"module:photo_delivery and its API caller.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"partial creation cleanup\",\"text\":\"Creates the project lock file on first use with the mode of `LOCK_FILE_MODE`, and the missing folders below the state folder with `STATE_FOLDER_MODE`\",\"question\":\"If some folders are created and a later folder or lock-file step fails, must the folders already created remain or be removed?\",\"options\":[\"Leave every successfully created folder in place.\",\"Remove newly created empty folders on failure.\",\"Remove folders only when no concurrent operation has begun using them.\"],\"default_guess\":\"Leave every successfully created folder in place.\",\"witness\":{\"initial\":\"Two missing folders are needed below the state folder; creation of the first can succeed but creation of the second will fail.\",\"events\":[\"project_lock creates the outer folder.\",\"Creation of the inner folder fails.\"],\"outcomes\":[\"The outer folder remains after `state_unavailable`.\",\"The implementation removes the outer folder before returning `state_unavailable`.\"],\"observer\":\"An administrator or the next project_lock call.\"}},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"parent-link policy\",\"text\":\"It opens the lock file without following a link\",\"question\":\"Does the no-follow requirement apply only to the lock-file entry, or must project_lock also refuse symbolic links in the folder chain below the state folder?\",\"options\":[\"Refuse every symbolic link in the folder chain and the lock-file entry.\",\"Allow parent-folder links but do not follow the final lock-file entry.\",\"Allow parent-folder links only when their resolved targets remain below the state folder.\"],\"default_guess\":\"Refuse every symbolic link in the folder chain and the lock-file entry.\",\"witness\":{\"initial\":\"The state folder exists, and an ancestor of the intended lock file below it is a symbolic link to an existing directory.\",\"events\":[\"module:photo_delivery requests the project lock.\",\"module:delivery_store traverses the lock-file address.\"],\"outcomes\":[\"The parent link is followed and the lock is acquired in its target directory.\",\"The operation refuses with `state_unavailable` because a parent component is a link.\"],\"observer\":\"The API caller and an administrator inspecting where the lock file appears.\"}},{\"subject\":\"public_op:delivery_store.store_image\",\"kind\":\"contradictory state impact\",\"text\":\"Writes one stored image.\",\"question\":\"Must the state impact also include the missing folders that store_image creates below the binary store?\",\"options\":[\"It may create ancestor folders and writes one stored image.\",\"It writes only the image and folder creation belongs to another operation.\"],\"default_guess\":\"It may create ancestor folders and writes one stored image.\",\"witness\":{\"initial\":\"The binary store exists, but `photos/<project_id>` does not.\",\"events\":[\"module:photo_delivery calls store_image.\",\"store_image creates the missing folders and writes the JPEG.\"],\"outcomes\":[\"The operation changes the filesystem by creating folders and the image.\",\"The declared state impact accounts only for the image.\"],\"observer\":\"The Portal, an administrator, or a later delivery that finds the folders present.\"}},{\"subject\":\"public_op:delivery_store.store_image\",\"kind\":\"partial creation cleanup\",\"text\":\"creating the missing folders below the binary store with `STORE_FOLDER_MODE`\",\"question\":\"When store_image creates one or more folders and then fails before renaming the image, must those newly created folders remain or be removed?\",\"options\":[\"Leave successfully created folders in place.\",\"Remove newly created empty folders when the image was not renamed.\",\"Remove only the deepest newly created folder.\"],\"default_guess\":\"Leave successfully created folders in place.\",\"witness\":{\"initial\":\"The binary store exists, the image's ancestor folders are missing, and image creation will fail after those folders are created.\",\"events\":[\"store_image creates the missing folders.\",\"Creation, writing, synchronisation, or renaming of the image fails before the destination image exists.\"],\"outcomes\":[\"The failed write leaves the created folders in place.\",\"The failed write removes the newly created empty folders.\"],\"observer\":\"An administrator or a later store_image call.\"}},{\"subject\":\"public_op:delivery_store.store_image\",\"kind\":\"concurrent folder creation\",\"text\":\"creating the missing folders below the binary store with `STORE_FOLDER_MODE`\",\"question\":\"When another process creates the same missing folder after store_image has observed it absent, does store_image accept the resulting existing directory and continue, or fail the image write?\",\"options\":[\"Accept it if it is now a suitable directory and continue.\",\"Treat the creation collision as a failed write.\",\"Retry the complete containment and folder-creation sequence before deciding.\"],\"default_guess\":\"Accept it if it is now a suitable directory, recheck containment, and continue.\",\"witness\":{\"initial\":\"The binary store exists, its shared `photos` folder is absent, and two processes are delivering images for different projects.\",\"events\":[\"Process A and process B both observe the shared folder absent.\",\"Process A creates it first.\",\"Process B's exclusive creation reports that the entry already exists.\"],\"outcomes\":[\"Process B validates the directory and both image writes can succeed.\",\"Process B reports a failed write solely because process A won the folder-creation race.\"],\"observer\":\"The two API callers.\"}}]}",
+ "set_aside": []
+}

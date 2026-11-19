@@ -1,0 +1,111 @@
+{
+ "open_points": [
+  {
+   "subject": "A6 — synchronisation of record and lock directories",
+   "kind": "ambiguous_scope",
+   "text": "Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. The folders created for a record or for the lock file are not synchronised. A placement or mark record is the last write of its operation, so a failure to synchronise its folder after the rename does not undo it and is not a failure of the operation; only its survival of a host crash is uncertain.",
+   "question": "For a newly created record or lock directory, which synchronisations are omitted: only synchronising its new directory entry in its parent, or also synchronising the directory itself after its file is created or renamed?",
+   "options": [
+    "Synchronise the record directory after the record rename, but do not synchronise the directory's creation in its parent.",
+    "Perform no directory synchronisation for a newly created record or lock directory.",
+    "Synchronise both the created directory entry in its parent and the directory after the file operation."
+   ],
+   "default_guess": "Synchronise a record directory after the record rename, but do not synchronise its creation in the parent; do not apply the temporary-file protocol to the lock file.",
+   "witness": {
+    "initial": "The state root exists, but the directory that will hold a placement record does not.",
+    "events": [
+     "The deliverer creates the record directory.",
+     "The deliverer renames the completed placement record into that directory.",
+     "The directory-synchronisation operation is made to fail or the host crashes immediately afterward."
+    ],
+    "outcomes": [
+     "The implementation synchronises the record directory after the rename, treats failure as non-fatal, and only the parent entry remains unsynchronised.",
+     "The implementation reads “not synchronised” as applying to the created record directory and never attempts that synchronisation."
+    ],
+    "observer": "A filesystem fault-injection test or the owner inspecting persistence after the host restarts."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 — concurrent creation of missing folders",
+   "kind": "race_precedence",
+   "text": "The service creates the missing folders below them, outermost first, with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.",
+   "question": "What happens when two processes both find a shared folder missing and one creates it before the other's creation attempt: must the second verify the existing entry and continue, or must its operation fail?",
+   "options": [
+    "Treat an already-created entry as success after verifying that it is an acceptable directory.",
+    "Treat the failed exclusive creation as a write or lock-file failure.",
+    "Retry the entire operation and redo containment and state checks."
+   ],
+   "default_guess": "Open the concurrently created entry without following a link, verify that it is a directory with the required containment, and continue.",
+   "witness": {
+    "initial": "A shared folder below the binary store or state folder is absent, and two processes begin operations for different projects.",
+    "events": [
+     "Both processes determine that the shared folder is missing.",
+     "The first process creates it.",
+     "The second process attempts to create the same folder."
+    ],
+    "outcomes": [
+     "The second process verifies the directory and continues successfully.",
+     "The second process treats the creation collision as a failure and returns a refusal or failed placement."
+    ],
+    "observer": "The second caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 — traversal of folders below the state folder",
+   "kind": "path_safety",
+   "text": "The service creates the missing folders below them, outermost first, with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.",
+   "question": "When an existing component below the state folder is a symbolic link or another unexpected object, must it be followed, refused, or replaced, and which refusal applies?",
+   "options": [
+    "Open every component without following links and refuse with `state_unavailable` unless it is a real directory.",
+    "Follow existing symbolic links because only the final lock or record is required to be opened without following a link.",
+    "Replace an unexpected component with a service-created directory."
+   ],
+   "default_guess": "Open each state-directory component without following links and return the STATE_UNAVAILABLE member of `models.RefusalCode` if it is not a real directory.",
+   "witness": {
+    "initial": "The state folder exists, and a component where a project record directory is expected is a symbolic link to a writable directory outside the state folder.",
+    "events": [
+     "A caller starts a placement or mark for that project.",
+     "The service traverses the existing component while preparing the lock or record path."
+    ],
+    "outcomes": [
+     "The link is followed and a lock or record is created outside the state folder.",
+     "The component is rejected and the operation answers `state_unavailable` without writing outside the state folder."
+    ],
+    "observer": "The caller and the owner inspecting the filesystem."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 — failed or interrupted folder setup",
+   "kind": "failure_semantics",
+   "text": "The service creates the missing folders below them, outermost first, with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.",
+   "question": "If creation succeeds but setting the exact mode or a subsequent setup step fails or is interrupted, must the partial directory be removed, retained and repaired on the next operation, or retained as an existing directory without repair; and which outward failure is returned?",
+   "options": [
+    "Fail the operation, leave the directory, and repair or validate its mode on the next use.",
+    "Fail the operation and remove every directory created by that operation when it is still empty.",
+    "Leave the directory and accept its current mode on later operations.",
+    "Regard directory creation as complete even when the requested final mode was not established."
+   ],
+   "default_guess": "Fail the operation using the failure assigned to the write or lock that needed the directory, leave any safely created directory in place, and validate and repair its mode before later use.",
+   "witness": {
+    "initial": "The process umask removes permissions required by `STATE_FOLDER_MODE`, and the project directory does not exist.",
+    "events": [
+     "The service creates the directory with permissions reduced by the umask.",
+     "The process crashes, or the corrective mode-setting operation fails, before the exact mode is established.",
+     "A later mark operation uses the surviving directory."
+    ],
+    "outcomes": [
+     "The later operation repairs the mode and proceeds.",
+     "The later operation treats the directory as already present and leaves the unintended mode unchanged."
+    ],
+    "observer": "The owner inspecting permissions and the later caller if the unintended mode prevents access."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A6 — synchronisation of record and lock directories\",\"kind\":\"ambiguous_scope\",\"text\":\"Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. The folders created for a record or for the lock file are not synchronised. A placement or mark record is the last write of its operation, so a failure to synchronise its folder after the rename does not undo it and is not a failure of the operation; only its survival of a host crash is uncertain.\",\"question\":\"For a newly created record or lock directory, which synchronisations are omitted: only synchronising its new directory entry in its parent, or also synchronising the directory itself after its file is created or renamed?\",\"options\":[\"Synchronise the record directory after the record rename, but do not synchronise the directory's creation in its parent.\",\"Perform no directory synchronisation for a newly created record or lock directory.\",\"Synchronise both the created directory entry in its parent and the directory after the file operation.\"],\"default_guess\":\"Synchronise a record directory after the record rename, but do not synchronise its creation in the parent; do not apply the temporary-file protocol to the lock file.\",\"witness\":{\"initial\":\"The state root exists, but the directory that will hold a placement record does not.\",\"events\":[\"The deliverer creates the record directory.\",\"The deliverer renames the completed placement record into that directory.\",\"The directory-synchronisation operation is made to fail or the host crashes immediately afterward.\"],\"outcomes\":[\"The implementation synchronises the record directory after the rename, treats failure as non-fatal, and only the parent entry remains unsynchronised.\",\"The implementation reads “not synchronised” as applying to the created record directory and never attempts that synchronisation.\"],\"observer\":\"A filesystem fault-injection test or the owner inspecting persistence after the host restarts.\"}},{\"subject\":\"A6 — concurrent creation of missing folders\",\"kind\":\"race_precedence\",\"text\":\"The service creates the missing folders below them, outermost first, with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.\",\"question\":\"What happens when two processes both find a shared folder missing and one creates it before the other's creation attempt: must the second verify the existing entry and continue, or must its operation fail?\",\"options\":[\"Treat an already-created entry as success after verifying that it is an acceptable directory.\",\"Treat the failed exclusive creation as a write or lock-file failure.\",\"Retry the entire operation and redo containment and state checks.\"],\"default_guess\":\"Open the concurrently created entry without following a link, verify that it is a directory with the required containment, and continue.\",\"witness\":{\"initial\":\"A shared folder below the binary store or state folder is absent, and two processes begin operations for different projects.\",\"events\":[\"Both processes determine that the shared folder is missing.\",\"The first process creates it.\",\"The second process attempts to create the same folder.\"],\"outcomes\":[\"The second process verifies the directory and continues successfully.\",\"The second process treats the creation collision as a failure and returns a refusal or failed placement.\"],\"observer\":\"The second caller.\"}},{\"subject\":\"A6 — traversal of folders below the state folder\",\"kind\":\"path_safety\",\"text\":\"The service creates the missing folders below them, outermost first, with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.\",\"question\":\"When an existing component below the state folder is a symbolic link or another unexpected object, must it be followed, refused, or replaced, and which refusal applies?\",\"options\":[\"Open every component without following links and refuse with `state_unavailable` unless it is a real directory.\",\"Follow existing symbolic links because only the final lock or record is required to be opened without following a link.\",\"Replace an unexpected component with a service-created directory.\"],\"default_guess\":\"Open each state-directory component without following links and return the STATE_UNAVAILABLE member of `models.RefusalCode` if it is not a real directory.\",\"witness\":{\"initial\":\"The state folder exists, and a component where a project record directory is expected is a symbolic link to a writable directory outside the state folder.\",\"events\":[\"A caller starts a placement or mark for that project.\",\"The service traverses the existing component while preparing the lock or record path.\"],\"outcomes\":[\"The link is followed and a lock or record is created outside the state folder.\",\"The component is rejected and the operation answers `state_unavailable` without writing outside the state folder.\"],\"observer\":\"The caller and the owner inspecting the filesystem.\"}},{\"subject\":\"A6 — failed or interrupted folder setup\",\"kind\":\"failure_semantics\",\"text\":\"The service creates the missing folders below them, outermost first, with the mode of the imported `STORE_FOLDER_MODE` constant in the binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the process umask.\",\"question\":\"If creation succeeds but setting the exact mode or a subsequent setup step fails or is interrupted, must the partial directory be removed, retained and repaired on the next operation, or retained as an existing directory without repair; and which outward failure is returned?\",\"options\":[\"Fail the operation, leave the directory, and repair or validate its mode on the next use.\",\"Fail the operation and remove every directory created by that operation when it is still empty.\",\"Leave the directory and accept its current mode on later operations.\",\"Regard directory creation as complete even when the requested final mode was not established.\"],\"default_guess\":\"Fail the operation using the failure assigned to the write or lock that needed the directory, leave any safely created directory in place, and validate and repair its mode before later use.\",\"witness\":{\"initial\":\"The process umask removes permissions required by `STATE_FOLDER_MODE`, and the project directory does not exist.\",\"events\":[\"The service creates the directory with permissions reduced by the umask.\",\"The process crashes, or the corrective mode-setting operation fails, before the exact mode is established.\",\"A later mark operation uses the surviving directory.\"],\"outcomes\":[\"The later operation repairs the mode and proceeds.\",\"The later operation treats the directory as already present and leaves the unintended mode unchanged.\"],\"observer\":\"The owner inspecting permissions and the later caller if the unintended mode prevents access.\"}}]}",
+ "set_aside": []
+}
