@@ -50,9 +50,12 @@ and an entry the listing shows as a symbolic link is neither reported nor follow
 
 Syncthing may change the folder during a scan, so a scan is not a view of one instant. Each rule applies
 to what its step finds when it runs, and the next scan sees the folder as it then stands. A file that
-changes while it is read is judged by the bytes that were read, once, without a retry: Syncthing replaces
-a finished file by renaming a new one over it, and a delivery that later reads other bytes answers
-`SOURCE_CHANGED` under A3 rule 5.
+changes while it is read is judged by the bytes that were read, once, without a retry. Syncthing replaces
+a finished file by renaming a new one over it; a later delivery judges what it then reads under A3 rule 5.
+
+Orders 1 and 2 are first decided by the size the listing gave, before the file is opened. A file is then
+read once, up to one byte past the source limit: reaching that byte is order 4, and the read stops there.
+A read that reaches the end of the file with no bytes is order 1.
 
 A scan only reads the source folder. A signature does not prove that an image can be decoded: a `ready`
 file may still fail when it is delivered.
