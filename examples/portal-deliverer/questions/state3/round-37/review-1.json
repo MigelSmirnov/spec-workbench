@@ -1,0 +1,98 @@
+{
+ "open_points": [
+  {
+   "subject": "expected token available to deliverer_api",
+   "kind": "missing ownership and data flow",
+   "text": "every route that does is a\nhandler of `deliverer_api`, which reads the field and compares the token itself",
+   "question": "Which owned value does `deliverer_api` compare the presented token with, and how does that startup-loaded value reach the handlers without `deliverer_api` owning the token file or depending on `deliverer_service`?",
+   "options": [
+    "`DeliveryContext` owns or carries the loaded token and is passed to every handler",
+    "`create_app` closes over the loaded token and injects it into the handlers",
+    "`deliverer_api` reads or caches the token independently"
+   ],
+   "default_guess": "Put the startup-loaded token in `DeliveryContext` and pass that context to every protected handler.",
+   "unit": "?"
+  },
+  {
+   "subject": "protected route handler invocation contract",
+   "kind": "missing boundary contract",
+   "text": "every route that does is a\nhandler of `deliverer_api`, which reads the field and compares the token itself, before the project id\nor the body.",
+   "question": "Does the generated router invoke each protected handler with the untouched request before any framework parsing or validation of the project id and body, and what exact handler signature guarantees that order?",
+   "options": [
+    "Pass the raw request to `deliverer_api`, which performs authentication before parsing identifiers or bodies",
+    "Let the router/framework parse route parameters and bodies before invoking `deliverer_api`",
+    "Add a router-level authentication dependency that runs before framework validation"
+   ],
+   "default_guess": "Pass an untouched request plus the delivery context to each protected handler and perform all authentication and request parsing inside `deliverer_api`.",
+   "witness": {
+    "initial": "A protected route receives no Authorization field and also has a malformed project id or body.",
+    "events": [
+     "The caller sends the malformed unauthenticated request.",
+     "`deliverer_router` dispatches it using the generated route contract.",
+     "`deliverer_api` is invoked only if router or framework validation has not already ended the request."
+    ],
+    "outcomes": [
+     "The raw request reaches `deliverer_api`; it checks authentication first and returns the `unauthorized` refusal with status 401.",
+     "The router or framework validates before invoking the handler and returns a validation or `invalid_request` answer, commonly status 422."
+    ],
+    "observer": "The calling flow sees a different refusal code and HTTP status."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "multiple Authorization fields",
+   "kind": "missing extraction semantics",
+   "text": "The router checks no token: the extractor of the `Authorization` field that the backend emits is\ncalled by no route it serves",
+   "question": "How does each `deliverer_api` handler obtain the complete ordered collection of raw Authorization fields so it can distinguish exactly one field from duplicate fields, rather than receiving a framework-selected or combined value?",
+   "options": [
+    "Inspect the raw request header list and require exactly one Authorization occurrence",
+    "Accept the framework's single normalized Authorization value",
+    "Have the router pass all Authorization occurrences explicitly to the handler"
+   ],
+   "default_guess": "Inspect the raw request header list inside `deliverer_api` and reject unless it contains exactly one Authorization occurrence.",
+   "witness": {
+    "initial": "A request to a protected route carries two Authorization fields, one with the correct token and one with another value.",
+    "events": [
+     "The caller sends both fields.",
+     "The router invokes the protected `deliverer_api` handler without using its generated extractor.",
+     "The handler obtains Authorization data through an unspecified request interface."
+    ],
+    "outcomes": [
+     "The handler sees both occurrences and returns the `unauthorized` refusal as A5 requires.",
+     "The framework selects or combines the fields; the handler may accept the request or reject it for the selected value rather than for multiplicity."
+    ],
+    "observer": "The caller and the protected operation see whether the request is authenticated and allowed to act."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "deliverer_api route-handler export surface",
+   "kind": "public surface ambiguity",
+   "text": "It imports the route handlers `scan_route`, `deliver_route` and `mark_route` of\n`deliverer_api`, which are not public capabilities",
+   "question": "Are `scan_route`, `deliver_route`, and `mark_route` exported module symbols that must appear in the provider's import/export closure despite not being public domain capabilities, or are they private implementation details that the router must not import directly?",
+   "options": [
+    "Export them as adapter-facing handler symbols while excluding them from the domain capability list",
+    "Make them public capabilities of `deliverer_api`",
+    "Keep them private and have the router import only public operations or receive closures from a factory"
+   ],
+   "default_guess": "Export them as adapter-facing handler symbols and explicitly distinguish that technical export surface from the module's public domain capabilities.",
+   "witness": {
+    "initial": "The imports closure and generated modules are produced from this State 3 dependency table and the `deliverer_api` capability list.",
+    "events": [
+     "The projector resolves the router's declared imports.",
+     "It decides whether the three handler names belong to the provider's export surface.",
+     "The generated router imports and registers the handlers."
+    ],
+    "outcomes": [
+     "The handlers are treated as exported adapter symbols, so generation and registration succeed.",
+     "They are treated as non-exported because they are not public capabilities, so strict import validation or the generated import fails."
+    ],
+    "observer": "The spec projector, generated service build, and service operator see whether the router can be generated and started."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"expected token available to deliverer_api\",\"kind\":\"missing ownership and data flow\",\"text\":\"every route that does is a\\nhandler of `deliverer_api`, which reads the field and compares the token itself\",\"question\":\"Which owned value does `deliverer_api` compare the presented token with, and how does that startup-loaded value reach the handlers without `deliverer_api` owning the token file or depending on `deliverer_service`?\",\"options\":[\"`DeliveryContext` owns or carries the loaded token and is passed to every handler\",\"`create_app` closes over the loaded token and injects it into the handlers\",\"`deliverer_api` reads or caches the token independently\"],\"default_guess\":\"Put the startup-loaded token in `DeliveryContext` and pass that context to every protected handler.\"},{\"subject\":\"protected route handler invocation contract\",\"kind\":\"missing boundary contract\",\"text\":\"every route that does is a\\nhandler of `deliverer_api`, which reads the field and compares the token itself, before the project id\\nor the body.\",\"question\":\"Does the generated router invoke each protected handler with the untouched request before any framework parsing or validation of the project id and body, and what exact handler signature guarantees that order?\",\"options\":[\"Pass the raw request to `deliverer_api`, which performs authentication before parsing identifiers or bodies\",\"Let the router/framework parse route parameters and bodies before invoking `deliverer_api`\",\"Add a router-level authentication dependency that runs before framework validation\"],\"default_guess\":\"Pass an untouched request plus the delivery context to each protected handler and perform all authentication and request parsing inside `deliverer_api`.\",\"witness\":{\"initial\":\"A protected route receives no Authorization field and also has a malformed project id or body.\",\"events\":[\"The caller sends the malformed unauthenticated request.\",\"`deliverer_router` dispatches it using the generated route contract.\",\"`deliverer_api` is invoked only if router or framework validation has not already ended the request.\"],\"outcomes\":[\"The raw request reaches `deliverer_api`; it checks authentication first and returns the `unauthorized` refusal with status 401.\",\"The router or framework validates before invoking the handler and returns a validation or `invalid_request` answer, commonly status 422.\"],\"observer\":\"The calling flow sees a different refusal code and HTTP status.\"}},{\"subject\":\"multiple Authorization fields\",\"kind\":\"missing extraction semantics\",\"text\":\"The router checks no token: the extractor of the `Authorization` field that the backend emits is\\ncalled by no route it serves\",\"question\":\"How does each `deliverer_api` handler obtain the complete ordered collection of raw Authorization fields so it can distinguish exactly one field from duplicate fields, rather than receiving a framework-selected or combined value?\",\"options\":[\"Inspect the raw request header list and require exactly one Authorization occurrence\",\"Accept the framework's single normalized Authorization value\",\"Have the router pass all Authorization occurrences explicitly to the handler\"],\"default_guess\":\"Inspect the raw request header list inside `deliverer_api` and reject unless it contains exactly one Authorization occurrence.\",\"witness\":{\"initial\":\"A request to a protected route carries two Authorization fields, one with the correct token and one with another value.\",\"events\":[\"The caller sends both fields.\",\"The router invokes the protected `deliverer_api` handler without using its generated extractor.\",\"The handler obtains Authorization data through an unspecified request interface.\"],\"outcomes\":[\"The handler sees both occurrences and returns the `unauthorized` refusal as A5 requires.\",\"The framework selects or combines the fields; the handler may accept the request or reject it for the selected value rather than for multiplicity.\"],\"observer\":\"The caller and the protected operation see whether the request is authenticated and allowed to act.\"}},{\"subject\":\"deliverer_api route-handler export surface\",\"kind\":\"public surface ambiguity\",\"text\":\"It imports the route handlers `scan_route`, `deliver_route` and `mark_route` of\\n`deliverer_api`, which are not public capabilities\",\"question\":\"Are `scan_route`, `deliver_route`, and `mark_route` exported module symbols that must appear in the provider's import/export closure despite not being public domain capabilities, or are they private implementation details that the router must not import directly?\",\"options\":[\"Export them as adapter-facing handler symbols while excluding them from the domain capability list\",\"Make them public capabilities of `deliverer_api`\",\"Keep them private and have the router import only public operations or receive closures from a factory\"],\"default_guess\":\"Export them as adapter-facing handler symbols and explicitly distinguish that technical export surface from the module's public domain capabilities.\",\"witness\":{\"initial\":\"The imports closure and generated modules are produced from this State 3 dependency table and the `deliverer_api` capability list.\",\"events\":[\"The projector resolves the router's declared imports.\",\"It decides whether the three handler names belong to the provider's export surface.\",\"The generated router imports and registers the handlers.\"],\"outcomes\":[\"The handlers are treated as exported adapter symbols, so generation and registration succeed.\",\"They are treated as non-exported because they are not public capabilities, so strict import validation or the generated import fails.\"],\"observer\":\"The spec projector, generated service build, and service operator see whether the router can be generated and started.\"}}]}",
+ "set_aside": []
+}

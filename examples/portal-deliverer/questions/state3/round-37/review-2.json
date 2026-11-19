@@ -1,0 +1,70 @@
+{
+ "open_points": [
+  {
+   "subject": "authentication token and principal handoff to deliverer_api",
+   "kind": "missing dependency/data flow",
+   "text": "The router checks no token: the extractor of the `Authorization` field that the backend emits is\ncalled by no route it serves, since the health route needs no token and every route that does is a\nhandler of `deliverer_api`, which reads the field and compares the token itself, before the project id\nor the body.",
+   "question": "From which owning module, through which declared interface, does `deliverer_api` receive the expected startup-loaded token and the principal or `DeliveryContext` needed after comparison, given that it may not depend back on `deliverer_service` or `deliverer_router`?",
+   "options": [
+    "`deliverer_service` constructs a `DeliveryContext` containing the token and the router passes it to every handler without performing authentication",
+    "the generated router injects the token or context through a separate dependency that does not check it",
+    "a new token/context provider is introduced and declared as a dependency of `deliverer_api`"
+   ],
+   "default_guess": "Put the startup-loaded token and operation resources in `DeliveryContext`, construct it in `deliverer_service`, and have `create_app` bind that context into the API handlers.",
+   "unit": "?"
+  },
+  {
+   "subject": "deliverer_api route-handler export surface",
+   "kind": "contradictory interface",
+   "text": "It imports the route handlers `scan_route`, `deliver_route` and `mark_route` of\n`deliverer_api`, which are not public capabilities: they are the handlers the route closure assigns to\n`deliverer_api` as the owner of irregular routes, and the router only registers them.\n\n### Candidate public capabilities\n\n```text\nanswer_health\n```",
+   "question": "Are `scan_route`, `deliver_route` and `mark_route` exported callable symbols of `deliverer_api` that belong to its module interface, or are they absent because the unit's only candidate public capability is `answer_health`; and if they are a distinct kind of export, where is that interface declared?",
+   "options": [
+    "Add the three route handlers to the declared capabilities/exports of `deliverer_api`",
+    "Keep them as explicitly declared adapter-only exports in a separate handler surface",
+    "Generate the handlers inside `deliverer_router` and remove the dependency on those three `deliverer_api` symbols"
+   ],
+   "default_guess": "Declare the three handlers as adapter-only exported symbols of `deliverer_api` and include that export surface explicitly alongside `answer_health`.",
+   "witness": {
+    "initial": "The generated router is being assembled from the closed module design.",
+    "events": [
+     "The generator creates `deliverer_api` from its listed candidate public capabilities.",
+     "The generator creates `deliverer_router` from the dependency table and tries to register `scan_route`, `deliver_route` and `mark_route`."
+    ],
+    "outcomes": [
+     "Treating the dependency passage as authoritative creates and exports the three handlers, so the routes register.",
+     "Treating the capability list as the module's export surface leaves the three symbols absent, so application construction fails or the routes are missing."
+    ],
+    "observer": "The deployer at startup and callers of the scan, delivery and mark routes"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "request parsing boundary and authentication-before-validation order",
+   "kind": "unclear module boundary",
+   "text": "- steps 1 and 2 of \"Order of one operation\": the `Authorization` field, the comparison of the token in\n  constant time, the project id and the request form;\n\n- how a request is read and a refusal becomes an answer.\n\nThe router checks no token: the extractor of the `Authorization` field that the backend emits is\ncalled by no route it serves, since the health route needs no token and every route that does is a\nhandler of `deliverer_api`, which reads the field and compares the token itself, before the project id\nor the body.",
+   "question": "What exact handler contract prevents `http_router_backend/v1` or the web framework from parsing and rejecting the project id or body before `deliverer_api` reads and authenticates the raw request?",
+   "options": [
+    "Pass an unparsed request object plus application context to each irregular-route handler and perform all header, path and body parsing in `deliverer_api`",
+    "Configure custom router-level parsing that defers every validation error until after the handler authenticates",
+    "Let the router parse typed parameters and accept that framework validation may precede the handler"
+   ],
+   "default_guess": "Give each irregular-route handler the raw request and bound `DeliveryContext`; perform token checking first and only then parse the project id and operation body in `deliverer_api`.",
+   "witness": {
+    "initial": "A request targets a token-protected delivery route, has no `Authorization` field, and has malformed JSON or a malformed project id.",
+    "events": [
+     "The caller sends the request.",
+     "The generated router dispatches it to the configured handler."
+    ],
+    "outcomes": [
+     "With a raw-request handler, `deliverer_api` checks authentication first and returns the `UNAUTHORIZED` refusal with status 401.",
+     "With framework-level typed parsing, the router rejects the malformed project id or body first and returns an invalid-request/validation response, commonly status 422."
+    ],
+    "observer": "The unauthenticated HTTP caller"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"authentication token and principal handoff to deliverer_api\",\"kind\":\"missing dependency/data flow\",\"text\":\"The router checks no token: the extractor of the `Authorization` field that the backend emits is\\ncalled by no route it serves, since the health route needs no token and every route that does is a\\nhandler of `deliverer_api`, which reads the field and compares the token itself, before the project id\\nor the body.\",\"question\":\"From which owning module, through which declared interface, does `deliverer_api` receive the expected startup-loaded token and the principal or `DeliveryContext` needed after comparison, given that it may not depend back on `deliverer_service` or `deliverer_router`?\",\"options\":[\"`deliverer_service` constructs a `DeliveryContext` containing the token and the router passes it to every handler without performing authentication\",\"the generated router injects the token or context through a separate dependency that does not check it\",\"a new token/context provider is introduced and declared as a dependency of `deliverer_api`\"],\"default_guess\":\"Put the startup-loaded token and operation resources in `DeliveryContext`, construct it in `deliverer_service`, and have `create_app` bind that context into the API handlers.\"},{\"subject\":\"deliverer_api route-handler export surface\",\"kind\":\"contradictory interface\",\"text\":\"It imports the route handlers `scan_route`, `deliver_route` and `mark_route` of\\n`deliverer_api`, which are not public capabilities: they are the handlers the route closure assigns to\\n`deliverer_api` as the owner of irregular routes, and the router only registers them.\\n\\n### Candidate public capabilities\\n\\n```text\\nanswer_health\\n```\",\"question\":\"Are `scan_route`, `deliver_route` and `mark_route` exported callable symbols of `deliverer_api` that belong to its module interface, or are they absent because the unit's only candidate public capability is `answer_health`; and if they are a distinct kind of export, where is that interface declared?\",\"options\":[\"Add the three route handlers to the declared capabilities/exports of `deliverer_api`\",\"Keep them as explicitly declared adapter-only exports in a separate handler surface\",\"Generate the handlers inside `deliverer_router` and remove the dependency on those three `deliverer_api` symbols\"],\"default_guess\":\"Declare the three handlers as adapter-only exported symbols of `deliverer_api` and include that export surface explicitly alongside `answer_health`.\",\"witness\":{\"initial\":\"The generated router is being assembled from the closed module design.\",\"events\":[\"The generator creates `deliverer_api` from its listed candidate public capabilities.\",\"The generator creates `deliverer_router` from the dependency table and tries to register `scan_route`, `deliver_route` and `mark_route`.\"],\"outcomes\":[\"Treating the dependency passage as authoritative creates and exports the three handlers, so the routes register.\",\"Treating the capability list as the module's export surface leaves the three symbols absent, so application construction fails or the routes are missing.\"],\"observer\":\"The deployer at startup and callers of the scan, delivery and mark routes\"}},{\"subject\":\"request parsing boundary and authentication-before-validation order\",\"kind\":\"unclear module boundary\",\"text\":\"- steps 1 and 2 of \\\"Order of one operation\\\": the `Authorization` field, the comparison of the token in\\n  constant time, the project id and the request form;\\n\\n- how a request is read and a refusal becomes an answer.\\n\\nThe router checks no token: the extractor of the `Authorization` field that the backend emits is\\ncalled by no route it serves, since the health route needs no token and every route that does is a\\nhandler of `deliverer_api`, which reads the field and compares the token itself, before the project id\\nor the body.\",\"question\":\"What exact handler contract prevents `http_router_backend/v1` or the web framework from parsing and rejecting the project id or body before `deliverer_api` reads and authenticates the raw request?\",\"options\":[\"Pass an unparsed request object plus application context to each irregular-route handler and perform all header, path and body parsing in `deliverer_api`\",\"Configure custom router-level parsing that defers every validation error until after the handler authenticates\",\"Let the router parse typed parameters and accept that framework validation may precede the handler\"],\"default_guess\":\"Give each irregular-route handler the raw request and bound `DeliveryContext`; perform token checking first and only then parse the project id and operation body in `deliverer_api`.\",\"witness\":{\"initial\":\"A request targets a token-protected delivery route, has no `Authorization` field, and has malformed JSON or a malformed project id.\",\"events\":[\"The caller sends the request.\",\"The generated router dispatches it to the configured handler.\"],\"outcomes\":[\"With a raw-request handler, `deliverer_api` checks authentication first and returns the `UNAUTHORIZED` refusal with status 401.\",\"With framework-level typed parsing, the router rejects the malformed project id or body first and returns an invalid-request/validation response, commonly status 422.\"],\"observer\":\"The unauthenticated HTTP caller\"}}]}",
+ "set_aside": []
+}
