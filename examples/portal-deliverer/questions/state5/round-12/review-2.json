@@ -1,0 +1,137 @@
+{
+ "open_points": [
+  {
+   "subject": "unit:context — source_folder.observe_source_files unreadable-entry boundary",
+   "kind": "vague failure classification",
+   "text": "A file that cannot be read is a rejected `SourceFile`, not an error.",
+   "question": "Does “cannot be read” exclude an entry that disappears or whose path metadata cannot be read before it is established as a regular file, so that such an entry is omitted rather than returned as rejected?",
+   "options": [
+    "Omit the entry when its initial path-metadata reading fails; return `rejected/unreadable_file` only after successful initial metadata identifies a regular file and opening, opened-file metadata, or byte reading fails.",
+    "Return a rejected `SourceFile` with `unreadable_file` whenever any per-file metadata, opening, or reading step fails, including the initial path-metadata reading."
+   ],
+   "default_guess": "Omit failures of the initial path-metadata reading and reject only failures after the entry was initially identified as a regular file.",
+   "witness": {
+    "initial": "A directory listing contains `photo.jpg`, but Syncthing removes it before the scan performs the path-metadata reading.",
+    "events": [
+     "Syncthing removes `photo.jpg` after directory enumeration.",
+     "`source_folder.observe_source_files` attempts the prescribed initial metadata reading.",
+     "The scan result is returned to the calling flow."
+    ],
+    "outcomes": [
+     "`photo.jpg` is absent from the scan because it disappeared before its metadata was read.",
+     "The scan contains a rejected `SourceFile` for `photo.jpg` with reason `unreadable_file`."
+    ],
+    "observer": "The calling flow reading the scan result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "unit:context — source_folder.read_named_source unreadable-name boundary",
+   "kind": "contradictory failure classification",
+   "text": "Nothing when the name fails condition 1 of A3 rule 5. Otherwise a `SourceRead`: one `SourceFile`, and the bytes that were judged when it is ready.\n\n### Observable effect\n\nReads one file once.\n\n### Enforces\n\nCondition 1 of A3 rule 5, A1 orders 1 to 6, INV-01, INV-02 and INV-19.\n\n### Errors\n\nNone. A file that cannot be read is a rejected `SourceFile`.",
+   "question": "When the requested path exists at lookup but its metadata cannot be read, must the operation return nothing under condition 1, or return a rejected `SourceFile` as a file that cannot be read?",
+   "options": [
+    "Return nothing; the delivery maps condition 1 to `not_ready_or_absent`.",
+    "Return a `SourceRead` containing a rejected `SourceFile` with reason `unreadable_file`; the delivery maps A1 order 5."
+   ],
+   "default_guess": "Return nothing because A3 condition 1 explicitly includes unreadable segment metadata.",
+   "witness": {
+    "initial": "A requested regular-looking path exists, has no placement, and its metadata reading fails because access is denied.",
+    "events": [
+     "The caller requests delivery of that name and source id.",
+     "`source_folder.read_named_source` tries to decide condition 1.",
+     "`photo_delivery.deliver_project_photo` maps the returned result to M06."
+    ],
+    "outcomes": [
+     "The operation returns nothing and delivery fails with `not_ready_or_absent`.",
+     "The operation returns a rejected `SourceFile` and delivery fails with `unreadable_file`."
+    ],
+    "observer": "The delivery caller, through the M06 reason."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "unit:context — source_folder.observe_source_files SourceFile contract",
+   "kind": "incomplete output contract",
+   "text": "One `SourceFile` for each reported file, in the walking order of A1, with its source id when it is ready.",
+   "question": "What exact `SourceFile` fields and values carry the changed A1 result, especially the listed size versus the number of bytes actually read to EOF and the rejection reason?",
+   "options": [
+    "Define `SourceFile` with the relative name, effective size, source id, readiness/rejection status, reason, and any metadata needed downstream; effective size follows M02's byte-count-versus-listed-size rule.",
+    "Return only name, source id, and rejection information, leaving `photo_delivery` to recover or recompute size and other facts.",
+    "Return both listed metadata and read-result metadata so `photo_delivery` chooses the M02 values."
+   ],
+   "default_guess": "Define one effective size in `SourceFile`: bytes read when EOF was reached, otherwise the initial listed size, together with name, source id, status, and reason.",
+   "witness": {
+    "initial": "The listing reports `photo.jpg` as 100 bytes; it grows to 120 bytes while being read, reaches EOF below the source limit, and has a valid image signature.",
+    "events": [
+     "`observe_source_files` records the listed metadata.",
+     "It reads 120 bytes and computes the source id from those bytes.",
+     "`scan_project_photos` converts the returned `SourceFile` into M02."
+    ],
+    "outcomes": [
+     "M02 reports size 120 because `SourceFile` carries the completed read count.",
+     "M02 reports size 100 because `SourceFile` carries only the listed size or leaves the choice to `photo_delivery`."
+    ],
+    "observer": "The calling flow reading M02."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "unit:context — source_folder.read_named_source SourceRead contract",
+   "kind": "incomplete output contract",
+   "text": "Otherwise a `SourceRead`: one `SourceFile`, and the bytes that were judged when it is ready.",
+   "question": "Does `SourceRead` carry the modification time obtained from the opened file before its one read, in A7's form and bound to the same opened object and bytes, or must another module obtain or derive that time?",
+   "options": [
+    "`SourceRead` includes the opened-file modification time, normalized as A7 rule 4 requires, and guarantees it belongs to the object whose returned bytes were read.",
+    "`SourceRead` includes the raw opened-file modification time and `photo_delivery` performs A7 normalization.",
+    "`photo_delivery` reads metadata from the path again after `read_named_source` returns.",
+    "`source_folder` computes and returns the final photo moment rather than the opened-file modification time."
+   ],
+   "default_guess": "Return the opened-file modification time in `SourceRead`, bound to the returned bytes, and let `photo_delivery` apply the photo-date rules.",
+   "witness": {
+    "initial": "`photo.jpg` is opened with modification time T1; while its bytes are read, Syncthing renames a replacement over the path with modification time T2 and no usable camera date.",
+    "events": [
+     "`read_named_source` opens the original file and obtains T1 before reading it.",
+     "Syncthing replaces the path with a new file having T2.",
+     "`read_named_source` returns the original file's bytes.",
+     "`photo_delivery` prepares the stored image and publication body."
+    ],
+    "outcomes": [
+     "The photo date is based on T1 because `SourceRead` carries the opened object's modification time.",
+     "The photo date is based on T2 because `photo_delivery` reads the path metadata after `SourceRead` returns."
+    ],
+    "observer": "The owner and Portal through the delivered photo date."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "unit:context — responsibility for the shared pre-open metadata reading",
+   "kind": "module responsibility ambiguity",
+   "text": "Condition 1 of A3 rule 5, A1 orders 1 to 6, INV-01, INV-02 and INV-19.",
+   "question": "Must `read_named_source` itself perform condition 1 and A1 orders 1 and 2 from one shared metadata reading, or does `photo_delivery.deliver_project_photo` perform condition 1 and pass a result to `read_named_source` for the A1 checks?",
+   "options": [
+    "`read_named_source` owns the entire name-validation, shared-metadata, open, opened-object check, and one-read sequence; `photo_delivery` only interprets its result.",
+    "`photo_delivery` performs condition 1 and the first metadata reading, then supplies that metadata or a validated handle to `read_named_source`.",
+    "Both modules inspect the path independently, with `read_named_source` treating its later metadata as authoritative."
+   ],
+   "default_guess": "Make `read_named_source` own the complete sequence and return one result so the same metadata reading necessarily decides condition 1 and A1 orders 1 and 2.",
+   "witness": {
+    "initial": "`photo.jpg` has a nonzero size below the limit when first inspected, then is replaced by an empty file before a second inspection.",
+    "events": [
+     "`photo_delivery` begins condition-1 validation.",
+     "The path is replaced after the first metadata reading.",
+     "`read_named_source` performs its part of the operation."
+    ],
+    "outcomes": [
+     "One shared metadata reading allows the original object to be opened and judged from its bytes.",
+     "A second path-metadata reading sees size zero and rejects the request as `empty` without opening the original object."
+    ],
+    "observer": "The delivery caller, through the M06 status and reason."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"unit:context — source_folder.observe_source_files unreadable-entry boundary\",\"kind\":\"vague failure classification\",\"text\":\"A file that cannot be read is a rejected `SourceFile`, not an error.\",\"question\":\"Does “cannot be read” exclude an entry that disappears or whose path metadata cannot be read before it is established as a regular file, so that such an entry is omitted rather than returned as rejected?\",\"options\":[\"Omit the entry when its initial path-metadata reading fails; return `rejected/unreadable_file` only after successful initial metadata identifies a regular file and opening, opened-file metadata, or byte reading fails.\",\"Return a rejected `SourceFile` with `unreadable_file` whenever any per-file metadata, opening, or reading step fails, including the initial path-metadata reading.\"],\"default_guess\":\"Omit failures of the initial path-metadata reading and reject only failures after the entry was initially identified as a regular file.\",\"witness\":{\"initial\":\"A directory listing contains `photo.jpg`, but Syncthing removes it before the scan performs the path-metadata reading.\",\"events\":[\"Syncthing removes `photo.jpg` after directory enumeration.\",\"`source_folder.observe_source_files` attempts the prescribed initial metadata reading.\",\"The scan result is returned to the calling flow.\"],\"outcomes\":[\"`photo.jpg` is absent from the scan because it disappeared before its metadata was read.\",\"The scan contains a rejected `SourceFile` for `photo.jpg` with reason `unreadable_file`.\"],\"observer\":\"The calling flow reading the scan result.\"}},{\"subject\":\"unit:context — source_folder.read_named_source unreadable-name boundary\",\"kind\":\"contradictory failure classification\",\"text\":\"Nothing when the name fails condition 1 of A3 rule 5. Otherwise a `SourceRead`: one `SourceFile`, and the bytes that were judged when it is ready.\\n\\n### Observable effect\\n\\nReads one file once.\\n\\n### Enforces\\n\\nCondition 1 of A3 rule 5, A1 orders 1 to 6, INV-01, INV-02 and INV-19.\\n\\n### Errors\\n\\nNone. A file that cannot be read is a rejected `SourceFile`.\",\"question\":\"When the requested path exists at lookup but its metadata cannot be read, must the operation return nothing under condition 1, or return a rejected `SourceFile` as a file that cannot be read?\",\"options\":[\"Return nothing; the delivery maps condition 1 to `not_ready_or_absent`.\",\"Return a `SourceRead` containing a rejected `SourceFile` with reason `unreadable_file`; the delivery maps A1 order 5.\"],\"default_guess\":\"Return nothing because A3 condition 1 explicitly includes unreadable segment metadata.\",\"witness\":{\"initial\":\"A requested regular-looking path exists, has no placement, and its metadata reading fails because access is denied.\",\"events\":[\"The caller requests delivery of that name and source id.\",\"`source_folder.read_named_source` tries to decide condition 1.\",\"`photo_delivery.deliver_project_photo` maps the returned result to M06.\"],\"outcomes\":[\"The operation returns nothing and delivery fails with `not_ready_or_absent`.\",\"The operation returns a rejected `SourceFile` and delivery fails with `unreadable_file`.\"],\"observer\":\"The delivery caller, through the M06 reason.\"}},{\"subject\":\"unit:context — source_folder.observe_source_files SourceFile contract\",\"kind\":\"incomplete output contract\",\"text\":\"One `SourceFile` for each reported file, in the walking order of A1, with its source id when it is ready.\",\"question\":\"What exact `SourceFile` fields and values carry the changed A1 result, especially the listed size versus the number of bytes actually read to EOF and the rejection reason?\",\"options\":[\"Define `SourceFile` with the relative name, effective size, source id, readiness/rejection status, reason, and any metadata needed downstream; effective size follows M02's byte-count-versus-listed-size rule.\",\"Return only name, source id, and rejection information, leaving `photo_delivery` to recover or recompute size and other facts.\",\"Return both listed metadata and read-result metadata so `photo_delivery` chooses the M02 values.\"],\"default_guess\":\"Define one effective size in `SourceFile`: bytes read when EOF was reached, otherwise the initial listed size, together with name, source id, status, and reason.\",\"witness\":{\"initial\":\"The listing reports `photo.jpg` as 100 bytes; it grows to 120 bytes while being read, reaches EOF below the source limit, and has a valid image signature.\",\"events\":[\"`observe_source_files` records the listed metadata.\",\"It reads 120 bytes and computes the source id from those bytes.\",\"`scan_project_photos` converts the returned `SourceFile` into M02.\"],\"outcomes\":[\"M02 reports size 120 because `SourceFile` carries the completed read count.\",\"M02 reports size 100 because `SourceFile` carries only the listed size or leaves the choice to `photo_delivery`.\"],\"observer\":\"The calling flow reading M02.\"}},{\"subject\":\"unit:context — source_folder.read_named_source SourceRead contract\",\"kind\":\"incomplete output contract\",\"text\":\"Otherwise a `SourceRead`: one `SourceFile`, and the bytes that were judged when it is ready.\",\"question\":\"Does `SourceRead` carry the modification time obtained from the opened file before its one read, in A7's form and bound to the same opened object and bytes, or must another module obtain or derive that time?\",\"options\":[\"`SourceRead` includes the opened-file modification time, normalized as A7 rule 4 requires, and guarantees it belongs to the object whose returned bytes were read.\",\"`SourceRead` includes the raw opened-file modification time and `photo_delivery` performs A7 normalization.\",\"`photo_delivery` reads metadata from the path again after `read_named_source` returns.\",\"`source_folder` computes and returns the final photo moment rather than the opened-file modification time.\"],\"default_guess\":\"Return the opened-file modification time in `SourceRead`, bound to the returned bytes, and let `photo_delivery` apply the photo-date rules.\",\"witness\":{\"initial\":\"`photo.jpg` is opened with modification time T1; while its bytes are read, Syncthing renames a replacement over the path with modification time T2 and no usable camera date.\",\"events\":[\"`read_named_source` opens the original file and obtains T1 before reading it.\",\"Syncthing replaces the path with a new file having T2.\",\"`read_named_source` returns the original file's bytes.\",\"`photo_delivery` prepares the stored image and publication body.\"],\"outcomes\":[\"The photo date is based on T1 because `SourceRead` carries the opened object's modification time.\",\"The photo date is based on T2 because `photo_delivery` reads the path metadata after `SourceRead` returns.\"],\"observer\":\"The owner and Portal through the delivered photo date.\"}},{\"subject\":\"unit:context — responsibility for the shared pre-open metadata reading\",\"kind\":\"module responsibility ambiguity\",\"text\":\"Condition 1 of A3 rule 5, A1 orders 1 to 6, INV-01, INV-02 and INV-19.\",\"question\":\"Must `read_named_source` itself perform condition 1 and A1 orders 1 and 2 from one shared metadata reading, or does `photo_delivery.deliver_project_photo` perform condition 1 and pass a result to `read_named_source` for the A1 checks?\",\"options\":[\"`read_named_source` owns the entire name-validation, shared-metadata, open, opened-object check, and one-read sequence; `photo_delivery` only interprets its result.\",\"`photo_delivery` performs condition 1 and the first metadata reading, then supplies that metadata or a validated handle to `read_named_source`.\",\"Both modules inspect the path independently, with `read_named_source` treating its later metadata as authoritative.\"],\"default_guess\":\"Make `read_named_source` own the complete sequence and return one result so the same metadata reading necessarily decides condition 1 and A1 orders 1 and 2.\",\"witness\":{\"initial\":\"`photo.jpg` has a nonzero size below the limit when first inspected, then is replaced by an empty file before a second inspection.\",\"events\":[\"`photo_delivery` begins condition-1 validation.\",\"The path is replaced after the first metadata reading.\",\"`read_named_source` performs its part of the operation.\"],\"outcomes\":[\"One shared metadata reading allows the original object to be opened and judged from its bytes.\",\"A second path-metadata reading sees size zero and rejects the request as `empty` without opening the original object.\"],\"observer\":\"The delivery caller, through the M06 status and reason.\"}}]}",
+ "set_aside": []
+}

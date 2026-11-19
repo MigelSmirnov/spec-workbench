@@ -332,7 +332,7 @@ The path of the photo folder and the requested name.
 
 ### Outputs
 
-Nothing when the name fails condition 1 of A3 rule 5. Otherwise a `SourceRead`: one `SourceFile`, and the bytes that were judged when it is ready.
+Nothing when the name fails condition 1 of A3 rule 5. Otherwise a `SourceRead`: one `SourceFile`, and the bytes that were judged when it is ready. A ready `SourceFile` carries in `modified` the modification time A1 takes from the opened file, so its caller reads no metadata of its own.
 
 ### Observable effect
 
@@ -362,7 +362,7 @@ Read-only.
 
 ### Inputs
 
-The bytes of the source, its modification time and the configured time zone.
+The bytes of the source, its modification time (`modified` of the ready `SourceFile` that came with those bytes) and the configured time zone.
 
 ### Outputs
 

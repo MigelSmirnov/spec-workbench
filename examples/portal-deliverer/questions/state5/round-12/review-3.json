@@ -1,0 +1,136 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:source_folder.observe_source_files",
+   "kind": "output_contract",
+   "text": "One `SourceFile` for each reported file, in the walking order of A1, with its source id when it is ready.",
+   "question": "What exact fields and meanings does `SourceFile` expose, especially the listed size versus the number of bytes read to EOF required to construct M02?",
+   "options": [
+    "`SourceFile.size` is the final M02 size: bytes read to EOF when EOF was reached, otherwise the listed metadata size.",
+    "`SourceFile` carries both `listed_size` and `bytes_read`, and `photo_delivery` derives M02.size.",
+    "The operation returns an additional read-result value separate from `SourceFile`."
+   ],
+   "default_guess": "Give `SourceFile` an effective size equal to M02.size and retain any distinct listed size only as private implementation state.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:source_folder.observe_source_files",
+   "kind": "failure_boundary",
+   "text": "A file that cannot be read is a rejected `SourceFile`, not an error.",
+   "question": "Does “cannot be read” include failure of the first no-follow metadata reading, or is such an entry omitted as A1's changed text says?",
+   "options": [
+    "Omit the entry when its initial metadata reading fails; reject only failures after it was established as a regular file.",
+    "Report a rejected `SourceFile` with `unreadable_file` whenever that initial metadata reading fails."
+   ],
+   "default_guess": "Omit the entry when the initial metadata reading fails.",
+   "witness": {
+    "initial": "A directory listing contains `photo.jpg`, but its path becomes inaccessible before the entry's no-follow metadata reading.",
+    "events": [
+     "The source-folder scanner lists `photo.jpg`.",
+     "Another actor removes the entry or makes its metadata unreadable.",
+     "The scanner's initial metadata reading fails."
+    ],
+    "outcomes": [
+     "The entry is omitted because the metadata reading did not show a regular file.",
+     "A rejected `SourceFile` with reason `unreadable_file` is returned because the file could not be read."
+    ],
+    "observer": "The scan caller sees either no observation or a rejected observation and a different rejected-status count."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:source_folder.read_named_source",
+   "kind": "output_contract",
+   "text": "Otherwise a `SourceRead`: one `SourceFile`, and the bytes that were judged when it is ready.",
+   "question": "Where does `SourceRead` carry the modification time read from the opened file before its bytes, so `photo_delivery` can apply A2 and A7 without reading metadata again?",
+   "options": [
+    "Add the normalized opened-file modification time to `SourceFile`.",
+    "Add the normalized opened-file modification time as a separate `SourceRead` field.",
+    "Return raw opened-file metadata in `SourceRead` and let `photo_delivery` normalize it."
+   ],
+   "default_guess": "Add the A7-normalized opened-file modification time as a distinct `SourceRead` field.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:source_folder.read_named_source",
+   "kind": "contradictory_failure",
+   "text": "None. A file that cannot be read is a rejected `SourceFile`.",
+   "question": "When the requested path's pre-open metadata cannot be read, must the operation return nothing under condition 1 or return a rejected `SourceFile` as this error passage permits?",
+   "options": [
+    "Return nothing, causing `NOT_READY_OR_ABSENT`, because unreadable path metadata is condition 1.",
+    "Return a rejected `SourceFile` with `unreadable_file`, causing `UNREADABLE_FILE`."
+   ],
+   "default_guess": "Return nothing and map the delivery to `NOT_READY_OR_ABSENT`.",
+   "witness": {
+    "initial": "The caller requests a syntactically valid unplaced name whose final path exists but whose metadata cannot be read.",
+    "events": [
+     "The delivery passes the token, project, connection, folder, source-id and lock checks.",
+     "`read_named_source` attempts the pre-open metadata reading.",
+     "The metadata reading fails before any file is opened."
+    ],
+    "outcomes": [
+     "Condition 1 fails, `read_named_source` returns nothing, and delivery returns `failed/not_ready_or_absent`.",
+     "The file is treated as unreadable, a rejected `SourceFile` is returned, and delivery returns `failed/unreadable_file`."
+    ],
+    "observer": "The delivery caller sees a different M06 failure reason."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:source_folder.read_named_source",
+   "kind": "path_race",
+   "text": "Condition 1 is decided from the name and the metadata of its path before the file is opened.",
+   "question": "If an ancestor or the final entry is replaced between validation and opening, is the operation bound to the object validated through retained directory handles, or must it re-resolve and reject the changed path?",
+   "options": [
+    "Retain no-follow directory/file handles so the later read is of the object validated by condition 1.",
+    "Re-resolve at opening and reject if any segment no longer has the validated identity.",
+    "Use ordinary pathname opening after validation, allowing the replacement to select a different object."
+   ],
+   "default_guess": "Retain no-follow handles and bind the read to the validated object; never follow a replacement symbolic link.",
+   "witness": {
+    "initial": "`album/photo.jpg` is an ordinary unplaced file and `album` is a real subdirectory.",
+    "events": [
+     "The service validates both path segments with no-follow metadata readings.",
+     "Another actor renames `album` and replaces it with a symbolic link before the file is opened.",
+     "The service proceeds to the opening step."
+    ],
+    "outcomes": [
+     "A handle-anchored implementation reads and may place the originally validated file.",
+     "A revalidating implementation rejects the changed path without reading or placing it."
+    ],
+    "observer": "The delivery caller and owner see `placed` versus a failed delivery."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:source_folder.read_named_source",
+   "kind": "mtime_failure",
+   "text": "A file that is read takes its modification time from one metadata reading of the file that was opened, the one whose bytes are read, taken after the opening and before the read; A7 rule 4 gives its form, and a delivery uses that time under A2 rule 3.",
+   "question": "What outcome is required when the opened-file modification time is present but cannot be converted to A7's datetime form?",
+   "options": [
+    "Reject the file as `unreadable_file`.",
+    "Treat the modification time as unavailable and allow only a usable camera date.",
+    "Refuse the whole operation.",
+    "Let an implementation exception escape."
+   ],
+   "default_guess": "Reject the file as `unreadable_file` before reading its bytes.",
+   "witness": {
+    "initial": "A regular supported image has a filesystem modification timestamp outside the implementation's representable datetime range.",
+    "events": [
+     "The requested path passes condition 1 and the size checks.",
+     "The file opens and its metadata reading succeeds.",
+     "Conversion of its modification time to A7's form fails."
+    ],
+    "outcomes": [
+     "The delivery returns M06 `failed/unreadable_file`.",
+     "The failure escapes or is treated as a whole-operation refusal instead of an M06 file failure."
+    ],
+    "observer": "The HTTP caller sees a defined M06 failure versus a refusal or server error."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:source_folder.observe_source_files\",\"kind\":\"output_contract\",\"text\":\"One `SourceFile` for each reported file, in the walking order of A1, with its source id when it is ready.\",\"question\":\"What exact fields and meanings does `SourceFile` expose, especially the listed size versus the number of bytes read to EOF required to construct M02?\",\"options\":[\"`SourceFile.size` is the final M02 size: bytes read to EOF when EOF was reached, otherwise the listed metadata size.\",\"`SourceFile` carries both `listed_size` and `bytes_read`, and `photo_delivery` derives M02.size.\",\"The operation returns an additional read-result value separate from `SourceFile`.\"],\"default_guess\":\"Give `SourceFile` an effective size equal to M02.size and retain any distinct listed size only as private implementation state.\"},{\"subject\":\"public_op:source_folder.observe_source_files\",\"kind\":\"failure_boundary\",\"text\":\"A file that cannot be read is a rejected `SourceFile`, not an error.\",\"question\":\"Does “cannot be read” include failure of the first no-follow metadata reading, or is such an entry omitted as A1's changed text says?\",\"options\":[\"Omit the entry when its initial metadata reading fails; reject only failures after it was established as a regular file.\",\"Report a rejected `SourceFile` with `unreadable_file` whenever that initial metadata reading fails.\"],\"default_guess\":\"Omit the entry when the initial metadata reading fails.\",\"witness\":{\"initial\":\"A directory listing contains `photo.jpg`, but its path becomes inaccessible before the entry's no-follow metadata reading.\",\"events\":[\"The source-folder scanner lists `photo.jpg`.\",\"Another actor removes the entry or makes its metadata unreadable.\",\"The scanner's initial metadata reading fails.\"],\"outcomes\":[\"The entry is omitted because the metadata reading did not show a regular file.\",\"A rejected `SourceFile` with reason `unreadable_file` is returned because the file could not be read.\"],\"observer\":\"The scan caller sees either no observation or a rejected observation and a different rejected-status count.\"}},{\"subject\":\"public_op:source_folder.read_named_source\",\"kind\":\"output_contract\",\"text\":\"Otherwise a `SourceRead`: one `SourceFile`, and the bytes that were judged when it is ready.\",\"question\":\"Where does `SourceRead` carry the modification time read from the opened file before its bytes, so `photo_delivery` can apply A2 and A7 without reading metadata again?\",\"options\":[\"Add the normalized opened-file modification time to `SourceFile`.\",\"Add the normalized opened-file modification time as a separate `SourceRead` field.\",\"Return raw opened-file metadata in `SourceRead` and let `photo_delivery` normalize it.\"],\"default_guess\":\"Add the A7-normalized opened-file modification time as a distinct `SourceRead` field.\"},{\"subject\":\"public_op:source_folder.read_named_source\",\"kind\":\"contradictory_failure\",\"text\":\"None. A file that cannot be read is a rejected `SourceFile`.\",\"question\":\"When the requested path's pre-open metadata cannot be read, must the operation return nothing under condition 1 or return a rejected `SourceFile` as this error passage permits?\",\"options\":[\"Return nothing, causing `NOT_READY_OR_ABSENT`, because unreadable path metadata is condition 1.\",\"Return a rejected `SourceFile` with `unreadable_file`, causing `UNREADABLE_FILE`.\"],\"default_guess\":\"Return nothing and map the delivery to `NOT_READY_OR_ABSENT`.\",\"witness\":{\"initial\":\"The caller requests a syntactically valid unplaced name whose final path exists but whose metadata cannot be read.\",\"events\":[\"The delivery passes the token, project, connection, folder, source-id and lock checks.\",\"`read_named_source` attempts the pre-open metadata reading.\",\"The metadata reading fails before any file is opened.\"],\"outcomes\":[\"Condition 1 fails, `read_named_source` returns nothing, and delivery returns `failed/not_ready_or_absent`.\",\"The file is treated as unreadable, a rejected `SourceFile` is returned, and delivery returns `failed/unreadable_file`.\"],\"observer\":\"The delivery caller sees a different M06 failure reason.\"}},{\"subject\":\"public_op:source_folder.read_named_source\",\"kind\":\"path_race\",\"text\":\"Condition 1 is decided from the name and the metadata of its path before the file is opened.\",\"question\":\"If an ancestor or the final entry is replaced between validation and opening, is the operation bound to the object validated through retained directory handles, or must it re-resolve and reject the changed path?\",\"options\":[\"Retain no-follow directory/file handles so the later read is of the object validated by condition 1.\",\"Re-resolve at opening and reject if any segment no longer has the validated identity.\",\"Use ordinary pathname opening after validation, allowing the replacement to select a different object.\"],\"default_guess\":\"Retain no-follow handles and bind the read to the validated object; never follow a replacement symbolic link.\",\"witness\":{\"initial\":\"`album/photo.jpg` is an ordinary unplaced file and `album` is a real subdirectory.\",\"events\":[\"The service validates both path segments with no-follow metadata readings.\",\"Another actor renames `album` and replaces it with a symbolic link before the file is opened.\",\"The service proceeds to the opening step.\"],\"outcomes\":[\"A handle-anchored implementation reads and may place the originally validated file.\",\"A revalidating implementation rejects the changed path without reading or placing it.\"],\"observer\":\"The delivery caller and owner see `placed` versus a failed delivery.\"}},{\"subject\":\"public_op:source_folder.read_named_source\",\"kind\":\"mtime_failure\",\"text\":\"A file that is read takes its modification time from one metadata reading of the file that was opened, the one whose bytes are read, taken after the opening and before the read; A7 rule 4 gives its form, and a delivery uses that time under A2 rule 3.\",\"question\":\"What outcome is required when the opened-file modification time is present but cannot be converted to A7's datetime form?\",\"options\":[\"Reject the file as `unreadable_file`.\",\"Treat the modification time as unavailable and allow only a usable camera date.\",\"Refuse the whole operation.\",\"Let an implementation exception escape.\"],\"default_guess\":\"Reject the file as `unreadable_file` before reading its bytes.\",\"witness\":{\"initial\":\"A regular supported image has a filesystem modification timestamp outside the implementation's representable datetime range.\",\"events\":[\"The requested path passes condition 1 and the size checks.\",\"The file opens and its metadata reading succeeds.\",\"Conversion of its modification time to A7's form fails.\"],\"outcomes\":[\"The delivery returns M06 `failed/unreadable_file`.\",\"The failure escapes or is treated as a whole-operation refusal instead of an M06 file failure.\"],\"observer\":\"The HTTP caller sees a defined M06 failure versus a refusal or server error.\"}}]}",
+ "set_aside": []
+}
