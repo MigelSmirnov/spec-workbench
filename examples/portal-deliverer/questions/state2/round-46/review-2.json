@@ -1,0 +1,212 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_policy",
+   "text": "`marked_at: datetime`",
+   "question": "Which authority supplies `marked_at`, what datetime representation is stored, and how many readings may one mark operation take? State 2 owns all three decisions but gives none of them.",
+   "options": [
+    "Read the system clock once and store naive UTC",
+    "Read the system clock once and store offset-aware UTC",
+    "Accept the instant from the caller",
+    "Use another declared authority module"
+   ],
+   "default_guess": "Read the injected system clock once when creating the first mark and store naive UTC, matching the product's other persisted datetime representation.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The calling flow marks the placement with a Portal photo id.",
+     "The deliverer creates M07 and later returns or exposes its `marked_at`."
+    ],
+    "outcomes": [
+     "One implementation stores a single system-clock reading as naive UTC.",
+     "Another stores local time, offset-aware UTC, or an instant supplied by the caller."
+    ],
+    "observer": "The calling flow, scans that read the mark, and any code comparing or serialising `marked_at`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 5 and M08 Refusal",
+   "kind": "classification_conflict",
+   "text": "A refusal of the whole request under A5 or A6, an M08, is not a failed photo.",
+   "question": "Does this make every whole-request refusal arising under A5 or A6 an M08, including authentication failures, or only the cases for which M08 already has a RefusalCode? If it includes authentication, which M08 code represents the 401 refusal?",
+   "options": [
+    "Only refusals explicitly assigned an M08 RefusalCode are M08; authentication remains a non-M08 401 response",
+    "Every A5 or A6 whole-request refusal is M08, requiring a new authentication code",
+    "Every A5 or A6 whole-request refusal is M08 but the HTTP status substitutes for a RefusalCode"
+   ],
+   "default_guess": "Limit the sentence to refusals explicitly assigned an existing M08 RefusalCode and keep A5 authentication failures as non-M08 401 responses.",
+   "witness": {
+    "initial": "The request otherwise names a valid connected project and valid photo, but has no Authorization header.",
+    "events": [
+     "The caller sends the delivery request.",
+     "A5 rule 1 rejects it before examining identifiers or the body."
+    ],
+    "outcomes": [
+     "A5 produces a 401 response that is not M08.",
+     "The new A3 sentence requires an M08, but M08 has no authentication RefusalCode."
+    ],
+    "observer": "The API caller and response-schema validator."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M08 Refusal and A6 rule 1",
+   "kind": "model_contradiction",
+   "text": "A delivery is M08 for the refusals of\nA3 rule 4 and A6 rule 5, and M06 for the failures of A3 rule 5.",
+   "question": "Must M08 also include the new whole-request `UNSAFE_REFERENCE` refusal of A6 rule 1, or is that refusal represented some other way?",
+   "options": [
+    "Extend this model rule to include A6 rule 1",
+    "Represent unsafe-reference as M06",
+    "Return an answer outside M06 and M08"
+   ],
+   "default_guess": "Extend the M08 rule to include A6 rule 1, because `UNSAFE_REFERENCE` is already a member of RefusalCode.",
+   "witness": {
+    "initial": "A delivery reaches a stored-image reference whose path resolves outside the binary store.",
+    "events": [
+     "The deliverer evaluates the new A6 rule 1 containment check."
+    ],
+    "outcomes": [
+     "A6 rule 1 returns M08 with `UNSAFE_REFERENCE`.",
+     "M08's closed meaning excludes A6 rule 1, leaving the response unrepresentable under the model."
+    ],
+    "observer": "The API caller, generated response type, and model validator."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 2 versus A6 rule 1",
+   "kind": "precedence_conflict",
+   "text": "Delivering content that already has a placement answers `replayed` with the stored placement and the\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\n   when the source file has left the folder.",
+   "question": "When an existing placement's stored reference now fails A6 rule 1, does unconditional replay win, or does the new unsafe-reference refusal win?",
+   "options": [
+    "Check A6 rule 1 before replay and return M08 `UNSAFE_REFERENCE`",
+    "Replay an existing placement without checking its stored-image path",
+    "Validate the stored reference only when the image is read or rewritten"
+   ],
+   "default_guess": "Check A6 rule 1 before replay and return M08 `UNSAFE_REFERENCE`, but state that precedence explicitly.",
+   "witness": {
+    "initial": "A valid placement record exists; afterwards a binary-store folder on its image path becomes a symbolic link leading outside the store.",
+    "events": [
+     "The caller repeats delivery of the same project and source content."
+    ],
+    "outcomes": [
+     "A3 rule 2 returns `replayed` without consulting the source or store path.",
+     "A6 rule 1 returns a whole-request M08 with `UNSAFE_REFERENCE`."
+    ],
+    "observer": "The delivery caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 1 containment check",
+   "kind": "unspecified_check_order",
+   "text": "Checks run in this order: token, request form and project id, connection, photo folder, source id,\n   project lock, existing placement, named file.",
+   "question": "At what exact position in this order is the new A6 rule 1 containment/resolution check performed, and which result wins when both it and a later named-file or placement check would fail?",
+   "options": [
+    "After source-id validation but before taking or creating the project lock",
+    "Inside the project lock before checking an existing placement",
+    "After checking an existing placement but before opening the named file",
+    "Only immediately before writing the stored image"
+   ],
+   "default_guess": "Run it after source-id validation and before taking the project lock, so the promised unsafe refusal writes nothing.",
+   "witness": {
+    "initial": "The project has no lock file; its prospective stored-image path is unsafe; the requested source name is absent.",
+    "events": [
+     "The caller requests delivery with a syntactically valid source id."
+    ],
+    "outcomes": [
+     "An early containment check returns M08 `UNSAFE_REFERENCE` and creates no project lock.",
+     "Following A3's listed order creates the project lock and later returns M06 `NOT_READY_OR_ABSENT`, or checks containment only after reading the source."
+    ],
+    "observer": "The caller and an operator inspecting the state folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 1 path resolution",
+   "kind": "resolution_semantics",
+   "text": "its path,\n   resolved with the links of the binary store, must lie below the resolved store; otherwise, and also when the path cannot be resolved, the delivery\n   is refused as a whole request",
+   "question": "How is a prospective path resolved when its final file or project folders do not exist yet: must every component already exist, or are links resolved only through the nearest existing ancestor and the remaining components checked lexically?",
+   "options": [
+    "Resolve the nearest existing ancestor and append validated non-existent components",
+    "Require strict resolution of every component, including the not-yet-created destination",
+    "Create destination folders first and then resolve the path"
+   ],
+   "default_guess": "Resolve links through the nearest existing ancestor and validate the remaining UUID/hash-derived components without creating anything.",
+   "witness": {
+    "initial": "The binary-store root exists and is safe, but this is the project's first delivery, so `photos/<project_id>/<source_id>.jpg` and some parent folders do not exist.",
+    "events": [
+     "The caller delivers a valid new photo."
+    ],
+    "outcomes": [
+     "Strict resolution fails and the request is refused with `UNSAFE_REFERENCE`.",
+     "Existing-prefix resolution proves containment and the placement is written."
+    ],
+    "observer": "The delivery caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 1 reachability statement",
+   "kind": "internal_contradiction",
+   "text": "A name built that way cannot leave the store, so the refusal is\n   reachable only when a folder of the store is a link that leads out of it.",
+   "question": "How can the refusal be reachable only for a link leading outside when the preceding sentence also requires it whenever the path cannot be resolved, including loops, dangling links, inaccessible components, and possibly absent prospective components?",
+   "options": [
+    "Unsafe refusal covers every resolution failure, so the reachability sentence must include those cases",
+    "Only an outward-resolving link is unsafe; other resolution failures receive another outcome",
+    "The defined resolution operation treats all internal missing, dangling, looping, and inaccessible cases as resolvable"
+   ],
+   "default_guess": "Treat every resolution failure as M08 `UNSAFE_REFERENCE` and broaden the reachability statement accordingly.",
+   "witness": {
+    "initial": "A folder on the prospective stored-image path is a dangling symbolic link that does not resolve to a location outside or inside the store.",
+    "events": [
+     "The caller requests a delivery whose reference traverses that folder."
+    ],
+    "outcomes": [
+     "The explicit unresolved-path clause returns M08 `UNSAFE_REFERENCE`.",
+     "The reachability sentence says the unsafe refusal cannot apply because no folder link resolves outside the store."
+    ],
+    "observer": "The delivery caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 1 and project-lock creation",
+   "kind": "write_effect_conflict",
+   "text": "nothing is written.",
+   "question": "Does this prohibit creation of the project lock and its folders on an unsafe-reference refusal, despite A6 rule 4 saying their first creation is the only write of an operation that writes nothing else?",
+   "options": [
+    "Unsafe-reference checking occurs before the lock, so absolutely no file or folder is created",
+    "The project lock may be created, while no image or record is written",
+    "An existing lock may be used but a missing lock causes a different refusal"
+   ],
+   "default_guess": "Perform the unsafe-reference check before lock acquisition and create nothing.",
+   "witness": {
+    "initial": "The project has no lock file, and its prospective stored-image reference cannot be resolved safely.",
+    "events": [
+     "The caller makes the project's first delivery request."
+    ],
+    "outcomes": [
+     "The request returns `UNSAFE_REFERENCE` and the state folder is byte-for-byte unchanged.",
+     "The operation first creates the project lock as A6 rule 4 normally requires, then returns `UNSAFE_REFERENCE`."
+    ],
+    "observer": "An operator inspecting the state folder and a test asserting that nothing was written."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 5",
+   "kind": "standard_violation",
+   "text": "status `failed`",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Replace the value-only reference with the member name and enumeration address, for example `status the FAILED member of = models.PlacementStatus`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_policy\",\"text\":\"`marked_at: datetime`\",\"question\":\"Which authority supplies `marked_at`, what datetime representation is stored, and how many readings may one mark operation take? State 2 owns all three decisions but gives none of them.\",\"options\":[\"Read the system clock once and store naive UTC\",\"Read the system clock once and store offset-aware UTC\",\"Accept the instant from the caller\",\"Use another declared authority module\"],\"default_guess\":\"Read the injected system clock once when creating the first mark and store naive UTC, matching the product's other persisted datetime representation.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The calling flow marks the placement with a Portal photo id.\",\"The deliverer creates M07 and later returns or exposes its `marked_at`.\"],\"outcomes\":[\"One implementation stores a single system-clock reading as naive UTC.\",\"Another stores local time, offset-aware UTC, or an instant supplied by the caller.\"],\"observer\":\"The calling flow, scans that read the mark, and any code comparing or serialising `marked_at`.\"}},{\"subject\":\"A3 rule 5 and M08 Refusal\",\"kind\":\"classification_conflict\",\"text\":\"A refusal of the whole request under A5 or A6, an M08, is not a failed photo.\",\"question\":\"Does this make every whole-request refusal arising under A5 or A6 an M08, including authentication failures, or only the cases for which M08 already has a RefusalCode? If it includes authentication, which M08 code represents the 401 refusal?\",\"options\":[\"Only refusals explicitly assigned an M08 RefusalCode are M08; authentication remains a non-M08 401 response\",\"Every A5 or A6 whole-request refusal is M08, requiring a new authentication code\",\"Every A5 or A6 whole-request refusal is M08 but the HTTP status substitutes for a RefusalCode\"],\"default_guess\":\"Limit the sentence to refusals explicitly assigned an existing M08 RefusalCode and keep A5 authentication failures as non-M08 401 responses.\",\"witness\":{\"initial\":\"The request otherwise names a valid connected project and valid photo, but has no Authorization header.\",\"events\":[\"The caller sends the delivery request.\",\"A5 rule 1 rejects it before examining identifiers or the body.\"],\"outcomes\":[\"A5 produces a 401 response that is not M08.\",\"The new A3 sentence requires an M08, but M08 has no authentication RefusalCode.\"],\"observer\":\"The API caller and response-schema validator.\"}},{\"subject\":\"M08 Refusal and A6 rule 1\",\"kind\":\"model_contradiction\",\"text\":\"A delivery is M08 for the refusals of\\nA3 rule 4 and A6 rule 5, and M06 for the failures of A3 rule 5.\",\"question\":\"Must M08 also include the new whole-request `UNSAFE_REFERENCE` refusal of A6 rule 1, or is that refusal represented some other way?\",\"options\":[\"Extend this model rule to include A6 rule 1\",\"Represent unsafe-reference as M06\",\"Return an answer outside M06 and M08\"],\"default_guess\":\"Extend the M08 rule to include A6 rule 1, because `UNSAFE_REFERENCE` is already a member of RefusalCode.\",\"witness\":{\"initial\":\"A delivery reaches a stored-image reference whose path resolves outside the binary store.\",\"events\":[\"The deliverer evaluates the new A6 rule 1 containment check.\"],\"outcomes\":[\"A6 rule 1 returns M08 with `UNSAFE_REFERENCE`.\",\"M08's closed meaning excludes A6 rule 1, leaving the response unrepresentable under the model.\"],\"observer\":\"The API caller, generated response type, and model validator.\"}},{\"subject\":\"A3 rule 2 versus A6 rule 1\",\"kind\":\"precedence_conflict\",\"text\":\"Delivering content that already has a placement answers `replayed` with the stored placement and the\\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\\n   when the source file has left the folder.\",\"question\":\"When an existing placement's stored reference now fails A6 rule 1, does unconditional replay win, or does the new unsafe-reference refusal win?\",\"options\":[\"Check A6 rule 1 before replay and return M08 `UNSAFE_REFERENCE`\",\"Replay an existing placement without checking its stored-image path\",\"Validate the stored reference only when the image is read or rewritten\"],\"default_guess\":\"Check A6 rule 1 before replay and return M08 `UNSAFE_REFERENCE`, but state that precedence explicitly.\",\"witness\":{\"initial\":\"A valid placement record exists; afterwards a binary-store folder on its image path becomes a symbolic link leading outside the store.\",\"events\":[\"The caller repeats delivery of the same project and source content.\"],\"outcomes\":[\"A3 rule 2 returns `replayed` without consulting the source or store path.\",\"A6 rule 1 returns a whole-request M08 with `UNSAFE_REFERENCE`.\"],\"observer\":\"The delivery caller.\"}},{\"subject\":\"A6 rule 1 containment check\",\"kind\":\"unspecified_check_order\",\"text\":\"Checks run in this order: token, request form and project id, connection, photo folder, source id,\\n   project lock, existing placement, named file.\",\"question\":\"At what exact position in this order is the new A6 rule 1 containment/resolution check performed, and which result wins when both it and a later named-file or placement check would fail?\",\"options\":[\"After source-id validation but before taking or creating the project lock\",\"Inside the project lock before checking an existing placement\",\"After checking an existing placement but before opening the named file\",\"Only immediately before writing the stored image\"],\"default_guess\":\"Run it after source-id validation and before taking the project lock, so the promised unsafe refusal writes nothing.\",\"witness\":{\"initial\":\"The project has no lock file; its prospective stored-image path is unsafe; the requested source name is absent.\",\"events\":[\"The caller requests delivery with a syntactically valid source id.\"],\"outcomes\":[\"An early containment check returns M08 `UNSAFE_REFERENCE` and creates no project lock.\",\"Following A3's listed order creates the project lock and later returns M06 `NOT_READY_OR_ABSENT`, or checks containment only after reading the source.\"],\"observer\":\"The caller and an operator inspecting the state folder.\"}},{\"subject\":\"A6 rule 1 path resolution\",\"kind\":\"resolution_semantics\",\"text\":\"its path,\\n   resolved with the links of the binary store, must lie below the resolved store; otherwise, and also when the path cannot be resolved, the delivery\\n   is refused as a whole request\",\"question\":\"How is a prospective path resolved when its final file or project folders do not exist yet: must every component already exist, or are links resolved only through the nearest existing ancestor and the remaining components checked lexically?\",\"options\":[\"Resolve the nearest existing ancestor and append validated non-existent components\",\"Require strict resolution of every component, including the not-yet-created destination\",\"Create destination folders first and then resolve the path\"],\"default_guess\":\"Resolve links through the nearest existing ancestor and validate the remaining UUID/hash-derived components without creating anything.\",\"witness\":{\"initial\":\"The binary-store root exists and is safe, but this is the project's first delivery, so `photos/<project_id>/<source_id>.jpg` and some parent folders do not exist.\",\"events\":[\"The caller delivers a valid new photo.\"],\"outcomes\":[\"Strict resolution fails and the request is refused with `UNSAFE_REFERENCE`.\",\"Existing-prefix resolution proves containment and the placement is written.\"],\"observer\":\"The delivery caller.\"}},{\"subject\":\"A6 rule 1 reachability statement\",\"kind\":\"internal_contradiction\",\"text\":\"A name built that way cannot leave the store, so the refusal is\\n   reachable only when a folder of the store is a link that leads out of it.\",\"question\":\"How can the refusal be reachable only for a link leading outside when the preceding sentence also requires it whenever the path cannot be resolved, including loops, dangling links, inaccessible components, and possibly absent prospective components?\",\"options\":[\"Unsafe refusal covers every resolution failure, so the reachability sentence must include those cases\",\"Only an outward-resolving link is unsafe; other resolution failures receive another outcome\",\"The defined resolution operation treats all internal missing, dangling, looping, and inaccessible cases as resolvable\"],\"default_guess\":\"Treat every resolution failure as M08 `UNSAFE_REFERENCE` and broaden the reachability statement accordingly.\",\"witness\":{\"initial\":\"A folder on the prospective stored-image path is a dangling symbolic link that does not resolve to a location outside or inside the store.\",\"events\":[\"The caller requests a delivery whose reference traverses that folder.\"],\"outcomes\":[\"The explicit unresolved-path clause returns M08 `UNSAFE_REFERENCE`.\",\"The reachability sentence says the unsafe refusal cannot apply because no folder link resolves outside the store.\"],\"observer\":\"The delivery caller.\"}},{\"subject\":\"A6 rule 1 and project-lock creation\",\"kind\":\"write_effect_conflict\",\"text\":\"nothing is written.\",\"question\":\"Does this prohibit creation of the project lock and its folders on an unsafe-reference refusal, despite A6 rule 4 saying their first creation is the only write of an operation that writes nothing else?\",\"options\":[\"Unsafe-reference checking occurs before the lock, so absolutely no file or folder is created\",\"The project lock may be created, while no image or record is written\",\"An existing lock may be used but a missing lock causes a different refusal\"],\"default_guess\":\"Perform the unsafe-reference check before lock acquisition and create nothing.\",\"witness\":{\"initial\":\"The project has no lock file, and its prospective stored-image reference cannot be resolved safely.\",\"events\":[\"The caller makes the project's first delivery request.\"],\"outcomes\":[\"The request returns `UNSAFE_REFERENCE` and the state folder is byte-for-byte unchanged.\",\"The operation first creates the project lock as A6 rule 4 normally requires, then returns `UNSAFE_REFERENCE`.\"],\"observer\":\"An operator inspecting the state folder and a test asserting that nothing was written.\"}},{\"subject\":\"A3 rule 5\",\"kind\":\"standard_violation\",\"text\":\"status `failed`\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Replace the value-only reference with the member name and enumeration address, for example `status the FAILED member of = models.PlacementStatus`.\"}]}",
+ "set_aside": []
+}

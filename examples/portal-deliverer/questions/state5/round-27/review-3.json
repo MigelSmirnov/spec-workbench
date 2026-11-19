@@ -1,0 +1,156 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:delivery_store.store_image",
+   "kind": "resolution_semantics",
+   "text": "when the reference leaves the binary store or cannot be resolved in it",
+   "question": "How must containment be resolved when the destination file or its generated project folder does not yet exist, and which existing path components must resolve successfully?",
+   "options": [
+    "Require every component and the destination to exist before the check",
+    "Resolve existing ancestors and append missing generated components lexically",
+    "Create the generated folders first and then perform the containment check"
+   ],
+   "default_guess": "Resolve the store and every existing ancestor without following an unresolved or looping link, append missing generated components lexically, verify containment, and only then create folders and write.",
+   "witness": {
+    "initial": "The binary store exists, but photos/<project_id> and the destination JPEG do not exist because this is the project's first placement.",
+    "events": [
+     "module:photo_delivery calls public_op:delivery_store.store_image with valid image bytes."
+    ],
+    "outcomes": [
+     "A strict resolver cannot resolve the absent destination and returns M08 unsafe_reference.",
+     "A resolver that permits missing generated suffixes proves containment, creates the project folder and stores the image."
+    ],
+    "observer": "The calling flow sees refusal instead of a placed photo."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "write_effect_contradiction",
+   "text": "is refused as a whole request with the UNSAFE_REFERENCE member of = models.RefusalCode, an M08, and\n   nothing is written.",
+   "question": "Does “nothing is written” exclude the project lock file already created before store_image runs, or must the operation somehow avoid or undo that write despite A6 rule 4 saying the lock is never removed?",
+   "options": [
+    "No image, placement or mark is written, but a first-use project lock may remain",
+    "Absolutely no file is written by the request",
+    "The containment check occurs before project_lock so no lock is created on this refusal"
+   ],
+   "default_guess": "Treat it as no image or record write; allow the first-use project lock to remain.",
+   "witness": {
+    "initial": "The project has no lock file yet, and the generated image reference resolves outside the binary store.",
+    "events": [
+     "module:photo_delivery takes public_op:delivery_store.project_lock, which creates the first-use lock file.",
+     "Later it calls public_op:delivery_store.store_image, whose containment check fails."
+    ],
+    "outcomes": [
+     "A6 rule 1's literal wording requires the whole request to leave no write.",
+     "The declared flow and A6 rule 4 leave the newly created, never-removed project lock file in place."
+    ],
+    "observer": "An administrator inspecting the state folder, and a later operation using the existing lock file, see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "reachability_contradiction",
+   "text": "A name built that way cannot leave the store, so the refusal is\n   reachable only when a folder of the store is a link that leads out of it.",
+   "question": "Can unsafe_reference also be reached when resolution fails for another reason, as the preceding sentence requires, or is an outward-pointing link the only reachable cause?",
+   "options": [
+    "Any resolution failure produces unsafe_reference",
+    "Only a link resolving outside the store produces unsafe_reference",
+    "Resolution failures other than escape use a different refusal or become a failed M06"
+   ],
+   "default_guess": "Return unsafe_reference for every failure to establish resolved containment, including loops, dangling links and inaccessible components.",
+   "witness": {
+    "initial": "A generated reference passes through a dangling symbolic link or a symbolic-link loop inside the binary store and therefore cannot be resolved, but no link is known to lead to a resolved location outside the store.",
+    "events": [
+     "The owner starts a delivery.",
+     "public_op:delivery_store.store_image checks the generated reference."
+    ],
+    "outcomes": [
+     "The preceding rule classifies the inability to resolve as M08 unsafe_reference.",
+     "The following reachability statement excludes this case because no folder link has resolved outside the store."
+    ],
+    "observer": "The calling flow sees either an M08 refusal or a different write outcome."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "model_contract_contradiction",
+   "text": "A delivery is M08 for the refusals of\nA3 rule 4 and A6 rule 5, and M06 for the failures of A3 rule 5.",
+   "question": "Must Model M08's meaning also include the newly added A6 rule 1 unsafe-reference refusal?",
+   "options": [
+    "Add A6 rule 1 to the delivery cases producing M08",
+    "Keep M08 limited to A3 rule 4 and A6 rule 5 and represent unsafe_reference differently",
+    "Treat the listed M08 cases as examples rather than an exhaustive model definition"
+   ],
+   "default_guess": "Add A6 rule 1 to Model M08's delivery cases.",
+   "witness": {
+    "initial": "A valid delivery reaches store_image, whose generated reference cannot be resolved inside the binary store.",
+    "events": [
+     "public_op:delivery_store.store_image raises DelivererError with UNSAFE_REFERENCE.",
+     "module:photo_delivery handles the error."
+    ],
+    "outcomes": [
+     "The changed State 5 contract and A6 rule 1 return M08 unsafe_reference.",
+     "Model M08's stated delivery classification does not include A6 rule 1."
+    ],
+    "observer": "The caller and generated type/error handling see whether an M08 is permitted for this case."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.deliver_project_photo",
+   "kind": "refusal_detail",
+   "text": "`invalid_source_id`, `unsafe_reference` and the refusals of the connection, the folder, the project lock and the records, as M08, in place of M06.",
+   "question": "What exact fixed, path-free sentence must M08.detail contain for unsafe_reference?",
+   "options": [
+    "Use one fixed generic unsafe-reference sentence",
+    "Use a fixed sentence distinguishing escape from failed resolution",
+    "Leave detail implementation-defined while fixing only the code"
+   ],
+   "default_guess": "Use one fixed path-free sentence for every unsafe_reference cause.",
+   "witness": {
+    "initial": "Two installations encounter the same unresolvable stored-image reference.",
+    "events": [
+     "Each implementation returns M08 with code unsafe_reference."
+    ],
+    "outcomes": [
+     "One answers detail “The stored image reference is unsafe.”",
+     "Another answers detail “The stored image location could not be resolved.”"
+    ],
+    "observer": "The authenticated HTTP caller sees different response bodies."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.deliver_project_photo",
+   "kind": "http_mapping",
+   "text": "`invalid_source_id`, `unsafe_reference` and the refusals of the connection, the folder, the project lock and the records, as M08, in place of M06.",
+   "question": "Which HTTP status must the delivery route use for the new unsafe_reference M08 refusal?",
+   "options": [
+    "400 Bad Request",
+    "409 Conflict",
+    "500 Internal Server Error",
+    "Another fixed status shared with a defined refusal class"
+   ],
+   "default_guess": "Return 409 Conflict because the request is valid but the configured store state prevents the placement.",
+   "witness": {
+    "initial": "An authenticated, well-formed delivery reaches an image reference that cannot be resolved inside the binary store.",
+    "events": [
+     "module:photo_delivery returns M08 unsafe_reference.",
+     "The delivery route turns that refusal into an HTTP answer."
+    ],
+    "outcomes": [
+     "One implementation maps it to a client-error status such as 400 or 409.",
+     "Another treats the unsafe store configuration as a server error and returns 500."
+    ],
+    "observer": "The calling flow sees a different HTTP status and may classify or retry the failure differently."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:delivery_store.store_image\",\"kind\":\"resolution_semantics\",\"text\":\"when the reference leaves the binary store or cannot be resolved in it\",\"question\":\"How must containment be resolved when the destination file or its generated project folder does not yet exist, and which existing path components must resolve successfully?\",\"options\":[\"Require every component and the destination to exist before the check\",\"Resolve existing ancestors and append missing generated components lexically\",\"Create the generated folders first and then perform the containment check\"],\"default_guess\":\"Resolve the store and every existing ancestor without following an unresolved or looping link, append missing generated components lexically, verify containment, and only then create folders and write.\",\"witness\":{\"initial\":\"The binary store exists, but photos/<project_id> and the destination JPEG do not exist because this is the project's first placement.\",\"events\":[\"module:photo_delivery calls public_op:delivery_store.store_image with valid image bytes.\"],\"outcomes\":[\"A strict resolver cannot resolve the absent destination and returns M08 unsafe_reference.\",\"A resolver that permits missing generated suffixes proves containment, creates the project folder and stores the image.\"],\"observer\":\"The calling flow sees refusal instead of a placed photo.\"}},{\"subject\":\"context\",\"kind\":\"write_effect_contradiction\",\"text\":\"is refused as a whole request with the UNSAFE_REFERENCE member of = models.RefusalCode, an M08, and\\n   nothing is written.\",\"question\":\"Does “nothing is written” exclude the project lock file already created before store_image runs, or must the operation somehow avoid or undo that write despite A6 rule 4 saying the lock is never removed?\",\"options\":[\"No image, placement or mark is written, but a first-use project lock may remain\",\"Absolutely no file is written by the request\",\"The containment check occurs before project_lock so no lock is created on this refusal\"],\"default_guess\":\"Treat it as no image or record write; allow the first-use project lock to remain.\",\"witness\":{\"initial\":\"The project has no lock file yet, and the generated image reference resolves outside the binary store.\",\"events\":[\"module:photo_delivery takes public_op:delivery_store.project_lock, which creates the first-use lock file.\",\"Later it calls public_op:delivery_store.store_image, whose containment check fails.\"],\"outcomes\":[\"A6 rule 1's literal wording requires the whole request to leave no write.\",\"The declared flow and A6 rule 4 leave the newly created, never-removed project lock file in place.\"],\"observer\":\"An administrator inspecting the state folder, and a later operation using the existing lock file, see the difference.\"}},{\"subject\":\"context\",\"kind\":\"reachability_contradiction\",\"text\":\"A name built that way cannot leave the store, so the refusal is\\n   reachable only when a folder of the store is a link that leads out of it.\",\"question\":\"Can unsafe_reference also be reached when resolution fails for another reason, as the preceding sentence requires, or is an outward-pointing link the only reachable cause?\",\"options\":[\"Any resolution failure produces unsafe_reference\",\"Only a link resolving outside the store produces unsafe_reference\",\"Resolution failures other than escape use a different refusal or become a failed M06\"],\"default_guess\":\"Return unsafe_reference for every failure to establish resolved containment, including loops, dangling links and inaccessible components.\",\"witness\":{\"initial\":\"A generated reference passes through a dangling symbolic link or a symbolic-link loop inside the binary store and therefore cannot be resolved, but no link is known to lead to a resolved location outside the store.\",\"events\":[\"The owner starts a delivery.\",\"public_op:delivery_store.store_image checks the generated reference.\"],\"outcomes\":[\"The preceding rule classifies the inability to resolve as M08 unsafe_reference.\",\"The following reachability statement excludes this case because no folder link has resolved outside the store.\"],\"observer\":\"The calling flow sees either an M08 refusal or a different write outcome.\"}},{\"subject\":\"context\",\"kind\":\"model_contract_contradiction\",\"text\":\"A delivery is M08 for the refusals of\\nA3 rule 4 and A6 rule 5, and M06 for the failures of A3 rule 5.\",\"question\":\"Must Model M08's meaning also include the newly added A6 rule 1 unsafe-reference refusal?\",\"options\":[\"Add A6 rule 1 to the delivery cases producing M08\",\"Keep M08 limited to A3 rule 4 and A6 rule 5 and represent unsafe_reference differently\",\"Treat the listed M08 cases as examples rather than an exhaustive model definition\"],\"default_guess\":\"Add A6 rule 1 to Model M08's delivery cases.\",\"witness\":{\"initial\":\"A valid delivery reaches store_image, whose generated reference cannot be resolved inside the binary store.\",\"events\":[\"public_op:delivery_store.store_image raises DelivererError with UNSAFE_REFERENCE.\",\"module:photo_delivery handles the error.\"],\"outcomes\":[\"The changed State 5 contract and A6 rule 1 return M08 unsafe_reference.\",\"Model M08's stated delivery classification does not include A6 rule 1.\"],\"observer\":\"The caller and generated type/error handling see whether an M08 is permitted for this case.\"}},{\"subject\":\"public_op:photo_delivery.deliver_project_photo\",\"kind\":\"refusal_detail\",\"text\":\"`invalid_source_id`, `unsafe_reference` and the refusals of the connection, the folder, the project lock and the records, as M08, in place of M06.\",\"question\":\"What exact fixed, path-free sentence must M08.detail contain for unsafe_reference?\",\"options\":[\"Use one fixed generic unsafe-reference sentence\",\"Use a fixed sentence distinguishing escape from failed resolution\",\"Leave detail implementation-defined while fixing only the code\"],\"default_guess\":\"Use one fixed path-free sentence for every unsafe_reference cause.\",\"witness\":{\"initial\":\"Two installations encounter the same unresolvable stored-image reference.\",\"events\":[\"Each implementation returns M08 with code unsafe_reference.\"],\"outcomes\":[\"One answers detail “The stored image reference is unsafe.”\",\"Another answers detail “The stored image location could not be resolved.”\"],\"observer\":\"The authenticated HTTP caller sees different response bodies.\"}},{\"subject\":\"public_op:photo_delivery.deliver_project_photo\",\"kind\":\"http_mapping\",\"text\":\"`invalid_source_id`, `unsafe_reference` and the refusals of the connection, the folder, the project lock and the records, as M08, in place of M06.\",\"question\":\"Which HTTP status must the delivery route use for the new unsafe_reference M08 refusal?\",\"options\":[\"400 Bad Request\",\"409 Conflict\",\"500 Internal Server Error\",\"Another fixed status shared with a defined refusal class\"],\"default_guess\":\"Return 409 Conflict because the request is valid but the configured store state prevents the placement.\",\"witness\":{\"initial\":\"An authenticated, well-formed delivery reaches an image reference that cannot be resolved inside the binary store.\",\"events\":[\"module:photo_delivery returns M08 unsafe_reference.\",\"The delivery route turns that refusal into an HTTP answer.\"],\"outcomes\":[\"One implementation maps it to a client-error status such as 400 or 409.\",\"Another treats the unsafe store configuration as a server error and returns 500.\"],\"observer\":\"The calling flow sees a different HTTP status and may classify or retry the failure differently.\"}}]}",
+ "set_aside": []
+}

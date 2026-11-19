@@ -1,0 +1,134 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:delivery_store.store_image",
+   "kind": "ambiguous_resolution",
+   "text": "resolved with the links of the binary store",
+   "question": "How is containment checked before the service-created `photos` and project folders exist: must every component already exist, or are links resolved only through the existing prefix while the missing suffix is treated lexically?",
+   "options": [
+    "Require strict resolution of every component and return `unsafe_reference` when a component is absent.",
+    "Resolve existing components and validate the missing suffix beneath the store before creating its folders.",
+    "Create the folders first and then resolve the complete path."
+   ],
+   "default_guess": "Resolve links through the existing prefix, validate the missing suffix beneath the resolved store, and only then create folders.",
+   "witness": {
+    "initial": "The binary-store root exists, but `photos/<project_id>` does not yet exist and this is the first placement for the project.",
+    "events": [
+     "The owner requests delivery of a valid new photo.",
+     "`module:photo_delivery` calls `store_image` for `photos/<project_id>/<source_id>.jpg`.",
+     "One implementation uses strict resolution; another resolves the existing prefix and permits the missing service-created suffix."
+    ],
+    "outcomes": [
+     "The strict implementation returns M08 `unsafe_reference` and stores nothing.",
+     "The prefix-resolving implementation creates the folders and stores the image."
+    ],
+    "observer": "The calling flow and owner see refusal versus successful placement."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "contradiction",
+   "text": "otherwise, and also when the path cannot be resolved, the delivery is refused as a whole request with the UNSAFE_REFERENCE member of = models.RefusalCode, an M08, and nothing is written.",
+   "question": "Does “nothing is written” include the project lock file that A6 rule 4 and the delivery flow create before `store_image` performs this check?",
+   "options": [
+    "The already-created project lock remains; only the image, placement and other delivery data are not written.",
+    "The unsafe-reference check must happen before taking or creating the project lock so the whole request writes nothing.",
+    "A newly created lock and its folders must be rolled back after this refusal."
+   ],
+   "default_guess": "Allow the project lock to remain and narrow “nothing is written” to the stored image and placement data.",
+   "witness": {
+    "initial": "The project has no lock file, and a store folder is a symbolic link leading outside the binary store.",
+    "events": [
+     "The caller requests delivery of a new photo.",
+     "Following the required flow, `module:photo_delivery` takes `project_lock`, which creates the lock file on first use.",
+     "`store_image` detects the unsafe reference."
+    ],
+    "outcomes": [
+     "A6 rule 4 and the flow leave the newly created project lock in place.",
+     "The changed A6 rule 1 says the whole request is refused and nothing is written, requiring no lock file to remain."
+    ],
+    "observer": "The owner or service operator inspecting the state folder sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "contradiction",
+   "text": "A name built that way cannot leave the store, so the refusal is reachable only when a folder of the store is a link that leads out of it.",
+   "question": "Can `unsafe_reference` also be reached when resolution fails for a dangling link, link loop, inaccessible component or another resolution error, as the preceding sentence says, or only for a link that resolves outside the store?",
+   "options": [
+    "Every failure to resolve the path produces M08 `unsafe_reference`.",
+    "Only a successfully resolved path outside the store produces `unsafe_reference`; other resolution failures become a failed M06 or an operating-system error.",
+    "Only links leading outside are supported cases; all other resolution failures are ruled out by an explicit invariant."
+   ],
+   "default_guess": "Treat every inability to resolve the path as M08 `unsafe_reference` and remove the claim that this is reachable only for links leading outside.",
+   "witness": {
+    "initial": "A folder on the intended store path is a dangling symbolic link and does not resolve to a location outside or inside the store.",
+    "events": [
+     "The caller requests delivery of a new photo.",
+     "`store_image` attempts the containment check."
+    ],
+    "outcomes": [
+     "The preceding rule classifies the unresolvable path as M08 `unsafe_reference`.",
+     "The reachability sentence excludes this case, allowing an implementation to treat the later write as an operating-system failure and return a failed M06."
+    ],
+    "observer": "The calling flow sees an M08 refusal versus a per-photo failed M06."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.deliver_project_photo",
+   "kind": "contradiction",
+   "text": "A delivery is M08 for the refusals of A3 rule 4 and A6 rule 5, and M06 for the failures of A3 rule 5.",
+   "question": "Must the definition of M08 also include the new A6 rule 1 `unsafe_reference` refusal?",
+   "options": [
+    "Add A6 rule 1 to the delivery cases that return M08.",
+    "Treat an unsafe store reference as A3 rule 5 condition 5 and return failed M06.",
+    "Make the M08 sentence explicitly non-exhaustive and state that later rules may add whole-request refusals."
+   ],
+   "default_guess": "Add A6 rule 1 explicitly to M08's delivery cases.",
+   "witness": {
+    "initial": "A valid new-photo request reaches a store path whose link resolves outside the binary store.",
+    "events": [
+     "`store_image` detects the unsafe reference.",
+     "`deliver_project_photo` must form its public result."
+    ],
+    "outcomes": [
+     "The changed operation and A6 rule 1 return M08 with code `unsafe_reference`.",
+     "The M08 definition enumerates delivery refusals from A3 rule 4 and A6 rule 5 but not A6 rule 1, so an implementation following that definition does not classify this case as M08."
+    ],
+    "observer": "The calling flow sees different result models and handling."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.store_image",
+   "kind": "unspecified_error_detail",
+   "text": "`detail` is a fixed sentence for people that holds no server path and no credential.",
+   "question": "What exact fixed `detail` must the new `unsafe_reference` DelivererError and resulting M08 contain, and is it identical for an outside path and an unresolvable path?",
+   "options": [
+    "Use one specified canonical sentence for every `unsafe_reference`.",
+    "Specify separate deterministic sentences for outside-store and unresolvable-path causes.",
+    "Derive or omit the detail from the refusal code."
+   ],
+   "default_guess": "Define one canonical path-free sentence for all `unsafe_reference` refusals.",
+   "witness": {
+    "initial": "A delivery reaches an unsafe stored-image reference.",
+    "events": [
+     "`store_image` constructs a `DelivererError` with code `unsafe_reference`.",
+     "The API serializes the resulting M08."
+    ],
+    "outcomes": [
+     "One implementation returns one fixed generic sentence.",
+     "Another returns a different sentence, or different sentences for outside and unresolvable paths."
+    ],
+    "observer": "The authenticated caller and owner see different refusal bodies."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:delivery_store.store_image\",\"kind\":\"ambiguous_resolution\",\"text\":\"resolved with the links of the binary store\",\"question\":\"How is containment checked before the service-created `photos` and project folders exist: must every component already exist, or are links resolved only through the existing prefix while the missing suffix is treated lexically?\",\"options\":[\"Require strict resolution of every component and return `unsafe_reference` when a component is absent.\",\"Resolve existing components and validate the missing suffix beneath the store before creating its folders.\",\"Create the folders first and then resolve the complete path.\"],\"default_guess\":\"Resolve links through the existing prefix, validate the missing suffix beneath the resolved store, and only then create folders.\",\"witness\":{\"initial\":\"The binary-store root exists, but `photos/<project_id>` does not yet exist and this is the first placement for the project.\",\"events\":[\"The owner requests delivery of a valid new photo.\",\"`module:photo_delivery` calls `store_image` for `photos/<project_id>/<source_id>.jpg`.\",\"One implementation uses strict resolution; another resolves the existing prefix and permits the missing service-created suffix.\"],\"outcomes\":[\"The strict implementation returns M08 `unsafe_reference` and stores nothing.\",\"The prefix-resolving implementation creates the folders and stores the image.\"],\"observer\":\"The calling flow and owner see refusal versus successful placement.\"}},{\"subject\":\"context\",\"kind\":\"contradiction\",\"text\":\"otherwise, and also when the path cannot be resolved, the delivery is refused as a whole request with the UNSAFE_REFERENCE member of = models.RefusalCode, an M08, and nothing is written.\",\"question\":\"Does “nothing is written” include the project lock file that A6 rule 4 and the delivery flow create before `store_image` performs this check?\",\"options\":[\"The already-created project lock remains; only the image, placement and other delivery data are not written.\",\"The unsafe-reference check must happen before taking or creating the project lock so the whole request writes nothing.\",\"A newly created lock and its folders must be rolled back after this refusal.\"],\"default_guess\":\"Allow the project lock to remain and narrow “nothing is written” to the stored image and placement data.\",\"witness\":{\"initial\":\"The project has no lock file, and a store folder is a symbolic link leading outside the binary store.\",\"events\":[\"The caller requests delivery of a new photo.\",\"Following the required flow, `module:photo_delivery` takes `project_lock`, which creates the lock file on first use.\",\"`store_image` detects the unsafe reference.\"],\"outcomes\":[\"A6 rule 4 and the flow leave the newly created project lock in place.\",\"The changed A6 rule 1 says the whole request is refused and nothing is written, requiring no lock file to remain.\"],\"observer\":\"The owner or service operator inspecting the state folder sees the difference.\"}},{\"subject\":\"context\",\"kind\":\"contradiction\",\"text\":\"A name built that way cannot leave the store, so the refusal is reachable only when a folder of the store is a link that leads out of it.\",\"question\":\"Can `unsafe_reference` also be reached when resolution fails for a dangling link, link loop, inaccessible component or another resolution error, as the preceding sentence says, or only for a link that resolves outside the store?\",\"options\":[\"Every failure to resolve the path produces M08 `unsafe_reference`.\",\"Only a successfully resolved path outside the store produces `unsafe_reference`; other resolution failures become a failed M06 or an operating-system error.\",\"Only links leading outside are supported cases; all other resolution failures are ruled out by an explicit invariant.\"],\"default_guess\":\"Treat every inability to resolve the path as M08 `unsafe_reference` and remove the claim that this is reachable only for links leading outside.\",\"witness\":{\"initial\":\"A folder on the intended store path is a dangling symbolic link and does not resolve to a location outside or inside the store.\",\"events\":[\"The caller requests delivery of a new photo.\",\"`store_image` attempts the containment check.\"],\"outcomes\":[\"The preceding rule classifies the unresolvable path as M08 `unsafe_reference`.\",\"The reachability sentence excludes this case, allowing an implementation to treat the later write as an operating-system failure and return a failed M06.\"],\"observer\":\"The calling flow sees an M08 refusal versus a per-photo failed M06.\"}},{\"subject\":\"public_op:photo_delivery.deliver_project_photo\",\"kind\":\"contradiction\",\"text\":\"A delivery is M08 for the refusals of A3 rule 4 and A6 rule 5, and M06 for the failures of A3 rule 5.\",\"question\":\"Must the definition of M08 also include the new A6 rule 1 `unsafe_reference` refusal?\",\"options\":[\"Add A6 rule 1 to the delivery cases that return M08.\",\"Treat an unsafe store reference as A3 rule 5 condition 5 and return failed M06.\",\"Make the M08 sentence explicitly non-exhaustive and state that later rules may add whole-request refusals.\"],\"default_guess\":\"Add A6 rule 1 explicitly to M08's delivery cases.\",\"witness\":{\"initial\":\"A valid new-photo request reaches a store path whose link resolves outside the binary store.\",\"events\":[\"`store_image` detects the unsafe reference.\",\"`deliver_project_photo` must form its public result.\"],\"outcomes\":[\"The changed operation and A6 rule 1 return M08 with code `unsafe_reference`.\",\"The M08 definition enumerates delivery refusals from A3 rule 4 and A6 rule 5 but not A6 rule 1, so an implementation following that definition does not classify this case as M08.\"],\"observer\":\"The calling flow sees different result models and handling.\"}},{\"subject\":\"public_op:delivery_store.store_image\",\"kind\":\"unspecified_error_detail\",\"text\":\"`detail` is a fixed sentence for people that holds no server path and no credential.\",\"question\":\"What exact fixed `detail` must the new `unsafe_reference` DelivererError and resulting M08 contain, and is it identical for an outside path and an unresolvable path?\",\"options\":[\"Use one specified canonical sentence for every `unsafe_reference`.\",\"Specify separate deterministic sentences for outside-store and unresolvable-path causes.\",\"Derive or omit the detail from the refusal code.\"],\"default_guess\":\"Define one canonical path-free sentence for all `unsafe_reference` refusals.\",\"witness\":{\"initial\":\"A delivery reaches an unsafe stored-image reference.\",\"events\":[\"`store_image` constructs a `DelivererError` with code `unsafe_reference`.\",\"The API serializes the resulting M08.\"],\"outcomes\":[\"One implementation returns one fixed generic sentence.\",\"Another returns a different sentence, or different sentences for outside and unresolvable paths.\"],\"observer\":\"The authenticated caller and owner see different refusal bodies.\"}}]}",
+ "set_aside": []
+}
