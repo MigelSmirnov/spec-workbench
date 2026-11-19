@@ -34,11 +34,11 @@ Reads the environment.
 
 ### Enforces
 
-A8: a required setting is present and not empty, an optional one that is absent or empty takes its decided default, and the port is decimal digits for a number from 1 to 65535.
+A8: a required setting is present, an optional one that is absent takes its decided default, and every value is one the start-up table accepts.
 
 ### Errors
 
-A missing required setting or an invalid port ends the start.
+A missing required setting or a value the start-up table does not accept ends the start.
 
 ### State impact
 
@@ -72,7 +72,7 @@ A8 and condition 1 of A5 rule 7: the service does not start with an invalid conn
 
 ### Errors
 
-An unknown time zone or an invalid connections file ends the start.
+A port above 65535, an unknown time zone or an invalid connections file ends the start.
 
 ### State impact
 
