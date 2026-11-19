@@ -213,6 +213,25 @@ def test_a_fix_is_reviewed_by_one_round_on_its_change_whose_topics_get_dispositi
     assert service.status(case, 2)["closed"] is True
 
 
+# portal-deliverer State 2, 2026-11-19: the fixed disposition was committed after the
+# fix, `ask --since` was offered that commit, the judge saw no change, and rounds 27-31
+# raised the same untouched passages again instead of setting them aside as preexisting.
+
+def test_the_closure_ref_of_a_fixed_round_holds_the_text_it_was_asked_on(tmp_path):
+    case = make_case(tmp_path, with_git=True)
+    ask(case, "gap")
+    commit(case, "round-01")
+    (case / "02_rules.md").write_text(RULES.replace("Rule one keeps every thing.", "Rule one, refusing b."), encoding="utf-8")
+    fix = commit(case, "A01 decides b is refused")
+    service.dispose(case, 2, "T1", "fixed", ref=fix)
+    kept = commit(case, "round-01 dispositions")
+    status = service.status(case, 2)
+    assert status["needs_round"] == ["A01"]
+    assert status["closed_at"] != kept
+    assert git(case, "show", f"{status['closed_at']}:02_rules.md") == RULES   # the text round-01 was asked on
+    assert "+Rule one, refusing b." in git(case, "diff", status["closed_at"], "--", "02_rules.md")
+
+
 def test_fixed_needs_a_commit_that_changes_the_case_after_the_round(tmp_path):
     case = make_case(tmp_path, with_git=True)
     before = git(case, "rev-parse", "HEAD").strip()
