@@ -450,7 +450,7 @@ A6 rule 4 and INV-12.
 
 ### State impact
 
-Writes only the project lock file, on first use.
+Writes only the project lock file and the folders below the state folder that lead to it, on first use (A6 rule 4).
 
 ## `public_op:delivery_store.store_image`
 
