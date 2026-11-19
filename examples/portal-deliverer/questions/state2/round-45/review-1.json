@@ -1,0 +1,294 @@
+{
+ "open_points": [
+  {
+   "subject": "A6 rule 1 unsafe-reference refusal",
+   "kind": "contradictory outcome model",
+   "text": "A photo that cannot be delivered is answered with status `failed` and one member of\n   `= models.PlacementFailure`.\n\notherwise the delivery\n   is refused with the UNSAFE_REFERENCE member of = models.RefusalCode.\n\nA delivery is M08 for the refusals of\nA3 rule 4 and A6 rule 5, and M06 for the failures of A3 rule 5.",
+   "question": "Does an unsafe stored-image reference return M08, M06, or another outcome, and which existing statement must be changed to make that answer consistent?",
+   "options": [
+    "Return M08 with RefusalCode.UNSAFE_REFERENCE and add A6 rule 1 to M08's delivery refusals",
+    "Return M06 failed after adding UNSAFE_REFERENCE to PlacementFailure",
+    "Define a separate outcome for this refusal"
+   ],
+   "default_guess": "Return M08 with RefusalCode.UNSAFE_REFERENCE and amend M08 to include A6 rule 1.",
+   "witness": {
+    "initial": "A confirmed project has a valid source file and no placement, but a folder below the binary store is a symbolic link leading outside the resolved store.",
+    "events": [
+     "The caller requests delivery of the valid source.",
+     "The deliverer resolves the proposed stored-image path and finds it outside the store."
+    ],
+    "outcomes": [
+     "The caller receives M08 with RefusalCode.UNSAFE_REFERENCE, as suggested by A6 rule 1.",
+     "The caller receives M06 with status failed, as required by A3 rule 5, while M08's definition excludes A6 rule 1."
+    ],
+    "observer": "The calling flow sees a different response model."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3/A6 check precedence",
+   "kind": "missing precedence",
+   "text": "Checks run in this order: token, request form and project id, connection, photo folder, source id,\n   project lock, existing placement, named file.",
+   "question": "Where in this ordered sequence is the A6 rule 1 containment check performed, and which refusal wins when both the source and the stored-image reference are invalid?",
+   "options": [
+    "Check containment immediately after taking the project lock",
+    "Check containment after finding that no placement exists but before opening the source",
+    "Check containment only after the source passes preparation, immediately before writing"
+   ],
+   "default_guess": "Check containment after successful source validation and preparation, immediately before the first stored-image write.",
+   "witness": {
+    "initial": "A confirmed project has an unsupported source image, no placement, and a binary-store folder link that makes the proposed stored-image path resolve outside the store.",
+    "events": [
+     "The caller requests delivery.",
+     "The implementation evaluates the source-format and containment checks in an order not fixed by the text."
+    ],
+    "outcomes": [
+     "The delivery fails with PlacementFailure.UNSUPPORTED_FORMAT before containment is checked.",
+     "The delivery is refused with RefusalCode.UNSAFE_REFERENCE before the source-format failure is reported."
+    ],
+    "observer": "The caller sees a different failure or refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 1 path resolution",
+   "kind": "undefined refusal condition",
+   "text": "its path,\n   resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery\n   is refused with the UNSAFE_REFERENCE member of = models.RefusalCode.",
+   "question": "What result is required when either the store or proposed path cannot be resolved because a link is dangling, a link loop exists, or traversal is denied?",
+   "options": [
+    "Treat every resolution failure as UNSAFE_REFERENCE",
+    "Treat resolution failure as a stored-image write failure under A3 rule 5 condition 5",
+    "Use STATE_UNAVAILABLE for inability to inspect the binary store"
+   ],
+   "default_guess": "Treat any inability to prove containment as M08 with RefusalCode.UNSAFE_REFERENCE.",
+   "witness": {
+    "initial": "A valid delivery reaches a proposed path whose intermediate binary-store folder is a dangling symbolic link.",
+    "events": [
+     "The deliverer attempts to resolve the store and proposed path before writing."
+    ],
+    "outcomes": [
+     "Failure to resolve is treated as failure to establish containment and returns UNSAFE_REFERENCE.",
+     "Resolution is deferred to the write, which fails and returns M06 failed with UNREADABLE_FILE."
+    ],
+    "observer": "The caller sees a different outcome model and code."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M08 detail for A6 rule 1",
+   "kind": "unspecified value",
+   "text": "`detail` is a fixed sentence for\npeople that holds no server path and no credential.",
+   "question": "What exact fixed detail sentence accompanies the new UNSAFE_REFERENCE refusal?",
+   "options": [
+    "Define one fixed unsafe-reference sentence in the refusal policy",
+    "Derive a sentence from the code at runtime",
+    "Return an empty detail"
+   ],
+   "default_guess": "Define a fixed generic sentence such as \"The stored image reference is unsafe.\" without including a path.",
+   "witness": {
+    "initial": "A delivery is refused because its stored-image path resolves outside the binary store.",
+    "events": [
+     "The service constructs the M08 response."
+    ],
+    "outcomes": [
+     "The response detail is \"The stored image reference is unsafe.\"",
+     "The response detail is a different implementation-chosen sentence while still exposing no path or credential."
+    ],
+    "observer": "The caller and any tests comparing the response see different text."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 marked_at",
+   "kind": "missing time source",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "Which authority supplies `marked_at` when the first publication mark is written?",
+   "options": [
+    "An injected wall-clock port",
+    "A datetime parameter supplied by the caller",
+    "A declared authority module wrapping the system clock"
+   ],
+   "default_guess": "Use an injected UTC wall-clock port owned by the mark operation.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The caller records the Portal photo_id.",
+     "The deliverer creates the first PublicationMark."
+    ],
+    "outcomes": [
+     "marked_at comes from an injected clock fixed by the test or deployment.",
+     "marked_at comes directly from the process system clock."
+    ],
+    "observer": "A durable-state reader or test sees a different marked_at value and different controllability."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 marked_at representation",
+   "kind": "missing time representation",
+   "text": "`marked_at: datetime`",
+   "question": "Must `marked_at` be timezone-aware UTC, timezone-naive UTC, or another representation, and what precision or normalization is required before persistence and comparison?",
+   "options": [
+    "Timezone-aware UTC datetime",
+    "Timezone-naive datetime whose value is UTC",
+    "Integer epoch time converted only at the model boundary"
+   ],
+   "default_guess": "Use a timezone-aware UTC datetime normalized to a single persistence precision.",
+   "witness": {
+    "initial": "A mark is created at a known UTC instant.",
+    "events": [
+     "The deliverer obtains the instant and serializes the PublicationMark.",
+     "The mark is later read and compared or replayed."
+    ],
+    "outcomes": [
+     "The record contains an aware UTC datetime such as 2026-11-19T10:00:00+00:00.",
+     "The record contains a naive datetime such as 2026-11-19T10:00:00."
+    ],
+    "observer": "The record reader, serializer, and equality tests see different values or types."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 mark operation clock readings",
+   "kind": "unspecified reading count",
+   "text": "The deliverer creates the mark. The scan and a\nrepeated placement read it, so a flow does not publish the photo again. The same `photo_id` again\nreturns the first mark; another `photo_id` is refused.",
+   "question": "How many clock readings may a mark operation take, and must replayed or refused mark calls avoid reading the clock entirely?",
+   "options": [
+    "Read once only when creating the first mark; read zero times for replay and refusal",
+    "Read once at the start of every mark call",
+    "Permit multiple readings and choose one for marked_at"
+   ],
+   "default_guess": "Read the clock exactly once after validation and immediately before creating the first mark; do not read it for replay or refusal.",
+   "witness": {
+    "initial": "A mark already exists with a fixed marked_at and the same photo_id is submitted again.",
+    "events": [
+     "The caller repeats the mark operation.",
+     "The implementation either consults its clock or returns the existing mark without doing so."
+    ],
+    "outcomes": [
+     "The replay takes no clock reading and preserves the original marked_at.",
+     "The replay reads the clock even though the stored marked_at remains unchanged, making observable clock-port interactions differ."
+    ],
+    "observer": "A deterministic clock-port test sees a different number of reads."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 taken_at source",
+   "kind": "vague time source",
+   "text": "The photo date comes from the camera record, otherwise from the file's\n  modification time, and is delivered as UTC without an offset.",
+   "question": "Which camera metadata fields constitute the camera record, in what precedence are they used, and which missing, malformed, contradictory, or out-of-range values cause fallback to file modification time?",
+   "options": [
+    "Use DateTimeOriginal with its offset companion, then fall back directly to file modification time",
+    "Use DateTimeOriginal, then DateTimeDigitized, then DateTime, then file modification time",
+    "Use the image library's single normalized capture-time result and fall back when it rejects the metadata"
+   ],
+   "default_guess": "Use DateTimeOriginal plus its offset metadata when both are valid; otherwise fall back to the file modification time.",
+   "witness": {
+    "initial": "A source image has valid but different DateTimeOriginal and DateTimeDigitized values and a third file-modification instant.",
+    "events": [
+     "The caller delivers the image.",
+     "The preparer selects the camera record and builds M03 and M05."
+    ],
+    "outcomes": [
+     "taken_at and photo_date use DateTimeOriginal.",
+     "taken_at and photo_date use DateTimeDigitized."
+    ],
+    "observer": "The Portal receives a different photo_date and the persisted placement differs."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 and M05 offsetless camera time",
+   "kind": "undefined conversion",
+   "text": "with the moment the photo was taken as UTC without an offset",
+   "question": "How is an EXIF camera date that contains no UTC offset converted into a UTC instant, and is \"UTC without an offset\" specifically a timezone-naive UTC datetime?",
+   "options": [
+    "Interpret an offsetless camera value as already UTC and remove tzinfo",
+    "Interpret it in a configured local timezone, convert to UTC, then remove tzinfo",
+    "Reject it as insufficient and fall back to file modification time"
+   ],
+   "default_guess": "Treat a camera value without usable offset information as insufficient and fall back to the file modification time.",
+   "witness": {
+    "initial": "An image contains DateTimeOriginal 2026-07-01 12:00:00 but no offset or timezone metadata; the server timezone is Europe/Madrid.",
+    "events": [
+     "The image is delivered.",
+     "The preparer converts the camera value for PreparedPhoto.taken_at and PhotoPublication.photo_date."
+    ],
+    "outcomes": [
+     "The stored value is naive 2026-07-01 12:00:00 after assuming the camera value was UTC.",
+     "The stored value is naive 2026-07-01 10:00:00 after interpreting it as Europe/Madrid and converting to UTC."
+    ],
+    "observer": "The Portal and durable placement see photo dates two hours apart."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "file modification time reading",
+   "kind": "unspecified reading count",
+   "text": "otherwise from the file's\n  modification time",
+   "question": "Is the fallback modification time taken from A3 rule 5's single metadata reading, from metadata on the opened file, or from a later reading, and how many such readings may one delivery take?",
+   "options": [
+    "Use the one pre-open metadata reading already required by A3",
+    "Read metadata from the opened file descriptor once",
+    "Read the modification time again during preparation"
+   ],
+   "default_guess": "Use one metadata reading tied to the opened file descriptor so the timestamp and bytes refer to the same opened source.",
+   "witness": {
+    "initial": "A source has no usable camera date and Syncthing changes its modification time between the path metadata check and image preparation.",
+    "events": [
+     "The deliverer performs A3's metadata check.",
+     "Syncthing changes the modification time.",
+     "The deliverer prepares the image and chooses the fallback date."
+    ],
+    "outcomes": [
+     "The photo date is the modification time from the original A3 metadata reading.",
+     "The photo date is the newer value obtained by rereading metadata during preparation."
+    ],
+    "observer": "The Portal and persisted placement see different photo_date values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-07 Required tests",
+   "kind": "incomplete invariant test",
+   "text": "INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).",
+   "question": "What must the tests assert about each earlier placement record, stored image, and mark after both replacement and removal, so that the full INV-07 statement is shown rather than only an image, a mark, or the vague phrase \"keeps its delivery\"?",
+   "options": [
+    "Assert byte-for-byte unchanged placement record, stored image, and mark in both histories",
+    "Assert only that replay still returns a placement",
+    "Narrow INV-07 to the artifacts the existing test description explicitly checks"
+   ],
+   "default_guess": "Require both tests to assert that the earlier placement record, stored image, and mark are each unchanged.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "unobservable invariant test",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "What must the Required tests observe to demonstrate that a new placement never reads a conflict copy, rather than merely demonstrating that it ultimately refuses the copy and writes no placement?",
+   "options": [
+    "Instrument source opening or reading and assert that the conflict-copy file is never opened for reading",
+    "Define rejection from the name before any metadata or content access and assert that boundary",
+    "Weaken INV-19 from \"never reads\" to \"never places\""
+   ],
+   "default_guess": "Require name-based rejection before opening the last segment for reading, with a witness check asserting zero content reads.",
+   "witness": {
+    "initial": "A conflict-copy file contains valid deliverable image bytes and has no existing placement.",
+    "events": [
+     "The caller requests delivery using the conflict-copy name.",
+     "One implementation rejects from the name; another opens and reads the bytes before rejecting."
+    ],
+    "outcomes": [
+     "The operation returns NOT_READY_OR_ABSENT without reading the file.",
+     "The operation reads the complete file and then returns the same NOT_READY_OR_ABSENT result with the same durable state."
+    ],
+    "observer": "A read/open spy, audit hook, or filesystem access observer sees the difference, while the currently described assertions do not."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A6 rule 1 unsafe-reference refusal\",\"kind\":\"contradictory outcome model\",\"text\":\"A photo that cannot be delivered is answered with status `failed` and one member of\\n   `= models.PlacementFailure`.\\n\\notherwise the delivery\\n   is refused with the UNSAFE_REFERENCE member of = models.RefusalCode.\\n\\nA delivery is M08 for the refusals of\\nA3 rule 4 and A6 rule 5, and M06 for the failures of A3 rule 5.\",\"question\":\"Does an unsafe stored-image reference return M08, M06, or another outcome, and which existing statement must be changed to make that answer consistent?\",\"options\":[\"Return M08 with RefusalCode.UNSAFE_REFERENCE and add A6 rule 1 to M08's delivery refusals\",\"Return M06 failed after adding UNSAFE_REFERENCE to PlacementFailure\",\"Define a separate outcome for this refusal\"],\"default_guess\":\"Return M08 with RefusalCode.UNSAFE_REFERENCE and amend M08 to include A6 rule 1.\",\"witness\":{\"initial\":\"A confirmed project has a valid source file and no placement, but a folder below the binary store is a symbolic link leading outside the resolved store.\",\"events\":[\"The caller requests delivery of the valid source.\",\"The deliverer resolves the proposed stored-image path and finds it outside the store.\"],\"outcomes\":[\"The caller receives M08 with RefusalCode.UNSAFE_REFERENCE, as suggested by A6 rule 1.\",\"The caller receives M06 with status failed, as required by A3 rule 5, while M08's definition excludes A6 rule 1.\"],\"observer\":\"The calling flow sees a different response model.\"}},{\"subject\":\"A3/A6 check precedence\",\"kind\":\"missing precedence\",\"text\":\"Checks run in this order: token, request form and project id, connection, photo folder, source id,\\n   project lock, existing placement, named file.\",\"question\":\"Where in this ordered sequence is the A6 rule 1 containment check performed, and which refusal wins when both the source and the stored-image reference are invalid?\",\"options\":[\"Check containment immediately after taking the project lock\",\"Check containment after finding that no placement exists but before opening the source\",\"Check containment only after the source passes preparation, immediately before writing\"],\"default_guess\":\"Check containment after successful source validation and preparation, immediately before the first stored-image write.\",\"witness\":{\"initial\":\"A confirmed project has an unsupported source image, no placement, and a binary-store folder link that makes the proposed stored-image path resolve outside the store.\",\"events\":[\"The caller requests delivery.\",\"The implementation evaluates the source-format and containment checks in an order not fixed by the text.\"],\"outcomes\":[\"The delivery fails with PlacementFailure.UNSUPPORTED_FORMAT before containment is checked.\",\"The delivery is refused with RefusalCode.UNSAFE_REFERENCE before the source-format failure is reported.\"],\"observer\":\"The caller sees a different failure or refusal.\"}},{\"subject\":\"A6 rule 1 path resolution\",\"kind\":\"undefined refusal condition\",\"text\":\"its path,\\n   resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery\\n   is refused with the UNSAFE_REFERENCE member of = models.RefusalCode.\",\"question\":\"What result is required when either the store or proposed path cannot be resolved because a link is dangling, a link loop exists, or traversal is denied?\",\"options\":[\"Treat every resolution failure as UNSAFE_REFERENCE\",\"Treat resolution failure as a stored-image write failure under A3 rule 5 condition 5\",\"Use STATE_UNAVAILABLE for inability to inspect the binary store\"],\"default_guess\":\"Treat any inability to prove containment as M08 with RefusalCode.UNSAFE_REFERENCE.\",\"witness\":{\"initial\":\"A valid delivery reaches a proposed path whose intermediate binary-store folder is a dangling symbolic link.\",\"events\":[\"The deliverer attempts to resolve the store and proposed path before writing.\"],\"outcomes\":[\"Failure to resolve is treated as failure to establish containment and returns UNSAFE_REFERENCE.\",\"Resolution is deferred to the write, which fails and returns M06 failed with UNREADABLE_FILE.\"],\"observer\":\"The caller sees a different outcome model and code.\"}},{\"subject\":\"M08 detail for A6 rule 1\",\"kind\":\"unspecified value\",\"text\":\"`detail` is a fixed sentence for\\npeople that holds no server path and no credential.\",\"question\":\"What exact fixed detail sentence accompanies the new UNSAFE_REFERENCE refusal?\",\"options\":[\"Define one fixed unsafe-reference sentence in the refusal policy\",\"Derive a sentence from the code at runtime\",\"Return an empty detail\"],\"default_guess\":\"Define a fixed generic sentence such as \\\"The stored image reference is unsafe.\\\" without including a path.\",\"witness\":{\"initial\":\"A delivery is refused because its stored-image path resolves outside the binary store.\",\"events\":[\"The service constructs the M08 response.\"],\"outcomes\":[\"The response detail is \\\"The stored image reference is unsafe.\\\"\",\"The response detail is a different implementation-chosen sentence while still exposing no path or credential.\"],\"observer\":\"The caller and any tests comparing the response see different text.\"}},{\"subject\":\"M07 marked_at\",\"kind\":\"missing time source\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"Which authority supplies `marked_at` when the first publication mark is written?\",\"options\":[\"An injected wall-clock port\",\"A datetime parameter supplied by the caller\",\"A declared authority module wrapping the system clock\"],\"default_guess\":\"Use an injected UTC wall-clock port owned by the mark operation.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The caller records the Portal photo_id.\",\"The deliverer creates the first PublicationMark.\"],\"outcomes\":[\"marked_at comes from an injected clock fixed by the test or deployment.\",\"marked_at comes directly from the process system clock.\"],\"observer\":\"A durable-state reader or test sees a different marked_at value and different controllability.\"}},{\"subject\":\"M07 marked_at representation\",\"kind\":\"missing time representation\",\"text\":\"`marked_at: datetime`\",\"question\":\"Must `marked_at` be timezone-aware UTC, timezone-naive UTC, or another representation, and what precision or normalization is required before persistence and comparison?\",\"options\":[\"Timezone-aware UTC datetime\",\"Timezone-naive datetime whose value is UTC\",\"Integer epoch time converted only at the model boundary\"],\"default_guess\":\"Use a timezone-aware UTC datetime normalized to a single persistence precision.\",\"witness\":{\"initial\":\"A mark is created at a known UTC instant.\",\"events\":[\"The deliverer obtains the instant and serializes the PublicationMark.\",\"The mark is later read and compared or replayed.\"],\"outcomes\":[\"The record contains an aware UTC datetime such as 2026-11-19T10:00:00+00:00.\",\"The record contains a naive datetime such as 2026-11-19T10:00:00.\"],\"observer\":\"The record reader, serializer, and equality tests see different values or types.\"}},{\"subject\":\"M07 mark operation clock readings\",\"kind\":\"unspecified reading count\",\"text\":\"The deliverer creates the mark. The scan and a\\nrepeated placement read it, so a flow does not publish the photo again. The same `photo_id` again\\nreturns the first mark; another `photo_id` is refused.\",\"question\":\"How many clock readings may a mark operation take, and must replayed or refused mark calls avoid reading the clock entirely?\",\"options\":[\"Read once only when creating the first mark; read zero times for replay and refusal\",\"Read once at the start of every mark call\",\"Permit multiple readings and choose one for marked_at\"],\"default_guess\":\"Read the clock exactly once after validation and immediately before creating the first mark; do not read it for replay or refusal.\",\"witness\":{\"initial\":\"A mark already exists with a fixed marked_at and the same photo_id is submitted again.\",\"events\":[\"The caller repeats the mark operation.\",\"The implementation either consults its clock or returns the existing mark without doing so.\"],\"outcomes\":[\"The replay takes no clock reading and preserves the original marked_at.\",\"The replay reads the clock even though the stored marked_at remains unchanged, making observable clock-port interactions differ.\"],\"observer\":\"A deterministic clock-port test sees a different number of reads.\"}},{\"subject\":\"M03 taken_at source\",\"kind\":\"vague time source\",\"text\":\"The photo date comes from the camera record, otherwise from the file's\\n  modification time, and is delivered as UTC without an offset.\",\"question\":\"Which camera metadata fields constitute the camera record, in what precedence are they used, and which missing, malformed, contradictory, or out-of-range values cause fallback to file modification time?\",\"options\":[\"Use DateTimeOriginal with its offset companion, then fall back directly to file modification time\",\"Use DateTimeOriginal, then DateTimeDigitized, then DateTime, then file modification time\",\"Use the image library's single normalized capture-time result and fall back when it rejects the metadata\"],\"default_guess\":\"Use DateTimeOriginal plus its offset metadata when both are valid; otherwise fall back to the file modification time.\",\"witness\":{\"initial\":\"A source image has valid but different DateTimeOriginal and DateTimeDigitized values and a third file-modification instant.\",\"events\":[\"The caller delivers the image.\",\"The preparer selects the camera record and builds M03 and M05.\"],\"outcomes\":[\"taken_at and photo_date use DateTimeOriginal.\",\"taken_at and photo_date use DateTimeDigitized.\"],\"observer\":\"The Portal receives a different photo_date and the persisted placement differs.\"}},{\"subject\":\"M03 and M05 offsetless camera time\",\"kind\":\"undefined conversion\",\"text\":\"with the moment the photo was taken as UTC without an offset\",\"question\":\"How is an EXIF camera date that contains no UTC offset converted into a UTC instant, and is \\\"UTC without an offset\\\" specifically a timezone-naive UTC datetime?\",\"options\":[\"Interpret an offsetless camera value as already UTC and remove tzinfo\",\"Interpret it in a configured local timezone, convert to UTC, then remove tzinfo\",\"Reject it as insufficient and fall back to file modification time\"],\"default_guess\":\"Treat a camera value without usable offset information as insufficient and fall back to the file modification time.\",\"witness\":{\"initial\":\"An image contains DateTimeOriginal 2026-07-01 12:00:00 but no offset or timezone metadata; the server timezone is Europe/Madrid.\",\"events\":[\"The image is delivered.\",\"The preparer converts the camera value for PreparedPhoto.taken_at and PhotoPublication.photo_date.\"],\"outcomes\":[\"The stored value is naive 2026-07-01 12:00:00 after assuming the camera value was UTC.\",\"The stored value is naive 2026-07-01 10:00:00 after interpreting it as Europe/Madrid and converting to UTC.\"],\"observer\":\"The Portal and durable placement see photo dates two hours apart.\"}},{\"subject\":\"file modification time reading\",\"kind\":\"unspecified reading count\",\"text\":\"otherwise from the file's\\n  modification time\",\"question\":\"Is the fallback modification time taken from A3 rule 5's single metadata reading, from metadata on the opened file, or from a later reading, and how many such readings may one delivery take?\",\"options\":[\"Use the one pre-open metadata reading already required by A3\",\"Read metadata from the opened file descriptor once\",\"Read the modification time again during preparation\"],\"default_guess\":\"Use one metadata reading tied to the opened file descriptor so the timestamp and bytes refer to the same opened source.\",\"witness\":{\"initial\":\"A source has no usable camera date and Syncthing changes its modification time between the path metadata check and image preparation.\",\"events\":[\"The deliverer performs A3's metadata check.\",\"Syncthing changes the modification time.\",\"The deliverer prepares the image and chooses the fallback date.\"],\"outcomes\":[\"The photo date is the modification time from the original A3 metadata reading.\",\"The photo date is the newer value obtained by rereading metadata during preparation.\"],\"observer\":\"The Portal and persisted placement see different photo_date values.\"}},{\"subject\":\"INV-07 Required tests\",\"kind\":\"incomplete invariant test\",\"text\":\"INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).\",\"question\":\"What must the tests assert about each earlier placement record, stored image, and mark after both replacement and removal, so that the full INV-07 statement is shown rather than only an image, a mark, or the vague phrase \\\"keeps its delivery\\\"?\",\"options\":[\"Assert byte-for-byte unchanged placement record, stored image, and mark in both histories\",\"Assert only that replay still returns a placement\",\"Narrow INV-07 to the artifacts the existing test description explicitly checks\"],\"default_guess\":\"Require both tests to assert that the earlier placement record, stored image, and mark are each unchanged.\"},{\"subject\":\"INV-19 Required tests\",\"kind\":\"unobservable invariant test\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"What must the Required tests observe to demonstrate that a new placement never reads a conflict copy, rather than merely demonstrating that it ultimately refuses the copy and writes no placement?\",\"options\":[\"Instrument source opening or reading and assert that the conflict-copy file is never opened for reading\",\"Define rejection from the name before any metadata or content access and assert that boundary\",\"Weaken INV-19 from \\\"never reads\\\" to \\\"never places\\\"\"],\"default_guess\":\"Require name-based rejection before opening the last segment for reading, with a witness check asserting zero content reads.\",\"witness\":{\"initial\":\"A conflict-copy file contains valid deliverable image bytes and has no existing placement.\",\"events\":[\"The caller requests delivery using the conflict-copy name.\",\"One implementation rejects from the name; another opens and reads the bytes before rejecting.\"],\"outcomes\":[\"The operation returns NOT_READY_OR_ABSENT without reading the file.\",\"The operation reads the complete file and then returns the same NOT_READY_OR_ABSENT result with the same durable state.\"],\"observer\":\"A read/open spy, audit hook, or filesystem access observer sees the difference, while the currently described assertions do not.\"}}]}",
+ "set_aside": []
+}
