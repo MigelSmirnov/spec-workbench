@@ -57,8 +57,10 @@ cycles, and `domain_models` names no other module.
 reads the record itself at its connection check, so no module keeps connections in memory.
 
 `deliverer_router` is the module that `http_router_backend/v1` generates, and it holds only what that
-backend emits. It imports the route handlers of `deliverer_api`, so `deliverer_api` cannot import it
-back. The router checks no token: the extractor of the `Authorization` field that the backend emits is
+backend emits. It imports the route handlers `scan_route`, `deliver_route` and `mark_route` of
+`deliverer_api`, which are not public capabilities: they are the handlers the route closure assigns to
+`deliverer_api` as the owner of irregular routes, and the router only registers them. So `deliverer_api`
+cannot import the router back. The router checks no token: the extractor of the `Authorization` field that the backend emits is
 called by no route it serves, since the health route needs no token and every route that does is a
 handler of `deliverer_api`, which reads the field and compares the token itself, before the project id
 or the body.
@@ -536,9 +538,6 @@ mark_photo_published
 
 ```text
 answer_health
-scan_route
-deliver_route
-mark_route
 ```
 
 ### Trace inputs

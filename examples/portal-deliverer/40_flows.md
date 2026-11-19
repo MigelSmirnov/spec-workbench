@@ -82,7 +82,7 @@ reports `SourceFile` values and `module:delivery_store` supplies the records. M0
 
 ### Steps
 
-1. The scan route that `capability:deliverer_router.create_app` built passes the request to `capability:deliverer_api.scan_route`, which checks the token and the project id.
+1. The scan route that `capability:deliverer_router.create_app` built passes the request to its handler in `module:deliverer_api`, which checks the token and the project id.
 2. `capability:photo_delivery.scan_project_photos` asks `capability:object_connections.confirmed_connection` for
    the project's connection, reading the connections file once.
 3. `capability:object_connections.available_photo_folder` checks the photo folder.
@@ -117,7 +117,7 @@ crosses back to the caller.
 
 ### Steps
 
-1. The delivery route that `capability:deliverer_router.create_app` built passes the request to `capability:deliverer_api.deliver_route`, which checks the token, the request form and the
+1. The delivery route that `capability:deliverer_router.create_app` built passes the request to its handler in `module:deliverer_api`, which checks the token, the request form and the
    project id.
 2. `capability:photo_delivery.deliver_project_photo` asks `capability:object_connections.confirmed_connection`
    and `capability:object_connections.available_photo_folder`, then checks the form of the source id.
@@ -160,7 +160,7 @@ the connection and `module:delivery_store` keeps the mark. M07 crosses back to t
 
 ### Steps
 
-1. The mark route that `capability:deliverer_router.create_app` built passes the request to `capability:deliverer_api.mark_route`, which checks the token, the request form, the project id
+1. The mark route that `capability:deliverer_router.create_app` built passes the request to its handler in `module:deliverer_api`, which checks the token, the request form, the project id
    and the `photo_id`.
 2. `capability:photo_delivery.mark_photo_published` checks the form of the source id.
 3. It reads the clock once through `capability:system_clock.utc_now`.
