@@ -64,7 +64,8 @@ record (R0-09) needs a mapping to the Registry project id. That step does not ch
 What one scan saw for one file of the photo folder. A placed file adds its `file_ref`, a published
 file adds its Portal `photo_id`, and files with the same content carry the same `source_id`. The
 deliverer computes it on each scan; the calling flow reads it. A server path is never part of it. `size`
-is the size the file's metadata gave when it was listed. `source_id` is present for `ready`, `placed` and
+is the number of bytes that were read, the bytes `source_id` is the hash of; a file rejected before its
+bytes were read has the size its metadata gave when it was listed. `source_id` is present for `ready`, `placed` and
 `published` and absent for `rejected`, `reason` is present only for `rejected`, `file_ref` for `placed`
 and `published`, and `photo_id` only for `published`.
 
