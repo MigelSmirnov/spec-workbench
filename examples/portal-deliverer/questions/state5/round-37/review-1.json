@@ -1,0 +1,183 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "empty_value_semantics",
+   "text": "A required setting that is absent ends the start, and an optional one that is absent takes its default.",
+   "question": "When an environment variable is present with the empty string, is it absent, an invalid value, or a valid string value, separately for required paths and optional settings?",
+   "options": [
+    "Treat empty as absent for every setting",
+    "Treat empty as present and invalid for every setting",
+    "Treat empty according to each field's type, allowing it for string paths unless separately forbidden"
+   ],
+   "default_guess": "Treat empty as present but invalid for every setting.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_TIMEZONE is set to the empty string and every other setting is valid.",
+    "events": [
+     "The deployment starts the service.",
+     "runtime_settings reads the environment."
+    ],
+    "outcomes": [
+     "The empty value counts as absent, so timezone becomes Europe/Madrid and startup continues.",
+     "The empty value is present but is not an accepted time zone, so startup ends."
+    ],
+    "observer": "The deployment and the calling flow see whether the service listens."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "environment_decoding",
+   "text": "that module decides how a value is read.",
+   "question": "What exact lexical forms does the environment reader accept for port and RuntimeEnvironment, including leading or trailing whitespace, a leading plus sign, leading zeroes, non-ASCII digits, and case variants of the environment values?",
+   "options": [
+    "Accept only canonical ASCII forms: decimal ASCII digits for port and the exact lowercase enum values",
+    "Apply ordinary language or library conversions, which may accept whitespace, signs, leading zeroes or case variants",
+    "Specify a different field-by-field normalization"
+   ],
+   "default_guess": "Accept decimal ASCII digits only for port and exact lowercase text for RuntimeEnvironment, with no trimming or case folding.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_PORT is +8850 and all other settings are valid.",
+    "events": [
+     "The deployment starts the service.",
+     "runtime_settings converts the port value."
+    ],
+    "outcomes": [
+     "Integer conversion accepts +8850 and startup continues on port 8850.",
+     "The value is not canonical decimal ASCII digits, so startup ends."
+    ],
+    "observer": "The deployment sees whether the service listens."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "contradictory_validation_owner",
+   "text": "A8: a required setting is present, an optional one that is absent takes its decided default, and every value is one the start-up table accepts.",
+   "question": "Does load_runtime_settings reject a well-formed port above 65535, as this operation's enforcement and error text say, or return it for deliverer_service.load_config to reject, as the cross-module ownership table and load_config error text say?",
+   "options": [
+    "runtime_settings rejects every out-of-range port",
+    "runtime_settings parses a well-formed integer and deliverer_service rejects values above 65535",
+    "Remove the split and assign all port range validation to one named operation"
+   ],
+   "default_guess": "Parse the integer in runtime_settings and assign the complete 1-to-65535 range check to deliverer_service.load_config.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_PORT is 70000, the connections file is valid, and every other setting is valid.",
+    "events": [
+     "The deployment calls runtime_settings.load_runtime_settings.",
+     "If settings are returned, deliverer_service calls load_config."
+    ],
+    "outcomes": [
+     "load_runtime_settings ends startup because 70000 is not accepted by the start-up table.",
+     "load_runtime_settings returns port 70000 and load_config ends startup because the port is above 65535."
+    ],
+    "observer": "deliverer_service sees whether load_runtime_settings returns, and instrumentation sees which public operation refuses the value."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "contradictory_validation_owner",
+   "text": "A missing required setting or a value the start-up table does not accept ends the start.",
+   "question": "Does load_runtime_settings reject an unknown time-zone name, or does it return the string for deliverer_service.load_config to reject, as the ownership table and load_config error text require?",
+   "options": [
+    "runtime_settings consults the time-zone database and rejects unknown names",
+    "runtime_settings accepts the string form and deliverer_service consults the time-zone database",
+    "Assign both parsing and database lookup to one named operation"
+   ],
+   "default_guess": "Let runtime_settings accept the string and let deliverer_service.load_config perform the time-zone database lookup.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_TIMEZONE is No/Such_Zone and every other setting is valid.",
+    "events": [
+     "The deployment calls runtime_settings.load_runtime_settings.",
+     "If settings are returned, deliverer_service calls load_config."
+    ],
+    "outcomes": [
+     "load_runtime_settings ends startup because the table does not accept the time zone.",
+     "load_runtime_settings returns the string and load_config ends startup because the time-zone database does not know it."
+    ],
+    "observer": "deliverer_service sees whether load_runtime_settings returns, and instrumentation sees which public operation performs the database lookup."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_service.load_config",
+   "kind": "missing_range_case",
+   "text": "A port above 65535, an unknown time zone or an invalid connections file ends the start.",
+   "question": "Which operation rejects the well-formed whole number 0, which A8 excludes from the allowed range but which is neither a value of the wrong form nor a port above 65535?",
+   "options": [
+    "runtime_settings rejects every port below 1",
+    "deliverer_service.load_config rejects every port outside 1 to 65535",
+    "No operation rejects 0 and the web server receives it"
+   ],
+   "default_guess": "deliverer_service.load_config should reject every parsed port outside 1 to 65535.",
+   "witness": {
+    "initial": "PORTAL_DELIVERER_PORT is 0 and every other setting and file is valid.",
+    "events": [
+     "runtime_settings parses 0 as a whole number.",
+     "deliverer_service loads the configuration.",
+     "run_service passes the port to the web server unless an earlier operation rejects it."
+    ],
+    "outcomes": [
+     "Startup ends because 0 is outside A8's accepted range.",
+     "Startup succeeds with the server's special handling of port 0, commonly an automatically selected port."
+    ],
+    "observer": "The deployment and caller see failure versus a service listening on an unintended port."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_service.load_config",
+   "kind": "validation_order",
+   "text": "A port above 65535, an unknown time zone or an invalid connections file ends the start.",
+   "question": "In what order does load_config validate the port, resolve the time zone, and read and validate the connections file, and does it read the file when an earlier setting is invalid?",
+   "options": [
+    "Validate port, then time zone, then read the connections file",
+    "Read and validate the connections file before validating port and time zone",
+    "Define another explicit order"
+   ],
+   "default_guess": "Validate port first, then time zone, then read the connections file.",
+   "witness": {
+    "initial": "The supplied port is 70000 and the connections-file path names a monitored invalid file.",
+    "events": [
+     "deliverer_service calls load_config.",
+     "load_config encounters both the out-of-range port and the invalid connections file."
+    ],
+    "outcomes": [
+     "The port is rejected first and the connections file is never opened.",
+     "The connections file is opened and rejected before the port is considered."
+    ],
+    "observer": "The installation operator or a file-access monitor sees whether the connections file is read."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "contradictory_responsibility",
+   "text": "the refusal of a well-formed port above 65535 and of a time zone the database does not know",
+   "question": "How can deliverer_service own these refusals when load_runtime_settings promises that every returned value is accepted by the same start-up table, making both deliverer_service cases unreachable?",
+   "options": [
+    "Narrow load_runtime_settings to syntactic conversion and missing/default handling",
+    "Move range and time-zone-database validation from deliverer_service to runtime_settings",
+    "Define an intermediate RuntimeSettings form that explicitly permits parsed but semantically invalid values"
+   ],
+   "default_guess": "Narrow load_runtime_settings to presence, defaults and syntactic conversion, and put all semantic port-range and time-zone-database checks in load_config.",
+   "witness": {
+    "initial": "One start uses port 70000; another uses an unknown time-zone name.",
+    "events": [
+     "runtime_settings applies its stated guarantee that every output value is accepted by the start-up table.",
+     "deliverer_service then calls load_config with the returned settings."
+    ],
+    "outcomes": [
+     "The invalid values never reach load_config, so its two stated refusals are unreachable.",
+     "The invalid values reach load_config, so load_runtime_settings returned values the start-up table does not accept."
+    ],
+    "observer": "Implementers and tests of the two module boundaries see incompatible reachable behavior."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"empty_value_semantics\",\"text\":\"A required setting that is absent ends the start, and an optional one that is absent takes its default.\",\"question\":\"When an environment variable is present with the empty string, is it absent, an invalid value, or a valid string value, separately for required paths and optional settings?\",\"options\":[\"Treat empty as absent for every setting\",\"Treat empty as present and invalid for every setting\",\"Treat empty according to each field's type, allowing it for string paths unless separately forbidden\"],\"default_guess\":\"Treat empty as present but invalid for every setting.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_TIMEZONE is set to the empty string and every other setting is valid.\",\"events\":[\"The deployment starts the service.\",\"runtime_settings reads the environment.\"],\"outcomes\":[\"The empty value counts as absent, so timezone becomes Europe/Madrid and startup continues.\",\"The empty value is present but is not an accepted time zone, so startup ends.\"],\"observer\":\"The deployment and the calling flow see whether the service listens.\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"environment_decoding\",\"text\":\"that module decides how a value is read.\",\"question\":\"What exact lexical forms does the environment reader accept for port and RuntimeEnvironment, including leading or trailing whitespace, a leading plus sign, leading zeroes, non-ASCII digits, and case variants of the environment values?\",\"options\":[\"Accept only canonical ASCII forms: decimal ASCII digits for port and the exact lowercase enum values\",\"Apply ordinary language or library conversions, which may accept whitespace, signs, leading zeroes or case variants\",\"Specify a different field-by-field normalization\"],\"default_guess\":\"Accept decimal ASCII digits only for port and exact lowercase text for RuntimeEnvironment, with no trimming or case folding.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_PORT is +8850 and all other settings are valid.\",\"events\":[\"The deployment starts the service.\",\"runtime_settings converts the port value.\"],\"outcomes\":[\"Integer conversion accepts +8850 and startup continues on port 8850.\",\"The value is not canonical decimal ASCII digits, so startup ends.\"],\"observer\":\"The deployment sees whether the service listens.\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"contradictory_validation_owner\",\"text\":\"A8: a required setting is present, an optional one that is absent takes its decided default, and every value is one the start-up table accepts.\",\"question\":\"Does load_runtime_settings reject a well-formed port above 65535, as this operation's enforcement and error text say, or return it for deliverer_service.load_config to reject, as the cross-module ownership table and load_config error text say?\",\"options\":[\"runtime_settings rejects every out-of-range port\",\"runtime_settings parses a well-formed integer and deliverer_service rejects values above 65535\",\"Remove the split and assign all port range validation to one named operation\"],\"default_guess\":\"Parse the integer in runtime_settings and assign the complete 1-to-65535 range check to deliverer_service.load_config.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_PORT is 70000, the connections file is valid, and every other setting is valid.\",\"events\":[\"The deployment calls runtime_settings.load_runtime_settings.\",\"If settings are returned, deliverer_service calls load_config.\"],\"outcomes\":[\"load_runtime_settings ends startup because 70000 is not accepted by the start-up table.\",\"load_runtime_settings returns port 70000 and load_config ends startup because the port is above 65535.\"],\"observer\":\"deliverer_service sees whether load_runtime_settings returns, and instrumentation sees which public operation refuses the value.\"}},{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"contradictory_validation_owner\",\"text\":\"A missing required setting or a value the start-up table does not accept ends the start.\",\"question\":\"Does load_runtime_settings reject an unknown time-zone name, or does it return the string for deliverer_service.load_config to reject, as the ownership table and load_config error text require?\",\"options\":[\"runtime_settings consults the time-zone database and rejects unknown names\",\"runtime_settings accepts the string form and deliverer_service consults the time-zone database\",\"Assign both parsing and database lookup to one named operation\"],\"default_guess\":\"Let runtime_settings accept the string and let deliverer_service.load_config perform the time-zone database lookup.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_TIMEZONE is No/Such_Zone and every other setting is valid.\",\"events\":[\"The deployment calls runtime_settings.load_runtime_settings.\",\"If settings are returned, deliverer_service calls load_config.\"],\"outcomes\":[\"load_runtime_settings ends startup because the table does not accept the time zone.\",\"load_runtime_settings returns the string and load_config ends startup because the time-zone database does not know it.\"],\"observer\":\"deliverer_service sees whether load_runtime_settings returns, and instrumentation sees which public operation performs the database lookup.\"}},{\"subject\":\"public_op:deliverer_service.load_config\",\"kind\":\"missing_range_case\",\"text\":\"A port above 65535, an unknown time zone or an invalid connections file ends the start.\",\"question\":\"Which operation rejects the well-formed whole number 0, which A8 excludes from the allowed range but which is neither a value of the wrong form nor a port above 65535?\",\"options\":[\"runtime_settings rejects every port below 1\",\"deliverer_service.load_config rejects every port outside 1 to 65535\",\"No operation rejects 0 and the web server receives it\"],\"default_guess\":\"deliverer_service.load_config should reject every parsed port outside 1 to 65535.\",\"witness\":{\"initial\":\"PORTAL_DELIVERER_PORT is 0 and every other setting and file is valid.\",\"events\":[\"runtime_settings parses 0 as a whole number.\",\"deliverer_service loads the configuration.\",\"run_service passes the port to the web server unless an earlier operation rejects it.\"],\"outcomes\":[\"Startup ends because 0 is outside A8's accepted range.\",\"Startup succeeds with the server's special handling of port 0, commonly an automatically selected port.\"],\"observer\":\"The deployment and caller see failure versus a service listening on an unintended port.\"}},{\"subject\":\"public_op:deliverer_service.load_config\",\"kind\":\"validation_order\",\"text\":\"A port above 65535, an unknown time zone or an invalid connections file ends the start.\",\"question\":\"In what order does load_config validate the port, resolve the time zone, and read and validate the connections file, and does it read the file when an earlier setting is invalid?\",\"options\":[\"Validate port, then time zone, then read the connections file\",\"Read and validate the connections file before validating port and time zone\",\"Define another explicit order\"],\"default_guess\":\"Validate port first, then time zone, then read the connections file.\",\"witness\":{\"initial\":\"The supplied port is 70000 and the connections-file path names a monitored invalid file.\",\"events\":[\"deliverer_service calls load_config.\",\"load_config encounters both the out-of-range port and the invalid connections file.\"],\"outcomes\":[\"The port is rejected first and the connections file is never opened.\",\"The connections file is opened and rejected before the port is considered.\"],\"observer\":\"The installation operator or a file-access monitor sees whether the connections file is read.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"contradictory_responsibility\",\"text\":\"the refusal of a well-formed port above 65535 and of a time zone the database does not know\",\"question\":\"How can deliverer_service own these refusals when load_runtime_settings promises that every returned value is accepted by the same start-up table, making both deliverer_service cases unreachable?\",\"options\":[\"Narrow load_runtime_settings to syntactic conversion and missing/default handling\",\"Move range and time-zone-database validation from deliverer_service to runtime_settings\",\"Define an intermediate RuntimeSettings form that explicitly permits parsed but semantically invalid values\"],\"default_guess\":\"Narrow load_runtime_settings to presence, defaults and syntactic conversion, and put all semantic port-range and time-zone-database checks in load_config.\",\"witness\":{\"initial\":\"One start uses port 70000; another uses an unknown time-zone name.\",\"events\":[\"runtime_settings applies its stated guarantee that every output value is accepted by the start-up table.\",\"deliverer_service then calls load_config with the returned settings.\"],\"outcomes\":[\"The invalid values never reach load_config, so its two stated refusals are unreachable.\",\"The invalid values reach load_config, so load_runtime_settings returned values the start-up table does not accept.\"],\"observer\":\"Implementers and tests of the two module boundaries see incompatible reachable behavior.\"}}]}",
+ "set_aside": []
+}
