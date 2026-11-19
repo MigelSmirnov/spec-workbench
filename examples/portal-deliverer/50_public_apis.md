@@ -438,7 +438,7 @@ A held lock for the duration of the caller's block.
 
 ### Observable effect
 
-Creates the project lock file on first use with the mode of `LOCK_FILE_MODE`, and the missing folders below the state folder with `STATE_FOLDER_MODE`; a missing state folder is refused like a lock file that cannot be opened. It opens the lock file for reading and writing without following a link, gives it the mode of `LOCK_FILE_MODE` each time, and holds an operating system lock.
+Creates the project lock file on first use with the mode of `LOCK_FILE_MODE`, and the missing folders below the state folder with `STATE_FOLDER_MODE`; a missing state folder is refused like a lock file that cannot be opened. It creates an absent lock file in place with the mode of `LOCK_FILE_MODE`, opens an existing one as it stands without changing it, never follows a link, and holds an operating system lock.
 
 ### Enforces
 
@@ -446,7 +446,7 @@ A6 rule 4 and INV-12.
 
 ### Errors
 
-`state_unavailable` when the state folder is missing, when a folder leading to the lock file cannot be created or given its mode or is a symbolic link or not a folder, when the lock file cannot be opened, given its mode or locked, or when its entry is a symbolic link or not a regular file.
+`state_unavailable` when the state folder is missing, when a folder leading to the lock file cannot be created or given its mode or is a symbolic link or not a folder, when the lock file cannot be created, opened, given its mode on creation or locked, or when its entry is a symbolic link or not a regular file.
 
 ### State impact
 

@@ -152,7 +152,8 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
 1. A placement is identified by the project and the SHA-256 of the source content (R0-10).
 2. Delivering content that already has a placement answers `replayed` with the stored placement and the
    current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even
-   when the source file has left the folder.
+   when the source file has left the folder. An absent project lock file and the folders leading to it
+   are the one exception: taking the lock creates them (A6 rules 2 and 4).
 3. One call delivers one photo, named by `name`, a relative path in the form a scan reports, and
    `source_id`. The service keeps no memory of earlier scans: it judges the name and the file when the call
    runs. A named file that passes condition 1 of rule 5 and that A1 orders 1 and 2 do not reject from its
@@ -348,7 +349,7 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
    create a folder or set its mode fails it too; for the lock file that is the refusal of rule 5. The Portal
    reads a stored image and alone decides who may retrieve it. The deliverer has no operation that
    returns image bytes.
-3. Each file is written to a temporary name in its folder, synchronised to disk and renamed, and
+3. Each stored image and record is written to a temporary name in its folder, synchronised to disk and renamed, and
    its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. The
    temporary name begins with the imported `TEMPORARY_NAME_PREFIX` constant and is chosen fresh for each
    write; the temporary file is created exclusively, never reusing an existing entry, by the standard
@@ -372,13 +373,17 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 4. Deliveries and marks of one project run one at a time, across processes, under an operating
    system lock on one lock file of that project in the state folder. A caller waits for the lock
    without a time limit, and the lock is released when its holder ends. The lock file is created on
-   first use with the mode of the imported `LOCK_FILE_MODE` constant and never removed; it holds no content. It is opened for reading and writing,
-   created when absent, without following a link, and given the mode of `LOCK_FILE_MODE` each time it is
-   opened, whatever the umask; a failure to set that mode is refused like a lock file that cannot be
-   opened. An entry at its address that is a symbolic link or not a regular file is refused like a
-   lock file that cannot be opened. A wait ends only when the lock is taken or the process ends. The check that a placement
+   first use and never removed. It is not written through a temporary name: it is created in place,
+   exclusively, for reading and writing and without following a link, and once it is found to be a regular
+   file it is given the mode of the imported `LOCK_FILE_MODE` constant, whatever the umask; a failure to
+   set that mode is refused like a lock file that cannot be opened. When it already exists it is opened
+   for reading and writing without following a link and used as it stands: its mode and its bytes are
+   never changed or read, so taking the lock writes nothing. The service writes no content into it. An
+   entry at its address that is a symbolic link or not a regular file is refused like a lock file that
+   cannot be opened, before anything about it is changed. A wait ends only when the lock is taken or the process ends. The check that a placement
    or mark exists and its writing happen inside that lock.
-5. A record is absent only when no entry exists at its address. A placement or mark record is opened
+5. A record is absent only when no entry exists at its address, also when a folder on its address does
+   not exist; reading a record creates nothing. A placement or mark record is opened
    without following a link and validated as JSON against its closed model: every field present with its
    type, every enumeration value a member, every nested model valid, and no other field. Its `project_id`
    and `source_id` must equal those of its address. A record that is a link, even a dangling one, or that
@@ -395,7 +400,7 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 
 ### Required tests
 
-- INV-12: concurrent placements of one source, in one process and in separate processes, answer one `placed` and otherwise `replayed` and leave one placement record and one stored image (`test_separate_processes_leave_one_placement`), and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).
+- INV-12: concurrent placements of one source, in one process and in separate processes, answer one `placed` and otherwise `replayed` and leave one placement record and one stored image (`test_separate_processes_leave_one_placement`), and marks of two `photo_id` values, in one process and in separate processes, answer one `marked`, `replayed` for the same value and `publication_conflict` for the other, and leave one mark record holding the `photo_id` whose call answered `marked` (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).
 - INV-20: with a damaged placement or mark record, scan, delivery and mark each answer M08 with the STATE_UNAVAILABLE member of = models.RefusalCode, the record stays as it was and no placement record, mark record or stored image is added or changed (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), a damaged mark without a placement stops a new placement (`test_a_damaged_mark_without_a_placement_stops_a_new_placement`), a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`), and a record that is a link, dangling or not, or that names another source is refused the same way (`test_a_record_not_written_at_its_address_is_refused`).
 
 ### Consequence

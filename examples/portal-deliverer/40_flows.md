@@ -116,7 +116,7 @@ reference and publication body, and a replayed photo carries its `photo_id` when
 `module:deliverer_api` refuses a wrong token, request form or project id. After it, `module:object_connections`
 refuses the connection or folder, `module:photo_delivery` refuses a malformed source id, and `module:delivery_store`
 refuses with `state_unavailable` when the lock or a record cannot be used. `module:photo_delivery` turns every condition of A3 rule 5 into a `failed` M06. The lock is released on every path.
-A failed atomic write removes its temporary file. An image left by a failed record write is completed by a
+A failed atomic write removes its temporary file, unless that removal fails too; the temporary file then stays, as A6 rule 3 decides. An image left by a failed record write is completed by a
 repeated delivery of the same file.
 
 ## `flow:record_publication`

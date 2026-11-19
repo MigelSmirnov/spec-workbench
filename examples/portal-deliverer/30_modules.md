@@ -413,7 +413,8 @@ build_publication
 
 - whether a placement or mark may be written;
 - the meaning of a replay or a conflict;
-- removal of anything, which the first version does not offer (A3).
+- removal of a placement, a mark or a stored image, which the first version does not offer (A3);
+  removing its own temporary file after a failed write (A6 rule 3) is not such a removal.
 
 ### Candidate public capabilities
 
