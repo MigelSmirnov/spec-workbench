@@ -1,0 +1,349 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_source",
+   "text": "`photo_id: UUID`, `marked_at: datetime`.",
+   "question": "What authority supplies the fresh `marked_at` instant when a publication mark is created?",
+   "options": [
+    "an injected clock port",
+    "a datetime parameter supplied by the caller",
+    "a declared authority module",
+    "the process wall clock read directly"
+   ],
+   "default_guess": "Use an injected UTC clock port owned by the service.",
+   "witness": {
+    "initial": "A placement exists and no publication mark exists; the process wall clock and a test clock report different instants.",
+    "events": [
+     "The calling flow records the publication.",
+     "The deliverer creates M07."
+    ],
+    "outcomes": [
+     "M07 stores the process wall-clock instant.",
+     "M07 stores the instant supplied by the injected authority."
+    ],
+    "observer": "The caller replaying the mark and anyone reading the persisted mark record."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_representation",
+   "text": "`marked_at: datetime`.",
+   "question": "Must `marked_at` be timezone-aware UTC, naive UTC, local time in the run setting, or another representation?",
+   "options": [
+    "timezone-aware UTC datetime",
+    "naive UTC datetime",
+    "naive datetime in the configured time zone",
+    "local datetime with an offset"
+   ],
+   "default_guess": "Store a timezone-aware UTC datetime and serialize it with an explicit UTC offset.",
+   "witness": {
+    "initial": "The configured time zone is Europe/Madrid and a mark is created at 2026-07-01T10:00:00Z.",
+    "events": [
+     "The calling flow records the publication.",
+     "The deliverer persists and later replays the mark."
+    ],
+    "outcomes": [
+     "The record contains an aware UTC value equivalent to 2026-07-01T10:00:00Z.",
+     "The record contains a naive local value 2026-07-01T12:00:00."
+    ],
+    "observer": "The caller and any record reader."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "publication-mark operation",
+   "kind": "missing_clock_read_count",
+   "text": "The deliverer creates it once when placing a photo.",
+   "question": "How many readings of the decided time source may the mark operation take, and which reading becomes `marked_at`?",
+   "options": [
+    "exactly one reading for a newly created mark and none for a replay or refusal",
+    "multiple readings are allowed but the first is stored",
+    "multiple readings are allowed and the last is stored"
+   ],
+   "default_guess": "Read the clock exactly once only after all refusal checks and immediately before constructing a new mark.",
+   "witness": {
+    "initial": "A deterministic clock returns T1 on its first read and T2 on its second; the placement exists and has no mark.",
+    "events": [
+     "The calling flow submits a valid mark request.",
+     "The operation validates and writes the mark."
+    ],
+    "outcomes": [
+     "The operation reads once and stores T1.",
+     "The operation reads during validation and again during construction and stores T2."
+    ],
+    "observer": "A deterministic test and anyone reading `marked_at`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 request forms",
+   "kind": "undefined_request_forms",
+   "text": "Any other project id, and a body\n   that is not the request form of its operation, is refused with `invalid_request`.",
+   "question": "What is the request form of scan, mark, and health, including whether each operation permits no body, an empty body, and which fields and types a mark body contains?",
+   "options": [
+    "define a separate closed body schema for every operation",
+    "scan and health require no body while mark has a closed `source_id`/`photo_id` body",
+    "apply `invalid_request` only to placement bodies"
+   ],
+   "default_guess": "Define closed schemas per operation: no body for scan and health, placement with exactly `name` and `source_id`, and mark with exactly `source_id` and `photo_id`.",
+   "witness": {
+    "initial": "A valid token and canonical project id are supplied to scan with a JSON body containing an unused field.",
+    "events": [
+     "The calling flow invokes scan with `{ \"unused\": true }`."
+    ],
+    "outcomes": [
+     "The request is refused with `invalid_request` because scan requires no body.",
+     "The body is ignored because no scan request form was defined."
+    ],
+    "observer": "The calling flow."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 placement request form",
+   "kind": "undefined_wire_form",
+   "text": "The request form is a body holding only `name` and\n   `source_id`, both strings.",
+   "question": "Which wire representation and media type constitute this body, and how are an absent body, malformed JSON, duplicate object keys, non-object JSON, and unsupported content types classified?",
+   "options": [
+    "a JSON object with exactly two unique keys and a required JSON media type",
+    "any decodable mapping with the two resulting string values",
+    "framework-native validation semantics"
+   ],
+   "default_guess": "Require a JSON object with exactly one `name` key and one `source_id` key, no other keys, and reject every other representation as `invalid_request`.",
+   "witness": {
+    "initial": "The token and project id are valid.",
+    "events": [
+     "The caller sends JSON containing two `name` keys followed by one `source_id` key."
+    ],
+    "outcomes": [
+     "The request is refused because duplicate keys are not the closed request form.",
+     "The JSON decoder keeps the last `name`, and the request is accepted."
+    ],
+    "observer": "The calling flow and the source folder accessed by the placement."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 project-id validation",
+   "kind": "undefined_validation_representation",
+   "text": "A project id is accepted only in the canonical spelling of a UUID: 36 characters, lowercase\n   hexadecimal digits in groups of 8, 4, 4, 4 and 12 joined by hyphens.",
+   "question": "Is canonical spelling checked on the raw URI path segment or on the percent-decoded route value?",
+   "options": [
+    "check the raw URI segment and reject every encoded spelling",
+    "check the decoded route value",
+    "permit percent encoding only for characters outside the UUID alphabet"
+   ],
+   "default_guess": "Require the raw path segment itself to be the 36-character canonical spelling.",
+   "witness": {
+    "initial": "A connection exists for project `aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa`.",
+    "events": [
+     "The caller sends the same UUID with its first `a` represented as `%61` in the path."
+    ],
+    "outcomes": [
+     "The raw spelling is noncanonical and the service answers `invalid_request`.",
+     "Routing decodes `%61` to `a`, validation sees a canonical UUID, and the operation proceeds."
+    ],
+    "observer": "The calling flow."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "scan refusal precedence",
+   "kind": "missing_check_order",
+   "text": "A request refused before its connection check does not read the file.",
+   "question": "After authentication, in what order does scan check its project-id/body form, the connections file, the project connection, and the photo folder?",
+   "options": [
+    "request form and project id before every connection or folder check",
+    "connections file before request validation",
+    "only authentication precedence is fixed"
+   ],
+   "default_guess": "Use token, request form and project id, connection file and project connection, then photo folder.",
+   "witness": {
+    "initial": "The caller has a valid token; the project id is uppercase and the connections file is unreadable.",
+    "events": [
+     "The caller invokes scan."
+    ],
+    "outcomes": [
+     "The service answers `invalid_request` and does not read the connections file.",
+     "The service reads the connections file and answers `folder_unavailable`."
+    ],
+    "observer": "The calling flow and an observer of connections-file access."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "mark refusal precedence",
+   "kind": "missing_check_order",
+   "text": "A source id must\n   match the imported `SOURCE_ID_PATTERN` constant in full.",
+   "question": "For mark, what is the order among request-form/project-id validation, connection checks, source-id validation, project locking, placement lookup, and publication-conflict checks?",
+   "options": [
+    "the same prefix as placement through source-id validation, followed by lock and record checks",
+    "validate source id before connection",
+    "perform connection and state checks before validating source id"
+   ],
+   "default_guess": "Use token, request form and project id, connection, source id, project lock, placement, then existing mark/conflict.",
+   "witness": {
+    "initial": "The token is valid, the connection is unconfirmed, and the mark request has a nonmatching source id.",
+    "events": [
+     "The calling flow submits the mark request."
+    ],
+    "outcomes": [
+     "The service answers `connection_not_confirmed`.",
+     "The service answers `invalid_source_id`."
+    ],
+    "observer": "The calling flow."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "unauthorized refusal detail",
+   "kind": "contradictory_reason",
+   "text": "A request without that\n   field, with more than one, or with any other value is refused with `unauthorized` before its\n   identifiers or body are examined. / `the request does not carry the deliverer's token`",
+   "question": "What fixed detail must describe a request containing two Authorization fields when one or both carry the correct token?",
+   "options": [
+    "use a detail saying the request does not carry exactly one valid authorization field",
+    "retain the current detail even when the request carries the token",
+    "give duplicate fields a distinct refusal code and detail"
+   ],
+   "default_guess": "Change the fixed unauthorized detail to state that the request does not carry exactly one valid authorization field.",
+   "witness": {
+    "initial": "The caller knows the correct token.",
+    "events": [
+     "The caller sends two identical `Authorization: Bearer <correct-token>` fields."
+    ],
+    "outcomes": [
+     "A5 requires an `unauthorized` refusal because there is more than one field.",
+     "The A8 detail asserts that the request does not carry the token, although it carries it twice."
+    ],
+    "observer": "The calling flow receiving M08."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "successful placement answer versus A5 response policy",
+   "kind": "contradiction",
+   "text": "An answer never holds a server path, a credential or text the caller sent. File names are returned\n    as plain data. / `name` is the name the delivery request carried when the source was placed",
+   "question": "May a successful placement or replay return M04.name even though it is text supplied by the caller?",
+   "options": [
+    "allow the validated file name in successful placement answers",
+    "remove `name` from returned placement data",
+    "prohibit only caller text in refusals, not in successful answers"
+   ],
+   "default_guess": "Restrict the no-echo rule to refusals and explicitly allow the validated M04 name in successful answers.",
+   "witness": {
+    "initial": "No placement exists for a valid file named `kitchen/photo.jpg`.",
+    "events": [
+     "The caller requests placement with `name` equal to `kitchen/photo.jpg`.",
+     "The placement succeeds and returns M04."
+    ],
+    "outcomes": [
+     "M04 returns `kitchen/photo.jpg` as its persisted name.",
+     "The response suppresses or alters M04.name to obey the rule that no answer holds caller-sent text."
+    ],
+    "observer": "The calling flow."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "PlacementOutcome.source_id versus A5 response policy",
+   "kind": "contradiction",
+   "text": "An answer never holds a server path, a credential or text the caller sent. / `source_id` is the one the caller requested.",
+   "question": "Must M06 repeat the requested source_id, or must all answers omit caller-supplied text?",
+   "options": [
+    "M06 returns the requested source_id",
+    "M06 omits source_id",
+    "the no-echo rule applies only to refusal detail"
+   ],
+   "default_guess": "Keep M06.source_id and limit the no-echo prohibition to refusal detail and other human-readable messages.",
+   "witness": {
+    "initial": "A valid source has hash `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`.",
+    "events": [
+     "The caller requests that source id.",
+     "The delivery returns M06."
+    ],
+    "outcomes": [
+     "M06.source_id repeats the caller-supplied string as its model requires.",
+     "The service omits or changes source_id to ensure no answer repeats caller text."
+    ],
+    "observer": "The calling flow."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-09",
+   "kind": "incomplete_required_test",
+   "text": "every declared route except the health answer refuses a request without the token (`test_every_route_except_health_requires_the_token`); a wrong token, another scheme, a value without its single space and two `Authorization` fields are each refused with 401 and `unauthorized`",
+   "question": "Must the Required tests show that every declared non-health route refuses each invalid-authorization form, rather than showing route coverage only for a missing field?",
+   "options": [
+    "exercise every invalid authorization form on every non-health route",
+    "exercise missing authorization on every route and other forms on one representative route",
+    "weaken INV-09 to cover only absence of the field across every route"
+   ],
+   "default_guess": "Require every non-health route to be tested with a missing field and a wrong token; test the remaining syntax variants on each authorization boundary implementation if that boundary is not shared.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-11",
+   "kind": "incomplete_required_test",
+   "text": "answers of scan, place, mark and a refusal contain neither the folder path, the store path nor the state path (`test_the_api_scans_and_places_without_showing_server_paths`)",
+   "question": "What must demonstrate the invariant that the deliverer returns no server path, including the root, photo and invoice folders, connections file, token file, binary root, state directory, temporary paths, and the health answer?",
+   "options": [
+    "check every answer model and refusal path against every configured server path",
+    "narrow the invariant to the three path classes named by the test",
+    "prove structurally that response schemas have no path-bearing fields and test representative values"
+   ],
+   "default_guess": "Use a structural response-schema check plus dynamic tests with distinctive values for every configured path and every answer kind, including health.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 invalid_request reference",
+   "kind": "standard_violation",
+   "text": "A defect of that form or of the project id refuses the whole request with\n   `invalid_request` (A5 rule 9).",
+   "rule": "Член перечисления note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must name the INVALID_REQUEST member by name beside `= models.RefusalCode`, with the lowercase value only as an optional supplement.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 unauthorized reference",
+   "kind": "standard_violation",
+   "text": "A request without that\n   field, with more than one, or with any other value is refused with `unauthorized` before its\n   identifiers or body are examined.",
+   "rule": "Член перечисления note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must name the UNAUTHORIZED member by name beside `= models.RefusalCode`, with the lowercase value only as an optional supplement.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 invalid_request reference",
+   "kind": "standard_violation",
+   "text": "Any other project id, and a body\n   that is not the request form of its operation, is refused with `invalid_request`.",
+   "rule": "Член перечисления note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must name the INVALID_REQUEST member by name beside `= models.RefusalCode`, with the lowercase value only as an optional supplement.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-09 expected refusal member",
+   "kind": "standard_violation",
+   "text": "a wrong token, another scheme, a value without its single space and two `Authorization` fields are each refused with 401 and `unauthorized`",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена (`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note (`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "The test requirement must name the UNAUTHORIZED member of `= models.RefusalCode` rather than naming the member only by its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-11 expected refusal member",
+   "kind": "standard_violation",
+   "text": "An uppercase or unhyphenated project id and a body that is not the request form each answer 422 with `invalid_request`",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена (`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note (`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "The test requirement must name the INVALID_REQUEST member of `= models.RefusalCode` rather than naming the member only by its value.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_source\",\"text\":\"`photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"What authority supplies the fresh `marked_at` instant when a publication mark is created?\",\"options\":[\"an injected clock port\",\"a datetime parameter supplied by the caller\",\"a declared authority module\",\"the process wall clock read directly\"],\"default_guess\":\"Use an injected UTC clock port owned by the service.\",\"witness\":{\"initial\":\"A placement exists and no publication mark exists; the process wall clock and a test clock report different instants.\",\"events\":[\"The calling flow records the publication.\",\"The deliverer creates M07.\"],\"outcomes\":[\"M07 stores the process wall-clock instant.\",\"M07 stores the instant supplied by the injected authority.\"],\"observer\":\"The caller replaying the mark and anyone reading the persisted mark record.\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_representation\",\"text\":\"`marked_at: datetime`.\",\"question\":\"Must `marked_at` be timezone-aware UTC, naive UTC, local time in the run setting, or another representation?\",\"options\":[\"timezone-aware UTC datetime\",\"naive UTC datetime\",\"naive datetime in the configured time zone\",\"local datetime with an offset\"],\"default_guess\":\"Store a timezone-aware UTC datetime and serialize it with an explicit UTC offset.\",\"witness\":{\"initial\":\"The configured time zone is Europe/Madrid and a mark is created at 2026-07-01T10:00:00Z.\",\"events\":[\"The calling flow records the publication.\",\"The deliverer persists and later replays the mark.\"],\"outcomes\":[\"The record contains an aware UTC value equivalent to 2026-07-01T10:00:00Z.\",\"The record contains a naive local value 2026-07-01T12:00:00.\"],\"observer\":\"The caller and any record reader.\"}},{\"subject\":\"publication-mark operation\",\"kind\":\"missing_clock_read_count\",\"text\":\"The deliverer creates it once when placing a photo.\",\"question\":\"How many readings of the decided time source may the mark operation take, and which reading becomes `marked_at`?\",\"options\":[\"exactly one reading for a newly created mark and none for a replay or refusal\",\"multiple readings are allowed but the first is stored\",\"multiple readings are allowed and the last is stored\"],\"default_guess\":\"Read the clock exactly once only after all refusal checks and immediately before constructing a new mark.\",\"witness\":{\"initial\":\"A deterministic clock returns T1 on its first read and T2 on its second; the placement exists and has no mark.\",\"events\":[\"The calling flow submits a valid mark request.\",\"The operation validates and writes the mark.\"],\"outcomes\":[\"The operation reads once and stores T1.\",\"The operation reads during validation and again during construction and stores T2.\"],\"observer\":\"A deterministic test and anyone reading `marked_at`.\"}},{\"subject\":\"A5 request forms\",\"kind\":\"undefined_request_forms\",\"text\":\"Any other project id, and a body\\n   that is not the request form of its operation, is refused with `invalid_request`.\",\"question\":\"What is the request form of scan, mark, and health, including whether each operation permits no body, an empty body, and which fields and types a mark body contains?\",\"options\":[\"define a separate closed body schema for every operation\",\"scan and health require no body while mark has a closed `source_id`/`photo_id` body\",\"apply `invalid_request` only to placement bodies\"],\"default_guess\":\"Define closed schemas per operation: no body for scan and health, placement with exactly `name` and `source_id`, and mark with exactly `source_id` and `photo_id`.\",\"witness\":{\"initial\":\"A valid token and canonical project id are supplied to scan with a JSON body containing an unused field.\",\"events\":[\"The calling flow invokes scan with `{ \\\"unused\\\": true }`.\"],\"outcomes\":[\"The request is refused with `invalid_request` because scan requires no body.\",\"The body is ignored because no scan request form was defined.\"],\"observer\":\"The calling flow.\"}},{\"subject\":\"A3 placement request form\",\"kind\":\"undefined_wire_form\",\"text\":\"The request form is a body holding only `name` and\\n   `source_id`, both strings.\",\"question\":\"Which wire representation and media type constitute this body, and how are an absent body, malformed JSON, duplicate object keys, non-object JSON, and unsupported content types classified?\",\"options\":[\"a JSON object with exactly two unique keys and a required JSON media type\",\"any decodable mapping with the two resulting string values\",\"framework-native validation semantics\"],\"default_guess\":\"Require a JSON object with exactly one `name` key and one `source_id` key, no other keys, and reject every other representation as `invalid_request`.\",\"witness\":{\"initial\":\"The token and project id are valid.\",\"events\":[\"The caller sends JSON containing two `name` keys followed by one `source_id` key.\"],\"outcomes\":[\"The request is refused because duplicate keys are not the closed request form.\",\"The JSON decoder keeps the last `name`, and the request is accepted.\"],\"observer\":\"The calling flow and the source folder accessed by the placement.\"}},{\"subject\":\"A5 project-id validation\",\"kind\":\"undefined_validation_representation\",\"text\":\"A project id is accepted only in the canonical spelling of a UUID: 36 characters, lowercase\\n   hexadecimal digits in groups of 8, 4, 4, 4 and 12 joined by hyphens.\",\"question\":\"Is canonical spelling checked on the raw URI path segment or on the percent-decoded route value?\",\"options\":[\"check the raw URI segment and reject every encoded spelling\",\"check the decoded route value\",\"permit percent encoding only for characters outside the UUID alphabet\"],\"default_guess\":\"Require the raw path segment itself to be the 36-character canonical spelling.\",\"witness\":{\"initial\":\"A connection exists for project `aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa`.\",\"events\":[\"The caller sends the same UUID with its first `a` represented as `%61` in the path.\"],\"outcomes\":[\"The raw spelling is noncanonical and the service answers `invalid_request`.\",\"Routing decodes `%61` to `a`, validation sees a canonical UUID, and the operation proceeds.\"],\"observer\":\"The calling flow.\"}},{\"subject\":\"scan refusal precedence\",\"kind\":\"missing_check_order\",\"text\":\"A request refused before its connection check does not read the file.\",\"question\":\"After authentication, in what order does scan check its project-id/body form, the connections file, the project connection, and the photo folder?\",\"options\":[\"request form and project id before every connection or folder check\",\"connections file before request validation\",\"only authentication precedence is fixed\"],\"default_guess\":\"Use token, request form and project id, connection file and project connection, then photo folder.\",\"witness\":{\"initial\":\"The caller has a valid token; the project id is uppercase and the connections file is unreadable.\",\"events\":[\"The caller invokes scan.\"],\"outcomes\":[\"The service answers `invalid_request` and does not read the connections file.\",\"The service reads the connections file and answers `folder_unavailable`.\"],\"observer\":\"The calling flow and an observer of connections-file access.\"}},{\"subject\":\"mark refusal precedence\",\"kind\":\"missing_check_order\",\"text\":\"A source id must\\n   match the imported `SOURCE_ID_PATTERN` constant in full.\",\"question\":\"For mark, what is the order among request-form/project-id validation, connection checks, source-id validation, project locking, placement lookup, and publication-conflict checks?\",\"options\":[\"the same prefix as placement through source-id validation, followed by lock and record checks\",\"validate source id before connection\",\"perform connection and state checks before validating source id\"],\"default_guess\":\"Use token, request form and project id, connection, source id, project lock, placement, then existing mark/conflict.\",\"witness\":{\"initial\":\"The token is valid, the connection is unconfirmed, and the mark request has a nonmatching source id.\",\"events\":[\"The calling flow submits the mark request.\"],\"outcomes\":[\"The service answers `connection_not_confirmed`.\",\"The service answers `invalid_source_id`.\"],\"observer\":\"The calling flow.\"}},{\"subject\":\"unauthorized refusal detail\",\"kind\":\"contradictory_reason\",\"text\":\"A request without that\\n   field, with more than one, or with any other value is refused with `unauthorized` before its\\n   identifiers or body are examined. / `the request does not carry the deliverer's token`\",\"question\":\"What fixed detail must describe a request containing two Authorization fields when one or both carry the correct token?\",\"options\":[\"use a detail saying the request does not carry exactly one valid authorization field\",\"retain the current detail even when the request carries the token\",\"give duplicate fields a distinct refusal code and detail\"],\"default_guess\":\"Change the fixed unauthorized detail to state that the request does not carry exactly one valid authorization field.\",\"witness\":{\"initial\":\"The caller knows the correct token.\",\"events\":[\"The caller sends two identical `Authorization: Bearer <correct-token>` fields.\"],\"outcomes\":[\"A5 requires an `unauthorized` refusal because there is more than one field.\",\"The A8 detail asserts that the request does not carry the token, although it carries it twice.\"],\"observer\":\"The calling flow receiving M08.\"}},{\"subject\":\"successful placement answer versus A5 response policy\",\"kind\":\"contradiction\",\"text\":\"An answer never holds a server path, a credential or text the caller sent. File names are returned\\n    as plain data. / `name` is the name the delivery request carried when the source was placed\",\"question\":\"May a successful placement or replay return M04.name even though it is text supplied by the caller?\",\"options\":[\"allow the validated file name in successful placement answers\",\"remove `name` from returned placement data\",\"prohibit only caller text in refusals, not in successful answers\"],\"default_guess\":\"Restrict the no-echo rule to refusals and explicitly allow the validated M04 name in successful answers.\",\"witness\":{\"initial\":\"No placement exists for a valid file named `kitchen/photo.jpg`.\",\"events\":[\"The caller requests placement with `name` equal to `kitchen/photo.jpg`.\",\"The placement succeeds and returns M04.\"],\"outcomes\":[\"M04 returns `kitchen/photo.jpg` as its persisted name.\",\"The response suppresses or alters M04.name to obey the rule that no answer holds caller-sent text.\"],\"observer\":\"The calling flow.\"}},{\"subject\":\"PlacementOutcome.source_id versus A5 response policy\",\"kind\":\"contradiction\",\"text\":\"An answer never holds a server path, a credential or text the caller sent. / `source_id` is the one the caller requested.\",\"question\":\"Must M06 repeat the requested source_id, or must all answers omit caller-supplied text?\",\"options\":[\"M06 returns the requested source_id\",\"M06 omits source_id\",\"the no-echo rule applies only to refusal detail\"],\"default_guess\":\"Keep M06.source_id and limit the no-echo prohibition to refusal detail and other human-readable messages.\",\"witness\":{\"initial\":\"A valid source has hash `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`.\",\"events\":[\"The caller requests that source id.\",\"The delivery returns M06.\"],\"outcomes\":[\"M06.source_id repeats the caller-supplied string as its model requires.\",\"The service omits or changes source_id to ensure no answer repeats caller text.\"],\"observer\":\"The calling flow.\"}},{\"subject\":\"INV-09\",\"kind\":\"incomplete_required_test\",\"text\":\"every declared route except the health answer refuses a request without the token (`test_every_route_except_health_requires_the_token`); a wrong token, another scheme, a value without its single space and two `Authorization` fields are each refused with 401 and `unauthorized`\",\"question\":\"Must the Required tests show that every declared non-health route refuses each invalid-authorization form, rather than showing route coverage only for a missing field?\",\"options\":[\"exercise every invalid authorization form on every non-health route\",\"exercise missing authorization on every route and other forms on one representative route\",\"weaken INV-09 to cover only absence of the field across every route\"],\"default_guess\":\"Require every non-health route to be tested with a missing field and a wrong token; test the remaining syntax variants on each authorization boundary implementation if that boundary is not shared.\"},{\"subject\":\"INV-11\",\"kind\":\"incomplete_required_test\",\"text\":\"answers of scan, place, mark and a refusal contain neither the folder path, the store path nor the state path (`test_the_api_scans_and_places_without_showing_server_paths`)\",\"question\":\"What must demonstrate the invariant that the deliverer returns no server path, including the root, photo and invoice folders, connections file, token file, binary root, state directory, temporary paths, and the health answer?\",\"options\":[\"check every answer model and refusal path against every configured server path\",\"narrow the invariant to the three path classes named by the test\",\"prove structurally that response schemas have no path-bearing fields and test representative values\"],\"default_guess\":\"Use a structural response-schema check plus dynamic tests with distinctive values for every configured path and every answer kind, including health.\"},{\"subject\":\"A3 invalid_request reference\",\"kind\":\"standard_violation\",\"text\":\"A defect of that form or of the project id refuses the whole request with\\n   `invalid_request` (A5 rule 9).\",\"rule\":\"Член перечисления note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the INVALID_REQUEST member by name beside `= models.RefusalCode`, with the lowercase value only as an optional supplement.\"},{\"subject\":\"A5 unauthorized reference\",\"kind\":\"standard_violation\",\"text\":\"A request without that\\n   field, with more than one, or with any other value is refused with `unauthorized` before its\\n   identifiers or body are examined.\",\"rule\":\"Член перечисления note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the UNAUTHORIZED member by name beside `= models.RefusalCode`, with the lowercase value only as an optional supplement.\"},{\"subject\":\"A5 invalid_request reference\",\"kind\":\"standard_violation\",\"text\":\"Any other project id, and a body\\n   that is not the request form of its operation, is refused with `invalid_request`.\",\"rule\":\"Член перечисления note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the INVALID_REQUEST member by name beside `= models.RefusalCode`, with the lowercase value only as an optional supplement.\"},{\"subject\":\"INV-09 expected refusal member\",\"kind\":\"standard_violation\",\"text\":\"a wrong token, another scheme, a value without its single space and two `Authorization` fields are each refused with 401 and `unauthorized`\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена (`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note (`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"The test requirement must name the UNAUTHORIZED member of `= models.RefusalCode` rather than naming the member only by its value.\"},{\"subject\":\"INV-11 expected refusal member\",\"kind\":\"standard_violation\",\"text\":\"An uppercase or unhyphenated project id and a body that is not the request form each answer 422 with `invalid_request`\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена (`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note (`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"The test requirement must name the INVALID_REQUEST member of `= models.RefusalCode` rather than naming the member only by its value.\"}]}",
+ "set_aside": []
+}
