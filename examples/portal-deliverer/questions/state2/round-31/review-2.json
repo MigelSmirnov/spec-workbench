@@ -1,0 +1,137 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 post-open modification-time metadata",
+   "kind": "uncovered_failure",
+   "text": "A file that is read takes its modification time from one metadata reading of the file that was opened, the one whose bytes are read, taken after the opening and before the read",
+   "question": "What happens if this post-open metadata reading fails, and which refusal or file status must result?",
+   "options": [
+    "Reject the file as `unreadable_file` under A1 order 5 and return UNREADABLE_FILE for delivery",
+    "Refuse the whole operation",
+    "Continue using the earlier path-metadata modification time"
+   ],
+   "default_guess": "Treat the metadata failure as A1 order 5 and, for delivery, return the UNREADABLE_FILE member of PlacementFailure.",
+   "witness": {
+    "initial": "A regular source file passes the pre-open metadata checks, opens successfully, and the metadata read on the opened file then fails.",
+    "events": [
+     "The caller starts a scan or delivery.",
+     "The service opens the source file.",
+     "The post-open metadata operation fails before the byte read."
+    ],
+    "outcomes": [
+     "The file is rejected or the delivery fails as `unreadable_file`.",
+     "The operation is refused as a whole, or it proceeds using the earlier metadata time."
+    ],
+    "observer": "The scan or delivery caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 modification-time representation",
+   "kind": "missing_dependency",
+   "text": "A7 rule 4 gives its form",
+   "question": "What exact type, timezone convention, precision and serialization form must be used for the modification time, given that A7 rule 4 is not present in the supplied text?",
+   "options": [
+    "A naive UTC datetime, preserving the filesystem's available precision",
+    "A timezone-aware UTC datetime",
+    "A numeric filesystem timestamp converted or rounded by a specified rule"
+   ],
+   "default_guess": "Use a naive UTC datetime, preserving filesystem precision, because P-05 says UTC without an offset.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 delivery use of modification time",
+   "kind": "missing_dependency",
+   "text": "and a delivery uses that time under A2 rule 3.",
+   "question": "Exactly when and how does delivery use this metadata time, including EXIF precedence, conversion and fallback behavior, given that A2 rule 3 is not present in the supplied text?",
+   "options": [
+    "Use it only when no accepted camera timestamp exists",
+    "Always use it as the prepared photo's `taken_at`",
+    "Use it when camera metadata is absent or invalid, with validity and conversion rules supplied by A2"
+   ],
+   "default_guess": "Use it only as the fallback when no valid camera timestamp is available, converted to the representation required by P-05 and A7.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 named-file processing",
+   "kind": "contradiction",
+   "text": "A named file that passes condition 1 of rule 5 and that A1 orders 1 and 2 do not reject from its metadata is opened and read once, and the bytes that were read are the bytes judged, hashed and prepared.",
+   "question": "After conditions 1, 2 and the pre-open size checks pass, is a byte read mandatory, or must A1 order 3 or an opening failure terminate processing before any read?",
+   "options": [
+    "Opening is attempted; only an opened regular file is read once, while A1 orders 3 and 5 terminate before a read",
+    "Every such file is read once even if the opened object is no longer regular",
+    "The quoted sentence applies only after all non-read checks in A1 orders 3 and 5 have also passed"
+   ],
+   "default_guess": "Treat the sentence as conditional shorthand: attempt the open, apply A1 order 3 and opening failures first, and read once only if the opened object is a regular readable file.",
+   "witness": {
+    "initial": "The path is a regular, non-empty, within-limit file when condition 1 and the pre-open metadata checks run, but it is replaced by a FIFO before opening.",
+    "events": [
+     "The caller requests delivery.",
+     "The service completes condition 1 and A1 orders 1 and 2 from the earlier metadata.",
+     "The service opens the replacement in non-blocking mode."
+    ],
+    "outcomes": [
+     "A1 order 3 ends processing without a byte read and returns NOT_A_REGULAR_FILE.",
+     "The unconditional read-once sentence causes a read; an empty read can instead produce EMPTY, or received bytes can be judged further."
+    ],
+    "observer": "The delivery caller, and any process observing or supplying data to the FIFO"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02",
+   "kind": "ambiguous_invariant_and_test",
+   "text": "INV-02: a delivery opens no path that fails condition 1 of A3 rule 5.",
+   "question": "Does “opens no path” prohibit opening only the final source file, or also prohibit opening directory components, and what must the Required tests observe to prove the chosen meaning rather than merely checking the returned failure and resulting files?",
+   "options": [
+    "No final source file may be opened; directory descriptors may be opened for safe traversal",
+    "Neither the final source nor any directory component may be opened",
+    "Opening attempts are permitted, but no path that is found unsafe may be read"
+   ],
+   "default_guess": "Interpret it as prohibiting opening the final source file before condition 1 passes, while allowing safe directory traversal; add an instrumented assertion that the final source was not opened.",
+   "witness": {
+    "initial": "A requested name traverses a directory component that is a symbolic link, and filesystem operations are instrumented.",
+    "events": [
+     "The caller requests delivery for content with no placement.",
+     "One implementation uses metadata-only traversal and returns NOT_READY_OR_ABSENT.",
+     "Another opens directory descriptors with no-follow checks, never opens the final file, and returns the same result."
+    ],
+    "outcomes": [
+     "The first implementation satisfies a literal prohibition on opening any path.",
+     "The second satisfies a final-source interpretation but violates the literal all-path interpretation; the listed Required test passes for both."
+    ],
+    "observer": "A gate or test that records filesystem open operations"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "What must the witness check assert to show the invariant's “never reads a conflict copy” property, rather than only its response and durable-write effects?",
+   "options": [
+    "Instrument source access and assert that the conflict-copy file is neither opened nor read",
+    "Assert only the specified failure and filesystem end state",
+    "Permit opening but assert that no bytes are read"
+   ],
+   "default_guess": "Instrument source access and assert that the conflict-copy file is not opened or read.",
+   "witness": {
+    "initial": "A conflict-copy file has no existing placement, and reads of that file can be observed independently of durable writes.",
+    "events": [
+     "The caller requests delivery under the conflict-copy name.",
+     "One implementation rejects the name before opening the file.",
+     "Another opens or reads the file, then returns NOT_READY_OR_ABSENT and performs no durable write."
+    ],
+    "outcomes": [
+     "The first implementation satisfies INV-19 and the listed Required test.",
+     "The second violates INV-19 but still satisfies every observation named by the listed Required test."
+    ],
+    "observer": "The invariant witness check or a filesystem-access monitor"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 post-open modification-time metadata\",\"kind\":\"uncovered_failure\",\"text\":\"A file that is read takes its modification time from one metadata reading of the file that was opened, the one whose bytes are read, taken after the opening and before the read\",\"question\":\"What happens if this post-open metadata reading fails, and which refusal or file status must result?\",\"options\":[\"Reject the file as `unreadable_file` under A1 order 5 and return UNREADABLE_FILE for delivery\",\"Refuse the whole operation\",\"Continue using the earlier path-metadata modification time\"],\"default_guess\":\"Treat the metadata failure as A1 order 5 and, for delivery, return the UNREADABLE_FILE member of PlacementFailure.\",\"witness\":{\"initial\":\"A regular source file passes the pre-open metadata checks, opens successfully, and the metadata read on the opened file then fails.\",\"events\":[\"The caller starts a scan or delivery.\",\"The service opens the source file.\",\"The post-open metadata operation fails before the byte read.\"],\"outcomes\":[\"The file is rejected or the delivery fails as `unreadable_file`.\",\"The operation is refused as a whole, or it proceeds using the earlier metadata time.\"],\"observer\":\"The scan or delivery caller\"}},{\"subject\":\"A1 modification-time representation\",\"kind\":\"missing_dependency\",\"text\":\"A7 rule 4 gives its form\",\"question\":\"What exact type, timezone convention, precision and serialization form must be used for the modification time, given that A7 rule 4 is not present in the supplied text?\",\"options\":[\"A naive UTC datetime, preserving the filesystem's available precision\",\"A timezone-aware UTC datetime\",\"A numeric filesystem timestamp converted or rounded by a specified rule\"],\"default_guess\":\"Use a naive UTC datetime, preserving filesystem precision, because P-05 says UTC without an offset.\"},{\"subject\":\"A1 delivery use of modification time\",\"kind\":\"missing_dependency\",\"text\":\"and a delivery uses that time under A2 rule 3.\",\"question\":\"Exactly when and how does delivery use this metadata time, including EXIF precedence, conversion and fallback behavior, given that A2 rule 3 is not present in the supplied text?\",\"options\":[\"Use it only when no accepted camera timestamp exists\",\"Always use it as the prepared photo's `taken_at`\",\"Use it when camera metadata is absent or invalid, with validity and conversion rules supplied by A2\"],\"default_guess\":\"Use it only as the fallback when no valid camera timestamp is available, converted to the representation required by P-05 and A7.\"},{\"subject\":\"A3 named-file processing\",\"kind\":\"contradiction\",\"text\":\"A named file that passes condition 1 of rule 5 and that A1 orders 1 and 2 do not reject from its metadata is opened and read once, and the bytes that were read are the bytes judged, hashed and prepared.\",\"question\":\"After conditions 1, 2 and the pre-open size checks pass, is a byte read mandatory, or must A1 order 3 or an opening failure terminate processing before any read?\",\"options\":[\"Opening is attempted; only an opened regular file is read once, while A1 orders 3 and 5 terminate before a read\",\"Every such file is read once even if the opened object is no longer regular\",\"The quoted sentence applies only after all non-read checks in A1 orders 3 and 5 have also passed\"],\"default_guess\":\"Treat the sentence as conditional shorthand: attempt the open, apply A1 order 3 and opening failures first, and read once only if the opened object is a regular readable file.\",\"witness\":{\"initial\":\"The path is a regular, non-empty, within-limit file when condition 1 and the pre-open metadata checks run, but it is replaced by a FIFO before opening.\",\"events\":[\"The caller requests delivery.\",\"The service completes condition 1 and A1 orders 1 and 2 from the earlier metadata.\",\"The service opens the replacement in non-blocking mode.\"],\"outcomes\":[\"A1 order 3 ends processing without a byte read and returns NOT_A_REGULAR_FILE.\",\"The unconditional read-once sentence causes a read; an empty read can instead produce EMPTY, or received bytes can be judged further.\"],\"observer\":\"The delivery caller, and any process observing or supplying data to the FIFO\"}},{\"subject\":\"INV-02\",\"kind\":\"ambiguous_invariant_and_test\",\"text\":\"INV-02: a delivery opens no path that fails condition 1 of A3 rule 5.\",\"question\":\"Does “opens no path” prohibit opening only the final source file, or also prohibit opening directory components, and what must the Required tests observe to prove the chosen meaning rather than merely checking the returned failure and resulting files?\",\"options\":[\"No final source file may be opened; directory descriptors may be opened for safe traversal\",\"Neither the final source nor any directory component may be opened\",\"Opening attempts are permitted, but no path that is found unsafe may be read\"],\"default_guess\":\"Interpret it as prohibiting opening the final source file before condition 1 passes, while allowing safe directory traversal; add an instrumented assertion that the final source was not opened.\",\"witness\":{\"initial\":\"A requested name traverses a directory component that is a symbolic link, and filesystem operations are instrumented.\",\"events\":[\"The caller requests delivery for content with no placement.\",\"One implementation uses metadata-only traversal and returns NOT_READY_OR_ABSENT.\",\"Another opens directory descriptors with no-follow checks, never opens the final file, and returns the same result.\"],\"outcomes\":[\"The first implementation satisfies a literal prohibition on opening any path.\",\"The second satisfies a final-source interpretation but violates the literal all-path interpretation; the listed Required test passes for both.\"],\"observer\":\"A gate or test that records filesystem open operations\"}},{\"subject\":\"INV-19 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"What must the witness check assert to show the invariant's “never reads a conflict copy” property, rather than only its response and durable-write effects?\",\"options\":[\"Instrument source access and assert that the conflict-copy file is neither opened nor read\",\"Assert only the specified failure and filesystem end state\",\"Permit opening but assert that no bytes are read\"],\"default_guess\":\"Instrument source access and assert that the conflict-copy file is not opened or read.\",\"witness\":{\"initial\":\"A conflict-copy file has no existing placement, and reads of that file can be observed independently of durable writes.\",\"events\":[\"The caller requests delivery under the conflict-copy name.\",\"One implementation rejects the name before opening the file.\",\"Another opens or reads the file, then returns NOT_READY_OR_ABSENT and performs no durable write.\"],\"outcomes\":[\"The first implementation satisfies INV-19 and the listed Required test.\",\"The second violates INV-19 but still satisfies every observation named by the listed Required test.\"],\"observer\":\"The invariant witness check or a filesystem-access monitor\"}}]}",
+ "set_aside": []
+}

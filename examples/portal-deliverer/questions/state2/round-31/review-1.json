@@ -1,0 +1,147 @@
+{
+ "open_points": [
+  {
+   "subject": "A1",
+   "kind": "uncovered_failure",
+   "text": "A file that is read takes its modification time from one metadata reading of the file that was opened, the one whose bytes are read, taken after the opening and before the read; A7 rule 4 gives its form, and a delivery uses that time under A2 rule 3.",
+   "question": "What happens when this post-open metadata reading fails, since A1 order 5 covers only opening or reading failures?",
+   "options": [
+    "Treat the failure as A1 order 5 and report `unreadable_file`.",
+    "Do not report the file in a scan and return NOT_READY_OR_ABSENT for delivery.",
+    "Refuse the whole operation with a specified refusal."
+   ],
+   "default_guess": "Treat it as A1 order 5 and report `unreadable_file`.",
+   "witness": {
+    "initial": "A valid regular JPEG is within the source limit and its pre-open metadata is readable.",
+    "events": [
+     "The service reads the path metadata and opens the file.",
+     "The metadata reading of the opened file fails before the byte read begins."
+    ],
+    "outcomes": [
+     "The file is rejected, or delivery fails, as `unreadable_file`.",
+     "The file is omitted or the operation is refused because no rule assigns the metadata failure."
+    ],
+    "observer": "The scan or delivery caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "race_handling",
+   "text": "A named file that passes condition 1 of rule 5 and that A1 orders 1 and 2 do not reject from its metadata is opened and read once, and the bytes that were read are the bytes judged, hashed and prepared.",
+   "question": "Must delivery anchor traversal to the checked photo-folder directories so that a folder segment replaced after condition 1 cannot be followed, and what result is returned if such a replacement is detected?",
+   "options": [
+    "Open every segment relative to anchored directory handles without following links and return NOT_READY_OR_ABSENT if a segment changes.",
+    "Use the path after the pre-open checks; a segment that becomes a symbolic link may be followed.",
+    "Detect the change during opening and return UNREADABLE_FILE."
+   ],
+   "default_guess": "Anchor traversal to the photo-folder directory, never follow a replaced symbolic-link segment, and return NOT_READY_OR_ABSENT.",
+   "witness": {
+    "initial": "`album/photo.jpg` is a valid regular file under the confirmed photo folder and has no placement.",
+    "events": [
+     "The caller requests delivery of `album/photo.jpg`.",
+     "Delivery checks condition 1 successfully.",
+     "Before the file is opened, another actor replaces `album` with a symbolic link to a directory outside the photo folder containing `photo.jpg`.",
+     "Delivery opens the requested name."
+    ],
+    "outcomes": [
+     "Anchored traversal detects the changed segment and returns NOT_READY_OR_ABSENT without reading outside the photo folder.",
+     "Path-based traversal follows the new symbolic link and reads and potentially places the outside file."
+    ],
+    "observer": "The caller and the owner of the outside file"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "check_precedence",
+   "text": "A named file that passes condition 1 of rule 5 and that A1 orders 1 and 2 do not reject from its metadata is opened and read once, and the bytes that were read are the bytes judged, hashed and prepared.",
+   "question": "If the opened object is no longer a regular file and A1 order 3 applies, does that check stop the operation before any read, or does the requirement to read once still apply?",
+   "options": [
+    "A1 order 3 short-circuits the read and returns NOT_A_REGULAR_FILE.",
+    "Perform one read attempt and then return NOT_A_REGULAR_FILE.",
+    "Treat the changed object as an opening or reading failure and return UNREADABLE_FILE."
+   ],
+   "default_guess": "Check the opened handle and return NOT_A_REGULAR_FILE without reading it.",
+   "witness": {
+    "initial": "A requested path is a regular file when condition 1 and the initial size checks run.",
+    "events": [
+     "Another actor replaces the path with a FIFO containing a byte before it is opened.",
+     "Delivery opens it in non-blocking mode and finds that it is not regular."
+    ],
+    "outcomes": [
+     "Delivery applies A1 order 3 without reading, leaving the FIFO byte untouched.",
+     "Delivery performs the stated one read before returning NOT_A_REGULAR_FILE, consuming the FIFO byte."
+    ],
+    "observer": "The actor using the FIFO or an open/read audit check"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "invariant_test_gap",
+   "text": "- INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What must the required test observe to prove INV-02's claim that no failing path is opened, rather than only proving the returned failure and durable-state result?",
+   "options": [
+    "Instrument opening and assert that no source-path open occurs for every listed case.",
+    "Assert only NOT_READY_OR_ABSENT and unchanged durable files.",
+    "Assert that an open may occur but no bytes are read."
+   ],
+   "default_guess": "Instrument source-path opens and assert that none occurs for every condition-1 failure.",
+   "witness": {
+    "initial": "An absolute or symbolic-link name points to a readable file and no placement exists.",
+    "events": [
+     "A delivery implementation opens the target, then returns NOT_READY_OR_ABSENT without creating durable state.",
+     "The required test checks only the response and files."
+    ],
+    "outcomes": [
+     "The current required test passes even though INV-02 is false because the path was opened.",
+     "A test that observes open calls fails and proves the invariant's stated boundary."
+    ],
+    "observer": "The invariant test and the owner of the opened file"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "invariant_test_gap",
+   "text": "- INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Placed content replays when only a conflict copy still holds it (`test_placed_content_replays_when_only_a_conflict_copy_still_holds_it`), and an ordinary file with the content of a conflict copy is delivered (`test_an_ordinary_file_is_placed_when_a_conflict_copy_has_the_same_content`).",
+   "question": "What must the required test observe to prove INV-19's claim that a new placement never reads a conflict copy?",
+   "options": [
+    "Instrument reads and assert that the conflict-copy file is never opened or read on the new-placement path.",
+    "Assert only NOT_READY_OR_ABSENT and unchanged durable files.",
+    "Permit opening but assert that no byte is consumed."
+   ],
+   "default_guess": "Instrument source access and assert that the conflict copy is neither opened nor read before NOT_READY_OR_ABSENT is returned.",
+   "witness": {
+    "initial": "A readable conflict-copy file exists and its content has no placement.",
+    "events": [
+     "An implementation reads the conflict copy, then notices its ignored name and returns NOT_READY_OR_ABSENT without writing durable state.",
+     "The stated required test checks only the answer and resulting files."
+    ],
+    "outcomes": [
+     "The stated test passes although INV-19 is false because the conflict copy was read.",
+     "A read-observing test fails and establishes the invariant."
+    ],
+    "observer": "The invariant test or a filesystem access observer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A10",
+   "kind": "ownership_gap",
+   "text": "- injection_interpreted_input: APPLICABLE; references: A5, A6; affected: project id, source id, file names, stored paths",
+   "question": "Does A3 now own the validation-to-open boundary for source file names and path segments, and therefore need to be named by this security category, or do A5 and A6 fully own that boundary despite A3 deciding it?",
+   "options": [
+    "Add A3 to the category references and make its safe-open rule the source-path control.",
+    "State that A5 owns all source-path validation and make A3 depend explicitly on that rule.",
+    "State that A6 owns anchored filesystem traversal and make A3 invoke it explicitly."
+   ],
+   "default_guess": "Add A3 to the references and explicitly assign its condition-1-to-open boundary to the source-path injection review.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1\",\"kind\":\"uncovered_failure\",\"text\":\"A file that is read takes its modification time from one metadata reading of the file that was opened, the one whose bytes are read, taken after the opening and before the read; A7 rule 4 gives its form, and a delivery uses that time under A2 rule 3.\",\"question\":\"What happens when this post-open metadata reading fails, since A1 order 5 covers only opening or reading failures?\",\"options\":[\"Treat the failure as A1 order 5 and report `unreadable_file`.\",\"Do not report the file in a scan and return NOT_READY_OR_ABSENT for delivery.\",\"Refuse the whole operation with a specified refusal.\"],\"default_guess\":\"Treat it as A1 order 5 and report `unreadable_file`.\",\"witness\":{\"initial\":\"A valid regular JPEG is within the source limit and its pre-open metadata is readable.\",\"events\":[\"The service reads the path metadata and opens the file.\",\"The metadata reading of the opened file fails before the byte read begins.\"],\"outcomes\":[\"The file is rejected, or delivery fails, as `unreadable_file`.\",\"The file is omitted or the operation is refused because no rule assigns the metadata failure.\"],\"observer\":\"The scan or delivery caller\"}},{\"subject\":\"A3\",\"kind\":\"race_handling\",\"text\":\"A named file that passes condition 1 of rule 5 and that A1 orders 1 and 2 do not reject from its metadata is opened and read once, and the bytes that were read are the bytes judged, hashed and prepared.\",\"question\":\"Must delivery anchor traversal to the checked photo-folder directories so that a folder segment replaced after condition 1 cannot be followed, and what result is returned if such a replacement is detected?\",\"options\":[\"Open every segment relative to anchored directory handles without following links and return NOT_READY_OR_ABSENT if a segment changes.\",\"Use the path after the pre-open checks; a segment that becomes a symbolic link may be followed.\",\"Detect the change during opening and return UNREADABLE_FILE.\"],\"default_guess\":\"Anchor traversal to the photo-folder directory, never follow a replaced symbolic-link segment, and return NOT_READY_OR_ABSENT.\",\"witness\":{\"initial\":\"`album/photo.jpg` is a valid regular file under the confirmed photo folder and has no placement.\",\"events\":[\"The caller requests delivery of `album/photo.jpg`.\",\"Delivery checks condition 1 successfully.\",\"Before the file is opened, another actor replaces `album` with a symbolic link to a directory outside the photo folder containing `photo.jpg`.\",\"Delivery opens the requested name.\"],\"outcomes\":[\"Anchored traversal detects the changed segment and returns NOT_READY_OR_ABSENT without reading outside the photo folder.\",\"Path-based traversal follows the new symbolic link and reads and potentially places the outside file.\"],\"observer\":\"The caller and the owner of the outside file\"}},{\"subject\":\"A3\",\"kind\":\"check_precedence\",\"text\":\"A named file that passes condition 1 of rule 5 and that A1 orders 1 and 2 do not reject from its metadata is opened and read once, and the bytes that were read are the bytes judged, hashed and prepared.\",\"question\":\"If the opened object is no longer a regular file and A1 order 3 applies, does that check stop the operation before any read, or does the requirement to read once still apply?\",\"options\":[\"A1 order 3 short-circuits the read and returns NOT_A_REGULAR_FILE.\",\"Perform one read attempt and then return NOT_A_REGULAR_FILE.\",\"Treat the changed object as an opening or reading failure and return UNREADABLE_FILE.\"],\"default_guess\":\"Check the opened handle and return NOT_A_REGULAR_FILE without reading it.\",\"witness\":{\"initial\":\"A requested path is a regular file when condition 1 and the initial size checks run.\",\"events\":[\"Another actor replaces the path with a FIFO containing a byte before it is opened.\",\"Delivery opens it in non-blocking mode and finds that it is not regular.\"],\"outcomes\":[\"Delivery applies A1 order 3 without reading, leaving the FIFO byte untouched.\",\"Delivery performs the stated one read before returning NOT_A_REGULAR_FILE, consuming the FIFO byte.\"],\"observer\":\"The actor using the FIFO or an open/read audit check\"}},{\"subject\":\"A1\",\"kind\":\"invariant_test_gap\",\"text\":\"- INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What must the required test observe to prove INV-02's claim that no failing path is opened, rather than only proving the returned failure and durable-state result?\",\"options\":[\"Instrument opening and assert that no source-path open occurs for every listed case.\",\"Assert only NOT_READY_OR_ABSENT and unchanged durable files.\",\"Assert that an open may occur but no bytes are read.\"],\"default_guess\":\"Instrument source-path opens and assert that none occurs for every condition-1 failure.\",\"witness\":{\"initial\":\"An absolute or symbolic-link name points to a readable file and no placement exists.\",\"events\":[\"A delivery implementation opens the target, then returns NOT_READY_OR_ABSENT without creating durable state.\",\"The required test checks only the response and files.\"],\"outcomes\":[\"The current required test passes even though INV-02 is false because the path was opened.\",\"A test that observes open calls fails and proves the invariant's stated boundary.\"],\"observer\":\"The invariant test and the owner of the opened file\"}},{\"subject\":\"A3\",\"kind\":\"invariant_test_gap\",\"text\":\"- INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Placed content replays when only a conflict copy still holds it (`test_placed_content_replays_when_only_a_conflict_copy_still_holds_it`), and an ordinary file with the content of a conflict copy is delivered (`test_an_ordinary_file_is_placed_when_a_conflict_copy_has_the_same_content`).\",\"question\":\"What must the required test observe to prove INV-19's claim that a new placement never reads a conflict copy?\",\"options\":[\"Instrument reads and assert that the conflict-copy file is never opened or read on the new-placement path.\",\"Assert only NOT_READY_OR_ABSENT and unchanged durable files.\",\"Permit opening but assert that no byte is consumed.\"],\"default_guess\":\"Instrument source access and assert that the conflict copy is neither opened nor read before NOT_READY_OR_ABSENT is returned.\",\"witness\":{\"initial\":\"A readable conflict-copy file exists and its content has no placement.\",\"events\":[\"An implementation reads the conflict copy, then notices its ignored name and returns NOT_READY_OR_ABSENT without writing durable state.\",\"The stated required test checks only the answer and resulting files.\"],\"outcomes\":[\"The stated test passes although INV-19 is false because the conflict copy was read.\",\"A read-observing test fails and establishes the invariant.\"],\"observer\":\"The invariant test or a filesystem access observer\"}},{\"subject\":\"A10\",\"kind\":\"ownership_gap\",\"text\":\"- injection_interpreted_input: APPLICABLE; references: A5, A6; affected: project id, source id, file names, stored paths\",\"question\":\"Does A3 now own the validation-to-open boundary for source file names and path segments, and therefore need to be named by this security category, or do A5 and A6 fully own that boundary despite A3 deciding it?\",\"options\":[\"Add A3 to the category references and make its safe-open rule the source-path control.\",\"State that A5 owns all source-path validation and make A3 depend explicitly on that rule.\",\"State that A6 owns anchored filesystem traversal and make A3 invoke it explicitly.\"],\"default_guess\":\"Add A3 to the references and explicitly assign its condition-1-to-open boundary to the source-path injection review.\"}]}",
+ "set_aside": []
+}

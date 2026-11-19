@@ -1,0 +1,245 @@
+{
+ "open_points": [
+  {
+   "subject": "A3 rule 3",
+   "kind": "contradictory_precedence",
+   "text": "A named file that passes condition 1 of rule 5 and that A1 orders 1 and 2 do not reject from its metadata is opened and read once, and the bytes that were read are the bytes judged, hashed and prepared.",
+   "question": "Does this requirement apply only after the existing-placement check finds no placement, or must every delivery validate and read the named file despite rule 2 and the check order placing existing placement first?",
+   "options": [
+    "Existing content replays without validating, opening or reading the named file.",
+    "Every delivery must first validate and read the named file; an absent or invalid name prevents replay."
+   ],
+   "default_guess": "Apply the sentence only to a new placement; replay before the named-file check and do not open the source.",
+   "witness": {
+    "initial": "A placement already exists for the requested project and source_id, and the source file has left the folder.",
+    "events": [
+     "The caller requests delivery with that source_id and the old name.",
+     "The deliverer reaches the existing-placement check before the named-file check."
+    ],
+    "outcomes": [
+     "A3 rule 2 returns replayed with the stored placement and reads no source file.",
+     "The changed sentence requires the named file to pass condition 1 and be opened and read, so the call fails because the file is absent."
+    ],
+    "observer": "The caller sees replayed in one implementation and failed with NOT_READY_OR_ABSENT in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 opened-file metadata reading",
+   "kind": "uncovered_failure",
+   "text": "A file that is read takes its modification time from one metadata reading of the file that was opened, the one whose bytes are read, taken after the opening and before the read; A7 rule 4 gives its form, and a delivery uses that time under A2 rule 3.",
+   "question": "What result is required when this post-open metadata reading fails?",
+   "options": [
+    "Reject the file as unreadable_file under order 5.",
+    "Refuse the whole operation with folder_unavailable.",
+    "Use the modification time from the earlier path metadata reading.",
+    "Continue without a usable modification time."
+   ],
+   "default_guess": "Reject the file as unreadable_file and do not fall back to the earlier path metadata.",
+   "witness": {
+    "initial": "A listed regular file passes the size checks and can be opened, but metadata cannot be read from the opened file.",
+    "events": [
+     "A scan or new delivery opens the file.",
+     "The required post-open metadata reading fails before the byte read."
+    ],
+    "outcomes": [
+     "The implementation treats the metadata failure like an opening or reading failure and reports unreadable_file.",
+     "The implementation reuses the listing metadata and continues to read and deliver the file."
+    ],
+    "observer": "The scan caller sees rejected versus ready, or the delivery caller sees failed versus placed."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 modification time",
+   "kind": "missing_representation",
+   "text": "A7 rule 4 gives its form, and a delivery uses that time under A2 rule 3.",
+   "question": "What exact representation does the opened file's modification time have, including precision, UTC conversion and whether the datetime carries an offset? The referenced A7 rule 4 is not present in the supplied State 2 text.",
+   "options": [
+    "A naive UTC datetime, preserving the filesystem precision.",
+    "An offset-aware UTC datetime.",
+    "An integer epoch timestamp with a specified unit.",
+    "A naive local-time datetime."
+   ],
+   "default_guess": "Use a naive UTC datetime with the filesystem's available precision, consistently with P-05's “UTC without an offset” requirement.",
+   "witness": {
+    "initial": "A source has no usable camera date and its filesystem modification instant is 2026-11-18T10:00:00+01:00.",
+    "events": [
+     "The deliverer reads the opened file's modification time.",
+     "It prepares the photo using the file-modified fallback.",
+     "It writes the publication body's photo_date."
+    ],
+    "outcomes": [
+     "The stored value is the naive UTC time 2026-11-18T09:00:00.",
+     "The stored value is 2026-11-18T10:00:00, or an offset-aware value, under a different interpretation of the missing form."
+    ],
+    "observer": "The Portal and callers reading the placement observe a different photo date or datetime representation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_source",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "From what authority is marked_at obtained, in what datetime representation, and how many readings does one mark operation take?",
+   "options": [
+    "Read an injected system clock once when creating the mark and store a naive UTC datetime.",
+    "Read an injected system clock once and store an offset-aware UTC datetime.",
+    "Use a request-supplied timestamp.",
+    "Use the state file or operating-system file modification time."
+   ],
+   "default_guess": "Read an injected clock exactly once when a new mark is created and store a naive UTC datetime; replay returns the stored value without reading the clock.",
+   "witness": {
+    "initial": "A placement exists without a publication mark, and the clock advances during the mark request.",
+    "events": [
+     "The caller reports a Portal photo_id.",
+     "The deliverer creates the publication mark.",
+     "The caller later repeats the same mark."
+    ],
+    "outcomes": [
+     "The first call stores one clock reading and replay preserves that marked_at.",
+     "An implementation reads at a different step or on replay, producing a different marked_at or datetime form."
+    ],
+    "observer": "The caller or a reader of the durable mark sees different marked_at values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-01 Required tests",
+   "kind": "insufficient_invariant_test",
+   "text": "INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).",
+   "question": "Must the test show that no operation ever creates, changes, moves or deletes a source-folder entry during execution, rather than only that the final folder state matches?",
+   "options": [
+    "Instrument source-folder mutations and show that none occurs at any time.",
+    "Check only the folder state after each operation."
+   ],
+   "default_guess": "Instrument filesystem mutations or permissions so that any attempted source-folder write, move or deletion fails the test.",
+   "witness": {
+    "initial": "The source folder contains one photo.",
+    "events": [
+     "A placement temporarily renames the source file and then restores its original name, bytes, modification time and mode.",
+     "The test compares the folder only after the placement finishes."
+    ],
+    "outcomes": [
+     "The stated after-state test passes even though INV-01 was violated during the operation.",
+     "A mutation-observing test fails at the temporary rename."
+    ],
+    "observer": "The test suite distinguishes the implementations; a concurrent folder observer could also see the temporary disappearance."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "insufficient_invariant_test",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What must the test observe to prove that delivery opens no path failing A3 rule 5 condition 1, rather than merely returning the required failure after opening it?",
+   "options": [
+    "Instrument the open boundary and assert that no source-path open occurs for every listed invalid case.",
+    "Assert only the returned failure and durable after-state."
+   ],
+   "default_guess": "Instrument source-path opening and assert zero open attempts for every condition-1 rejection.",
+   "witness": {
+    "initial": "An ignored regular file exists and has content with no placement.",
+    "events": [
+     "A delivery implementation opens and reads the ignored file, then notices that its name is ignored and returns NOT_READY_OR_ABSENT.",
+     "The required test checks only the outcome and resulting files."
+    ],
+    "outcomes": [
+     "The outcome-only test passes despite violating INV-02.",
+     "An open-observing test detects the forbidden open and fails."
+    ],
+    "observer": "The test suite, filesystem auditing, or another process observing access sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-07 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).",
+   "question": "Must the replacement test explicitly show that the earlier placement record also stays unchanged, as INV-07 requires?",
+   "options": [
+    "Assert that the earlier placement record, stored image and mark all remain byte-for-byte unchanged.",
+    "Assert only that the earlier stored image and mark remain."
+   ],
+   "default_guess": "Assert that all three durable artifacts—the placement record, stored image and mark—remain unchanged.",
+   "witness": {
+    "initial": "A source has an existing placement, stored image and publication mark.",
+    "events": [
+     "The source file is replaced with different content.",
+     "A scan reports the replacement as ready.",
+     "A faulty implementation deletes the earlier placement record but leaves its image and mark."
+    ],
+    "outcomes": [
+     "The described assertions about the new observation, earlier image and mark pass.",
+     "A test that also checks the earlier placement record fails."
+    ],
+    "observer": "The test suite and a later repeated-delivery caller see the missing earlier placement."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "insufficient_invariant_test",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "What must the test observe to prove that a new placement never reads a conflict copy, rather than reading it and then returning the required failure without durable changes?",
+   "options": [
+    "Instrument source-file reads and assert that the conflict copy is neither opened nor read.",
+    "Assert only the failure result and durable after-state."
+   ],
+   "default_guess": "Instrument the source access boundary and assert that the conflict-copy path is never opened or read.",
+   "witness": {
+    "initial": "A conflict copy exists for content with no placement.",
+    "events": [
+     "A faulty delivery opens and reads the conflict copy.",
+     "It then recognizes the conflict-copy name, returns NOT_READY_OR_ABSENT and makes no durable change."
+    ],
+    "outcomes": [
+     "The stated result-and-state assertions pass despite violating INV-19.",
+     "A read-observing test fails when the conflict copy is opened."
+    ],
+    "observer": "The test suite, filesystem auditing, or another process observing access sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-12 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).",
+   "question": "Must these tests also inspect durable state and show exactly one placement record, one stored image and one mark, rather than infer the invariant solely from returned statuses?",
+   "options": [
+    "Assert both the response distribution and the exact durable artifacts left behind.",
+    "Assert only the response distribution."
+   ],
+   "default_guess": "Assert the responses and then inspect storage to show one placement record, one stored image and one mark for the source.",
+   "witness": {
+    "initial": "No placement or mark exists for the source.",
+    "events": [
+     "Two processes concurrently deliver the source and receive placed and replayed.",
+     "A faulty backend writes two physical placement or mark records while presenting one as authoritative."
+    ],
+    "outcomes": [
+     "A response-only test passes although duplicate durable artifacts exist.",
+     "A durable-state assertion detects the duplicates and fails."
+    ],
+    "observer": "The test suite or a later storage inspection sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A10 files_artifacts security review",
+   "kind": "incomplete_ownership",
+   "text": "- files_artifacts: APPLICABLE; references: A1, A2, A5, A6, A8; affected: M01, M02, M03, M04, connections file, source folders, Portal binary store",
+   "question": "Must this category reference A3 now that A3 rule 3 explicitly governs validation, opening and reading of the named source file, or is that file-access security behavior considered owned entirely by the listed decisions?",
+   "options": [
+    "Add A3 to the references for files_artifacts.",
+    "State explicitly which listed decision owns A3's validation and source-file opening behavior.",
+    "Leave the references unchanged and treat them as non-exhaustive."
+   ],
+   "default_guess": "Add A3 to the files_artifacts references so the review explicitly assigns the changed file-opening behavior.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A3 rule 3\",\"kind\":\"contradictory_precedence\",\"text\":\"A named file that passes condition 1 of rule 5 and that A1 orders 1 and 2 do not reject from its metadata is opened and read once, and the bytes that were read are the bytes judged, hashed and prepared.\",\"question\":\"Does this requirement apply only after the existing-placement check finds no placement, or must every delivery validate and read the named file despite rule 2 and the check order placing existing placement first?\",\"options\":[\"Existing content replays without validating, opening or reading the named file.\",\"Every delivery must first validate and read the named file; an absent or invalid name prevents replay.\"],\"default_guess\":\"Apply the sentence only to a new placement; replay before the named-file check and do not open the source.\",\"witness\":{\"initial\":\"A placement already exists for the requested project and source_id, and the source file has left the folder.\",\"events\":[\"The caller requests delivery with that source_id and the old name.\",\"The deliverer reaches the existing-placement check before the named-file check.\"],\"outcomes\":[\"A3 rule 2 returns replayed with the stored placement and reads no source file.\",\"The changed sentence requires the named file to pass condition 1 and be opened and read, so the call fails because the file is absent.\"],\"observer\":\"The caller sees replayed in one implementation and failed with NOT_READY_OR_ABSENT in the other.\"}},{\"subject\":\"A1 opened-file metadata reading\",\"kind\":\"uncovered_failure\",\"text\":\"A file that is read takes its modification time from one metadata reading of the file that was opened, the one whose bytes are read, taken after the opening and before the read; A7 rule 4 gives its form, and a delivery uses that time under A2 rule 3.\",\"question\":\"What result is required when this post-open metadata reading fails?\",\"options\":[\"Reject the file as unreadable_file under order 5.\",\"Refuse the whole operation with folder_unavailable.\",\"Use the modification time from the earlier path metadata reading.\",\"Continue without a usable modification time.\"],\"default_guess\":\"Reject the file as unreadable_file and do not fall back to the earlier path metadata.\",\"witness\":{\"initial\":\"A listed regular file passes the size checks and can be opened, but metadata cannot be read from the opened file.\",\"events\":[\"A scan or new delivery opens the file.\",\"The required post-open metadata reading fails before the byte read.\"],\"outcomes\":[\"The implementation treats the metadata failure like an opening or reading failure and reports unreadable_file.\",\"The implementation reuses the listing metadata and continues to read and deliver the file.\"],\"observer\":\"The scan caller sees rejected versus ready, or the delivery caller sees failed versus placed.\"}},{\"subject\":\"A1 modification time\",\"kind\":\"missing_representation\",\"text\":\"A7 rule 4 gives its form, and a delivery uses that time under A2 rule 3.\",\"question\":\"What exact representation does the opened file's modification time have, including precision, UTC conversion and whether the datetime carries an offset? The referenced A7 rule 4 is not present in the supplied State 2 text.\",\"options\":[\"A naive UTC datetime, preserving the filesystem precision.\",\"An offset-aware UTC datetime.\",\"An integer epoch timestamp with a specified unit.\",\"A naive local-time datetime.\"],\"default_guess\":\"Use a naive UTC datetime with the filesystem's available precision, consistently with P-05's “UTC without an offset” requirement.\",\"witness\":{\"initial\":\"A source has no usable camera date and its filesystem modification instant is 2026-11-18T10:00:00+01:00.\",\"events\":[\"The deliverer reads the opened file's modification time.\",\"It prepares the photo using the file-modified fallback.\",\"It writes the publication body's photo_date.\"],\"outcomes\":[\"The stored value is the naive UTC time 2026-11-18T09:00:00.\",\"The stored value is 2026-11-18T10:00:00, or an offset-aware value, under a different interpretation of the missing form.\"],\"observer\":\"The Portal and callers reading the placement observe a different photo date or datetime representation.\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_source\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"From what authority is marked_at obtained, in what datetime representation, and how many readings does one mark operation take?\",\"options\":[\"Read an injected system clock once when creating the mark and store a naive UTC datetime.\",\"Read an injected system clock once and store an offset-aware UTC datetime.\",\"Use a request-supplied timestamp.\",\"Use the state file or operating-system file modification time.\"],\"default_guess\":\"Read an injected clock exactly once when a new mark is created and store a naive UTC datetime; replay returns the stored value without reading the clock.\",\"witness\":{\"initial\":\"A placement exists without a publication mark, and the clock advances during the mark request.\",\"events\":[\"The caller reports a Portal photo_id.\",\"The deliverer creates the publication mark.\",\"The caller later repeats the same mark.\"],\"outcomes\":[\"The first call stores one clock reading and replay preserves that marked_at.\",\"An implementation reads at a different step or on replay, producing a different marked_at or datetime form.\"],\"observer\":\"The caller or a reader of the durable mark sees different marked_at values.\"}},{\"subject\":\"INV-01 Required tests\",\"kind\":\"insufficient_invariant_test\",\"text\":\"INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).\",\"question\":\"Must the test show that no operation ever creates, changes, moves or deletes a source-folder entry during execution, rather than only that the final folder state matches?\",\"options\":[\"Instrument source-folder mutations and show that none occurs at any time.\",\"Check only the folder state after each operation.\"],\"default_guess\":\"Instrument filesystem mutations or permissions so that any attempted source-folder write, move or deletion fails the test.\",\"witness\":{\"initial\":\"The source folder contains one photo.\",\"events\":[\"A placement temporarily renames the source file and then restores its original name, bytes, modification time and mode.\",\"The test compares the folder only after the placement finishes.\"],\"outcomes\":[\"The stated after-state test passes even though INV-01 was violated during the operation.\",\"A mutation-observing test fails at the temporary rename.\"],\"observer\":\"The test suite distinguishes the implementations; a concurrent folder observer could also see the temporary disappearance.\"}},{\"subject\":\"INV-02 Required tests\",\"kind\":\"insufficient_invariant_test\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What must the test observe to prove that delivery opens no path failing A3 rule 5 condition 1, rather than merely returning the required failure after opening it?\",\"options\":[\"Instrument the open boundary and assert that no source-path open occurs for every listed invalid case.\",\"Assert only the returned failure and durable after-state.\"],\"default_guess\":\"Instrument source-path opening and assert zero open attempts for every condition-1 rejection.\",\"witness\":{\"initial\":\"An ignored regular file exists and has content with no placement.\",\"events\":[\"A delivery implementation opens and reads the ignored file, then notices that its name is ignored and returns NOT_READY_OR_ABSENT.\",\"The required test checks only the outcome and resulting files.\"],\"outcomes\":[\"The outcome-only test passes despite violating INV-02.\",\"An open-observing test detects the forbidden open and fails.\"],\"observer\":\"The test suite, filesystem auditing, or another process observing access sees the difference.\"}},{\"subject\":\"INV-07 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).\",\"question\":\"Must the replacement test explicitly show that the earlier placement record also stays unchanged, as INV-07 requires?\",\"options\":[\"Assert that the earlier placement record, stored image and mark all remain byte-for-byte unchanged.\",\"Assert only that the earlier stored image and mark remain.\"],\"default_guess\":\"Assert that all three durable artifacts—the placement record, stored image and mark—remain unchanged.\",\"witness\":{\"initial\":\"A source has an existing placement, stored image and publication mark.\",\"events\":[\"The source file is replaced with different content.\",\"A scan reports the replacement as ready.\",\"A faulty implementation deletes the earlier placement record but leaves its image and mark.\"],\"outcomes\":[\"The described assertions about the new observation, earlier image and mark pass.\",\"A test that also checks the earlier placement record fails.\"],\"observer\":\"The test suite and a later repeated-delivery caller see the missing earlier placement.\"}},{\"subject\":\"INV-19 Required tests\",\"kind\":\"insufficient_invariant_test\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"What must the test observe to prove that a new placement never reads a conflict copy, rather than reading it and then returning the required failure without durable changes?\",\"options\":[\"Instrument source-file reads and assert that the conflict copy is neither opened nor read.\",\"Assert only the failure result and durable after-state.\"],\"default_guess\":\"Instrument the source access boundary and assert that the conflict-copy path is never opened or read.\",\"witness\":{\"initial\":\"A conflict copy exists for content with no placement.\",\"events\":[\"A faulty delivery opens and reads the conflict copy.\",\"It then recognizes the conflict-copy name, returns NOT_READY_OR_ABSENT and makes no durable change.\"],\"outcomes\":[\"The stated result-and-state assertions pass despite violating INV-19.\",\"A read-observing test fails when the conflict copy is opened.\"],\"observer\":\"The test suite, filesystem auditing, or another process observing access sees the difference.\"}},{\"subject\":\"INV-12 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).\",\"question\":\"Must these tests also inspect durable state and show exactly one placement record, one stored image and one mark, rather than infer the invariant solely from returned statuses?\",\"options\":[\"Assert both the response distribution and the exact durable artifacts left behind.\",\"Assert only the response distribution.\"],\"default_guess\":\"Assert the responses and then inspect storage to show one placement record, one stored image and one mark for the source.\",\"witness\":{\"initial\":\"No placement or mark exists for the source.\",\"events\":[\"Two processes concurrently deliver the source and receive placed and replayed.\",\"A faulty backend writes two physical placement or mark records while presenting one as authoritative.\"],\"outcomes\":[\"A response-only test passes although duplicate durable artifacts exist.\",\"A durable-state assertion detects the duplicates and fails.\"],\"observer\":\"The test suite or a later storage inspection sees the difference.\"}},{\"subject\":\"A10 files_artifacts security review\",\"kind\":\"incomplete_ownership\",\"text\":\"- files_artifacts: APPLICABLE; references: A1, A2, A5, A6, A8; affected: M01, M02, M03, M04, connections file, source folders, Portal binary store\",\"question\":\"Must this category reference A3 now that A3 rule 3 explicitly governs validation, opening and reading of the named source file, or is that file-access security behavior considered owned entirely by the listed decisions?\",\"options\":[\"Add A3 to the references for files_artifacts.\",\"State explicitly which listed decision owns A3's validation and source-file opening behavior.\",\"Leave the references unchanged and treat them as non-exhaustive.\"],\"default_guess\":\"Add A3 to the files_artifacts references so the review explicitly assigns the changed file-opening behavior.\"}]}",
+ "set_aside": []
+}
