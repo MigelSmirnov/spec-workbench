@@ -34,11 +34,11 @@ Reads the environment.
 
 ### Enforces
 
-A8: a required setting is present, an optional one that is absent takes its decided default, and every value is one the start-up table accepts.
+A8: a required setting is present, an optional one that is absent takes its decided default, and every value has the form its row of the start-up table declares.
 
 ### Errors
 
-A missing required setting or a value the start-up table does not accept ends the start.
+A missing required setting or a value of the wrong form ends the start.
 
 ### State impact
 
