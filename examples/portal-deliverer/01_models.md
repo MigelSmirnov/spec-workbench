@@ -12,6 +12,10 @@ Evidence for every model: `python3 -m pytest -q prototypes/portal_deliverer`,
 Registry) and `python3 prototypes/portal_deliverer/e2e_local_syncthing.py` (two private Syncthing
 instances). No run has used the owner's own devices, the kernel or the VPS.
 
+The run settings and `RuntimeEnvironment`, the kind of installation that chooses the defaults of the optional
+run settings, are startup configuration read from the environment of the process, not models of this state.
+A8 decides them, and the State 6 model closure gives their fields and members.
+
 ## Model M01 — ObjectConnection
 
 ### Meaning

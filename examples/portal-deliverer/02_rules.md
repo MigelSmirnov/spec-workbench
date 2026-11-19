@@ -257,7 +257,7 @@ A published photo is recognised without any change to the Portal.
    = models.RefusalCode before its identifiers or body are examined.
 2. The token is generated with 256 bits from a cryptographic random source and is kept in a UTF-8
    file: the 32 random bytes in URL-safe Base64, 43 characters of `A`-`Z`, `a`-`z`, `0`-`9`, `-` and `_`.
-   The path is the `token_file` run setting (A8). At the start it is opened once; its last component is
+   The path is the `credential_file` run setting (A8). At the start it is opened once; its last component is
    opened without following a link, while the folders above it belong to the installation and are
    resolved as they stand. The permissions are those of the opened file and its content is read from it. The file is decoded as UTF-8, a byte sequence that is not
    UTF-8 ending the start, and the characters of the imported `TOKEN_TRIM_CHARACTERS` constant (the ASCII
@@ -421,10 +421,12 @@ Every instant the deliverer writes has the form the Portal stores.
 
 ### Normative rules
 
-Run settings are fields of the settings object, read from the environment of the process. A variable
-that is set but empty counts as absent: a required one ends the start, an optional one takes its
-default. `PORTAL_DELIVERER_PORT` is decimal ASCII digits for a number from 1 to 65535, and anything else
-ends the start. A time zone the time zone database does not know ends the start:
+Each run setting is a row of the start-up table that only the runtime settings module of SPEC_STANDARD 6.11
+reads, into a field of the settings object; that module decides how a value is read. A required setting that
+is absent ends the start, and an optional one that is absent takes its default. `environment` chooses which
+default applies; the defaults of this table are the same for every member of = models.RuntimeEnvironment.
+The port is a whole number from 1 to 65535, and a time zone the time zone database does not know ends the
+start:
 
 | Field | Type | Environment variable | Decided |
 |---|---|---|---|
@@ -432,7 +434,8 @@ ends the start. A time zone the time zone database does not know ends the start:
 | `binary_root` | `str` | `PORTAL_DELIVERER_BINARY_ROOT` | required, per installation |
 | `state_dir` | `str` | `PORTAL_DELIVERER_STATE_DIR` | required, per installation |
 | `connections_file` | `str` | `PORTAL_DELIVERER_CONNECTIONS_FILE` | required, per installation |
-| `token_file` | `str` | `PORTAL_DELIVERER_TOKEN_FILE` | required, per installation |
+| `credential_file` | `str` | `PORTAL_DELIVERER_CREDENTIAL_FILE` | required, per installation |
+| `environment` | `RuntimeEnvironment` | `PORTAL_DELIVERER_ENVIRONMENT` | required: the DEVELOPMENT, TEST or PRODUCTION member of = models.RuntimeEnvironment (values `development`, `test`, `production`) |
 | `port` | `int` | `PORTAL_DELIVERER_PORT` | optional, 8850 when absent |
 
 Policy values are constants of the data provider:
