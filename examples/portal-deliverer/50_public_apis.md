@@ -438,7 +438,7 @@ A held lock for the duration of the caller's block.
 
 ### Observable effect
 
-Creates the project lock file on first use with the mode of `LOCK_FILE_MODE`, and the missing folders below the state folder with `STATE_FOLDER_MODE`; a missing state folder is refused like a lock file that cannot be opened. It creates an absent lock file in place with the mode of `LOCK_FILE_MODE`, opens an existing one as it stands without changing it, never follows a link, and holds an operating system lock.
+Creates the project lock file on first use and holds an operating system lock (A6 rule 4).
 
 ### Enforces
 
@@ -446,11 +446,11 @@ A6 rule 4 and INV-12.
 
 ### Errors
 
-`state_unavailable` when the state folder is missing, when a folder leading to the lock file cannot be created or given its mode or is a symbolic link or not a folder, when the lock file cannot be created, opened, given its mode on creation or locked, or when its entry is a symbolic link or not a regular file.
+`state_unavailable` when the lock cannot be taken (A6 rule 5).
 
 ### State impact
 
-Writes only the project lock file and the folders below the state folder that lead to it (A6 rule 2).
+Writes only the project lock file, on first use.
 
 ## `public_op:delivery_store.store_image`
 
@@ -472,7 +472,7 @@ The reference `photos/<project_id>/<source_id>.jpg`.
 
 ### Observable effect
 
-Writes the stored image atomically with the mode of `STORED_IMAGE_MODE`, creating the missing folders below the binary store with `STORE_FOLDER_MODE`; each folder it creates and the image's own folder are synchronised before it returns, and a failure there is a failed write (A6 rules 2 and 3). A missing binary store is a failed write.
+Writes the stored image atomically and makes it durable before it returns (A6 rules 2 and 3).
 
 ### Enforces
 
@@ -540,7 +540,7 @@ Nothing.
 
 ### Observable effect
 
-Writes the record atomically with the mode of `RECORD_MODE`; a failed synchronisation of its folder after the rename does not undo it (A6 rule 3).
+Writes the record atomically (A6 rules 2 and 3).
 
 ### Enforces
 
@@ -608,7 +608,7 @@ Nothing.
 
 ### Observable effect
 
-Writes the record atomically with the mode of `RECORD_MODE`; a failed synchronisation of its folder after the rename does not undo it (A6 rule 3).
+Writes the record atomically (A6 rules 2 and 3).
 
 ### Enforces
 

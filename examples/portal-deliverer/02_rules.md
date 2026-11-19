@@ -119,11 +119,11 @@ A replaced file is scanned again by its new content (A3).
    to a limit passes. Only the first frame of an animated image is delivered.
 3. The photo moment is the first usable value of: EXIF `DateTimeOriginal`, EXIF `DateTime`, then
    the file's modification time. `DateTimeOriginal` uses `OffsetTimeOriginal` when that offset has
-   the form `+HH:MM` or `-HH:MM` with hours up to 14 and minutes up to 59; otherwise it is read in the configured time zone, and so is
+   the form `+HH:MM` or `-HH:MM` with hours up to 14 and minutes up to 59; otherwise it is read in the time zone of the `timezone` field of the run settings (A8), and so is
    `DateTime`. A camera value is unusable when it is malformed, when its UTC year
    is before 2000, or when it is more than 24 hours after the file's modification time.
 4. The photo date is delivered as UTC without an offset, as the Client Portal stores it. A camera
-   time with no offset is read in the configured time zone. A local time that occurs twice is the
+   time with no offset is read in the time zone of that `timezone` field. A local time that occurs twice is the
    first occurrence, and a local time that does not exist is read with the offset in force before
    the clock change. A modification time is an absolute instant converted to UTC.
 5. The publication body has `client_visible` false, no section and no caption (R0-06, R0-12). The
@@ -152,8 +152,8 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
 1. A placement is identified by the project and the SHA-256 of the source content (R0-10).
 2. Delivering content that already has a placement answers `replayed` with the stored placement and the
    current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even
-   when the source file has left the folder. An absent project lock file and the folders leading to it
-   are the one exception: taking the lock creates them (A6 rules 2 and 4).
+   when the source file has left the folder. A mark record of that placement that is damaged refuses the
+   delivery under A6 rule 5.
 3. One call delivers one photo, named by `name`, a relative path in the form a scan reports, and
    `source_id`. The service keeps no memory of earlier scans: it judges the name and the file when the call
    runs. A named file that passes condition 1 of rule 5 and that A1 orders 1 and 2 do not reject from its
@@ -172,7 +172,7 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
    the path is opening it as a folder, never reading a file of it; only the last segment is opened for
    reading (INV-02). Condition 2 applies A1 as A1 decides it: orders 1 and 2 first from that same
    metadata, before the file is opened, then the read. Conditions 3 and 4 follow the read. Conditions 1 to 4 write nothing except the
-   project lock file and the folders that lead to it (A6 rule 2). After condition 5 a stored image may remain without a record: no caller has received
+   project lock (A6 rule 4). After condition 5 a stored image may remain without a record: no caller has received
    its reference, and a repeated delivery of the same file writes it again and completes the placement,
    unless a refusal of A6 rule 5 applies.
 
@@ -333,65 +333,29 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
    write holds for that write.
 2. A stored image has the mode of the imported `STORED_IMAGE_MODE` constant and a state record that of
    the imported `RECORD_MODE` constant, so neither is executable. The installation creates the binary
-   store and the state folder themselves; the service never creates them, and when one is missing the
-   write that needs it fails. Each of them is the installation's own folder and is reached as its
-   configured path stands, also through a link; only the entries below it are checked as this rule says. In the state folder the lock file of a project is named by its project id with the
-   imported `LOCK_FILE_SUFFIX` constant, in the folder of the imported `LOCKS_FOLDER` constant; a placement
-   record and a mark record are named by the source id with the imported `RECORD_FILE_SUFFIX` constant, in
-   a folder named by the project id inside the folder of the imported `PLACEMENTS_FOLDER` or `MARKS_FOLDER`
-   constant.
-   The service makes the folders below the binary store and the state folder exist one at a time, from
-   the outermost: a folder it finds is accepted, whoever created it, also a concurrent call, when it is a
-   folder, and a creation that finds the folder already there is not a failure; a missing one is created with the mode of the imported `STORE_FOLDER_MODE` constant in the
-   binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the
-   process umask. In the binary store the folders are those of the path resolved under rule 1. In the state
-   folder an entry on the way that is a symbolic link or not a folder fails the write, and a failure to
-   create a folder or set its mode fails it too; for the lock file that is the refusal of rule 5. The Portal
-   reads a stored image and alone decides who may retrieve it. The deliverer has no operation that
-   returns image bytes.
-3. Each stored image and record is written to a temporary name in its folder, synchronised to disk and renamed, and
-   its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. The
-   temporary name begins with the imported `TEMPORARY_NAME_PREFIX` constant and is chosen fresh for each
-   write; the temporary file is created exclusively, never reusing an existing entry, by the standard
-   library's `tempfile.mkstemp`, which draws random names and passes over one already taken; when it
-   finds no free name the write fails. It takes the mode of the imported `TEMPORARY_FILE_MODE` constant at
-   once and its final mode before the rename. A file counts as written when the rename succeeds. A write
-   that fails before the rename leaves the destination as it was, whether absent or holding an earlier
-   complete file, and removes its temporary file; when that removal fails too, the write's own failure is the
-   result and the temporary file stays, as after a crash. A stored image is written before a record that depends
-   on it, so each folder created for it is synchronised in the folder that holds it before the next one
-   is created and before its temporary file is created, and its own folder after the rename; a failure of any of these synchronisations fails that write: what was written
-   stays, no record is written, and A3 rule 5 condition 5 applies. A folder created for a record or for
-   the lock file is not synchronised in the folder that holds it; a record's own folder is synchronised
-   after its rename, as every file's is, with the effect decided below for a record. A folder the
-   service has created stays: it is never removed, also when the write it was created for fails. A placement or mark record is the last write of
-   its operation, so a failure to synchronise its folder after the rename does not undo it and is not a
-   failure of the operation; only its survival of a host crash is uncertain. A crash of the process or the
-   host is not a failed write: the temporary file it interrupts stays under its temporary name, is never
-   read, and the service does not remove it. A3 decides what
-   a crash between the image and the record means.
+   store and the state folder; the service creates only folders below them, with the imported
+   `STORE_FOLDER_MODE` and `STATE_FOLDER_MODE` constants, and removes none. Below the state folder the
+   service follows no symbolic link. The Portal reads a stored image and alone decides who may retrieve
+   it. The deliverer has no operation that returns image bytes.
+3. Each stored image and record is written atomically: a reader sees the complete file or none, and a
+   write that fails leaves the earlier state of its address as it was. A stored image is made durable
+   before the record that refers to it is written, so a crash never leaves a record without its image; a
+   failure to make it durable fails that write and A3 rule 5 condition 5 applies. A record is the last
+   write of its operation: once it is in place the operation has taken effect. A write cut short by a
+   crash leaves at most a temporary file whose name begins with the imported `TEMPORARY_NAME_PREFIX`
+   constant, which is never read. A3 decides what a crash between the image and the record means.
 4. Deliveries and marks of one project run one at a time, across processes, under an operating
-   system lock on one lock file of that project in the state folder. A caller waits for the lock
-   without a time limit, and the lock is released when its holder ends. The lock file is created on
-   first use and never removed. It is not written through a temporary name: it is created in place,
-   exclusively, for reading and writing and without following a link, and once it is found to be a regular
-   file it is given the mode of the imported `LOCK_FILE_MODE` constant, whatever the umask; a failure to
-   set that mode is refused like a lock file that cannot be opened. When it already exists it is opened
-   for reading and writing without following a link and used as it stands: its mode and its bytes are
-   never changed or read, so taking the lock writes nothing. The service writes no content into it. An
-   entry at its address that is a symbolic link or not a regular file is refused like a lock file that
-   cannot be opened, before anything about it is changed. A wait ends only when the lock is taken or the process ends. The check that a placement
-   or mark exists and its writing happen inside that lock.
-5. A record is absent only when no entry exists at its address, also when a folder on its address does
-   not exist; reading a record creates nothing. A placement or mark record is opened
-   without following a link and validated as JSON against its closed model: every field present with its
-   type, every enumeration value a member, every nested model valid, and no other field. Its `project_id`
-   and `source_id` must equal those of its address. A record that is a link, even a dangling one, or that
-   cannot be opened or read, is not valid JSON, fails that validation or names another project or source
-   is never taken for an absent record: the operation is refused with the STATE_UNAVAILABLE member of = models.RefusalCode, whose value is
-   `state_unavailable`, and changes no record and no stored image. The same refusal answers a
-   failure to make the folders of the lock file exist under rule 2, a failure to open or lock the lock file, which waiting for another holder is not, and a mark that cannot be
-   written.
+   system lock on one lock file of that project in the state folder. The lock file is created on first
+   use with the imported `LOCK_FILE_MODE` constant and is never changed or removed afterwards. A caller
+   waits for the lock without a time limit, and the lock is released when its holder ends. The check
+   that a placement or mark exists and its writing happen inside that lock.
+5. A record is absent only when nothing exists at its address. A placement or mark record that exists is
+   validated against its closed model, and its `project_id` and `source_id` must equal those of its
+   address. A record that is a symbolic link, that cannot be read, or that fails that validation is never
+   taken for an absent record: the operation is refused with the STATE_UNAVAILABLE member of
+   = models.RefusalCode, whose value is `state_unavailable`, and changes no record and no stored image.
+   The same refusal answers a lock that cannot be taken, which waiting for another holder is not, and a
+   mark that cannot be written.
 
 ### Formal invariants
 
@@ -400,7 +364,7 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 
 ### Required tests
 
-- INV-12: concurrent placements of one source, in one process and in separate processes, answer one `placed` and otherwise `replayed` and leave one placement record and one stored image (`test_separate_processes_leave_one_placement`), and marks of two `photo_id` values, in one process and in separate processes, answer one `marked`, `replayed` for the same value and `publication_conflict` for the other, and leave one mark record holding the `photo_id` whose call answered `marked` (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).
+- INV-12: concurrent placements of one source, in one process and in separate processes, answer the PLACED member of = models.PlacementStatus once and otherwise its REPLAYED member, and leave one placement record and one stored image (`test_separate_processes_leave_one_placement`), and marks of two `photo_id` values, in one process and in separate processes, answer the MARKED member of = models.MarkStatus once, its REPLAYED member for the same value and the PUBLICATION_CONFLICT member of = models.RefusalCode for the other, and leave one mark record holding the `photo_id` whose call answered MARKED (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).
 - INV-20: with a damaged placement or mark record, scan, delivery and mark each answer M08 with the STATE_UNAVAILABLE member of = models.RefusalCode, the record stays as it was and no placement record, mark record or stored image is added or changed (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), a damaged mark without a placement stops a new placement (`test_a_damaged_mark_without_a_placement_stops_a_new_placement`), a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`), and a record that is a link, dangling or not, or that names another source is refused the same way (`test_a_record_not_written_at_its_address_is_refused`).
 
 ### Consequence
