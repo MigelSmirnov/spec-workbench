@@ -127,7 +127,8 @@ A replaced file is scanned again by its new content (A3).
    first occurrence, and a local time that does not exist is read with the offset in force before
    the clock change. A modification time is an absolute instant converted to UTC.
 5. The publication body has `client_visible` false, no section and no caption (R0-06, R0-12). The
-   owner sets a section or caption in the Portal. `intake_id` and `intake_source` are as M05 states.
+   owner sets a section or caption in the Portal. `intake_id` and `intake_source` are as M05 states. Its
+   `photo_date` is the `taken_at` of M03, unchanged.
 
 ### Formal invariants
 
