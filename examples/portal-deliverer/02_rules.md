@@ -25,7 +25,7 @@ applies decides:
 | 2 | larger than the source limit | `rejected` | `too_large` |
 | 3 | opened in non-blocking mode without following a link, what it finds is not a regular file | `rejected` | `not_a_regular_file` |
 | 4 | it grew past the source limit while being read | `rejected` | `too_large` |
-| 5 | opening or reading it fails, which includes a file that disappeared and a path that became a symbolic link after the listing | `rejected` | `unreadable_file` |
+| 5 | opening or reading it fails, which includes a file that disappeared or became a symbolic link after its metadata was read | `rejected` | `unreadable_file` |
 | 6 | does not begin with a JPEG, PNG or WEBP signature | `rejected` | `unsupported_format` |
 | 7 | placed and marked | `published` | none |
 | 8 | placed | `placed` | none |
@@ -58,9 +58,10 @@ a finished file by renaming a new one over it; a later delivery judges what it t
 Every folder is opened without following a link: the photo folder one folder at a time along its
 resolved path (A5 rule 8), and each subfolder in the folder that holds it. A folder is listed, its entries
 are read and its files are opened only through the folder that was opened, so an entry replaced by a link
-after a check is never followed. A subfolder the listing showed that is no longer that folder when it is
-opened, because it became a link or another object, is not entered; one that cannot be opened is refused
-as a subfolder that cannot be listed. When the listing reaches an entry, one metadata reading of that
+after a check is never followed. A subfolder the listing showed is opened without following a link: when
+the opening finds a symbolic link, dangling or not, or an object that is not a folder, it is not entered
+and the scan goes on; when the subfolder is gone or the opening fails for any other reason, the scan is
+refused as for a subfolder that cannot be listed. When the listing reaches an entry, one metadata reading of that
 entry in its opened folder, without following a link, decides that it is a regular file and gives its
 listed size and modification time; an entry that reading does not show as a regular file is not
 reported, and a reading that fails other than for a file that disappeared refuses the scan with
@@ -100,8 +101,13 @@ A replaced file is scanned again by its new content (A3).
 1. A stored image is a newly encoded JPEG made from the decoded pixels of the source: baseline, not
    progressive, three colour channels with the colour resolution halved in both directions (4:2:0), the
    imported `PHOTO_QUALITY` constant as its quality, and no colour profile and no metadata. The pixels
-   are converted to RGB as decoded, without colour management. Transparent areas become white. The camera orientation is applied, then the longest side is reduced to the
-   limit when it is larger.
+   are taken as decoded, without colour management. The camera orientation is applied; then, when
+   the longest side is larger than the limit, the image is reduced with a Lanczos filter so that its
+   longest side equals the limit and the other side keeps the proportion, rounded to whole pixels;
+   then transparent and partly transparent pixels are composited onto white by their alpha, and the
+   result is three-channel RGB. The encoded bytes are not fixed beyond these rules: two implementations
+   may store different bytes for one source. `sha256` and `size` of M04 describe the bytes that were
+   stored, and a repeated delivery returns that placement without encoding again (A3 rule 2).
 2. The source may be JPEG, PNG or WEBP. Checks run in this order: a first frame above the pixel
    limit (width times height) fails with `too_many_pixels`, a source that cannot be decoded with
    `unreadable_image`, and a result above the Portal's read limit with `too_large`. A value equal
@@ -241,9 +247,12 @@ A published photo is recognised without any change to the Portal.
    the request's identifiers or body are examined.
 2. The token is generated with 256 bits from a cryptographic random source and is kept in a UTF-8
    file: the 32 random bytes in URL-safe Base64, 43 characters of `A`-`Z`, `a`-`z`, `0`-`9`, `-` and `_`.
-   At the start the file is decoded as UTF-8, a byte sequence that is not UTF-8 ending the start, and the
-   Unicode whitespace at both ends is removed. The service does not start when the group or others have
-   any permission on the file, or when what remains has fewer than 32 characters or any character that
+   At the start the path is opened once, without following a link; the permissions are those of the
+   opened file and its content is read from it. The file is decoded as UTF-8, a byte sequence that is not
+   UTF-8 ending the start, and the ASCII whitespace at both ends (space, tab, line feed, carriage return,
+   vertical tab and form feed) is removed; no other character is removed. The service does not start when
+   the path is a symbolic link or not a regular file, when the group or others have any permission on
+   the file, or when what remains has fewer than 32 characters or any character that
    is not visible ASCII (`!` to `~`), since a token with such a character could not be presented in
    the `Authorization` header.
 3. A token is replaced by writing a new file and restarting the service. The old token then stops
@@ -273,7 +282,8 @@ A published photo is recognised without any change to the Portal.
 8. The form of a subfolder: the photo and invoice subfolders are non-empty relative paths without
    `..` and are not the root itself. Separately, on each scan and placement the photo folder of the
    requested project must be a folder whose resolved path is strictly below the resolved root,
-   otherwise the operation is refused with `folder_unavailable`. The photo folder is then reached by that
+   otherwise the operation is refused with `folder_unavailable`; so is a root or photo folder that is
+   missing, lies in a loop of links or cannot be resolved or inspected for any other reason. The photo folder is then reached by that
    resolved path, opened one folder at a time from the root of the file system without following a link
    at any of them (A1), so the folder that is read is the folder whose containment was checked; a folder
    on that path replaced after the check by a link or by anything that is not a folder cannot be opened,
@@ -309,20 +319,28 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
    `photos/<project_id>/<source_id>.jpg`. The reference must stay inside the binary store: its path,
    resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery
    is refused with `unsafe_reference`. A name built that way cannot leave the store, so the refusal is
-   reachable only when a folder of the store is a link that leads out of it.
+   reachable only when a folder of the store is a link that leads out of it. The binary store is
+   written only by the Portal and the deliverer, both installed by the owner; Syncthing and the calling
+   agent have no access to it. No other actor changes its folders, so the containment checked before a
+   write holds for that write.
 2. A stored image has mode 0644 and a state record mode 0600, so neither is executable. The Portal
    reads a stored image and alone decides who may retrieve it. The deliverer has no operation that
    returns image bytes.
 3. Each file is written to a temporary name in its folder, synchronised to disk and renamed, and
    its folder is synchronised, so a reader sees a complete file or none. Atomicity is per file. A
-   file counts as written when the rename succeeds. A failure before the rename leaves no file and
-   removes the temporary one; a failure to synchronise the folder after it is a failed write of that
-   operation, while the renamed file stays and a repeated call finds it (A3 rule 2, A4). A3 decides what
+   file counts as written when the rename succeeds. A failure before the rename leaves the destination
+   as it was, whether absent or holding an earlier complete file, and removes the temporary file. A
+   failure to synchronise the folder after the rename does not undo the write and is not a failure of the
+   operation: the file is in place, and only its survival of a host crash is uncertain. A temporary file
+   left by a crash stays under its temporary name beginning with `.tmp-`; it is never read and the
+   service does not remove it. A3 decides what
    a crash between the image and the record means.
 4. Deliveries and marks of one project run one at a time, across processes, under an operating
    system lock on one lock file of that project in the state folder. A caller waits for the lock
    without a time limit, and the lock is released when its holder ends. The lock file is created on
-   first use and never removed. A wait interrupted by a signal is resumed, not ended. The check that a placement
+   first use with mode 0600 and never removed; it holds no content. It is opened without following a
+   link, and an entry at its address that is a symbolic link or not a regular file is refused like a
+   lock file that cannot be opened. A wait ends only when the lock is taken or the process ends. The check that a placement
    or mark exists and its writing happen inside that lock.
 5. A record is absent only when no entry exists at its address. A placement or mark record is opened
    without following a link and validated as JSON against its closed model: every field present with its

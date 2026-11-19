@@ -162,7 +162,7 @@ The environment of the process.
 
 ### Outputs
 
-The exit status of the process: 0 when the service stops after it has served, 1 when the start fails, with the reason on the standard error stream and without listening.
+The exit status of the process: 0 when it is stopped by a signal after it has served, 1 when the start fails, without listening, and a status other than 0 when the web server fails after it has started listening. A failure is reported on the standard error stream; the text of that report is not part of the contract.
 
 ### Observable effect
 
@@ -276,7 +276,7 @@ The containment rule of A5 rule 8.
 
 ### Errors
 
-`folder_unavailable` when the folder is missing, is not a folder or does not resolve strictly below the root.
+`folder_unavailable` when the root or the folder is missing, is not a folder, lies in a loop of links, cannot be resolved or inspected, or does not resolve strictly below the root.
 
 ### State impact
 
@@ -438,7 +438,7 @@ A held lock for the duration of the caller's block.
 
 ### Observable effect
 
-Creates the project lock file on first use and holds an operating system lock.
+Creates the project lock file on first use with mode 0600, opens it without following a link, and holds an operating system lock.
 
 ### Enforces
 
@@ -446,7 +446,7 @@ A6 rule 4 and INV-12.
 
 ### Errors
 
-`state_unavailable` when the lock file cannot be opened or locked.
+`state_unavailable` when the lock file cannot be opened or locked, or its entry is a symbolic link or not a regular file.
 
 ### State impact
 
