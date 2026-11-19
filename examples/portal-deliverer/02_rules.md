@@ -326,7 +326,7 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 1. A stored image is named only from the project id and the source hash:
    `photos/<project_id>/<source_id>.jpg`. The reference must stay inside the binary store: its path,
    resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery
-   is refused with `unsafe_reference`. A name built that way cannot leave the store, so the refusal is
+   is refused with the UNSAFE_REFERENCE member of = models.RefusalCode. A name built that way cannot leave the store, so the refusal is
    reachable only when a folder of the store is a link that leads out of it. The binary store is
    written only by the Portal and the deliverer, both installed by the owner; Syncthing and the calling
    agent have no access to it. No other actor changes its folders, so the containment checked before a
