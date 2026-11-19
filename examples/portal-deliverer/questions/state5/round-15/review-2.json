@@ -1,0 +1,336 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:runtime_settings.load_runtime_settings",
+   "kind": "contradictory_character_set",
+   "text": "A8: a required setting is present and not empty, an optional one that is absent or empty takes its decided default, and the port is decimal digits for a number from 1 to 65535.",
+   "question": "Must the port contain only ASCII digits as A8 requires, or may other Unicode decimal digits be accepted?",
+   "options": [
+    "Accept only ASCII `0` through `9`.",
+    "Accept every Unicode decimal digit and convert its value."
+   ],
+   "default_guess": "Accept only ASCII `0` through `9`.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_PORT` is set to the Arabic-Indic digits `١٢`.",
+    "events": [
+     "The deployment starts the service.",
+     "`load_runtime_settings` validates the port."
+    ],
+    "outcomes": [
+     "The start fails because the value is not decimal ASCII digits.",
+     "The service starts on port 12 because the characters are decimal digits."
+    ],
+    "observer": "The deployment operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.read_token",
+   "kind": "ambiguous_whitespace",
+   "text": "The token with the whitespace around it removed.",
+   "question": "Which exact Unicode code points count as surrounding whitespace, and which Unicode version or algorithm decides that set?",
+   "options": [
+    "Use the Unicode `White_Space` property from a specified Unicode version.",
+    "Use the implementation language's default string-trimming predicate.",
+    "Remove only ASCII whitespace."
+   ],
+   "default_guess": "Use the Unicode `White_Space` property from the Unicode version supported by the pinned runtime.",
+   "witness": {
+    "initial": "The token file contains U+001C, then 32 visible ASCII characters, and has acceptable permissions.",
+    "events": [
+     "The deployment starts the service.",
+     "`read_token` trims and validates the file."
+    ],
+    "outcomes": [
+     "U+001C is trimmed and the token is accepted.",
+     "U+001C remains, is not visible ASCII, and the start fails."
+    ],
+    "observer": "The deployment operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.read_token",
+   "kind": "file_identity_race",
+   "text": "A5 rule 2: no group or other permission on the file, UTF-8 content, and after the surrounding whitespace is removed at least 32 characters, all visible ASCII.",
+   "question": "Are symbolic links accepted, which object's permissions are checked, and must the permission check and content read be bound to the same opened file object?",
+   "options": [
+    "Reject a token path that is a symbolic link and validate the opened regular file through one descriptor.",
+    "Follow symbolic links, but check and read the same opened target through one descriptor.",
+    "Check the path's permissions and then read it by path, allowing replacement between the operations."
+   ],
+   "default_guess": "Reject symbolic links and check the mode and content of one opened regular file through the same descriptor.",
+   "witness": {
+    "initial": "The configured token path is a symbolic link whose target has mode 0600 and valid content; alternatively, the path is replaced between a permission check and a read.",
+    "events": [
+     "The deployment starts the service.",
+     "`read_token` checks permissions and reads the configured path."
+    ],
+    "outcomes": [
+     "The token is accepted after following and validating the target.",
+     "The start fails because links are forbidden, or a replacement is detected because the checked and read objects differ."
+    ],
+    "observer": "The deployment operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.run_service",
+   "kind": "incomplete_exit_contract",
+   "text": "The exit status of the process: 0 when the service stops after it has served, 1 when the start fails, with the reason on the standard error stream and without listening.",
+   "question": "What exit status applies when the web server fails after listening, and which kinds of shutdown count as the service having stopped after it has served?",
+   "options": [
+    "Return 0 for every shutdown after listening, including a later server failure.",
+    "Return 0 only for an orderly requested shutdown and 1 for every server failure.",
+    "Use distinct nonzero statuses for start failure, runtime failure and signal termination."
+   ],
+   "default_guess": "Return 0 only for an orderly shutdown after listening and 1 for a server failure handled by the process.",
+   "witness": {
+    "initial": "The service has begun listening and then the web server raises a fatal runtime error.",
+    "events": [
+     "The deployment starts `run_service`.",
+     "The service listens successfully.",
+     "The serving loop fails."
+    ],
+    "outcomes": [
+     "The process exits 0 because it stopped after it had served.",
+     "The process exits nonzero because serving failed."
+    ],
+    "observer": "The deployment supervisor"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.run_service",
+   "kind": "unspecified_error_output",
+   "text": "1 when the start fails, with the reason on the standard error stream and without listening.",
+   "question": "What exact reason or stable error format must be written to standard error for each start failure, and may implementation exception text or server paths appear in it?",
+   "options": [
+    "Write a fixed, enumerated public message for each start-failure class.",
+    "Write the caught exception's implementation-dependent text.",
+    "Write only one generic start-failed message."
+   ],
+   "default_guess": "Write a fixed message for each start-failure class without credentials or implementation exception details.",
+   "witness": {
+    "initial": "The configured port is invalid.",
+    "events": [
+     "The deployment starts `run_service`.",
+     "Runtime-setting validation fails."
+    ],
+    "outcomes": [
+     "Standard error contains a stable message such as `invalid port`.",
+     "Standard error contains a library- or implementation-specific exception and representation of the value."
+    ],
+    "observer": "The deployment operator and log collector"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:object_connections.available_photo_folder",
+   "kind": "incomplete_error_surface",
+   "text": "`folder_unavailable` when the folder is missing, is not a folder or does not resolve strictly below the root.",
+   "question": "What happens when resolving the root or photo folder fails for another reason, such as a permission error, a dangling link or a symbolic-link loop?",
+   "options": [
+    "Map every resolution or inspection failure to `folder_unavailable`.",
+    "Propagate the operating-system error.",
+    "Map only selected failures to `folder_unavailable` and specify the selection."
+   ],
+   "default_guess": "Map every failure to resolve or inspect either path to `folder_unavailable`.",
+   "witness": {
+    "initial": "The photo-folder path contains a symbolic-link loop.",
+    "events": [
+     "A scan obtains the confirmed connection.",
+     "It calls `available_photo_folder`.",
+     "Path resolution encounters the loop."
+    ],
+    "outcomes": [
+     "The scan returns M08 with `folder_unavailable`.",
+     "An operating-system exception escapes the declared refusal surface."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 folder traversal",
+   "kind": "undefined_folder_identity",
+   "text": "A subfolder the listing showed that is no longer that folder when it is opened, because it became a link or another object, is not entered; one that cannot be opened is refused as a subfolder that cannot be listed.",
+   "question": "How is the listed folder's identity captured and compared with the folder later opened, especially when it is replaced by another directory at the same name?",
+   "options": [
+    "Capture and compare filesystem device-and-file identifiers before traversing it.",
+    "Treat any directory opened at the listed name as the listed folder.",
+    "Use an operating-system primitive that opens the directory entry itself and define replacement detection by that primitive."
+   ],
+   "default_guess": "Open relative to the parent descriptor without following links and compare the opened directory's device-and-file identifiers with metadata captured for the listed entry.",
+   "witness": {
+    "initial": "A scan lists subfolder `day`, which initially contains `a.jpg`.",
+    "events": [
+     "Syncthing removes `day` after it is listed.",
+     "Syncthing creates a different directory named `day` containing `b.jpg`.",
+     "The scanner reaches the listed subfolder."
+    ],
+    "outcomes": [
+     "The replacement is detected and the new directory is not entered.",
+     "The scanner enters the replacement and reports `day/b.jpg`."
+    ],
+    "observer": "The calling flow receiving the scan"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 image resizing",
+   "kind": "underspecified_resampling",
+   "text": "The camera orientation is applied, then the longest side is reduced to the limit when it is larger.",
+   "question": "Which resampling filter is used, and how are non-integral scaled dimensions rounded?",
+   "options": [
+    "Specify a particular filter and round each scaled dimension down.",
+    "Specify a particular filter and round to the nearest integer.",
+    "Use the image library's default resizing behavior."
+   ],
+   "default_guess": "Use a specified high-quality filter and round scaled dimensions to the nearest integer while keeping both dimensions at least one pixel.",
+   "witness": {
+    "initial": "A source image has dimensions whose proportional size at a 2000-pixel longest side is non-integral.",
+    "events": [
+     "The caller delivers the source.",
+     "`prepare_photo` applies orientation and resizing."
+    ],
+    "outcomes": [
+     "The stored JPEG has one set of dimensions and pixels using floor rounding and one filter.",
+     "The stored JPEG has different dimensions or pixels using nearest rounding or another filter."
+    ],
+    "observer": "The caller through M04 size and SHA-256, and the Portal through the stored image"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 JPEG encoding",
+   "kind": "underspecified_encoding",
+   "text": "A stored image is a newly encoded JPEG made from the decoded pixels of the source: baseline, not progressive, three colour channels with the colour resolution halved in both directions (4:2:0), the imported `PHOTO_QUALITY` constant as its quality, and no colour profile and no metadata.",
+   "question": "Which JPEG encoder behavior fixes the meaning of quality and the remaining encoder choices, including quantization tables, Huffman-table optimization and DCT settings?",
+   "options": [
+    "Specify the pinned encoder and every option needed for reproducible output.",
+    "Require only the stated JPEG properties and permit different valid JPEG byte streams.",
+    "Supply fixed quantization and Huffman tables independent of the library."
+   ],
+   "default_guess": "Specify the pinned encoder and explicit options, while treating its resulting byte stream as the required output.",
+   "witness": {
+    "initial": "Two implementations receive the same decoded RGB pixels.",
+    "events": [
+     "Each encodes them as baseline 4:2:0 JPEG at `PHOTO_QUALITY`.",
+     "Each stores the result and constructs M04."
+    ],
+    "outcomes": [
+     "One encoder produces one byte sequence, SHA-256 and size.",
+     "Another conforming encoder produces a different byte sequence, SHA-256 and size."
+    ],
+    "observer": "The calling flow receiving M04 and the Portal reading the image"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 transparency conversion",
+   "kind": "underspecified_alpha_compositing",
+   "text": "The pixels are converted to RGB as decoded, without colour management. Transparent areas become white.",
+   "question": "How are partially transparent pixels composited onto white, in which colour space, with what rounding, and at what point relative to resizing?",
+   "options": [
+    "Composite all alpha values onto white in encoded RGB before resizing, with a specified integer formula.",
+    "Resize colour and alpha first, then composite onto white.",
+    "Only replace fully transparent pixels and discard partial alpha using library defaults."
+   ],
+   "default_guess": "Composite every alpha value onto white in encoded RGB before resizing, using a specified channel formula and rounding rule.",
+   "witness": {
+    "initial": "A PNG contains partially transparent coloured pixels along an edge.",
+    "events": [
+     "The caller delivers the image.",
+     "`prepare_photo` removes transparency and resizes it."
+    ],
+    "outcomes": [
+     "Compositing before resizing produces one set of edge pixels.",
+     "Resizing alpha separately or discarding it produces different edge pixels and JPEG bytes."
+    ],
+    "observer": "The Portal user viewing the image and the caller through M04 SHA-256 and size"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 stored-image containment",
+   "kind": "unsafe_reference_resolution",
+   "text": "The reference must stay inside the binary store: its path, resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery is refused with `unsafe_reference`.",
+   "question": "How is a not-yet-existing destination resolved, and how is the write kept bound to the checked directories if a store directory is replaced after the containment check?",
+   "options": [
+    "Resolve existing ancestors, then create and rename through opened directory descriptors without following links.",
+    "Perform a non-strict path resolution and later write by pathname.",
+    "Require the complete destination to exist before it can be resolved."
+   ],
+   "default_guess": "Resolve existing ancestors and perform creation and rename through the same opened, no-follow directory descriptors used to establish containment.",
+   "witness": {
+    "initial": "The binary store initially contains an in-store `photos` directory.",
+    "events": [
+     "Delivery checks that the destination resolves below the store.",
+     "Another process replaces `photos` with a link to an outside directory.",
+     "`store_image` creates and renames the image."
+    ],
+    "outcomes": [
+     "The replacement is detected and delivery returns `unsafe_reference` or a failed write without writing outside.",
+     "The pathname write follows the new link and creates the image outside the binary store."
+    ],
+    "observer": "The filesystem administrator and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 atomic stored-image retry",
+   "kind": "ambiguous_retry_effect",
+   "text": "a failure to synchronise the folder after it is a failed write of that operation, while the renamed file stays and a repeated call finds it (A3 rule 2, A4).",
+   "question": "When folder synchronisation fails after an image rename but before any placement record exists, does the next delivery reuse the orphan image or encode and atomically write it again?",
+   "options": [
+    "Reuse the existing image after verifying that its bytes are the required prepared image.",
+    "Atomically replace the image again before writing the placement record.",
+    "Treat the existing image without a placement record as `state_unavailable`."
+   ],
+   "default_guess": "Atomically replace the image again, because replay is determined by the placement record and A3 otherwise repeats the placement work.",
+   "witness": {
+    "initial": "No placement exists for the source.",
+    "events": [
+     "Delivery renames the stored image successfully.",
+     "Synchronising the image folder fails, so the call returns a failed M06 and writes no placement record.",
+     "The caller repeats the same delivery."
+    ],
+    "outcomes": [
+     "The repeated call finds and reuses the renamed image, then writes the placement.",
+     "The repeated call writes the image again, then writes the placement."
+    ],
+    "observer": "A filesystem observer through write count or modification time"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 record validation",
+   "kind": "underspecified_json_validation",
+   "text": "A placement or mark record is opened without following a link and validated as JSON against its closed model: every field present with its type, every enumeration value a member, every nested model valid, and no other field.",
+   "question": "Are duplicate JSON member names rejected, and are model types validated strictly or by coercion and normalization for values such as UUIDs, integers and datetimes?",
+   "options": [
+    "Reject duplicate names and require exact JSON types and the canonical UUID and datetime forms stated by the rules.",
+    "Use the JSON parser's last value for duplicate names but otherwise validate strictly.",
+    "Use model-library coercion and normalization, accepting alternate textual or numeric forms."
+   ],
+   "default_guess": "Reject duplicate names, require exact JSON types, and require the canonical UUID and datetime forms prescribed by the rules.",
+   "witness": {
+    "initial": "A placement record contains two `source_id` members, or contains `size` as the string `\"10\"` instead of a JSON integer.",
+    "events": [
+     "A scan calls `read_placement`.",
+     "The record is parsed and validated."
+    ],
+    "outcomes": [
+     "The record is damaged and the scan returns `state_unavailable`.",
+     "The parser keeps one duplicate value or coerces the string, and the scan accepts the placement."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:runtime_settings.load_runtime_settings\",\"kind\":\"contradictory_character_set\",\"text\":\"A8: a required setting is present and not empty, an optional one that is absent or empty takes its decided default, and the port is decimal digits for a number from 1 to 65535.\",\"question\":\"Must the port contain only ASCII digits as A8 requires, or may other Unicode decimal digits be accepted?\",\"options\":[\"Accept only ASCII `0` through `9`.\",\"Accept every Unicode decimal digit and convert its value.\"],\"default_guess\":\"Accept only ASCII `0` through `9`.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_PORT` is set to the Arabic-Indic digits `١٢`.\",\"events\":[\"The deployment starts the service.\",\"`load_runtime_settings` validates the port.\"],\"outcomes\":[\"The start fails because the value is not decimal ASCII digits.\",\"The service starts on port 12 because the characters are decimal digits.\"],\"observer\":\"The deployment operator\"}},{\"subject\":\"public_op:deliverer_api.read_token\",\"kind\":\"ambiguous_whitespace\",\"text\":\"The token with the whitespace around it removed.\",\"question\":\"Which exact Unicode code points count as surrounding whitespace, and which Unicode version or algorithm decides that set?\",\"options\":[\"Use the Unicode `White_Space` property from a specified Unicode version.\",\"Use the implementation language's default string-trimming predicate.\",\"Remove only ASCII whitespace.\"],\"default_guess\":\"Use the Unicode `White_Space` property from the Unicode version supported by the pinned runtime.\",\"witness\":{\"initial\":\"The token file contains U+001C, then 32 visible ASCII characters, and has acceptable permissions.\",\"events\":[\"The deployment starts the service.\",\"`read_token` trims and validates the file.\"],\"outcomes\":[\"U+001C is trimmed and the token is accepted.\",\"U+001C remains, is not visible ASCII, and the start fails.\"],\"observer\":\"The deployment operator\"}},{\"subject\":\"public_op:deliverer_api.read_token\",\"kind\":\"file_identity_race\",\"text\":\"A5 rule 2: no group or other permission on the file, UTF-8 content, and after the surrounding whitespace is removed at least 32 characters, all visible ASCII.\",\"question\":\"Are symbolic links accepted, which object's permissions are checked, and must the permission check and content read be bound to the same opened file object?\",\"options\":[\"Reject a token path that is a symbolic link and validate the opened regular file through one descriptor.\",\"Follow symbolic links, but check and read the same opened target through one descriptor.\",\"Check the path's permissions and then read it by path, allowing replacement between the operations.\"],\"default_guess\":\"Reject symbolic links and check the mode and content of one opened regular file through the same descriptor.\",\"witness\":{\"initial\":\"The configured token path is a symbolic link whose target has mode 0600 and valid content; alternatively, the path is replaced between a permission check and a read.\",\"events\":[\"The deployment starts the service.\",\"`read_token` checks permissions and reads the configured path.\"],\"outcomes\":[\"The token is accepted after following and validating the target.\",\"The start fails because links are forbidden, or a replacement is detected because the checked and read objects differ.\"],\"observer\":\"The deployment operator\"}},{\"subject\":\"public_op:deliverer_api.run_service\",\"kind\":\"incomplete_exit_contract\",\"text\":\"The exit status of the process: 0 when the service stops after it has served, 1 when the start fails, with the reason on the standard error stream and without listening.\",\"question\":\"What exit status applies when the web server fails after listening, and which kinds of shutdown count as the service having stopped after it has served?\",\"options\":[\"Return 0 for every shutdown after listening, including a later server failure.\",\"Return 0 only for an orderly requested shutdown and 1 for every server failure.\",\"Use distinct nonzero statuses for start failure, runtime failure and signal termination.\"],\"default_guess\":\"Return 0 only for an orderly shutdown after listening and 1 for a server failure handled by the process.\",\"witness\":{\"initial\":\"The service has begun listening and then the web server raises a fatal runtime error.\",\"events\":[\"The deployment starts `run_service`.\",\"The service listens successfully.\",\"The serving loop fails.\"],\"outcomes\":[\"The process exits 0 because it stopped after it had served.\",\"The process exits nonzero because serving failed.\"],\"observer\":\"The deployment supervisor\"}},{\"subject\":\"public_op:deliverer_api.run_service\",\"kind\":\"unspecified_error_output\",\"text\":\"1 when the start fails, with the reason on the standard error stream and without listening.\",\"question\":\"What exact reason or stable error format must be written to standard error for each start failure, and may implementation exception text or server paths appear in it?\",\"options\":[\"Write a fixed, enumerated public message for each start-failure class.\",\"Write the caught exception's implementation-dependent text.\",\"Write only one generic start-failed message.\"],\"default_guess\":\"Write a fixed message for each start-failure class without credentials or implementation exception details.\",\"witness\":{\"initial\":\"The configured port is invalid.\",\"events\":[\"The deployment starts `run_service`.\",\"Runtime-setting validation fails.\"],\"outcomes\":[\"Standard error contains a stable message such as `invalid port`.\",\"Standard error contains a library- or implementation-specific exception and representation of the value.\"],\"observer\":\"The deployment operator and log collector\"}},{\"subject\":\"public_op:object_connections.available_photo_folder\",\"kind\":\"incomplete_error_surface\",\"text\":\"`folder_unavailable` when the folder is missing, is not a folder or does not resolve strictly below the root.\",\"question\":\"What happens when resolving the root or photo folder fails for another reason, such as a permission error, a dangling link or a symbolic-link loop?\",\"options\":[\"Map every resolution or inspection failure to `folder_unavailable`.\",\"Propagate the operating-system error.\",\"Map only selected failures to `folder_unavailable` and specify the selection.\"],\"default_guess\":\"Map every failure to resolve or inspect either path to `folder_unavailable`.\",\"witness\":{\"initial\":\"The photo-folder path contains a symbolic-link loop.\",\"events\":[\"A scan obtains the confirmed connection.\",\"It calls `available_photo_folder`.\",\"Path resolution encounters the loop.\"],\"outcomes\":[\"The scan returns M08 with `folder_unavailable`.\",\"An operating-system exception escapes the declared refusal surface.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A1 folder traversal\",\"kind\":\"undefined_folder_identity\",\"text\":\"A subfolder the listing showed that is no longer that folder when it is opened, because it became a link or another object, is not entered; one that cannot be opened is refused as a subfolder that cannot be listed.\",\"question\":\"How is the listed folder's identity captured and compared with the folder later opened, especially when it is replaced by another directory at the same name?\",\"options\":[\"Capture and compare filesystem device-and-file identifiers before traversing it.\",\"Treat any directory opened at the listed name as the listed folder.\",\"Use an operating-system primitive that opens the directory entry itself and define replacement detection by that primitive.\"],\"default_guess\":\"Open relative to the parent descriptor without following links and compare the opened directory's device-and-file identifiers with metadata captured for the listed entry.\",\"witness\":{\"initial\":\"A scan lists subfolder `day`, which initially contains `a.jpg`.\",\"events\":[\"Syncthing removes `day` after it is listed.\",\"Syncthing creates a different directory named `day` containing `b.jpg`.\",\"The scanner reaches the listed subfolder.\"],\"outcomes\":[\"The replacement is detected and the new directory is not entered.\",\"The scanner enters the replacement and reports `day/b.jpg`.\"],\"observer\":\"The calling flow receiving the scan\"}},{\"subject\":\"A2 image resizing\",\"kind\":\"underspecified_resampling\",\"text\":\"The camera orientation is applied, then the longest side is reduced to the limit when it is larger.\",\"question\":\"Which resampling filter is used, and how are non-integral scaled dimensions rounded?\",\"options\":[\"Specify a particular filter and round each scaled dimension down.\",\"Specify a particular filter and round to the nearest integer.\",\"Use the image library's default resizing behavior.\"],\"default_guess\":\"Use a specified high-quality filter and round scaled dimensions to the nearest integer while keeping both dimensions at least one pixel.\",\"witness\":{\"initial\":\"A source image has dimensions whose proportional size at a 2000-pixel longest side is non-integral.\",\"events\":[\"The caller delivers the source.\",\"`prepare_photo` applies orientation and resizing.\"],\"outcomes\":[\"The stored JPEG has one set of dimensions and pixels using floor rounding and one filter.\",\"The stored JPEG has different dimensions or pixels using nearest rounding or another filter.\"],\"observer\":\"The caller through M04 size and SHA-256, and the Portal through the stored image\"}},{\"subject\":\"A2 JPEG encoding\",\"kind\":\"underspecified_encoding\",\"text\":\"A stored image is a newly encoded JPEG made from the decoded pixels of the source: baseline, not progressive, three colour channels with the colour resolution halved in both directions (4:2:0), the imported `PHOTO_QUALITY` constant as its quality, and no colour profile and no metadata.\",\"question\":\"Which JPEG encoder behavior fixes the meaning of quality and the remaining encoder choices, including quantization tables, Huffman-table optimization and DCT settings?\",\"options\":[\"Specify the pinned encoder and every option needed for reproducible output.\",\"Require only the stated JPEG properties and permit different valid JPEG byte streams.\",\"Supply fixed quantization and Huffman tables independent of the library.\"],\"default_guess\":\"Specify the pinned encoder and explicit options, while treating its resulting byte stream as the required output.\",\"witness\":{\"initial\":\"Two implementations receive the same decoded RGB pixels.\",\"events\":[\"Each encodes them as baseline 4:2:0 JPEG at `PHOTO_QUALITY`.\",\"Each stores the result and constructs M04.\"],\"outcomes\":[\"One encoder produces one byte sequence, SHA-256 and size.\",\"Another conforming encoder produces a different byte sequence, SHA-256 and size.\"],\"observer\":\"The calling flow receiving M04 and the Portal reading the image\"}},{\"subject\":\"A2 transparency conversion\",\"kind\":\"underspecified_alpha_compositing\",\"text\":\"The pixels are converted to RGB as decoded, without colour management. Transparent areas become white.\",\"question\":\"How are partially transparent pixels composited onto white, in which colour space, with what rounding, and at what point relative to resizing?\",\"options\":[\"Composite all alpha values onto white in encoded RGB before resizing, with a specified integer formula.\",\"Resize colour and alpha first, then composite onto white.\",\"Only replace fully transparent pixels and discard partial alpha using library defaults.\"],\"default_guess\":\"Composite every alpha value onto white in encoded RGB before resizing, using a specified channel formula and rounding rule.\",\"witness\":{\"initial\":\"A PNG contains partially transparent coloured pixels along an edge.\",\"events\":[\"The caller delivers the image.\",\"`prepare_photo` removes transparency and resizes it.\"],\"outcomes\":[\"Compositing before resizing produces one set of edge pixels.\",\"Resizing alpha separately or discarding it produces different edge pixels and JPEG bytes.\"],\"observer\":\"The Portal user viewing the image and the caller through M04 SHA-256 and size\"}},{\"subject\":\"A6 stored-image containment\",\"kind\":\"unsafe_reference_resolution\",\"text\":\"The reference must stay inside the binary store: its path, resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery is refused with `unsafe_reference`.\",\"question\":\"How is a not-yet-existing destination resolved, and how is the write kept bound to the checked directories if a store directory is replaced after the containment check?\",\"options\":[\"Resolve existing ancestors, then create and rename through opened directory descriptors without following links.\",\"Perform a non-strict path resolution and later write by pathname.\",\"Require the complete destination to exist before it can be resolved.\"],\"default_guess\":\"Resolve existing ancestors and perform creation and rename through the same opened, no-follow directory descriptors used to establish containment.\",\"witness\":{\"initial\":\"The binary store initially contains an in-store `photos` directory.\",\"events\":[\"Delivery checks that the destination resolves below the store.\",\"Another process replaces `photos` with a link to an outside directory.\",\"`store_image` creates and renames the image.\"],\"outcomes\":[\"The replacement is detected and delivery returns `unsafe_reference` or a failed write without writing outside.\",\"The pathname write follows the new link and creates the image outside the binary store.\"],\"observer\":\"The filesystem administrator and the calling flow\"}},{\"subject\":\"A6 atomic stored-image retry\",\"kind\":\"ambiguous_retry_effect\",\"text\":\"a failure to synchronise the folder after it is a failed write of that operation, while the renamed file stays and a repeated call finds it (A3 rule 2, A4).\",\"question\":\"When folder synchronisation fails after an image rename but before any placement record exists, does the next delivery reuse the orphan image or encode and atomically write it again?\",\"options\":[\"Reuse the existing image after verifying that its bytes are the required prepared image.\",\"Atomically replace the image again before writing the placement record.\",\"Treat the existing image without a placement record as `state_unavailable`.\"],\"default_guess\":\"Atomically replace the image again, because replay is determined by the placement record and A3 otherwise repeats the placement work.\",\"witness\":{\"initial\":\"No placement exists for the source.\",\"events\":[\"Delivery renames the stored image successfully.\",\"Synchronising the image folder fails, so the call returns a failed M06 and writes no placement record.\",\"The caller repeats the same delivery.\"],\"outcomes\":[\"The repeated call finds and reuses the renamed image, then writes the placement.\",\"The repeated call writes the image again, then writes the placement.\"],\"observer\":\"A filesystem observer through write count or modification time\"}},{\"subject\":\"A6 record validation\",\"kind\":\"underspecified_json_validation\",\"text\":\"A placement or mark record is opened without following a link and validated as JSON against its closed model: every field present with its type, every enumeration value a member, every nested model valid, and no other field.\",\"question\":\"Are duplicate JSON member names rejected, and are model types validated strictly or by coercion and normalization for values such as UUIDs, integers and datetimes?\",\"options\":[\"Reject duplicate names and require exact JSON types and the canonical UUID and datetime forms stated by the rules.\",\"Use the JSON parser's last value for duplicate names but otherwise validate strictly.\",\"Use model-library coercion and normalization, accepting alternate textual or numeric forms.\"],\"default_guess\":\"Reject duplicate names, require exact JSON types, and require the canonical UUID and datetime forms prescribed by the rules.\",\"witness\":{\"initial\":\"A placement record contains two `source_id` members, or contains `size` as the string `\\\"10\\\"` instead of a JSON integer.\",\"events\":[\"A scan calls `read_placement`.\",\"The record is parsed and validated.\"],\"outcomes\":[\"The record is damaged and the scan returns `state_unavailable`.\",\"The parser keeps one duplicate value or coerces the string, and the scan accepts the placement.\"],\"observer\":\"The calling flow\"} }]}",
+ "set_aside": []
+}

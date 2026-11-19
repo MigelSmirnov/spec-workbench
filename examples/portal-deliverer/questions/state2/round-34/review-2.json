@@ -1,0 +1,277 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 subfolder traversal",
+   "kind": "contradictory_failure_handling",
+   "text": "A subfolder the listing showed that is no longer that folder when it is opened, because it became a link or another object, is not entered; one that cannot be opened is refused as a subfolder that cannot be listed.",
+   "question": "When a listed subfolder has become a link or another non-folder by the time it is opened, is it silently skipped or does the whole scan fail with folder_unavailable?",
+   "options": [
+    "Skip the changed entry and continue the scan",
+    "Refuse the whole scan with folder_unavailable"
+   ],
+   "default_guess": "Refuse the whole scan with folder_unavailable, matching the preceding rule that an unopenable non-ignored subfolder refuses the scan.",
+   "witness": {
+    "initial": "A scan has listed non-ignored subfolder photos/day1.",
+    "events": [
+     "Syncthing replaces photos/day1 with a symbolic link before the deliverer opens it.",
+     "The deliverer attempts to continue traversal."
+    ],
+    "outcomes": [
+     "The link is not entered and the scan completes without that subfolder.",
+     "The scan is refused with folder_unavailable."
+    ],
+    "observer": "The calling flow sees either a completed partial scan or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 stored-image bytes",
+   "kind": "underspecified_transform",
+   "text": "A stored image is a newly encoded JPEG made from the decoded pixels of the source: baseline, not progressive, three colour channels with the colour resolution halved in both directions (4:2:0), the imported `PHOTO_QUALITY` constant as its quality, and no colour profile and no metadata. The pixels are converted to RGB as decoded, without colour management. Transparent areas become white. The camera orientation is applied, then the longest side is reduced to the limit when it is larger.",
+   "question": "Which precise resize filter, RGB conversion, alpha-compositing arithmetic and JPEG encoder settings determine the stored bytes?",
+   "options": [
+    "Specify one deterministic pixel and JPEG encoding recipe",
+    "Allow any implementation whose result satisfies the listed structural properties"
+   ],
+   "default_guess": "Use the selected image library's RGB conversion, white compositing and high-quality downsampling, with baseline 4:2:0 JPEG at PHOTO_QUALITY and its other defaults.",
+   "witness": {
+    "initial": "A transparent or resized source image is accepted for placement.",
+    "events": [
+     "One implementation resizes with a box filter and uses default JPEG tables.",
+     "Another uses a Lanczos filter or different valid JPEG optimisation settings."
+    ],
+    "outcomes": [
+     "Both outputs satisfy baseline RGB 4:2:0 JPEG at the stated quality but have one set of pixels and SHA-256.",
+     "Both outputs satisfy the same text but have different pixels, length and SHA-256."
+    ],
+    "observer": "The calling flow and Portal observe different placement size and sha256, and clients may see different pixels."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 and A6 delivery refusal",
+   "kind": "conflicting_failure_classification",
+   "text": "A name built that way cannot leave the store, so the refusal is reachable only when a folder of the store is a link that leads out of it.",
+   "question": "At what ordered check is an out-of-store resolved reference detected, and does it return the M08 unsafe_reference refusal or the M06 UNREADABLE_FILE failure for writing the stored image?",
+   "options": [
+    "Check the reference before writing and return M08 unsafe_reference",
+    "Treat the unsafe destination as an image-write failure and return M06 UNREADABLE_FILE"
+   ],
+   "default_guess": "Check immediately before opening the destination and return M08 with unsafe_reference, as A6 rule 1 explicitly requires.",
+   "witness": {
+    "initial": "The project has no placement and photos/<project_id> in the binary store is a link outside the resolved store.",
+    "events": [
+     "The owner requests delivery of a valid source.",
+     "The deliverer reaches creation of the stored image."
+    ],
+    "outcomes": [
+     "A6 rule 1 produces an M08 unsafe_reference refusal.",
+     "A3 rule 5 classifies failure to write the stored image as failed/UNREADABLE_FILE."
+    ],
+    "observer": "The calling flow sees a different answer model and reason."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 durable file write",
+   "kind": "contradictory_write_state",
+   "text": "A file counts as written when the rename succeeds. A failure before the rename leaves no file and removes the temporary one; a failure to synchronise the folder after it is a failed write of that operation, while the renamed file stays and a repeated call finds it (A3 rule 2, A4).",
+   "question": "After rename succeeds but folder synchronisation fails, is the image considered written for replay, and what does a repeated delivery do when no placement record was written?",
+   "options": [
+    "Reuse the surviving image and continue with the placement record",
+    "Rewrite the image as A3 says for a stored image left without a record",
+    "Treat the surviving image as unavailable or damaged and refuse"
+   ],
+   "default_guess": "Validate and reuse the surviving image, then write the placement record, without invoking A3 rule 2 unless a placement record actually exists.",
+   "witness": {
+    "initial": "A valid delivery has renamed the stored image, but synchronising its folder fails before the placement record is written.",
+    "events": [
+     "The first call returns a write failure.",
+     "The same content is delivered again."
+    ],
+    "outcomes": [
+     "The repeated call finds and reuses the surviving image.",
+     "Under A3's stated recovery, it writes the image again before completing the placement."
+    ],
+    "observer": "The operator can observe different filesystem writes and failure behavior; the caller may receive a different second outcome."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 pre-rename failure",
+   "kind": "ambiguous_existing_file",
+   "text": "A failure before the rename leaves no file and removes the temporary one",
+   "question": "Does “leaves no file” mean no newly installed file, or must an already existing destination file also be absent after the failure?",
+   "options": [
+    "Remove only the temporary file and preserve any existing destination",
+    "Require the destination to be absent, including deleting an existing file"
+   ],
+   "default_guess": "Remove only the temporary file and preserve any pre-existing destination.",
+   "witness": {
+    "initial": "A stored image remains from an earlier call whose folder synchronisation failed, but no placement record exists.",
+    "events": [
+     "A repeated delivery starts another temporary write.",
+     "That write fails before rename."
+    ],
+    "outcomes": [
+     "The old complete destination image remains and only the new temporary file is removed.",
+     "No destination file remains, as the literal phrase “leaves no file” can be read to require."
+    ],
+    "observer": "The next delivery and a filesystem inspector see whether the old image survived."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 project lock file",
+   "kind": "unspecified_link_handling",
+   "text": "The lock file is created on first use and never removed.",
+   "question": "How must an existing entry at the lock-file address be opened and validated, especially when it is a symbolic link or a non-regular file?",
+   "options": [
+    "Open without following links and refuse non-regular entries with state_unavailable",
+    "Follow an existing link if it can be opened and locked",
+    "Replace an unsuitable entry with a new regular lock file"
+   ],
+   "default_guess": "Open without following links, require a regular file, and return state_unavailable otherwise.",
+   "witness": {
+    "initial": "The project lock-file address contains a symbolic link to another writable file.",
+    "events": [
+     "A delivery reaches the project-lock step.",
+     "The implementation opens the lock entry."
+    ],
+    "outcomes": [
+     "A no-follow implementation refuses with state_unavailable.",
+     "A following implementation locks the link target and continues the delivery."
+    ],
+    "observer": "The calling flow sees refusal versus delivery, and another process may be locked unexpectedly."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 binary-store containment",
+   "kind": "time_of_check_race",
+   "text": "The reference must stay inside the binary store: its path, resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery is refused with `unsafe_reference`.",
+   "question": "How is containment kept true between resolving the reference and opening or renaming the stored image if a store directory is replaced concurrently?",
+   "options": [
+    "Use directory-relative no-follow opens and rename through already opened directories",
+    "Resolve again immediately before each write or rename",
+    "Accept a non-atomic resolve-then-write check"
+   ],
+   "default_guess": "Use directory handles and no-follow operations so the checked directories are the ones used for the write.",
+   "witness": {
+    "initial": "photos/<project_id> initially resolves inside the binary store.",
+    "events": [
+     "The deliverer completes the containment check.",
+     "Another actor replaces that directory with a link outside the store.",
+     "The deliverer opens or renames the image by pathname."
+    ],
+    "outcomes": [
+     "An anchored implementation refuses or writes only through the directory it checked.",
+     "A resolve-then-write implementation writes outside the binary store despite the required containment."
+    ],
+    "observer": "The host operator observes the external write; the caller may receive placed instead of unsafe_reference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "invariant_witness_gap",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What must the test observe to prove that no path failing A3 condition 1 was opened, rather than merely proving the final failure and durable files?",
+   "options": [
+    "Instrument path opens and assert that disallowed components and final entries are never opened for reading",
+    "Treat the returned failure and lack of durable output as sufficient evidence"
+   ],
+   "default_guess": "Instrument filesystem opens and assert that no disallowed path or final object is opened for reading.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "incomplete_case_coverage",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "Which Required tests demonstrate the other changed condition-1 cases: an absent segment, a folder that cannot be opened, a non-folder intermediate segment, and failed metadata for the last segment?",
+   "options": [
+    "Add explicit cases for every condition-1 refusal",
+    "Declare that the listed folder and symbolic-link cases stand for all condition-1 failures"
+   ],
+   "default_guess": "Add explicit cases for each materially different filesystem failure.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 token parsing",
+   "kind": "vague_character_class",
+   "text": "the Unicode whitespace at both ends is removed",
+   "question": "Which exact Unicode whitespace definition and version decides what is removed from the token file?",
+   "options": [
+    "Use the runtime language's strip/White_Space behavior and accept version-dependent results",
+    "Fix a Unicode version and the White_Space property",
+    "Remove only ASCII header whitespace"
+   ],
+   "default_guess": "Use the runtime's Unicode whitespace stripping, while documenting that dependency as part of the selected runtime.",
+   "witness": {
+    "initial": "The token file starts or ends with a Unicode code point whose whitespace treatment differs between implementations or Unicode versions.",
+    "events": [
+     "The service reads and trims the token file.",
+     "A request presents the otherwise identical token."
+    ],
+    "outcomes": [
+     "One implementation removes the code point and accepts the request.",
+     "Another retains it, then either fails startup as non-visible ASCII or expects it in the token."
+    ],
+    "observer": "The operator sees startup success versus failure, or the caller sees authentication success versus 401."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 current-time precision",
+   "kind": "unspecified_precision_reduction",
+   "text": "The current time is a `datetime` in UTC without an offset, with microsecond precision and no rounding",
+   "question": "If the system clock exposes finer-than-microsecond precision, how is it reduced to a microsecond without rounding?",
+   "options": [
+    "Truncate toward the earlier instant, as modification times do",
+    "Require utc_now itself to return an already microsecond-quantised datetime",
+    "Reject or otherwise handle a finer-precision clock value"
+   ],
+   "default_guess": "Require system_clock_backend.utc_now to return an already microsecond-precision datetime, truncating toward the earlier instant inside that backend if necessary.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2 size limits",
+   "kind": "standard_violation",
+   "text": "Transparent areas become white. The camera orientation is applied, then the longest side is reduced to the\n   limit when it is larger.",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must name the limit as the imported `PHOTO_MAX_SIDE` constant.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2 decoding limits",
+   "kind": "standard_violation",
+   "text": "Checks run in this order: a first frame above the pixel\n   limit (width times height) fails with `too_many_pixels`, a source that cannot be decoded with\n   `unreadable_image`, and a result above the Portal's read limit with `too_large`.",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must name the pixel limit as the imported `MAX_PIXELS` constant and the stored-result limit as the imported `MAX_OUTPUT_BYTES` constant.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2 OffsetTimeOriginal bounds",
+   "kind": "standard_violation",
+   "text": "`DateTimeOriginal` uses `OffsetTimeOriginal` when that offset has\n   the form `+HH:MM` or `-HH:MM` with hours up to 14 and minutes up to 59; otherwise it is read in the configured time zone, and so is\n   `DateTime`.",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The hour and minute bounds must be supplied through a named imported policy constant or table, or the validation must be expressed through an already emitted symbol that owns those values.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 token policy values",
+   "kind": "standard_violation",
+   "text": "The token is generated with 256 bits from a cryptographic random source and is kept in a UTF-8\n   file: the 32 random bytes in URL-safe Base64, 43 characters of `A`-`Z`, `a`-`z`, `0`-`9`, `-` and `_`.\n   At the start the file is decoded as UTF-8, a byte sequence that is not UTF-8 ending the start, and the\n   Unicode whitespace at both ends is removed. The service does not start when the group or others have\n   any permission on the file, or when what remains has fewer than 32 characters or any character that\n   is not visible ASCII (`!` to `~`), since a token with such a character could not be presented in\n   the `Authorization` header.",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The generated-token size, encoded length, accepted minimum length and closed character sets must be named imported provider constants or tables instead of being delivered only as literal policy values in this passage.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 subfolder traversal\",\"kind\":\"contradictory_failure_handling\",\"text\":\"A subfolder the listing showed that is no longer that folder when it is opened, because it became a link or another object, is not entered; one that cannot be opened is refused as a subfolder that cannot be listed.\",\"question\":\"When a listed subfolder has become a link or another non-folder by the time it is opened, is it silently skipped or does the whole scan fail with folder_unavailable?\",\"options\":[\"Skip the changed entry and continue the scan\",\"Refuse the whole scan with folder_unavailable\"],\"default_guess\":\"Refuse the whole scan with folder_unavailable, matching the preceding rule that an unopenable non-ignored subfolder refuses the scan.\",\"witness\":{\"initial\":\"A scan has listed non-ignored subfolder photos/day1.\",\"events\":[\"Syncthing replaces photos/day1 with a symbolic link before the deliverer opens it.\",\"The deliverer attempts to continue traversal.\"],\"outcomes\":[\"The link is not entered and the scan completes without that subfolder.\",\"The scan is refused with folder_unavailable.\"],\"observer\":\"The calling flow sees either a completed partial scan or a refusal.\"}},{\"subject\":\"A2 stored-image bytes\",\"kind\":\"underspecified_transform\",\"text\":\"A stored image is a newly encoded JPEG made from the decoded pixels of the source: baseline, not progressive, three colour channels with the colour resolution halved in both directions (4:2:0), the imported `PHOTO_QUALITY` constant as its quality, and no colour profile and no metadata. The pixels are converted to RGB as decoded, without colour management. Transparent areas become white. The camera orientation is applied, then the longest side is reduced to the limit when it is larger.\",\"question\":\"Which precise resize filter, RGB conversion, alpha-compositing arithmetic and JPEG encoder settings determine the stored bytes?\",\"options\":[\"Specify one deterministic pixel and JPEG encoding recipe\",\"Allow any implementation whose result satisfies the listed structural properties\"],\"default_guess\":\"Use the selected image library's RGB conversion, white compositing and high-quality downsampling, with baseline 4:2:0 JPEG at PHOTO_QUALITY and its other defaults.\",\"witness\":{\"initial\":\"A transparent or resized source image is accepted for placement.\",\"events\":[\"One implementation resizes with a box filter and uses default JPEG tables.\",\"Another uses a Lanczos filter or different valid JPEG optimisation settings.\"],\"outcomes\":[\"Both outputs satisfy baseline RGB 4:2:0 JPEG at the stated quality but have one set of pixels and SHA-256.\",\"Both outputs satisfy the same text but have different pixels, length and SHA-256.\"],\"observer\":\"The calling flow and Portal observe different placement size and sha256, and clients may see different pixels.\"}},{\"subject\":\"A3 and A6 delivery refusal\",\"kind\":\"conflicting_failure_classification\",\"text\":\"A name built that way cannot leave the store, so the refusal is reachable only when a folder of the store is a link that leads out of it.\",\"question\":\"At what ordered check is an out-of-store resolved reference detected, and does it return the M08 unsafe_reference refusal or the M06 UNREADABLE_FILE failure for writing the stored image?\",\"options\":[\"Check the reference before writing and return M08 unsafe_reference\",\"Treat the unsafe destination as an image-write failure and return M06 UNREADABLE_FILE\"],\"default_guess\":\"Check immediately before opening the destination and return M08 with unsafe_reference, as A6 rule 1 explicitly requires.\",\"witness\":{\"initial\":\"The project has no placement and photos/<project_id> in the binary store is a link outside the resolved store.\",\"events\":[\"The owner requests delivery of a valid source.\",\"The deliverer reaches creation of the stored image.\"],\"outcomes\":[\"A6 rule 1 produces an M08 unsafe_reference refusal.\",\"A3 rule 5 classifies failure to write the stored image as failed/UNREADABLE_FILE.\"],\"observer\":\"The calling flow sees a different answer model and reason.\"}},{\"subject\":\"A6 durable file write\",\"kind\":\"contradictory_write_state\",\"text\":\"A file counts as written when the rename succeeds. A failure before the rename leaves no file and removes the temporary one; a failure to synchronise the folder after it is a failed write of that operation, while the renamed file stays and a repeated call finds it (A3 rule 2, A4).\",\"question\":\"After rename succeeds but folder synchronisation fails, is the image considered written for replay, and what does a repeated delivery do when no placement record was written?\",\"options\":[\"Reuse the surviving image and continue with the placement record\",\"Rewrite the image as A3 says for a stored image left without a record\",\"Treat the surviving image as unavailable or damaged and refuse\"],\"default_guess\":\"Validate and reuse the surviving image, then write the placement record, without invoking A3 rule 2 unless a placement record actually exists.\",\"witness\":{\"initial\":\"A valid delivery has renamed the stored image, but synchronising its folder fails before the placement record is written.\",\"events\":[\"The first call returns a write failure.\",\"The same content is delivered again.\"],\"outcomes\":[\"The repeated call finds and reuses the surviving image.\",\"Under A3's stated recovery, it writes the image again before completing the placement.\"],\"observer\":\"The operator can observe different filesystem writes and failure behavior; the caller may receive a different second outcome.\"}},{\"subject\":\"A6 pre-rename failure\",\"kind\":\"ambiguous_existing_file\",\"text\":\"A failure before the rename leaves no file and removes the temporary one\",\"question\":\"Does “leaves no file” mean no newly installed file, or must an already existing destination file also be absent after the failure?\",\"options\":[\"Remove only the temporary file and preserve any existing destination\",\"Require the destination to be absent, including deleting an existing file\"],\"default_guess\":\"Remove only the temporary file and preserve any pre-existing destination.\",\"witness\":{\"initial\":\"A stored image remains from an earlier call whose folder synchronisation failed, but no placement record exists.\",\"events\":[\"A repeated delivery starts another temporary write.\",\"That write fails before rename.\"],\"outcomes\":[\"The old complete destination image remains and only the new temporary file is removed.\",\"No destination file remains, as the literal phrase “leaves no file” can be read to require.\"],\"observer\":\"The next delivery and a filesystem inspector see whether the old image survived.\"}},{\"subject\":\"A6 project lock file\",\"kind\":\"unspecified_link_handling\",\"text\":\"The lock file is created on first use and never removed.\",\"question\":\"How must an existing entry at the lock-file address be opened and validated, especially when it is a symbolic link or a non-regular file?\",\"options\":[\"Open without following links and refuse non-regular entries with state_unavailable\",\"Follow an existing link if it can be opened and locked\",\"Replace an unsuitable entry with a new regular lock file\"],\"default_guess\":\"Open without following links, require a regular file, and return state_unavailable otherwise.\",\"witness\":{\"initial\":\"The project lock-file address contains a symbolic link to another writable file.\",\"events\":[\"A delivery reaches the project-lock step.\",\"The implementation opens the lock entry.\"],\"outcomes\":[\"A no-follow implementation refuses with state_unavailable.\",\"A following implementation locks the link target and continues the delivery.\"],\"observer\":\"The calling flow sees refusal versus delivery, and another process may be locked unexpectedly.\"}},{\"subject\":\"A6 binary-store containment\",\"kind\":\"time_of_check_race\",\"text\":\"The reference must stay inside the binary store: its path, resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery is refused with `unsafe_reference`.\",\"question\":\"How is containment kept true between resolving the reference and opening or renaming the stored image if a store directory is replaced concurrently?\",\"options\":[\"Use directory-relative no-follow opens and rename through already opened directories\",\"Resolve again immediately before each write or rename\",\"Accept a non-atomic resolve-then-write check\"],\"default_guess\":\"Use directory handles and no-follow operations so the checked directories are the ones used for the write.\",\"witness\":{\"initial\":\"photos/<project_id> initially resolves inside the binary store.\",\"events\":[\"The deliverer completes the containment check.\",\"Another actor replaces that directory with a link outside the store.\",\"The deliverer opens or renames the image by pathname.\"],\"outcomes\":[\"An anchored implementation refuses or writes only through the directory it checked.\",\"A resolve-then-write implementation writes outside the binary store despite the required containment.\"],\"observer\":\"The host operator observes the external write; the caller may receive placed instead of unsafe_reference.\"}},{\"subject\":\"INV-02 Required tests\",\"kind\":\"invariant_witness_gap\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What must the test observe to prove that no path failing A3 condition 1 was opened, rather than merely proving the final failure and durable files?\",\"options\":[\"Instrument path opens and assert that disallowed components and final entries are never opened for reading\",\"Treat the returned failure and lack of durable output as sufficient evidence\"],\"default_guess\":\"Instrument filesystem opens and assert that no disallowed path or final object is opened for reading.\"},{\"subject\":\"INV-02 Required tests\",\"kind\":\"incomplete_case_coverage\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"Which Required tests demonstrate the other changed condition-1 cases: an absent segment, a folder that cannot be opened, a non-folder intermediate segment, and failed metadata for the last segment?\",\"options\":[\"Add explicit cases for every condition-1 refusal\",\"Declare that the listed folder and symbolic-link cases stand for all condition-1 failures\"],\"default_guess\":\"Add explicit cases for each materially different filesystem failure.\"},{\"subject\":\"A5 token parsing\",\"kind\":\"vague_character_class\",\"text\":\"the Unicode whitespace at both ends is removed\",\"question\":\"Which exact Unicode whitespace definition and version decides what is removed from the token file?\",\"options\":[\"Use the runtime language's strip/White_Space behavior and accept version-dependent results\",\"Fix a Unicode version and the White_Space property\",\"Remove only ASCII header whitespace\"],\"default_guess\":\"Use the runtime's Unicode whitespace stripping, while documenting that dependency as part of the selected runtime.\",\"witness\":{\"initial\":\"The token file starts or ends with a Unicode code point whose whitespace treatment differs between implementations or Unicode versions.\",\"events\":[\"The service reads and trims the token file.\",\"A request presents the otherwise identical token.\"],\"outcomes\":[\"One implementation removes the code point and accepts the request.\",\"Another retains it, then either fails startup as non-visible ASCII or expects it in the token.\"],\"observer\":\"The operator sees startup success versus failure, or the caller sees authentication success versus 401.\"}},{\"subject\":\"A7 current-time precision\",\"kind\":\"unspecified_precision_reduction\",\"text\":\"The current time is a `datetime` in UTC without an offset, with microsecond precision and no rounding\",\"question\":\"If the system clock exposes finer-than-microsecond precision, how is it reduced to a microsecond without rounding?\",\"options\":[\"Truncate toward the earlier instant, as modification times do\",\"Require utc_now itself to return an already microsecond-quantised datetime\",\"Reject or otherwise handle a finer-precision clock value\"],\"default_guess\":\"Require system_clock_backend.utc_now to return an already microsecond-precision datetime, truncating toward the earlier instant inside that backend if necessary.\"},{\"subject\":\"A2 size limits\",\"kind\":\"standard_violation\",\"text\":\"Transparent areas become white. The camera orientation is applied, then the longest side is reduced to the\\n   limit when it is larger.\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the limit as the imported `PHOTO_MAX_SIDE` constant.\"},{\"subject\":\"A2 decoding limits\",\"kind\":\"standard_violation\",\"text\":\"Checks run in this order: a first frame above the pixel\\n   limit (width times height) fails with `too_many_pixels`, a source that cannot be decoded with\\n   `unreadable_image`, and a result above the Portal's read limit with `too_large`.\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the pixel limit as the imported `MAX_PIXELS` constant and the stored-result limit as the imported `MAX_OUTPUT_BYTES` constant.\"},{\"subject\":\"A2 OffsetTimeOriginal bounds\",\"kind\":\"standard_violation\",\"text\":\"`DateTimeOriginal` uses `OffsetTimeOriginal` when that offset has\\n   the form `+HH:MM` or `-HH:MM` with hours up to 14 and minutes up to 59; otherwise it is read in the configured time zone, and so is\\n   `DateTime`.\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь\\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The hour and minute bounds must be supplied through a named imported policy constant or table, or the validation must be expressed through an already emitted symbol that owns those values.\"},{\"subject\":\"A5 token policy values\",\"kind\":\"standard_violation\",\"text\":\"The token is generated with 256 bits from a cryptographic random source and is kept in a UTF-8\\n   file: the 32 random bytes in URL-safe Base64, 43 characters of `A`-`Z`, `a`-`z`, `0`-`9`, `-` and `_`.\\n   At the start the file is decoded as UTF-8, a byte sequence that is not UTF-8 ending the start, and the\\n   Unicode whitespace at both ends is removed. The service does not start when the group or others have\\n   any permission on the file, or when what remains has fewer than 32 characters or any character that\\n   is not visible ASCII (`!` to `~`), since a token with such a character could not be presented in\\n   the `Authorization` header.\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The generated-token size, encoded length, accepted minimum length and closed character sets must be named imported provider constants or tables instead of being delivered only as literal policy values in this passage.\"}]}",
+ "set_aside": []
+}

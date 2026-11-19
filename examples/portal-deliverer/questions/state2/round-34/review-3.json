@@ -1,0 +1,249 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 scan result for an entry replaced by a symbolic link",
+   "kind": "contradictory_outcome",
+   "text": "an entry the listing shows as a symbolic link is neither reported nor followed.\n\nEvery folder is opened without following a link: the photo folder one folder at a time along its\nresolved path (A5 rule 8), and each subfolder in the folder that holds it. A folder is listed, its entries\nare read and its files are opened only through the folder that was opened, so an entry replaced by a link\nafter a check is never followed. A subfolder the listing showed that is no longer that folder when it is\nopened, because it became a link or another object, is not entered; one that cannot be opened is refused\nas a subfolder that cannot be listed. When the listing reaches an entry, one metadata reading of that\nentry in its opened folder, without following a link, decides that it is a regular file and gives its\nlisted size and modification time; an entry that reading does not show as a regular file is not\nreported",
+   "question": "If the listing showed a regular file and it becomes a symbolic link before the metadata reading, is it absent from the scan or reported as rejected with `unreadable_file` under order 5?",
+   "options": [
+    "Omit the entry because the metadata reading does not show a regular file",
+    "Report it as rejected with `unreadable_file` because it became a symbolic link after listing"
+   ],
+   "default_guess": "Report it as rejected with `unreadable_file`, following the explicit order-5 condition.",
+   "witness": {
+    "initial": "A folder listing contains a regular entry named `photo.jpg`.",
+    "events": [
+     "Syncthing replaces `photo.jpg` with a symbolic link before the scan's metadata reading.",
+     "The scan performs the no-follow metadata reading."
+    ],
+    "outcomes": [
+     "The entry is not reported because the metadata reading does not show a regular file.",
+     "The entry is reported as `rejected` with reason `unreadable_file` because its path became a symbolic link after listing."
+    ],
+    "observer": "The caller reading the scan answer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 and A5 folder identity across replacement races",
+   "kind": "identity_check_unspecified",
+   "text": "A subfolder the listing showed that is no longer that folder when it is\nopened, because it became a link or another object, is not entered",
+   "question": "How must the implementation establish that the directory opened later is the same directory object that was listed or whose containment was checked, especially when it is replaced by another ordinary directory?",
+   "options": [
+    "Capture and compare stable filesystem identity such as device and inode",
+    "Hold an open directory handle from the containment check through traversal",
+    "Treat any ordinary directory currently at the path as the same folder"
+   ],
+   "default_guess": "Open and retain directory handles during traversal and compare stable identity where a listed child must later be opened.",
+   "witness": {
+    "initial": "The checked photo directory is `/root/photos`, containing `old.jpg`.",
+    "events": [
+     "The containment check resolves `/root/photos`.",
+     "Another actor renames that directory and installs a different ordinary directory at `/root/photos`, containing `other.jpg`.",
+     "The scan opens `/root/photos`; no component is a link or non-folder."
+    ],
+    "outcomes": [
+     "The replacement is detected as another object and the scan does not enter it.",
+     "The replacement opens successfully and `other.jpg` is scanned."
+    ],
+    "observer": "The caller and the owner whose files are scanned"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 RGB conversion and JPEG byte production",
+   "kind": "encoding_underdefined",
+   "text": "A stored image is a newly encoded JPEG made from the decoded pixels of the source: baseline, not\n   progressive, three colour channels with the colour resolution halved in both directions (4:2:0), the\n   imported `PHOTO_QUALITY` constant as its quality, and no colour profile and no metadata. The pixels\n   are converted to RGB as decoded, without colour management.",
+   "question": "Must equal decoded pixels produce one reproducible JPEG byte sequence, and if so which RGB conversion, alpha arithmetic, chroma siting, DCT, quantisation, Huffman and encoder settings define it?",
+   "options": [
+    "Specify a particular encoder and all byte-affecting settings",
+    "Specify a canonical pixel conversion and permit any conforming baseline 4:2:0 JPEG encoding",
+    "Explicitly permit both pixel-conversion and JPEG-byte variation within the stated constraints"
+   ],
+   "default_guess": "Fix the selected image library and all byte-affecting save settings, while treating embedded profiles as ignored.",
+   "witness": {
+    "initial": "Two clean installations receive the same decodable source image with non-RGB channels or transparency.",
+    "events": [
+     "Each installation converts the decoded pixels to RGB without applying a colour profile.",
+     "Each encodes a baseline 4:2:0 JPEG at quality 85 using a different conforming encoder or conversion default."
+    ],
+    "outcomes": [
+     "The stored JPEG has one byte sequence, length and SHA-256.",
+     "The stored JPEG has a different byte sequence, length and SHA-256 while satisfying every listed constraint."
+    ],
+    "observer": "The caller through M04 `sha256` and `size`, and the client through the displayed pixels"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 token file loading",
+   "kind": "startup_failure_unspecified",
+   "text": "At the start the file is decoded as UTF-8, a byte sequence that is not UTF-8 ending the start, and the\n   Unicode whitespace at both ends is removed. The service does not start when the group or others have\n   any permission on the file, or when what remains has fewer than 32 characters or any character that\n   is not visible ASCII (`!` to `~`)",
+   "question": "What happens when the token path is absent, cannot be opened or read, is a directory or symbolic link, or changes between the permission check and the read?",
+   "options": [
+    "End startup for every open, type, read or race failure and reject symbolic links",
+    "Follow symbolic links and validate the resulting file",
+    "Permit selected transient failures or file types"
+   ],
+   "default_guess": "End startup, require a regular file opened without following a link, and perform permission validation on the opened object.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 unsafe-reference check ordering",
+   "kind": "precedence_unspecified",
+   "text": "The reference must stay inside the binary store: its path,\n   resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery\n   is refused with `unsafe_reference`.",
+   "question": "At what point in A3's ordered delivery checks is the unsafe-reference check made, and does an existing placement replay before this check or get refused by it?",
+   "options": [
+    "Check before looking up an existing placement",
+    "Check after the placement lookup, so an existing placement replays",
+    "Check only immediately before writing a new stored image"
+   ],
+   "default_guess": "Look up and validate durable state under the project lock first; replay an existing valid placement, and check the destination before preparing or writing a new image.",
+   "witness": {
+    "initial": "A valid placement already exists, and a binary-store directory used by its deterministic path has since become a link outside the store.",
+    "events": [
+     "The caller repeats delivery with the same project and source id.",
+     "The operation reaches the project lock and existing-placement check."
+    ],
+    "outcomes": [
+     "A3 rule 2 returns `replayed` without examining the current source or destination path.",
+     "A6 rule 1 refuses the delivery with `unsafe_reference` because the resolved reference is outside the store."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 directory-synchronisation failure and retry",
+   "kind": "contradiction",
+   "text": "A failure to synchronise the folder after it is a failed write of that\n   operation, while the renamed file stays and a repeated call finds it (A3 rule 2, A4).",
+   "question": "When image rename succeeds but directory synchronisation fails before a placement record exists, does the retry reuse the renamed image or write it again as A3 rule 5 says?",
+   "options": [
+    "Reuse and validate the renamed image on retry",
+    "Rewrite the stored image on retry",
+    "Treat the remaining image as damaged state and refuse"
+   ],
+   "default_guess": "Reuse the existing image only after verifying that its bytes match the image that would be stored, then complete the record.",
+   "witness": {
+    "initial": "No placement record or stored image exists for a source.",
+    "events": [
+     "Delivery writes and renames the stored image.",
+     "Synchronising the containing directory fails, so the operation reports a failed write and no placement record is written.",
+     "The same delivery is called again."
+    ],
+    "outcomes": [
+     "The repeated call finds and reuses the renamed image.",
+     "The repeated call writes the stored image again because there is still no placement and A3 says a retry after condition 5 writes it again."
+    ],
+    "observer": "The filesystem operator and the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 temporary-file cleanup failure",
+   "kind": "failure_case_uncovered",
+   "text": "A failure before the rename leaves no file and\n   removes the temporary one",
+   "question": "What result and durable-state guarantee apply if the original write or synchronisation fails and removing the temporary file also fails?",
+   "options": [
+    "Return the ordinary write failure while allowing a temporary file to remain",
+    "Retry cleanup and refuse until cleanup succeeds",
+    "Treat cleanup failure as state unavailable and preserve the artifact for recovery"
+   ],
+   "default_guess": "Return the write failure, make a best-effort cleanup, and explicitly permit an unreachable temporary artifact to remain if cleanup itself fails.",
+   "witness": {
+    "initial": "A delivery has created its temporary image file but has not renamed it.",
+    "events": [
+     "Writing or synchronising the temporary file fails.",
+     "The attempt to unlink the temporary file also fails."
+    ],
+    "outcomes": [
+     "The operation returns a failed delivery and a temporary file remains.",
+     "The operation continues retrying or returns a different whole-operation refusal until the promised no-file state is obtained."
+    ],
+    "observer": "The filesystem operator and a later delivery"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 clock failure contract",
+   "kind": "failure_case_uncovered",
+   "text": "The system clock is the one source of the current time, declared as `rules.time_source_policy`\n   and reaching code through `system_clock_backend` as the operation `utc_now`.",
+   "question": "What must a mark do if `utc_now` fails or returns a value outside the required naive-UTC, microsecond-precision contract?",
+   "options": [
+    "Return a defined M08 refusal code",
+    "Fail the request as an internal service error without an M08 body",
+    "Require the backend contract to make failure and invalid values impossible"
+   ],
+   "default_guess": "Make `utc_now` a declared infallible authority returning a validated naive-UTC `datetime`; unexpected backend failure becomes an internal service error and writes nothing.",
+   "witness": {
+    "initial": "A valid authenticated mark request has passed request and identifier validation.",
+    "events": [
+     "The mark calls `utc_now` at the required point.",
+     "The clock operation raises an error or returns an offset-aware value."
+    ],
+    "outcomes": [
+     "The mark returns a defined refusal and writes nothing.",
+     "The request fails as an internal error and writes nothing."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "invariant_test_incomplete",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What observation must the test make to prove that delivery opens no path failing condition 1, rather than merely proving the returned failure and absence of destination writes?",
+   "options": [
+    "Instrument source-path open operations and assert that no forbidden final path or symlink target is opened for reading",
+    "Rewrite INV-02 to assert only the listed outcomes and durable writes",
+    "Add adversarial files whose access has an observable side effect and assert that the side effect does not occur"
+   ],
+   "default_guess": "Instrument directory and file opens, asserting that only permitted directory inspections occur and that no rejected last segment or symlink target is opened for reading.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13 Required tests",
+   "kind": "invariant_test_incomplete",
+   "text": "INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Must the Required tests also show the specified clock counts for a mark refused before the clock point, a mark refused after it, and a replayed mark?",
+   "options": [
+    "Test every specified mark branch: zero before the point and exactly one after it, including refusal and replay",
+    "Treat one successful mark as sufficient evidence of the at-most-once invariant",
+    "Narrow the normative timing rules to the successful-mark path"
+   ],
+   "default_guess": "Test zero reads for every pre-clock refusal and exactly one read for successful, post-clock-refused and replayed marks.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 folder-unavailable refusal member",
+   "kind": "standard_violation",
+   "text": "When the photo folder, or a subfolder\nthat is not ignored, cannot be opened or listed, the whole operation is refused with `folder_unavailable`, so a partial scan is\nnever reported as complete.",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не\nявляется именем ни одного члена, генератор пишет только имена\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\n(`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Name the FOLDER_UNAVAILABLE member of = models.RefusalCode, optionally adding its `folder_unavailable` value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 folder-unavailable refusal member",
+   "kind": "standard_violation",
+   "text": "a folder\n   on that path replaced after the check by a link or by anything that is not a folder cannot be opened,\n   and the scan is refused with `folder_unavailable` or the delivery fails under condition 1 of A3 rule 5.",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не\nявляется именем ни одного члена, генератор пишет только имена\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\n(`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Replace `folder_unavailable` with the FOLDER_UNAVAILABLE member of = models.RefusalCode, optionally retaining the value as a supplement.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 unsafe-reference refusal member",
+   "kind": "standard_violation",
+   "text": "The reference must stay inside the binary store: its path,\n   resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery\n   is refused with `unsafe_reference`.",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не\nявляется именем ни одного члена, генератор пишет только имена\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\n(`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Name the UNSAFE_REFERENCE member of = models.RefusalCode, optionally adding its `unsafe_reference` value.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 scan result for an entry replaced by a symbolic link\",\"kind\":\"contradictory_outcome\",\"text\":\"an entry the listing shows as a symbolic link is neither reported nor followed.\\n\\nEvery folder is opened without following a link: the photo folder one folder at a time along its\\nresolved path (A5 rule 8), and each subfolder in the folder that holds it. A folder is listed, its entries\\nare read and its files are opened only through the folder that was opened, so an entry replaced by a link\\nafter a check is never followed. A subfolder the listing showed that is no longer that folder when it is\\nopened, because it became a link or another object, is not entered; one that cannot be opened is refused\\nas a subfolder that cannot be listed. When the listing reaches an entry, one metadata reading of that\\nentry in its opened folder, without following a link, decides that it is a regular file and gives its\\nlisted size and modification time; an entry that reading does not show as a regular file is not\\nreported\",\"question\":\"If the listing showed a regular file and it becomes a symbolic link before the metadata reading, is it absent from the scan or reported as rejected with `unreadable_file` under order 5?\",\"options\":[\"Omit the entry because the metadata reading does not show a regular file\",\"Report it as rejected with `unreadable_file` because it became a symbolic link after listing\"],\"default_guess\":\"Report it as rejected with `unreadable_file`, following the explicit order-5 condition.\",\"witness\":{\"initial\":\"A folder listing contains a regular entry named `photo.jpg`.\",\"events\":[\"Syncthing replaces `photo.jpg` with a symbolic link before the scan's metadata reading.\",\"The scan performs the no-follow metadata reading.\"],\"outcomes\":[\"The entry is not reported because the metadata reading does not show a regular file.\",\"The entry is reported as `rejected` with reason `unreadable_file` because its path became a symbolic link after listing.\"],\"observer\":\"The caller reading the scan answer\"}},{\"subject\":\"A1 and A5 folder identity across replacement races\",\"kind\":\"identity_check_unspecified\",\"text\":\"A subfolder the listing showed that is no longer that folder when it is\\nopened, because it became a link or another object, is not entered\",\"question\":\"How must the implementation establish that the directory opened later is the same directory object that was listed or whose containment was checked, especially when it is replaced by another ordinary directory?\",\"options\":[\"Capture and compare stable filesystem identity such as device and inode\",\"Hold an open directory handle from the containment check through traversal\",\"Treat any ordinary directory currently at the path as the same folder\"],\"default_guess\":\"Open and retain directory handles during traversal and compare stable identity where a listed child must later be opened.\",\"witness\":{\"initial\":\"The checked photo directory is `/root/photos`, containing `old.jpg`.\",\"events\":[\"The containment check resolves `/root/photos`.\",\"Another actor renames that directory and installs a different ordinary directory at `/root/photos`, containing `other.jpg`.\",\"The scan opens `/root/photos`; no component is a link or non-folder.\"],\"outcomes\":[\"The replacement is detected as another object and the scan does not enter it.\",\"The replacement opens successfully and `other.jpg` is scanned.\"],\"observer\":\"The caller and the owner whose files are scanned\"}},{\"subject\":\"A2 RGB conversion and JPEG byte production\",\"kind\":\"encoding_underdefined\",\"text\":\"A stored image is a newly encoded JPEG made from the decoded pixels of the source: baseline, not\\n   progressive, three colour channels with the colour resolution halved in both directions (4:2:0), the\\n   imported `PHOTO_QUALITY` constant as its quality, and no colour profile and no metadata. The pixels\\n   are converted to RGB as decoded, without colour management.\",\"question\":\"Must equal decoded pixels produce one reproducible JPEG byte sequence, and if so which RGB conversion, alpha arithmetic, chroma siting, DCT, quantisation, Huffman and encoder settings define it?\",\"options\":[\"Specify a particular encoder and all byte-affecting settings\",\"Specify a canonical pixel conversion and permit any conforming baseline 4:2:0 JPEG encoding\",\"Explicitly permit both pixel-conversion and JPEG-byte variation within the stated constraints\"],\"default_guess\":\"Fix the selected image library and all byte-affecting save settings, while treating embedded profiles as ignored.\",\"witness\":{\"initial\":\"Two clean installations receive the same decodable source image with non-RGB channels or transparency.\",\"events\":[\"Each installation converts the decoded pixels to RGB without applying a colour profile.\",\"Each encodes a baseline 4:2:0 JPEG at quality 85 using a different conforming encoder or conversion default.\"],\"outcomes\":[\"The stored JPEG has one byte sequence, length and SHA-256.\",\"The stored JPEG has a different byte sequence, length and SHA-256 while satisfying every listed constraint.\"],\"observer\":\"The caller through M04 `sha256` and `size`, and the client through the displayed pixels\"}},{\"subject\":\"A5 token file loading\",\"kind\":\"startup_failure_unspecified\",\"text\":\"At the start the file is decoded as UTF-8, a byte sequence that is not UTF-8 ending the start, and the\\n   Unicode whitespace at both ends is removed. The service does not start when the group or others have\\n   any permission on the file, or when what remains has fewer than 32 characters or any character that\\n   is not visible ASCII (`!` to `~`)\",\"question\":\"What happens when the token path is absent, cannot be opened or read, is a directory or symbolic link, or changes between the permission check and the read?\",\"options\":[\"End startup for every open, type, read or race failure and reject symbolic links\",\"Follow symbolic links and validate the resulting file\",\"Permit selected transient failures or file types\"],\"default_guess\":\"End startup, require a regular file opened without following a link, and perform permission validation on the opened object.\"},{\"subject\":\"A6 unsafe-reference check ordering\",\"kind\":\"precedence_unspecified\",\"text\":\"The reference must stay inside the binary store: its path,\\n   resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery\\n   is refused with `unsafe_reference`.\",\"question\":\"At what point in A3's ordered delivery checks is the unsafe-reference check made, and does an existing placement replay before this check or get refused by it?\",\"options\":[\"Check before looking up an existing placement\",\"Check after the placement lookup, so an existing placement replays\",\"Check only immediately before writing a new stored image\"],\"default_guess\":\"Look up and validate durable state under the project lock first; replay an existing valid placement, and check the destination before preparing or writing a new image.\",\"witness\":{\"initial\":\"A valid placement already exists, and a binary-store directory used by its deterministic path has since become a link outside the store.\",\"events\":[\"The caller repeats delivery with the same project and source id.\",\"The operation reaches the project lock and existing-placement check.\"],\"outcomes\":[\"A3 rule 2 returns `replayed` without examining the current source or destination path.\",\"A6 rule 1 refuses the delivery with `unsafe_reference` because the resolved reference is outside the store.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A6 directory-synchronisation failure and retry\",\"kind\":\"contradiction\",\"text\":\"A failure to synchronise the folder after it is a failed write of that\\n   operation, while the renamed file stays and a repeated call finds it (A3 rule 2, A4).\",\"question\":\"When image rename succeeds but directory synchronisation fails before a placement record exists, does the retry reuse the renamed image or write it again as A3 rule 5 says?\",\"options\":[\"Reuse and validate the renamed image on retry\",\"Rewrite the stored image on retry\",\"Treat the remaining image as damaged state and refuse\"],\"default_guess\":\"Reuse the existing image only after verifying that its bytes match the image that would be stored, then complete the record.\",\"witness\":{\"initial\":\"No placement record or stored image exists for a source.\",\"events\":[\"Delivery writes and renames the stored image.\",\"Synchronising the containing directory fails, so the operation reports a failed write and no placement record is written.\",\"The same delivery is called again.\"],\"outcomes\":[\"The repeated call finds and reuses the renamed image.\",\"The repeated call writes the stored image again because there is still no placement and A3 says a retry after condition 5 writes it again.\"],\"observer\":\"The filesystem operator and the calling flow\"}},{\"subject\":\"A6 temporary-file cleanup failure\",\"kind\":\"failure_case_uncovered\",\"text\":\"A failure before the rename leaves no file and\\n   removes the temporary one\",\"question\":\"What result and durable-state guarantee apply if the original write or synchronisation fails and removing the temporary file also fails?\",\"options\":[\"Return the ordinary write failure while allowing a temporary file to remain\",\"Retry cleanup and refuse until cleanup succeeds\",\"Treat cleanup failure as state unavailable and preserve the artifact for recovery\"],\"default_guess\":\"Return the write failure, make a best-effort cleanup, and explicitly permit an unreachable temporary artifact to remain if cleanup itself fails.\",\"witness\":{\"initial\":\"A delivery has created its temporary image file but has not renamed it.\",\"events\":[\"Writing or synchronising the temporary file fails.\",\"The attempt to unlink the temporary file also fails.\"],\"outcomes\":[\"The operation returns a failed delivery and a temporary file remains.\",\"The operation continues retrying or returns a different whole-operation refusal until the promised no-file state is obtained.\"],\"observer\":\"The filesystem operator and a later delivery\"}},{\"subject\":\"A7 clock failure contract\",\"kind\":\"failure_case_uncovered\",\"text\":\"The system clock is the one source of the current time, declared as `rules.time_source_policy`\\n   and reaching code through `system_clock_backend` as the operation `utc_now`.\",\"question\":\"What must a mark do if `utc_now` fails or returns a value outside the required naive-UTC, microsecond-precision contract?\",\"options\":[\"Return a defined M08 refusal code\",\"Fail the request as an internal service error without an M08 body\",\"Require the backend contract to make failure and invalid values impossible\"],\"default_guess\":\"Make `utc_now` a declared infallible authority returning a validated naive-UTC `datetime`; unexpected backend failure becomes an internal service error and writes nothing.\",\"witness\":{\"initial\":\"A valid authenticated mark request has passed request and identifier validation.\",\"events\":[\"The mark calls `utc_now` at the required point.\",\"The clock operation raises an error or returns an offset-aware value.\"],\"outcomes\":[\"The mark returns a defined refusal and writes nothing.\",\"The request fails as an internal error and writes nothing.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"INV-02 Required tests\",\"kind\":\"invariant_test_incomplete\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What observation must the test make to prove that delivery opens no path failing condition 1, rather than merely proving the returned failure and absence of destination writes?\",\"options\":[\"Instrument source-path open operations and assert that no forbidden final path or symlink target is opened for reading\",\"Rewrite INV-02 to assert only the listed outcomes and durable writes\",\"Add adversarial files whose access has an observable side effect and assert that the side effect does not occur\"],\"default_guess\":\"Instrument directory and file opens, asserting that only permitted directory inspections occur and that no rejected last segment or symlink target is opened for reading.\"},{\"subject\":\"INV-13 Required tests\",\"kind\":\"invariant_test_incomplete\",\"text\":\"INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Must the Required tests also show the specified clock counts for a mark refused before the clock point, a mark refused after it, and a replayed mark?\",\"options\":[\"Test every specified mark branch: zero before the point and exactly one after it, including refusal and replay\",\"Treat one successful mark as sufficient evidence of the at-most-once invariant\",\"Narrow the normative timing rules to the successful-mark path\"],\"default_guess\":\"Test zero reads for every pre-clock refusal and exactly one read for successful, post-clock-refused and replayed marks.\"},{\"subject\":\"A1 folder-unavailable refusal member\",\"kind\":\"standard_violation\",\"text\":\"When the photo folder, or a subfolder\\nthat is not ignored, cannot be opened or listed, the whole operation is refused with `folder_unavailable`, so a partial scan is\\nnever reported as complete.\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не\\nявляется именем ни одного члена, генератор пишет только имена\\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\\n(`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Name the FOLDER_UNAVAILABLE member of = models.RefusalCode, optionally adding its `folder_unavailable` value.\"},{\"subject\":\"A5 folder-unavailable refusal member\",\"kind\":\"standard_violation\",\"text\":\"a folder\\n   on that path replaced after the check by a link or by anything that is not a folder cannot be opened,\\n   and the scan is refused with `folder_unavailable` or the delivery fails under condition 1 of A3 rule 5.\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не\\nявляется именем ни одного члена, генератор пишет только имена\\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\\n(`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Replace `folder_unavailable` with the FOLDER_UNAVAILABLE member of = models.RefusalCode, optionally retaining the value as a supplement.\"},{\"subject\":\"A6 unsafe-reference refusal member\",\"kind\":\"standard_violation\",\"text\":\"The reference must stay inside the binary store: its path,\\n   resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery\\n   is refused with `unsafe_reference`.\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не\\nявляется именем ни одного члена, генератор пишет только имена\\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\\n(`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Name the UNSAFE_REFERENCE member of = models.RefusalCode, optionally adding its `unsafe_reference` value.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,388 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:deliverer_api.read_token",
+   "kind": "race_semantics",
+   "text": "A5 rule 2: no group or other permission on the file, UTF-8 content, and after the surrounding whitespace is removed at least 32 characters, all visible ASCII.",
+   "question": "Must the permission check and content read apply to the same opened filesystem object, and how must replacement of the path between those actions be handled?",
+   "options": [
+    "Open once without following links and check permissions on that opened object before reading it",
+    "Check permissions by path and then open the path separately",
+    "Detect any replacement and end the start"
+   ],
+   "default_guess": "Open once without following links, check the opened object's permissions, and read that same object.",
+   "witness": {
+    "initial": "The token path names a mode-0600 file containing token A; another file containing token B has group-read permission.",
+    "events": [
+     "The deployment starts the service.",
+     "An actor replaces the path with the second file between a path-based permission check and the content read."
+    ],
+    "outcomes": [
+     "The service starts with token B because the checked path and the read path are treated separately.",
+     "The service ends the start because permissions are checked on the same opened file whose bytes are read."
+    ],
+    "observer": "The calling flow, which finds either token B accepted or no listening service."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.read_token",
+   "kind": "file_kind",
+   "text": "The path of the token file.",
+   "question": "Must the token path name a regular file, and are symbolic links, FIFOs, devices and directories rejected even when they can be read and have acceptable permissions?",
+   "options": [
+    "Require a regular file opened without following a symbolic link",
+    "Allow a symbolic link to a qualifying regular file",
+    "Allow any readable filesystem object whose bytes and permissions satisfy A5 rule 2"
+   ],
+   "default_guess": "Require a regular file and do not follow a symbolic link.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.run_service",
+   "kind": "exit_status",
+   "text": "The exit status of the process: 0 when the service stops after it has served, 1 when the start fails, with the reason on the standard error stream and without listening.",
+   "question": "What exit status is returned when the web server fails after it has begun listening, as opposed to being stopped normally?",
+   "options": [
+    "Return 0 for every termination after the service has listened",
+    "Return 0 only for an orderly stop and 1 for a runtime server failure",
+    "Propagate a web-server-specific nonzero status"
+   ],
+   "default_guess": "Return 0 for an orderly stop and 1 for a runtime server failure.",
+   "witness": {
+    "initial": "The start succeeds and the service is listening.",
+    "events": [
+     "The web server later terminates because its serving loop raises an error."
+    ],
+    "outcomes": [
+     "The process exits 0 because it stopped after it had served.",
+     "The process exits 1 because the post-start termination was a failure."
+    ],
+    "observer": "The deployment supervisor."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_api.run_service",
+   "kind": "error_output",
+   "text": "with the reason on the standard error stream",
+   "question": "What exact reason, format and trailing newline must be written for each start failure, and may it contain filesystem paths or exception text?",
+   "options": [
+    "Write a fixed public sentence for each failure class with no server path",
+    "Write the underlying exception message",
+    "Write only a generic fixed start-failed sentence"
+   ],
+   "default_guess": "Write a fixed, path-free sentence for each failure class followed by one newline.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:object_connections.available_photo_folder",
+   "kind": "error_mapping",
+   "text": "`folder_unavailable` when the folder is missing, is not a folder or does not resolve strictly below the root.",
+   "question": "What happens when resolving or inspecting the root or photo folder fails for another reason, such as permission denial, a symbolic-link loop or an I/O error?",
+   "options": [
+    "Return `folder_unavailable` for every failure to resolve or inspect either path",
+    "Propagate the operating-system error",
+    "Distinguish configuration errors from transient filesystem errors"
+   ],
+   "default_guess": "Return `folder_unavailable` for every failure to resolve or inspect the paths.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "folder_identity_race",
+   "text": "The photo folder is then reached by that resolved path, opened one folder at a time from the root of the file system without following a link at any of them (A1), so the folder that is read is the folder whose containment was checked;",
+   "question": "How is the identity of the checked folder preserved if a checked path component is replaced by a different directory, rather than by a link or non-folder, before it is opened?",
+   "options": [
+    "Hold directory handles from containment checking through use and verify identities",
+    "Accept any later directory at the same resolved path",
+    "Re-resolve and repeat containment checking immediately before use"
+   ],
+   "default_guess": "Hold or verify directory identities so the opened folder is the object whose containment was checked.",
+   "witness": {
+    "initial": "`root/photos` is inside the root and passes containment checking.",
+    "events": [
+     "Another actor renames `root/photos` away and installs a different directory at the same path.",
+     "The scan opens the saved resolved path one component at a time without following links."
+    ],
+    "outcomes": [
+     "The scan reads the replacement directory because it is still a directory at the checked pathname.",
+     "The scan refuses because the directory identity differs from the one checked."
+    ],
+    "observer": "The caller, which sees files from the replacement directory or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.write_placement",
+   "kind": "record_address",
+   "text": "The address of the record is taken from the `project_id` and `source_id` inside M04, so the two cannot disagree.",
+   "question": "What is the complete placement-record address derived from those identifiers, including directory layout, filename, extension and encoding or escaping of each component?",
+   "options": [
+    "Use a specified project directory and source-id JSON filename",
+    "Use one flat filename containing both identifiers",
+    "Leave the layout implementation-defined"
+   ],
+   "default_guess": "Use a documented state-directory layout with a canonical lowercase project UUID and source-id filename.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.write_mark",
+   "kind": "record_address",
+   "text": "The address of the record is taken from the `project_id` and `source_id` inside M07, so the two cannot disagree.",
+   "question": "What is the complete mark-record address derived from those identifiers, and how is it kept distinct from the placement-record address?",
+   "options": [
+    "Use a specified marks subtree parallel to placements",
+    "Use distinct filename suffixes in one directory",
+    "Leave the layout implementation-defined"
+   ],
+   "default_guess": "Use documented, separate placement and mark subtrees with canonical identifier spellings.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "jpeg_resize",
+   "text": "Transparent areas become white. The camera orientation is applied, then the longest side is reduced to the limit when it is larger.",
+   "question": "Which resampling filter and dimension-rounding rule must be used when reducing the longest side?",
+   "options": [
+    "Use a named high-quality filter and round the other dimension to nearest",
+    "Use a named filter and floor the other dimension",
+    "Allow the image library's default resizing behavior"
+   ],
+   "default_guess": "Use a fixed high-quality filter and an explicitly specified nearest-integer rule with a minimum dimension of one pixel.",
+   "witness": {
+    "initial": "A source has dimensions whose aspect-ratio calculation produces a non-integer shorter side and contains high-frequency detail.",
+    "events": [
+     "The calling flow delivers the source.",
+     "One implementation rounds the dimension and uses Lanczos; another floors it and uses bicubic."
+    ],
+    "outcomes": [
+     "The implementations store different dimensions and JPEG bytes.",
+     "The implementations store another pair of dimensions or pixels, producing a different M04 `size` and `sha256`."
+    ],
+    "observer": "The Portal and the calling flow."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "jpeg_encoding",
+   "text": "A stored image is a newly encoded JPEG made from the decoded pixels of the source: baseline, not progressive, three colour channels with the colour resolution halved in both directions (4:2:0), the imported `PHOTO_QUALITY` constant as its quality, and no colour profile and no metadata.",
+   "question": "Which remaining JPEG encoder choices must be fixed, including quality scaling, quantization and Huffman tables, optimization, DCT method and deterministic output requirements?",
+   "options": [
+    "Specify exact encoder settings and require deterministic bytes",
+    "Specify one library and version whose defaults define the bytes",
+    "Permit any baseline 4:2:0 JPEG satisfying the stated quality and metadata constraints"
+   ],
+   "default_guess": "Specify the pinned encoder and every non-default option needed for deterministic bytes.",
+   "witness": {
+    "initial": "A valid source image is ready for preparation.",
+    "events": [
+     "One implementation encodes at quality 85 with optimized Huffman tables.",
+     "Another encodes at quality 85 with standard Huffman tables."
+    ],
+    "outcomes": [
+     "Both outputs satisfy the stated JPEG properties but have different bytes, sizes and hashes.",
+     "The caller receives different M04 `size` and `sha256`, and the Portal stores different files."
+    ],
+    "observer": "The calling flow and the Portal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "metadata_definition",
+   "text": "and no colour profile and no metadata.",
+   "question": "Which JPEG markers count as prohibited metadata, particularly JFIF/APP0 density data, Adobe markers, thumbnails and application-specific APP segments?",
+   "options": [
+    "Permit only the structural markers needed to decode the JPEG and prohibit every APP and COM segment",
+    "Permit JFIF/APP0 but prohibit EXIF, XMP, ICC, GPS and COM data",
+    "Use the encoder's default marker set"
+   ],
+   "default_guess": "Define an explicit marker allowlist and prohibit all other APP and COM segments.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "camera_time_parsing",
+   "text": "A camera value is unusable when it is malformed, when its UTC year is before 2000, or when it is more than 24 hours after the file's modification time.",
+   "question": "What exact lexical forms and EXIF companion fields make `DateTimeOriginal`, `DateTime` and `OffsetTimeOriginal` well formed, and are fractional-second EXIF fields used or ignored?",
+   "options": [
+    "Accept only the canonical EXIF date-time form and ignore fractional-second companion fields",
+    "Accept library-parsed variants and use available fractional-second fields",
+    "Define an explicit set of accepted variants and companion fields"
+   ],
+   "default_guess": "Accept only explicitly listed EXIF forms and state explicitly whether each fractional-second field is used.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "hash_representation",
+   "text": "`sha256`, `size` and `media_type` describe the stored image:",
+   "question": "What string representation must M04 use for the stored image's SHA-256 digest?",
+   "options": [
+    "Lowercase 64-character hexadecimal",
+    "Uppercase hexadecimal",
+    "Base64"
+   ],
+   "default_guess": "Lowercase 64-character hexadecimal.",
+   "witness": {
+    "initial": "A photo is successfully prepared and stored.",
+    "events": [
+     "One implementation writes the digest as lowercase hexadecimal.",
+     "Another writes the same digest as Base64."
+    ],
+    "outcomes": [
+     "The returned and persisted M04 values differ despite identical stored bytes.",
+     "A later validator may accept one record and reject the other once a representation is assumed."
+    ],
+    "observer": "The calling flow and a later service version reading the record."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "media_type_value",
+   "text": "`sha256`, `size` and `media_type` describe the stored image:",
+   "question": "What exact value must M04 store in `media_type` for the generated JPEG?",
+   "options": [
+    "`image/jpeg`",
+    "`image/jpg`",
+    "An encoder-reported value"
+   ],
+   "default_guess": "`image/jpeg`.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "store_containment_race",
+   "text": "The reference must stay inside the binary store: its path, resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery is refused with `unsafe_reference`.",
+   "question": "How is containment preserved if a store directory is replaced by a link after resolution but before the temporary file or final file is opened or renamed?",
+   "options": [
+    "Open each directory without following links and perform writes relative to held directory handles",
+    "Repeat path resolution immediately before each filesystem action",
+    "Rely on the earlier resolved-path check"
+   ],
+   "default_guess": "Use held directory handles and no-follow relative operations for creation and rename.",
+   "witness": {
+    "initial": "The destination directory resolves below the binary store.",
+    "events": [
+     "Containment checking succeeds.",
+     "Another actor replaces a destination directory with a symbolic link to a directory outside the store.",
+     "The writer creates or renames the image through the pathname."
+    ],
+    "outcomes": [
+     "The image is written outside the binary store despite the earlier check.",
+     "The operation refuses or fails without writing outside because directory handles and no-follow operations bind the write to checked directories."
+    ],
+    "observer": "The host operator and any reader of the outside directory."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "placement_fsync_contradiction",
+   "text": "a failure to synchronise the folder after it is a failed write of that operation, while the renamed file stays and a repeated call finds it (A3 rule 2, A4).",
+   "question": "When placement-record rename succeeds but its directory synchronization fails, must the first delivery answer `failed` even though the placement record remains, and must the next delivery replay it rather than write it again as A3's condition-5 continuation says?",
+   "options": [
+    "First answer `failed`; retain the record; next call answers `replayed`",
+    "Treat successful rename as a successful placement despite directory-sync failure",
+    "Remove or invalidate the renamed record so the next call writes it again"
+   ],
+   "default_guess": "First answer `failed`, retain the renamed record as required by A6, and have the next call answer `replayed`; revise A3's contrary continuation.",
+   "witness": {
+    "initial": "No image or placement record exists.",
+    "events": [
+     "The image write succeeds.",
+     "The placement-record rename succeeds.",
+     "Synchronizing the record directory fails."
+    ],
+    "outcomes": [
+     "The delivery answers `failed`, but the record remains and the next call answers `replayed`.",
+     "The delivery answers `failed`, and the next call writes the placement again and answers `placed`."
+    ],
+    "observer": "The calling flow."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "mark_write_contradiction",
+   "text": "A refused mark writes nothing, and the lock is released on every path.",
+   "question": "How must this claim change for a mark whose rename succeeds but whose directory synchronization fails, since A6 says that write is failed while the renamed file stays?",
+   "options": [
+    "A refused mark may leave the renamed mark, and a repeat can answer `replayed`",
+    "Delete the mark after directory-sync failure",
+    "Treat the mark as successful once rename succeeds"
+   ],
+   "default_guess": "State that a `state_unavailable` refusal caused by post-rename directory-sync failure may leave the mark and that a repeat can replay it.",
+   "witness": {
+    "initial": "A placement exists and has no mark.",
+    "events": [
+     "The mark file is renamed into place.",
+     "Synchronizing its directory fails."
+    ],
+    "outcomes": [
+     "The call is refused with `state_unavailable` while the mark remains, as A6 requires.",
+     "The refused call leaves no mark, as the flow text states."
+    ],
+    "observer": "The calling flow on this call and its retry."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "parent_directory_policy",
+   "text": "Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none.",
+   "question": "Who creates the image, placement, mark and lock parent directories, what modes do those directories receive, and is an absent parent a normal first-use condition or a write failure?",
+   "options": [
+    "The service creates all required directories on first use with specified modes",
+    "Deployment must pre-create every parent directory",
+    "The service creates project directories but deployment creates the store and state roots"
+   ],
+   "default_guess": "Require deployment to create the configured roots and let the service create documented per-project subdirectories with restrictive specified modes.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:delivery_store.project_lock",
+   "kind": "lock_file_mode",
+   "text": "Creates the project lock file on first use and holds an operating system lock.",
+   "question": "What mode, ownership and symbolic-link policy apply when the lock file is created or opened?",
+   "options": [
+    "Create mode 0600 and open without following links",
+    "Create mode 0644 and allow an existing regular file",
+    "Use the process umask and follow the normal path"
+   ],
+   "default_guess": "Create it with mode 0600 and open it without following symbolic links.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "record_json_format",
+   "text": "A placement or mark record is opened without following a link and validated as JSON against its closed model: every field present with its type, every enumeration value a member, every nested model valid, and no other field.",
+   "question": "What exact JSON representations are required for UUIDs, datetimes and enumerations; which character encoding is required; and are duplicate object-member names rejected?",
+   "options": [
+    "Require UTF-8, canonical lowercase hyphenated UUIDs, A7 datetime strings, enumeration values as stated, and reject duplicate names",
+    "Accept any JSON Unicode encoding and parser-supported UUID/date spellings, with last duplicate member winning",
+    "Define a canonical writer form but accept a broader explicitly listed reader form"
+   ],
+   "default_guess": "Define a canonical UTF-8 form and reject duplicate member names and every noncanonical typed value.",
+   "witness": {
+    "initial": "A placement record contains two `source_id` members, one matching its address and one naming another source.",
+    "events": [
+     "A scan reads and validates the record.",
+     "One JSON parser keeps the first duplicate member; another keeps the last."
+    ],
+    "outcomes": [
+     "The record is accepted because the retained value matches its address.",
+     "The record is refused with `state_unavailable` because the retained value does not match its address."
+    ],
+    "observer": "The scan caller."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:deliverer_api.read_token\",\"kind\":\"race_semantics\",\"text\":\"A5 rule 2: no group or other permission on the file, UTF-8 content, and after the surrounding whitespace is removed at least 32 characters, all visible ASCII.\",\"question\":\"Must the permission check and content read apply to the same opened filesystem object, and how must replacement of the path between those actions be handled?\",\"options\":[\"Open once without following links and check permissions on that opened object before reading it\",\"Check permissions by path and then open the path separately\",\"Detect any replacement and end the start\"],\"default_guess\":\"Open once without following links, check the opened object's permissions, and read that same object.\",\"witness\":{\"initial\":\"The token path names a mode-0600 file containing token A; another file containing token B has group-read permission.\",\"events\":[\"The deployment starts the service.\",\"An actor replaces the path with the second file between a path-based permission check and the content read.\"],\"outcomes\":[\"The service starts with token B because the checked path and the read path are treated separately.\",\"The service ends the start because permissions are checked on the same opened file whose bytes are read.\"],\"observer\":\"The calling flow, which finds either token B accepted or no listening service.\"}},{\"subject\":\"public_op:deliverer_api.read_token\",\"kind\":\"file_kind\",\"text\":\"The path of the token file.\",\"question\":\"Must the token path name a regular file, and are symbolic links, FIFOs, devices and directories rejected even when they can be read and have acceptable permissions?\",\"options\":[\"Require a regular file opened without following a symbolic link\",\"Allow a symbolic link to a qualifying regular file\",\"Allow any readable filesystem object whose bytes and permissions satisfy A5 rule 2\"],\"default_guess\":\"Require a regular file and do not follow a symbolic link.\"},{\"subject\":\"public_op:deliverer_api.run_service\",\"kind\":\"exit_status\",\"text\":\"The exit status of the process: 0 when the service stops after it has served, 1 when the start fails, with the reason on the standard error stream and without listening.\",\"question\":\"What exit status is returned when the web server fails after it has begun listening, as opposed to being stopped normally?\",\"options\":[\"Return 0 for every termination after the service has listened\",\"Return 0 only for an orderly stop and 1 for a runtime server failure\",\"Propagate a web-server-specific nonzero status\"],\"default_guess\":\"Return 0 for an orderly stop and 1 for a runtime server failure.\",\"witness\":{\"initial\":\"The start succeeds and the service is listening.\",\"events\":[\"The web server later terminates because its serving loop raises an error.\"],\"outcomes\":[\"The process exits 0 because it stopped after it had served.\",\"The process exits 1 because the post-start termination was a failure.\"],\"observer\":\"The deployment supervisor.\"}},{\"subject\":\"public_op:deliverer_api.run_service\",\"kind\":\"error_output\",\"text\":\"with the reason on the standard error stream\",\"question\":\"What exact reason, format and trailing newline must be written for each start failure, and may it contain filesystem paths or exception text?\",\"options\":[\"Write a fixed public sentence for each failure class with no server path\",\"Write the underlying exception message\",\"Write only a generic fixed start-failed sentence\"],\"default_guess\":\"Write a fixed, path-free sentence for each failure class followed by one newline.\"},{\"subject\":\"public_op:object_connections.available_photo_folder\",\"kind\":\"error_mapping\",\"text\":\"`folder_unavailable` when the folder is missing, is not a folder or does not resolve strictly below the root.\",\"question\":\"What happens when resolving or inspecting the root or photo folder fails for another reason, such as permission denial, a symbolic-link loop or an I/O error?\",\"options\":[\"Return `folder_unavailable` for every failure to resolve or inspect either path\",\"Propagate the operating-system error\",\"Distinguish configuration errors from transient filesystem errors\"],\"default_guess\":\"Return `folder_unavailable` for every failure to resolve or inspect the paths.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"folder_identity_race\",\"text\":\"The photo folder is then reached by that resolved path, opened one folder at a time from the root of the file system without following a link at any of them (A1), so the folder that is read is the folder whose containment was checked;\",\"question\":\"How is the identity of the checked folder preserved if a checked path component is replaced by a different directory, rather than by a link or non-folder, before it is opened?\",\"options\":[\"Hold directory handles from containment checking through use and verify identities\",\"Accept any later directory at the same resolved path\",\"Re-resolve and repeat containment checking immediately before use\"],\"default_guess\":\"Hold or verify directory identities so the opened folder is the object whose containment was checked.\",\"witness\":{\"initial\":\"`root/photos` is inside the root and passes containment checking.\",\"events\":[\"Another actor renames `root/photos` away and installs a different directory at the same path.\",\"The scan opens the saved resolved path one component at a time without following links.\"],\"outcomes\":[\"The scan reads the replacement directory because it is still a directory at the checked pathname.\",\"The scan refuses because the directory identity differs from the one checked.\"],\"observer\":\"The caller, which sees files from the replacement directory or a refusal.\"}},{\"subject\":\"public_op:delivery_store.write_placement\",\"kind\":\"record_address\",\"text\":\"The address of the record is taken from the `project_id` and `source_id` inside M04, so the two cannot disagree.\",\"question\":\"What is the complete placement-record address derived from those identifiers, including directory layout, filename, extension and encoding or escaping of each component?\",\"options\":[\"Use a specified project directory and source-id JSON filename\",\"Use one flat filename containing both identifiers\",\"Leave the layout implementation-defined\"],\"default_guess\":\"Use a documented state-directory layout with a canonical lowercase project UUID and source-id filename.\"},{\"subject\":\"public_op:delivery_store.write_mark\",\"kind\":\"record_address\",\"text\":\"The address of the record is taken from the `project_id` and `source_id` inside M07, so the two cannot disagree.\",\"question\":\"What is the complete mark-record address derived from those identifiers, and how is it kept distinct from the placement-record address?\",\"options\":[\"Use a specified marks subtree parallel to placements\",\"Use distinct filename suffixes in one directory\",\"Leave the layout implementation-defined\"],\"default_guess\":\"Use documented, separate placement and mark subtrees with canonical identifier spellings.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"jpeg_resize\",\"text\":\"Transparent areas become white. The camera orientation is applied, then the longest side is reduced to the limit when it is larger.\",\"question\":\"Which resampling filter and dimension-rounding rule must be used when reducing the longest side?\",\"options\":[\"Use a named high-quality filter and round the other dimension to nearest\",\"Use a named filter and floor the other dimension\",\"Allow the image library's default resizing behavior\"],\"default_guess\":\"Use a fixed high-quality filter and an explicitly specified nearest-integer rule with a minimum dimension of one pixel.\",\"witness\":{\"initial\":\"A source has dimensions whose aspect-ratio calculation produces a non-integer shorter side and contains high-frequency detail.\",\"events\":[\"The calling flow delivers the source.\",\"One implementation rounds the dimension and uses Lanczos; another floors it and uses bicubic.\"],\"outcomes\":[\"The implementations store different dimensions and JPEG bytes.\",\"The implementations store another pair of dimensions or pixels, producing a different M04 `size` and `sha256`.\"],\"observer\":\"The Portal and the calling flow.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"jpeg_encoding\",\"text\":\"A stored image is a newly encoded JPEG made from the decoded pixels of the source: baseline, not progressive, three colour channels with the colour resolution halved in both directions (4:2:0), the imported `PHOTO_QUALITY` constant as its quality, and no colour profile and no metadata.\",\"question\":\"Which remaining JPEG encoder choices must be fixed, including quality scaling, quantization and Huffman tables, optimization, DCT method and deterministic output requirements?\",\"options\":[\"Specify exact encoder settings and require deterministic bytes\",\"Specify one library and version whose defaults define the bytes\",\"Permit any baseline 4:2:0 JPEG satisfying the stated quality and metadata constraints\"],\"default_guess\":\"Specify the pinned encoder and every non-default option needed for deterministic bytes.\",\"witness\":{\"initial\":\"A valid source image is ready for preparation.\",\"events\":[\"One implementation encodes at quality 85 with optimized Huffman tables.\",\"Another encodes at quality 85 with standard Huffman tables.\"],\"outcomes\":[\"Both outputs satisfy the stated JPEG properties but have different bytes, sizes and hashes.\",\"The caller receives different M04 `size` and `sha256`, and the Portal stores different files.\"],\"observer\":\"The calling flow and the Portal.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"metadata_definition\",\"text\":\"and no colour profile and no metadata.\",\"question\":\"Which JPEG markers count as prohibited metadata, particularly JFIF/APP0 density data, Adobe markers, thumbnails and application-specific APP segments?\",\"options\":[\"Permit only the structural markers needed to decode the JPEG and prohibit every APP and COM segment\",\"Permit JFIF/APP0 but prohibit EXIF, XMP, ICC, GPS and COM data\",\"Use the encoder's default marker set\"],\"default_guess\":\"Define an explicit marker allowlist and prohibit all other APP and COM segments.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"camera_time_parsing\",\"text\":\"A camera value is unusable when it is malformed, when its UTC year is before 2000, or when it is more than 24 hours after the file's modification time.\",\"question\":\"What exact lexical forms and EXIF companion fields make `DateTimeOriginal`, `DateTime` and `OffsetTimeOriginal` well formed, and are fractional-second EXIF fields used or ignored?\",\"options\":[\"Accept only the canonical EXIF date-time form and ignore fractional-second companion fields\",\"Accept library-parsed variants and use available fractional-second fields\",\"Define an explicit set of accepted variants and companion fields\"],\"default_guess\":\"Accept only explicitly listed EXIF forms and state explicitly whether each fractional-second field is used.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"hash_representation\",\"text\":\"`sha256`, `size` and `media_type` describe the stored image:\",\"question\":\"What string representation must M04 use for the stored image's SHA-256 digest?\",\"options\":[\"Lowercase 64-character hexadecimal\",\"Uppercase hexadecimal\",\"Base64\"],\"default_guess\":\"Lowercase 64-character hexadecimal.\",\"witness\":{\"initial\":\"A photo is successfully prepared and stored.\",\"events\":[\"One implementation writes the digest as lowercase hexadecimal.\",\"Another writes the same digest as Base64.\"],\"outcomes\":[\"The returned and persisted M04 values differ despite identical stored bytes.\",\"A later validator may accept one record and reject the other once a representation is assumed.\"],\"observer\":\"The calling flow and a later service version reading the record.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"media_type_value\",\"text\":\"`sha256`, `size` and `media_type` describe the stored image:\",\"question\":\"What exact value must M04 store in `media_type` for the generated JPEG?\",\"options\":[\"`image/jpeg`\",\"`image/jpg`\",\"An encoder-reported value\"],\"default_guess\":\"`image/jpeg`.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"store_containment_race\",\"text\":\"The reference must stay inside the binary store: its path, resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery is refused with `unsafe_reference`.\",\"question\":\"How is containment preserved if a store directory is replaced by a link after resolution but before the temporary file or final file is opened or renamed?\",\"options\":[\"Open each directory without following links and perform writes relative to held directory handles\",\"Repeat path resolution immediately before each filesystem action\",\"Rely on the earlier resolved-path check\"],\"default_guess\":\"Use held directory handles and no-follow relative operations for creation and rename.\",\"witness\":{\"initial\":\"The destination directory resolves below the binary store.\",\"events\":[\"Containment checking succeeds.\",\"Another actor replaces a destination directory with a symbolic link to a directory outside the store.\",\"The writer creates or renames the image through the pathname.\"],\"outcomes\":[\"The image is written outside the binary store despite the earlier check.\",\"The operation refuses or fails without writing outside because directory handles and no-follow operations bind the write to checked directories.\"],\"observer\":\"The host operator and any reader of the outside directory.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"placement_fsync_contradiction\",\"text\":\"a failure to synchronise the folder after it is a failed write of that operation, while the renamed file stays and a repeated call finds it (A3 rule 2, A4).\",\"question\":\"When placement-record rename succeeds but its directory synchronization fails, must the first delivery answer `failed` even though the placement record remains, and must the next delivery replay it rather than write it again as A3's condition-5 continuation says?\",\"options\":[\"First answer `failed`; retain the record; next call answers `replayed`\",\"Treat successful rename as a successful placement despite directory-sync failure\",\"Remove or invalidate the renamed record so the next call writes it again\"],\"default_guess\":\"First answer `failed`, retain the renamed record as required by A6, and have the next call answer `replayed`; revise A3's contrary continuation.\",\"witness\":{\"initial\":\"No image or placement record exists.\",\"events\":[\"The image write succeeds.\",\"The placement-record rename succeeds.\",\"Synchronizing the record directory fails.\"],\"outcomes\":[\"The delivery answers `failed`, but the record remains and the next call answers `replayed`.\",\"The delivery answers `failed`, and the next call writes the placement again and answers `placed`.\"],\"observer\":\"The calling flow.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"mark_write_contradiction\",\"text\":\"A refused mark writes nothing, and the lock is released on every path.\",\"question\":\"How must this claim change for a mark whose rename succeeds but whose directory synchronization fails, since A6 says that write is failed while the renamed file stays?\",\"options\":[\"A refused mark may leave the renamed mark, and a repeat can answer `replayed`\",\"Delete the mark after directory-sync failure\",\"Treat the mark as successful once rename succeeds\"],\"default_guess\":\"State that a `state_unavailable` refusal caused by post-rename directory-sync failure may leave the mark and that a repeat can replay it.\",\"witness\":{\"initial\":\"A placement exists and has no mark.\",\"events\":[\"The mark file is renamed into place.\",\"Synchronizing its directory fails.\"],\"outcomes\":[\"The call is refused with `state_unavailable` while the mark remains, as A6 requires.\",\"The refused call leaves no mark, as the flow text states.\"],\"observer\":\"The calling flow on this call and its retry.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"parent_directory_policy\",\"text\":\"Each file is written to a temporary name in its folder, synchronised to disk and renamed, and its folder is synchronised, so a reader sees a complete file or none.\",\"question\":\"Who creates the image, placement, mark and lock parent directories, what modes do those directories receive, and is an absent parent a normal first-use condition or a write failure?\",\"options\":[\"The service creates all required directories on first use with specified modes\",\"Deployment must pre-create every parent directory\",\"The service creates project directories but deployment creates the store and state roots\"],\"default_guess\":\"Require deployment to create the configured roots and let the service create documented per-project subdirectories with restrictive specified modes.\"},{\"subject\":\"public_op:delivery_store.project_lock\",\"kind\":\"lock_file_mode\",\"text\":\"Creates the project lock file on first use and holds an operating system lock.\",\"question\":\"What mode, ownership and symbolic-link policy apply when the lock file is created or opened?\",\"options\":[\"Create mode 0600 and open without following links\",\"Create mode 0644 and allow an existing regular file\",\"Use the process umask and follow the normal path\"],\"default_guess\":\"Create it with mode 0600 and open it without following symbolic links.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"record_json_format\",\"text\":\"A placement or mark record is opened without following a link and validated as JSON against its closed model: every field present with its type, every enumeration value a member, every nested model valid, and no other field.\",\"question\":\"What exact JSON representations are required for UUIDs, datetimes and enumerations; which character encoding is required; and are duplicate object-member names rejected?\",\"options\":[\"Require UTF-8, canonical lowercase hyphenated UUIDs, A7 datetime strings, enumeration values as stated, and reject duplicate names\",\"Accept any JSON Unicode encoding and parser-supported UUID/date spellings, with last duplicate member winning\",\"Define a canonical writer form but accept a broader explicitly listed reader form\"],\"default_guess\":\"Define a canonical UTF-8 form and reject duplicate member names and every noncanonical typed value.\",\"witness\":{\"initial\":\"A placement record contains two `source_id` members, one matching its address and one naming another source.\",\"events\":[\"A scan reads and validates the record.\",\"One JSON parser keeps the first duplicate member; another keeps the last.\"],\"outcomes\":[\"The record is accepted because the retained value matches its address.\",\"The record is refused with `state_unavailable` because the retained value does not match its address.\"],\"observer\":\"The scan caller.\"}}]}",
+ "set_aside": []
+}
