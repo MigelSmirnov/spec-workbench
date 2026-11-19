@@ -1,0 +1,135 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_source",
+   "text": "`marked_at: datetime`.",
+   "question": "What authoritative source supplies the fresh instant written to `marked_at` when the first publication mark is created?",
+   "options": [
+    "A declared system-clock backend supplied to the mark operation",
+    "An ambient process wall clock",
+    "The request-receipt time",
+    "A timestamp supplied by the caller"
+   ],
+   "default_guess": "Use a declared system-clock backend supplied to the mark operation.",
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_representation",
+   "text": "`marked_at: datetime`.",
+   "question": "Which exact datetime representation is stored and compared: timezone-aware UTC, naive UTC, or another representation and precision?",
+   "options": [
+    "Timezone-aware UTC datetime",
+    "Naive datetime whose value is UTC",
+    "Integer epoch timestamp with declared precision"
+   ],
+   "default_guess": "Store a timezone-aware UTC datetime at microsecond precision.",
+   "unit": "?"
+  },
+  {
+   "subject": "publication mark operation",
+   "kind": "missing_clock_read_count",
+   "text": "The first mark stands when it is sent again, and its `marked_at` does not change (`test_marking_again_changes_nothing_and_another_photo_is_refused`).",
+   "question": "How many clock readings does each mark operation take, which reading becomes `marked_at`, and are there zero readings for replay and publication-conflict outcomes?",
+   "options": [
+    "Read once only when creating the first mark; read zero times for replay and conflict",
+    "Read once for every mark request and discard it for replay or conflict",
+    "Read more than once during creation and select a specified reading"
+   ],
+   "default_guess": "Read the clock exactly once after validation and before writing a new mark, and zero times for replay or conflict.",
+   "witness": {
+    "initial": "A placement exists without a publication mark, and the supplied clock would return two distinct instants t1 and t2 on successive reads.",
+    "events": [
+     "The calling flow records the first Portal photo id.",
+     "The deliverer creates and persists the publication mark."
+    ],
+    "outcomes": [
+     "An implementation reads once and stores t1.",
+     "Another implementation reads twice and stores t2."
+    ],
+    "observer": "A reader of the persisted mark or its returned `marked_at` value."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-10 Required tests",
+   "kind": "incomplete_invariant_evidence",
+   "text": "After a scan has succeeded on the running service, clearing the confirmation makes scan, placement and mark each answer the CONNECTION_NOT_CONFIRMED member of = models.RefusalCode and write nothing (`test_a_cleared_confirmation_stops_the_running_service`). For a valid file with no record for the project, scan, placement and mark each answer the UNKNOWN_PROJECT member of = models.RefusalCode and write nothing (`test_a_project_without_a_connection_delivers_nothing`). For an absent file, a file that cannot be opened, a file that is not UTF-8 or JSON, a file of another form and a record that breaks the form of rule 8, also when that record is unconfirmed or belongs to another project, scan, placement and mark each answer the FOLDER_UNAVAILABLE member of = models.RefusalCode and write nothing (`test_unreadable_connections_deliver_nothing`)",
+   "question": "For cleared confirmation, an unknown project, and every invalid-connections-file case, must the tests also show that no photo folder, subfolder, or source file is opened or read, rather than only that no durable state is written?",
+   "options": [
+    "Trap all source-folder access in every listed refusal case",
+    "Rely on the answer and absence of writes without checking source reads",
+    "Trap source access only for the initially unconfirmed-connection case"
+   ],
+   "default_guess": "Trap all photo-folder, descendant-folder, and source-file access in every connection refusal case.",
+   "witness": {
+    "initial": "The running service previously scanned a confirmed connection and retains enough information or an open handle to reach its photo folder; the agent then clears confirmation.",
+    "events": [
+     "The caller requests another scan.",
+     "The service reads the new unconfirmed connection record.",
+     "Before refusing, the service reads a source file through retained state and writes nothing."
+    ],
+    "outcomes": [
+     "A test that checks only the refusal and durable writes passes.",
+     "A test that also traps source access fails."
+    ],
+    "observer": "The invariant test and anyone monitoring source-folder access."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-10 unconfirmed-connection access trap",
+   "kind": "ambiguous_test_scope",
+   "text": "with every opening of the photo folder of that connection and of a file in it other than the connections file recorded, none is recorded",
+   "question": "Does “a file in it” include files at every depth and openings of descendant folders, or only direct child files of the photo folder?",
+   "options": [
+    "All descendant folders and files recursively",
+    "Only direct child files",
+    "Only paths that the requested operation would ordinarily inspect"
+   ],
+   "default_guess": "Record openings of the photo folder and every descendant folder and file recursively.",
+   "witness": {
+    "initial": "An unconfirmed connection's photo folder contains `subfolder/photo.jpg`.",
+    "events": [
+     "A scan is requested.",
+     "The implementation reaches the connection check but nevertheless opens the descendant folder and file before returning CONNECTION_NOT_CONFIRMED."
+    ],
+    "outcomes": [
+     "A direct-children-only recorder observes no prohibited file opening.",
+     "A recursive recorder observes the descendant-folder and file openings."
+    ],
+    "observer": "The `test_an_unconfirmed_connection_delivers_nothing` check."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-10 connections-file exception",
+   "kind": "ambiguous_exception_identity",
+   "text": "other than the connections file",
+   "question": "Does this exception cover only the single opening required for the connection check, every opening through the configured pathname, or every alias or hard link to the same filesystem object?",
+   "options": [
+    "Exclude only the mandated connection-check opening and record every later opening",
+    "Exclude every opening through the configured connections-file path",
+    "Exclude every pathname resolving to the same filesystem object"
+   ],
+   "default_guess": "Exclude only the single mandated connection-check opening; record any additional opening, including aliases, as prohibited access.",
+   "witness": {
+    "initial": "The configured connections file is inside the photo tree or has a hard-link alias there, and its project record is unconfirmed.",
+    "events": [
+     "The operation opens the configured file once for its connection check.",
+     "It then opens the same object through its photo-tree alias before refusing."
+    ],
+    "outcomes": [
+     "A recorder treating filesystem identity as “the connections file” excludes both openings.",
+     "A recorder excluding only the required connection-check opening reports the second opening."
+    ],
+    "observer": "The `test_an_unconfirmed_connection_delivers_nothing` check."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_source\",\"text\":\"`marked_at: datetime`.\",\"question\":\"What authoritative source supplies the fresh instant written to `marked_at` when the first publication mark is created?\",\"options\":[\"A declared system-clock backend supplied to the mark operation\",\"An ambient process wall clock\",\"The request-receipt time\",\"A timestamp supplied by the caller\"],\"default_guess\":\"Use a declared system-clock backend supplied to the mark operation.\"},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_representation\",\"text\":\"`marked_at: datetime`.\",\"question\":\"Which exact datetime representation is stored and compared: timezone-aware UTC, naive UTC, or another representation and precision?\",\"options\":[\"Timezone-aware UTC datetime\",\"Naive datetime whose value is UTC\",\"Integer epoch timestamp with declared precision\"],\"default_guess\":\"Store a timezone-aware UTC datetime at microsecond precision.\"},{\"subject\":\"publication mark operation\",\"kind\":\"missing_clock_read_count\",\"text\":\"The first mark stands when it is sent again, and its `marked_at` does not change (`test_marking_again_changes_nothing_and_another_photo_is_refused`).\",\"question\":\"How many clock readings does each mark operation take, which reading becomes `marked_at`, and are there zero readings for replay and publication-conflict outcomes?\",\"options\":[\"Read once only when creating the first mark; read zero times for replay and conflict\",\"Read once for every mark request and discard it for replay or conflict\",\"Read more than once during creation and select a specified reading\"],\"default_guess\":\"Read the clock exactly once after validation and before writing a new mark, and zero times for replay or conflict.\",\"witness\":{\"initial\":\"A placement exists without a publication mark, and the supplied clock would return two distinct instants t1 and t2 on successive reads.\",\"events\":[\"The calling flow records the first Portal photo id.\",\"The deliverer creates and persists the publication mark.\"],\"outcomes\":[\"An implementation reads once and stores t1.\",\"Another implementation reads twice and stores t2.\"],\"observer\":\"A reader of the persisted mark or its returned `marked_at` value.\"}},{\"subject\":\"INV-10 Required tests\",\"kind\":\"incomplete_invariant_evidence\",\"text\":\"After a scan has succeeded on the running service, clearing the confirmation makes scan, placement and mark each answer the CONNECTION_NOT_CONFIRMED member of = models.RefusalCode and write nothing (`test_a_cleared_confirmation_stops_the_running_service`). For a valid file with no record for the project, scan, placement and mark each answer the UNKNOWN_PROJECT member of = models.RefusalCode and write nothing (`test_a_project_without_a_connection_delivers_nothing`). For an absent file, a file that cannot be opened, a file that is not UTF-8 or JSON, a file of another form and a record that breaks the form of rule 8, also when that record is unconfirmed or belongs to another project, scan, placement and mark each answer the FOLDER_UNAVAILABLE member of = models.RefusalCode and write nothing (`test_unreadable_connections_deliver_nothing`)\",\"question\":\"For cleared confirmation, an unknown project, and every invalid-connections-file case, must the tests also show that no photo folder, subfolder, or source file is opened or read, rather than only that no durable state is written?\",\"options\":[\"Trap all source-folder access in every listed refusal case\",\"Rely on the answer and absence of writes without checking source reads\",\"Trap source access only for the initially unconfirmed-connection case\"],\"default_guess\":\"Trap all photo-folder, descendant-folder, and source-file access in every connection refusal case.\",\"witness\":{\"initial\":\"The running service previously scanned a confirmed connection and retains enough information or an open handle to reach its photo folder; the agent then clears confirmation.\",\"events\":[\"The caller requests another scan.\",\"The service reads the new unconfirmed connection record.\",\"Before refusing, the service reads a source file through retained state and writes nothing.\"],\"outcomes\":[\"A test that checks only the refusal and durable writes passes.\",\"A test that also traps source access fails.\"],\"observer\":\"The invariant test and anyone monitoring source-folder access.\"}},{\"subject\":\"INV-10 unconfirmed-connection access trap\",\"kind\":\"ambiguous_test_scope\",\"text\":\"with every opening of the photo folder of that connection and of a file in it other than the connections file recorded, none is recorded\",\"question\":\"Does “a file in it” include files at every depth and openings of descendant folders, or only direct child files of the photo folder?\",\"options\":[\"All descendant folders and files recursively\",\"Only direct child files\",\"Only paths that the requested operation would ordinarily inspect\"],\"default_guess\":\"Record openings of the photo folder and every descendant folder and file recursively.\",\"witness\":{\"initial\":\"An unconfirmed connection's photo folder contains `subfolder/photo.jpg`.\",\"events\":[\"A scan is requested.\",\"The implementation reaches the connection check but nevertheless opens the descendant folder and file before returning CONNECTION_NOT_CONFIRMED.\"],\"outcomes\":[\"A direct-children-only recorder observes no prohibited file opening.\",\"A recursive recorder observes the descendant-folder and file openings.\"],\"observer\":\"The `test_an_unconfirmed_connection_delivers_nothing` check.\"}},{\"subject\":\"INV-10 connections-file exception\",\"kind\":\"ambiguous_exception_identity\",\"text\":\"other than the connections file\",\"question\":\"Does this exception cover only the single opening required for the connection check, every opening through the configured pathname, or every alias or hard link to the same filesystem object?\",\"options\":[\"Exclude only the mandated connection-check opening and record every later opening\",\"Exclude every opening through the configured connections-file path\",\"Exclude every pathname resolving to the same filesystem object\"],\"default_guess\":\"Exclude only the single mandated connection-check opening; record any additional opening, including aliases, as prohibited access.\",\"witness\":{\"initial\":\"The configured connections file is inside the photo tree or has a hard-link alias there, and its project record is unconfirmed.\",\"events\":[\"The operation opens the configured file once for its connection check.\",\"It then opens the same object through its photo-tree alias before refusing.\"],\"outcomes\":[\"A recorder treating filesystem identity as “the connections file” excludes both openings.\",\"A recorder excluding only the required connection-check opening reports the second opening.\"],\"observer\":\"The `test_an_unconfirmed_connection_delivers_nothing` check.\"}}]}",
+ "set_aside": []
+}
