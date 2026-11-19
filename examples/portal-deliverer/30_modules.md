@@ -294,7 +294,8 @@ RECORD_FILE_SUFFIX
 ### Owns
 
 - reading the run settings of A8 from the environment of the process;
-- the default of each optional setting, and the refusal of a value the start-up table does not accept.
+- the default of each optional setting, and the refusal of a missing required setting or of a value of the
+  wrong form.
 
 ### Knows
 
