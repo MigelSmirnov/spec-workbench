@@ -1,0 +1,118 @@
+{
+ "open_points": [
+  {
+   "subject": "A8 time-zone validation ownership",
+   "kind": "unclear_validation_boundary",
+   "text": "| A8 | the refusal of a well-formed port above 65535 and of a time zone the database does not know | `deliverer_service` |",
+   "question": "What makes a time-zone string “well-formed,” so that malformed strings can be assigned unambiguously either to `runtime_settings` as wrong-form values or to `deliverer_service` as names unknown to the database?",
+   "options": [
+    "Every string is well-formed as a `str`; `deliverer_service` rejects every name the database cannot resolve",
+    "`runtime_settings` first validates a specified time-zone-name grammar; `deliverer_service` rejects only syntactically valid but unavailable names"
+   ],
+   "default_guess": "Treat every successfully read string as well-formed and let `deliverer_service` ask the time-zone database.",
+   "witness": {
+    "initial": "`PORTAL_DELIVERER_TIMEZONE` is `Europe//Madrid`.",
+    "events": [
+     "The operator starts the service.",
+     "`runtime_settings` reads the environment value.",
+     "Startup validation processes the time zone."
+    ],
+    "outcomes": [
+     "`runtime_settings` refuses the value as being of the wrong form and never produces settings.",
+     "`runtime_settings` produces settings, and `deliverer_service` refuses the value because the time-zone database does not know it."
+    ],
+    "observer": "A startup test or maintainer tracing which module rejected the setting"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 startup validation order",
+   "kind": "ownerless_coordination_decision",
+   "text": "| A8 | reading each run setting, its default, and the refusal of a missing required setting or of a value of the wrong form | `runtime_settings` |\n| A8 | the refusal of a well-formed port above 65535 and of a time zone the database does not know | `deliverer_service` |",
+   "question": "Which module owns the order and precedence between failures found by `runtime_settings` and the semantic port and time-zone failures found by `deliverer_service` when more than one startup setting is invalid?",
+   "options": [
+    "`runtime_settings` must finish successfully before `deliverer_service` performs port and time-zone checks",
+    "`deliverer_service` coordinates all startup checks and may validate semantic values before every setting has been read",
+    "All invalid settings are accumulated and reported together"
+   ],
+   "default_guess": "Have `runtime_settings` read and form the complete settings object first, then have `deliverer_service` validate the port range and time-zone database membership.",
+   "witness": {
+    "initial": "A required path setting is absent, the port is `65536`, and the time-zone name is unknown.",
+    "events": [
+     "The operator starts the service.",
+     "The startup path invokes the two modules' checks."
+    ],
+    "outcomes": [
+     "Startup reports the missing required setting and never performs the service-owned checks.",
+     "Startup reports the invalid port or unknown time zone before reporting the missing required setting."
+    ],
+    "observer": "The operator and startup tests"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "exception-type ownership in `domain_models`",
+   "kind": "ambiguous_ownership_partition",
+   "text": "- no exception type: those belong to `refusals` and `deliverer_api`.",
+   "question": "Which exact exception types are owned by `refusals`, and which are owned by `deliverer_api`?",
+   "options": [
+    "All refusal exception types belong to `refusals`, while `AuthenticationRequired` belongs to `deliverer_api`",
+    "`AuthenticationRequired` and other API-facing exceptions belong to `deliverer_api`, with storage or domain refusal exceptions in `refusals`",
+    "`refusals` owns every exception type and `deliverer_api` only re-exports selected ones"
+   ],
+   "default_guess": "Preserve the earlier explicit partition: refusal types belong to `refusals`, and `AuthenticationRequired` belongs to `deliverer_api`.",
+   "unit": "?"
+  },
+  {
+   "subject": "`deliverer_router` handling of `AuthenticationRequired`",
+   "kind": "contradictory_response_contract",
+   "text": "- any check of a request or a delivery rule, and any answer a request receives: its empty 401 for\n  `AuthenticationRequired` is a mapping the backend emits that no request reaches;",
+   "question": "Is `AuthenticationRequired` truly unreachable dead backend mapping, or can authentication failure reach it; and if it can, must the response be the empty 401 stated here or the M08 `UNAUTHORIZED` response required by A5 rules 1 and 10?",
+   "options": [
+    "No request may reach the mapping; actual authentication refusals are M08 responses produced by `deliverer_api`",
+    "Authentication failures raise `AuthenticationRequired` and the backend returns an empty 401",
+    "Authentication failures raise `AuthenticationRequired`, but the backend maps it to the A8-defined M08 `UNAUTHORIZED` body"
+   ],
+   "default_guess": "Keep the mapping unreachable and have `deliverer_api` return the required M08 `UNAUTHORIZED` answer.",
+   "witness": {
+    "initial": "A client sends a declared non-health route without an `Authorization` field.",
+    "events": [
+     "The client submits the request.",
+     "The authentication check detects the missing field.",
+     "The HTTP layer converts the result into a response."
+    ],
+    "outcomes": [
+     "The client receives an empty HTTP 401 through the `AuthenticationRequired` mapping.",
+     "The client receives HTTP 401 with M08 code `unauthorized` and the fixed `REFUSAL_ANSWERS` detail."
+    ],
+    "observer": "The calling client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "`deliverer_router` dependency on `AuthenticationRequired`",
+   "kind": "unclear_dependency_direction",
+   "text": "- any check of a request or a delivery rule, and any answer a request receives: its empty 401 for\n  `AuthenticationRequired` is a mapping the backend emits that no request reaches;",
+   "question": "Must `deliverer_router` directly import `AuthenticationRequired` from its owner to register or inspect this mapping, or is the symbol exclusively known by the backend and therefore forbidden from the router's dependency surface?",
+   "options": [
+    "`deliverer_router` imports it from `deliverer_api` and registers the mapping",
+    "The backend imports or defines the mapping, and `deliverer_router` must not depend on the exception symbol",
+    "`refusals` owns the exception and both API and backend depend on it"
+   ],
+   "default_guess": "The backend alone should know the exception mapping; `deliverer_router` should not directly import the symbol.",
+   "unit": "?"
+  },
+  {
+   "subject": "`deliverer_router` note about an unreachable backend mapping",
+   "kind": "standard_violation",
+   "text": "- any check of a request or a delivery rule, and any answer a request receives: its empty 401 for\n  `AuthenticationRequired` is a mapping the backend emits that no request reaches;",
+   "rule": "note, которая не должна создавать ребро, не называет чужой экспорт целым словом",
+   "section": "7",
+   "question": "Rewrite the note without the foreign export name if the router has no dependency on it, or make the router's real dependency explicit and describe why its runtime code directly uses that symbol.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A8 time-zone validation ownership\",\"kind\":\"unclear_validation_boundary\",\"text\":\"| A8 | the refusal of a well-formed port above 65535 and of a time zone the database does not know | `deliverer_service` |\",\"question\":\"What makes a time-zone string “well-formed,” so that malformed strings can be assigned unambiguously either to `runtime_settings` as wrong-form values or to `deliverer_service` as names unknown to the database?\",\"options\":[\"Every string is well-formed as a `str`; `deliverer_service` rejects every name the database cannot resolve\",\"`runtime_settings` first validates a specified time-zone-name grammar; `deliverer_service` rejects only syntactically valid but unavailable names\"],\"default_guess\":\"Treat every successfully read string as well-formed and let `deliverer_service` ask the time-zone database.\",\"witness\":{\"initial\":\"`PORTAL_DELIVERER_TIMEZONE` is `Europe//Madrid`.\",\"events\":[\"The operator starts the service.\",\"`runtime_settings` reads the environment value.\",\"Startup validation processes the time zone.\"],\"outcomes\":[\"`runtime_settings` refuses the value as being of the wrong form and never produces settings.\",\"`runtime_settings` produces settings, and `deliverer_service` refuses the value because the time-zone database does not know it.\"],\"observer\":\"A startup test or maintainer tracing which module rejected the setting\"}},{\"subject\":\"A8 startup validation order\",\"kind\":\"ownerless_coordination_decision\",\"text\":\"| A8 | reading each run setting, its default, and the refusal of a missing required setting or of a value of the wrong form | `runtime_settings` |\\n| A8 | the refusal of a well-formed port above 65535 and of a time zone the database does not know | `deliverer_service` |\",\"question\":\"Which module owns the order and precedence between failures found by `runtime_settings` and the semantic port and time-zone failures found by `deliverer_service` when more than one startup setting is invalid?\",\"options\":[\"`runtime_settings` must finish successfully before `deliverer_service` performs port and time-zone checks\",\"`deliverer_service` coordinates all startup checks and may validate semantic values before every setting has been read\",\"All invalid settings are accumulated and reported together\"],\"default_guess\":\"Have `runtime_settings` read and form the complete settings object first, then have `deliverer_service` validate the port range and time-zone database membership.\",\"witness\":{\"initial\":\"A required path setting is absent, the port is `65536`, and the time-zone name is unknown.\",\"events\":[\"The operator starts the service.\",\"The startup path invokes the two modules' checks.\"],\"outcomes\":[\"Startup reports the missing required setting and never performs the service-owned checks.\",\"Startup reports the invalid port or unknown time zone before reporting the missing required setting.\"],\"observer\":\"The operator and startup tests\"}},{\"subject\":\"exception-type ownership in `domain_models`\",\"kind\":\"ambiguous_ownership_partition\",\"text\":\"- no exception type: those belong to `refusals` and `deliverer_api`.\",\"question\":\"Which exact exception types are owned by `refusals`, and which are owned by `deliverer_api`?\",\"options\":[\"All refusal exception types belong to `refusals`, while `AuthenticationRequired` belongs to `deliverer_api`\",\"`AuthenticationRequired` and other API-facing exceptions belong to `deliverer_api`, with storage or domain refusal exceptions in `refusals`\",\"`refusals` owns every exception type and `deliverer_api` only re-exports selected ones\"],\"default_guess\":\"Preserve the earlier explicit partition: refusal types belong to `refusals`, and `AuthenticationRequired` belongs to `deliverer_api`.\"},{\"subject\":\"`deliverer_router` handling of `AuthenticationRequired`\",\"kind\":\"contradictory_response_contract\",\"text\":\"- any check of a request or a delivery rule, and any answer a request receives: its empty 401 for\\n  `AuthenticationRequired` is a mapping the backend emits that no request reaches;\",\"question\":\"Is `AuthenticationRequired` truly unreachable dead backend mapping, or can authentication failure reach it; and if it can, must the response be the empty 401 stated here or the M08 `UNAUTHORIZED` response required by A5 rules 1 and 10?\",\"options\":[\"No request may reach the mapping; actual authentication refusals are M08 responses produced by `deliverer_api`\",\"Authentication failures raise `AuthenticationRequired` and the backend returns an empty 401\",\"Authentication failures raise `AuthenticationRequired`, but the backend maps it to the A8-defined M08 `UNAUTHORIZED` body\"],\"default_guess\":\"Keep the mapping unreachable and have `deliverer_api` return the required M08 `UNAUTHORIZED` answer.\",\"witness\":{\"initial\":\"A client sends a declared non-health route without an `Authorization` field.\",\"events\":[\"The client submits the request.\",\"The authentication check detects the missing field.\",\"The HTTP layer converts the result into a response.\"],\"outcomes\":[\"The client receives an empty HTTP 401 through the `AuthenticationRequired` mapping.\",\"The client receives HTTP 401 with M08 code `unauthorized` and the fixed `REFUSAL_ANSWERS` detail.\"],\"observer\":\"The calling client\"}},{\"subject\":\"`deliverer_router` dependency on `AuthenticationRequired`\",\"kind\":\"unclear_dependency_direction\",\"text\":\"- any check of a request or a delivery rule, and any answer a request receives: its empty 401 for\\n  `AuthenticationRequired` is a mapping the backend emits that no request reaches;\",\"question\":\"Must `deliverer_router` directly import `AuthenticationRequired` from its owner to register or inspect this mapping, or is the symbol exclusively known by the backend and therefore forbidden from the router's dependency surface?\",\"options\":[\"`deliverer_router` imports it from `deliverer_api` and registers the mapping\",\"The backend imports or defines the mapping, and `deliverer_router` must not depend on the exception symbol\",\"`refusals` owns the exception and both API and backend depend on it\"],\"default_guess\":\"The backend alone should know the exception mapping; `deliverer_router` should not directly import the symbol.\"},{\"subject\":\"`deliverer_router` note about an unreachable backend mapping\",\"kind\":\"standard_violation\",\"text\":\"- any check of a request or a delivery rule, and any answer a request receives: its empty 401 for\\n  `AuthenticationRequired` is a mapping the backend emits that no request reaches;\",\"rule\":\"note, которая не должна создавать ребро, не называет чужой экспорт целым словом\",\"section\":\"7\",\"question\":\"Rewrite the note without the foreign export name if the router has no dependency on it, or make the router's real dependency explicit and describe why its runtime code directly uses that symbol.\"}]}",
+ "set_aside": []
+}
