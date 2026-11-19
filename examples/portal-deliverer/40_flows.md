@@ -192,8 +192,8 @@ The owner starts a delivery for one project in the workplace (R0-07).
 ### Boundary
 
 The calling agent is outside this service and organises the work (R0-15). It reads and publishes in the Portal with
-its own session. It reaches the deliverer only through the authenticated routes of `module:deliverer_api`, which
-delegates to `module:photo_delivery`. The deliverer never calls the Portal. Showing a photo to the client is a later
+its own session. It reaches the deliverer only through the routes of `module:deliverer_router`, whose handlers in
+`module:deliverer_api` check the token and delegate to `module:photo_delivery`. The deliverer never calls the Portal. Showing a photo to the client is a later
 action of the owner in the Portal and is not part of this flow.
 
 ### Steps

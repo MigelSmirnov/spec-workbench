@@ -620,7 +620,6 @@ run_service
 ### Trace inputs
 
 - A5
-- A7
 - A8
 
 ### Depth assessment
