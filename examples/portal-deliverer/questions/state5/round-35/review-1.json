@@ -1,0 +1,211 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "input_contract",
+   "text": "The context of the operations and the token.",
+   "question": "What are the exact parameter names, types, required values and ownership or lifetime rules for the context and token?",
+   "options": [
+    "Accept exactly a DeliveryContext and a str token and retain them for the application's lifetime",
+    "Accept a broader settings or mapping object and derive or copy the needed values",
+    "Validate the inputs during construction and reject invalid values"
+   ],
+   "default_guess": "Accept DeliveryContext and str as required positional or named parameters and capture their values for the application's lifetime.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "output_contract",
+   "text": "The HTTP surface with four routes, each bound to its handler:",
+   "question": "What concrete value does create_app return, and is a new independent application required on every call?",
+   "options": [
+    "Return a new FastAPI application on every call",
+    "Return an abstract ASGI application",
+    "Return or reuse a module-level application"
+   ],
+   "default_guess": "Return a newly constructed FastAPI application on every call.",
+   "witness": {
+    "initial": "Two callers invoke create_app with different contexts and tokens in one process.",
+    "events": [
+     "The first caller creates and retains a surface for token A.",
+     "The second caller creates a surface for token B.",
+     "Each caller then sends an authenticated request to its retained surface."
+    ],
+    "outcomes": [
+     "Each returned application retains its own context and token.",
+     "A reused application is reconfigured, so the first returned surface now uses token B or the second call fails."
+    ],
+    "observer": "The two callers and their HTTP clients"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "construction_errors",
+   "text": "Building the surface raises no refusal.",
+   "question": "Can construction raise non-M08 exceptions, including exceptions caused by invalid inputs or route registration, or must create_app always return a surface for every value admitted by its signature?",
+   "options": [
+    "No exception of any kind is part of the operation; all admitted inputs produce a surface",
+    "Only M08 refusals are excluded; ordinary validation and framework exceptions may propagate",
+    "Invalid context or token values have explicitly defined construction errors"
+   ],
+   "default_guess": "Assume valid typed inputs and allow unexpected framework exceptions to propagate, while never producing an M08 refusal.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "handler_binding",
+   "text": "Every other route passes the request to its handler in `module:deliverer_api`",
+   "question": "Does the router register each deliverer_api handler directly for framework injection, or wrap it, and exactly which request values may a wrapper parse or forward?",
+   "options": [
+    "Register each deliverer_api handler directly without a router-owned wrapper",
+    "Use a thin wrapper that forwards the raw framework request",
+    "Use a wrapper that extracts path, header and body values before calling the handler"
+   ],
+   "default_guess": "Register the deliverer_api handlers directly so their signatures control extraction and validation.",
+   "witness": {
+    "initial": "A delivery request has a valid token and project path but malformed JSON.",
+    "events": [
+     "The client sends the request to the delivery route.",
+     "The framework attempts to bind the request to deliver_route."
+    ],
+    "outcomes": [
+     "Direct registration lets framework validation answer before deliver_route runs.",
+     "A raw-request wrapper invokes deliver_route, which applies the specified M08 request-form handling."
+    ],
+    "observer": "The HTTP client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "redirect_contract",
+   "text": "a path with a trailing slash added is redirected to the route's path",
+   "question": "What status, Location form, body and query-string handling must the redirect use, and must it preserve the method and body of POST requests?",
+   "options": [
+    "Use 307 Temporary Redirect, preserve method and body, and retain the query string",
+    "Use 308 Permanent Redirect, preserve method and body, and retain the query string",
+    "Use 301 or 302 with framework-default method conversion and body",
+    "Define only the target path and leave every other redirect property to the framework"
+   ],
+   "default_guess": "Use the framework's 307 redirect, preserving the method, body and query string, with its native Location header and body.",
+   "witness": {
+    "initial": "The service is running and the client has a valid delivery request body.",
+    "events": [
+     "The client POSTs to `/v1/projects/<project_id>/photos/deliver/`.",
+     "The client follows the redirect according to its HTTP implementation."
+    ],
+    "outcomes": [
+     "A 307 or 308 preserves POST and the body, so the delivery handler receives the request.",
+     "A 301 or 302 may be followed as GET without the body, producing 405 or a different request."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "authentication_order",
+   "text": "a path with a trailing slash added is redirected to the route's path",
+   "question": "For a non-health path with an added trailing slash, is the redirect returned before token checking, or must a missing or wrong token produce the A5 unauthorized M08 instead?",
+   "options": [
+    "Redirect before authentication because the slash path is not itself a declared route",
+    "Authenticate first and return unauthorized without revealing the redirect",
+    "Redirect health before authentication but authenticate slash variants of the other routes"
+   ],
+   "default_guess": "Redirect before authentication, treating the slash form as routing canonicalization rather than an operation.",
+   "witness": {
+    "initial": "The service is running with a secret token.",
+    "events": [
+     "An unauthenticated caller requests `/v1/projects/<project_id>/photos/`.",
+     "The application processes routing and authentication."
+    ],
+    "outcomes": [
+     "Routing first returns a redirect to the canonical scan path.",
+     "Authentication first returns the unauthorized M08 with status 401."
+    ],
+    "observer": "The unauthenticated HTTP caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "path_canonicalization",
+   "text": "A path matches a route only as the table writes it, `{project_id}` and `{source_id}` each standing for one path segment",
+   "question": "At which representation is matching applied, and how must percent-encoded slashes, repeated slashes, dot segments and other server or framework path normalization be handled?",
+   "options": [
+    "Match the framework's decoded and normalized path",
+    "Match the raw HTTP path before percent decoding or normalization",
+    "Reject every non-literal representation except the one explicitly allowed trailing slash"
+   ],
+   "default_guess": "Use the framework's decoded path and its ordinary routing normalization, while configuring only the specified trailing-slash redirect.",
+   "witness": {
+    "initial": "The service is running with a valid token and project connection.",
+    "events": [
+     "A caller sends a path whose project segment contains `%2F`, or sends a path containing a repeated slash.",
+     "The server decodes or normalizes the target and the router attempts matching."
+    ],
+    "outcomes": [
+     "Matching the raw target treats the encoded slash as part of one segment or rejects it according to explicit raw-path rules.",
+     "Matching the decoded or normalized path changes the segment boundaries or canonical path and can select a route, redirect, or return a different 404."
+    ],
+    "observer": "The HTTP caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "query_handling",
+   "text": "A path matches a route only as the table writes it",
+   "question": "Do arbitrary query parameters leave the path matched and get ignored or passed to the handler, or must a request containing any query string be rejected?",
+   "options": [
+    "Query parameters do not participate in path matching and are ignored unless a handler declares them",
+    "Any query string makes the request fail to match and return 404",
+    "The route matches, but undeclared query parameters produce invalid_request"
+   ],
+   "default_guess": "Treat the query as separate from the path; match the route and ignore undeclared query parameters.",
+   "witness": {
+    "initial": "The service is running and the caller has a valid token.",
+    "events": [
+     "The caller requests `/health?probe=1`.",
+     "The router evaluates whether this is the health route."
+    ],
+    "outcomes": [
+     "The route matches and returns the health answer.",
+     "The literal-target interpretation does not match the table entry and returns 404."
+    ],
+    "observer": "The health-checking deployment"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "framework_response_contract",
+   "text": "both with the framework's own body and not M08.",
+   "question": "Which exact framework-native 404 and 405 response contract is required, including media type, body, Allow header and effects of middleware or framework-version changes?",
+   "options": [
+    "Pin the exact native behavior of the selected FastAPI and Starlette versions and configuration",
+    "Specify the complete 404 and 405 status, headers and body in this operation",
+    "Require only the status and non-M08 property and leave body and headers unconstrained"
+   ],
+   "default_guess": "Use the pinned framework's unmodified native responses, including its native headers and JSON body.",
+   "witness": {
+    "initial": "A client calls the scan path with POST.",
+    "events": [
+     "One implementation uses the framework's default exception handlers.",
+     "Another installs or inherits a framework exception handler that changes native error serialization.",
+     "Both return status 405 and no M08."
+    ],
+    "outcomes": [
+     "The client receives the framework-default JSON body and Allow header.",
+     "The client receives a different framework-owned body or headers while still satisfying the stated status."
+    ],
+    "observer": "The HTTP client"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"input_contract\",\"text\":\"The context of the operations and the token.\",\"question\":\"What are the exact parameter names, types, required values and ownership or lifetime rules for the context and token?\",\"options\":[\"Accept exactly a DeliveryContext and a str token and retain them for the application's lifetime\",\"Accept a broader settings or mapping object and derive or copy the needed values\",\"Validate the inputs during construction and reject invalid values\"],\"default_guess\":\"Accept DeliveryContext and str as required positional or named parameters and capture their values for the application's lifetime.\"},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"output_contract\",\"text\":\"The HTTP surface with four routes, each bound to its handler:\",\"question\":\"What concrete value does create_app return, and is a new independent application required on every call?\",\"options\":[\"Return a new FastAPI application on every call\",\"Return an abstract ASGI application\",\"Return or reuse a module-level application\"],\"default_guess\":\"Return a newly constructed FastAPI application on every call.\",\"witness\":{\"initial\":\"Two callers invoke create_app with different contexts and tokens in one process.\",\"events\":[\"The first caller creates and retains a surface for token A.\",\"The second caller creates a surface for token B.\",\"Each caller then sends an authenticated request to its retained surface.\"],\"outcomes\":[\"Each returned application retains its own context and token.\",\"A reused application is reconfigured, so the first returned surface now uses token B or the second call fails.\"],\"observer\":\"The two callers and their HTTP clients\"}},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"construction_errors\",\"text\":\"Building the surface raises no refusal.\",\"question\":\"Can construction raise non-M08 exceptions, including exceptions caused by invalid inputs or route registration, or must create_app always return a surface for every value admitted by its signature?\",\"options\":[\"No exception of any kind is part of the operation; all admitted inputs produce a surface\",\"Only M08 refusals are excluded; ordinary validation and framework exceptions may propagate\",\"Invalid context or token values have explicitly defined construction errors\"],\"default_guess\":\"Assume valid typed inputs and allow unexpected framework exceptions to propagate, while never producing an M08 refusal.\"},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"handler_binding\",\"text\":\"Every other route passes the request to its handler in `module:deliverer_api`\",\"question\":\"Does the router register each deliverer_api handler directly for framework injection, or wrap it, and exactly which request values may a wrapper parse or forward?\",\"options\":[\"Register each deliverer_api handler directly without a router-owned wrapper\",\"Use a thin wrapper that forwards the raw framework request\",\"Use a wrapper that extracts path, header and body values before calling the handler\"],\"default_guess\":\"Register the deliverer_api handlers directly so their signatures control extraction and validation.\",\"witness\":{\"initial\":\"A delivery request has a valid token and project path but malformed JSON.\",\"events\":[\"The client sends the request to the delivery route.\",\"The framework attempts to bind the request to deliver_route.\"],\"outcomes\":[\"Direct registration lets framework validation answer before deliver_route runs.\",\"A raw-request wrapper invokes deliver_route, which applies the specified M08 request-form handling.\"],\"observer\":\"The HTTP client\"}},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"redirect_contract\",\"text\":\"a path with a trailing slash added is redirected to the route's path\",\"question\":\"What status, Location form, body and query-string handling must the redirect use, and must it preserve the method and body of POST requests?\",\"options\":[\"Use 307 Temporary Redirect, preserve method and body, and retain the query string\",\"Use 308 Permanent Redirect, preserve method and body, and retain the query string\",\"Use 301 or 302 with framework-default method conversion and body\",\"Define only the target path and leave every other redirect property to the framework\"],\"default_guess\":\"Use the framework's 307 redirect, preserving the method, body and query string, with its native Location header and body.\",\"witness\":{\"initial\":\"The service is running and the client has a valid delivery request body.\",\"events\":[\"The client POSTs to `/v1/projects/<project_id>/photos/deliver/`.\",\"The client follows the redirect according to its HTTP implementation.\"],\"outcomes\":[\"A 307 or 308 preserves POST and the body, so the delivery handler receives the request.\",\"A 301 or 302 may be followed as GET without the body, producing 405 or a different request.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"authentication_order\",\"text\":\"a path with a trailing slash added is redirected to the route's path\",\"question\":\"For a non-health path with an added trailing slash, is the redirect returned before token checking, or must a missing or wrong token produce the A5 unauthorized M08 instead?\",\"options\":[\"Redirect before authentication because the slash path is not itself a declared route\",\"Authenticate first and return unauthorized without revealing the redirect\",\"Redirect health before authentication but authenticate slash variants of the other routes\"],\"default_guess\":\"Redirect before authentication, treating the slash form as routing canonicalization rather than an operation.\",\"witness\":{\"initial\":\"The service is running with a secret token.\",\"events\":[\"An unauthenticated caller requests `/v1/projects/<project_id>/photos/`.\",\"The application processes routing and authentication.\"],\"outcomes\":[\"Routing first returns a redirect to the canonical scan path.\",\"Authentication first returns the unauthorized M08 with status 401.\"],\"observer\":\"The unauthenticated HTTP caller\"}},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"path_canonicalization\",\"text\":\"A path matches a route only as the table writes it, `{project_id}` and `{source_id}` each standing for one path segment\",\"question\":\"At which representation is matching applied, and how must percent-encoded slashes, repeated slashes, dot segments and other server or framework path normalization be handled?\",\"options\":[\"Match the framework's decoded and normalized path\",\"Match the raw HTTP path before percent decoding or normalization\",\"Reject every non-literal representation except the one explicitly allowed trailing slash\"],\"default_guess\":\"Use the framework's decoded path and its ordinary routing normalization, while configuring only the specified trailing-slash redirect.\",\"witness\":{\"initial\":\"The service is running with a valid token and project connection.\",\"events\":[\"A caller sends a path whose project segment contains `%2F`, or sends a path containing a repeated slash.\",\"The server decodes or normalizes the target and the router attempts matching.\"],\"outcomes\":[\"Matching the raw target treats the encoded slash as part of one segment or rejects it according to explicit raw-path rules.\",\"Matching the decoded or normalized path changes the segment boundaries or canonical path and can select a route, redirect, or return a different 404.\"],\"observer\":\"The HTTP caller\"}},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"query_handling\",\"text\":\"A path matches a route only as the table writes it\",\"question\":\"Do arbitrary query parameters leave the path matched and get ignored or passed to the handler, or must a request containing any query string be rejected?\",\"options\":[\"Query parameters do not participate in path matching and are ignored unless a handler declares them\",\"Any query string makes the request fail to match and return 404\",\"The route matches, but undeclared query parameters produce invalid_request\"],\"default_guess\":\"Treat the query as separate from the path; match the route and ignore undeclared query parameters.\",\"witness\":{\"initial\":\"The service is running and the caller has a valid token.\",\"events\":[\"The caller requests `/health?probe=1`.\",\"The router evaluates whether this is the health route.\"],\"outcomes\":[\"The route matches and returns the health answer.\",\"The literal-target interpretation does not match the table entry and returns 404.\"],\"observer\":\"The health-checking deployment\"}},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"framework_response_contract\",\"text\":\"both with the framework's own body and not M08.\",\"question\":\"Which exact framework-native 404 and 405 response contract is required, including media type, body, Allow header and effects of middleware or framework-version changes?\",\"options\":[\"Pin the exact native behavior of the selected FastAPI and Starlette versions and configuration\",\"Specify the complete 404 and 405 status, headers and body in this operation\",\"Require only the status and non-M08 property and leave body and headers unconstrained\"],\"default_guess\":\"Use the pinned framework's unmodified native responses, including its native headers and JSON body.\",\"witness\":{\"initial\":\"A client calls the scan path with POST.\",\"events\":[\"One implementation uses the framework's default exception handlers.\",\"Another installs or inherits a framework exception handler that changes native error serialization.\",\"Both return status 405 and no M08.\"],\"outcomes\":[\"The client receives the framework-default JSON body and Allow header.\",\"The client receives a different framework-owned body or headers while still satisfying the stated status.\"],\"observer\":\"The HTTP client\"}}]}",
+ "set_aside": []
+}

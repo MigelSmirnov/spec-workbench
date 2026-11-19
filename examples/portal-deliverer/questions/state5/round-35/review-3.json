@@ -1,0 +1,152 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "redirect_response",
+   "text": "a path with a trailing slash added is redirected to the route's path",
+   "question": "What exact redirect status, Location form, body and headers must be returned, and must the original query string be preserved?",
+   "options": [
+    "307 with a relative Location, the query string preserved and the framework's default body and headers",
+    "308 with a relative Location and the query string preserved",
+    "301 or 302, allowing a client to change the method",
+    "An absolute Location derived from the request instead of a relative Location"
+   ],
+   "default_guess": "Use the framework default 307 redirect, preserve the method and query string, and point Location at the same path without its final slash.",
+   "witness": {
+    "initial": "The surface is serving and the caller has no redirect cached.",
+    "events": [
+     "The caller sends POST /v1/projects/01234567-89ab-cdef-0123-456789abcdef/photos/deliver/?trace=1 with a valid token and body."
+    ],
+    "outcomes": [
+     "The surface answers 307 with Location /v1/projects/01234567-89ab-cdef-0123-456789abcdef/photos/deliver?trace=1, so a conforming client repeats POST.",
+     "The surface answers 302 or 308, or emits a different Location form or drops trace=1; the caller follows or reports a different response."
+    ],
+    "observer": "The calling flow and any HTTP client or reverse proxy observing the response"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "dispatch_precedence",
+   "text": "a path with a trailing slash added is redirected to the route's path. Any other path answers 404, and a route's path with another method answers 405",
+   "question": "When both the trailing-slash rule and the wrong-method rule apply, does the surface redirect, answer 405 at the slash-added path, or answer 404?",
+   "options": [
+    "Redirect first, preserving the wrong method; the target then answers 405 if followed",
+    "Normalize the path for matching and answer 405 immediately",
+    "Treat the slash-added path with the wrong method as an unmatched path and answer 404"
+   ],
+   "default_guess": "Redirect first and preserve the method; answer 405 only after the client requests the canonical path.",
+   "witness": {
+    "initial": "The surface has GET /health and no POST /health route.",
+    "events": [
+     "A caller sends POST /health/."
+    ],
+    "outcomes": [
+     "The caller receives the trailing-slash redirect to /health.",
+     "The caller receives 405, or 404, without a redirect."
+    ],
+    "observer": "The caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "path_canonicalization",
+   "text": "A path matches a route only as the table writes it",
+   "question": "Is matching performed against the raw request-target spelling or against the server/framework's percent-decoded and normalized path?",
+   "options": [
+    "Match the framework's decoded path, so percent-encoded unreserved characters can match route literals",
+    "Match the raw path spelling, so only the literal route spelling matches",
+    "Define an explicit subset of percent encodings and normalizations that may match"
+   ],
+   "default_guess": "Use the framework's decoded path matching without additional raw-path enforcement.",
+   "witness": {
+    "initial": "The service is listening.",
+    "events": [
+     "A caller sends GET /he%61lth."
+    ],
+    "outcomes": [
+     "The decoded path is /health and the caller receives the health answer.",
+     "The raw spelling is not the table's /health and the caller receives 404."
+    ],
+    "observer": "The caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "segment_boundary",
+   "text": "`{project_id}` and `{source_id}` each standing for one path segment",
+   "question": "Are segment boundaries determined before or after percent-decoding reserved characters such as `%2F`?",
+   "options": [
+    "Decode before routing, so an encoded slash creates another segment and the path does not match",
+    "Split the raw path first, so `%2F` remains inside one captured value and the handler later validates it",
+    "Reject encoded path separators explicitly before route matching"
+   ],
+   "default_guess": "Use the framework's decoded path; an encoded slash creates a segment boundary and this request answers 404.",
+   "witness": {
+    "initial": "The scan route is available.",
+    "events": [
+     "A caller sends GET /v1/projects/01234567-89ab-cdef-0123-456789abc%2Fdef/photos with the correct token."
+    ],
+    "outcomes": [
+     "Percent-decoding creates an extra path segment, so the surface answers 404.",
+     "Raw splitting captures one project_id value, so the handler runs and answers the invalid-project-id M08 response."
+    ],
+    "observer": "The caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "error_headers",
+   "text": "with the framework's own body and not M08",
+   "question": "Are all headers of 404 and 405 responses delegated to the framework, and in particular what exact Allow header must a 405 response carry?",
+   "options": [
+    "Delegate the complete response to the framework, including Content-Type, Content-Length and Allow",
+    "Require only the framework body and status, leaving headers to the implementation",
+    "Specify the allowed method in Allow while delegating all other headers"
+   ],
+   "default_guess": "Delegate the complete default 404 or 405 response to the pinned framework, including its Allow header.",
+   "witness": {
+    "initial": "The surface has only GET /health at that path.",
+    "events": [
+     "A caller sends POST /health and inspects the response headers."
+    ],
+    "outcomes": [
+     "The 405 response includes Allow: GET and the framework's other default headers.",
+     "The response has the same status and body but omits Allow or supplies a different set of headers."
+    ],
+    "observer": "The caller and any HTTP middleware enforcing method negotiation"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "schema_exposure",
+   "text": "no generated description of them",
+   "question": "Must create_app prevent generation and programmatic access to a route description, or must it only stop serving description endpoints over HTTP?",
+   "options": [
+    "Disable only /openapi.json, /docs and /redoc while allowing the returned application object's schema-generation method to describe the routes",
+    "Disable or override schema generation as well, so no generated route description is obtainable from the returned object",
+    "Permit an internally generated cached schema provided it is never served"
+   ],
+   "default_guess": "Disable all HTTP schema and documentation endpoints, but leave the framework's programmatic schema method unused and available.",
+   "witness": {
+    "initial": "deliverer_service has received the application object returned by create_app, and no HTTP documentation endpoints are registered.",
+    "events": [
+     "An in-process caller or test invokes the framework's schema-generation method on that application object."
+    ],
+    "outcomes": [
+     "It receives a generated description of the four routes even though no HTTP path serves it.",
+     "Schema generation is disabled and no description is returned."
+    ],
+    "observer": "deliverer_service, an in-process extension or a test inspecting the returned application"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"redirect_response\",\"text\":\"a path with a trailing slash added is redirected to the route's path\",\"question\":\"What exact redirect status, Location form, body and headers must be returned, and must the original query string be preserved?\",\"options\":[\"307 with a relative Location, the query string preserved and the framework's default body and headers\",\"308 with a relative Location and the query string preserved\",\"301 or 302, allowing a client to change the method\",\"An absolute Location derived from the request instead of a relative Location\"],\"default_guess\":\"Use the framework default 307 redirect, preserve the method and query string, and point Location at the same path without its final slash.\",\"witness\":{\"initial\":\"The surface is serving and the caller has no redirect cached.\",\"events\":[\"The caller sends POST /v1/projects/01234567-89ab-cdef-0123-456789abcdef/photos/deliver/?trace=1 with a valid token and body.\"],\"outcomes\":[\"The surface answers 307 with Location /v1/projects/01234567-89ab-cdef-0123-456789abcdef/photos/deliver?trace=1, so a conforming client repeats POST.\",\"The surface answers 302 or 308, or emits a different Location form or drops trace=1; the caller follows or reports a different response.\"],\"observer\":\"The calling flow and any HTTP client or reverse proxy observing the response\"}},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"dispatch_precedence\",\"text\":\"a path with a trailing slash added is redirected to the route's path. Any other path answers 404, and a route's path with another method answers 405\",\"question\":\"When both the trailing-slash rule and the wrong-method rule apply, does the surface redirect, answer 405 at the slash-added path, or answer 404?\",\"options\":[\"Redirect first, preserving the wrong method; the target then answers 405 if followed\",\"Normalize the path for matching and answer 405 immediately\",\"Treat the slash-added path with the wrong method as an unmatched path and answer 404\"],\"default_guess\":\"Redirect first and preserve the method; answer 405 only after the client requests the canonical path.\",\"witness\":{\"initial\":\"The surface has GET /health and no POST /health route.\",\"events\":[\"A caller sends POST /health/.\"],\"outcomes\":[\"The caller receives the trailing-slash redirect to /health.\",\"The caller receives 405, or 404, without a redirect.\"],\"observer\":\"The caller\"}},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"path_canonicalization\",\"text\":\"A path matches a route only as the table writes it\",\"question\":\"Is matching performed against the raw request-target spelling or against the server/framework's percent-decoded and normalized path?\",\"options\":[\"Match the framework's decoded path, so percent-encoded unreserved characters can match route literals\",\"Match the raw path spelling, so only the literal route spelling matches\",\"Define an explicit subset of percent encodings and normalizations that may match\"],\"default_guess\":\"Use the framework's decoded path matching without additional raw-path enforcement.\",\"witness\":{\"initial\":\"The service is listening.\",\"events\":[\"A caller sends GET /he%61lth.\"],\"outcomes\":[\"The decoded path is /health and the caller receives the health answer.\",\"The raw spelling is not the table's /health and the caller receives 404.\"],\"observer\":\"The caller\"}},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"segment_boundary\",\"text\":\"`{project_id}` and `{source_id}` each standing for one path segment\",\"question\":\"Are segment boundaries determined before or after percent-decoding reserved characters such as `%2F`?\",\"options\":[\"Decode before routing, so an encoded slash creates another segment and the path does not match\",\"Split the raw path first, so `%2F` remains inside one captured value and the handler later validates it\",\"Reject encoded path separators explicitly before route matching\"],\"default_guess\":\"Use the framework's decoded path; an encoded slash creates a segment boundary and this request answers 404.\",\"witness\":{\"initial\":\"The scan route is available.\",\"events\":[\"A caller sends GET /v1/projects/01234567-89ab-cdef-0123-456789abc%2Fdef/photos with the correct token.\"],\"outcomes\":[\"Percent-decoding creates an extra path segment, so the surface answers 404.\",\"Raw splitting captures one project_id value, so the handler runs and answers the invalid-project-id M08 response.\"],\"observer\":\"The caller\"}},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"error_headers\",\"text\":\"with the framework's own body and not M08\",\"question\":\"Are all headers of 404 and 405 responses delegated to the framework, and in particular what exact Allow header must a 405 response carry?\",\"options\":[\"Delegate the complete response to the framework, including Content-Type, Content-Length and Allow\",\"Require only the framework body and status, leaving headers to the implementation\",\"Specify the allowed method in Allow while delegating all other headers\"],\"default_guess\":\"Delegate the complete default 404 or 405 response to the pinned framework, including its Allow header.\",\"witness\":{\"initial\":\"The surface has only GET /health at that path.\",\"events\":[\"A caller sends POST /health and inspects the response headers.\"],\"outcomes\":[\"The 405 response includes Allow: GET and the framework's other default headers.\",\"The response has the same status and body but omits Allow or supplies a different set of headers.\"],\"observer\":\"The caller and any HTTP middleware enforcing method negotiation\"}},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"schema_exposure\",\"text\":\"no generated description of them\",\"question\":\"Must create_app prevent generation and programmatic access to a route description, or must it only stop serving description endpoints over HTTP?\",\"options\":[\"Disable only /openapi.json, /docs and /redoc while allowing the returned application object's schema-generation method to describe the routes\",\"Disable or override schema generation as well, so no generated route description is obtainable from the returned object\",\"Permit an internally generated cached schema provided it is never served\"],\"default_guess\":\"Disable all HTTP schema and documentation endpoints, but leave the framework's programmatic schema method unused and available.\",\"witness\":{\"initial\":\"deliverer_service has received the application object returned by create_app, and no HTTP documentation endpoints are registered.\",\"events\":[\"An in-process caller or test invokes the framework's schema-generation method on that application object.\"],\"outcomes\":[\"It receives a generated description of the four routes even though no HTTP path serves it.\",\"Schema generation is disabled and no description is returned.\"],\"observer\":\"deliverer_service, an in-process extension or a test inspecting the returned application\"}}]}",
+ "set_aside": []
+}
