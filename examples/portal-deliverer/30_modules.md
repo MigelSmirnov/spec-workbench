@@ -27,15 +27,21 @@ cycles, and `domain_models` names no other module.
 | Consumer | Provider | Symbols |
 |---|---|---|
 | `data_provider` | `domain_models` | `RefusalAnswerRule`, `RefusalCode` |
-| `runtime_settings` | `domain_models` | `RuntimeSettings` |
-| `object_connections` | `domain_models` | `DelivererError`, `ObjectConnection`, `RefusalCode` |
-| `source_folder` | `domain_models` | `DelivererError`, `ObservationReason`, `PlacementFailure`, `RefusalCode`, `Rejected`, `ScanStatus`, `SourceFile`, `SourceRead` |
+| `refusals` | `domain_models` | `PlacementFailure`, `RefusalCode` |
+| `runtime_settings` | `domain_models` | `RuntimeEnvironment`, `RuntimeSettings` |
+| `object_connections` | `domain_models` | `ObjectConnection`, `RefusalCode` |
+| `object_connections` | `refusals` | `DelivererError` |
+| `source_folder` | `domain_models` | `ObservationReason`, `PlacementFailure`, `RefusalCode`, `ScanStatus`, `SourceFile`, `SourceRead` |
+| `source_folder` | `refusals` | `DelivererError`, `Rejected` |
 | `source_folder` | `data_provider` | `CONFLICT_COPY_MARK`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `MAX_SOURCE_BYTES` |
-| `photo_preparation` | `domain_models` | `DateSource`, `PhotoPublication`, `PlacementFailure`, `PreparedPhoto`, `Rejected` |
+| `photo_preparation` | `domain_models` | `DateSource`, `PhotoPublication`, `PlacementFailure`, `PreparedPhoto` |
+| `photo_preparation` | `refusals` | `Rejected` |
 | `photo_preparation` | `data_provider` | `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_BACKGROUND`, `PHOTO_MAX_SIDE`, `PHOTO_OPTIMIZE`, `PHOTO_PROGRESSIVE`, `PHOTO_QUALITY`, `PHOTO_SUBSAMPLING` |
 | `delivery_store` | `data_provider` | `LOCK_FILE_MODE`, `RECORD_MODE`, `STATE_FOLDER_MODE`, `STORE_FOLDER_MODE`, `STORED_IMAGE_MODE`, `TEMPORARY_FILE_MODE`, `TEMPORARY_NAME_PREFIX`, `LOCKS_FOLDER`, `PLACEMENTS_FOLDER`, `MARKS_FOLDER`, `LOCK_FILE_SUFFIX`, `RECORD_FILE_SUFFIX` |
-| `delivery_store` | `domain_models` | `DelivererError`, `DeliveryContext`, `PhotoPlacement`, `PublicationMark`, `RefusalCode` |
-| `photo_delivery` | `domain_models` | `DelivererError`, `DeliveryContext`, `MarkOutcome`, `MarkStatus`, `PhotoPlacement`, `PlacementFailure`, `PlacementOutcome`, `PlacementStatus`, `PublicationMark`, `RefusalCode`, `Rejected`, `ScanResult`, `ScanStatus`, `SourceFile`, `SourcePhotoObservation` |
+| `delivery_store` | `domain_models` | `DeliveryContext`, `PhotoPlacement`, `PublicationMark`, `RefusalCode` |
+| `delivery_store` | `refusals` | `DelivererError` |
+| `photo_delivery` | `domain_models` | `DeliveryContext`, `MarkOutcome`, `MarkStatus`, `PhotoPlacement`, `PlacementFailure`, `PlacementOutcome`, `PlacementStatus`, `PublicationMark`, `RefusalCode`, `ScanResult`, `ScanStatus`, `SourceFile`, `SourcePhotoObservation` |
+| `photo_delivery` | `refusals` | `DelivererError`, `Rejected` |
 | `photo_delivery` | `data_provider` | `SOURCE_ID_PATTERN` |
 | `photo_delivery` | `object_connections` | `available_photo_folder`, `confirmed_connection` |
 | `photo_delivery` | `source_folder` | `observe_source_files`, `read_named_source` |
@@ -43,10 +49,11 @@ cycles, and `domain_models` names no other module.
 | `photo_delivery` | `delivery_store` | `project_lock`, `read_mark`, `read_placement`, `store_image`, `write_mark`, `write_placement` |
 | `photo_delivery` | `system_clock` | `utc_now` |
 | `deliverer_api` | `data_provider` | `REFUSAL_ANSWERS` |
-| `deliverer_api` | `domain_models` | `AuthenticationRequired`, `DeliverRequest`, `DelivererError`, `DeliveryContext`, `HealthAnswer`, `MarkOutcome`, `PlacementOutcome`, `PublishedRequest`, `Refusal`, `RefusalCode`, `ScanResult` |
+| `deliverer_api` | `domain_models` | `DeliverRequest`, `DeliveryContext`, `HealthAnswer`, `MarkOutcome`, `PlacementOutcome`, `PublishedRequest`, `Refusal`, `RefusalCode`, `ScanResult` |
+| `deliverer_api` | `refusals` | `DelivererError` |
 | `deliverer_api` | `photo_delivery` | `deliver_project_photo`, `mark_photo_published`, `scan_project_photos` |
-| `deliverer_router` | `domain_models` | `AuthenticationRequired`, `DeliveryContext`, `HealthAnswer` |
-| `deliverer_router` | `deliverer_api` | `answer_health`, `deliver_route`, `mark_route`, `scan_route` |
+| `deliverer_router` | `domain_models` | `DeliveryContext`, `HealthAnswer` |
+| `deliverer_router` | `deliverer_api` | `AuthenticationRequired`, `answer_health`, `deliver_route`, `mark_route`, `scan_route` |
 | `deliverer_service` | `data_provider` | `TOKEN_MIN_LENGTH`, `TOKEN_TRIM_CHARACTERS` |
 | `deliverer_service` | `domain_models` | `DeliveryContext`, `RuntimeSettings` |
 | `deliverer_service` | `runtime_settings` | `load_runtime_settings` |
@@ -60,8 +67,11 @@ reads the record itself at its connection check, so no module keeps connections 
 backend emits. It imports the route handlers `scan_route`, `deliver_route` and `mark_route` of
 `deliverer_api`, which are not public capabilities: they are the handlers the route closure assigns to
 `deliverer_api` as the owner of irregular routes, and the router only registers them. So `deliverer_api`
-cannot import the router back. The router checks no token: the extractor of the `Authorization` field that the backend emits is
-called by no route it serves, since the health route needs no token and every route that does is a
+cannot import the router back. The router checks no token: the extractor of the `Authorization` field that the backend emits raises
+`AuthenticationRequired`, and the router maps that exception to 401 with an empty body, so it imports it from
+`deliverer_api`. No request ever gets that empty answer: the extractor is called by no route the router serves,
+and every handler of `deliverer_api` catches its own `AuthenticationRequired` and answers it as M08 (A5 rules 1
+and 10), since the health route needs no token and every route that does is a
 handler of `deliverer_api`, which reads the field and compares the token itself, before the project id
 or the body.
 
@@ -118,6 +128,8 @@ names the owner of each rule.
 | A7 | rule 2, when an operation reads the clock | `photo_delivery` |
 | A7 | rule 4, a file's modification time | `source_folder` |
 | A7 | rule 5, the photo moment | `photo_preparation` |
+| A8 | reading each run setting, its default, and the refusal of a value the start-up table does not accept | `runtime_settings` |
+| A8 | the refusal of a port above 65535 and of a time zone the database does not know | `deliverer_service` |
 
 ## Invariant owners
 
@@ -141,7 +153,7 @@ outbound call.
 
 ### Owns
 
-- the models M01 to M07 and their enumerations;
+- the models M01 to M08 and their enumerations;
 - `SourceFile`, what `source_folder` reports about one file to `photo_delivery`. It holds the server path
   of the file and never leaves the service; M02 is the form a caller sees;
 - the type of the run settings, and `DeliveryContext`, the context of the operations that `deliverer_service` builds from them:
@@ -152,8 +164,7 @@ outbound call.
   `HealthAnswer`, the body of the health route;
 - `RefusalAnswerRule`, the row form of the refusal answers that `data_provider` holds: a refusal code with its
   status and `detail`;
-- the three refusal types: a refusal of the whole operation, a refusal of one file, and
-  `AuthenticationRequired`, a request that does not carry the token.
+- no exception: the refusal types belong to `refusals`, and `AuthenticationRequired` to `deliverer_api`.
 
 ### Knows
 
@@ -177,6 +188,44 @@ Exports types and constants only.
 
 - kind: deep
 - hidden mechanism: none beyond type validity; this is the shared vocabulary of the service.
+
+## `refusals`
+
+### Owns
+
+- `DelivererError`, the refusal of a whole operation, whose code is a member of = models.RefusalCode and
+  becomes M08;
+- `Rejected`, the refusal of one file, whose reason is a member of = models.PlacementFailure and becomes the
+  failure of that photo.
+
+### Knows
+
+- the two vocabularies those refusals carry, and nothing about when they are raised.
+
+### Hides
+
+- nothing beyond the two exception types; this is shared vocabulary, as `domain_models` is for values.
+
+### Must not own
+
+- any rule that decides a refusal, or the answer a refusal becomes.
+
+### Public surface
+
+```text
+DelivererError
+Rejected
+```
+
+### Trace inputs
+
+- A3
+- A5
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: none beyond the two exception types; the shared refusal vocabulary of the service.
 
 ## `data_provider`
 
@@ -245,7 +294,7 @@ RECORD_FILE_SUFFIX
 ### Owns
 
 - reading the run settings of A8 from the environment of the process;
-- the default of each optional setting, and the refusal of a missing required setting or an invalid port.
+- the default of each optional setting, and the refusal of a value the start-up table does not accept.
 
 ### Knows
 
@@ -517,6 +566,7 @@ mark_photo_published
 - steps 1 and 2 of "Order of one operation": the `Authorization` field, the comparison of the token in
   constant time, the project id and the request form;
 - the status and the content of every refusal answer;
+- `AuthenticationRequired`, the refusal of a request that does not carry the token;
 - the one principal of A5 rule 5.
 
 ### Knows
@@ -591,8 +641,7 @@ create_app
 
 ### Owns
 
-- the start of the service: the run settings, the context of the operations, the token file and the
-  refusals that end the start;
+- the start of the service: the context of the operations and the token file;
 - listening on the loopback interface only.
 
 ### Knows
