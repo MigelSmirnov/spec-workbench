@@ -1,0 +1,228 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing time source",
+   "text": "`marked_at: datetime`",
+   "question": "Which clock or authority supplies `marked_at`, and which instant is recorded when a mark operation waits for the project lock?",
+   "options": [
+    "Read the system clock after acquiring the project lock immediately before writing the mark",
+    "Read the system clock when the request arrives and retain that instant while waiting",
+    "Use an injected monotonic-to-wall-clock authority with a specified sampling point"
+   ],
+   "default_guess": "Read an injected UTC wall clock once after acquiring the project lock and immediately before constructing the mark.",
+   "witness": {
+    "initial": "A placement exists and another process holds the project lock for several minutes.",
+    "events": [
+     "The calling flow requests a publication mark at 10:00.",
+     "The mark operation waits for the project lock until 10:05 and then writes M07."
+    ],
+    "outcomes": [
+     "`marked_at` is 10:00, the request-arrival instant.",
+     "`marked_at` is 10:05, the instant the mark is committed."
+    ],
+    "observer": "The calling flow or any later reader of the publication mark"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto.taken_at and M05 PhotoPublication.photo_date",
+   "kind": "ambiguous time representation",
+   "text": "with the moment the photo was taken as UTC without an offset",
+   "question": "What exact datetime representation, precision and serialization constitute “UTC without an offset”?",
+   "options": [
+    "A timezone-naive datetime whose fields have already been converted to UTC",
+    "A timezone-aware UTC datetime serialized with `Z`",
+    "A timezone-aware UTC datetime internally, with the numeric offset removed only in the Portal payload"
+   ],
+   "default_guess": "Use a timezone-naive UTC datetime, preserve the available source precision, and serialize it without an offset suffix.",
+   "witness": {
+    "initial": "A source photo has an instant corresponding to 2026-11-18 12:00:00 UTC.",
+    "events": [
+     "The deliverer prepares the photo.",
+     "The deliverer builds and persists M04 and its M05 publication body."
+    ],
+    "outcomes": [
+     "The stored value and payload contain `2026-11-18T12:00:00`.",
+     "The stored value and payload contain `2026-11-18T12:00:00Z`."
+    ],
+    "observer": "The Portal and a reader of the placement record"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto.taken_at",
+   "kind": "ambiguous camera time",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "Which camera metadata field wins when several date fields exist, and how is a camera timestamp that has no timezone converted to UTC?",
+   "options": [
+    "Use a declared precedence among EXIF original, digitized and modification timestamps and require an EXIF offset",
+    "Use a declared field precedence and interpret offset-less camera time in a configured timezone",
+    "Treat an offset-less camera timestamp as already UTC"
+   ],
+   "default_guess": "Prefer DateTimeOriginal, then DateTimeDigitized, use an accompanying EXIF offset when present, and otherwise treat the timestamp as UTC.",
+   "witness": {
+    "initial": "A photo contains DateTimeOriginal `2026:11:18 12:00:00`, DateTimeDigitized `2026:11:18 12:01:00`, and no timezone-offset tag; the file modification time is 11:00 UTC.",
+    "events": [
+     "The caller delivers the photo.",
+     "The deliverer prepares M03 and builds M05."
+    ],
+    "outcomes": [
+     "The photo date is 12:00 UTC by treating DateTimeOriginal as UTC.",
+     "The photo date is 11:00 UTC or another converted instant after interpreting the offset-less camera time in a local timezone or choosing another camera field."
+    ],
+    "observer": "The Portal user viewing the photo date"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "time readings per operation",
+   "kind": "missing sampling rule",
+   "text": "where time comes from and what it means: the source of every instant the product writes or compares, its representation, and how many readings one operation takes",
+   "question": "How many readings of each time source may delivery and mark operations take, and which one supplies every persisted or returned timestamp?",
+   "options": [
+    "Exactly one time reading per operation that needs current time",
+    "One reading per timestamp constructed",
+    "Unrestricted readings, with a specified reading selected for each field"
+   ],
+   "default_guess": "Take exactly one current-time reading in a mark operation and reuse it for every representation of `marked_at`; delivery uses the single already-read file metadata value for its modification-time fallback.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 project lock",
+   "kind": "unspecified lock address",
+   "text": "an operating\n   system lock on one lock file of that project in the state folder",
+   "question": "What exact relative path and filename identify a project's lock file, and which folders below the state folder lead to it?",
+   "options": [
+    "One lock file directly below the state folder named from the canonical project UUID",
+    "A per-project directory containing a fixed lock filename",
+    "A hashed or encoded project identifier arranged in multiple directories"
+   ],
+   "default_guess": "Use a per-project directory named by the canonical UUID and a fixed `lock` filename inside it.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 project-lock initialization",
+   "kind": "undefined first-use race and recovery",
+   "text": "The project lock is that lock file\n   together with the folders below the state folder that lead to it. It is created on first use, the lock\n   file with the imported `LOCK_FILE_MODE` constant and those folders with the imported\n   `STATE_FOLDER_MODE` constant, and is never changed or removed afterwards; its first creation is the\n   only write of an operation that writes nothing else.",
+   "question": "How must concurrent creators and a crash after creating only part of the folder-and-file structure be handled: recover and continue, wait, or refuse with STATE_UNAVAILABLE?",
+   "options": [
+    "Create each missing component idempotently, tolerate another creator winning, and resume incomplete initialization",
+    "Treat any pre-existing partial structure as state damage and refuse",
+    "Create the entire lock structure through a separately specified atomic initialization protocol"
+   ],
+   "default_guess": "Create directories and the lock file idempotently with exclusive primitives, accept expected already-exists races, and resume a partial structure when every existing component has the required safe type.",
+   "witness": {
+    "initial": "The project's lock folders and lock file do not exist.",
+    "events": [
+     "Process A creates the first required folder and then crashes before creating the lock file.",
+     "Process B starts a delivery for the same project."
+    ],
+    "outcomes": [
+     "Process B completes the missing lock structure, takes the lock and continues.",
+     "Process B treats the partial structure as unavailable state and refuses with STATE_UNAVAILABLE."
+    ],
+    "observer": "The caller of process B"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 project-lock validation",
+   "kind": "incomplete refusal conditions",
+   "text": "The same refusal answers a lock that cannot be taken",
+   "question": "Exactly which existing lock-file or lock-folder conditions mean that the lock “cannot be taken,” including wrong object type, symbolic link, wrong mode, wrong owner, unexpected contents and operating-system errors?",
+   "options": [
+    "Refuse only when the operating-system lock acquisition call fails after no-link opening",
+    "Validate type, ownership and modes first and refuse on any mismatch",
+    "Repair permissible mode or ownership mismatches, then attempt the lock"
+   ],
+   "default_guess": "Without following links, require every folder to be a directory and the lock entry to be a regular file; refuse with STATE_UNAVAILABLE on any mismatch or open/lock error, but do not require or repair the mode of an existing entry.",
+   "witness": {
+    "initial": "The expected lock path contains a regular file that can be locked but has a mode different from `LOCK_FILE_MODE`.",
+    "events": [
+     "The caller starts a delivery.",
+     "The service reaches the project-lock check."
+    ],
+    "outcomes": [
+     "The service locks the existing file and continues because the mode rule governs creation only.",
+     "The service refuses with STATE_UNAVAILABLE because the existing lock does not satisfy the declared lock mode."
+    ],
+    "observer": "The delivery caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 lock lifetime",
+   "kind": "ambiguous release condition",
+   "text": "the lock is released when its holder ends",
+   "question": "What event means that the holder “ends”: completion of the operation, closure of a lock handle, termination of a thread or process, request cancellation, or loss of the client connection?",
+   "options": [
+    "Release in a finally step whenever the service operation returns, raises or is cancelled",
+    "Hold until the owning process terminates",
+    "Release on request cancellation or disconnect even if internal work is still unwinding"
+   ],
+   "default_guess": "The operation is the holder; release its lock handle in a finally step after all protected work has stopped, including on exception or cancellation.",
+   "witness": {
+    "initial": "A mark operation holds the project lock while its HTTP caller disconnects.",
+    "events": [
+     "The server detects the disconnect while protected work is still running.",
+     "A second process requests a delivery for the same project."
+    ],
+    "outcomes": [
+     "The first operation retains the lock until its protected work finishes, so the second waits.",
+     "The disconnect ends the holder and releases the lock immediately, so the second operation enters concurrently with unfinished work."
+    ],
+    "observer": "The second caller and the persisted project state"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 2",
+   "kind": "standard_violation",
+   "text": "Delivering content that already has a placement answers `replayed` with the stored placement and the\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\n   when the source file has left the folder.",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\n(`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Name the REPLAYED member of = models.PlacementStatus, optionally adding its `replayed` value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 4",
+   "kind": "standard_violation",
+   "text": "A\n   `source_id` that does not match the imported `SOURCE_ID_PATTERN` constant in full is refused with\n   `invalid_source_id`.",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\n(`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Name the INVALID_SOURCE_ID member of = models.RefusalCode, optionally adding its `invalid_source_id` value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 5",
+   "kind": "standard_violation",
+   "text": "A photo that cannot be delivered is answered with status `failed` and one member of\n   `= models.PlacementFailure`.",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\n(`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Name the FAILED member of = models.PlacementStatus, optionally adding its `failed` value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 INV-07 Required tests",
+   "kind": "standard_violation",
+   "text": "a replaced file is reported as a new `ready` photo while the earlier image and mark stay",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\n(`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Name the READY member of = models.ScanStatus, optionally adding its `ready` value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 1",
+   "kind": "standard_violation",
+   "text": "otherwise the delivery\n   is refused with `unsafe_reference`.",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\n(`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Name the UNSAFE_REFERENCE member of = models.RefusalCode, optionally adding its `unsafe_reference` value.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing time source\",\"text\":\"`marked_at: datetime`\",\"question\":\"Which clock or authority supplies `marked_at`, and which instant is recorded when a mark operation waits for the project lock?\",\"options\":[\"Read the system clock after acquiring the project lock immediately before writing the mark\",\"Read the system clock when the request arrives and retain that instant while waiting\",\"Use an injected monotonic-to-wall-clock authority with a specified sampling point\"],\"default_guess\":\"Read an injected UTC wall clock once after acquiring the project lock and immediately before constructing the mark.\",\"witness\":{\"initial\":\"A placement exists and another process holds the project lock for several minutes.\",\"events\":[\"The calling flow requests a publication mark at 10:00.\",\"The mark operation waits for the project lock until 10:05 and then writes M07.\"],\"outcomes\":[\"`marked_at` is 10:00, the request-arrival instant.\",\"`marked_at` is 10:05, the instant the mark is committed.\"],\"observer\":\"The calling flow or any later reader of the publication mark\"}},{\"subject\":\"M03 PreparedPhoto.taken_at and M05 PhotoPublication.photo_date\",\"kind\":\"ambiguous time representation\",\"text\":\"with the moment the photo was taken as UTC without an offset\",\"question\":\"What exact datetime representation, precision and serialization constitute “UTC without an offset”?\",\"options\":[\"A timezone-naive datetime whose fields have already been converted to UTC\",\"A timezone-aware UTC datetime serialized with `Z`\",\"A timezone-aware UTC datetime internally, with the numeric offset removed only in the Portal payload\"],\"default_guess\":\"Use a timezone-naive UTC datetime, preserve the available source precision, and serialize it without an offset suffix.\",\"witness\":{\"initial\":\"A source photo has an instant corresponding to 2026-11-18 12:00:00 UTC.\",\"events\":[\"The deliverer prepares the photo.\",\"The deliverer builds and persists M04 and its M05 publication body.\"],\"outcomes\":[\"The stored value and payload contain `2026-11-18T12:00:00`.\",\"The stored value and payload contain `2026-11-18T12:00:00Z`.\"],\"observer\":\"The Portal and a reader of the placement record\"}},{\"subject\":\"M03 PreparedPhoto.taken_at\",\"kind\":\"ambiguous camera time\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"Which camera metadata field wins when several date fields exist, and how is a camera timestamp that has no timezone converted to UTC?\",\"options\":[\"Use a declared precedence among EXIF original, digitized and modification timestamps and require an EXIF offset\",\"Use a declared field precedence and interpret offset-less camera time in a configured timezone\",\"Treat an offset-less camera timestamp as already UTC\"],\"default_guess\":\"Prefer DateTimeOriginal, then DateTimeDigitized, use an accompanying EXIF offset when present, and otherwise treat the timestamp as UTC.\",\"witness\":{\"initial\":\"A photo contains DateTimeOriginal `2026:11:18 12:00:00`, DateTimeDigitized `2026:11:18 12:01:00`, and no timezone-offset tag; the file modification time is 11:00 UTC.\",\"events\":[\"The caller delivers the photo.\",\"The deliverer prepares M03 and builds M05.\"],\"outcomes\":[\"The photo date is 12:00 UTC by treating DateTimeOriginal as UTC.\",\"The photo date is 11:00 UTC or another converted instant after interpreting the offset-less camera time in a local timezone or choosing another camera field.\"],\"observer\":\"The Portal user viewing the photo date\"}},{\"subject\":\"time readings per operation\",\"kind\":\"missing sampling rule\",\"text\":\"where time comes from and what it means: the source of every instant the product writes or compares, its representation, and how many readings one operation takes\",\"question\":\"How many readings of each time source may delivery and mark operations take, and which one supplies every persisted or returned timestamp?\",\"options\":[\"Exactly one time reading per operation that needs current time\",\"One reading per timestamp constructed\",\"Unrestricted readings, with a specified reading selected for each field\"],\"default_guess\":\"Take exactly one current-time reading in a mark operation and reuse it for every representation of `marked_at`; delivery uses the single already-read file metadata value for its modification-time fallback.\"},{\"subject\":\"A6 project lock\",\"kind\":\"unspecified lock address\",\"text\":\"an operating\\n   system lock on one lock file of that project in the state folder\",\"question\":\"What exact relative path and filename identify a project's lock file, and which folders below the state folder lead to it?\",\"options\":[\"One lock file directly below the state folder named from the canonical project UUID\",\"A per-project directory containing a fixed lock filename\",\"A hashed or encoded project identifier arranged in multiple directories\"],\"default_guess\":\"Use a per-project directory named by the canonical UUID and a fixed `lock` filename inside it.\"},{\"subject\":\"A6 project-lock initialization\",\"kind\":\"undefined first-use race and recovery\",\"text\":\"The project lock is that lock file\\n   together with the folders below the state folder that lead to it. It is created on first use, the lock\\n   file with the imported `LOCK_FILE_MODE` constant and those folders with the imported\\n   `STATE_FOLDER_MODE` constant, and is never changed or removed afterwards; its first creation is the\\n   only write of an operation that writes nothing else.\",\"question\":\"How must concurrent creators and a crash after creating only part of the folder-and-file structure be handled: recover and continue, wait, or refuse with STATE_UNAVAILABLE?\",\"options\":[\"Create each missing component idempotently, tolerate another creator winning, and resume incomplete initialization\",\"Treat any pre-existing partial structure as state damage and refuse\",\"Create the entire lock structure through a separately specified atomic initialization protocol\"],\"default_guess\":\"Create directories and the lock file idempotently with exclusive primitives, accept expected already-exists races, and resume a partial structure when every existing component has the required safe type.\",\"witness\":{\"initial\":\"The project's lock folders and lock file do not exist.\",\"events\":[\"Process A creates the first required folder and then crashes before creating the lock file.\",\"Process B starts a delivery for the same project.\"],\"outcomes\":[\"Process B completes the missing lock structure, takes the lock and continues.\",\"Process B treats the partial structure as unavailable state and refuses with STATE_UNAVAILABLE.\"],\"observer\":\"The caller of process B\"}},{\"subject\":\"A6 project-lock validation\",\"kind\":\"incomplete refusal conditions\",\"text\":\"The same refusal answers a lock that cannot be taken\",\"question\":\"Exactly which existing lock-file or lock-folder conditions mean that the lock “cannot be taken,” including wrong object type, symbolic link, wrong mode, wrong owner, unexpected contents and operating-system errors?\",\"options\":[\"Refuse only when the operating-system lock acquisition call fails after no-link opening\",\"Validate type, ownership and modes first and refuse on any mismatch\",\"Repair permissible mode or ownership mismatches, then attempt the lock\"],\"default_guess\":\"Without following links, require every folder to be a directory and the lock entry to be a regular file; refuse with STATE_UNAVAILABLE on any mismatch or open/lock error, but do not require or repair the mode of an existing entry.\",\"witness\":{\"initial\":\"The expected lock path contains a regular file that can be locked but has a mode different from `LOCK_FILE_MODE`.\",\"events\":[\"The caller starts a delivery.\",\"The service reaches the project-lock check.\"],\"outcomes\":[\"The service locks the existing file and continues because the mode rule governs creation only.\",\"The service refuses with STATE_UNAVAILABLE because the existing lock does not satisfy the declared lock mode.\"],\"observer\":\"The delivery caller\"}},{\"subject\":\"A6 lock lifetime\",\"kind\":\"ambiguous release condition\",\"text\":\"the lock is released when its holder ends\",\"question\":\"What event means that the holder “ends”: completion of the operation, closure of a lock handle, termination of a thread or process, request cancellation, or loss of the client connection?\",\"options\":[\"Release in a finally step whenever the service operation returns, raises or is cancelled\",\"Hold until the owning process terminates\",\"Release on request cancellation or disconnect even if internal work is still unwinding\"],\"default_guess\":\"The operation is the holder; release its lock handle in a finally step after all protected work has stopped, including on exception or cancellation.\",\"witness\":{\"initial\":\"A mark operation holds the project lock while its HTTP caller disconnects.\",\"events\":[\"The server detects the disconnect while protected work is still running.\",\"A second process requests a delivery for the same project.\"],\"outcomes\":[\"The first operation retains the lock until its protected work finishes, so the second waits.\",\"The disconnect ends the holder and releases the lock immediately, so the second operation enters concurrently with unfinished work.\"],\"observer\":\"The second caller and the persisted project state\"}},{\"subject\":\"A3 rule 2\",\"kind\":\"standard_violation\",\"text\":\"Delivering content that already has a placement answers `replayed` with the stored placement and the\\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\\n   when the source file has left the folder.\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\\n(`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Name the REPLAYED member of = models.PlacementStatus, optionally adding its `replayed` value.\"},{\"subject\":\"A3 rule 4\",\"kind\":\"standard_violation\",\"text\":\"A\\n   `source_id` that does not match the imported `SOURCE_ID_PATTERN` constant in full is refused with\\n   `invalid_source_id`.\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\\n(`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Name the INVALID_SOURCE_ID member of = models.RefusalCode, optionally adding its `invalid_source_id` value.\"},{\"subject\":\"A3 rule 5\",\"kind\":\"standard_violation\",\"text\":\"A photo that cannot be delivered is answered with status `failed` and one member of\\n   `= models.PlacementFailure`.\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\\n(`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Name the FAILED member of = models.PlacementStatus, optionally adding its `failed` value.\"},{\"subject\":\"A3 INV-07 Required tests\",\"kind\":\"standard_violation\",\"text\":\"a replaced file is reported as a new `ready` photo while the earlier image and mark stay\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\\n(`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Name the READY member of = models.ScanStatus, optionally adding its `ready` value.\"},{\"subject\":\"A6 rule 1\",\"kind\":\"standard_violation\",\"text\":\"otherwise the delivery\\n   is refused with `unsafe_reference`.\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена\\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\\n(`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Name the UNSAFE_REFERENCE member of = models.RefusalCode, optionally adding its `unsafe_reference` value.\"}]}",
+ "set_aside": []
+}

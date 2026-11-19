@@ -1,0 +1,341 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_source",
+   "text": "`marked_at: datetime`",
+   "question": "Which authority supplies a new mark's instant, at what point in the mark operation is it read, and how many readings may that operation take?",
+   "options": [
+    "Read the system clock exactly once after the project lock is acquired and reuse that instant through the write",
+    "Inject a clock port and read it exactly once at another specified point",
+    "Pass the instant as a datetime parameter supplied by the caller"
+   ],
+   "default_guess": "Inject a UTC clock, read it exactly once after the lock and all refusal checks succeed, and use that reading for the new record.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark; the system clock and a caller-provided clock return different instants.",
+    "events": [
+     "The calling flow asks the deliverer to create the first publication mark.",
+     "One implementation reads the host system clock; another reads an injected clock."
+    ],
+    "outcomes": [
+     "The stored mark contains the host-clock instant.",
+     "The stored mark contains the injected-clock instant."
+    ],
+    "observer": "The calling flow or any later scan that reads the publication mark."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_representation",
+   "text": "`marked_at: datetime`",
+   "question": "What representation and meaning must `marked_at` have: UTC or local time, offset-aware or UTC without an offset, and with what precision and normalization?",
+   "options": [
+    "Offset-aware UTC datetime",
+    "UTC datetime without an offset, like the photo date",
+    "Local or host-native datetime",
+    "Caller-supplied datetime preserved as received"
+   ],
+   "default_guess": "Use a UTC datetime without an offset, normalized to a specified microsecond precision.",
+   "witness": {
+    "initial": "A placement exists and the host is configured for Europe/Madrid.",
+    "events": [
+     "A publication is marked at a winter instant.",
+     "One implementation stores an offset-aware UTC datetime; another stores a naive local datetime."
+    ],
+    "outcomes": [
+     "The record denotes the UTC instant unambiguously.",
+     "The record contains the same wall-clock-shaped value with a different or ambiguous meaning."
+    ],
+    "observer": "A later reader of the mark record."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto.taken_at and M05 PhotoPublication.photo_date",
+   "kind": "vague_time_source",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "Which camera timestamp fields count as the camera record, what is their precedence, and which missing, malformed, or out-of-range values cause fallback to file modification time?",
+   "options": [
+    "Use one specified EXIF datetime field only and fall back on any absence or invalidity",
+    "Use a specified ordered list of EXIF fields and the first valid value",
+    "Refuse malformed camera metadata instead of falling back",
+    "Let the image library choose a camera timestamp"
+   ],
+   "default_guess": "Use a specified ordered list of EXIF capture-time fields, accept the first valid value, and otherwise use the file modification time.",
+   "witness": {
+    "initial": "A readable image has two different valid camera datetime fields.",
+    "events": [
+     "The caller delivers the image.",
+     "One implementation chooses the original-capture field; another chooses the generic modification field."
+    ],
+    "outcomes": [
+     "The publication contains the original-capture instant.",
+     "The publication contains the camera-modification instant."
+    ],
+    "observer": "The Portal and the owner viewing the photo date."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto.taken_at and M05 PhotoPublication.photo_date",
+   "kind": "undefined_time_conversion",
+   "text": "with the moment the photo was taken as UTC without an offset",
+   "question": "How is a camera timestamp converted to UTC when its metadata has no offset, has a separate offset field, has a conflicting offset, or falls in a daylight-saving overlap or gap?",
+   "options": [
+    "Require and apply a valid embedded offset, otherwise fall back to file modification time",
+    "Interpret an offsetless camera time in a specified configured timezone",
+    "Treat an offsetless camera value as already UTC",
+    "Preserve the wall time and merely remove any offset"
+   ],
+   "default_guess": "Apply a valid associated EXIF offset; if no usable offset exists, fall back to the filesystem modification instant rather than inventing a timezone.",
+   "witness": {
+    "initial": "An image says 2026-11-19 10:00 in its camera datetime field and supplies no timezone offset; the host timezone is Europe/Madrid.",
+    "events": [
+     "The caller delivers the image.",
+     "One implementation treats the camera value as UTC; another interprets it in the host timezone before converting to UTC."
+    ],
+    "outcomes": [
+     "The delivered photo date is 10:00 UTC without an offset.",
+     "The delivered photo date is 09:00 UTC without an offset."
+    ],
+    "observer": "The Portal and the owner viewing the photo date."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M03 PreparedPhoto.taken_at fallback",
+   "kind": "missing_reading_rule",
+   "text": "otherwise from the file's modification time",
+   "question": "Must the modification instant be taken from A3's single pre-open metadata reading, or may preparation perform another metadata or time reading after the file has been read?",
+   "options": [
+    "Reuse the one metadata reading mandated by A3",
+    "Read modification time again during preparation",
+    "Read it after the content read and reject if it changed"
+   ],
+   "default_guess": "Reuse A3's single no-follow metadata reading and take no second filesystem timestamp reading.",
+   "witness": {
+    "initial": "A regular source file has modification time T1.",
+    "events": [
+     "Delivery performs A3's metadata reading.",
+     "Another actor changes the file's modification time to T2 without changing its bytes.",
+     "The deliverer prepares a photo with no usable camera timestamp."
+    ],
+    "outcomes": [
+     "The photo date is T1 because the original metadata reading is reused.",
+     "The photo date is T2 because modification time is read again."
+    ],
+    "observer": "The Portal and the owner viewing the photo date."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 4 project lock",
+   "kind": "ambiguous_aggregate_creation",
+   "text": "The project lock is that lock file together with the folders below the state folder that lead to it. It is created on first use, the lock file with the imported `LOCK_FILE_MODE` constant and those folders with the imported `STATE_FOLDER_MODE` constant, and is never changed or removed afterwards; its first creation is the only write of an operation that writes nothing else.",
+   "question": "Are the leading folders exclusive parts of one project's lock or may different project locks share them, and what does first creation mean when some leading folders already exist?",
+   "options": [
+    "Every project has a disjoint folder chain and the whole chain is created on that project's first use",
+    "Project locks may share leading folders; only missing components are created on each project's first use",
+    "Only the lock file is project-owned and the folders are shared infrastructure despite being called part of the project lock"
+   ],
+   "default_guess": "Allow shared leading folders, create only missing components with the required mode, and regard creation of any missing components plus the lock file as creation of that project's lock.",
+   "witness": {
+    "initial": "Project A has already caused a shared folder below the state folder to be created; project B has no lock file yet.",
+    "events": [
+     "A no-op operation for project B runs for the first time.",
+     "One implementation treats the shared folder as an already existing component of B's project lock; another requires a disjoint project-specific folder chain."
+    ],
+    "outcomes": [
+     "Only B's lock file and any missing suffix folders are created.",
+     "A separate full folder chain and B's lock file are created."
+    ],
+    "observer": "The owner or a filesystem-level test inspecting the state folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 4 project lock",
+   "kind": "vague_immutability",
+   "text": "and is never changed or removed afterwards",
+   "question": "For folders that are part of the project lock, does “never changed” prohibit only chmod, replacement, and removal, or also ordinary directory-content and metadata changes caused by later state files and other project locks?",
+   "options": [
+    "Preserve only each folder's identity, type, ownership, and mode; its contents and directory timestamps may change",
+    "Freeze the complete directory contents and metadata after lock creation",
+    "Apply the promise only to the lock file, not to the folders"
+   ],
+   "default_guess": "Preserve the lock file and folder objects, types, ownership, and modes, while allowing their directory entries and incidental timestamps to change.",
+   "witness": {
+    "initial": "A project lock folder exists and is also the parent of a later mark record.",
+    "events": [
+     "A publication mark is written under that folder.",
+     "One implementation permits the new entry; another treats the directory-content change as forbidden by the lock rule."
+    ],
+    "outcomes": [
+     "The mark succeeds and the directory changes.",
+     "The mark is refused or must be stored elsewhere."
+    ],
+    "observer": "The caller marking the publication and the owner inspecting state storage."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 4 project lock",
+   "kind": "ambiguous_write_count",
+   "text": "its first creation is the only write of an operation that writes nothing else",
+   "question": "Does creation of the aggregate project lock count as one logical allowed write even when it requires several directory creations plus the lock-file creation, and what partial state is permitted if a later creation step fails?",
+   "options": [
+    "All mkdir operations and lock-file creation collectively form the one allowed logical write; successfully created components remain after failure",
+    "Only one filesystem object may be created by such an operation",
+    "Creation must be transactional so either the whole aggregate exists or none of it does"
+   ],
+   "default_guess": "Treat all missing lock components as one logical project-lock write and leave successfully created folders in place if a later step fails, since A6 forbids their removal.",
+   "witness": {
+    "initial": "The state folder exists, but two leading folders and the project lock file do not; creating the second folder or lock file will fail.",
+    "events": [
+     "An operation that otherwise writes nothing attempts to acquire the project lock.",
+     "One implementation retains the first folder it created; another rolls the partial aggregate back."
+    ],
+    "outcomes": [
+     "The operation refuses and one project-lock folder remains.",
+     "The operation refuses and the state tree is restored to its initial form."
+    ],
+    "observer": "The caller on a retry and the owner inspecting the state folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-06 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).",
+   "question": "What must the test inspect to demonstrate the invariant's unrestricted statement that a repeated placement “writes nothing,” beyond stored images and placement records?",
+   "options": [
+    "Assert that the entire durable state tree is byte-for-byte and metadata-for-metadata unchanged",
+    "Assert only that images, placement records, mark records, and temporary files are unchanged",
+    "Narrow INV-06 so that it promises only unchanged stored images and placement records"
+   ],
+   "default_guess": "Snapshot every durable object except nondurable operating-system lock state and assert that no file, directory, record, mode, or temporary artifact is added or changed.",
+   "witness": {
+    "initial": "A placement and its project lock already exist.",
+    "events": [
+     "The same content is delivered again.",
+     "One implementation returns the first placement but creates an unrelated durable bookkeeping file; another creates nothing."
+    ],
+    "outcomes": [
+     "The stated Required test passes because all stored images and placement records are unchanged, although the formal invariant is false.",
+     "The Required test passes and the formal invariant is true."
+    ],
+    "observer": "A stronger filesystem-level invariant test or the owner inspecting state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-07 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).",
+   "question": "For replacement and removal, which exact records, stored-image bytes, modes, metadata, and publication marks must the tests prove unchanged to establish that no earlier placement, stored image, or mark changes?",
+   "options": [
+    "Explicitly snapshot and compare the earlier placement record, stored image, and mark for both replacement and removal",
+    "Treat successful replay of the earlier delivery as sufficient",
+    "Narrow the invariant to the artifacts that the current test wording explicitly checks"
+   ],
+   "default_guess": "Require both tests to snapshot and compare the earlier placement record, stored image, and publication mark, and separately assert the new observation status where applicable.",
+   "witness": {
+    "initial": "A source has a placement, stored image, and publication mark.",
+    "events": [
+     "The source is removed.",
+     "One implementation retains the placement record but deletes the stored image; another preserves all three artifacts.",
+     "The test checks only that the delivery record can still be found."
+    ],
+    "outcomes": [
+     "The wording “keeps its delivery” can pass despite the stored image being removed.",
+     "The test passes with the placement, image, and mark all unchanged."
+    ],
+    "observer": "The Portal when it later reads the image and a filesystem-level invariant test."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "How must the test demonstrate the invariant's “never reads a conflict copy” requirement, rather than only checking the answer and resulting files?",
+   "options": [
+    "Instrument file opening and reading and assert that the conflict-copy last segment is never opened",
+    "Assert only the failure and unchanged durable state",
+    "Narrow the invariant from never reading to never placing a conflict copy"
+   ],
+   "default_guess": "Instrument the source-filesystem adapter and assert that name classification rejects the conflict copy before its last segment is opened or read.",
+   "witness": {
+    "initial": "A readable conflict copy has no placement and reading it is observable through an instrumented file adapter.",
+    "events": [
+     "The caller asks to deliver it.",
+     "One implementation rejects from the name before opening it; another opens and hashes it, then returns the required failure."
+    ],
+    "outcomes": [
+     "No source read occurs.",
+     "The source is read, but the documented answer and durable-state assertions are identical."
+    ],
+    "observer": "The invariant test's file adapter or filesystem access audit."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 2",
+   "kind": "standard_violation",
+   "text": "Delivering content that already has a placement answers `replayed` with the stored placement and the\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\n   when the source file has left the folder.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Replace the value-only `replayed` reference with the REPLAYED member named beside `= models.PlacementStatus`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 4",
+   "kind": "standard_violation",
+   "text": "A\n   `source_id` that does not match the imported `SOURCE_ID_PATTERN` constant in full is refused with\n   `invalid_source_id`.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Replace the value-only `invalid_source_id` reference with the INVALID_SOURCE_ID member named beside `= models.RefusalCode`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 5",
+   "kind": "standard_violation",
+   "text": "A photo that cannot be delivered is answered with status `failed` and one member of\n   `= models.PlacementFailure`.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Replace the value-only `failed` reference with the FAILED member named beside `= models.PlacementStatus`.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-07 Required tests",
+   "kind": "standard_violation",
+   "text": "INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Replace the value-only `ready` reference with the READY member named beside `= models.ScanStatus`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 1",
+   "kind": "standard_violation",
+   "text": "The reference must stay inside the binary store: its path,\n   resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery\n   is refused with `unsafe_reference`.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Replace the value-only `unsafe_reference` reference with the UNSAFE_REFERENCE member named beside `= models.RefusalCode`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A6 rule 1 stored-image name",
+   "kind": "standard_violation",
+   "text": "A stored image is named only from the project id and the source hash:\n   `photos/<project_id>/<source_id>.jpg`.",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление\nназывается адресом, константа поставщика — `the imported X constant`,\nнастройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Replace the literal path prefix, separators, and suffix read by generated code with a named imported provider constant or deterministic backend symbol using one of the permitted paths.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_source\",\"text\":\"`marked_at: datetime`\",\"question\":\"Which authority supplies a new mark's instant, at what point in the mark operation is it read, and how many readings may that operation take?\",\"options\":[\"Read the system clock exactly once after the project lock is acquired and reuse that instant through the write\",\"Inject a clock port and read it exactly once at another specified point\",\"Pass the instant as a datetime parameter supplied by the caller\"],\"default_guess\":\"Inject a UTC clock, read it exactly once after the lock and all refusal checks succeed, and use that reading for the new record.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark; the system clock and a caller-provided clock return different instants.\",\"events\":[\"The calling flow asks the deliverer to create the first publication mark.\",\"One implementation reads the host system clock; another reads an injected clock.\"],\"outcomes\":[\"The stored mark contains the host-clock instant.\",\"The stored mark contains the injected-clock instant.\"],\"observer\":\"The calling flow or any later scan that reads the publication mark.\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_representation\",\"text\":\"`marked_at: datetime`\",\"question\":\"What representation and meaning must `marked_at` have: UTC or local time, offset-aware or UTC without an offset, and with what precision and normalization?\",\"options\":[\"Offset-aware UTC datetime\",\"UTC datetime without an offset, like the photo date\",\"Local or host-native datetime\",\"Caller-supplied datetime preserved as received\"],\"default_guess\":\"Use a UTC datetime without an offset, normalized to a specified microsecond precision.\",\"witness\":{\"initial\":\"A placement exists and the host is configured for Europe/Madrid.\",\"events\":[\"A publication is marked at a winter instant.\",\"One implementation stores an offset-aware UTC datetime; another stores a naive local datetime.\"],\"outcomes\":[\"The record denotes the UTC instant unambiguously.\",\"The record contains the same wall-clock-shaped value with a different or ambiguous meaning.\"],\"observer\":\"A later reader of the mark record.\"}},{\"subject\":\"M03 PreparedPhoto.taken_at and M05 PhotoPublication.photo_date\",\"kind\":\"vague_time_source\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"Which camera timestamp fields count as the camera record, what is their precedence, and which missing, malformed, or out-of-range values cause fallback to file modification time?\",\"options\":[\"Use one specified EXIF datetime field only and fall back on any absence or invalidity\",\"Use a specified ordered list of EXIF fields and the first valid value\",\"Refuse malformed camera metadata instead of falling back\",\"Let the image library choose a camera timestamp\"],\"default_guess\":\"Use a specified ordered list of EXIF capture-time fields, accept the first valid value, and otherwise use the file modification time.\",\"witness\":{\"initial\":\"A readable image has two different valid camera datetime fields.\",\"events\":[\"The caller delivers the image.\",\"One implementation chooses the original-capture field; another chooses the generic modification field.\"],\"outcomes\":[\"The publication contains the original-capture instant.\",\"The publication contains the camera-modification instant.\"],\"observer\":\"The Portal and the owner viewing the photo date.\"}},{\"subject\":\"M03 PreparedPhoto.taken_at and M05 PhotoPublication.photo_date\",\"kind\":\"undefined_time_conversion\",\"text\":\"with the moment the photo was taken as UTC without an offset\",\"question\":\"How is a camera timestamp converted to UTC when its metadata has no offset, has a separate offset field, has a conflicting offset, or falls in a daylight-saving overlap or gap?\",\"options\":[\"Require and apply a valid embedded offset, otherwise fall back to file modification time\",\"Interpret an offsetless camera time in a specified configured timezone\",\"Treat an offsetless camera value as already UTC\",\"Preserve the wall time and merely remove any offset\"],\"default_guess\":\"Apply a valid associated EXIF offset; if no usable offset exists, fall back to the filesystem modification instant rather than inventing a timezone.\",\"witness\":{\"initial\":\"An image says 2026-11-19 10:00 in its camera datetime field and supplies no timezone offset; the host timezone is Europe/Madrid.\",\"events\":[\"The caller delivers the image.\",\"One implementation treats the camera value as UTC; another interprets it in the host timezone before converting to UTC.\"],\"outcomes\":[\"The delivered photo date is 10:00 UTC without an offset.\",\"The delivered photo date is 09:00 UTC without an offset.\"],\"observer\":\"The Portal and the owner viewing the photo date.\"}},{\"subject\":\"M03 PreparedPhoto.taken_at fallback\",\"kind\":\"missing_reading_rule\",\"text\":\"otherwise from the file's modification time\",\"question\":\"Must the modification instant be taken from A3's single pre-open metadata reading, or may preparation perform another metadata or time reading after the file has been read?\",\"options\":[\"Reuse the one metadata reading mandated by A3\",\"Read modification time again during preparation\",\"Read it after the content read and reject if it changed\"],\"default_guess\":\"Reuse A3's single no-follow metadata reading and take no second filesystem timestamp reading.\",\"witness\":{\"initial\":\"A regular source file has modification time T1.\",\"events\":[\"Delivery performs A3's metadata reading.\",\"Another actor changes the file's modification time to T2 without changing its bytes.\",\"The deliverer prepares a photo with no usable camera timestamp.\"],\"outcomes\":[\"The photo date is T1 because the original metadata reading is reused.\",\"The photo date is T2 because modification time is read again.\"],\"observer\":\"The Portal and the owner viewing the photo date.\"}},{\"subject\":\"A6 rule 4 project lock\",\"kind\":\"ambiguous_aggregate_creation\",\"text\":\"The project lock is that lock file together with the folders below the state folder that lead to it. It is created on first use, the lock file with the imported `LOCK_FILE_MODE` constant and those folders with the imported `STATE_FOLDER_MODE` constant, and is never changed or removed afterwards; its first creation is the only write of an operation that writes nothing else.\",\"question\":\"Are the leading folders exclusive parts of one project's lock or may different project locks share them, and what does first creation mean when some leading folders already exist?\",\"options\":[\"Every project has a disjoint folder chain and the whole chain is created on that project's first use\",\"Project locks may share leading folders; only missing components are created on each project's first use\",\"Only the lock file is project-owned and the folders are shared infrastructure despite being called part of the project lock\"],\"default_guess\":\"Allow shared leading folders, create only missing components with the required mode, and regard creation of any missing components plus the lock file as creation of that project's lock.\",\"witness\":{\"initial\":\"Project A has already caused a shared folder below the state folder to be created; project B has no lock file yet.\",\"events\":[\"A no-op operation for project B runs for the first time.\",\"One implementation treats the shared folder as an already existing component of B's project lock; another requires a disjoint project-specific folder chain.\"],\"outcomes\":[\"Only B's lock file and any missing suffix folders are created.\",\"A separate full folder chain and B's lock file are created.\"],\"observer\":\"The owner or a filesystem-level test inspecting the state folder.\"}},{\"subject\":\"A6 rule 4 project lock\",\"kind\":\"vague_immutability\",\"text\":\"and is never changed or removed afterwards\",\"question\":\"For folders that are part of the project lock, does “never changed” prohibit only chmod, replacement, and removal, or also ordinary directory-content and metadata changes caused by later state files and other project locks?\",\"options\":[\"Preserve only each folder's identity, type, ownership, and mode; its contents and directory timestamps may change\",\"Freeze the complete directory contents and metadata after lock creation\",\"Apply the promise only to the lock file, not to the folders\"],\"default_guess\":\"Preserve the lock file and folder objects, types, ownership, and modes, while allowing their directory entries and incidental timestamps to change.\",\"witness\":{\"initial\":\"A project lock folder exists and is also the parent of a later mark record.\",\"events\":[\"A publication mark is written under that folder.\",\"One implementation permits the new entry; another treats the directory-content change as forbidden by the lock rule.\"],\"outcomes\":[\"The mark succeeds and the directory changes.\",\"The mark is refused or must be stored elsewhere.\"],\"observer\":\"The caller marking the publication and the owner inspecting state storage.\"}},{\"subject\":\"A6 rule 4 project lock\",\"kind\":\"ambiguous_write_count\",\"text\":\"its first creation is the only write of an operation that writes nothing else\",\"question\":\"Does creation of the aggregate project lock count as one logical allowed write even when it requires several directory creations plus the lock-file creation, and what partial state is permitted if a later creation step fails?\",\"options\":[\"All mkdir operations and lock-file creation collectively form the one allowed logical write; successfully created components remain after failure\",\"Only one filesystem object may be created by such an operation\",\"Creation must be transactional so either the whole aggregate exists or none of it does\"],\"default_guess\":\"Treat all missing lock components as one logical project-lock write and leave successfully created folders in place if a later step fails, since A6 forbids their removal.\",\"witness\":{\"initial\":\"The state folder exists, but two leading folders and the project lock file do not; creating the second folder or lock file will fail.\",\"events\":[\"An operation that otherwise writes nothing attempts to acquire the project lock.\",\"One implementation retains the first folder it created; another rolls the partial aggregate back.\"],\"outcomes\":[\"The operation refuses and one project-lock folder remains.\",\"The operation refuses and the state tree is restored to its initial form.\"],\"observer\":\"The caller on a retry and the owner inspecting the state folder.\"}},{\"subject\":\"INV-06 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).\",\"question\":\"What must the test inspect to demonstrate the invariant's unrestricted statement that a repeated placement “writes nothing,” beyond stored images and placement records?\",\"options\":[\"Assert that the entire durable state tree is byte-for-byte and metadata-for-metadata unchanged\",\"Assert only that images, placement records, mark records, and temporary files are unchanged\",\"Narrow INV-06 so that it promises only unchanged stored images and placement records\"],\"default_guess\":\"Snapshot every durable object except nondurable operating-system lock state and assert that no file, directory, record, mode, or temporary artifact is added or changed.\",\"witness\":{\"initial\":\"A placement and its project lock already exist.\",\"events\":[\"The same content is delivered again.\",\"One implementation returns the first placement but creates an unrelated durable bookkeeping file; another creates nothing.\"],\"outcomes\":[\"The stated Required test passes because all stored images and placement records are unchanged, although the formal invariant is false.\",\"The Required test passes and the formal invariant is true.\"],\"observer\":\"A stronger filesystem-level invariant test or the owner inspecting state.\"}},{\"subject\":\"INV-07 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).\",\"question\":\"For replacement and removal, which exact records, stored-image bytes, modes, metadata, and publication marks must the tests prove unchanged to establish that no earlier placement, stored image, or mark changes?\",\"options\":[\"Explicitly snapshot and compare the earlier placement record, stored image, and mark for both replacement and removal\",\"Treat successful replay of the earlier delivery as sufficient\",\"Narrow the invariant to the artifacts that the current test wording explicitly checks\"],\"default_guess\":\"Require both tests to snapshot and compare the earlier placement record, stored image, and publication mark, and separately assert the new observation status where applicable.\",\"witness\":{\"initial\":\"A source has a placement, stored image, and publication mark.\",\"events\":[\"The source is removed.\",\"One implementation retains the placement record but deletes the stored image; another preserves all three artifacts.\",\"The test checks only that the delivery record can still be found.\"],\"outcomes\":[\"The wording “keeps its delivery” can pass despite the stored image being removed.\",\"The test passes with the placement, image, and mark all unchanged.\"],\"observer\":\"The Portal when it later reads the image and a filesystem-level invariant test.\"}},{\"subject\":\"INV-19 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"How must the test demonstrate the invariant's “never reads a conflict copy” requirement, rather than only checking the answer and resulting files?\",\"options\":[\"Instrument file opening and reading and assert that the conflict-copy last segment is never opened\",\"Assert only the failure and unchanged durable state\",\"Narrow the invariant from never reading to never placing a conflict copy\"],\"default_guess\":\"Instrument the source-filesystem adapter and assert that name classification rejects the conflict copy before its last segment is opened or read.\",\"witness\":{\"initial\":\"A readable conflict copy has no placement and reading it is observable through an instrumented file adapter.\",\"events\":[\"The caller asks to deliver it.\",\"One implementation rejects from the name before opening it; another opens and hashes it, then returns the required failure.\"],\"outcomes\":[\"No source read occurs.\",\"The source is read, but the documented answer and durable-state assertions are identical.\"],\"observer\":\"The invariant test's file adapter or filesystem access audit.\"}},{\"subject\":\"A3 rule 2\",\"kind\":\"standard_violation\",\"text\":\"Delivering content that already has a placement answers `replayed` with the stored placement and the\\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\\n   when the source file has left the folder.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Replace the value-only `replayed` reference with the REPLAYED member named beside `= models.PlacementStatus`.\"},{\"subject\":\"A3 rule 4\",\"kind\":\"standard_violation\",\"text\":\"A\\n   `source_id` that does not match the imported `SOURCE_ID_PATTERN` constant in full is refused with\\n   `invalid_source_id`.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Replace the value-only `invalid_source_id` reference with the INVALID_SOURCE_ID member named beside `= models.RefusalCode`.\"},{\"subject\":\"A3 rule 5\",\"kind\":\"standard_violation\",\"text\":\"A photo that cannot be delivered is answered with status `failed` and one member of\\n   `= models.PlacementFailure`.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Replace the value-only `failed` reference with the FAILED member named beside `= models.PlacementStatus`.\"},{\"subject\":\"INV-07 Required tests\",\"kind\":\"standard_violation\",\"text\":\"INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Replace the value-only `ready` reference with the READY member named beside `= models.ScanStatus`.\"},{\"subject\":\"A6 rule 1\",\"kind\":\"standard_violation\",\"text\":\"The reference must stay inside the binary store: its path,\\n   resolved with the links of the binary store, must lie below the resolved store, otherwise the delivery\\n   is refused with `unsafe_reference`.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Replace the value-only `unsafe_reference` reference with the UNSAFE_REFERENCE member named beside `= models.RefusalCode`.\"},{\"subject\":\"A6 rule 1 stored-image name\",\"kind\":\"standard_violation\",\"text\":\"A stored image is named only from the project id and the source hash:\\n   `photos/<project_id>/<source_id>.jpg`.\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление\\nназывается адресом, константа поставщика — `the imported X constant`,\\nнастройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Replace the literal path prefix, separators, and suffix read by generated code with a named imported provider constant or deterministic backend symbol using one of the permitted paths.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,131 @@
+{
+ "open_points": [
+  {
+   "subject": "A6",
+   "kind": "lock_path_unspecified",
+   "text": "The project lock is that lock file together with the folders below the state folder that lead to it.",
+   "question": "What is the exact path of each project's lock file relative to the state folder, and therefore which folders belong to the project lock?",
+   "options": [
+    "Use a per-project directory such as <project_id>/lock",
+    "Use a shared lock directory with one file per project",
+    "Leave the path to a later storage backend"
+   ],
+   "default_guess": "Use a per-project directory below the state folder, with a fixed lock-file name.",
+   "witness": {
+    "initial": "The state folder exists and project P has no state.",
+    "events": [
+     "Two implementers add the first delivery for project P.",
+     "One stores the lock at P/lock; the other stores it at locks/P."
+    ],
+    "outcomes": [
+     "The first delivery creates the P folder and P/lock.",
+     "The first delivery creates the locks folder and locks/P."
+    ],
+    "observer": "An administrator, backup process, security audit or filesystem-level test sees different durable artifacts."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "mode_semantics",
+   "text": "It is created on first use, the lock file with the imported `LOCK_FILE_MODE` constant and those folders with the imported `STATE_FOLDER_MODE` constant",
+   "question": "Must the resulting permission bits equal the constants despite the process umask, or is passing those constants to the creation calls sufficient?",
+   "options": [
+    "Ensure the resulting modes equal the constants, correcting for umask",
+    "Pass the constants as creation modes and accept umask-masked results"
+   ],
+   "default_guess": "Ensure the resulting permission bits equal the imported constants.",
+   "witness": {
+    "initial": "The service runs with an umask that removes a permission bit present in LOCK_FILE_MODE or STATE_FOLDER_MODE.",
+    "events": [
+     "A caller performs the first operation for a project.",
+     "The service creates the project-lock folders and lock file."
+    ],
+    "outcomes": [
+     "The implementation explicitly ensures the final modes equal the constants.",
+     "The implementation supplies the constants to mkdir/open, so the final modes are masked by umask."
+    ],
+    "observer": "The owner or a permission-checking test sees different modes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "partial_creation",
+   "text": "It is created on first use, the lock file with the imported `LOCK_FILE_MODE` constant and those folders with the imported `STATE_FOLDER_MODE` constant, and is never changed or removed afterwards",
+   "question": "If creation succeeds for only some folders or for the lock file but the operation cannot acquire the lock, what state must remain, what refusal is returned, and may a later call complete the project lock?",
+   "options": [
+    "Keep every created component, return STATE_UNAVAILABLE, and let a later call create the missing components",
+    "Treat partial creation as an unusable damaged lock and refuse all later calls",
+    "Require all-or-nothing creation, despite the rule that the service removes no folders"
+   ],
+   "default_guess": "Keep successfully created components, return STATE_UNAVAILABLE for the failed call, and allow a later call to complete and use the lock.",
+   "witness": {
+    "initial": "The state folder exists, but no component of project P's lock exists.",
+    "events": [
+     "A delivery creates the first leading folder.",
+     "Creation of a later folder or the lock file fails.",
+     "A second delivery is attempted after the filesystem problem is corrected."
+    ],
+    "outcomes": [
+     "The first call returns STATE_UNAVAILABLE and the second completes the remaining components and proceeds.",
+     "The partial tree is treated as invalid, so the second call also returns STATE_UNAVAILABLE."
+    ],
+    "observer": "The caller sees whether the project recovers without manual filesystem repair."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6",
+   "kind": "existing_component_policy",
+   "text": "It is created on first use, the lock file with the imported `LOCK_FILE_MODE` constant and those folders with the imported `STATE_FOLDER_MODE` constant, and is never changed or removed afterwards",
+   "question": "When a required folder or lock file already exists, which type, ownership and mode properties must be validated, and does a mismatch cause STATE_UNAVAILABLE or get accepted unchanged?",
+   "options": [
+    "Require the expected object type and exact policy modes, otherwise return STATE_UNAVAILABLE",
+    "Reject links and unusable objects but accept any usable regular file or directory without changing its mode",
+    "Repair mismatching modes before taking the lock"
+   ],
+   "default_guess": "Reject links and wrong object types; accept usable pre-existing components without changing them, because the text says they are never changed.",
+   "witness": {
+    "initial": "The required lock file already exists as a regular file with permissions different from LOCK_FILE_MODE but can still be opened and locked.",
+    "events": [
+     "A caller starts a delivery for that project."
+    ],
+    "outcomes": [
+     "The delivery is refused with STATE_UNAVAILABLE because the durable lock artifact violates its required mode.",
+     "The service takes the usable existing file unchanged and performs the delivery."
+    ],
+    "observer": "The caller sees refusal versus success, and the owner sees whether the unexpected mode is tolerated."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "filesystem_write_boundary",
+   "text": "adds no file except the project lock and changes no existing file",
+   "question": "Now that A6 defines the project lock to include newly created folders, do directory-entry and directory-metadata changes caused by creating those folders count as changing an existing file for this required test?",
+   "options": [
+    "Treat the new folders, their entries and necessary parent-directory metadata changes as part of the permitted project-lock creation",
+    "Permit the new lock objects but require the test to ignore directory metadata",
+    "Count a changed pre-existing parent directory as a violation"
+   ],
+   "default_guess": "Treat the filesystem changes necessarily caused by creating the defined project lock as part of the permitted exception.",
+   "witness": {
+    "initial": "The state folder exists and the project lock does not.",
+    "events": [
+     "A caller tries to deliver an unplaced conflict-copy name.",
+     "The operation creates the project-lock folders and lock file, then fails with NOT_READY_OR_ABSENT."
+    ],
+    "outcomes": [
+     "The INV-19 test passes because all resulting directory changes belong to creation of the project lock.",
+     "The INV-19 test fails because creating a child changes the pre-existing state folder's directory entries or metadata."
+    ],
+    "observer": "The filesystem-level INV-19 test sees different pass or fail results."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A6\",\"kind\":\"lock_path_unspecified\",\"text\":\"The project lock is that lock file together with the folders below the state folder that lead to it.\",\"question\":\"What is the exact path of each project's lock file relative to the state folder, and therefore which folders belong to the project lock?\",\"options\":[\"Use a per-project directory such as <project_id>/lock\",\"Use a shared lock directory with one file per project\",\"Leave the path to a later storage backend\"],\"default_guess\":\"Use a per-project directory below the state folder, with a fixed lock-file name.\",\"witness\":{\"initial\":\"The state folder exists and project P has no state.\",\"events\":[\"Two implementers add the first delivery for project P.\",\"One stores the lock at P/lock; the other stores it at locks/P.\"],\"outcomes\":[\"The first delivery creates the P folder and P/lock.\",\"The first delivery creates the locks folder and locks/P.\"],\"observer\":\"An administrator, backup process, security audit or filesystem-level test sees different durable artifacts.\"}},{\"subject\":\"A6\",\"kind\":\"mode_semantics\",\"text\":\"It is created on first use, the lock file with the imported `LOCK_FILE_MODE` constant and those folders with the imported `STATE_FOLDER_MODE` constant\",\"question\":\"Must the resulting permission bits equal the constants despite the process umask, or is passing those constants to the creation calls sufficient?\",\"options\":[\"Ensure the resulting modes equal the constants, correcting for umask\",\"Pass the constants as creation modes and accept umask-masked results\"],\"default_guess\":\"Ensure the resulting permission bits equal the imported constants.\",\"witness\":{\"initial\":\"The service runs with an umask that removes a permission bit present in LOCK_FILE_MODE or STATE_FOLDER_MODE.\",\"events\":[\"A caller performs the first operation for a project.\",\"The service creates the project-lock folders and lock file.\"],\"outcomes\":[\"The implementation explicitly ensures the final modes equal the constants.\",\"The implementation supplies the constants to mkdir/open, so the final modes are masked by umask.\"],\"observer\":\"The owner or a permission-checking test sees different modes.\"}},{\"subject\":\"A6\",\"kind\":\"partial_creation\",\"text\":\"It is created on first use, the lock file with the imported `LOCK_FILE_MODE` constant and those folders with the imported `STATE_FOLDER_MODE` constant, and is never changed or removed afterwards\",\"question\":\"If creation succeeds for only some folders or for the lock file but the operation cannot acquire the lock, what state must remain, what refusal is returned, and may a later call complete the project lock?\",\"options\":[\"Keep every created component, return STATE_UNAVAILABLE, and let a later call create the missing components\",\"Treat partial creation as an unusable damaged lock and refuse all later calls\",\"Require all-or-nothing creation, despite the rule that the service removes no folders\"],\"default_guess\":\"Keep successfully created components, return STATE_UNAVAILABLE for the failed call, and allow a later call to complete and use the lock.\",\"witness\":{\"initial\":\"The state folder exists, but no component of project P's lock exists.\",\"events\":[\"A delivery creates the first leading folder.\",\"Creation of a later folder or the lock file fails.\",\"A second delivery is attempted after the filesystem problem is corrected.\"],\"outcomes\":[\"The first call returns STATE_UNAVAILABLE and the second completes the remaining components and proceeds.\",\"The partial tree is treated as invalid, so the second call also returns STATE_UNAVAILABLE.\"],\"observer\":\"The caller sees whether the project recovers without manual filesystem repair.\"}},{\"subject\":\"A6\",\"kind\":\"existing_component_policy\",\"text\":\"It is created on first use, the lock file with the imported `LOCK_FILE_MODE` constant and those folders with the imported `STATE_FOLDER_MODE` constant, and is never changed or removed afterwards\",\"question\":\"When a required folder or lock file already exists, which type, ownership and mode properties must be validated, and does a mismatch cause STATE_UNAVAILABLE or get accepted unchanged?\",\"options\":[\"Require the expected object type and exact policy modes, otherwise return STATE_UNAVAILABLE\",\"Reject links and unusable objects but accept any usable regular file or directory without changing its mode\",\"Repair mismatching modes before taking the lock\"],\"default_guess\":\"Reject links and wrong object types; accept usable pre-existing components without changing them, because the text says they are never changed.\",\"witness\":{\"initial\":\"The required lock file already exists as a regular file with permissions different from LOCK_FILE_MODE but can still be opened and locked.\",\"events\":[\"A caller starts a delivery for that project.\"],\"outcomes\":[\"The delivery is refused with STATE_UNAVAILABLE because the durable lock artifact violates its required mode.\",\"The service takes the usable existing file unchanged and performs the delivery.\"],\"observer\":\"The caller sees refusal versus success, and the owner sees whether the unexpected mode is tolerated.\"}},{\"subject\":\"A3\",\"kind\":\"filesystem_write_boundary\",\"text\":\"adds no file except the project lock and changes no existing file\",\"question\":\"Now that A6 defines the project lock to include newly created folders, do directory-entry and directory-metadata changes caused by creating those folders count as changing an existing file for this required test?\",\"options\":[\"Treat the new folders, their entries and necessary parent-directory metadata changes as part of the permitted project-lock creation\",\"Permit the new lock objects but require the test to ignore directory metadata\",\"Count a changed pre-existing parent directory as a violation\"],\"default_guess\":\"Treat the filesystem changes necessarily caused by creating the defined project lock as part of the permitted exception.\",\"witness\":{\"initial\":\"The state folder exists and the project lock does not.\",\"events\":[\"A caller tries to deliver an unplaced conflict-copy name.\",\"The operation creates the project-lock folders and lock file, then fails with NOT_READY_OR_ABSENT.\"],\"outcomes\":[\"The INV-19 test passes because all resulting directory changes belong to creation of the project lock.\",\"The INV-19 test fails because creating a child changes the pre-existing state folder's directory entries or metadata.\"],\"observer\":\"The filesystem-level INV-19 test sees different pass or fail results.\"}}]}",
+ "set_aside": []
+}
