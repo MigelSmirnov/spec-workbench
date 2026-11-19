@@ -26,7 +26,7 @@ cycles, and `domain_models` names no other module.
 
 | Consumer | Provider | Symbols |
 |---|---|---|
-| `data_provider` | `domain_models` | `RefusalCode` |
+| `data_provider` | `domain_models` | `RefusalAnswerRule`, `RefusalCode` |
 | `runtime_settings` | `domain_models` | `RuntimeSettings` |
 | `object_connections` | `domain_models` | `DelivererError`, `ObjectConnection`, `RefusalCode` |
 | `source_folder` | `domain_models` | `DelivererError`, `ObservationReason`, `PlacementFailure`, `RefusalCode`, `Rejected`, `ScanStatus`, `SourceFile`, `SourceRead` |
@@ -42,7 +42,7 @@ cycles, and `domain_models` names no other module.
 | `photo_delivery` | `photo_preparation` | `build_publication`, `prepare_photo` |
 | `photo_delivery` | `delivery_store` | `project_lock`, `read_mark`, `read_placement`, `store_image`, `write_mark`, `write_placement` |
 | `photo_delivery` | `system_clock` | `utc_now` |
-| `deliverer_api` | `data_provider` | `REFUSAL_DETAIL`, `REFUSAL_STATUS` |
+| `deliverer_api` | `data_provider` | `REFUSAL_ANSWERS` |
 | `deliverer_api` | `domain_models` | `AuthenticationRequired`, `DeliverRequest`, `DelivererError`, `DeliveryContext`, `HealthAnswer`, `MarkOutcome`, `PlacementOutcome`, `PublishedRequest`, `Refusal`, `RefusalCode`, `ScanResult` |
 | `deliverer_api` | `photo_delivery` | `deliver_project_photo`, `mark_photo_published`, `scan_project_photos` |
 | `deliverer_router` | `domain_models` | `AuthenticationRequired`, `DeliveryContext`, `HealthAnswer` |
@@ -150,6 +150,8 @@ outbound call.
   with the bytes that were judged; `ScanResult`, the observations of one scan and the count of each status;
   `MarkOutcome`, M07 with its `MarkStatus`; `DeliverRequest` and `PublishedRequest`, the bodies of two routes; and
   `HealthAnswer`, the body of the health route;
+- `RefusalAnswerRule`, the row form of the refusal answers that `data_provider` holds: a refusal code with its
+  status and `detail`;
 - the three refusal types: a refusal of the whole operation, a refusal of one file, and
   `AuthenticationRequired`, a request that does not carry the token.
 
@@ -210,8 +212,7 @@ CONFLICT_COPY_MARK
 SOURCE_ID_PATTERN
 TOKEN_MIN_LENGTH
 TOKEN_TRIM_CHARACTERS
-REFUSAL_STATUS
-REFUSAL_DETAIL
+REFUSAL_ANSWERS
 STORED_IMAGE_MODE
 STORE_FOLDER_MODE
 RECORD_MODE

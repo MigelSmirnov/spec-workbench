@@ -107,7 +107,7 @@ A replaced file is scanned again by its new content (A3).
    `Image.thumbnail` with the `LANCZOS` filter and a box of the imported `PHOTO_MAX_SIDE` constant on
    each side reduces the image when a side is larger than that box, keeping its proportion; the result
    is pasted onto an `RGB` image of the same size filled with the colour of the imported
-   `PHOTO_BACKGROUND` constant, white, with its own alpha channel as the mask, so transparent areas
+   `PHOTO_BACKGROUND` constant, a colour name of white, with its own alpha channel as the mask, so transparent areas
    become white; and `Image.save` writes a JPEG with the imported constants `PHOTO_QUALITY` as
    `quality`, `PHOTO_OPTIMIZE` as `optimize`, `PHOTO_PROGRESSIVE` as `progressive` and
    `PHOTO_SUBSAMPLING` as `subsampling`, with no EXIF, colour profile or other metadata. With one library version one source gives the same bytes. `sha256`
@@ -310,9 +310,9 @@ A published photo is recognised without any change to the Portal.
    match the imported `SOURCE_ID_PATTERN` constant in full. Neither a file name nor any other received
    text becomes part of a stored path.
 10. An answer never holds a server path or a credential. File names are returned as plain data. A
-    refusal repeats nothing the caller sent. A refusal is answered with M08: its status is the entry of its code in the imported
-    `REFUSAL_STATUS` constant and its `detail` the entry of its code in the imported `REFUSAL_DETAIL`
-    constant.
+    refusal repeats nothing the caller sent. A refusal is answered with M08 from the one row of the
+    imported `REFUSAL_ANSWERS` constant whose `code` is the refusal's code: the row's `status` is the
+    status of the answer and its `detail` the `detail` of M08.
 
 ### Formal invariants
 
@@ -324,7 +324,7 @@ A published photo is recognised without any change to the Portal.
 
 - INV-09: every declared route except the health answer refuses a request without the token (`test_every_route_except_health_requires_the_token`); a wrong token, another scheme, a value without its single space and two `Authorization` fields are each refused with 401 and the UNAUTHORIZED member of = models.RefusalCode, while the scheme written `bearer` is accepted (`test_the_api_requires_the_token`); a request without the token and with a malformed project id or body is still refused with the UNAUTHORIZED member of = models.RefusalCode (`test_the_token_is_checked_before_the_request_form`).
 - INV-10: scan, placement and mark each answer the CONNECTION_NOT_CONFIRMED member of = models.RefusalCode for an unconfirmed connection whose photo folder does not exist, so the folder is never consulted, and no stored image, placement record or mark record is written (`test_an_unconfirmed_connection_delivers_nothing`). After a scan has succeeded on the running service, clearing the confirmation makes scan, placement and mark each answer the CONNECTION_NOT_CONFIRMED member of = models.RefusalCode and write nothing (`test_a_cleared_confirmation_stops_the_running_service`). For a valid file with no record for the project, scan, placement and mark each answer the UNKNOWN_PROJECT member of = models.RefusalCode and write nothing (`test_a_project_without_a_connection_delivers_nothing`). For an absent file, a file that cannot be opened, a file that is not UTF-8 or JSON, a file of another form and a record that breaks the form of rule 8, also when that record is unconfirmed or belongs to another project, scan, placement and mark each answer the FOLDER_UNAVAILABLE member of = models.RefusalCode and write nothing (`test_unreadable_connections_deliver_nothing`), and the service does not start (`test_the_service_does_not_start_with_an_unreadable_connection_record`). A scan, placement or mark that reaches its connection check reads the file exactly once (`test_each_operation_reads_the_connection_record_once`), a request refused earlier reads it zero times (`test_a_request_refused_before_the_connection_check_does_not_read_the_file`), and a file replaced after the reading does not change the running operation (`test_an_operation_finishes_on_the_reading_it_made`). A connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).
-- INV-11: answers of scan, place, mark and a refusal contain neither the folder path, the store path nor the state path (`test_the_api_scans_and_places_without_showing_server_paths`), and the generated service has no Portal client, no outbound HTTP dependency and no Portal credential setting. With every outbound network connection of the process trapped, a scan, a delivery and a mark succeed and none is attempted (`test_no_operation_opens_a_network_connection`). An uppercase or unhyphenated project id and a body that is not the request form each answer 422 with the INVALID_REQUEST member of = models.RefusalCode, and no refusal repeats what the caller sent (`test_a_malformed_request_is_refused_as_invalid_request`), and every refusal code answers its entries of `REFUSAL_STATUS` and `REFUSAL_DETAIL` (`test_each_refusal_answers_its_status_and_detail`).
+- INV-11: answers of scan, place, mark and a refusal contain neither the folder path, the store path nor the state path (`test_the_api_scans_and_places_without_showing_server_paths`), and the generated service has no Portal client, no outbound HTTP dependency and no Portal credential setting. With every outbound network connection of the process trapped, a scan, a delivery and a mark succeed and none is attempted (`test_no_operation_opens_a_network_connection`). An uppercase or unhyphenated project id and a body that is not the request form each answer 422 with the INVALID_REQUEST member of = models.RefusalCode, and no refusal repeats what the caller sent (`test_a_malformed_request_is_refused_as_invalid_request`), and every refusal code answers the `status` and `detail` of its row of `REFUSAL_ANSWERS` (`test_each_refusal_answers_its_status_and_detail`).
 
 ### Consequence
 
@@ -467,11 +467,13 @@ Policy values are constants of the data provider:
 | `PHOTO_OPTIMIZE` | `bool` | true |
 | `PHOTO_PROGRESSIVE` | `bool` | false |
 | `PHOTO_SUBSAMPLING` | `str` | `4:2:0` |
-| `PHOTO_BACKGROUND` | `tuple[int, int, int]` | (255, 255, 255) |
-| `REFUSAL_STATUS` | `dict[RefusalCode, int]` | one entry per `RefusalCode` member, below |
-| `REFUSAL_DETAIL` | `dict[RefusalCode, str]` | one entry per `RefusalCode` member, below |
+| `PHOTO_BACKGROUND` | `str` | `#ffffff` |
+| `REFUSAL_ANSWERS` | `tuple[RefusalAnswerRule, ...]` | one row per member of = models.RefusalCode, below |
 
-| Member of = models.RefusalCode | `REFUSAL_STATUS` | `REFUSAL_DETAIL` |
+`REFUSAL_ANSWERS` holds exactly one row for each member of = models.RefusalCode, keyed by `code`; a
+member without its row stops the build.
+
+| `code` | `status` | `detail` |
 |---|---|---|
 | `UNAUTHORIZED` | 401 | `the request does not carry the deliverer's token` |
 | `INVALID_REQUEST` | 422 | `the project id or the body of the request has the wrong form` |
