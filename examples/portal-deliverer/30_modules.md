@@ -32,7 +32,7 @@ cycles, and `domain_models` names no other module.
 | `source_folder` | `data_provider` | `CONFLICT_COPY_MARK`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `MAX_SOURCE_BYTES` |
 | `photo_preparation` | `domain_models` | `DateSource`, `PhotoPublication`, `PlacementFailure`, `PreparedPhoto`, `Rejected` |
 | `photo_preparation` | `data_provider` | `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_BACKGROUND`, `PHOTO_MAX_SIDE`, `PHOTO_OPTIMIZE`, `PHOTO_PROGRESSIVE`, `PHOTO_QUALITY`, `PHOTO_SUBSAMPLING` |
-| `delivery_store` | `data_provider` | `LOCK_FILE_MODE`, `RECORD_MODE`, `STATE_FOLDER_MODE`, `STORE_FOLDER_MODE`, `STORED_IMAGE_MODE`, `TEMPORARY_FILE_MODE`, `TEMPORARY_NAME_PREFIX` |
+| `delivery_store` | `data_provider` | `LOCK_FILE_MODE`, `RECORD_MODE`, `STATE_FOLDER_MODE`, `STORE_FOLDER_MODE`, `STORED_IMAGE_MODE`, `TEMPORARY_FILE_MODE`, `TEMPORARY_NAME_PREFIX`, `LOCKS_FOLDER`, `PLACEMENTS_FOLDER`, `MARKS_FOLDER`, `LOCK_FILE_SUFFIX`, `RECORD_FILE_SUFFIX` |
 | `delivery_store` | `domain_models` | `DelivererError`, `DeliveryContext`, `PhotoPlacement`, `PublicationMark`, `RefusalCode` |
 | `photo_delivery` | `domain_models` | `DelivererError`, `DeliveryContext`, `MarkOutcome`, `MarkStatus`, `PhotoPlacement`, `PlacementFailure`, `PlacementOutcome`, `PlacementStatus`, `PublicationMark`, `RefusalCode`, `Rejected`, `ScanResult`, `ScanStatus`, `SourceFile`, `SourcePhotoObservation` |
 | `photo_delivery` | `data_provider` | `SOURCE_ID_PATTERN` |
@@ -204,6 +204,11 @@ PHOTO_OPTIMIZE
 PHOTO_PROGRESSIVE
 PHOTO_SUBSAMPLING
 PHOTO_BACKGROUND
+LOCKS_FOLDER
+PLACEMENTS_FOLDER
+MARKS_FOLDER
+LOCK_FILE_SUFFIX
+RECORD_FILE_SUFFIX
 ```
 
 ### Trace inputs

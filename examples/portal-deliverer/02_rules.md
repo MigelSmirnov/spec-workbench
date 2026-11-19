@@ -171,7 +171,7 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
    the path is opening it as a folder, never reading a file of it; only the last segment is opened for
    reading (INV-02). Condition 2 applies A1 as A1 decides it: orders 1 and 2 first from that same
    metadata, before the file is opened, then the read. Conditions 3 and 4 follow the read. Conditions 1 to 4 write nothing except the
-   project lock. After condition 5 a stored image may remain without a record: no caller has received
+   project lock file and the folders that lead to it (A6 rule 2). After condition 5 a stored image may remain without a record: no caller has received
    its reference, and a repeated delivery of the same file writes it again and completes the placement,
    unless a refusal of A6 rule 5 applies.
 
@@ -333,11 +333,15 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 2. A stored image has the mode of the imported `STORED_IMAGE_MODE` constant and a state record that of
    the imported `RECORD_MODE` constant, so neither is executable. The installation creates the binary
    store and the state folder themselves; the service never creates them, and when one is missing the
-   write that needs it fails. In the state folder the lock file is `locks/<project_id>.lock`, a placement
-   record `ledger/<project_id>/<source_id>.json` and a mark record `published/<project_id>/<source_id>.json`.
+   write that needs it fails. Each of them is the installation's own folder and is reached as its
+   configured path stands, also through a link; only the entries below it are checked as this rule says. In the state folder the lock file of a project is named by its project id with the
+   imported `LOCK_FILE_SUFFIX` constant, in the folder of the imported `LOCKS_FOLDER` constant; a placement
+   record and a mark record are named by the source id with the imported `RECORD_FILE_SUFFIX` constant, in
+   a folder named by the project id inside the folder of the imported `PLACEMENTS_FOLDER` or `MARKS_FOLDER`
+   constant.
    The service makes the folders below the binary store and the state folder exist one at a time, from
    the outermost: a folder it finds is accepted, whoever created it, also a concurrent call, when it is a
-   folder; a missing one is created with the mode of the imported `STORE_FOLDER_MODE` constant in the
+   folder, and a creation that finds the folder already there is not a failure; a missing one is created with the mode of the imported `STORE_FOLDER_MODE` constant in the
    binary store and of the imported `STATE_FOLDER_MODE` constant in the state folder, set whatever the
    process umask. In the binary store the folders are those of the path resolved under rule 1. In the state
    folder an entry on the way that is a symbolic link or not a folder fails the write, and a failure to
@@ -352,7 +356,8 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
    finds no free name the write fails. It takes the mode of the imported `TEMPORARY_FILE_MODE` constant at
    once and its final mode before the rename. A file counts as written when the rename succeeds. A write
    that fails before the rename leaves the destination as it was, whether absent or holding an earlier
-   complete file, and removes its temporary file. A stored image is written before a record that depends
+   complete file, and removes its temporary file; when that removal fails too, the write's own failure is the
+   result and the temporary file stays, as after a crash. A stored image is written before a record that depends
    on it, so each folder created for it is synchronised in the folder that holds it before the next one
    is created and before its temporary file is created, and its own folder after the rename; a failure of any of these synchronisations fails that write: what was written
    stays, no record is written, and A3 rule 5 condition 5 applies. A folder created for a record or for
@@ -367,8 +372,10 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 4. Deliveries and marks of one project run one at a time, across processes, under an operating
    system lock on one lock file of that project in the state folder. A caller waits for the lock
    without a time limit, and the lock is released when its holder ends. The lock file is created on
-   first use with the mode of the imported `LOCK_FILE_MODE` constant and never removed; it holds no content. It is opened without following a
-   link, and an entry at its address that is a symbolic link or not a regular file is refused like a
+   first use with the mode of the imported `LOCK_FILE_MODE` constant and never removed; it holds no content. It is opened for reading and writing,
+   created when absent, without following a link, and given the mode of `LOCK_FILE_MODE` each time it is
+   opened, whatever the umask; a failure to set that mode is refused like a lock file that cannot be
+   opened. An entry at its address that is a symbolic link or not a regular file is refused like a
    lock file that cannot be opened. A wait ends only when the lock is taken or the process ends. The check that a placement
    or mark exists and its writing happen inside that lock.
 5. A record is absent only when no entry exists at its address. A placement or mark record is opened
@@ -388,8 +395,8 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 
 ### Required tests
 
-- INV-12: concurrent placements of one source answer one `placed` and otherwise `replayed`, and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).
-- INV-20: with a damaged placement or mark record, scan, delivery and mark each answer M08 with the STATE_UNAVAILABLE member of = models.RefusalCode and the record stays as it was (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), a damaged mark without a placement stops a new placement (`test_a_damaged_mark_without_a_placement_stops_a_new_placement`), a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`), and a record that is a link, dangling or not, or that names another source is refused the same way (`test_a_record_not_written_at_its_address_is_refused`).
+- INV-12: concurrent placements of one source, in one process and in separate processes, answer one `placed` and otherwise `replayed` and leave one placement record and one stored image (`test_separate_processes_leave_one_placement`), and marks from separate processes with two `photo_id` values answer one `marked`, `replayed` for the same value and `publication_conflict` for the other (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).
+- INV-20: with a damaged placement or mark record, scan, delivery and mark each answer M08 with the STATE_UNAVAILABLE member of = models.RefusalCode, the record stays as it was and no placement record, mark record or stored image is added or changed (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), a damaged mark without a placement stops a new placement (`test_a_damaged_mark_without_a_placement_stops_a_new_placement`), a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`), and a record that is a link, dangling or not, or that names another source is refused the same way (`test_a_record_not_written_at_its_address_is_refused`).
 
 ### Consequence
 
@@ -467,6 +474,11 @@ Policy values are constants of the data provider:
 | `LOCK_FILE_MODE` | `int` | 0o600 |
 | `TEMPORARY_NAME_PREFIX` | `str` | `.tmp-` |
 | `TEMPORARY_FILE_MODE` | `int` | 0o600 |
+| `LOCKS_FOLDER` | `str` | `locks` |
+| `PLACEMENTS_FOLDER` | `str` | `ledger` |
+| `MARKS_FOLDER` | `str` | `published` |
+| `LOCK_FILE_SUFFIX` | `str` | `.lock` |
+| `RECORD_FILE_SUFFIX` | `str` | `.json` |
 | `PHOTO_OPTIMIZE` | `bool` | true |
 | `PHOTO_PROGRESSIVE` | `bool` | false |
 | `PHOTO_SUBSAMPLING` | `str` | `4:2:0` |
