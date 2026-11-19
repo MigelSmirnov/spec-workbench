@@ -480,7 +480,7 @@ A6 rules 1 to 3.
 
 ### Errors
 
-`unsafe_reference` when the reference leaves the binary store. A failed write raises the operating system error, which `module:photo_delivery` turns into the failure of that photo.
+A `DelivererError` with the UNSAFE_REFERENCE member of `RefusalCode` when the reference leaves the binary store or cannot be resolved in it, before anything is written (A6 rule 1); `module:photo_delivery` passes it on as M08. A failed write raises the operating system error, which `module:photo_delivery` turns into the failure of that photo.
 
 ### State impact
 
@@ -684,7 +684,7 @@ A3, INV-06, INV-07, INV-10, INV-11, INV-12 and INV-19.
 
 ### Errors
 
-`invalid_source_id` and the refusals of the connection, the folder, the project lock and the records, as M08. Every condition of A3 rule 5 is a `failed` M06.
+`invalid_source_id`, `unsafe_reference` and the refusals of the connection, the folder, the project lock and the records, as M08, in place of M06. Every condition of A3 rule 5 is a `failed` M06.
 
 ### State impact
 
