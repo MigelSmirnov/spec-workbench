@@ -54,10 +54,12 @@ changes while it is read is judged by the bytes that were read, once, without a 
 a finished file by renaming a new one over it; a later delivery judges what it then reads under A3 rule 5.
 
 When the listing reaches an entry, one metadata reading of its path, without following a link, decides
-that it is a regular file and gives its listed size and modification time. Orders 1 and 2 are first
-decided by that size, before the file is opened. A file is then read once, up to one byte past the
-imported `MAX_SOURCE_BYTES` constant: reaching that byte is order 4, and the read stops there. A read that
-reaches the end of the file with no bytes is order 1.
+that it is a regular file and gives its listed size and modification time; an entry that reading does not
+show as a regular file is not reported. Orders 1 and 2 are first decided by that size, before the file is
+opened. A file is then read once, up to one byte past the imported `MAX_SOURCE_BYTES` constant: reaching
+that byte is order 4, and the read stops there. A read that reaches the end of the file with no bytes is
+order 1. A file that is read takes its modification time from the file that was opened, the one whose
+bytes were read, and a delivery uses that time under A2 rule 3.
 
 A scan only reads the source folder. A signature does not prove that an image can be decoded: a `ready`
 file may still fail when it is delivered.
@@ -127,7 +129,8 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
    when the source file has left the folder.
 3. One call delivers one photo, named by `name`, a relative path in the form a scan reports, and
    `source_id`. The service keeps no memory of earlier scans: it judges the name and the file when the call
-   runs. The named file is read once, and the bytes that were read are the bytes judged, hashed and prepared.
+   runs. A named file that A1 orders 1 and 2 do not reject from its metadata is read once, and the bytes
+   that were read are the bytes judged, hashed and prepared.
 4. Checks run in this order: token, request form and project id, connection, photo folder, source id,
    project lock, existing placement, named file. The request form is a body holding only `name` and
    `source_id`, both strings. A defect of that form or of the project id is refused as a whole request. A
@@ -135,8 +138,8 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
    `invalid_source_id`.
 5. A photo that cannot be delivered is answered with status `failed` and one member of
    `= models.PlacementFailure`. Condition 1 is decided from the name and the metadata of its path before
-   the file is opened. Condition 2 decides A1 orders 1 and 2 from that same metadata, before the file is
-   opened, and its other orders and conditions 3 and 4 from the opening on. Conditions 1 to 4 write nothing except the
+   the file is opened. Condition 2 applies A1 as A1 decides it: orders 1 and 2 first from that same
+   metadata, before the file is opened, then the read. Conditions 3 and 4 follow the read. Conditions 1 to 4 write nothing except the
    project lock. After condition 5 a stored image may remain without a record: no caller has received
    its reference, and a repeated delivery of the same file writes it again and completes the placement,
    unless a refusal of A6 rule 5 applies.

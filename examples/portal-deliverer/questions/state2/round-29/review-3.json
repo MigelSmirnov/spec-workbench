@@ -1,0 +1,135 @@
+{
+ "open_points": [
+  {
+   "subject": "A3",
+   "kind": "contradictory_precedence",
+   "text": "Condition 2 decides A1 orders 1 and 2 from that same metadata, before the file is opened, and its other orders and conditions 3 and 4 from the opening on. A read that reaches the end of the file with no bytes is order 1.",
+   "question": "When metadata reports a non-empty file but the opened file reaches EOF with no bytes, is A1 order 1 still applied after opening, or are only A1 orders 3 to 6 available after opening?",
+   "options": [
+    "Return failed with EMPTY because the zero-byte read is A1 order 1.",
+    "Do not reconsider order 1 after opening; continue to a later rule, potentially returning UNSUPPORTED_FORMAT."
+   ],
+   "default_guess": "Apply A1 order 1 after the read and return failed with EMPTY.",
+   "witness": {
+    "initial": "A regular source file has a non-zero metadata size and no existing placement.",
+    "events": [
+     "The caller starts delivery with the matching source_id.",
+     "The deliverer reads the non-zero metadata.",
+     "Another actor truncates the file to zero bytes before it is opened.",
+     "The deliverer opens it and immediately reaches EOF."
+    ],
+    "outcomes": [
+     "A1's explicit EOF rule makes this order 1, so delivery fails with EMPTY.",
+     "A3's division of orders treats orders 1 and 2 as already decided before opening, so the empty read reaches a later rule and may fail with UNSUPPORTED_FORMAT."
+    ],
+    "observer": "The delivery caller sees a different PlacementFailure member."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "time_representation",
+   "text": "gives its listed size and modification time",
+   "question": "In what exact datetime representation and precision is the filesystem modification time retained and converted when it supplies the fallback photo time: UTC-aware or UTC without an offset, and are subsecond or nanosecond digits preserved, truncated or rounded?",
+   "options": [
+    "Convert the filesystem instant to a naive UTC datetime and preserve the greatest precision supported by the model.",
+    "Convert it to a naive UTC datetime at a specified fixed precision.",
+    "Keep an offset-aware UTC datetime internally and remove the offset only at the publication boundary."
+   ],
+   "default_guess": "Convert once to a naive UTC datetime, truncate to microsecond precision, and use that same value throughout the operation.",
+   "witness": {
+    "initial": "A source photo has no usable camera date and its filesystem modification time contains sub-microsecond precision.",
+    "events": [
+     "The scanner reads the entry metadata.",
+     "The caller later delivers the photo.",
+     "The deliverer prepares the photo and builds its publication body using the modification-time fallback."
+    ],
+    "outcomes": [
+     "The stored publication date is a naive UTC datetime truncated to microseconds.",
+     "The stored publication date is rounded, offset-aware, or converted at a different precision."
+    ],
+    "observer": "The caller or Portal sees a different photo_date, and persisted placement values can differ."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "invariant_test_gap",
+   "text": "INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).",
+   "question": "What must the Required test observe to prove that no operation ever creates, changes, moves or deletes anything in the source folder, including transient writes and changes to directories, rather than only comparing selected final file attributes?",
+   "options": [
+    "Instrument filesystem mutations and assert that no write, create, rename, move or delete is attempted in the source tree.",
+    "Define INV-01 as a final-state invariant and compare all relevant file and directory identities and metadata after each operation.",
+    "Keep the stated final comparison, which permits undetected transient mutations and directory changes."
+   ],
+   "default_guess": "Instrument filesystem operations and assert that no mutating operation targets the source tree, in addition to comparing the final tree.",
+   "witness": {
+    "initial": "The source tree contains one regular photo and its parent directory.",
+    "events": [
+     "The service performs a scan.",
+     "An implementation creates and deletes a temporary file in the source directory, leaving the original file unchanged.",
+     "The Required test compares the final files, their bytes, modification times and modes."
+    ],
+    "outcomes": [
+     "An implementation that only reads the tree satisfies INV-01.",
+     "An implementation that transiently writes in the tree violates INV-01 but can satisfy the described final-state check."
+    ],
+    "observer": "A filesystem audit or concurrent Syncthing process sees the difference; the described test need not."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1",
+   "kind": "invariant_test_gap",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What must the Required test observe to prove INV-02's prohibition on opening a path, rather than only checking the refusal and resulting files?",
+   "options": [
+    "Instrument path opening and assert that none of the rejected paths is opened.",
+    "Require only the stated refusal and durable-state result, even if the implementation opens or reads the rejected path first."
+   ],
+   "default_guess": "Instrument the open boundary and assert zero open attempts for every condition-1 case.",
+   "witness": {
+    "initial": "An ignored regular file exists and has no placement.",
+    "events": [
+     "The caller requests delivery under the ignored name.",
+     "One implementation rejects the name before opening it.",
+     "Another implementation opens or reads the file and then returns the required refusal without writing durable state."
+    ],
+    "outcomes": [
+     "The first implementation satisfies INV-02 and the described outcome assertions.",
+     "The second violates INV-02 but produces the same NOT_READY_OR_ABSENT answer and the same final files."
+    ],
+    "observer": "A filesystem audit or an instrumented open boundary sees the difference; the caller and described state assertions do not."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3",
+   "kind": "invariant_test_gap",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "What must the Required test observe to prove that a new placement never reads a conflict copy, rather than merely proving that no placement is committed?",
+   "options": [
+    "Instrument file opening and reading and assert that the conflict-copy path is never opened or read.",
+    "Require only the stated refusal and durable-state result, allowing an implementation to read the conflict copy before rejecting it."
+   ],
+   "default_guess": "Instrument the read boundary and assert that the conflict-copy path is neither opened nor read.",
+   "witness": {
+    "initial": "A conflict-copy file exists with content that has no placement.",
+    "events": [
+     "The caller requests delivery using the conflict-copy name.",
+     "One implementation rejects the name before opening the file.",
+     "Another implementation reads the file, recognizes the ignored name afterward, and returns the same refusal without committing a placement."
+    ],
+    "outcomes": [
+     "The first implementation satisfies INV-19 and the described test result.",
+     "The second violates INV-19 but returns NOT_READY_OR_ABSENT and leaves the same durable state."
+    ],
+    "observer": "A filesystem audit or read spy sees the difference; the delivery caller does not."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A3\",\"kind\":\"contradictory_precedence\",\"text\":\"Condition 2 decides A1 orders 1 and 2 from that same metadata, before the file is opened, and its other orders and conditions 3 and 4 from the opening on. A read that reaches the end of the file with no bytes is order 1.\",\"question\":\"When metadata reports a non-empty file but the opened file reaches EOF with no bytes, is A1 order 1 still applied after opening, or are only A1 orders 3 to 6 available after opening?\",\"options\":[\"Return failed with EMPTY because the zero-byte read is A1 order 1.\",\"Do not reconsider order 1 after opening; continue to a later rule, potentially returning UNSUPPORTED_FORMAT.\"],\"default_guess\":\"Apply A1 order 1 after the read and return failed with EMPTY.\",\"witness\":{\"initial\":\"A regular source file has a non-zero metadata size and no existing placement.\",\"events\":[\"The caller starts delivery with the matching source_id.\",\"The deliverer reads the non-zero metadata.\",\"Another actor truncates the file to zero bytes before it is opened.\",\"The deliverer opens it and immediately reaches EOF.\"],\"outcomes\":[\"A1's explicit EOF rule makes this order 1, so delivery fails with EMPTY.\",\"A3's division of orders treats orders 1 and 2 as already decided before opening, so the empty read reaches a later rule and may fail with UNSUPPORTED_FORMAT.\"],\"observer\":\"The delivery caller sees a different PlacementFailure member.\"}},{\"subject\":\"A1\",\"kind\":\"time_representation\",\"text\":\"gives its listed size and modification time\",\"question\":\"In what exact datetime representation and precision is the filesystem modification time retained and converted when it supplies the fallback photo time: UTC-aware or UTC without an offset, and are subsecond or nanosecond digits preserved, truncated or rounded?\",\"options\":[\"Convert the filesystem instant to a naive UTC datetime and preserve the greatest precision supported by the model.\",\"Convert it to a naive UTC datetime at a specified fixed precision.\",\"Keep an offset-aware UTC datetime internally and remove the offset only at the publication boundary.\"],\"default_guess\":\"Convert once to a naive UTC datetime, truncate to microsecond precision, and use that same value throughout the operation.\",\"witness\":{\"initial\":\"A source photo has no usable camera date and its filesystem modification time contains sub-microsecond precision.\",\"events\":[\"The scanner reads the entry metadata.\",\"The caller later delivers the photo.\",\"The deliverer prepares the photo and builds its publication body using the modification-time fallback.\"],\"outcomes\":[\"The stored publication date is a naive UTC datetime truncated to microseconds.\",\"The stored publication date is rounded, offset-aware, or converted at a different precision.\"],\"observer\":\"The caller or Portal sees a different photo_date, and persisted placement values can differ.\"}},{\"subject\":\"A1\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).\",\"question\":\"What must the Required test observe to prove that no operation ever creates, changes, moves or deletes anything in the source folder, including transient writes and changes to directories, rather than only comparing selected final file attributes?\",\"options\":[\"Instrument filesystem mutations and assert that no write, create, rename, move or delete is attempted in the source tree.\",\"Define INV-01 as a final-state invariant and compare all relevant file and directory identities and metadata after each operation.\",\"Keep the stated final comparison, which permits undetected transient mutations and directory changes.\"],\"default_guess\":\"Instrument filesystem operations and assert that no mutating operation targets the source tree, in addition to comparing the final tree.\",\"witness\":{\"initial\":\"The source tree contains one regular photo and its parent directory.\",\"events\":[\"The service performs a scan.\",\"An implementation creates and deletes a temporary file in the source directory, leaving the original file unchanged.\",\"The Required test compares the final files, their bytes, modification times and modes.\"],\"outcomes\":[\"An implementation that only reads the tree satisfies INV-01.\",\"An implementation that transiently writes in the tree violates INV-01 but can satisfy the described final-state check.\"],\"observer\":\"A filesystem audit or concurrent Syncthing process sees the difference; the described test need not.\"}},{\"subject\":\"A1\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What must the Required test observe to prove INV-02's prohibition on opening a path, rather than only checking the refusal and resulting files?\",\"options\":[\"Instrument path opening and assert that none of the rejected paths is opened.\",\"Require only the stated refusal and durable-state result, even if the implementation opens or reads the rejected path first.\"],\"default_guess\":\"Instrument the open boundary and assert zero open attempts for every condition-1 case.\",\"witness\":{\"initial\":\"An ignored regular file exists and has no placement.\",\"events\":[\"The caller requests delivery under the ignored name.\",\"One implementation rejects the name before opening it.\",\"Another implementation opens or reads the file and then returns the required refusal without writing durable state.\"],\"outcomes\":[\"The first implementation satisfies INV-02 and the described outcome assertions.\",\"The second violates INV-02 but produces the same NOT_READY_OR_ABSENT answer and the same final files.\"],\"observer\":\"A filesystem audit or an instrumented open boundary sees the difference; the caller and described state assertions do not.\"}},{\"subject\":\"A3\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"What must the Required test observe to prove that a new placement never reads a conflict copy, rather than merely proving that no placement is committed?\",\"options\":[\"Instrument file opening and reading and assert that the conflict-copy path is never opened or read.\",\"Require only the stated refusal and durable-state result, allowing an implementation to read the conflict copy before rejecting it.\"],\"default_guess\":\"Instrument the read boundary and assert that the conflict-copy path is neither opened nor read.\",\"witness\":{\"initial\":\"A conflict-copy file exists with content that has no placement.\",\"events\":[\"The caller requests delivery using the conflict-copy name.\",\"One implementation rejects the name before opening the file.\",\"Another implementation reads the file, recognizes the ignored name afterward, and returns the same refusal without committing a placement.\"],\"outcomes\":[\"The first implementation satisfies INV-19 and the described test result.\",\"The second violates INV-19 but returns NOT_READY_OR_ABSENT and leaves the same durable state.\"],\"observer\":\"A filesystem audit or read spy sees the difference; the delivery caller does not.\"}}]}",
+ "set_aside": []
+}

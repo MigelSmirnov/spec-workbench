@@ -1,0 +1,249 @@
+{
+ "open_points": [
+  {
+   "subject": "A3 rule 3 and A3 rule 5 condition 2",
+   "kind": "contradictory read requirement",
+   "text": "The named file is read once, and the bytes that were read are the bytes judged, hashed and prepared.\n\nCondition 2 decides A1 orders 1 and 2 from that same metadata, before the file is opened",
+   "question": "Is an empty or metadata-oversized named file never opened, or must every named file still be opened and read once?",
+   "options": [
+    "Reject A1 orders 1 and 2 from metadata without opening the file",
+    "Open and read every named file once, then reject it",
+    "Treat “read once” as applying only after the metadata checks pass"
+   ],
+   "default_guess": "Treat “read once” as applying only after the metadata checks pass.",
+   "witness": {
+    "initial": "A confirmed project contains an empty regular file with no existing placement.",
+    "events": [
+     "The caller requests delivery of that file.",
+     "The deliverer reads metadata showing size zero."
+    ],
+    "outcomes": [
+     "The deliverer returns EMPTY without opening or reading the file.",
+     "The deliverer opens the file and performs the one required read before returning EMPTY."
+    ],
+    "observer": "A filesystem-call audit or a file that changes immediately after the metadata read"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 scan metadata failure",
+   "kind": "missing refusal condition",
+   "text": "When the listing reaches an entry, one metadata reading of its path, without following a link, decides that it is a regular file and gives its listed size and modification time.",
+   "question": "What must a scan do when the entry was listed but this metadata reading fails for a reason other than disappearance?",
+   "options": [
+    "Omit the entry",
+    "Report it as rejected with unreadable_file",
+    "Refuse the whole scan with folder_unavailable"
+   ],
+   "default_guess": "Report it as rejected with unreadable_file.",
+   "witness": {
+    "initial": "A directory listing returns a file name, but reading that path's metadata then fails with a permissions or I/O error.",
+    "events": [
+     "The caller starts a scan.",
+     "The listing returns the entry.",
+     "The metadata reading fails."
+    ],
+    "outcomes": [
+     "The scan completes and silently omits the entry.",
+     "The scan includes a rejected observation with reason unreadable_file."
+    ],
+    "observer": "The scan caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 entry whose type changes before metadata",
+   "kind": "uncovered race outcome",
+   "text": "When the listing reaches an entry, one metadata reading of its path, without following a link, decides that it is a regular file and gives its listed size and modification time.",
+   "question": "What status or omission applies when the listing showed a regular file but the metadata reading finds a directory, symbolic link, or other non-regular object?",
+   "options": [
+    "Omit it because it is no longer a regular file",
+    "Report rejected with not_a_regular_file",
+    "Report rejected with unreadable_file"
+   ],
+   "default_guess": "Omit a symbolic link and report other non-regular entries as rejected with not_a_regular_file.",
+   "witness": {
+    "initial": "The listing observes a regular file.",
+    "events": [
+     "Another actor replaces the entry with a directory before its metadata is read.",
+     "The scan reads metadata and finds the directory."
+    ],
+    "outcomes": [
+     "The entry is omitted from the scan.",
+     "The entry is reported as rejected with not_a_regular_file."
+    ],
+    "observer": "The scan caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 condition 1 path traversal",
+   "kind": "atomicity and link-race ambiguity",
+   "text": "Condition 1 is decided from the name and the metadata of its path before the file is opened.",
+   "question": "How must the implementation prevent an intermediate segment or the final entry from being replaced by a symbolic link between the metadata checks and opening the file?",
+   "options": [
+    "Resolve and open every segment relative to already-open directory handles, without following links",
+    "Check metadata first and then open the textual path normally",
+    "Detect replacement by comparing metadata from the opened handle with the checked metadata and refuse on mismatch"
+   ],
+   "default_guess": "Resolve each segment relative to directory handles without following links, and verify the opened file is the checked regular file.",
+   "witness": {
+    "initial": "A valid relative name points through an ordinary subfolder to a regular file.",
+    "events": [
+     "The deliverer checks all path metadata and condition 1 passes.",
+     "Another process replaces the subfolder with a symbolic link to a location outside the photo folder.",
+     "The deliverer opens the textual path."
+    ],
+    "outcomes": [
+     "The operation refuses with NOT_READY_OR_ABSENT without opening the outside file.",
+     "The operation follows the replacement link and reads a file outside the photo folder."
+    ],
+    "observer": "The caller, the owner of the outside file, or a filesystem security audit"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "invariant test does not prove invariant",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What must the Required tests item observe to prove that delivery opens no path failing condition 1, rather than merely proving the returned failure and durable-state outcome?",
+   "options": [
+    "Instrument opening and assert that no rejected path or outside target is opened",
+    "Add a race test that swaps a checked segment for a symbolic link before opening",
+    "Treat the response and no-write assertions as sufficient evidence"
+   ],
+   "default_guess": "Instrument path opening and include a symbolic-link replacement race, asserting that no rejected or outside path is opened.",
+   "witness": {
+    "initial": "A rejected name points through a symbolic link, and no placement exists.",
+    "events": [
+     "An implementation opens and reads the target but subsequently returns NOT_READY_OR_ABSENT.",
+     "The named test checks only the answer and durable files."
+    ],
+    "outcomes": [
+     "The test passes even though INV-02 was violated.",
+     "A test observing open operations fails when the target is opened."
+    ],
+    "observer": "The generated-service test suite"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "invariant test does not prove invariant",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "What must the Required tests item observe to prove that a new placement never reads a conflict copy?",
+   "options": [
+    "Instrument file access and assert that the conflict-copy path is never opened or read",
+    "Make the conflict-copy contents unreadable and require NOT_READY_OR_ABSENT rather than an access-dependent result",
+    "Treat the failure and no-write result as sufficient evidence"
+   ],
+   "default_guess": "Instrument file access and assert that the conflict-copy path is neither opened nor read.",
+   "witness": {
+    "initial": "A conflict-copy file contains content with no placement.",
+    "events": [
+     "An implementation opens and reads the conflict copy, recognizes its ignored name afterward, and returns NOT_READY_OR_ABSENT.",
+     "The named test checks only the answer and durable files."
+    ],
+    "outcomes": [
+     "The existing assertions pass although INV-19 was violated.",
+     "An access-observing assertion fails because the conflict copy was read."
+    ],
+    "observer": "The generated-service test suite"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 modification time used by M03 and M05",
+   "kind": "timestamp provenance ambiguity",
+   "text": "When the listing reaches an entry, one metadata reading of its path, without following a link, decides that it is a regular file and gives its listed size and modification time.",
+   "question": "Is this listed modification time the file_modified fallback used for PreparedPhoto.taken_at and PhotoPublication.photo_date, or must delivery obtain the modification time from the file it actually opens?",
+   "options": [
+    "Use the pre-open metadata reading's modification time",
+    "Use metadata from the opened file handle",
+    "Refuse when the pre-open and opened-file identities or modification times differ"
+   ],
+   "default_guess": "Use metadata from the opened file handle so the fallback date belongs to the bytes actually read.",
+   "witness": {
+    "initial": "Path photo.jpg contains content A with modification time T1.",
+    "events": [
+     "Delivery reads path metadata.",
+     "Syncthing renames content B with modification time T2 over the path.",
+     "Delivery opens and reads content B."
+    ],
+    "outcomes": [
+     "The placement hashes content B but publishes photo date T1.",
+     "The placement hashes content B and publishes photo date T2."
+    ],
+    "observer": "The owner viewing the photo date in the Portal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "file_modified datetime representation",
+   "kind": "timestamp representation unspecified",
+   "text": "The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.",
+   "question": "What exact datetime representation and precision must be produced from the filesystem modification time?",
+   "options": [
+    "A naive UTC datetime preserving the filesystem's available fractional precision",
+    "A naive UTC datetime truncated to whole seconds",
+    "An offset-aware UTC datetime internally, serialized without an offset"
+   ],
+   "default_guess": "Use a naive UTC datetime preserving the filesystem's available fractional precision and serialize it in one canonical form.",
+   "witness": {
+    "initial": "A source file has a modification timestamp with fractional seconds near a UTC day boundary.",
+    "events": [
+     "The file has no usable camera date.",
+     "The deliverer prepares and stores the publication body."
+    ],
+    "outcomes": [
+     "photo_date preserves the fractional UTC instant as a naive datetime.",
+     "photo_date is rounded or truncated, producing a different represented instant."
+    ],
+    "observer": "The caller comparing the publication body or a repeated result"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing time-source decision",
+   "text": "`marked_at: datetime`",
+   "question": "What is the source and representation of marked_at, and how many readings does one mark operation take?",
+   "options": [
+    "Read an injected UTC clock exactly once when the mark is created and store a naive UTC datetime",
+    "Accept the timestamp from the caller",
+    "Read the host system clock directly, potentially more than once",
+    "Derive it from the Portal response or request time"
+   ],
+   "default_guess": "Read an injected UTC clock exactly once after validation and while holding the project lock, then store a canonical naive UTC datetime; replay returns the stored value without reading the clock.",
+   "witness": {
+    "initial": "A placement exists and has no publication mark.",
+    "events": [
+     "The caller records a Portal photo_id while the system clock advances across a second boundary.",
+     "The caller repeats the same mark request later."
+    ],
+    "outcomes": [
+     "The first call stores one clock reading and replay returns that unchanged marked_at.",
+     "The operation takes multiple or ambient readings, or replay recomputes marked_at, producing a different value."
+    ],
+    "observer": "The calling flow reading the mark result or stored record"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A10 injection_interpreted_input ownership",
+   "kind": "security ownership ambiguity",
+   "text": "- injection_interpreted_input: APPLICABLE; references: A5, A6; affected: project id, source id, file names, stored paths",
+   "question": "Does the security outcome for file names and source-path traversal also depend on A1 and A3's metadata, ignored-name, and no-link rules, and therefore need to reference those decisions?",
+   "options": [
+    "Add A1 and A3 as references and cover their path-opening race guarantees",
+    "Leave ownership solely with A5 and A6",
+    "Separate lexical input validation from filesystem traversal and name the owner of each"
+   ],
+   "default_guess": "Separate lexical validation from filesystem traversal, with A3 owning delivery traversal and A1 owning scan traversal, and reference both in the security outcome.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A3 rule 3 and A3 rule 5 condition 2\",\"kind\":\"contradictory read requirement\",\"text\":\"The named file is read once, and the bytes that were read are the bytes judged, hashed and prepared.\\n\\nCondition 2 decides A1 orders 1 and 2 from that same metadata, before the file is opened\",\"question\":\"Is an empty or metadata-oversized named file never opened, or must every named file still be opened and read once?\",\"options\":[\"Reject A1 orders 1 and 2 from metadata without opening the file\",\"Open and read every named file once, then reject it\",\"Treat “read once” as applying only after the metadata checks pass\"],\"default_guess\":\"Treat “read once” as applying only after the metadata checks pass.\",\"witness\":{\"initial\":\"A confirmed project contains an empty regular file with no existing placement.\",\"events\":[\"The caller requests delivery of that file.\",\"The deliverer reads metadata showing size zero.\"],\"outcomes\":[\"The deliverer returns EMPTY without opening or reading the file.\",\"The deliverer opens the file and performs the one required read before returning EMPTY.\"],\"observer\":\"A filesystem-call audit or a file that changes immediately after the metadata read\"}},{\"subject\":\"A1 scan metadata failure\",\"kind\":\"missing refusal condition\",\"text\":\"When the listing reaches an entry, one metadata reading of its path, without following a link, decides that it is a regular file and gives its listed size and modification time.\",\"question\":\"What must a scan do when the entry was listed but this metadata reading fails for a reason other than disappearance?\",\"options\":[\"Omit the entry\",\"Report it as rejected with unreadable_file\",\"Refuse the whole scan with folder_unavailable\"],\"default_guess\":\"Report it as rejected with unreadable_file.\",\"witness\":{\"initial\":\"A directory listing returns a file name, but reading that path's metadata then fails with a permissions or I/O error.\",\"events\":[\"The caller starts a scan.\",\"The listing returns the entry.\",\"The metadata reading fails.\"],\"outcomes\":[\"The scan completes and silently omits the entry.\",\"The scan includes a rejected observation with reason unreadable_file.\"],\"observer\":\"The scan caller\"}},{\"subject\":\"A1 entry whose type changes before metadata\",\"kind\":\"uncovered race outcome\",\"text\":\"When the listing reaches an entry, one metadata reading of its path, without following a link, decides that it is a regular file and gives its listed size and modification time.\",\"question\":\"What status or omission applies when the listing showed a regular file but the metadata reading finds a directory, symbolic link, or other non-regular object?\",\"options\":[\"Omit it because it is no longer a regular file\",\"Report rejected with not_a_regular_file\",\"Report rejected with unreadable_file\"],\"default_guess\":\"Omit a symbolic link and report other non-regular entries as rejected with not_a_regular_file.\",\"witness\":{\"initial\":\"The listing observes a regular file.\",\"events\":[\"Another actor replaces the entry with a directory before its metadata is read.\",\"The scan reads metadata and finds the directory.\"],\"outcomes\":[\"The entry is omitted from the scan.\",\"The entry is reported as rejected with not_a_regular_file.\"],\"observer\":\"The scan caller\"}},{\"subject\":\"A3 condition 1 path traversal\",\"kind\":\"atomicity and link-race ambiguity\",\"text\":\"Condition 1 is decided from the name and the metadata of its path before the file is opened.\",\"question\":\"How must the implementation prevent an intermediate segment or the final entry from being replaced by a symbolic link between the metadata checks and opening the file?\",\"options\":[\"Resolve and open every segment relative to already-open directory handles, without following links\",\"Check metadata first and then open the textual path normally\",\"Detect replacement by comparing metadata from the opened handle with the checked metadata and refuse on mismatch\"],\"default_guess\":\"Resolve each segment relative to directory handles without following links, and verify the opened file is the checked regular file.\",\"witness\":{\"initial\":\"A valid relative name points through an ordinary subfolder to a regular file.\",\"events\":[\"The deliverer checks all path metadata and condition 1 passes.\",\"Another process replaces the subfolder with a symbolic link to a location outside the photo folder.\",\"The deliverer opens the textual path.\"],\"outcomes\":[\"The operation refuses with NOT_READY_OR_ABSENT without opening the outside file.\",\"The operation follows the replacement link and reads a file outside the photo folder.\"],\"observer\":\"The caller, the owner of the outside file, or a filesystem security audit\"}},{\"subject\":\"INV-02 Required tests\",\"kind\":\"invariant test does not prove invariant\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What must the Required tests item observe to prove that delivery opens no path failing condition 1, rather than merely proving the returned failure and durable-state outcome?\",\"options\":[\"Instrument opening and assert that no rejected path or outside target is opened\",\"Add a race test that swaps a checked segment for a symbolic link before opening\",\"Treat the response and no-write assertions as sufficient evidence\"],\"default_guess\":\"Instrument path opening and include a symbolic-link replacement race, asserting that no rejected or outside path is opened.\",\"witness\":{\"initial\":\"A rejected name points through a symbolic link, and no placement exists.\",\"events\":[\"An implementation opens and reads the target but subsequently returns NOT_READY_OR_ABSENT.\",\"The named test checks only the answer and durable files.\"],\"outcomes\":[\"The test passes even though INV-02 was violated.\",\"A test observing open operations fails when the target is opened.\"],\"observer\":\"The generated-service test suite\"}},{\"subject\":\"INV-19 Required tests\",\"kind\":\"invariant test does not prove invariant\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"What must the Required tests item observe to prove that a new placement never reads a conflict copy?\",\"options\":[\"Instrument file access and assert that the conflict-copy path is never opened or read\",\"Make the conflict-copy contents unreadable and require NOT_READY_OR_ABSENT rather than an access-dependent result\",\"Treat the failure and no-write result as sufficient evidence\"],\"default_guess\":\"Instrument file access and assert that the conflict-copy path is neither opened nor read.\",\"witness\":{\"initial\":\"A conflict-copy file contains content with no placement.\",\"events\":[\"An implementation opens and reads the conflict copy, recognizes its ignored name afterward, and returns NOT_READY_OR_ABSENT.\",\"The named test checks only the answer and durable files.\"],\"outcomes\":[\"The existing assertions pass although INV-19 was violated.\",\"An access-observing assertion fails because the conflict copy was read.\"],\"observer\":\"The generated-service test suite\"}},{\"subject\":\"A1 modification time used by M03 and M05\",\"kind\":\"timestamp provenance ambiguity\",\"text\":\"When the listing reaches an entry, one metadata reading of its path, without following a link, decides that it is a regular file and gives its listed size and modification time.\",\"question\":\"Is this listed modification time the file_modified fallback used for PreparedPhoto.taken_at and PhotoPublication.photo_date, or must delivery obtain the modification time from the file it actually opens?\",\"options\":[\"Use the pre-open metadata reading's modification time\",\"Use metadata from the opened file handle\",\"Refuse when the pre-open and opened-file identities or modification times differ\"],\"default_guess\":\"Use metadata from the opened file handle so the fallback date belongs to the bytes actually read.\",\"witness\":{\"initial\":\"Path photo.jpg contains content A with modification time T1.\",\"events\":[\"Delivery reads path metadata.\",\"Syncthing renames content B with modification time T2 over the path.\",\"Delivery opens and reads content B.\"],\"outcomes\":[\"The placement hashes content B but publishes photo date T1.\",\"The placement hashes content B and publishes photo date T2.\"],\"observer\":\"The owner viewing the photo date in the Portal\"}},{\"subject\":\"file_modified datetime representation\",\"kind\":\"timestamp representation unspecified\",\"text\":\"The photo date comes from the camera record, otherwise from the file's modification time, and is delivered as UTC without an offset.\",\"question\":\"What exact datetime representation and precision must be produced from the filesystem modification time?\",\"options\":[\"A naive UTC datetime preserving the filesystem's available fractional precision\",\"A naive UTC datetime truncated to whole seconds\",\"An offset-aware UTC datetime internally, serialized without an offset\"],\"default_guess\":\"Use a naive UTC datetime preserving the filesystem's available fractional precision and serialize it in one canonical form.\",\"witness\":{\"initial\":\"A source file has a modification timestamp with fractional seconds near a UTC day boundary.\",\"events\":[\"The file has no usable camera date.\",\"The deliverer prepares and stores the publication body.\"],\"outcomes\":[\"photo_date preserves the fractional UTC instant as a naive datetime.\",\"photo_date is rounded or truncated, producing a different represented instant.\"],\"observer\":\"The caller comparing the publication body or a repeated result\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing time-source decision\",\"text\":\"`marked_at: datetime`\",\"question\":\"What is the source and representation of marked_at, and how many readings does one mark operation take?\",\"options\":[\"Read an injected UTC clock exactly once when the mark is created and store a naive UTC datetime\",\"Accept the timestamp from the caller\",\"Read the host system clock directly, potentially more than once\",\"Derive it from the Portal response or request time\"],\"default_guess\":\"Read an injected UTC clock exactly once after validation and while holding the project lock, then store a canonical naive UTC datetime; replay returns the stored value without reading the clock.\",\"witness\":{\"initial\":\"A placement exists and has no publication mark.\",\"events\":[\"The caller records a Portal photo_id while the system clock advances across a second boundary.\",\"The caller repeats the same mark request later.\"],\"outcomes\":[\"The first call stores one clock reading and replay returns that unchanged marked_at.\",\"The operation takes multiple or ambient readings, or replay recomputes marked_at, producing a different value.\"],\"observer\":\"The calling flow reading the mark result or stored record\"}},{\"subject\":\"A10 injection_interpreted_input ownership\",\"kind\":\"security ownership ambiguity\",\"text\":\"- injection_interpreted_input: APPLICABLE; references: A5, A6; affected: project id, source id, file names, stored paths\",\"question\":\"Does the security outcome for file names and source-path traversal also depend on A1 and A3's metadata, ignored-name, and no-link rules, and therefore need to reference those decisions?\",\"options\":[\"Add A1 and A3 as references and cover their path-opening race guarantees\",\"Leave ownership solely with A5 and A6\",\"Separate lexical input validation from filesystem traversal and name the owner of each\"],\"default_guess\":\"Separate lexical validation from filesystem traversal, with A3 owning delivery traversal and A1 owning scan traversal, and reference both in the security outcome.\"}]}",
+ "set_aside": []
+}
