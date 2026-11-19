@@ -1,0 +1,139 @@
+{
+ "open_points": [
+  {
+   "subject": "M02 SourcePhotoObservation.size",
+   "kind": "uncovered case",
+   "text": "a file rejected before its bytes were read has the size its metadata gave when it was listed",
+   "question": "What is `size` when a file is rejected after some, but not all, bytes have been read?",
+   "options": [
+    "the number of bytes successfully read",
+    "the metadata size recorded at listing",
+    "zero",
+    "the observation must not be emitted and the scan fails"
+   ],
+   "default_guess": "Use the number of bytes successfully read.",
+   "witness": {
+    "initial": "A listed file has metadata size 100 bytes and becomes unreadable after 40 bytes.",
+    "events": [
+     "The deliverer lists the file.",
+     "The deliverer reads 40 bytes.",
+     "The next read fails and the deliverer produces a rejected observation with reason `unreadable_file`."
+    ],
+    "outcomes": [
+     "The observation has `size` 40 because 40 bytes were read.",
+     "The observation has `size` 100 because rejected observations use the listed metadata size."
+    ],
+    "observer": "The calling flow reading the observation"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M02 SourcePhotoObservation.size",
+   "kind": "measurement semantics",
+   "text": "is the number of bytes that were read, the bytes `source_id` is the hash of",
+   "question": "Does “number of bytes that were read” mean the length of the single logical byte sequence supplied to the hash, or total physical I/O including retries, duplicate reads, and seeks?",
+   "options": [
+    "length of the byte sequence supplied once to the hash",
+    "sum of every successful filesystem read call",
+    "final file size after reading"
+   ],
+   "default_guess": "Use the length of the logical byte sequence supplied to the hash.",
+   "witness": {
+    "initial": "A 100-byte file is read; a transient failure causes the first 20 bytes to be read again.",
+    "events": [
+     "The deliverer reads 20 bytes.",
+     "The deliverer retries from the beginning.",
+     "The deliverer reads and hashes the complete 100-byte sequence."
+    ],
+    "outcomes": [
+     "`size` is 100, the length of the hashed content.",
+     "`size` is 120, the total number of bytes physically read."
+    ],
+    "observer": "The calling flow reading `size`"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M02 content observation during concurrent mutation",
+   "kind": "snapshot rule",
+   "text": "files with the same content carry the same `source_id`",
+   "question": "What content does an observation represent when the file changes while its bytes are being read, and must the deliverer accept the resulting stream, retry for a stable snapshot, or reject it?",
+   "options": [
+    "hash and report exactly the byte stream obtained during that read",
+    "retry until metadata and content form a stable snapshot",
+    "reject the file as unreadable or otherwise invalid",
+    "take a filesystem snapshot before reading"
+   ],
+   "default_guess": "Hash and report exactly the byte stream obtained during that read.",
+   "witness": {
+    "initial": "A listed file contains content A and another actor replaces part of it with content B during the scan.",
+    "events": [
+     "The deliverer begins reading the file.",
+     "Another process modifies the file.",
+     "The deliverer completes the read."
+    ],
+    "outcomes": [
+     "The deliverer emits a ready observation whose `source_id` hashes the mixed byte stream and whose `size` is that stream's length.",
+     "The deliverer detects the change and retries or rejects instead of emitting that observation."
+    ],
+    "observer": "The calling flow and any later scan comparing `source_id`"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M02 size and source_id invariant",
+   "kind": "missing formal invariant",
+   "text": "- INV-16: every security category has an explicit outcome.",
+   "question": "What formal invariant, in addition to INV-16, requires `size` to equal the length of the bytes hashed into `source_id` and defines the metadata-size exception for rejection before any read?",
+   "options": [
+    "add one formal invariant covering both the hashed-byte rule and the pre-read rejection exception",
+    "add separate invariants for successful reads and rejected files",
+    "declare the M02 prose non-invariant despite State 2 owning every formal invariant"
+   ],
+   "default_guess": "Add one formal invariant covering both rules.",
+   "unit": "?"
+  },
+  {
+   "subject": "M02 size and source_id Required tests",
+   "kind": "missing required test",
+   "text": "- INV-16: `python tools/design_lint.py examples/portal-deliverer --state 2` reports no security finding. The closed list of categories is `SECURITY_REVIEW_EVIDENCE.md`.",
+   "question": "Which Required tests item must show the changed M02 size rule, including the pre-read rejection exception and the chosen partial-read behavior?",
+   "options": [
+    "a test hashes a known byte sequence and asserts `size` equals its length",
+    "a test rejects before reading and asserts `size` equals listed metadata",
+    "a test covers rejection after a partial read according to the decided rule",
+    "one Required tests item names all of these cases"
+   ],
+   "default_guess": "Add one Required tests item naming all three cases and the invariant they demonstrate.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-16 Required tests",
+   "kind": "test obligation ambiguity",
+   "text": "reports no security finding",
+   "question": "Must the test explicitly demonstrate that every category in the closed list has exactly one permitted explicit outcome, or is the absence of any lint finding alone sufficient evidence for INV-16?",
+   "options": [
+    "the check must assert coverage and exactly one permitted outcome for every closed-list category",
+    "any execution producing no security finding is sufficient",
+    "the Required tests text must enumerate the permitted outcomes and required coverage"
+   ],
+   "default_guess": "Require the check to assert coverage and exactly one permitted outcome for every closed-list category.",
+   "witness": {
+    "initial": "The evidence file contains a category with no outcome, but the linter version being run does not diagnose missing outcomes.",
+    "events": [
+     "A reviewer runs the command named by the Required tests item.",
+     "The command exits without a security finding."
+    ],
+    "outcomes": [
+     "INV-16 passes because the stated result is only “no security finding.”",
+     "INV-16 fails because the test must independently show an explicit outcome for every category."
+    ],
+    "observer": "The State 2 reviewer deciding whether State 3 may start"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M02 SourcePhotoObservation.size\",\"kind\":\"uncovered case\",\"text\":\"a file rejected before its bytes were read has the size its metadata gave when it was listed\",\"question\":\"What is `size` when a file is rejected after some, but not all, bytes have been read?\",\"options\":[\"the number of bytes successfully read\",\"the metadata size recorded at listing\",\"zero\",\"the observation must not be emitted and the scan fails\"],\"default_guess\":\"Use the number of bytes successfully read.\",\"witness\":{\"initial\":\"A listed file has metadata size 100 bytes and becomes unreadable after 40 bytes.\",\"events\":[\"The deliverer lists the file.\",\"The deliverer reads 40 bytes.\",\"The next read fails and the deliverer produces a rejected observation with reason `unreadable_file`.\"],\"outcomes\":[\"The observation has `size` 40 because 40 bytes were read.\",\"The observation has `size` 100 because rejected observations use the listed metadata size.\"],\"observer\":\"The calling flow reading the observation\"}},{\"subject\":\"M02 SourcePhotoObservation.size\",\"kind\":\"measurement semantics\",\"text\":\"is the number of bytes that were read, the bytes `source_id` is the hash of\",\"question\":\"Does “number of bytes that were read” mean the length of the single logical byte sequence supplied to the hash, or total physical I/O including retries, duplicate reads, and seeks?\",\"options\":[\"length of the byte sequence supplied once to the hash\",\"sum of every successful filesystem read call\",\"final file size after reading\"],\"default_guess\":\"Use the length of the logical byte sequence supplied to the hash.\",\"witness\":{\"initial\":\"A 100-byte file is read; a transient failure causes the first 20 bytes to be read again.\",\"events\":[\"The deliverer reads 20 bytes.\",\"The deliverer retries from the beginning.\",\"The deliverer reads and hashes the complete 100-byte sequence.\"],\"outcomes\":[\"`size` is 100, the length of the hashed content.\",\"`size` is 120, the total number of bytes physically read.\"],\"observer\":\"The calling flow reading `size`\"}},{\"subject\":\"M02 content observation during concurrent mutation\",\"kind\":\"snapshot rule\",\"text\":\"files with the same content carry the same `source_id`\",\"question\":\"What content does an observation represent when the file changes while its bytes are being read, and must the deliverer accept the resulting stream, retry for a stable snapshot, or reject it?\",\"options\":[\"hash and report exactly the byte stream obtained during that read\",\"retry until metadata and content form a stable snapshot\",\"reject the file as unreadable or otherwise invalid\",\"take a filesystem snapshot before reading\"],\"default_guess\":\"Hash and report exactly the byte stream obtained during that read.\",\"witness\":{\"initial\":\"A listed file contains content A and another actor replaces part of it with content B during the scan.\",\"events\":[\"The deliverer begins reading the file.\",\"Another process modifies the file.\",\"The deliverer completes the read.\"],\"outcomes\":[\"The deliverer emits a ready observation whose `source_id` hashes the mixed byte stream and whose `size` is that stream's length.\",\"The deliverer detects the change and retries or rejects instead of emitting that observation.\"],\"observer\":\"The calling flow and any later scan comparing `source_id`\"}},{\"subject\":\"M02 size and source_id invariant\",\"kind\":\"missing formal invariant\",\"text\":\"- INV-16: every security category has an explicit outcome.\",\"question\":\"What formal invariant, in addition to INV-16, requires `size` to equal the length of the bytes hashed into `source_id` and defines the metadata-size exception for rejection before any read?\",\"options\":[\"add one formal invariant covering both the hashed-byte rule and the pre-read rejection exception\",\"add separate invariants for successful reads and rejected files\",\"declare the M02 prose non-invariant despite State 2 owning every formal invariant\"],\"default_guess\":\"Add one formal invariant covering both rules.\"},{\"subject\":\"M02 size and source_id Required tests\",\"kind\":\"missing required test\",\"text\":\"- INV-16: `python tools/design_lint.py examples/portal-deliverer --state 2` reports no security finding. The closed list of categories is `SECURITY_REVIEW_EVIDENCE.md`.\",\"question\":\"Which Required tests item must show the changed M02 size rule, including the pre-read rejection exception and the chosen partial-read behavior?\",\"options\":[\"a test hashes a known byte sequence and asserts `size` equals its length\",\"a test rejects before reading and asserts `size` equals listed metadata\",\"a test covers rejection after a partial read according to the decided rule\",\"one Required tests item names all of these cases\"],\"default_guess\":\"Add one Required tests item naming all three cases and the invariant they demonstrate.\"},{\"subject\":\"INV-16 Required tests\",\"kind\":\"test obligation ambiguity\",\"text\":\"reports no security finding\",\"question\":\"Must the test explicitly demonstrate that every category in the closed list has exactly one permitted explicit outcome, or is the absence of any lint finding alone sufficient evidence for INV-16?\",\"options\":[\"the check must assert coverage and exactly one permitted outcome for every closed-list category\",\"any execution producing no security finding is sufficient\",\"the Required tests text must enumerate the permitted outcomes and required coverage\"],\"default_guess\":\"Require the check to assert coverage and exactly one permitted outcome for every closed-list category.\",\"witness\":{\"initial\":\"The evidence file contains a category with no outcome, but the linter version being run does not diagnose missing outcomes.\",\"events\":[\"A reviewer runs the command named by the Required tests item.\",\"The command exits without a security finding.\"],\"outcomes\":[\"INV-16 passes because the stated result is only “no security finding.”\",\"INV-16 fails because the test must independently show an explicit outcome for every category.\"],\"observer\":\"The State 2 reviewer deciding whether State 3 may start\"}}]}",
+ "set_aside": []
+}

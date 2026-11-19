@@ -1,0 +1,163 @@
+{
+ "open_points": [
+  {
+   "subject": "context",
+   "kind": "hash_definition",
+   "text": "`size` is the number of bytes that were read, the bytes `source_id` is the hash of",
+   "question": "Which hash algorithm, input framing, and string encoding define `source_id`?",
+   "options": [
+    "Hash the raw bytes with SHA-256 and use lowercase hexadecimal.",
+    "Use another digest or encoding while preserving equality for identical content.",
+    "Treat the algorithm and representation as implementation details."
+   ],
+   "default_guess": "SHA-256 over the raw byte sequence, encoded as lowercase hexadecimal.",
+   "witness": {
+    "initial": "Two installations scan files containing the same byte sequence.",
+    "events": [
+     "One implementer computes a lowercase hexadecimal SHA-256 digest.",
+     "Another implementer computes a base32 BLAKE3 digest.",
+     "The calling flow compares or persists the resulting `source_id` values."
+    ],
+    "outcomes": [
+     "The observations carry the SHA-256 string.",
+     "The observations carry the BLAKE3 string."
+    ],
+    "observer": "The calling flow and any component matching observations across installations"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "byte_count_semantics",
+   "text": "`size` is the number of bytes that were read",
+   "question": "Does `size` mean the length of the logical file-content sequence supplied to the hash, or the cumulative number of bytes transferred by every read, including retries, overlapping reads, and decoder rereads?",
+   "options": [
+    "Count each byte once in the ordered sequence supplied to the hash.",
+    "Count all bytes returned by all physical read operations.",
+    "Use the file length after a successful read and count transferred bytes only after a partial failure."
+   ],
+   "default_guess": "Use the length of the single ordered raw-byte sequence supplied to the hash.",
+   "witness": {
+    "initial": "A 100-byte file is read once for identification and reread by format validation.",
+    "events": [
+     "The scanner reads 100 bytes to compute the digest.",
+     "The format validator reads the same 100 bytes again.",
+     "The scanner constructs the observation."
+    ],
+    "outcomes": [
+     "`size` is 100 because the hashed content has 100 bytes.",
+     "`size` is 200 because 200 bytes were read in total."
+    ],
+    "observer": "The caller reading `SourcePhotoObservation.size`"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "absent_hash_semantics",
+   "text": "`size` is the number of bytes that were read, the bytes `source_id` is the hash of; a file rejected before its bytes were read has the size its metadata gave when it was listed. `source_id` is present for `ready`, `placed` and `published` and absent for `rejected`",
+   "question": "For a file rejected after some or all bytes were read, does the size/hash correspondence still require computing and discarding a digest, or is `size` merely a count of bytes read with no defined hash input?",
+   "options": [
+    "Compute the digest over exactly the counted bytes and discard it because rejected observations must omit `source_id`.",
+    "Count bytes read without computing a digest for a rejected file.",
+    "A rejection after reading bytes is not permitted; rejection must occur before reading or after a complete digest is available."
+   ],
+   "default_guess": "Count the bytes supplied to the digest, compute or maintain the digest during reading, and omit the resulting `source_id` from the rejected observation.",
+   "witness": {
+    "initial": "A regular file is read completely and is then found to have an unsupported format.",
+    "events": [
+     "The deliverer reads the file's bytes.",
+     "Format validation rejects the file.",
+     "The deliverer returns a `rejected` observation."
+    ],
+    "outcomes": [
+     "The digest is computed over the counted bytes but discarded; `source_id` is absent.",
+     "No digest is computed, so only the physical-read count determines `size`; `source_id` is absent."
+    ],
+    "observer": "Tests or instrumentation checking digest work and the caller checking `size`"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "refusal_condition",
+   "text": "a file rejected before its bytes were read has the size its metadata gave when it was listed",
+   "question": "When must `too_large` be decided: from listed metadata before reading, from the actual byte stream while reading, after reading completes, or from some stated combination of those checks?",
+   "options": [
+    "Reject before reading when metadata exceeds the limit, and also stop and reject if streamed bytes exceed it.",
+    "Use only listed metadata to decide `too_large`.",
+    "Ignore metadata for refusal and decide only from bytes actually read."
+   ],
+   "default_guess": "Reject immediately when metadata exceeds the limit and also stop with `too_large` if the actual stream crosses the limit.",
+   "witness": {
+    "initial": "A file's listed metadata is within the applicable size limit, but the file grows and its stream crosses the limit during the scan.",
+    "events": [
+     "The deliverer lists the file and records its metadata size.",
+     "Another actor enlarges the file.",
+     "The deliverer reads the file."
+    ],
+    "outcomes": [
+     "Reading stops at the limit and the observation is `rejected` with reason `too_large`.",
+     "The deliverer continues because the listed size passed, and may return `ready` or reject only after consuming the whole file."
+    ],
+    "observer": "The caller and the operator observing resource consumption"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "check_precedence",
+   "text": "`ObservationReason` is `empty`, `too_large`, `not_a_regular_file`, `unreadable_file`, `unsupported_format`.",
+   "question": "If reading both crosses the size limit and then fails, which refusal reason takes precedence: `too_large` or `unreadable_file`?",
+   "options": [
+    "Return `too_large` as soon as the byte limit is crossed.",
+    "Return `unreadable_file` when any later read fails.",
+    "Define a general ordered precedence for all simultaneously applicable rejection reasons."
+   ],
+   "default_guess": "Stop immediately at the size limit and return `too_large`.",
+   "witness": {
+    "initial": "A listed regular file is readable long enough to cross the size limit, then a subsequent read fails.",
+    "events": [
+     "The deliverer begins reading the file.",
+     "The number of bytes read crosses the limit.",
+     "A later read raises an I/O error."
+    ],
+    "outcomes": [
+     "The observation is rejected with reason `too_large`.",
+     "The observation is rejected with reason `unreadable_file`."
+    ],
+    "observer": "The caller reading `reason`"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "missing_invariant_test",
+   "text": "`size` is the number of bytes that were read, the bytes `source_id` is the hash of; a file rejected before its bytes were read has the size its metadata gave when it was listed.",
+   "question": "What formal invariant and Required tests item must State 2 add to show the size/hash-input equality and the metadata fallback for rejection before any bytes are read?",
+   "options": [
+    "Add one invariant covering both branches and a test witnessing each branch.",
+    "Add separate invariants and witness tests for the read-byte rule and metadata fallback.",
+    "Declare these statements non-invariant descriptive facts and state why State 2 does not formalize them."
+   ],
+   "default_guess": "Add separate formal invariants with witness tests for a successfully hashed file, a partially read rejection, and a rejection before any byte is read.",
+   "witness": {
+    "initial": "Two implementations both pass the only listed Required test, which checks INV-16 security-category outcomes.",
+    "events": [
+     "One implementation reports the length of the hash input and uses metadata only when zero bytes were read.",
+     "Another reports metadata size for every rejected file.",
+     "Both run `python tools/design_lint.py examples/portal-deliverer --state 2` successfully."
+    ],
+    "outcomes": [
+     "The first implementation follows the newly stated size branches.",
+     "The second implementation produces a different rejected observation while satisfying every listed State 2 Required test."
+    ],
+    "observer": "The caller reading rejected observations and the later assembly agent"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context\",\"kind\":\"hash_definition\",\"text\":\"`size` is the number of bytes that were read, the bytes `source_id` is the hash of\",\"question\":\"Which hash algorithm, input framing, and string encoding define `source_id`?\",\"options\":[\"Hash the raw bytes with SHA-256 and use lowercase hexadecimal.\",\"Use another digest or encoding while preserving equality for identical content.\",\"Treat the algorithm and representation as implementation details.\"],\"default_guess\":\"SHA-256 over the raw byte sequence, encoded as lowercase hexadecimal.\",\"witness\":{\"initial\":\"Two installations scan files containing the same byte sequence.\",\"events\":[\"One implementer computes a lowercase hexadecimal SHA-256 digest.\",\"Another implementer computes a base32 BLAKE3 digest.\",\"The calling flow compares or persists the resulting `source_id` values.\"],\"outcomes\":[\"The observations carry the SHA-256 string.\",\"The observations carry the BLAKE3 string.\"],\"observer\":\"The calling flow and any component matching observations across installations\"}},{\"subject\":\"context\",\"kind\":\"byte_count_semantics\",\"text\":\"`size` is the number of bytes that were read\",\"question\":\"Does `size` mean the length of the logical file-content sequence supplied to the hash, or the cumulative number of bytes transferred by every read, including retries, overlapping reads, and decoder rereads?\",\"options\":[\"Count each byte once in the ordered sequence supplied to the hash.\",\"Count all bytes returned by all physical read operations.\",\"Use the file length after a successful read and count transferred bytes only after a partial failure.\"],\"default_guess\":\"Use the length of the single ordered raw-byte sequence supplied to the hash.\",\"witness\":{\"initial\":\"A 100-byte file is read once for identification and reread by format validation.\",\"events\":[\"The scanner reads 100 bytes to compute the digest.\",\"The format validator reads the same 100 bytes again.\",\"The scanner constructs the observation.\"],\"outcomes\":[\"`size` is 100 because the hashed content has 100 bytes.\",\"`size` is 200 because 200 bytes were read in total.\"],\"observer\":\"The caller reading `SourcePhotoObservation.size`\"}},{\"subject\":\"context\",\"kind\":\"absent_hash_semantics\",\"text\":\"`size` is the number of bytes that were read, the bytes `source_id` is the hash of; a file rejected before its bytes were read has the size its metadata gave when it was listed. `source_id` is present for `ready`, `placed` and `published` and absent for `rejected`\",\"question\":\"For a file rejected after some or all bytes were read, does the size/hash correspondence still require computing and discarding a digest, or is `size` merely a count of bytes read with no defined hash input?\",\"options\":[\"Compute the digest over exactly the counted bytes and discard it because rejected observations must omit `source_id`.\",\"Count bytes read without computing a digest for a rejected file.\",\"A rejection after reading bytes is not permitted; rejection must occur before reading or after a complete digest is available.\"],\"default_guess\":\"Count the bytes supplied to the digest, compute or maintain the digest during reading, and omit the resulting `source_id` from the rejected observation.\",\"witness\":{\"initial\":\"A regular file is read completely and is then found to have an unsupported format.\",\"events\":[\"The deliverer reads the file's bytes.\",\"Format validation rejects the file.\",\"The deliverer returns a `rejected` observation.\"],\"outcomes\":[\"The digest is computed over the counted bytes but discarded; `source_id` is absent.\",\"No digest is computed, so only the physical-read count determines `size`; `source_id` is absent.\"],\"observer\":\"Tests or instrumentation checking digest work and the caller checking `size`\"}},{\"subject\":\"context\",\"kind\":\"refusal_condition\",\"text\":\"a file rejected before its bytes were read has the size its metadata gave when it was listed\",\"question\":\"When must `too_large` be decided: from listed metadata before reading, from the actual byte stream while reading, after reading completes, or from some stated combination of those checks?\",\"options\":[\"Reject before reading when metadata exceeds the limit, and also stop and reject if streamed bytes exceed it.\",\"Use only listed metadata to decide `too_large`.\",\"Ignore metadata for refusal and decide only from bytes actually read.\"],\"default_guess\":\"Reject immediately when metadata exceeds the limit and also stop with `too_large` if the actual stream crosses the limit.\",\"witness\":{\"initial\":\"A file's listed metadata is within the applicable size limit, but the file grows and its stream crosses the limit during the scan.\",\"events\":[\"The deliverer lists the file and records its metadata size.\",\"Another actor enlarges the file.\",\"The deliverer reads the file.\"],\"outcomes\":[\"Reading stops at the limit and the observation is `rejected` with reason `too_large`.\",\"The deliverer continues because the listed size passed, and may return `ready` or reject only after consuming the whole file.\"],\"observer\":\"The caller and the operator observing resource consumption\"}},{\"subject\":\"context\",\"kind\":\"check_precedence\",\"text\":\"`ObservationReason` is `empty`, `too_large`, `not_a_regular_file`, `unreadable_file`, `unsupported_format`.\",\"question\":\"If reading both crosses the size limit and then fails, which refusal reason takes precedence: `too_large` or `unreadable_file`?\",\"options\":[\"Return `too_large` as soon as the byte limit is crossed.\",\"Return `unreadable_file` when any later read fails.\",\"Define a general ordered precedence for all simultaneously applicable rejection reasons.\"],\"default_guess\":\"Stop immediately at the size limit and return `too_large`.\",\"witness\":{\"initial\":\"A listed regular file is readable long enough to cross the size limit, then a subsequent read fails.\",\"events\":[\"The deliverer begins reading the file.\",\"The number of bytes read crosses the limit.\",\"A later read raises an I/O error.\"],\"outcomes\":[\"The observation is rejected with reason `too_large`.\",\"The observation is rejected with reason `unreadable_file`.\"],\"observer\":\"The caller reading `reason`\"}},{\"subject\":\"context\",\"kind\":\"missing_invariant_test\",\"text\":\"`size` is the number of bytes that were read, the bytes `source_id` is the hash of; a file rejected before its bytes were read has the size its metadata gave when it was listed.\",\"question\":\"What formal invariant and Required tests item must State 2 add to show the size/hash-input equality and the metadata fallback for rejection before any bytes are read?\",\"options\":[\"Add one invariant covering both branches and a test witnessing each branch.\",\"Add separate invariants and witness tests for the read-byte rule and metadata fallback.\",\"Declare these statements non-invariant descriptive facts and state why State 2 does not formalize them.\"],\"default_guess\":\"Add separate formal invariants with witness tests for a successfully hashed file, a partially read rejection, and a rejection before any byte is read.\",\"witness\":{\"initial\":\"Two implementations both pass the only listed Required test, which checks INV-16 security-category outcomes.\",\"events\":[\"One implementation reports the length of the hash input and uses metadata only when zero bytes were read.\",\"Another reports metadata size for every rejected file.\",\"Both run `python tools/design_lint.py examples/portal-deliverer --state 2` successfully.\"],\"outcomes\":[\"The first implementation follows the newly stated size branches.\",\"The second implementation produces a different rejected observation while satisfying every listed State 2 Required test.\"],\"observer\":\"The caller reading rejected observations and the later assembly agent\"}}]}",
+ "set_aside": []
+}

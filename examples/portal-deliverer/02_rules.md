@@ -49,7 +49,10 @@ writing lies under such a temporary name. Ignored names are not reported, ignore
 and an entry the listing shows as a symbolic link is neither reported nor followed.
 
 Syncthing may change the folder during a scan, so a scan is not a view of one instant. Each rule applies
-to what its step finds when it runs, and the next scan sees the folder as it then stands.
+to what its step finds when it runs, and the next scan sees the folder as it then stands. A file that
+changes while it is read is judged by the bytes that were read, once, without a retry: Syncthing replaces
+a finished file by renaming a new one over it, and a delivery that later reads other bytes answers
+`SOURCE_CHANGED` under A3 rule 5.
 
 A scan only reads the source folder. A signature does not prove that an image can be decoded: a `ready`
 file may still fail when it is delivered.
