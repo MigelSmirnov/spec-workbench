@@ -1,0 +1,82 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 and A3 post-open metadata check",
+   "kind": "contradictory sequencing",
+   "text": "A file is then opened: an opening that fails, or a failed metadata reading of the opened file, is order 5, and an opened object that is not a regular file is order 3; either ends the work on that file before any byte is read. / A named file that passes condition 1 of rule 5 and that A1 orders 1 and 2 do not reject from its metadata is opened, and unless the opening decides A1 order 3 or 5, read once; the bytes that were read are the bytes judged, hashed and prepared.",
+   "question": "Does A3's phrase \"the opening decides\" include the metadata reading performed after a successful open, so that failure of that reading or discovery of a non-regular opened object always prevents every read?",
+   "options": [
+    "Treat opening plus the post-open metadata check as one opening phase and do not read after either order 3 or order 5",
+    "Treat only the open operation itself as \"the opening\", so a successful open is followed by a read even if the post-open metadata check failed"
+   ],
+   "default_guess": "Treat the open and its mandatory post-open metadata check as one phase, and never read after order 3 or order 5.",
+   "witness": {
+    "initial": "A listed entry is a non-empty regular file within the size limit, and opening it succeeds.",
+    "events": [
+     "The deliverer opens the file.",
+     "The metadata reading of the opened file fails.",
+     "The implementation decides whether A3 still requires the read."
+    ],
+    "outcomes": [
+     "A1 ends work before any byte is read and the delivery fails with UNREADABLE_FILE.",
+     "A3 is read literally as exempting only an open failure, so the implementation attempts to read the opened object."
+    ],
+    "observer": "A filesystem or syscall observer sees whether a read is attempted."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1/A3 symbolic-link race through an intermediate folder",
+   "kind": "uncovered race",
+   "text": "or a folder on its path is absent or a symbolic link / opened in non-blocking mode without following a link / opening or reading it fails, which includes a file that disappeared and a path that became a symbolic link after the listing",
+   "question": "If an intermediate folder is replaced by a symbolic link after condition 1 checks it but before the file is opened, must opening be anchored so that no intermediate link can be followed, and which A1 order and PlacementFailure result apply when that race is detected?",
+   "options": [
+    "Open every component relative to already-open directory handles without following links; a raced intermediate link refuses the delivery",
+    "Apply no-follow only to the last segment; an intermediate link introduced after the metadata checks may be followed",
+    "Recheck the path immediately before a conventional full-path open, accepting the remaining check-to-open race"
+   ],
+   "default_guess": "Use directory-relative, no-follow traversal for every component and treat a detected post-check link race as A1 order 5 and UNREADABLE_FILE.",
+   "witness": {
+    "initial": "The photo folder contains `room/photo.jpg` as a regular file, while an outside directory contains another `photo.jpg`.",
+    "events": [
+     "The deliverer verifies that `room` and `room/photo.jpg` contain no symbolic-link segment.",
+     "Syncthing or another filesystem actor replaces `room` with a symbolic link to the outside directory.",
+     "The deliverer opens `room/photo.jpg`."
+    ],
+    "outcomes": [
+     "An anchored no-follow traversal detects the replacement and refuses without reading the outside file.",
+     "A full-path open with no-follow protection only on the last segment follows the new intermediate link and reads or places the outside file."
+    ],
+    "observer": "The owner sees a refusal versus placement of outside content; a filesystem observer also sees which file was read."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "invariant test obligation incomplete",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What must the Required test observe to prove that delivery opens no path failing condition 1, rather than merely proving the returned failure and absence of durable writes?",
+   "options": [
+    "Instrument filesystem opening and assert that the rejected target path is never opened for every listed case",
+    "Treat the failure response and lack of durable writes as sufficient evidence even if the implementation opened or read the rejected path"
+   ],
+   "default_guess": "Instrument the filesystem boundary and assert that no rejected target path is opened.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "invariant test obligation incomplete",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "What must the Required test observe to prove that a new placement never reads a conflict copy, rather than only proving that the call ultimately fails without durable changes?",
+   "options": [
+    "Instrument file reads and assert that the conflict copy is neither opened for content nor read",
+    "Treat the failure response and unchanged durable state as sufficient even if the conflict copy was read before refusal"
+   ],
+   "default_guess": "Instrument the source-file boundary and assert that no content read of the conflict copy occurs.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 and A3 post-open metadata check\",\"kind\":\"contradictory sequencing\",\"text\":\"A file is then opened: an opening that fails, or a failed metadata reading of the opened file, is order 5, and an opened object that is not a regular file is order 3; either ends the work on that file before any byte is read. / A named file that passes condition 1 of rule 5 and that A1 orders 1 and 2 do not reject from its metadata is opened, and unless the opening decides A1 order 3 or 5, read once; the bytes that were read are the bytes judged, hashed and prepared.\",\"question\":\"Does A3's phrase \\\"the opening decides\\\" include the metadata reading performed after a successful open, so that failure of that reading or discovery of a non-regular opened object always prevents every read?\",\"options\":[\"Treat opening plus the post-open metadata check as one opening phase and do not read after either order 3 or order 5\",\"Treat only the open operation itself as \\\"the opening\\\", so a successful open is followed by a read even if the post-open metadata check failed\"],\"default_guess\":\"Treat the open and its mandatory post-open metadata check as one phase, and never read after order 3 or order 5.\",\"witness\":{\"initial\":\"A listed entry is a non-empty regular file within the size limit, and opening it succeeds.\",\"events\":[\"The deliverer opens the file.\",\"The metadata reading of the opened file fails.\",\"The implementation decides whether A3 still requires the read.\"],\"outcomes\":[\"A1 ends work before any byte is read and the delivery fails with UNREADABLE_FILE.\",\"A3 is read literally as exempting only an open failure, so the implementation attempts to read the opened object.\"],\"observer\":\"A filesystem or syscall observer sees whether a read is attempted.\"}},{\"subject\":\"A1/A3 symbolic-link race through an intermediate folder\",\"kind\":\"uncovered race\",\"text\":\"or a folder on its path is absent or a symbolic link / opened in non-blocking mode without following a link / opening or reading it fails, which includes a file that disappeared and a path that became a symbolic link after the listing\",\"question\":\"If an intermediate folder is replaced by a symbolic link after condition 1 checks it but before the file is opened, must opening be anchored so that no intermediate link can be followed, and which A1 order and PlacementFailure result apply when that race is detected?\",\"options\":[\"Open every component relative to already-open directory handles without following links; a raced intermediate link refuses the delivery\",\"Apply no-follow only to the last segment; an intermediate link introduced after the metadata checks may be followed\",\"Recheck the path immediately before a conventional full-path open, accepting the remaining check-to-open race\"],\"default_guess\":\"Use directory-relative, no-follow traversal for every component and treat a detected post-check link race as A1 order 5 and UNREADABLE_FILE.\",\"witness\":{\"initial\":\"The photo folder contains `room/photo.jpg` as a regular file, while an outside directory contains another `photo.jpg`.\",\"events\":[\"The deliverer verifies that `room` and `room/photo.jpg` contain no symbolic-link segment.\",\"Syncthing or another filesystem actor replaces `room` with a symbolic link to the outside directory.\",\"The deliverer opens `room/photo.jpg`.\"],\"outcomes\":[\"An anchored no-follow traversal detects the replacement and refuses without reading the outside file.\",\"A full-path open with no-follow protection only on the last segment follows the new intermediate link and reads or places the outside file.\"],\"observer\":\"The owner sees a refusal versus placement of outside content; a filesystem observer also sees which file was read.\"}},{\"subject\":\"INV-02 Required tests\",\"kind\":\"invariant test obligation incomplete\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What must the Required test observe to prove that delivery opens no path failing condition 1, rather than merely proving the returned failure and absence of durable writes?\",\"options\":[\"Instrument filesystem opening and assert that the rejected target path is never opened for every listed case\",\"Treat the failure response and lack of durable writes as sufficient evidence even if the implementation opened or read the rejected path\"],\"default_guess\":\"Instrument the filesystem boundary and assert that no rejected target path is opened.\"},{\"subject\":\"INV-19 Required tests\",\"kind\":\"invariant test obligation incomplete\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"What must the Required test observe to prove that a new placement never reads a conflict copy, rather than only proving that the call ultimately fails without durable changes?\",\"options\":[\"Instrument file reads and assert that the conflict copy is neither opened for content nor read\",\"Treat the failure response and unchanged durable state as sufficient even if the conflict copy was read before refusal\"],\"default_guess\":\"Instrument the source-file boundary and assert that no content read of the conflict copy occurs.\"}]}",
+ "set_aside": []
+}

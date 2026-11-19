@@ -59,8 +59,9 @@ show as a regular file is not reported. Orders 1 and 2 are first decided by that
 opened. A file is then opened: an opening that fails, or a failed metadata reading of the opened file,
 is order 5, and an opened object that is not a regular file is order 3; either ends the work on that file
 before any byte is read. Otherwise it is read once, up to one byte past the imported `MAX_SOURCE_BYTES` constant: reaching
-that byte is order 4, and the read stops there. A read that reaches the end of the file with no bytes is
-order 1. A file that is read takes its modification time from one metadata reading of the file that was
+that byte is order 4, and the read stops there. Read once means one pass over the opened file from its
+start, continued after a short read until the end of the file or that byte; the file is not opened or read
+again. A read that reaches the end of the file with no bytes is order 1. A file that is read takes its modification time from one metadata reading of the file that was
 opened, the one whose bytes are read, taken after the opening and before the read; A7 rule 4 gives its
 form, and a delivery uses that time under A2 rule 3.
 

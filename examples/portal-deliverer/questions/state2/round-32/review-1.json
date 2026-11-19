@@ -1,0 +1,132 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 opening a path after listing",
+   "kind": "race_scope",
+   "text": "opening or reading it fails, which includes a file that disappeared and a path that became a symbolic link after the listing",
+   "question": "Does “a path that became a symbolic link” include every ancestor segment as well as the final segment, and must a substitution after the metadata check be refused even when opening through the new link succeeds?",
+   "options": [
+    "Reject with `unreadable_file` if any segment becomes a symbolic link after its metadata check.",
+    "Apply no-follow behavior only to the final segment; an ancestor replaced by a symbolic link may be followed.",
+    "Reject only when the operating-system open itself fails because of the link."
+   ],
+   "default_guess": "Open by descriptor-relative traversal without following any segment and treat any detected substitution as order 5.",
+   "witness": {
+    "initial": "The listing and metadata checks see `album/photo.jpg` as a regular file of an ordinary subfolder and within the size limit.",
+    "events": [
+     "Syncthing or another local actor renames `album` and replaces it with a symbolic link to another directory containing `photo.jpg`.",
+     "The deliverer opens the named file after the replacement."
+    ],
+    "outcomes": [
+     "The replacement of an ancestor by a symbolic link is order 5, so the file is rejected as `unreadable_file` without reading bytes.",
+     "Only the final segment is opened without following a link, so the ancestor link is followed and the other file is read and judged."
+    ],
+    "observer": "The caller sees rejection versus an outcome based on the alternate file."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 file reading",
+   "kind": "read_semantics",
+   "text": "Otherwise it is read once, up to one byte past the imported `MAX_SOURCE_BYTES` constant",
+   "question": "Does “read once” mean one operating-system read call or one logical pass that continues after short reads, and are interrupted reads retried or treated as order 5?",
+   "options": [
+    "Continue reading until EOF, the limit-plus-one byte, or a non-retryable error; retry interruptions.",
+    "Make exactly one read call and judge whatever bytes it returns.",
+    "Continue after short reads but treat every interrupted call as order 5."
+   ],
+   "default_guess": "Treat it as one logical pass, retry interruptions, and continue after short reads until EOF, limit-plus-one, or a non-retryable error.",
+   "witness": {
+    "initial": "A regular valid image is larger than the first short result but smaller than `MAX_SOURCE_BYTES`.",
+    "events": [
+     "The deliverer starts the prescribed read.",
+     "The operating system returns a positive short read without EOF."
+    ],
+    "outcomes": [
+     "The implementation continues to EOF and hashes and prepares the complete image.",
+     "The implementation treats the one short result as the completed read and hashes or rejects based on a truncated image."
+    ],
+    "observer": "The caller sees placement or a source/format failure computed from different bytes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 INV-01",
+   "kind": "invariant_test_gap",
+   "text": "INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).",
+   "question": "Must the invariant cover source metadata not named here, such as access times, ownership and extended attributes, and must it be shown for refused and failed operation paths as well as the four listed successful actions?",
+   "options": [
+    "Expand the required test to show that all source-folder state remains unchanged across successful, refused and failed paths.",
+    "Define “changes” as only files, bytes, modification times and modes, and test those facts across every operation path.",
+    "Narrow INV-01 itself to the properties and paths this Required tests item covers."
+   ],
+   "default_guess": "Count all persistent source-folder state as protected and test successful, refused and failed paths; use access-time-safe reads where the platform permits.",
+   "witness": {
+    "initial": "A source image has an old access time and otherwise stable bytes, modification time and mode.",
+    "events": [
+     "The owner requests a scan.",
+     "The implementation opens and reads the source using ordinary access-time-updating filesystem semantics."
+    ],
+    "outcomes": [
+     "The scan changes the access time, so INV-01 is violated although the stated test can pass.",
+     "The implementation or mounted filesystem suppresses access-time updates, so the source state remains unchanged."
+    ],
+    "observer": "The source-folder owner or a filesystem audit sees the metadata difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 INV-02",
+   "kind": "invariant_test_gap",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What must the Required test observe to prove that no failing path was opened, rather than only proving the returned failure and durable writes?",
+   "options": [
+    "Instrument file-opening calls and assert that none targets a path failing A3 rule 5 condition 1.",
+    "Replace INV-02 with an outcome-and-write invariant matching what the listed test observes.",
+    "Treat the failure result and lack of durable files as indirect proof that no path was opened."
+   ],
+   "default_guess": "Instrument the filesystem-opening boundary and assert that validation refuses each case before an open is attempted.",
+   "witness": {
+    "initial": "An ignored file exists, has no placement, and would be readable if opened.",
+    "events": [
+     "The caller requests delivery under the ignored name.",
+     "One implementation opens the file before returning the required failure; another rejects the name before opening it."
+    ],
+    "outcomes": [
+     "Both return NOT_READY_OR_ABSENT and add only the project lock, but the first violates INV-02.",
+     "Both return the same answer, and the stated Required test cannot distinguish their behavior."
+    ],
+    "observer": "A test spy or filesystem audit sees whether the source path was opened."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 INV-19",
+   "kind": "invariant_test_gap",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "What must the Required test observe to prove the invariant that a new placement never reads a conflict copy, rather than only its answer and durable effects?",
+   "options": [
+    "Instrument source reads and assert that no bytes of the conflict copy are read.",
+    "Narrow INV-19 to refusal and durable-state effects.",
+    "Accept the refusal and unchanged files as indirect evidence that no read occurred."
+   ],
+   "default_guess": "Instrument the read boundary and assert that conflict-copy recognition happens before any source bytes are read.",
+   "witness": {
+    "initial": "A readable conflict copy exists and its content has no placement.",
+    "events": [
+     "The caller requests delivery using the conflict-copy name.",
+     "One implementation reads and hashes it before detecting the conflict name; another rejects the name before reading."
+    ],
+    "outcomes": [
+     "Both return NOT_READY_OR_ABSENT and leave the same durable state, but the first violates INV-19.",
+     "The stated Required test passes for both implementations."
+    ],
+    "observer": "A read spy, access audit or source-filesystem observer sees the difference."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 opening a path after listing\",\"kind\":\"race_scope\",\"text\":\"opening or reading it fails, which includes a file that disappeared and a path that became a symbolic link after the listing\",\"question\":\"Does “a path that became a symbolic link” include every ancestor segment as well as the final segment, and must a substitution after the metadata check be refused even when opening through the new link succeeds?\",\"options\":[\"Reject with `unreadable_file` if any segment becomes a symbolic link after its metadata check.\",\"Apply no-follow behavior only to the final segment; an ancestor replaced by a symbolic link may be followed.\",\"Reject only when the operating-system open itself fails because of the link.\"],\"default_guess\":\"Open by descriptor-relative traversal without following any segment and treat any detected substitution as order 5.\",\"witness\":{\"initial\":\"The listing and metadata checks see `album/photo.jpg` as a regular file of an ordinary subfolder and within the size limit.\",\"events\":[\"Syncthing or another local actor renames `album` and replaces it with a symbolic link to another directory containing `photo.jpg`.\",\"The deliverer opens the named file after the replacement.\"],\"outcomes\":[\"The replacement of an ancestor by a symbolic link is order 5, so the file is rejected as `unreadable_file` without reading bytes.\",\"Only the final segment is opened without following a link, so the ancestor link is followed and the other file is read and judged.\"],\"observer\":\"The caller sees rejection versus an outcome based on the alternate file.\"}},{\"subject\":\"A1 file reading\",\"kind\":\"read_semantics\",\"text\":\"Otherwise it is read once, up to one byte past the imported `MAX_SOURCE_BYTES` constant\",\"question\":\"Does “read once” mean one operating-system read call or one logical pass that continues after short reads, and are interrupted reads retried or treated as order 5?\",\"options\":[\"Continue reading until EOF, the limit-plus-one byte, or a non-retryable error; retry interruptions.\",\"Make exactly one read call and judge whatever bytes it returns.\",\"Continue after short reads but treat every interrupted call as order 5.\"],\"default_guess\":\"Treat it as one logical pass, retry interruptions, and continue after short reads until EOF, limit-plus-one, or a non-retryable error.\",\"witness\":{\"initial\":\"A regular valid image is larger than the first short result but smaller than `MAX_SOURCE_BYTES`.\",\"events\":[\"The deliverer starts the prescribed read.\",\"The operating system returns a positive short read without EOF.\"],\"outcomes\":[\"The implementation continues to EOF and hashes and prepares the complete image.\",\"The implementation treats the one short result as the completed read and hashes or rejects based on a truncated image.\"],\"observer\":\"The caller sees placement or a source/format failure computed from different bytes.\"}},{\"subject\":\"A1 INV-01\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).\",\"question\":\"Must the invariant cover source metadata not named here, such as access times, ownership and extended attributes, and must it be shown for refused and failed operation paths as well as the four listed successful actions?\",\"options\":[\"Expand the required test to show that all source-folder state remains unchanged across successful, refused and failed paths.\",\"Define “changes” as only files, bytes, modification times and modes, and test those facts across every operation path.\",\"Narrow INV-01 itself to the properties and paths this Required tests item covers.\"],\"default_guess\":\"Count all persistent source-folder state as protected and test successful, refused and failed paths; use access-time-safe reads where the platform permits.\",\"witness\":{\"initial\":\"A source image has an old access time and otherwise stable bytes, modification time and mode.\",\"events\":[\"The owner requests a scan.\",\"The implementation opens and reads the source using ordinary access-time-updating filesystem semantics.\"],\"outcomes\":[\"The scan changes the access time, so INV-01 is violated although the stated test can pass.\",\"The implementation or mounted filesystem suppresses access-time updates, so the source state remains unchanged.\"],\"observer\":\"The source-folder owner or a filesystem audit sees the metadata difference.\"}},{\"subject\":\"A1 INV-02\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What must the Required test observe to prove that no failing path was opened, rather than only proving the returned failure and durable writes?\",\"options\":[\"Instrument file-opening calls and assert that none targets a path failing A3 rule 5 condition 1.\",\"Replace INV-02 with an outcome-and-write invariant matching what the listed test observes.\",\"Treat the failure result and lack of durable files as indirect proof that no path was opened.\"],\"default_guess\":\"Instrument the filesystem-opening boundary and assert that validation refuses each case before an open is attempted.\",\"witness\":{\"initial\":\"An ignored file exists, has no placement, and would be readable if opened.\",\"events\":[\"The caller requests delivery under the ignored name.\",\"One implementation opens the file before returning the required failure; another rejects the name before opening it.\"],\"outcomes\":[\"Both return NOT_READY_OR_ABSENT and add only the project lock, but the first violates INV-02.\",\"Both return the same answer, and the stated Required test cannot distinguish their behavior.\"],\"observer\":\"A test spy or filesystem audit sees whether the source path was opened.\"}},{\"subject\":\"A3 INV-19\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"What must the Required test observe to prove the invariant that a new placement never reads a conflict copy, rather than only its answer and durable effects?\",\"options\":[\"Instrument source reads and assert that no bytes of the conflict copy are read.\",\"Narrow INV-19 to refusal and durable-state effects.\",\"Accept the refusal and unchanged files as indirect evidence that no read occurred.\"],\"default_guess\":\"Instrument the read boundary and assert that conflict-copy recognition happens before any source bytes are read.\",\"witness\":{\"initial\":\"A readable conflict copy exists and its content has no placement.\",\"events\":[\"The caller requests delivery using the conflict-copy name.\",\"One implementation reads and hashes it before detecting the conflict name; another rejects the name before reading.\"],\"outcomes\":[\"Both return NOT_READY_OR_ABSENT and leave the same durable state, but the first violates INV-19.\",\"The stated Required test passes for both implementations.\"],\"observer\":\"A read spy, access audit or source-filesystem observer sees the difference.\"}}]}",
+ "set_aside": []
+}
