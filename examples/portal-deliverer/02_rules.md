@@ -53,9 +53,11 @@ to what its step finds when it runs, and the next scan sees the folder as it the
 changes while it is read is judged by the bytes that were read, once, without a retry. Syncthing replaces
 a finished file by renaming a new one over it; a later delivery judges what it then reads under A3 rule 5.
 
-Orders 1 and 2 are first decided by the size the listing gave, before the file is opened. A file is then
-read once, up to one byte past the source limit: reaching that byte is order 4, and the read stops there.
-A read that reaches the end of the file with no bytes is order 1.
+When the listing reaches an entry, one metadata reading of its path, without following a link, decides
+that it is a regular file and gives its listed size and modification time. Orders 1 and 2 are first
+decided by that size, before the file is opened. A file is then read once, up to one byte past the
+imported `MAX_SOURCE_BYTES` constant: reaching that byte is order 4, and the read stops there. A read that
+reaches the end of the file with no bytes is order 1.
 
 A scan only reads the source folder. A signature does not prove that an image can be decoded: a `ready`
 file may still fail when it is delivered.
@@ -133,7 +135,8 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
    `invalid_source_id`.
 5. A photo that cannot be delivered is answered with status `failed` and one member of
    `= models.PlacementFailure`. Condition 1 is decided from the name and the metadata of its path before
-   the file is opened, and conditions 2 to 4 from the opening on. Conditions 1 to 4 write nothing except the
+   the file is opened. Condition 2 decides A1 orders 1 and 2 from that same metadata, before the file is
+   opened, and its other orders and conditions 3 and 4 from the opening on. Conditions 1 to 4 write nothing except the
    project lock. After condition 5 a stored image may remain without a record: no caller has received
    its reference, and a repeated delivery of the same file writes it again and completes the placement,
    unless a refusal of A6 rule 5 applies.
