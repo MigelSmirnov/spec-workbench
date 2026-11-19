@@ -56,7 +56,9 @@ a finished file by renaming a new one over it; a later delivery judges what it t
 When the listing reaches an entry, one metadata reading of its path, without following a link, decides
 that it is a regular file and gives its listed size and modification time; an entry that reading does not
 show as a regular file is not reported. Orders 1 and 2 are first decided by that size, before the file is
-opened. A file is then read once, up to one byte past the imported `MAX_SOURCE_BYTES` constant: reaching
+opened. A file is then opened: an opening that fails, or a failed metadata reading of the opened file,
+is order 5, and an opened object that is not a regular file is order 3; either ends the work on that file
+before any byte is read. Otherwise it is read once, up to one byte past the imported `MAX_SOURCE_BYTES` constant: reaching
 that byte is order 4, and the read stops there. A read that reaches the end of the file with no bytes is
 order 1. A file that is read takes its modification time from one metadata reading of the file that was
 opened, the one whose bytes are read, taken after the opening and before the read; A7 rule 4 gives its
@@ -131,7 +133,8 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
 3. One call delivers one photo, named by `name`, a relative path in the form a scan reports, and
    `source_id`. The service keeps no memory of earlier scans: it judges the name and the file when the call
    runs. A named file that passes condition 1 of rule 5 and that A1 orders 1 and 2 do not reject from its
-   metadata is opened and read once, and the bytes that were read are the bytes judged, hashed and prepared.
+   metadata is opened, and unless the opening decides A1 order 3 or 5, read once; the bytes that were read
+   are the bytes judged, hashed and prepared.
 4. Checks run in this order: token, request form and project id, connection, photo folder, source id,
    project lock, existing placement, named file. The request form is a body holding only `name` and
    `source_id`, both strings. A defect of that form or of the project id is refused as a whole request. A
