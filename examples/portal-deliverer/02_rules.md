@@ -33,7 +33,7 @@ applies decides:
 
 A scan covers the photo folder and all its subfolders (R0-12). When the photo folder, or a subfolder
 that is not ignored and is still a folder, cannot be opened or listed, the whole operation is refused
-with `folder_unavailable`, so a partial scan is never reported as complete; a listed subfolder that has
+with the FOLDER_UNAVAILABLE member of = models.RefusalCode, so a partial scan is never reported as complete; a listed subfolder that has
 become a symbolic link or another object is the one exception, decided below. A file exactly at the source limit passes that rule. A file that
 disappears before its metadata is read is not reported. Files with the same content are each reported,
 with the same source id. A rejected file has no source id.
@@ -66,7 +66,7 @@ refused as for a subfolder that cannot be listed. When the listing reaches an en
 entry in its opened folder, without following a link, decides that it is a regular file and gives its
 listed size and modification time; an entry that reading does not show as a regular file is not
 reported, and a reading that fails other than for a file that disappeared refuses the scan with
-`folder_unavailable`. Orders 1 and 2 are first decided by that size, before the file is
+the FOLDER_UNAVAILABLE member of = models.RefusalCode. Orders 1 and 2 are first decided by that size, before the file is
 opened. A file is then opened in that same opened folder: an opening that fails, or a failed metadata reading of the opened file,
 is order 5, and an opened object that is not a regular file is order 3; either ends the work on that file
 before any byte is read. Otherwise it is read once, up to one byte past the imported `MAX_SOURCE_BYTES` constant: reaching
@@ -165,7 +165,7 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
    `source_id`, both strings. A defect of that form or of the project id refuses the whole request with
    the INVALID_REQUEST member of = models.RefusalCode (A5 rule 9). A
    `source_id` that does not match the imported `SOURCE_ID_PATTERN` constant in full is refused with
-   `invalid_source_id`.
+   the INVALID_SOURCE_ID member of = models.RefusalCode.
 5. A photo that cannot be delivered is answered with the FAILED member of = models.PlacementStatus and one member of
    `= models.PlacementFailure`. Condition 1 is decided from the name, then by opening the photo folder and
    each folder of the name in turn, each in the one before it and without following a link, and by one
@@ -222,10 +222,10 @@ The same content in two projects is two deliveries.
    carries a `photo_id`.
 2. Checks run in this order: token, request form and identifiers, connection, placement. A
    `photo_id` is a UUID, kept in lowercase hyphenated form. A mark needs an existing placement of
-   the same project, otherwise it is refused with `not_placed`. The photo folder need not be
+   the same project, otherwise it is refused with the NOT_PLACED member of = models.RefusalCode. The photo folder need not be
    available.
 3. The same `photo_id` again answers `replayed` with the first mark. Another `photo_id` is refused
-   with `publication_conflict` and nothing changes.
+   with the PUBLICATION_CONFLICT member of = models.RefusalCode and nothing changes.
 4. The deliverer holds no Portal credential, so it does not verify a `photo_id` with the Portal
    and does not check that a `photo_id` is unused by another placement. It trusts the authenticated
    calling flow for this fact.
@@ -273,8 +273,8 @@ A published photo is recognised without any change to the Portal.
    HTTPS for any caller from outside. The service reads no forwarded header.
 5. There is one principal: the calling flow of the owner. It may act on every confirmed connection.
 6. A change of an object's root or subfolder writes `assignment_confirmed` false (R0-11). An
-   operation on a project with no connection is refused with `unknown_project`, and one with an
-   unconfirmed connection with `connection_not_confirmed`. This is decided by the service, not by
+   operation on a project with no connection is refused with the UNKNOWN_PROJECT member of = models.RefusalCode, and one with an
+   unconfirmed connection with the CONNECTION_NOT_CONFIRMED member of = models.RefusalCode. This is decided by the service, not by
    the caller.
 7. Each scan, placement and mark reads the connections file exactly once, at its connection check,
    and uses that reading for the whole operation. A change written later applies from the next
@@ -286,20 +286,20 @@ A published photo is recognised without any change to the Portal.
 
    | Order | Condition | Answer |
    |---|---|---|
-   | 1 | the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or the subfolders of any record break the form of rule 8 | `folder_unavailable` |
-   | 2 | the file holds no record for the project | `unknown_project` |
-   | 3 | the project's record is unconfirmed | `connection_not_confirmed` |
+   | 1 | the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or the subfolders of any record break the form of rule 8 | the FOLDER_UNAVAILABLE member of = models.RefusalCode |
+   | 2 | the file holds no record for the project | the UNKNOWN_PROJECT member of = models.RefusalCode |
+   | 3 | the project's record is unconfirmed | the CONNECTION_NOT_CONFIRMED member of = models.RefusalCode |
 
    The service does not start when condition 1 applies.
 8. The form of a subfolder: the photo and invoice subfolders are non-empty relative paths without
    `..` and are not the root itself. Separately, on each scan and placement the photo folder of the
    requested project must be a folder whose resolved path is strictly below the resolved root,
-   otherwise the operation is refused with `folder_unavailable`; so is a root or photo folder that is
+   otherwise the operation is refused with the FOLDER_UNAVAILABLE member of = models.RefusalCode; so is a root or photo folder that is
    missing, lies in a loop of links or cannot be resolved or inspected for any other reason. The photo folder is then reached by that
    resolved path, opened one folder at a time from the root of the file system without following a link
    at any of them (A1), so the folder that is read is the folder whose containment was checked; a folder
    on that path replaced after the check by a link or by anything that is not a folder cannot be opened,
-   and the scan is refused with `folder_unavailable` or the delivery fails under condition 1 of A3 rule 5.
+   and the scan is refused with the FOLDER_UNAVAILABLE member of = models.RefusalCode or the delivery fails under condition 1 of A3 rule 5.
    This second check does not run at the start of the service or for other projects. The deliverer never opens the invoice folder, so
    the resolved path of that folder is checked by the Cabinet Inbox when it moves to this record
    (R0-09).
@@ -322,8 +322,8 @@ A published photo is recognised without any change to the Portal.
 
 ### Required tests
 
-- INV-09: every declared route except the health answer refuses a request without the token (`test_every_route_except_health_requires_the_token`); a wrong token, another scheme, a value without its single space and two `Authorization` fields are each refused with 401 and the UNAUTHORIZED member of = models.RefusalCode, while the scheme written `bearer` is accepted (`test_the_api_requires_the_token`); a request without the token and with a malformed project id or body is still refused with the UNAUTHORIZED member (`test_the_token_is_checked_before_the_request_form`).
-- INV-10: scan, placement and mark each answer `connection_not_confirmed` for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`). After a scan has succeeded on the running service, clearing the confirmation makes scan, placement and mark each answer `connection_not_confirmed` and write nothing (`test_a_cleared_confirmation_stops_the_running_service`). For a valid file with no record for the project, scan, placement and mark each answer `unknown_project` and write nothing (`test_a_project_without_a_connection_delivers_nothing`). For an absent file, a file that cannot be opened, a file that is not UTF-8 or JSON, a file of another form and a record that breaks the form of rule 8, also when that record is unconfirmed or belongs to another project, scan, placement and mark each answer `folder_unavailable` and write nothing (`test_unreadable_connections_deliver_nothing`), and the service does not start (`test_the_service_does_not_start_with_an_unreadable_connection_record`). A scan, placement or mark that reaches its connection check reads the file exactly once (`test_each_operation_reads_the_connection_record_once`), a request refused earlier reads it zero times (`test_a_request_refused_before_the_connection_check_does_not_read_the_file`), and a file replaced after the reading does not change the running operation (`test_an_operation_finishes_on_the_reading_it_made`). A connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).
+- INV-09: every declared route except the health answer refuses a request without the token (`test_every_route_except_health_requires_the_token`); a wrong token, another scheme, a value without its single space and two `Authorization` fields are each refused with 401 and the UNAUTHORIZED member of = models.RefusalCode, while the scheme written `bearer` is accepted (`test_the_api_requires_the_token`); a request without the token and with a malformed project id or body is still refused with the UNAUTHORIZED member of = models.RefusalCode (`test_the_token_is_checked_before_the_request_form`).
+- INV-10: scan, placement and mark each answer the CONNECTION_NOT_CONFIRMED member of = models.RefusalCode for an unconfirmed connection (`test_an_unconfirmed_connection_delivers_nothing`). After a scan has succeeded on the running service, clearing the confirmation makes scan, placement and mark each answer the CONNECTION_NOT_CONFIRMED member of = models.RefusalCode and write nothing (`test_a_cleared_confirmation_stops_the_running_service`). For a valid file with no record for the project, scan, placement and mark each answer the UNKNOWN_PROJECT member of = models.RefusalCode and write nothing (`test_a_project_without_a_connection_delivers_nothing`). For an absent file, a file that cannot be opened, a file that is not UTF-8 or JSON, a file of another form and a record that breaks the form of rule 8, also when that record is unconfirmed or belongs to another project, scan, placement and mark each answer the FOLDER_UNAVAILABLE member of = models.RefusalCode and write nothing (`test_unreadable_connections_deliver_nothing`), and the service does not start (`test_the_service_does_not_start_with_an_unreadable_connection_record`). A scan, placement or mark that reaches its connection check reads the file exactly once (`test_each_operation_reads_the_connection_record_once`), a request refused earlier reads it zero times (`test_a_request_refused_before_the_connection_check_does_not_read_the_file`), and a file replaced after the reading does not change the running operation (`test_an_operation_finishes_on_the_reading_it_made`). A connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).
 - INV-11: answers of scan, place, mark and a refusal contain neither the folder path, the store path nor the state path (`test_the_api_scans_and_places_without_showing_server_paths`), and the generated service has no Portal client, no outbound HTTP dependency and no Portal credential setting. With every outbound network connection of the process trapped, a scan, a delivery and a mark succeed and none is attempted (`test_no_operation_opens_a_network_connection`). An uppercase or unhyphenated project id and a body that is not the request form each answer 422 with the INVALID_REQUEST member of = models.RefusalCode, and no refusal repeats what the caller sent (`test_a_malformed_request_is_refused_as_invalid_request`), and every refusal code answers its entries of `REFUSAL_STATUS` and `REFUSAL_DETAIL` (`test_each_refusal_answers_its_status_and_detail`).
 
 ### Consequence

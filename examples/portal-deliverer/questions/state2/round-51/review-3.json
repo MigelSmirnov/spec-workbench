@@ -1,0 +1,224 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_source",
+   "text": "`marked_at: datetime`",
+   "question": "What authority supplies the fresh instant written to `marked_at` when a publication mark is created?",
+   "options": [
+    "an injected wall-clock port",
+    "a declared authority module",
+    "a datetime parameter supplied by the caller"
+   ],
+   "default_guess": "Inject a UTC wall-clock port and read it when the new mark is committed.",
+   "witness": {
+    "initial": "A placement exists without a publication mark, and a mark call is waiting for its project lock.",
+    "events": [
+     "The calling flow requests a mark.",
+     "Another process releases the project lock after the wall clock has advanced."
+    ],
+    "outcomes": [
+     "An implementation that captured time at request entry stores the earlier instant.",
+     "An implementation that reads time after acquiring the lock stores the later instant."
+    ],
+    "observer": "A reader of the persisted publication mark"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_representation",
+   "text": "`marked_at: datetime`",
+   "question": "In which representation is `marked_at` stored: aware UTC, naive UTC, local time, or another form?",
+   "options": [
+    "timezone-aware UTC datetime",
+    "naive UTC datetime",
+    "local datetime in the configured timezone"
+   ],
+   "default_guess": "Store a timezone-aware UTC datetime.",
+   "witness": {
+    "initial": "The configured timezone is Europe/Madrid and a publication mark is created during standard time.",
+    "events": [
+     "The calling flow records a publication.",
+     "The mark is serialized and later read."
+    ],
+    "outcomes": [
+     "One implementation stores `2026-11-19T11:00:00+00:00`.",
+     "Another stores `2026-11-19T12:00:00` as local or naive time."
+    ],
+    "observer": "The mark reader and any later code comparing its timestamp"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "publication-mark operation",
+   "kind": "missing_clock_read_count",
+   "text": "`marked_at` does not change",
+   "question": "How many times may a mark operation read its time source, and must a replayed mark avoid reading it altogether?",
+   "options": [
+    "read exactly once only when creating a new mark and zero times on replay",
+    "read once for every mark call but discard it on replay",
+    "allow multiple readings during a new mark"
+   ],
+   "default_guess": "Read exactly once after validation and lock acquisition only when a new mark will be written; read zero times on replay.",
+   "witness": {
+    "initial": "A publication mark already exists for the requested `photo_id`.",
+    "events": [
+     "The calling flow repeats the mark request.",
+     "The clock port records whether it was called."
+    ],
+    "outcomes": [
+     "One implementation returns the stored mark without consulting the clock.",
+     "Another reads the clock before discovering the replay and then returns the stored mark unchanged."
+    ],
+    "observer": "A deterministic test or clock-port observer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-01 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).",
+   "question": "What must the test assert about directories and unlisted filesystem properties so that it demonstrates that no operation changes anything in a source folder?",
+   "options": [
+    "compare the complete source tree including directory metadata and relevant file metadata",
+    "narrow INV-01 to the file paths, bytes, modification times and modes named by the test",
+    "add write-operation tracing that proves the source tree receives no mutation"
+   ],
+   "default_guess": "Trace filesystem mutations and also compare the complete source-tree snapshot before and after the operations.",
+   "witness": {
+    "initial": "The source folder contains one unchanged photo in a subfolder.",
+    "events": [
+     "A scan changes the subfolder's mode but leaves every file path, byte sequence, file modification time and file mode unchanged.",
+     "The named test performs only its stated file comparisons."
+    ],
+    "outcomes": [
+     "The stated test passes because all listed file properties are unchanged.",
+     "INV-01 is violated because an operation changed an object in the source folder."
+    ],
+    "observer": "The owner or a filesystem audit"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What observation must prove the invariant's requirement that the delivery opens no path failing condition 1, rather than merely proving the returned failure and durable-state result?",
+   "options": [
+    "instrument path-opening calls and assert that disallowed paths are never opened",
+    "narrow INV-02 to the failure response and durable-state effects currently tested",
+    "assert separately which prefix folders may be opened to decide condition 1"
+   ],
+   "default_guess": "Instrument filesystem opens and assert that no disallowed final path or ignored segment is opened.",
+   "witness": {
+    "initial": "An ignored regular file exists and has no placement.",
+    "events": [
+     "A delivery implementation opens and reads the ignored file, then returns NOT_READY_OR_ABSENT.",
+     "The stated test checks only the result and durable files."
+    ],
+    "outcomes": [
+     "The test passes although the disallowed path was opened.",
+     "An implementation rejecting from the name without opening the file also passes."
+    ],
+    "observer": "A filesystem-open tracer or security test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "What must the test observe to demonstrate that a new placement never reads a conflict copy?",
+   "options": [
+    "instrument reads and assert that the conflict-copy file is never opened or read",
+    "narrow INV-19 to refusing placement and leaving durable state unchanged",
+    "make the conflict-copy read fail observably if attempted"
+   ],
+   "default_guess": "Instrument file opens and reads and assert zero access to the conflict-copy file.",
+   "witness": {
+    "initial": "A conflict copy exists with content that has no placement.",
+    "events": [
+     "One implementation reads and hashes the conflict copy before rejecting its name.",
+     "Another rejects its name before opening it."
+    ],
+    "outcomes": [
+     "Both return NOT_READY_OR_ABSENT and make the same allowed project-lock write.",
+     "Only the second satisfies the invariant that the conflict copy is never read."
+    ],
+    "observer": "A filesystem-read tracer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-11 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "INV-11: answers of scan, place, mark and a refusal contain neither the folder path, the store path nor the state path (`test_the_api_scans_and_places_without_showing_server_paths`), and the generated service has no Portal client, no outbound HTTP dependency and no Portal credential setting.",
+   "question": "How must the test establish the invariant's broader claim that no server path is returned, rather than checking only the folder, store and state paths?",
+   "options": [
+    "assert responses against closed schemas whose path-like fields are proven relative references",
+    "test every configured and discovered server path, including token and connections paths",
+    "narrow the invariant to the three paths named by the test"
+   ],
+   "default_guess": "Validate every answer against closed response schemas and separately prove that `file_ref` is a relative store reference.",
+   "witness": {
+    "initial": "The configured folder, store and state paths are distinct from `/etc/hostname`.",
+    "events": [
+     "A defective refusal includes `/etc/hostname` in an extra response field.",
+     "The stated test searches only for the folder, store and state paths."
+    ],
+    "outcomes": [
+     "The stated path assertions pass.",
+     "INV-11 is violated because the response contains another server path."
+    ],
+    "observer": "The authenticated caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-16 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "INV-16: `python tools/design_lint.py examples/portal-deliverer --state 2` reports no security finding. The closed list of categories is `SECURITY_REVIEW_EVIDENCE.md`.",
+   "question": "What must this test show to prove that every category in the closed list has an explicit outcome, including detection of an omitted category?",
+   "options": [
+    "assert exact set equality between reviewed categories and the closed list, and require one explicit outcome per category",
+    "state that `design_lint.py` performs that exact set and outcome check",
+    "replace the invariant with the weaker claim that the linter reports no finding"
+   ],
+   "default_guess": "Require the linter check to assert exact category-set equality and one explicit APPLICABLE or NOT_APPLICABLE outcome for each category.",
+   "witness": {
+    "initial": "A category exists in `SECURITY_REVIEW_EVIDENCE.md` but is absent from the Security review list.",
+    "events": [
+     "The lint command runs without checking exact category-set equality."
+    ],
+    "outcomes": [
+     "The command reports no security finding despite the omission.",
+     "A linter that checks exact set equality reports the missing category."
+    ],
+    "observer": "The State 3 gate reviewer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 rule 4",
+   "kind": "standard_violation",
+   "text": "`invalid_source_id`",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена (`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note (`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "The passage must name `the INVALID_SOURCE_ID member of = models.RefusalCode` instead of naming the member only by its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 INV-09 Required tests",
+   "kind": "standard_violation",
+   "text": "the UNAUTHORIZED member",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must become `the UNAUTHORIZED member of = models.RefusalCode`, placing the member name beside the enumeration address.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_source\",\"text\":\"`marked_at: datetime`\",\"question\":\"What authority supplies the fresh instant written to `marked_at` when a publication mark is created?\",\"options\":[\"an injected wall-clock port\",\"a declared authority module\",\"a datetime parameter supplied by the caller\"],\"default_guess\":\"Inject a UTC wall-clock port and read it when the new mark is committed.\",\"witness\":{\"initial\":\"A placement exists without a publication mark, and a mark call is waiting for its project lock.\",\"events\":[\"The calling flow requests a mark.\",\"Another process releases the project lock after the wall clock has advanced.\"],\"outcomes\":[\"An implementation that captured time at request entry stores the earlier instant.\",\"An implementation that reads time after acquiring the lock stores the later instant.\"],\"observer\":\"A reader of the persisted publication mark\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_representation\",\"text\":\"`marked_at: datetime`\",\"question\":\"In which representation is `marked_at` stored: aware UTC, naive UTC, local time, or another form?\",\"options\":[\"timezone-aware UTC datetime\",\"naive UTC datetime\",\"local datetime in the configured timezone\"],\"default_guess\":\"Store a timezone-aware UTC datetime.\",\"witness\":{\"initial\":\"The configured timezone is Europe/Madrid and a publication mark is created during standard time.\",\"events\":[\"The calling flow records a publication.\",\"The mark is serialized and later read.\"],\"outcomes\":[\"One implementation stores `2026-11-19T11:00:00+00:00`.\",\"Another stores `2026-11-19T12:00:00` as local or naive time.\"],\"observer\":\"The mark reader and any later code comparing its timestamp\"}},{\"subject\":\"publication-mark operation\",\"kind\":\"missing_clock_read_count\",\"text\":\"`marked_at` does not change\",\"question\":\"How many times may a mark operation read its time source, and must a replayed mark avoid reading it altogether?\",\"options\":[\"read exactly once only when creating a new mark and zero times on replay\",\"read once for every mark call but discard it on replay\",\"allow multiple readings during a new mark\"],\"default_guess\":\"Read exactly once after validation and lock acquisition only when a new mark will be written; read zero times on replay.\",\"witness\":{\"initial\":\"A publication mark already exists for the requested `photo_id`.\",\"events\":[\"The calling flow repeats the mark request.\",\"The clock port records whether it was called.\"],\"outcomes\":[\"One implementation returns the stored mark without consulting the clock.\",\"Another reads the clock before discovering the replay and then returns the stored mark unchanged.\"],\"observer\":\"A deterministic test or clock-port observer\"}},{\"subject\":\"INV-01 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).\",\"question\":\"What must the test assert about directories and unlisted filesystem properties so that it demonstrates that no operation changes anything in a source folder?\",\"options\":[\"compare the complete source tree including directory metadata and relevant file metadata\",\"narrow INV-01 to the file paths, bytes, modification times and modes named by the test\",\"add write-operation tracing that proves the source tree receives no mutation\"],\"default_guess\":\"Trace filesystem mutations and also compare the complete source-tree snapshot before and after the operations.\",\"witness\":{\"initial\":\"The source folder contains one unchanged photo in a subfolder.\",\"events\":[\"A scan changes the subfolder's mode but leaves every file path, byte sequence, file modification time and file mode unchanged.\",\"The named test performs only its stated file comparisons.\"],\"outcomes\":[\"The stated test passes because all listed file properties are unchanged.\",\"INV-01 is violated because an operation changed an object in the source folder.\"],\"observer\":\"The owner or a filesystem audit\"}},{\"subject\":\"INV-02 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What observation must prove the invariant's requirement that the delivery opens no path failing condition 1, rather than merely proving the returned failure and durable-state result?\",\"options\":[\"instrument path-opening calls and assert that disallowed paths are never opened\",\"narrow INV-02 to the failure response and durable-state effects currently tested\",\"assert separately which prefix folders may be opened to decide condition 1\"],\"default_guess\":\"Instrument filesystem opens and assert that no disallowed final path or ignored segment is opened.\",\"witness\":{\"initial\":\"An ignored regular file exists and has no placement.\",\"events\":[\"A delivery implementation opens and reads the ignored file, then returns NOT_READY_OR_ABSENT.\",\"The stated test checks only the result and durable files.\"],\"outcomes\":[\"The test passes although the disallowed path was opened.\",\"An implementation rejecting from the name without opening the file also passes.\"],\"observer\":\"A filesystem-open tracer or security test\"}},{\"subject\":\"INV-19 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"What must the test observe to demonstrate that a new placement never reads a conflict copy?\",\"options\":[\"instrument reads and assert that the conflict-copy file is never opened or read\",\"narrow INV-19 to refusing placement and leaving durable state unchanged\",\"make the conflict-copy read fail observably if attempted\"],\"default_guess\":\"Instrument file opens and reads and assert zero access to the conflict-copy file.\",\"witness\":{\"initial\":\"A conflict copy exists with content that has no placement.\",\"events\":[\"One implementation reads and hashes the conflict copy before rejecting its name.\",\"Another rejects its name before opening it.\"],\"outcomes\":[\"Both return NOT_READY_OR_ABSENT and make the same allowed project-lock write.\",\"Only the second satisfies the invariant that the conflict copy is never read.\"],\"observer\":\"A filesystem-read tracer\"}},{\"subject\":\"INV-11 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-11: answers of scan, place, mark and a refusal contain neither the folder path, the store path nor the state path (`test_the_api_scans_and_places_without_showing_server_paths`), and the generated service has no Portal client, no outbound HTTP dependency and no Portal credential setting.\",\"question\":\"How must the test establish the invariant's broader claim that no server path is returned, rather than checking only the folder, store and state paths?\",\"options\":[\"assert responses against closed schemas whose path-like fields are proven relative references\",\"test every configured and discovered server path, including token and connections paths\",\"narrow the invariant to the three paths named by the test\"],\"default_guess\":\"Validate every answer against closed response schemas and separately prove that `file_ref` is a relative store reference.\",\"witness\":{\"initial\":\"The configured folder, store and state paths are distinct from `/etc/hostname`.\",\"events\":[\"A defective refusal includes `/etc/hostname` in an extra response field.\",\"The stated test searches only for the folder, store and state paths.\"],\"outcomes\":[\"The stated path assertions pass.\",\"INV-11 is violated because the response contains another server path.\"],\"observer\":\"The authenticated caller\"}},{\"subject\":\"INV-16 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-16: `python tools/design_lint.py examples/portal-deliverer --state 2` reports no security finding. The closed list of categories is `SECURITY_REVIEW_EVIDENCE.md`.\",\"question\":\"What must this test show to prove that every category in the closed list has an explicit outcome, including detection of an omitted category?\",\"options\":[\"assert exact set equality between reviewed categories and the closed list, and require one explicit outcome per category\",\"state that `design_lint.py` performs that exact set and outcome check\",\"replace the invariant with the weaker claim that the linter reports no finding\"],\"default_guess\":\"Require the linter check to assert exact category-set equality and one explicit APPLICABLE or NOT_APPLICABLE outcome for each category.\",\"witness\":{\"initial\":\"A category exists in `SECURITY_REVIEW_EVIDENCE.md` but is absent from the Security review list.\",\"events\":[\"The lint command runs without checking exact category-set equality.\"],\"outcomes\":[\"The command reports no security finding despite the omission.\",\"A linter that checks exact set equality reports the missing category.\"],\"observer\":\"The State 3 gate reviewer\"}},{\"subject\":\"A3 rule 4\",\"kind\":\"standard_violation\",\"text\":\"`invalid_source_id`\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена (`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note (`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"The passage must name `the INVALID_SOURCE_ID member of = models.RefusalCode` instead of naming the member only by its value.\"},{\"subject\":\"A5 INV-09 Required tests\",\"kind\":\"standard_violation\",\"text\":\"the UNAUTHORIZED member\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления: `the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must become `the UNAUTHORIZED member of = models.RefusalCode`, placing the member name beside the enumeration address.\"}]}",
+ "set_aside": []
+}
