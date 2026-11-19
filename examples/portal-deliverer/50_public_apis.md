@@ -128,8 +128,14 @@ The context of the operations and the token.
 
 ### Outputs
 
-The HTTP surface with the health, scan, delivery and mark routes, each bound to its handler in
-`module:deliverer_api`.
+The HTTP surface with four routes, each bound to its handler:
+
+| Route | Method and path | Handler |
+|---|---|---|
+| health | `GET /health` | the router's own, calling `public_op:deliverer_api.answer_health` |
+| scan | `GET /v1/projects/{project_id}/photos` | `public_op:deliverer_api.scan_route` |
+| delivery | `POST /v1/projects/{project_id}/photos/deliver` | `public_op:deliverer_api.deliver_route` |
+| mark | `POST /v1/projects/{project_id}/photos/{source_id}/published` | `public_op:deliverer_api.mark_route` |
 
 ### Observable effect
 
@@ -140,8 +146,8 @@ turns its refusal into an answer.
 
 ### Enforces
 
-The method and path of each route of the manifest. The checks of A5 rules 1, 5, 9 and 10, A3 rule 4 and A4
-rule 2 run in the handlers of `module:deliverer_api`.
+The method and path of each route. The checks of A5 rules 1, 5, 9 and 10, A3 rule 4 and A4 rule 2 run in
+the handlers of `module:deliverer_api`.
 
 ### Errors
 
@@ -218,6 +224,111 @@ None.
 ### State impact
 
 Read-only.
+
+## `public_op:deliverer_api.scan_route`
+
+### Owner
+
+`module:deliverer_api`.
+
+### Callers
+
+`module:deliverer_router`, through the scan route `GET /v1/projects/{project_id}/photos`.
+
+### Inputs
+
+The request as received: its `Authorization` field and the project id written in the path.
+
+### Outputs
+
+The answer of the route: 200 with the scan result, or M08 with the `REFUSAL_STATUS` and `REFUSAL_DETAIL` entries of its code.
+
+### Observable effect
+
+Checks the `Authorization` field and the token first, then the project id. When they are accepted it calls
+`public_op:photo_delivery.scan_project_photos` once and answers its result or its refusal. A request refused before that call reaches no other module.
+
+### Enforces
+
+A5 rules 1, 5, 9 and 10.
+
+### Errors
+
+None raised. Every refusal, its own and that of `public_op:photo_delivery.scan_project_photos`, is answered as M08.
+
+### State impact
+
+Read-only of its own; `public_op:photo_delivery.scan_project_photos` decides what is written.
+
+## `public_op:deliverer_api.deliver_route`
+
+### Owner
+
+`module:deliverer_api`.
+
+### Callers
+
+`module:deliverer_router`, through the delivery route `POST /v1/projects/{project_id}/photos/deliver`.
+
+### Inputs
+
+The request as received: its `Authorization` field, the project id written in the path and the body.
+
+### Outputs
+
+The answer of the route: 200 with M06, or M08 with the `REFUSAL_STATUS` and `REFUSAL_DETAIL` entries of its code.
+
+### Observable effect
+
+Checks the `Authorization` field and the token first, then the project id and the request form of A3 rule 4. When they are accepted it calls
+`public_op:photo_delivery.deliver_project_photo` once and answers its result or its refusal. A request refused before that call reaches no other module.
+
+### Enforces
+
+A5 rules 1, 5, 9 and 10 and the request form of A3 rule 4.
+
+### Errors
+
+None raised. Every refusal, its own and that of `public_op:photo_delivery.deliver_project_photo`, is answered as M08.
+
+### State impact
+
+Read-only of its own; `public_op:photo_delivery.deliver_project_photo` decides what is written.
+
+## `public_op:deliverer_api.mark_route`
+
+### Owner
+
+`module:deliverer_api`.
+
+### Callers
+
+`module:deliverer_router`, through the mark route `POST /v1/projects/{project_id}/photos/{source_id}/published`.
+
+### Inputs
+
+The request as received: its `Authorization` field, the project id and the source id written in the path, and the body.
+
+### Outputs
+
+The answer of the route: 200 with the mark outcome, or M08 with the `REFUSAL_STATUS` and `REFUSAL_DETAIL` entries of its code.
+
+### Observable effect
+
+Checks the `Authorization` field and the token first, then the project id and the request form with the `photo_id` of A4 rule 2. When they are accepted it calls
+`public_op:photo_delivery.mark_photo_published` once and answers its result or its refusal. A request refused before that call reaches no other module.
+
+### Enforces
+
+A5 rules 1, 5, 9 and 10 and the `photo_id` form of A4 rule 2.
+
+### Errors
+
+None raised. Every refusal, its own and that of `public_op:photo_delivery.mark_photo_published`, is answered as M08.
+
+### State impact
+
+Read-only of its own; `public_op:photo_delivery.mark_photo_published` decides what is written.
 
 ## `public_op:object_connections.load_connections`
 

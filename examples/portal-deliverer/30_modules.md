@@ -46,7 +46,7 @@ cycles, and `domain_models` names no other module.
 | `deliverer_api` | `domain_models` | `AuthenticationRequired`, `DeliverRequest`, `DelivererError`, `DeliveryContext`, `HealthAnswer`, `MarkOutcome`, `PlacementOutcome`, `PublishedRequest`, `Refusal`, `RefusalCode`, `ScanResult` |
 | `deliverer_api` | `photo_delivery` | `deliver_project_photo`, `mark_photo_published`, `scan_project_photos` |
 | `deliverer_router` | `domain_models` | `AuthenticationRequired`, `DeliveryContext`, `HealthAnswer` |
-| `deliverer_router` | `deliverer_api` | `answer_health`, `check_token`, `deliver_route`, `mark_route`, `scan_route` |
+| `deliverer_router` | `deliverer_api` | `answer_health`, `deliver_route`, `mark_route`, `scan_route` |
 | `deliverer_service` | `data_provider` | `TOKEN_MIN_LENGTH`, `TOKEN_TRIM_CHARACTERS` |
 | `deliverer_service` | `domain_models` | `DeliveryContext`, `RuntimeSettings` |
 | `deliverer_service` | `runtime_settings` | `load_runtime_settings` |
@@ -58,10 +58,10 @@ reads the record itself at its connection check, so no module keeps connections 
 
 `deliverer_router` is the module that `http_router_backend/v1` generates, and it holds only what that
 backend emits. It imports the route handlers of `deliverer_api`, so `deliverer_api` cannot import it
-back. The router declares its extractor of the `Authorization` field and names `check_token` as the
-resolver of its one principal, but no route it serves calls them: the health route needs no token, and
-every route that does is a handler of `deliverer_api`, which reads the field and calls `check_token`
-itself, before the project id or the body.
+back. The router checks no token: the extractor of the `Authorization` field that the backend emits is
+called by no route it serves, since the health route needs no token and every route that does is a
+handler of `deliverer_api`, which reads the field and compares the token itself, before the project id
+or the body.
 
 `system_clock` is the module that `system_clock_backend` generates, and `photo_delivery` alone names it.
 
@@ -536,7 +536,6 @@ mark_photo_published
 
 ```text
 answer_health
-check_token
 scan_route
 deliver_route
 mark_route
