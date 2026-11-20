@@ -462,8 +462,11 @@ def _prepare(
 
     after_spec = dict(spec)
     after_spec["notes"] = working
-    coverage_before = len(language.factory_coverage(spec))
-    coverage_after = len(language.factory_coverage(after_spec))
+    from notes_workbench import gate  # gate imports language; read lazily
+
+    emitted = gate._load_deterministic_callable_scopes(project)
+    coverage_before = len(language.factory_coverage(spec, emitted))
+    coverage_after = len(language.factory_coverage(after_spec, emitted))
     dependency_before = len([
         item for item in language.dependency_bindings(spec)
         if item.get("severity") == "block"
