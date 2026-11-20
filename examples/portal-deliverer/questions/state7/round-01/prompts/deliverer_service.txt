@@ -1,0 +1,117 @@
+Module: deliverer_service
+Target path: portal_deliverer/deliverer_service.py
+Target file: deliverer_service.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from datetime import timezone
+from pathlib import Path
+
+from portal_deliverer.data_provider import TOKEN_MIN_LENGTH, TOKEN_TRIM_CHARACTERS
+from portal_deliverer.deliverer_router import create_app
+from portal_deliverer.models import DeliveryContext, ObjectConnection, RuntimeEnvironment, RuntimeSettings, Refusal
+from portal_deliverer.object_connections import load_connections
+from portal_deliverer.refusals import DelivererError
+from portal_deliverer.runtime_settings import load_runtime_settings
+
+CONTRACTS (function signatures — follow exactly):
+def load_config(settings: RuntimeSettings) -> DeliveryContext
+def read_token(path: Path) -> str
+def run_service() -> int
+# DelivererError
+def __init__(self, code: RefusalCode) -> None
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def create_app(context: DeliveryContext, token: str) -> FastAPI
+def load_connections(path: Path) -> dict[UUID, ObjectConnection]
+def load_runtime_settings() -> RuntimeSettings
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+TOKEN_MIN_LENGTH: int
+TOKEN_TRIM_CHARACTERS: str
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- load_config: (settings: RuntimeSettings) -> DeliveryContext
+- read_token: (path: Path) -> str
+- run_service: () -> int
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- load_config: [VALIDATION_ERROR] MUST raise ValueError when the port of the settings is above the largest TCP port number or when zoneinfo does not know their timezone, then MUST call the imported load_connections once with the connections_file of the settings as a Path, letting its DelivererError end the start, and MUST return DeliveryContext with binary_root, state_dir and connections_file of the settings as Path values and their timezone unchanged; it MUST NOT read the credential file.
+- read_token: [SECURITY_BOUNDARY] MUST open the last component of path once without following a link, resolving the folders above it as they stand, and judge only that opened file: it MUST raise ValueError when the opening fails or meets a link, when the opened file is not a regular file, when its mode gives the group or others any permission, when its content is not UTF-8, or when what remains after removing the characters of the imported TOKEN_TRIM_CHARACTERS constant at both ends, and no other character, is shorter than the imported TOKEN_MIN_LENGTH constant or holds a character outside visible ASCII, exclamation mark to tilde; otherwise it MUST return that remaining text. No message, log line or exception it raises MAY carry the content of the file.
+- run_service: [ORCHESTRATION] MUST call load_runtime_settings, then load_config with those settings, then read_token with the credential_file of the settings as a Path, then the imported create_app with that context and token, in that order, and serve the application with uvicorn on the loopback interface and the port of the settings, with forwarded and proxy headers not trusted; a failure of any of these steps before listening MUST write one line naming the failed step to standard error, never the token, and return the exit status one, a stop by a signal after serving MUST return the exit status zero, and a failure of the web server after it listened MUST return a non-zero exit status.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+No = models.* spec data addresses referenced by notes.
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+No = models.* spec data addresses referenced by notes.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from portal_deliverer.models. Use the listed enum member names and model fields exactly.
+- DeliveryContext fields (exact, no others exist): binary_root: Path, connections_file: Path, state_dir: Path, timezone: str
+- ObjectConnection fields (exact, no others exist): assignment_confirmed: bool, invoice_subfolder: str, label: str, photo_subfolder: str, project_id: UUID, root: str
+- Refusal fields (exact, no others exist): code: RefusalCode, detail: str
+- RuntimeEnvironment enum members: DEVELOPMENT='development', PRODUCTION='production', TEST='test'
+- RuntimeSettings fields (exact, no others exist): binary_root: str, connections_file: str, credential_file: str, environment: RuntimeEnvironment, port: int, state_dir: str, timezone: str
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+load_config, read_token, run_service
+
+MODELS CONTEXT:
+Runtime models live in portal_deliverer.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete deliverer_service.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in portal_deliverer.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and portal_deliverer.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.

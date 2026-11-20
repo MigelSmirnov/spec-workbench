@@ -1,0 +1,157 @@
+Module: source_folder
+Target path: portal_deliverer/source_folder.py
+Target file: source_folder.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from builtins import OSError
+from collections.abc import Iterator
+from datetime import datetime
+from os import stat_result
+from pathlib import Path
+
+from portal_deliverer.data_provider import CONFLICT_COPY_MARK, IGNORED_NAME_PREFIXES, IGNORED_NAME_SUFFIXES, MAX_SOURCE_BYTES, SOURCE_FORMATS, SOURCE_SIGNATURES
+from portal_deliverer.models import ObservationReason, PlacementFailure, Refusal, RefusalCode, ScanStatus, SourceFile, SourceRead, SourceSignatureRule
+from portal_deliverer.refusals import DelivererError, Rejected
+
+CONTRACTS (function signatures — follow exactly):
+def _is_ignored(name: str) -> bool
+def _modified_at(info: stat_result) -> datetime
+def _name_parts(name: str) -> tuple[str, ...] | None
+def _observed(folder: int, entry: str, name: str, info: stat_result) -> tuple[SourceFile, bytes | None]
+def _opened_folder(path: Path) -> Iterator[int]
+def _read_source_bytes(folder: int, entry: str) -> tuple[bytes, stat_result]
+def _signature_format(content: bytes) -> str | None
+def _source_files(folder: int) -> Iterator[tuple[int, str, str, stat_result]]
+def _unlisted_folder(error: OSError) -> None
+def observe_source_files(folder: Path) -> list[SourceFile]
+def read_named_source(folder: Path, name: str) -> SourceRead | None
+# DelivererError
+def __init__(self, code: RefusalCode) -> None
+# Rejected
+def __init__(self, reason: PlacementFailure) -> None
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+CONFLICT_COPY_MARK: str
+IGNORED_NAME_PREFIXES: tuple[str, ...]
+IGNORED_NAME_SUFFIXES: tuple[str, ...]
+MAX_SOURCE_BYTES: int
+SOURCE_FORMATS: tuple[str, ...]
+SOURCE_SIGNATURES: tuple[SourceSignatureRule, ...]
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _is_ignored: (name: str) -> bool
+- _modified_at: (info: stat_result) -> datetime
+- _name_parts: (name: str) -> tuple[str, ...] | None
+- _observed: (folder: int, entry: str, name: str, info: stat_result) -> tuple[SourceFile, bytes | None]
+- _opened_folder: (path: Path) -> Iterator[int]
+- _read_source_bytes: (folder: int, entry: str) -> tuple[bytes, stat_result]
+- _signature_format: (content: bytes) -> str | None
+- _source_files: (folder: int) -> Iterator[tuple[int, str, str, stat_result]]
+- _unlisted_folder: (error: OSError) -> None
+- observe_source_files: (folder: Path) -> list[SourceFile]
+- read_named_source: (folder: Path, name: str) -> SourceRead | None
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _is_ignored: [PATH_OR_ARTIFACT_POLICY] MUST return True when the name, with only the letters A to Z lowered and no other character changed, begins with an item of the imported IGNORED_NAME_PREFIXES constant, ends with an item of the imported IGNORED_NAME_SUFFIXES constant, or contains the imported CONFLICT_COPY_MARK constant, and False otherwise; it MUST NOT use str.lower or casefold, which change letters beyond A to Z.
+- _modified_at: [FIELD_ASSIGNMENT] MUST return the st_mtime_ns of info as a naive datetime in UTC with microsecond precision, dropping any finer fraction toward the earlier instant, also before the epoch, and MUST NOT go through the float st_mtime or the local time zone.
+- _name_parts: [VALIDATION_ERROR] MUST return the segments of the name split on the slash character only when the name is non-empty and every segment is non-empty, is neither . nor .. and is not one _is_ignored accepts, compared exactly without Unicode normalisation, and MUST return None for any other name, an absolute name among them.
+- _observed: [VALIDATION_ERROR] MUST judge the rejection orders of A1 in their order: a listed st_size of info of zero is rejected with the EMPTY member of = models.ObservationReason and one above the imported MAX_SOURCE_BYTES constant with TOO_LARGE, both before the file is opened; then it MUST call _read_source_bytes once, and a Rejected it raises is rejected with the ObservationReason member whose value equals that reason, no bytes read is EMPTY, and _signature_format returning None is UNSUPPORTED_FORMAT. A rejected SourceFile carries the given name, the listed size, the time _modified_at gives for info, no source id and no bytes; otherwise it MUST return a READY SourceFile with the hashlib.sha256 hexdigest of the bytes as source_id, their length as size and the time _modified_at gives for the fstat result of the read, together with those bytes.
+- _opened_folder: [PATH_OR_ARTIFACT_POLICY] MUST be a contextlib.contextmanager generator that opens the absolute path one folder at a time from the root of the file system, each folder opened with os.open in the one before it through dir_fd with os.O_DIRECTORY and os.O_NOFOLLOW, yields the descriptor of the last folder and closes every descriptor it opened on every exit; an opening that fails for any reason, a symbolic link or an object that is not a folder among them, MUST raise DelivererError with the FOLDER_UNAVAILABLE member of = models.RefusalCode.
+- _read_source_bytes: [VALIDATION_ERROR] MUST open entry once in the folder descriptor with os.open through dir_fd, for reading only, in non-blocking mode and without following a link, take one os.fstat of the opened descriptor before reading, and raise Rejected with the NOT_A_REGULAR_FILE member of = models.PlacementFailure when that object is not a regular file, or with the UNREADABLE_FILE member when the opening, that fstat or a read fails; otherwise it MUST read in one pass from the start, continuing after short reads, until the end of the file or one byte past the imported MAX_SOURCE_BYTES constant, raise Rejected with the TOO_LARGE member when that byte is reached, and return the bytes read with that fstat result; the descriptor MUST be closed on every path and the file never opened again.
+- _signature_format: [BEHAVIOR] MUST return the first format of the imported SOURCE_FORMATS constant, in its order, for which every row of the imported SOURCE_SIGNATURES constant whose format equals it finds the bytes its signature spells in hexadecimal at its offset from the start of content, and None when no format does; it reads only content.
+- _source_files: [DETERMINISM_OR_ORDERING] MUST list the folder descriptor once with os.listdir, skip every name _is_ignored accepts, take one os.stat of each remaining entry in that folder with follow_symlinks False, skip an entry that disappeared and every entry that is neither a regular file nor a folder, call _unlisted_folder for a listing or reading that fails otherwise, then yield the folder descriptor, the entry, its name relative to the photo folder joined by slashes and its stat result for each regular file in Unicode code point order of the entries, and only then enter each folder entry in the same order; a folder entry is opened with os.open, os.O_DIRECTORY and os.O_NOFOLLOW through dir_fd, skipped when that opening meets a symbolic link or an object that is not a folder, refused through _unlisted_folder when it is gone or fails otherwise, walked the same way and closed when its walk ends.
+- _unlisted_folder: [VALIDATION_ERROR] MUST raise DelivererError with the FOLDER_UNAVAILABLE member of = models.RefusalCode chained from the given OSError and MUST never return; it is the one place a folder that cannot be listed or opened during a scan becomes a refusal.
+- observe_source_files: [ORCHESTRATION] MUST open the folder with _opened_folder, call _observed once for each file _source_files yields from that descriptor, and return the SourceFile of each in the order _source_files yields them, keeping no bytes; a DelivererError of the walk MUST pass on, so a partial scan is never returned, and it MUST NOT create, change, move or delete anything in the folder.
+- read_named_source: [PATH_OR_ARTIFACT_POLICY] MUST return None, opening nothing in the folder, when _name_parts returns None; otherwise it MUST open the folder with _opened_folder, then each folder segment of the name in the one before it with os.open, os.O_DIRECTORY and os.O_NOFOLLOW through dir_fd, and take one os.stat of the last segment in the last folder with follow_symlinks False, and MUST return None when an opening or that reading fails, the DelivererError of _opened_folder among them, or the last segment is not a regular file; otherwise it MUST return a SourceRead holding the SourceFile and bytes _observed gives for that last segment, its folder descriptor, the name and that reading, closing every descriptor it opened.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- ObservationReason: omitted because it is an imported runtime model schema
+- PlacementFailure: omitted because it is an imported runtime model schema
+- RefusalCode: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not portal_deliverer.models imports.
+Only import runtime model symbols from portal_deliverer.models when they are explicitly listed in IMPORTS.
+- models.ObservationReason: runtime model schema omitted from non-model prompt; exported from portal_deliverer.models by IMPORTS.
+- models.PlacementFailure: runtime model schema omitted from non-model prompt; exported from portal_deliverer.models by IMPORTS.
+- models.RefusalCode: runtime model schema omitted from non-model prompt; exported from portal_deliverer.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from portal_deliverer.models. Use the listed enum member names and model fields exactly.
+- ObservationReason enum members: EMPTY='empty', NOT_A_REGULAR_FILE='not_a_regular_file', TOO_LARGE='too_large', UNREADABLE_FILE='unreadable_file', UNSUPPORTED_FORMAT='unsupported_format'
+- PlacementFailure enum members: EMPTY='empty', NOT_A_REGULAR_FILE='not_a_regular_file', NOT_READY_OR_ABSENT='not_ready_or_absent', SOURCE_CHANGED='source_changed', TOO_LARGE='too_large', TOO_MANY_PIXELS='too_many_pixels', UNREADABLE_FILE='unreadable_file', UNREADABLE_IMAGE='unreadable_image', UNSUPPORTED_FORMAT='unsupported_format'
+- Refusal fields (exact, no others exist): code: RefusalCode, detail: str
+- RefusalCode enum members: CONNECTION_NOT_CONFIRMED='connection_not_confirmed', FOLDER_UNAVAILABLE='folder_unavailable', INVALID_REQUEST='invalid_request', INVALID_SOURCE_ID='invalid_source_id', NOT_PLACED='not_placed', PUBLICATION_CONFLICT='publication_conflict', STATE_UNAVAILABLE='state_unavailable', UNAUTHORIZED='unauthorized', UNKNOWN_PROJECT='unknown_project', UNSAFE_REFERENCE='unsafe_reference'
+- ScanStatus enum members: PLACED='placed', PUBLISHED='published', READY='ready', REJECTED='rejected'
+- SourceFile fields (exact, no others exist): modified: datetime, name: str, reason: ObservationReason | None, size: int, source_id: str | None, status: ScanStatus
+- SourceRead fields (exact, no others exist): content: bytes | None, source: SourceFile
+- SourceSignatureRule fields (exact, no others exist): format: str, offset: int, signature: str
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+_is_ignored, _modified_at, _name_parts, _observed, _opened_folder, _read_source_bytes, _signature_format, _source_files, _unlisted_folder, observe_source_files, read_named_source
+
+MODELS CONTEXT:
+Runtime models live in portal_deliverer.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete source_folder.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in portal_deliverer.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and portal_deliverer.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.

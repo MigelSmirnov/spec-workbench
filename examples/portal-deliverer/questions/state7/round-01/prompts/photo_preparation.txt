@@ -1,0 +1,141 @@
+Module: photo_preparation
+Target path: portal_deliverer/photo_preparation.py
+Target file: photo_preparation.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from datetime import datetime, timezone
+from uuid import UUID
+from zoneinfo import ZoneInfo
+
+from portal_deliverer.data_provider import CAMERA_EARLIEST_YEAR, CAMERA_LATEST_AFTER_MODIFIED_HOURS, CAMERA_OFFSET_MAX_HOURS, INTAKE_ID_PREFIX, INTAKE_SOURCE, MAX_OUTPUT_BYTES, MAX_PIXELS, PHOTO_BACKGROUND, PHOTO_MAX_SIDE, PHOTO_OPTIMIZE, PHOTO_PROGRESSIVE, PHOTO_QUALITY, PHOTO_SUBSAMPLING, SOURCE_FORMATS
+from portal_deliverer.models import DateSource, PhotoPublication, PlacementFailure, PreparedPhoto
+from portal_deliverer.refusals import Rejected
+
+CONTRACTS (function signatures — follow exactly):
+def _camera_offset(offset: object) -> timezone | None
+def _parse_exif_moment(text: object, offset: object, zone: ZoneInfo, modified: datetime) -> datetime | None
+def _photo_moment(image: Image.Image, modified: datetime, zone: ZoneInfo) -> tuple[datetime, DateSource]
+def _to_naive_utc(moment: datetime) -> datetime
+def build_publication(project_id: UUID, source_id: str, file_ref: str, photo: PreparedPhoto) -> PhotoPublication
+def prepare_photo(raw: bytes, modified: datetime, timezone_name: str) -> PreparedPhoto
+# Rejected
+def __init__(self, reason: PlacementFailure) -> None
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+CAMERA_EARLIEST_YEAR: int
+CAMERA_LATEST_AFTER_MODIFIED_HOURS: int
+CAMERA_OFFSET_MAX_HOURS: int
+INTAKE_ID_PREFIX: str
+INTAKE_SOURCE: str
+MAX_OUTPUT_BYTES: int
+MAX_PIXELS: int
+PHOTO_BACKGROUND: str
+PHOTO_MAX_SIDE: int
+PHOTO_OPTIMIZE: bool
+PHOTO_PROGRESSIVE: bool
+PHOTO_QUALITY: int
+PHOTO_SUBSAMPLING: str
+SOURCE_FORMATS: tuple[str, ...]
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _camera_offset: (offset: object) -> timezone | None
+- _parse_exif_moment: (text: object, offset: object, zone: ZoneInfo, modified: datetime) -> datetime | None
+- _photo_moment: (image: Image.Image, modified: datetime, zone: ZoneInfo) -> tuple[datetime, DateSource]
+- _to_naive_utc: (moment: datetime) -> datetime
+- build_publication: (project_id: UUID, source_id: str, file_ref: str, photo: PreparedPhoto) -> PhotoPublication
+- prepare_photo: (raw: bytes, modified: datetime, timezone_name: str) -> PreparedPhoto
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _camera_offset: [VALIDATION_ERROR] MUST return the datetime.timezone of the offset only when it is a string of a plus or minus sign, two digits of hours not above the imported CAMERA_OFFSET_MAX_HOURS constant, a colon and two digits of a clock minute, and nothing else, and MUST return None for any other value.
+- _parse_exif_moment: [VALIDATION_ERROR] MUST return None unless text is a string that, after trailing NUL characters and spaces are removed, is exactly a valid calendar date and time written YYYY:MM:DD HH:MM:SS; that local time MUST be read at the offset _camera_offset gives for offset, or, when it gives None, in zone with fold zero, so a time that occurs twice is its first occurrence and a time that does not exist takes the offset in force before the change, and turned into UTC by _to_naive_utc; it MUST return None when the UTC year is before the imported CAMERA_EARLIEST_YEAR constant or the moment lies more than the imported CAMERA_LATEST_AFTER_MODIFIED_HOURS constant of hours after modified, and the moment otherwise.
+- _photo_moment: [BEHAVIOR] MUST read the EXIF of the first frame once with Image.getexif, take ExifTags.Base.DateTimeOriginal and ExifTags.Base.OffsetTimeOriginal from its ExifTags.IFD.Exif directory and ExifTags.Base.DateTime from its first directory, a reading that fails counting as no EXIF, and return the first moment _parse_exif_moment gives for DateTimeOriginal with OffsetTimeOriginal, then for DateTime with no offset, each read in zone and judged against modified, paired with the EXIF member of = models.DateSource; when neither gives one it MUST return modified unchanged with the FILE_MODIFIED member. It MUST NOT read the service clock.
+- _to_naive_utc: [FIELD_ASSIGNMENT] MUST return the same instant as the given aware datetime, converted to UTC with its tzinfo removed and its microseconds kept, and MUST raise ValueError for a naive datetime, which names no instant.
+- build_publication: [FIELD_ASSIGNMENT] MUST return a PhotoPublication whose intake_id is the imported INTAKE_ID_PREFIX constant followed by the canonical project id, a hyphen and the source id, whose project_id and file_ref are the given ones, whose photo_date is the taken_at of photo unchanged, whose intake_source is the imported INTAKE_SOURCE constant, whose client_visible is false and whose section_id and caption are None; it reads nothing and writes nothing.
+- prepare_photo: [VALIDATION_ERROR] MUST open raw with Image.open restricted to the formats of the imported SOURCE_FORMATS constant; a source is opened when Image.open returns and the width and height of its first frame are read, and any failure before that, a DecompressionBombError of Image.open included, MUST raise Rejected with the UNREADABLE_IMAGE member of = models.PlacementFailure; for an opened source, before decoding pixels, it MUST raise Rejected with TOO_MANY_PIXELS when that width times that height is above the imported MAX_PIXELS constant; a later failure to decode the first frame or of any operation of the first rule of A2 MUST raise Rejected with UNREADABLE_IMAGE, and an encoded result longer than the imported MAX_OUTPUT_BYTES constant Rejected with TOO_LARGE; a value equal to a limit passes.
+- prepare_photo: [BEHAVIOR] MUST make the image of the first frame by exactly the operations of the first rule of A2 in their order: ImageOps.exif_transpose, Image.convert to RGBA with no colour management, Image.thumbnail with a box of the imported PHOTO_MAX_SIDE constant on each side and Image.Resampling.LANCZOS, a paste with its own alpha as the mask onto a new RGB image of the same size filled with the imported PHOTO_BACKGROUND constant, and Image.save as JPEG with quality the imported PHOTO_QUALITY constant, optimize the imported PHOTO_OPTIMIZE constant, progressive the imported PHOTO_PROGRESSIVE constant and subsampling the imported PHOTO_SUBSAMPLING constant, and no EXIF, colour profile or other metadata; it MUST return a PreparedPhoto of those bytes and of the moment and date source _photo_moment gives for the opened source image, modified and the ZoneInfo of timezone_name.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- DateSource: omitted because it is an imported runtime model schema
+- PlacementFailure: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not portal_deliverer.models imports.
+Only import runtime model symbols from portal_deliverer.models when they are explicitly listed in IMPORTS.
+- models.DateSource: runtime model schema omitted from non-model prompt; exported from portal_deliverer.models by IMPORTS.
+- models.PlacementFailure: runtime model schema omitted from non-model prompt; exported from portal_deliverer.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from portal_deliverer.models. Use the listed enum member names and model fields exactly.
+- DateSource enum members: EXIF='exif', FILE_MODIFIED='file_modified'
+- PhotoPublication fields (exact, no others exist): caption: str | None, client_visible: bool, file_ref: str, intake_id: str, intake_source: str, photo_date: datetime, project_id: UUID, section_id: UUID | None
+- PlacementFailure enum members: EMPTY='empty', NOT_A_REGULAR_FILE='not_a_regular_file', NOT_READY_OR_ABSENT='not_ready_or_absent', SOURCE_CHANGED='source_changed', TOO_LARGE='too_large', TOO_MANY_PIXELS='too_many_pixels', UNREADABLE_FILE='unreadable_file', UNREADABLE_IMAGE='unreadable_image', UNSUPPORTED_FORMAT='unsupported_format'
+- PreparedPhoto fields (exact, no others exist): content: bytes, date_source: DateSource, taken_at: datetime
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+_camera_offset, _parse_exif_moment, _photo_moment, _to_naive_utc, build_publication, prepare_photo
+
+MODELS CONTEXT:
+Runtime models live in portal_deliverer.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete photo_preparation.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in portal_deliverer.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and portal_deliverer.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
