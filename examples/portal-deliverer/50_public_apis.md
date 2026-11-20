@@ -180,7 +180,7 @@ The environment of the process.
 
 ### Outputs
 
-The exit status of the process: 0 when it is stopped by a signal after it has served, 1 when the start fails, without listening, and a status other than 0 when the web server fails after it has started listening. A failure is reported on the standard error stream; the text of that report is not part of the contract.
+The exit status of the process: the status of the row of the imported `EXIT_STATUSES` constant for the SERVED member of = models.ServiceExit when it is stopped by a signal after it has served, the status of its row for the START_FAILED member when the start fails, without listening, and a status other than that of SERVED when the web server fails after it has started listening. A failure is reported on the standard error stream; the text of that report is not part of the contract.
 
 ### Observable effect
 

@@ -272,21 +272,21 @@ A published photo is recognised without any change to the Portal.
    space and the token, compared whole, case-sensitively and in constant time. A request without that
    field, with more than one, or with any other value is refused with the UNAUTHORIZED member of
    = models.RefusalCode before its identifiers or body are examined.
-2. The token is generated with 256 bits from a cryptographic random source and is kept in a UTF-8
-   file: the 32 random bytes in URL-safe Base64, 43 characters of `A`-`Z`, `a`-`z`, `0`-`9`, `-` and `_`.
+2. The token is generated with 256 bits from a cryptographic random source and is kept in a
+   file in the encoding of the imported `TOKEN_ENCODING` constant: the 32 random bytes in URL-safe Base64, 43 characters of `A`-`Z`, `a`-`z`, `0`-`9`, `-` and `_`.
    The path is the `credential_file` run setting (A8). At the start it is opened once; its last component is
    opened without following a link, while the folders above it belong to the installation and are
-   resolved as they stand. The permissions are those of the opened file and its content is read from it. The file is decoded as UTF-8, a byte sequence that is not
-   UTF-8 ending the start, and the characters of the imported `TOKEN_TRIM_CHARACTERS` constant (the ASCII
+   resolved as they stand. The permissions are those of the opened file and its content is read from it. The file is decoded in that encoding, a byte sequence it cannot
+   decode ending the start, and the characters of the imported `TOKEN_TRIM_CHARACTERS` constant (the ASCII
    space, tab, line feed, carriage return, vertical tab and form feed) are removed at both ends; no other
    character is removed. The service does not start when
    the path is a symbolic link or not a regular file, when the group or others have any permission on
-   the file, or when what remains has fewer characters than the imported `TOKEN_MIN_LENGTH` constant or any character that
-   is not visible ASCII (`!` to `~`), since a token with such a character could not be presented in
+   the file, or when what remains has fewer characters than the imported `TOKEN_MIN_LENGTH` constant or any character outside
+   the imported `TOKEN_ALPHABET` constant, since a token with such a character could not be presented in
    the `Authorization` header.
 3. A token is replaced by writing a new file and restarting the service. The old token then stops
    working. The token is never written to logs, answers, repository files or the manifest.
-4. The service listens on the loopback interface. A reverse proxy on the same host terminates
+4. The service listens on the loopback interface, the address of the imported `BIND_HOST` constant. A reverse proxy on the same host terminates
    HTTPS for any caller from outside. The service reads no forwarded header.
 5. There is one principal: the calling flow of the owner. It may act on every confirmed connection.
 6. A change of an object's root or subfolder writes `assignment_confirmed` false (R0-11). An
@@ -507,6 +507,12 @@ Policy values are constants of the data provider:
 | `STORED_IMAGES_FOLDER` | `str` | `photos` |
 | `STORED_IMAGE_SUFFIX` | `str` | `.jpg` |
 | `STORED_MEDIA_TYPE` | `str` | `image/jpeg` |
+| `INTAKE_ID_SEPARATOR` | `str` | `-` |
+| `TOKEN_ENCODING` | `str` | `utf-8` |
+| `TOKEN_ALPHABET` | `str` | the visible ASCII characters, `!` to `~`, in code point order |
+| `BIND_HOST` | `str` | `127.0.0.1`, the loopback interface |
+| `EXIT_STATUSES` | `tuple[ExitStatusRule, ...]` | one row per member of = models.ServiceExit, below |
+| `OBSERVATION_FAILURES` | `tuple[ObservationFailure, ...]` | one row per member of = models.ObservationReason, below |
 | `REFUSAL_ANSWERS` | `tuple[RefusalAnswerRule, ...]` | one row per member of = models.RefusalCode, below |
 
 `REFUSAL_ANSWERS` holds exactly one row for each member of = models.RefusalCode, keyed by `code`; a
@@ -542,6 +548,28 @@ hexadecimal, at its byte `offset` from the start of the file.
 | `PNG` | 0 | `89504e470d0a1a0a` |
 | `WEBP` | 0 | `52494646` |
 | `WEBP` | 8 | `57454250` |
+
+`OBSERVATION_FAILURES` holds exactly one row for each member of = models.ObservationReason, keyed by
+`reason`; a member without its row stops the build. Its `failure` is the member of
+= models.PlacementFailure a delivery answers for a source a scan rejects with that reason, and a scan
+gives a source whose reading fails with that `failure` that `reason`.
+
+| `reason` | `failure` |
+|---|---|
+| `EMPTY` | `EMPTY` |
+| `TOO_LARGE` | `TOO_LARGE` |
+| `NOT_A_REGULAR_FILE` | `NOT_A_REGULAR_FILE` |
+| `UNREADABLE_FILE` | `UNREADABLE_FILE` |
+| `UNSUPPORTED_FORMAT` | `UNSUPPORTED_FORMAT` |
+
+`EXIT_STATUSES` holds exactly one row for each member of = models.ServiceExit, keyed by `outcome`; a
+member without its row stops the build. `ServiceExit` is SERVED, value `served`, a stop by a signal
+after the service has served, and START_FAILED, value `start_failed`, a start that fails before listening.
+
+| `outcome` | `status` |
+|---|---|
+| `SERVED` | 0 |
+| `START_FAILED` | 1 |
 
 `MAX_OUTPUT_BYTES` equals the Portal's `BINARY_MAX_READ_BYTES`. A change of that Portal value is
 released together with a change of this constant. The deliverer does not ask the Portal for it.

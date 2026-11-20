@@ -26,23 +26,23 @@ cycles, and `domain_models` names no other module.
 
 | Consumer | Provider | Symbols |
 |---|---|---|
-| `data_provider` | `domain_models` | `RefusalAnswerRule`, `RefusalCode`, `SourceSignatureRule` |
+| `data_provider` | `domain_models` | `ExitStatusRule`, `ObservationFailure`, `ObservationReason`, `PlacementFailure`, `RefusalAnswerRule`, `RefusalCode`, `SourceSignatureRule` |
 | `refusals` | `domain_models` | `PlacementFailure`, `RefusalCode` |
 | `runtime_settings` | `domain_models` | `RuntimeEnvironment`, `RuntimeSettings` |
 | `object_connections` | `domain_models` | `ConnectionEntry`, `ConnectionsFile`, `ObjectConnection`, `RefusalCode` |
 | `object_connections` | `refusals` | `DelivererError` |
 | `source_folder` | `domain_models` | `ObservationReason`, `PlacementFailure`, `RefusalCode`, `ScanStatus`, `SourceFile`, `SourceRead`, `SourceSignatureRule` |
 | `source_folder` | `refusals` | `DelivererError`, `Rejected` |
-| `source_folder` | `data_provider` | `CONFLICT_COPY_MARK`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `MAX_SOURCE_BYTES`, `SOURCE_FORMATS`, `SOURCE_SIGNATURES` |
+| `source_folder` | `data_provider` | `CONFLICT_COPY_MARK`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `MAX_SOURCE_BYTES`, `OBSERVATION_FAILURES`, `SOURCE_FORMATS`, `SOURCE_SIGNATURES` |
 | `photo_preparation` | `domain_models` | `DateSource`, `PhotoPublication`, `PlacementFailure`, `PreparedPhoto` |
 | `photo_preparation` | `refusals` | `Rejected` |
-| `photo_preparation` | `data_provider` | `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_BACKGROUND`, `PHOTO_MAX_SIDE`, `PHOTO_OPTIMIZE`, `PHOTO_PROGRESSIVE`, `PHOTO_QUALITY`, `PHOTO_SUBSAMPLING`, `SOURCE_FORMATS`, `CAMERA_EARLIEST_YEAR`, `CAMERA_LATEST_AFTER_MODIFIED_HOURS`, `CAMERA_OFFSET_MAX_HOURS` |
+| `photo_preparation` | `data_provider` | `INTAKE_ID_PREFIX`, `INTAKE_ID_SEPARATOR`, `INTAKE_SOURCE`, `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_BACKGROUND`, `PHOTO_MAX_SIDE`, `PHOTO_OPTIMIZE`, `PHOTO_PROGRESSIVE`, `PHOTO_QUALITY`, `PHOTO_SUBSAMPLING`, `SOURCE_FORMATS`, `CAMERA_EARLIEST_YEAR`, `CAMERA_LATEST_AFTER_MODIFIED_HOURS`, `CAMERA_OFFSET_MAX_HOURS` |
 | `delivery_store` | `data_provider` | `LOCK_FILE_MODE`, `RECORD_MODE`, `STATE_FOLDER_MODE`, `STORE_FOLDER_MODE`, `STORED_IMAGE_MODE`, `TEMPORARY_FILE_MODE`, `TEMPORARY_NAME_PREFIX`, `LOCKS_FOLDER`, `PLACEMENTS_FOLDER`, `MARKS_FOLDER`, `LOCK_FILE_SUFFIX`, `RECORD_FILE_SUFFIX`, `STORED_IMAGES_FOLDER`, `STORED_IMAGE_SUFFIX` |
 | `delivery_store` | `domain_models` | `DeliveryContext`, `PhotoPlacement`, `PublicationMark`, `RefusalCode` |
 | `delivery_store` | `refusals` | `DelivererError` |
 | `photo_delivery` | `domain_models` | `DeliveryContext`, `MarkOutcome`, `MarkStatus`, `PhotoPlacement`, `PlacementFailure`, `PlacementOutcome`, `PlacementStatus`, `PublicationMark`, `RefusalCode`, `ScanResult`, `ScanStatus`, `SourceFile`, `SourcePhotoObservation` |
 | `photo_delivery` | `refusals` | `DelivererError`, `Rejected` |
-| `photo_delivery` | `data_provider` | `SOURCE_ID_PATTERN`, `STORED_MEDIA_TYPE` |
+| `photo_delivery` | `data_provider` | `OBSERVATION_FAILURES`, `SOURCE_ID_PATTERN`, `STORED_MEDIA_TYPE` |
 | `photo_delivery` | `object_connections` | `available_photo_folder`, `confirmed_connection` |
 | `photo_delivery` | `source_folder` | `observe_source_files`, `read_named_source` |
 | `photo_delivery` | `photo_preparation` | `build_publication`, `prepare_photo` |
@@ -54,8 +54,8 @@ cycles, and `domain_models` names no other module.
 | `deliverer_api` | `photo_delivery` | `deliver_project_photo`, `mark_photo_published`, `scan_project_photos` |
 | `deliverer_router` | `domain_models` | `DeliveryContext`, `HealthAnswer` |
 | `deliverer_router` | `deliverer_api` | `AuthenticationRequired`, `answer_health`, `deliver_route`, `mark_route`, `scan_route` |
-| `deliverer_service` | `data_provider` | `TOKEN_MIN_LENGTH`, `TOKEN_TRIM_CHARACTERS` |
-| `deliverer_service` | `domain_models` | `DeliveryContext`, `RuntimeSettings` |
+| `deliverer_service` | `data_provider` | `BIND_HOST`, `EXIT_STATUSES`, `TOKEN_ALPHABET`, `TOKEN_ENCODING`, `TOKEN_MIN_LENGTH`, `TOKEN_TRIM_CHARACTERS` |
+| `deliverer_service` | `domain_models` | `DeliveryContext`, `RuntimeSettings`, `ServiceExit` |
 | `deliverer_service` | `runtime_settings` | `load_runtime_settings` |
 | `deliverer_service` | `object_connections` | `load_connections` |
 | `deliverer_service` | `deliverer_router` | `create_app` |
@@ -164,7 +164,9 @@ outbound call.
   `HealthAnswer`, the body of the health route;
 - `RefusalAnswerRule`, the row form of the refusal answers that `data_provider` holds: a refusal code with its
   status and `detail`; and `SourceSignatureRule`, the row form of the format signatures that `data_provider`
-  holds: a format, a byte offset and the signature written in lowercase hexadecimal (A8);
+  holds: a format, a byte offset and the signature written in lowercase hexadecimal; and `ObservationFailure`,
+  the row form of the correspondence of a scan's rejection reason with a delivery's failure; and
+  `ExitStatusRule`, the exit status of each `ServiceExit` outcome of the service (A8);
 - no exception type: those belong to `refusals` and `deliverer_api`.
 
 ### Knows
@@ -287,6 +289,12 @@ CAMERA_OFFSET_MAX_HOURS
 STORED_IMAGES_FOLDER
 STORED_IMAGE_SUFFIX
 STORED_MEDIA_TYPE
+INTAKE_ID_SEPARATOR
+TOKEN_ENCODING
+TOKEN_ALPHABET
+BIND_HOST
+EXIT_STATUSES
+OBSERVATION_FAILURES
 ```
 
 ### Trace inputs
