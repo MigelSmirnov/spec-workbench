@@ -1,0 +1,154 @@
+{
+ "open_points": [
+  {
+   "subject": "A8 / EXIF date parsing",
+   "kind": "undefined_match_semantics",
+   "text": "`EXIF_DATETIME_PATTERN` | `str` | `[0-9]{4}:[0-9]{2}:[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}`, the EXIF DateTime form",
+   "question": "Must a raw `DateTimeOriginal` or `DateTime` value match this pattern in full, and must the matched components also form a valid calendar date and time?",
+   "options": [
+    "Require a full-string match and reject calendar-invalid component values as malformed",
+    "Use a prefix or substring match, then parse the matched part",
+    "Leave recognition and calendar validation to the image library"
+   ],
+   "default_guess": "Require a full-string match and strict calendar validation; otherwise treat the camera value as unusable.",
+   "witness": {
+    "initial": "A source has `DateTimeOriginal` equal to `2026:11:20 10:20:30junk` and a usable modification time with a different instant.",
+    "events": [
+     "The calling flow requests placement of the source.",
+     "The deliverer chooses the first usable photo moment."
+    ],
+    "outcomes": [
+     "A full match rejects the EXIF value and uses the modification time.",
+     "A prefix match accepts the EXIF value and uses 2026-11-20 10:20:30."
+    ],
+    "observer": "The caller sees a different `photo_date` and `date_source` in the placement."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 / EXIF offset parsing",
+   "kind": "undefined_constant_application",
+   "text": "`EXIF_OFFSET_PATTERN` | `str` | `[+-][0-9]{2}:[0-9]{2}`, the EXIF OffsetTime form",
+   "question": "Is this pattern required to match `OffsetTimeOriginal` in full before the separate hour and minute bounds are checked, or is some other interpretation of the string allowed?",
+   "options": [
+    "Full-match the imported pattern, then enforce the hour and minute bounds",
+    "Accept a matching prefix or a value normalized by the image library",
+    "Use the prose `+HH:MM` or `-HH:MM` rule without reading this constant"
+   ],
+   "default_guess": "Full-match the imported pattern and then enforce the stated bounds.",
+   "witness": {
+    "initial": "A source has a valid `DateTimeOriginal`, `OffsetTimeOriginal` equal to `+02:00junk`, and the run time zone has a different UTC offset.",
+    "events": [
+     "The calling flow requests placement.",
+     "The deliverer interprets the camera time."
+    ],
+    "outcomes": [
+     "A full match rejects the offset and interprets the camera time in the run time zone.",
+     "A prefix match accepts `+02:00` and converts the camera time using that offset."
+    ],
+    "observer": "The caller sees a different UTC `photo_date`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 / M07 PublicationMark.marked_at",
+   "kind": "missing_time_source",
+   "text": "`marked_at: datetime`",
+   "question": "Which authority supplies `marked_at`, at what event is it read, is it represented as naive UTC or offset-aware time, and how many clock readings may a new or replayed mark operation take?",
+   "options": [
+    "The service clock is read once when a new mark is durably created; store naive UTC, and do not read it on replay",
+    "The service clock is read when the mark request begins",
+    "The caller supplies the instant",
+    "The persistence backend supplies the instant when it commits"
+   ],
+   "default_guess": "Read the service clock once immediately before creating the durable mark, store naive UTC, and preserve the stored value without a clock read on replay.",
+   "witness": {
+    "initial": "A placement exists without a publication mark; a mark request begins at 10:00:00 and its durable write completes at 10:00:05.",
+    "events": [
+     "The owner's calling flow submits the Portal photo id.",
+     "The deliverer creates the publication mark.",
+     "The same mark is later read or replayed."
+    ],
+    "outcomes": [
+     "`marked_at` is 10:00:00 because the operation reads the clock at request entry.",
+     "`marked_at` is 10:00:05 because the operation reads the clock at durable creation."
+    ],
+    "observer": "A check or repository reader inspecting the persisted or replayed mark sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 / file modification time",
+   "kind": "missing_read_count",
+   "text": "A modification time is an absolute instant converted to UTC.",
+   "question": "Must one placement read the file's modification time exactly once and use that same instant both for camera-time plausibility and as the fallback photo moment?",
+   "options": [
+    "Read it once and reuse that reading throughout the operation",
+    "Read it independently for the plausibility comparison and for fallback",
+    "Use whichever modification time accompanies each filesystem or image-library operation"
+   ],
+   "default_guess": "Read the modification time once and reuse the same value for every decision in that placement.",
+   "witness": {
+    "initial": "The camera time is 25 hours after the file's initial modification time and 23 hours after a later modification time.",
+    "events": [
+     "The deliverer reads the initial modification time.",
+     "Another actor changes the file's modification time while placement is running.",
+     "The deliverer checks camera plausibility and chooses the photo moment."
+    ],
+    "outcomes": [
+     "With one reading, the camera value is unusable and the initial modification time is used.",
+     "With a later rereading, the camera value is usable and becomes the photo moment."
+    ],
+    "observer": "The caller sees a different `photo_date` and `date_source`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 / file modification time representation",
+   "kind": "undefined_time_precision",
+   "text": "A modification time is an absolute instant converted to UTC.",
+   "question": "When the filesystem modification instant has sub-second precision, must that precision be preserved, rounded, or truncated in `taken_at` and `photo_date`, and is the resulting UTC datetime naive or offset-aware before delivery?",
+   "options": [
+    "Preserve all precision representable by `datetime` and deliver naive UTC",
+    "Truncate to whole seconds to match EXIF precision",
+    "Round to whole seconds",
+    "Preserve an offset-aware UTC datetime internally and remove the offset only in the publication body"
+   ],
+   "default_guess": "Preserve representable microseconds and use naive UTC consistently in `taken_at` and `photo_date`.",
+   "witness": {
+    "initial": "A source has no usable camera time and has a modification instant of 2026-11-20T10:20:30.500000Z.",
+    "events": [
+     "The calling flow requests placement.",
+     "The deliverer falls back to the modification time and builds the publication body."
+    ],
+    "outcomes": [
+     "The delivered value is 2026-11-20 10:20:30.500000.",
+     "The delivered value is truncated or rounded to whole seconds."
+    ],
+    "observer": "The caller and Portal see different `photo_date` values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 rule 3 / EXIF_DATETIME_PATTERN",
+   "kind": "standard_violation",
+   "text": "The photo moment is the first usable value of: EXIF `DateTimeOriginal`, EXIF `DateTime`, then",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "The passage must name the imported `EXIF_DATETIME_PATTERN` constant as the policy used to recognize the two EXIF date-time values.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2 rule 3 / EXIF_OFFSET_PATTERN",
+   "kind": "standard_violation",
+   "text": "the form `+HH:MM` or `-HH:MM` with hours up to the imported `CAMERA_OFFSET_MAX_HOURS` constant and minutes up to 59; otherwise it is read in the time zone of the `timezone` field of the run settings (A8), and so is",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "The passage must name the imported `EXIF_OFFSET_PATTERN` constant instead of restating its format without the constant's symbol.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A8 / EXIF date parsing\",\"kind\":\"undefined_match_semantics\",\"text\":\"`EXIF_DATETIME_PATTERN` | `str` | `[0-9]{4}:[0-9]{2}:[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}`, the EXIF DateTime form\",\"question\":\"Must a raw `DateTimeOriginal` or `DateTime` value match this pattern in full, and must the matched components also form a valid calendar date and time?\",\"options\":[\"Require a full-string match and reject calendar-invalid component values as malformed\",\"Use a prefix or substring match, then parse the matched part\",\"Leave recognition and calendar validation to the image library\"],\"default_guess\":\"Require a full-string match and strict calendar validation; otherwise treat the camera value as unusable.\",\"witness\":{\"initial\":\"A source has `DateTimeOriginal` equal to `2026:11:20 10:20:30junk` and a usable modification time with a different instant.\",\"events\":[\"The calling flow requests placement of the source.\",\"The deliverer chooses the first usable photo moment.\"],\"outcomes\":[\"A full match rejects the EXIF value and uses the modification time.\",\"A prefix match accepts the EXIF value and uses 2026-11-20 10:20:30.\"],\"observer\":\"The caller sees a different `photo_date` and `date_source` in the placement.\"}},{\"subject\":\"A8 / EXIF offset parsing\",\"kind\":\"undefined_constant_application\",\"text\":\"`EXIF_OFFSET_PATTERN` | `str` | `[+-][0-9]{2}:[0-9]{2}`, the EXIF OffsetTime form\",\"question\":\"Is this pattern required to match `OffsetTimeOriginal` in full before the separate hour and minute bounds are checked, or is some other interpretation of the string allowed?\",\"options\":[\"Full-match the imported pattern, then enforce the hour and minute bounds\",\"Accept a matching prefix or a value normalized by the image library\",\"Use the prose `+HH:MM` or `-HH:MM` rule without reading this constant\"],\"default_guess\":\"Full-match the imported pattern and then enforce the stated bounds.\",\"witness\":{\"initial\":\"A source has a valid `DateTimeOriginal`, `OffsetTimeOriginal` equal to `+02:00junk`, and the run time zone has a different UTC offset.\",\"events\":[\"The calling flow requests placement.\",\"The deliverer interprets the camera time.\"],\"outcomes\":[\"A full match rejects the offset and interprets the camera time in the run time zone.\",\"A prefix match accepts `+02:00` and converts the camera time using that offset.\"],\"observer\":\"The caller sees a different UTC `photo_date`.\"}},{\"subject\":\"A8 / M07 PublicationMark.marked_at\",\"kind\":\"missing_time_source\",\"text\":\"`marked_at: datetime`\",\"question\":\"Which authority supplies `marked_at`, at what event is it read, is it represented as naive UTC or offset-aware time, and how many clock readings may a new or replayed mark operation take?\",\"options\":[\"The service clock is read once when a new mark is durably created; store naive UTC, and do not read it on replay\",\"The service clock is read when the mark request begins\",\"The caller supplies the instant\",\"The persistence backend supplies the instant when it commits\"],\"default_guess\":\"Read the service clock once immediately before creating the durable mark, store naive UTC, and preserve the stored value without a clock read on replay.\",\"witness\":{\"initial\":\"A placement exists without a publication mark; a mark request begins at 10:00:00 and its durable write completes at 10:00:05.\",\"events\":[\"The owner's calling flow submits the Portal photo id.\",\"The deliverer creates the publication mark.\",\"The same mark is later read or replayed.\"],\"outcomes\":[\"`marked_at` is 10:00:00 because the operation reads the clock at request entry.\",\"`marked_at` is 10:00:05 because the operation reads the clock at durable creation.\"],\"observer\":\"A check or repository reader inspecting the persisted or replayed mark sees the difference.\"}},{\"subject\":\"A2 / file modification time\",\"kind\":\"missing_read_count\",\"text\":\"A modification time is an absolute instant converted to UTC.\",\"question\":\"Must one placement read the file's modification time exactly once and use that same instant both for camera-time plausibility and as the fallback photo moment?\",\"options\":[\"Read it once and reuse that reading throughout the operation\",\"Read it independently for the plausibility comparison and for fallback\",\"Use whichever modification time accompanies each filesystem or image-library operation\"],\"default_guess\":\"Read the modification time once and reuse the same value for every decision in that placement.\",\"witness\":{\"initial\":\"The camera time is 25 hours after the file's initial modification time and 23 hours after a later modification time.\",\"events\":[\"The deliverer reads the initial modification time.\",\"Another actor changes the file's modification time while placement is running.\",\"The deliverer checks camera plausibility and chooses the photo moment.\"],\"outcomes\":[\"With one reading, the camera value is unusable and the initial modification time is used.\",\"With a later rereading, the camera value is usable and becomes the photo moment.\"],\"observer\":\"The caller sees a different `photo_date` and `date_source`.\"}},{\"subject\":\"A2 / file modification time representation\",\"kind\":\"undefined_time_precision\",\"text\":\"A modification time is an absolute instant converted to UTC.\",\"question\":\"When the filesystem modification instant has sub-second precision, must that precision be preserved, rounded, or truncated in `taken_at` and `photo_date`, and is the resulting UTC datetime naive or offset-aware before delivery?\",\"options\":[\"Preserve all precision representable by `datetime` and deliver naive UTC\",\"Truncate to whole seconds to match EXIF precision\",\"Round to whole seconds\",\"Preserve an offset-aware UTC datetime internally and remove the offset only in the publication body\"],\"default_guess\":\"Preserve representable microseconds and use naive UTC consistently in `taken_at` and `photo_date`.\",\"witness\":{\"initial\":\"A source has no usable camera time and has a modification instant of 2026-11-20T10:20:30.500000Z.\",\"events\":[\"The calling flow requests placement.\",\"The deliverer falls back to the modification time and builds the publication body.\"],\"outcomes\":[\"The delivered value is 2026-11-20 10:20:30.500000.\",\"The delivered value is truncated or rounded to whole seconds.\"],\"observer\":\"The caller and Portal see different `photo_date` values.\"}},{\"subject\":\"A2 rule 3 / EXIF_DATETIME_PATTERN\",\"kind\":\"standard_violation\",\"text\":\"The photo moment is the first usable value of: EXIF `DateTimeOriginal`, EXIF `DateTime`, then\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"The passage must name the imported `EXIF_DATETIME_PATTERN` constant as the policy used to recognize the two EXIF date-time values.\"},{\"subject\":\"A2 rule 3 / EXIF_OFFSET_PATTERN\",\"kind\":\"standard_violation\",\"text\":\"the form `+HH:MM` or `-HH:MM` with hours up to the imported `CAMERA_OFFSET_MAX_HOURS` constant and minutes up to 59; otherwise it is read in the time zone of the `timezone` field of the run settings (A8), and so is\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"The passage must name the imported `EXIF_OFFSET_PATTERN` constant instead of restating its format without the constant's symbol.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,167 @@
+{
+ "open_points": [
+  {
+   "subject": "A2 EXIF DateTime parsing",
+   "kind": "standard_violation",
+   "text": "A camera value is unusable when it is malformed",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "Make this passage name the imported `EXIF_DATETIME_PATTERN` constant as the rule that determines the required textual form.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2 OffsetTimeOriginal parsing",
+   "kind": "standard_violation",
+   "text": "the form `+HH:MM` or `-HH:MM`",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "Replace the locally repeated offset form with a reference to the imported `EXIF_OFFSET_PATTERN` constant.",
+   "unit": "?"
+  },
+  {
+   "subject": "EXIF_DATETIME_PATTERN matching",
+   "kind": "matching_scope",
+   "text": "`[0-9]{4}:[0-9]{2}:[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}`, the EXIF DateTime form",
+   "question": "Must the entire camera value match this pattern, and are leading or trailing characters or whitespace forbidden without normalization?",
+   "options": [
+    "Require a full match of the value exactly as supplied",
+    "Search for a matching substring",
+    "Trim or otherwise normalize the value before a full match"
+   ],
+   "default_guess": "Require an exact full match without trimming or normalization.",
+   "witness": {
+    "initial": "A source has `DateTimeOriginal` equal to `x2026:11:20 10:00:00y` and a usable modification time.",
+    "events": [
+     "The caller asks the service to place the source.",
+     "The deliverer evaluates the camera value against `EXIF_DATETIME_PATTERN`."
+    ],
+    "outcomes": [
+     "A full-match implementation rejects the camera value and uses the modification time.",
+     "A substring-match implementation accepts the embedded camera value and uses it as the photo moment."
+    ],
+    "observer": "The caller sees different `date_source` and `photo_date` values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "EXIF camera-value validity",
+   "kind": "uncovered_case",
+   "text": "A camera value is unusable when it is malformed",
+   "question": "Is a value that matches `EXIF_DATETIME_PATTERN` but is not a real calendar date or time malformed, and must it be skipped rather than fail the placement or be normalized?",
+   "options": [
+    "Treat every calendar-invalid value as unusable and try the next source",
+    "Treat a pattern match as usable and let conversion failure fail the placement",
+    "Normalize out-of-range calendar fields"
+   ],
+   "default_guess": "Require both a full pattern match and a valid Gregorian local date and time; otherwise try the next photo-moment source.",
+   "witness": {
+    "initial": "A source has `DateTimeOriginal` equal to `2026:02:31 10:00:00` and a usable modification time.",
+    "events": [
+     "The caller asks the service to place the source.",
+     "The value matches `EXIF_DATETIME_PATTERN` but cannot be represented as a calendar datetime."
+    ],
+    "outcomes": [
+     "The value is classified as malformed and the modification time is used.",
+     "The pattern match is treated as sufficient and the later conversion error fails or aborts preparation."
+    ],
+    "observer": "The caller sees either a successful placement with the modification-time date or a failed placement."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "STOP_SIGNALS representation",
+   "kind": "representation_mapping",
+   "text": "| `STOP_SIGNALS` | `tuple[str, ...]` | `SIGINT`, `SIGTERM` |",
+   "question": "Are the tuple members literal signal-name strings, and, if so, exactly how are they resolved to and compared with the operating system's signal identifiers?",
+   "options": [
+    "Store the strings `SIGINT` and `SIGTERM` and resolve them through the platform signal API",
+    "Store numeric or enum signal identifiers and change the declared type",
+    "Compare received signal names as strings after converting the operating-system value"
+   ],
+   "default_guess": "Keep literal strings and resolve each through the platform signal API when installing handlers and classifying the received signal.",
+   "witness": {
+    "initial": "The web server has crossed the startup boundary and is serving requests.",
+    "events": [
+     "The operating system sends SIGTERM to the process.",
+     "The service classifies the received numeric or enum signal using `STOP_SIGNALS`."
+    ],
+    "outcomes": [
+     "The names are resolved correctly, shutdown is clean, and the outcome is SERVED with status 0.",
+     "The string members are compared directly with the operating-system signal value, the stop is not recognized as a listed signal, and the outcome is SERVER_FAILED with status 1."
+    ],
+    "observer": "The service supervisor observes a different exit status."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 file modification time",
+   "kind": "time_read_count",
+   "text": "The photo moment is the first usable value of: EXIF `DateTimeOriginal`, EXIF `DateTime`, then the file's modification time.",
+   "question": "How many times may one placement read the file modification time, and must the same captured instant be used both for camera-time plausibility and as the fallback photo moment?",
+   "options": [
+    "Read it exactly once per placement and reuse that instant",
+    "Read it separately for plausibility and fallback",
+    "Reuse a modification time supplied by an earlier scan"
+   ],
+   "default_guess": "Read the source's modification time once during placement and reuse the captured absolute instant for every comparison and fallback in that operation.",
+   "witness": {
+    "initial": "A source has a camera time near the permitted future boundary, and its modification time can change concurrently.",
+    "events": [
+     "The caller starts placement.",
+     "The deliverer reads the modification time for the plausibility comparison.",
+     "Another actor changes the file's modification time before fallback evaluation.",
+     "The deliverer needs the modification time again."
+    ],
+    "outcomes": [
+     "A single captured reading gives one stable plausibility decision and fallback instant.",
+     "Separate readings can change whether the camera value is usable or can produce a different fallback instant."
+    ],
+    "observer": "The caller sees a different `photo_date` or `date_source` for the same operation history."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 marked_at",
+   "kind": "missing_time_source",
+   "text": "`marked_at: datetime`",
+   "question": "What authority supplies the fresh instant written to `marked_at` when a publication mark is first created?",
+   "options": [
+    "The service's injected system-clock authority",
+    "An instant supplied by the caller",
+    "The Portal publication event or response time",
+    "The filesystem timestamp of the mark record"
+   ],
+   "default_guess": "Use the service's injected system-clock authority at the successful creation of the mark.",
+   "unit": "?"
+  },
+  {
+   "subject": "M07 marked_at",
+   "kind": "missing_time_representation",
+   "text": "`marked_at: datetime`",
+   "question": "In what representation and time zone is `marked_at` stored and returned?",
+   "options": [
+    "A timezone-aware UTC datetime",
+    "A naive datetime representing UTC",
+    "A local datetime in the run setting's time zone"
+   ],
+   "default_guess": "Store and return a timezone-aware UTC datetime.",
+   "unit": "?"
+  },
+  {
+   "subject": "M07 marked_at",
+   "kind": "time_read_count",
+   "text": "The first mark stands when it is sent again, and its `marked_at` does not change",
+   "question": "How many clock readings does a mark operation take when it creates the mark, and how many does a replay or conflicting mark take?",
+   "options": [
+    "One reading only when a new mark is created and zero for replay or conflict",
+    "One reading for every mark request but persist only the creation reading",
+    "Multiple readings during creation with an unspecified one persisted"
+   ],
+   "default_guess": "Read the clock exactly once after all refusal checks and immediately before creating a new mark; read it zero times for replay and conflict.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A2 EXIF DateTime parsing\",\"kind\":\"standard_violation\",\"text\":\"A camera value is unusable when it is malformed\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"Make this passage name the imported `EXIF_DATETIME_PATTERN` constant as the rule that determines the required textual form.\"},{\"subject\":\"A2 OffsetTimeOriginal parsing\",\"kind\":\"standard_violation\",\"text\":\"the form `+HH:MM` or `-HH:MM`\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"Replace the locally repeated offset form with a reference to the imported `EXIF_OFFSET_PATTERN` constant.\"},{\"subject\":\"EXIF_DATETIME_PATTERN matching\",\"kind\":\"matching_scope\",\"text\":\"`[0-9]{4}:[0-9]{2}:[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}`, the EXIF DateTime form\",\"question\":\"Must the entire camera value match this pattern, and are leading or trailing characters or whitespace forbidden without normalization?\",\"options\":[\"Require a full match of the value exactly as supplied\",\"Search for a matching substring\",\"Trim or otherwise normalize the value before a full match\"],\"default_guess\":\"Require an exact full match without trimming or normalization.\",\"witness\":{\"initial\":\"A source has `DateTimeOriginal` equal to `x2026:11:20 10:00:00y` and a usable modification time.\",\"events\":[\"The caller asks the service to place the source.\",\"The deliverer evaluates the camera value against `EXIF_DATETIME_PATTERN`.\"],\"outcomes\":[\"A full-match implementation rejects the camera value and uses the modification time.\",\"A substring-match implementation accepts the embedded camera value and uses it as the photo moment.\"],\"observer\":\"The caller sees different `date_source` and `photo_date` values.\"}},{\"subject\":\"EXIF camera-value validity\",\"kind\":\"uncovered_case\",\"text\":\"A camera value is unusable when it is malformed\",\"question\":\"Is a value that matches `EXIF_DATETIME_PATTERN` but is not a real calendar date or time malformed, and must it be skipped rather than fail the placement or be normalized?\",\"options\":[\"Treat every calendar-invalid value as unusable and try the next source\",\"Treat a pattern match as usable and let conversion failure fail the placement\",\"Normalize out-of-range calendar fields\"],\"default_guess\":\"Require both a full pattern match and a valid Gregorian local date and time; otherwise try the next photo-moment source.\",\"witness\":{\"initial\":\"A source has `DateTimeOriginal` equal to `2026:02:31 10:00:00` and a usable modification time.\",\"events\":[\"The caller asks the service to place the source.\",\"The value matches `EXIF_DATETIME_PATTERN` but cannot be represented as a calendar datetime.\"],\"outcomes\":[\"The value is classified as malformed and the modification time is used.\",\"The pattern match is treated as sufficient and the later conversion error fails or aborts preparation.\"],\"observer\":\"The caller sees either a successful placement with the modification-time date or a failed placement.\"}},{\"subject\":\"STOP_SIGNALS representation\",\"kind\":\"representation_mapping\",\"text\":\"| `STOP_SIGNALS` | `tuple[str, ...]` | `SIGINT`, `SIGTERM` |\",\"question\":\"Are the tuple members literal signal-name strings, and, if so, exactly how are they resolved to and compared with the operating system's signal identifiers?\",\"options\":[\"Store the strings `SIGINT` and `SIGTERM` and resolve them through the platform signal API\",\"Store numeric or enum signal identifiers and change the declared type\",\"Compare received signal names as strings after converting the operating-system value\"],\"default_guess\":\"Keep literal strings and resolve each through the platform signal API when installing handlers and classifying the received signal.\",\"witness\":{\"initial\":\"The web server has crossed the startup boundary and is serving requests.\",\"events\":[\"The operating system sends SIGTERM to the process.\",\"The service classifies the received numeric or enum signal using `STOP_SIGNALS`.\"],\"outcomes\":[\"The names are resolved correctly, shutdown is clean, and the outcome is SERVED with status 0.\",\"The string members are compared directly with the operating-system signal value, the stop is not recognized as a listed signal, and the outcome is SERVER_FAILED with status 1.\"],\"observer\":\"The service supervisor observes a different exit status.\"}},{\"subject\":\"A2 file modification time\",\"kind\":\"time_read_count\",\"text\":\"The photo moment is the first usable value of: EXIF `DateTimeOriginal`, EXIF `DateTime`, then the file's modification time.\",\"question\":\"How many times may one placement read the file modification time, and must the same captured instant be used both for camera-time plausibility and as the fallback photo moment?\",\"options\":[\"Read it exactly once per placement and reuse that instant\",\"Read it separately for plausibility and fallback\",\"Reuse a modification time supplied by an earlier scan\"],\"default_guess\":\"Read the source's modification time once during placement and reuse the captured absolute instant for every comparison and fallback in that operation.\",\"witness\":{\"initial\":\"A source has a camera time near the permitted future boundary, and its modification time can change concurrently.\",\"events\":[\"The caller starts placement.\",\"The deliverer reads the modification time for the plausibility comparison.\",\"Another actor changes the file's modification time before fallback evaluation.\",\"The deliverer needs the modification time again.\"],\"outcomes\":[\"A single captured reading gives one stable plausibility decision and fallback instant.\",\"Separate readings can change whether the camera value is usable or can produce a different fallback instant.\"],\"observer\":\"The caller sees a different `photo_date` or `date_source` for the same operation history.\"}},{\"subject\":\"M07 marked_at\",\"kind\":\"missing_time_source\",\"text\":\"`marked_at: datetime`\",\"question\":\"What authority supplies the fresh instant written to `marked_at` when a publication mark is first created?\",\"options\":[\"The service's injected system-clock authority\",\"An instant supplied by the caller\",\"The Portal publication event or response time\",\"The filesystem timestamp of the mark record\"],\"default_guess\":\"Use the service's injected system-clock authority at the successful creation of the mark.\"},{\"subject\":\"M07 marked_at\",\"kind\":\"missing_time_representation\",\"text\":\"`marked_at: datetime`\",\"question\":\"In what representation and time zone is `marked_at` stored and returned?\",\"options\":[\"A timezone-aware UTC datetime\",\"A naive datetime representing UTC\",\"A local datetime in the run setting's time zone\"],\"default_guess\":\"Store and return a timezone-aware UTC datetime.\"},{\"subject\":\"M07 marked_at\",\"kind\":\"time_read_count\",\"text\":\"The first mark stands when it is sent again, and its `marked_at` does not change\",\"question\":\"How many clock readings does a mark operation take when it creates the mark, and how many does a replay or conflicting mark take?\",\"options\":[\"One reading only when a new mark is created and zero for replay or conflict\",\"One reading for every mark request but persist only the creation reading\",\"Multiple readings during creation with an unspecified one persisted\"],\"default_guess\":\"Read the clock exactly once after all refusal checks and immediately before creating a new mark; read it zero times for replay and conflict.\"}]}",
+ "set_aside": []
+}
