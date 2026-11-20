@@ -1,0 +1,279 @@
+{
+ "open_points": [
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "filename representation",
+   "text": "Files are visited folder by folder: the files of a folder in order of their names, then its\nsubfolders in order of their names, compared by Unicode code point.",
+   "question": "How is a filesystem name that is not valid Unicode represented, ordered and returned in M02: is the scan refused, is the entry skipped, or is a reversible byte-to-string representation used?",
+   "options": [
+    "Refuse the whole scan with FOLDER_UNAVAILABLE",
+    "Skip the unrepresentable entry",
+    "Represent arbitrary filename bytes reversibly and order those represented values"
+   ],
+   "default_guess": "Use the platform's reversible surrogate representation, order the resulting code points, and preserve it through the name field.",
+   "witness": {
+    "initial": "The photo folder contains a regular file whose name includes the byte 0xFF and whose content is otherwise a valid supported image.",
+    "events": [
+     "The owner asks the calling flow to scan the project.",
+     "The deliverer lists and orders the folder entries."
+    ],
+    "outcomes": [
+     "The scan reports the file under a reversible string name.",
+     "The scan skips the file or refuses the operation because its name is not valid Unicode."
+    ],
+    "observer": "The owner through the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "invariant scope",
+   "text": "INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).",
+   "question": "Must INV-01 also preserve access times, ownership, ACLs and extended attributes, or is the required assertion deliberately limited to files, bytes, modification times and modes?",
+   "options": [
+    "Preserve every filesystem datum, including access time",
+    "Assert only the properties explicitly listed in the Required tests item",
+    "Permit incidental access-time changes but preserve all other metadata"
+   ],
+   "default_guess": "Treat incidental access-time changes caused by reads as allowed and assert exactly the listed properties.",
+   "witness": {
+    "initial": "The filesystem updates a file's access time when its contents are read.",
+    "events": [
+     "The owner requests a scan that reads the file.",
+     "The filesystem advances the file's access time without changing its bytes, modification time or mode."
+    ],
+    "outcomes": [
+     "INV-01 passes because the Required tests item does not include access time.",
+     "INV-01 fails because changing access time changes something in the source folder."
+    ],
+    "observer": "The operator inspecting source-folder metadata"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "contradictory path rule",
+   "text": "INV-02: a delivery opens no path that fails condition 1 of A3 rule 5.",
+   "question": "Does INV-02 prohibit opening any component of a name that ultimately fails condition 1, or does it permit opening the validated prefix needed to discover the failing component, as A3 rule 5 requires?",
+   "options": [
+    "Open no component of an ultimately failing path",
+    "Open each validated prefix component but not the failing component's target or anything beyond it"
+   ],
+   "default_guess": "Open the validated prefix components needed for the check, but never open the named file, a component past the failure, or a symbolic-link target.",
+   "witness": {
+    "initial": "The requested name is `safe/missing/photo.jpg`; `safe` is a real folder and `missing` is absent.",
+    "events": [
+     "The caller requests delivery.",
+     "A3 rule 5 requires the deliverer to open the photo folder and each folder of the name in turn to decide condition 1."
+    ],
+    "outcomes": [
+     "The deliverer opens `safe`, discovers that `missing` is absent and refuses.",
+     "The deliverer opens none of the path because the complete name fails condition 1."
+    ],
+    "observer": "A file-open trace used by the INV-02 test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "incomplete invariant test",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock, and a trace of every file the process opens while the delivery runs shows no opening of the named file, of a folder past the segment that fails or of a link's target (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What must the INV-02 witness show for the other condition-1 cases—an absent folder or final segment, a non-folder component, a folder-opening failure, and an unreadable final metadata record?",
+   "options": [
+    "Add explicit cases and open-trace assertions for every condition-1 branch",
+    "Treat the listed examples as sufficient representatives of all condition-1 branches"
+   ],
+   "default_guess": "Add explicit cases for every materially distinct condition-1 branch.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2: Accepted decision A2 — What reaches the Portal store",
+   "kind": "camera time grammar",
+   "text": "A camera value is unusable when it is malformed, when its UTC year\n   is before the imported `CAMERA_EARLIEST_YEAR` constant, or when it is more than the imported\n   `CAMERA_LATEST_AFTER_MODIFIED_HOURS` constant of hours after the file's modification time.",
+   "question": "What exact EXIF date-time syntax is well formed, and are fractional seconds from fields such as `SubSecTimeOriginal` read, ignored, or grounds for falling back to the next time source?",
+   "options": [
+    "Accept only the base EXIF date-time field to whole seconds and ignore subsecond companion fields",
+    "Combine the base field with a valid EXIF subsecond companion field",
+    "Accept an explicitly defined broader parser grammar"
+   ],
+   "default_guess": "Parse the standard base EXIF form to whole seconds and ignore subsecond companion fields unless they are explicitly added to the design.",
+   "witness": {
+    "initial": "A file has `DateTimeOriginal` equal to `2026:11:20 10:15:30` and `SubSecTimeOriginal` equal to `750`; its modification time is later.",
+    "events": [
+     "The caller delivers the file.",
+     "The deliverer derives `taken_at` and the publication `photo_date`."
+    ],
+    "outcomes": [
+     "The delivered instant is `2026-11-20T10:15:30.750000`.",
+     "The subsecond field is ignored and the delivered instant is `2026-11-20T10:15:30`."
+    ],
+    "observer": "The owner and Portal through the publication body"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2: Accepted decision A2 — What reaches the Portal store",
+   "kind": "animated metadata source",
+   "text": "Only the first frame of an animated\n   image is delivered.",
+   "question": "Must the photo moment also be read exclusively from the first frame's metadata, or may it come from container-level or another frame's EXIF metadata?",
+   "options": [
+    "Use only EXIF associated with the first frame",
+    "Use the image library's container-level EXIF result",
+    "Search frames for the first usable EXIF value"
+   ],
+   "default_guess": "Use only the metadata exposed for the first frame, matching the pixels that are delivered.",
+   "witness": {
+    "initial": "An animated source has no date on its first frame and a usable `DateTimeOriginal` on its second frame.",
+    "events": [
+     "The caller delivers the source.",
+     "The deliverer selects the first frame's pixels and derives the photo moment."
+    ],
+    "outcomes": [
+     "It falls back to the file modification time because the first frame has no usable camera time.",
+     "It uses the second frame's camera time although the second frame's pixels are not delivered."
+    ],
+    "observer": "The owner through the resulting photo date"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2: Accepted decision A2 — What reaches the Portal store",
+   "kind": "unclassified processing failure",
+   "text": "For a source\n   it opens, checks run in this order: a first frame whose width times height is above the imported\n   `MAX_PIXELS` constant fails with the TOO_MANY_PIXELS member, a source that cannot be decoded with the\n   UNREADABLE_IMAGE member, and a result longer than the imported `MAX_OUTPUT_BYTES` constant, the Portal's\n   read limit, with the TOO_LARGE member.",
+   "question": "What outcome applies when decoding succeeds but orientation, conversion, resizing, compositing or JPEG encoding fails before a result exists?",
+   "options": [
+    "Return the UNREADABLE_IMAGE placement failure",
+    "Return the UNREADABLE_FILE placement failure",
+    "Refuse the whole operation with a service-state refusal",
+    "Treat the failure as an unhandled internal error"
+   ],
+   "default_guess": "Return the UNREADABLE_IMAGE placement failure for any deterministic image-processing or encoding failure before storage.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3: Accepted decision A3 — One placement per project and content",
+   "kind": "lock write contradiction",
+   "text": "Delivering content that already has a placement answers `replayed` with the stored placement and the\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\n   when the source file has left the folder.",
+   "question": "Because the project lock is taken before the existing-placement check, does creating or updating a durable lock artifact violate the replay rule's “writes nothing,” or is the project lock an allowed exception?",
+   "options": [
+    "A replay may create or update the project lock",
+    "The lock must already exist or be implemented without durable writes",
+    "“Writes nothing” excludes lock infrastructure but only when another rule says so"
+   ],
+   "default_guess": "Require lock acquisition to make no durable change observable as application state during a replay.",
+   "witness": {
+    "initial": "A placement already exists, but no project-lock file exists on disk.",
+    "events": [
+     "The caller repeats delivery of that content.",
+     "The service reaches the project-lock check before looking up the placement."
+    ],
+    "outcomes": [
+     "The service creates a lock file and returns `replayed`.",
+     "The service uses a non-durable lock or refuses to create a lock artifact so that replay writes nothing."
+    ],
+    "observer": "The operator inspecting durable files and the INV-06 test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3: Accepted decision A3 — One placement per project and content",
+   "kind": "incomplete invariant test",
+   "text": "INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`). When no refusal of A6 rule 5 applies, a delivery repeated after a failed record write completes the placement (`test_a_delivery_repeated_after_a_failed_record_write_completes`).",
+   "question": "Must the Required tests item demonstrate the “at most one placement” invariant under concurrent first deliveries, or is a sequential second delivery sufficient?",
+   "options": [
+    "Require a concurrent-delivery witness that ends with one placement",
+    "Treat sequential replay plus the separately specified locking tests as sufficient"
+   ],
+   "default_guess": "Add a concurrent first-delivery witness that asserts one placement record and one effective stored image.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3: Accepted decision A3 — One placement per project and content",
+   "kind": "incomplete invariant test",
+   "text": "INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).",
+   "question": "For removal, must the test explicitly assert that the earlier placement record, stored image and publication mark are all byte-for-byte unchanged, as INV-07 states?",
+   "options": [
+    "Explicitly assert all three durable artifacts remain unchanged",
+    "Treat “keeps its delivery” as sufficient to imply all three"
+   ],
+   "default_guess": "Explicitly assert the placement record, stored image and publication mark remain unchanged.",
+   "unit": "?"
+  },
+  {
+   "subject": "A7: Accepted decision A7 — Time",
+   "kind": "clock precision conversion",
+   "text": "The current time is a `datetime` in UTC without an offset, with microsecond precision and no\n   rounding",
+   "question": "When the system clock supplies a value finer than a microsecond, which microsecond is produced—must the excess fraction be truncated toward the earlier instant, as file modification time is, or is another conversion allowed?",
+   "options": [
+    "Drop the excess fraction toward the earlier instant",
+    "Use the host datetime conversion's behavior",
+    "Require the backend clock itself to supply an already microsecond-exact value"
+   ],
+   "default_guess": "Drop any finer fraction toward the earlier instant.",
+   "witness": {
+    "initial": "The system clock instant is `2026-11-20T10:15:30.123456789Z`.",
+    "events": [
+     "The calling flow records a publication mark.",
+     "The mark reads `utc_now` once and stores `marked_at`."
+    ],
+    "outcomes": [
+     "`marked_at` is `2026-11-20T10:15:30.123456`.",
+     "The backend conversion produces another microsecond value, such as `2026-11-20T10:15:30.123457`, or rejects the reading."
+    ],
+    "observer": "The caller reading the mark and the persisted M07 record"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7: Accepted decision A7 — Time",
+   "kind": "incomplete invariant test",
+   "text": "INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "What must the INV-13 test show for a mark refused before the clock point, a mark refused after it, and a replayed mark?",
+   "options": [
+    "Test zero reads before the point and exactly one read for post-point refusal and replay",
+    "Test only one successful new mark because it represents all mark paths"
+   ],
+   "default_guess": "Add separate assertions for pre-clock refusal, post-clock refusal and replay, matching normative rule 2.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "standard_violation",
+   "text": "| Order | Condition | Status | Reason |\n|---|---|---|---|\n| 1 | empty | `rejected` | `empty` |\n| 2 | larger than the source limit | `rejected` | `too_large` |\n| 3 | opened in non-blocking mode without following a link, what it finds is not a regular file | `rejected` | `not_a_regular_file` |\n| 4 | it grew past the source limit while being read | `rejected` | `too_large` |\n| 5 | opening or reading it fails, which includes a file that disappeared or became a symbolic link after its metadata was read | `rejected` | `unreadable_file` |\n| 6 | does not begin with the signature of a format of the imported `SOURCE_FORMATS` constant: for no format do all the rows of the imported `SOURCE_SIGNATURES` constant with that `format` find their `signature` bytes at their `offset` | `rejected` | `unsupported_format` |\n| 7 | placed and marked | `published` | none |\n| 8 | placed | `placed` | none |\n| 9 | anything else | `ready` | none |",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Replace every status and reason value with its generated member name beside the address of = models.ScanStatus or = models.ObservationReason.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "standard_violation",
+   "text": "A signature does not prove that an image can be decoded: a `ready`\nfile may still fail when it is delivered.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the READY member of = models.ScanStatus instead of naming it only by its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3: Accepted decision A3 — One placement per project and content",
+   "kind": "standard_violation",
+   "text": "Delivering content that already has a placement answers `replayed` with the stored placement and the\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\n   when the source file has left the folder.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the REPLAYED member of = models.PlacementStatus beside the enumeration address.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3: Accepted decision A3 — One placement per project and content",
+   "kind": "standard_violation",
+   "text": "INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the READY member of = models.ScanStatus beside the enumeration address.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"filename representation\",\"text\":\"Files are visited folder by folder: the files of a folder in order of their names, then its\\nsubfolders in order of their names, compared by Unicode code point.\",\"question\":\"How is a filesystem name that is not valid Unicode represented, ordered and returned in M02: is the scan refused, is the entry skipped, or is a reversible byte-to-string representation used?\",\"options\":[\"Refuse the whole scan with FOLDER_UNAVAILABLE\",\"Skip the unrepresentable entry\",\"Represent arbitrary filename bytes reversibly and order those represented values\"],\"default_guess\":\"Use the platform's reversible surrogate representation, order the resulting code points, and preserve it through the name field.\",\"witness\":{\"initial\":\"The photo folder contains a regular file whose name includes the byte 0xFF and whose content is otherwise a valid supported image.\",\"events\":[\"The owner asks the calling flow to scan the project.\",\"The deliverer lists and orders the folder entries.\"],\"outcomes\":[\"The scan reports the file under a reversible string name.\",\"The scan skips the file or refuses the operation because its name is not valid Unicode.\"],\"observer\":\"The owner through the calling flow\"}},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"invariant scope\",\"text\":\"INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).\",\"question\":\"Must INV-01 also preserve access times, ownership, ACLs and extended attributes, or is the required assertion deliberately limited to files, bytes, modification times and modes?\",\"options\":[\"Preserve every filesystem datum, including access time\",\"Assert only the properties explicitly listed in the Required tests item\",\"Permit incidental access-time changes but preserve all other metadata\"],\"default_guess\":\"Treat incidental access-time changes caused by reads as allowed and assert exactly the listed properties.\",\"witness\":{\"initial\":\"The filesystem updates a file's access time when its contents are read.\",\"events\":[\"The owner requests a scan that reads the file.\",\"The filesystem advances the file's access time without changing its bytes, modification time or mode.\"],\"outcomes\":[\"INV-01 passes because the Required tests item does not include access time.\",\"INV-01 fails because changing access time changes something in the source folder.\"],\"observer\":\"The operator inspecting source-folder metadata\"}},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"contradictory path rule\",\"text\":\"INV-02: a delivery opens no path that fails condition 1 of A3 rule 5.\",\"question\":\"Does INV-02 prohibit opening any component of a name that ultimately fails condition 1, or does it permit opening the validated prefix needed to discover the failing component, as A3 rule 5 requires?\",\"options\":[\"Open no component of an ultimately failing path\",\"Open each validated prefix component but not the failing component's target or anything beyond it\"],\"default_guess\":\"Open the validated prefix components needed for the check, but never open the named file, a component past the failure, or a symbolic-link target.\",\"witness\":{\"initial\":\"The requested name is `safe/missing/photo.jpg`; `safe` is a real folder and `missing` is absent.\",\"events\":[\"The caller requests delivery.\",\"A3 rule 5 requires the deliverer to open the photo folder and each folder of the name in turn to decide condition 1.\"],\"outcomes\":[\"The deliverer opens `safe`, discovers that `missing` is absent and refuses.\",\"The deliverer opens none of the path because the complete name fails condition 1.\"],\"observer\":\"A file-open trace used by the INV-02 test\"}},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"incomplete invariant test\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock, and a trace of every file the process opens while the delivery runs shows no opening of the named file, of a folder past the segment that fails or of a link's target (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What must the INV-02 witness show for the other condition-1 cases—an absent folder or final segment, a non-folder component, a folder-opening failure, and an unreadable final metadata record?\",\"options\":[\"Add explicit cases and open-trace assertions for every condition-1 branch\",\"Treat the listed examples as sufficient representatives of all condition-1 branches\"],\"default_guess\":\"Add explicit cases for every materially distinct condition-1 branch.\"},{\"subject\":\"A2: Accepted decision A2 — What reaches the Portal store\",\"kind\":\"camera time grammar\",\"text\":\"A camera value is unusable when it is malformed, when its UTC year\\n   is before the imported `CAMERA_EARLIEST_YEAR` constant, or when it is more than the imported\\n   `CAMERA_LATEST_AFTER_MODIFIED_HOURS` constant of hours after the file's modification time.\",\"question\":\"What exact EXIF date-time syntax is well formed, and are fractional seconds from fields such as `SubSecTimeOriginal` read, ignored, or grounds for falling back to the next time source?\",\"options\":[\"Accept only the base EXIF date-time field to whole seconds and ignore subsecond companion fields\",\"Combine the base field with a valid EXIF subsecond companion field\",\"Accept an explicitly defined broader parser grammar\"],\"default_guess\":\"Parse the standard base EXIF form to whole seconds and ignore subsecond companion fields unless they are explicitly added to the design.\",\"witness\":{\"initial\":\"A file has `DateTimeOriginal` equal to `2026:11:20 10:15:30` and `SubSecTimeOriginal` equal to `750`; its modification time is later.\",\"events\":[\"The caller delivers the file.\",\"The deliverer derives `taken_at` and the publication `photo_date`.\"],\"outcomes\":[\"The delivered instant is `2026-11-20T10:15:30.750000`.\",\"The subsecond field is ignored and the delivered instant is `2026-11-20T10:15:30`.\"],\"observer\":\"The owner and Portal through the publication body\"}},{\"subject\":\"A2: Accepted decision A2 — What reaches the Portal store\",\"kind\":\"animated metadata source\",\"text\":\"Only the first frame of an animated\\n   image is delivered.\",\"question\":\"Must the photo moment also be read exclusively from the first frame's metadata, or may it come from container-level or another frame's EXIF metadata?\",\"options\":[\"Use only EXIF associated with the first frame\",\"Use the image library's container-level EXIF result\",\"Search frames for the first usable EXIF value\"],\"default_guess\":\"Use only the metadata exposed for the first frame, matching the pixels that are delivered.\",\"witness\":{\"initial\":\"An animated source has no date on its first frame and a usable `DateTimeOriginal` on its second frame.\",\"events\":[\"The caller delivers the source.\",\"The deliverer selects the first frame's pixels and derives the photo moment.\"],\"outcomes\":[\"It falls back to the file modification time because the first frame has no usable camera time.\",\"It uses the second frame's camera time although the second frame's pixels are not delivered.\"],\"observer\":\"The owner through the resulting photo date\"}},{\"subject\":\"A2: Accepted decision A2 — What reaches the Portal store\",\"kind\":\"unclassified processing failure\",\"text\":\"For a source\\n   it opens, checks run in this order: a first frame whose width times height is above the imported\\n   `MAX_PIXELS` constant fails with the TOO_MANY_PIXELS member, a source that cannot be decoded with the\\n   UNREADABLE_IMAGE member, and a result longer than the imported `MAX_OUTPUT_BYTES` constant, the Portal's\\n   read limit, with the TOO_LARGE member.\",\"question\":\"What outcome applies when decoding succeeds but orientation, conversion, resizing, compositing or JPEG encoding fails before a result exists?\",\"options\":[\"Return the UNREADABLE_IMAGE placement failure\",\"Return the UNREADABLE_FILE placement failure\",\"Refuse the whole operation with a service-state refusal\",\"Treat the failure as an unhandled internal error\"],\"default_guess\":\"Return the UNREADABLE_IMAGE placement failure for any deterministic image-processing or encoding failure before storage.\"},{\"subject\":\"A3: Accepted decision A3 — One placement per project and content\",\"kind\":\"lock write contradiction\",\"text\":\"Delivering content that already has a placement answers `replayed` with the stored placement and the\\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\\n   when the source file has left the folder.\",\"question\":\"Because the project lock is taken before the existing-placement check, does creating or updating a durable lock artifact violate the replay rule's “writes nothing,” or is the project lock an allowed exception?\",\"options\":[\"A replay may create or update the project lock\",\"The lock must already exist or be implemented without durable writes\",\"“Writes nothing” excludes lock infrastructure but only when another rule says so\"],\"default_guess\":\"Require lock acquisition to make no durable change observable as application state during a replay.\",\"witness\":{\"initial\":\"A placement already exists, but no project-lock file exists on disk.\",\"events\":[\"The caller repeats delivery of that content.\",\"The service reaches the project-lock check before looking up the placement.\"],\"outcomes\":[\"The service creates a lock file and returns `replayed`.\",\"The service uses a non-durable lock or refuses to create a lock artifact so that replay writes nothing.\"],\"observer\":\"The operator inspecting durable files and the INV-06 test\"}},{\"subject\":\"A3: Accepted decision A3 — One placement per project and content\",\"kind\":\"incomplete invariant test\",\"text\":\"INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`). When no refusal of A6 rule 5 applies, a delivery repeated after a failed record write completes the placement (`test_a_delivery_repeated_after_a_failed_record_write_completes`).\",\"question\":\"Must the Required tests item demonstrate the “at most one placement” invariant under concurrent first deliveries, or is a sequential second delivery sufficient?\",\"options\":[\"Require a concurrent-delivery witness that ends with one placement\",\"Treat sequential replay plus the separately specified locking tests as sufficient\"],\"default_guess\":\"Add a concurrent first-delivery witness that asserts one placement record and one effective stored image.\"},{\"subject\":\"A3: Accepted decision A3 — One placement per project and content\",\"kind\":\"incomplete invariant test\",\"text\":\"INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).\",\"question\":\"For removal, must the test explicitly assert that the earlier placement record, stored image and publication mark are all byte-for-byte unchanged, as INV-07 states?\",\"options\":[\"Explicitly assert all three durable artifacts remain unchanged\",\"Treat “keeps its delivery” as sufficient to imply all three\"],\"default_guess\":\"Explicitly assert the placement record, stored image and publication mark remain unchanged.\"},{\"subject\":\"A7: Accepted decision A7 — Time\",\"kind\":\"clock precision conversion\",\"text\":\"The current time is a `datetime` in UTC without an offset, with microsecond precision and no\\n   rounding\",\"question\":\"When the system clock supplies a value finer than a microsecond, which microsecond is produced—must the excess fraction be truncated toward the earlier instant, as file modification time is, or is another conversion allowed?\",\"options\":[\"Drop the excess fraction toward the earlier instant\",\"Use the host datetime conversion's behavior\",\"Require the backend clock itself to supply an already microsecond-exact value\"],\"default_guess\":\"Drop any finer fraction toward the earlier instant.\",\"witness\":{\"initial\":\"The system clock instant is `2026-11-20T10:15:30.123456789Z`.\",\"events\":[\"The calling flow records a publication mark.\",\"The mark reads `utc_now` once and stores `marked_at`.\"],\"outcomes\":[\"`marked_at` is `2026-11-20T10:15:30.123456`.\",\"The backend conversion produces another microsecond value, such as `2026-11-20T10:15:30.123457`, or rejects the reading.\"],\"observer\":\"The caller reading the mark and the persisted M07 record\"}},{\"subject\":\"A7: Accepted decision A7 — Time\",\"kind\":\"incomplete invariant test\",\"text\":\"INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"What must the INV-13 test show for a mark refused before the clock point, a mark refused after it, and a replayed mark?\",\"options\":[\"Test zero reads before the point and exactly one read for post-point refusal and replay\",\"Test only one successful new mark because it represents all mark paths\"],\"default_guess\":\"Add separate assertions for pre-clock refusal, post-clock refusal and replay, matching normative rule 2.\"},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"standard_violation\",\"text\":\"| Order | Condition | Status | Reason |\\n|---|---|---|---|\\n| 1 | empty | `rejected` | `empty` |\\n| 2 | larger than the source limit | `rejected` | `too_large` |\\n| 3 | opened in non-blocking mode without following a link, what it finds is not a regular file | `rejected` | `not_a_regular_file` |\\n| 4 | it grew past the source limit while being read | `rejected` | `too_large` |\\n| 5 | opening or reading it fails, which includes a file that disappeared or became a symbolic link after its metadata was read | `rejected` | `unreadable_file` |\\n| 6 | does not begin with the signature of a format of the imported `SOURCE_FORMATS` constant: for no format do all the rows of the imported `SOURCE_SIGNATURES` constant with that `format` find their `signature` bytes at their `offset` | `rejected` | `unsupported_format` |\\n| 7 | placed and marked | `published` | none |\\n| 8 | placed | `placed` | none |\\n| 9 | anything else | `ready` | none |\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Replace every status and reason value with its generated member name beside the address of = models.ScanStatus or = models.ObservationReason.\"},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"standard_violation\",\"text\":\"A signature does not prove that an image can be decoded: a `ready`\\nfile may still fail when it is delivered.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the READY member of = models.ScanStatus instead of naming it only by its value.\"},{\"subject\":\"A3: Accepted decision A3 — One placement per project and content\",\"kind\":\"standard_violation\",\"text\":\"Delivering content that already has a placement answers `replayed` with the stored placement and the\\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\\n   when the source file has left the folder.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the REPLAYED member of = models.PlacementStatus beside the enumeration address.\"},{\"subject\":\"A3: Accepted decision A3 — One placement per project and content\",\"kind\":\"standard_violation\",\"text\":\"INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the READY member of = models.ScanStatus beside the enumeration address.\"}]}",
+ "set_aside": []
+}

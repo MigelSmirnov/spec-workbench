@@ -19,17 +19,17 @@ checks that witness the generated service are bound after State 7.
 A scan gives each regular file of the photo folder exactly one status. The first rule that
 applies decides:
 
-| Order | Condition | Status | Reason |
+| Order | Condition | Status, a member of = models.ScanStatus | Reason, a member of = models.ObservationReason |
 |---|---|---|---|
-| 1 | empty | `rejected` | `empty` |
-| 2 | larger than the source limit | `rejected` | `too_large` |
-| 3 | opened in non-blocking mode without following a link, what it finds is not a regular file | `rejected` | `not_a_regular_file` |
-| 4 | it grew past the source limit while being read | `rejected` | `too_large` |
-| 5 | opening or reading it fails, which includes a file that disappeared or became a symbolic link after its metadata was read | `rejected` | `unreadable_file` |
-| 6 | does not begin with the signature of a format of the imported `SOURCE_FORMATS` constant: for no format do all the rows of the imported `SOURCE_SIGNATURES` constant with that `format` find their `signature` bytes at their `offset` | `rejected` | `unsupported_format` |
-| 7 | placed and marked | `published` | none |
-| 8 | placed | `placed` | none |
-| 9 | anything else | `ready` | none |
+| 1 | empty | REJECTED | EMPTY |
+| 2 | larger than the source limit | REJECTED | TOO_LARGE |
+| 3 | opened in non-blocking mode without following a link, what it finds is not a regular file | REJECTED | NOT_A_REGULAR_FILE |
+| 4 | it grew past the source limit while being read | REJECTED | TOO_LARGE |
+| 5 | opening or reading it fails, which includes a file that disappeared or became a symbolic link after its metadata was read | REJECTED | UNREADABLE_FILE |
+| 6 | does not begin with the signature of a format of the imported `SOURCE_FORMATS` constant: for no format do all the rows of the imported `SOURCE_SIGNATURES` constant with that `format` find their `signature` bytes at their `offset` | REJECTED | UNSUPPORTED_FORMAT |
+| 7 | placed and marked | PUBLISHED | none |
+| 8 | placed | PLACED | none |
+| 9 | anything else | READY | none |
 
 A scan covers the photo folder and all its subfolders (R0-12). When the photo folder, or a subfolder
 that is not ignored and is still a folder, cannot be opened or listed, the whole operation is refused
@@ -76,8 +76,8 @@ again. A read that reaches the end of the file with no bytes is order 1. A file 
 opened, the one whose bytes are read, taken after the opening and before the read; A7 rule 4 gives its
 form, and a delivery uses that time under A2 rule 3.
 
-A scan only reads the source folder. A signature does not prove that an image can be decoded: a `ready`
-file may still fail when it is delivered.
+A scan only reads the source folder. A signature does not prove that an image can be decoded: a file with the
+READY member of = models.ScanStatus may still fail when it is delivered.
 
 ### Formal invariants
 
@@ -157,8 +157,9 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
 ### Normative rules
 
 1. A placement is identified by the project and the SHA-256 of the source content (R0-10).
-2. Delivering content that already has a placement answers `replayed` with the stored placement and the
-   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even
+2. Delivering content that already has a placement answers the REPLAYED member of = models.PlacementStatus with
+   the stored placement and the current `photo_id` of its mark, if any, and writes nothing except the project
+   lock on its first use (A6 rule 4), whatever name the request carries and even
    when the source file has left the folder. A mark record of that placement that is damaged refuses the
    delivery under A6 rule 5.
 3. One call delivers one photo, named by `name`, a relative path in the form a scan reports, and
@@ -212,7 +213,7 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
 ### Required tests
 
 - INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`). When no refusal of A6 rule 5 applies, a delivery repeated after a failed record write completes the placement (`test_a_delivery_repeated_after_a_failed_record_write_completes`).
-- INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).
+- INV-07: a replaced file is reported as a new photo with the READY member of = models.ScanStatus while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).
 - INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Placed content replays when only a conflict copy still holds it (`test_placed_content_replays_when_only_a_conflict_copy_still_holds_it`), and an ordinary file with the content of a conflict copy is delivered (`test_an_ordinary_file_is_placed_when_a_conflict_copy_has_the_same_content`).
 
 ### Consequence

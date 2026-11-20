@@ -1,0 +1,301 @@
+{
+ "open_points": [
+  {
+   "subject": "A2 rule 2 image decoding",
+   "kind": "failure_boundary",
+   "text": "A source it cannot open as one of them fails with the UNREADABLE_IMAGE member of = models.PlacementFailure, whatever dimensions its header declares. For a source it opens, checks run in this order: a first frame whose width times height is above the imported `MAX_PIXELS` constant fails with the TOO_MANY_PIXELS member, a source that cannot be decoded with the UNREADABLE_IMAGE member",
+   "question": "Which exact image-library operations constitute opening and decoding, and which failure applies when opening succeeds but frame selection, orientation, conversion, thumbnailing or pixel loading fails?",
+   "options": [
+    "Only the initial library open is opening; any later failure before successful pixel decoding is UNREADABLE_IMAGE.",
+    "Opening includes loading the first frame; failures during later transformations use another failure.",
+    "Each library stage has its own explicitly assigned failure."
+   ],
+   "default_guess": "Treat the initial image-library open as opening and every failure while loading or transforming the first frame as UNREADABLE_IMAGE.",
+   "witness": {
+    "initial": "A source has a recognised signature and the image library accepts its container and dimensions, but loading the first frame fails during conversion.",
+    "events": [
+     "The caller requests delivery.",
+     "The deliverer opens the image container successfully.",
+     "The library raises while loading or converting the first frame."
+    ],
+    "outcomes": [
+     "The delivery fails with UNREADABLE_IMAGE because the source cannot be decoded.",
+     "The failure is treated as a preparation or write failure and the delivery fails with UNREADABLE_FILE."
+    ],
+    "observer": "The calling flow sees a different PlacementFailure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 rule 2 encoded result",
+   "kind": "uncovered_failure",
+   "text": "a result longer than the imported `MAX_OUTPUT_BYTES` constant, the Portal's read limit, with the TOO_LARGE member",
+   "question": "What outcome is required if producing the encoded result fails before its length can be measured?",
+   "options": [
+    "Fail with UNREADABLE_IMAGE.",
+    "Fail with UNREADABLE_FILE under A3 condition 5.",
+    "Refuse the whole request with a RefusalCode.",
+    "Propagate an internal error."
+   ],
+   "default_guess": "Fail with UNREADABLE_IMAGE when decoding or transformation caused the failure, and UNREADABLE_FILE only after encoded bytes exist and durable writing fails.",
+   "witness": {
+    "initial": "The first frame decodes and is within MAX_PIXELS, but the JPEG encoder raises before returning bytes.",
+    "events": [
+     "The caller requests delivery.",
+     "The source passes signature, open, pixel-count and decode checks.",
+     "JPEG encoding raises before an output length exists."
+    ],
+    "outcomes": [
+     "The delivery returns FAILED with UNREADABLE_IMAGE.",
+     "The delivery returns FAILED with UNREADABLE_FILE under A3 condition 5."
+    ],
+    "observer": "The calling flow sees a different PlacementFailure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-01 meaning and proof",
+   "kind": "invariant_test_gap",
+   "text": "INV-01: no operation creates, changes, moves or deletes anything in a source folder.",
+   "question": "Does “changes” include access times, ownership, extended attributes and directory metadata, and must the Required tests show those facts for successful and failed variants of every operation?",
+   "options": [
+    "All filesystem metadata, including access times and directory metadata, is protected and tested.",
+    "Only names, bytes, modification times and modes are protected.",
+    "Reading-induced access-time changes are excluded explicitly, while all other named metadata is protected."
+   ],
+   "default_guess": "Interpret the guarantee as names, bytes, modification times and modes only, and explicitly exclude access-time changes caused by ordinary reads.",
+   "witness": {
+    "initial": "The filesystem updates a file's access time whenever its contents are read.",
+    "events": [
+     "A source file has a recorded access time.",
+     "An actor runs a scan or delivery that reads it.",
+     "The test compares only files, bytes, modification times and modes."
+    ],
+    "outcomes": [
+     "INV-01 is violated because the access time changed although the required test passes.",
+     "INV-01 is satisfied because “changes” excludes access time, and the required test passes."
+    ],
+    "observer": "An administrator inspecting source metadata sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-01 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`)",
+   "question": "What must demonstrate INV-01 for refused or failed scans, deliveries and marks, and for directories and metadata not named by this test?",
+   "options": [
+    "The test must cover every success, failure and refusal path and all filesystem state included by INV-01.",
+    "The invariant is narrowed to the four successful calls and the listed file properties.",
+    "Separate witness checks cover exceptional paths and remaining protected state."
+   ],
+   "default_guess": "Require parameterized checks for successful, failed and refused operation paths, comparing every filesystem property that the clarified invariant protects.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 versus A3 condition 1",
+   "kind": "contradiction",
+   "text": "INV-02: a delivery opens no path that fails condition 1 of A3 rule 5.",
+   "question": "May delivery open the valid prefix folders needed to discover that a later segment fails condition 1?",
+   "options": [
+    "Yes; it may open each valid prefix and must stop before opening the failing segment or anything beyond it.",
+    "No path component may be opened when the complete requested path ultimately fails condition 1.",
+    "The invariant concerns opening the last segment as a file, not opening directories."
+   ],
+   "default_guess": "Allow opening valid prefix directories and forbid opening the failing segment as a file, any later segment or any link target.",
+   "witness": {
+    "initial": "The requested name is `existing/missing/photo.jpg`; `existing` is a real directory and `missing` is absent.",
+    "events": [
+     "The caller requests delivery.",
+     "The deliverer opens `existing` as A3 rule 5 requires in order to inspect the next segment.",
+     "It discovers that `missing` is absent."
+    ],
+    "outcomes": [
+     "A3 rule 5 permits and requires opening `existing`, then returns NOT_READY_OR_ABSENT.",
+     "INV-02 read literally forbids opening any part of a path that ultimately fails condition 1."
+    ],
+    "observer": "A filesystem-open trace sees whether `existing` was opened."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "a trace of every file the process opens while the delivery runs shows no opening of the named file, of a folder past the segment that fails or of a link's target",
+   "question": "Must the witness trace directory opens as well as regular-file opens, and where are absent segments, permission failures, failed metadata reads and other condition-1 branches required to be shown?",
+   "options": [
+    "Trace every file and directory open and exercise every condition-1 branch.",
+    "Trace only regular-file opens and narrow INV-02 accordingly.",
+    "Use separate checks for directory traversal and for last-segment file opening."
+   ],
+   "default_guess": "Trace both file and directory opens and parameterize the witness over every condition-1 refusal branch.",
+   "witness": {
+    "initial": "A requested path contains a directory that cannot be opened because of permissions.",
+    "events": [
+     "The caller requests delivery.",
+     "The implementation attempts directory traversal and returns NOT_READY_OR_ABSENT.",
+     "The named Required test does not include this failure and its trace records only regular files."
+    ],
+    "outcomes": [
+     "The implementation opens no forbidden directory or later component.",
+     "The implementation probes a later component or follows an unintended target, while the required test still passes."
+    ],
+    "observer": "A system-call trace sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-06 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`)",
+   "question": "What Required test must show that at most one placement exists when two first deliveries for the same project and content run concurrently?",
+   "options": [
+    "A concurrent witness starts both deliveries before either observes a placement and proves one durable placement and no replay writes.",
+    "The invariant is only sequential and must say so.",
+    "The project-lock implementation is inspected by a structural check instead of a concurrent test."
+   ],
+   "default_guess": "Add a concurrent witness that synchronizes two first deliveries and proves one placement record, one stored image and no duplicate durable write.",
+   "witness": {
+    "initial": "No placement exists for project P and source S.",
+    "events": [
+     "Caller A begins delivering P/S.",
+     "Caller B begins delivering P/S before A commits its placement.",
+     "Both calls check for an existing placement and continue."
+    ],
+    "outcomes": [
+     "Project locking serializes the calls, leaving one placement and making the second a write-free replay.",
+     "Both calls write independently, while the existing sequential repeated-placement test still passes."
+    ],
+    "observer": "The callers and the durable store see duplicate writes or references."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`)",
+   "question": "What must show the clock counts for a mark refused before the reading point, every refusal after it and a replayed mark?",
+   "options": [
+    "The Required tests exercise each branch and assert zero or one reading as rule 2 specifies.",
+    "The invariant covers only a successful new mark.",
+    "A structural check proves all mark paths use one shared reading site."
+   ],
+   "default_guess": "Exercise early refusal, late refusal, new mark and replay separately with a counting clock.",
+   "witness": {
+    "initial": "The happy-path mark reads the clock once, but the replay branch calls the clock twice.",
+    "events": [
+     "A first mark is created and the named successful-mark tests pass.",
+     "The same photo_id is submitted again.",
+     "The replay branch performs two clock reads and writes nothing."
+    ],
+    "outcomes": [
+     "The replay is required to read the clock once.",
+     "The existing Required tests pass even though the replay reads it twice."
+    ],
+    "observer": "An instrumented clock or clock service sees the extra read."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 clock failure",
+   "kind": "uncovered_failure",
+   "text": "Only a mark reads it, once, after the token, the request form and the identifiers are accepted and before the connection is examined or the project lock is taken.",
+   "question": "What result is required when `utc_now` cannot return a valid time or raises at this point?",
+   "options": [
+    "Refuse with the STATE_UNAVAILABLE member of = models.RefusalCode.",
+    "Return a different specified refusal.",
+    "Return an internal service error.",
+    "The clock backend is declared infallible."
+   ],
+   "default_guess": "Refuse the mark with the STATE_UNAVAILABLE member of = models.RefusalCode and write nothing.",
+   "witness": {
+    "initial": "The request token, form and identifiers are valid, but the clock backend raises.",
+    "events": [
+     "The caller submits a mark.",
+     "Validation reaches the prescribed clock-read point.",
+     "`utc_now` raises before the connection or lock is examined."
+    ],
+    "outcomes": [
+     "The operation returns a deterministic refusal and writes nothing.",
+     "The exception escapes as an unspecified server error."
+    ],
+    "observer": "The calling flow sees a different response contract."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`)",
+   "question": "What Required test proves that a new placement never reads the conflict copy, rather than merely proving the same failure and durable-state outcome?",
+   "options": [
+    "An open/read trace proves that the conflict-copy file is never opened for reading.",
+    "The invariant is weakened to require only refusal and no durable change.",
+    "A filesystem double fails the test if the conflict copy is read."
+   ],
+   "default_guess": "Require an open/read trace or a failing filesystem double that proves the conflict-copy file's bytes are never opened or read.",
+   "witness": {
+    "initial": "A conflict-copy file exists and no placement exists for its content.",
+    "events": [
+     "The caller asks to deliver the conflict-copy name.",
+     "One implementation rejects the ignored name before opening it.",
+     "Another reads and hashes the file, then rejects it and writes nothing."
+    ],
+    "outcomes": [
+     "Both implementations return NOT_READY_OR_ABSENT with identical durable state, but only the first satisfies INV-19.",
+     "The named Required test passes for both implementations."
+    ],
+    "observer": "A filesystem read trace sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 status and reason table",
+   "kind": "standard_violation",
+   "text": "| Order | Condition | Status | Reason |\n|---|---|---|---|\n| 1 | empty | `rejected` | `empty` |\n| 2 | larger than the source limit | `rejected` | `too_large` |\n| 3 | opened in non-blocking mode without following a link, what it finds is not a regular file | `rejected` | `not_a_regular_file` |\n| 4 | it grew past the source limit while being read | `rejected` | `too_large` |\n| 5 | opening or reading it fails, which includes a file that disappeared or became a symbolic link after its metadata was read | `rejected` | `unreadable_file` |\n| 6 | does not begin with the signature of a format of the imported `SOURCE_FORMATS` constant: for no format do all the rows of the imported `SOURCE_SIGNATURES` constant with that `format` find their `signature` bytes at their `offset` | `rejected` | `unsupported_format` |\n| 7 | placed and marked | `published` | none |\n| 8 | placed | `placed` | none |\n| 9 | anything else | `ready` | none |",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Replace each status and reason value with its generated member name beside the address of = models.ScanStatus or = models.ObservationReason, as applicable.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 ready status",
+   "kind": "standard_violation",
+   "text": "A signature does not prove that an image can be decoded: a `ready`\nfile may still fail when it is delivered.",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не\nявляется именем ни одного члена, генератор пишет только имена\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\n(`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Name the READY member beside the address of = models.ScanStatus instead of naming it only by its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2 rule 2 failure members",
+   "kind": "standard_violation",
+   "text": "a first frame whose width times height is above the imported\n   `MAX_PIXELS` constant fails with the TOO_MANY_PIXELS member, a source that cannot be decoded with the\n   UNREADABLE_IMAGE member, and a result longer than the imported `MAX_OUTPUT_BYTES` constant, the Portal's\n   read limit, with the TOO_LARGE member.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name TOO_MANY_PIXELS, UNREADABLE_IMAGE and TOO_LARGE beside the address of = models.PlacementFailure.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3 replayed status",
+   "kind": "standard_violation",
+   "text": "Delivering content that already has a placement answers `replayed` with the stored placement and the\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\n   when the source file has left the folder.",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не\nявляется именем ни одного члена, генератор пишет только имена\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\n(`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Name the REPLAYED member beside the address of = models.PlacementStatus instead of naming it only by its value.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-07 Required tests ready status",
+   "kind": "standard_violation",
+   "text": "a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`)",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не\nявляется именем ни одного члена, генератор пишет только имена\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\n(`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Name the READY member beside the address of = models.ScanStatus instead of naming it only by its value.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A2 rule 2 image decoding\",\"kind\":\"failure_boundary\",\"text\":\"A source it cannot open as one of them fails with the UNREADABLE_IMAGE member of = models.PlacementFailure, whatever dimensions its header declares. For a source it opens, checks run in this order: a first frame whose width times height is above the imported `MAX_PIXELS` constant fails with the TOO_MANY_PIXELS member, a source that cannot be decoded with the UNREADABLE_IMAGE member\",\"question\":\"Which exact image-library operations constitute opening and decoding, and which failure applies when opening succeeds but frame selection, orientation, conversion, thumbnailing or pixel loading fails?\",\"options\":[\"Only the initial library open is opening; any later failure before successful pixel decoding is UNREADABLE_IMAGE.\",\"Opening includes loading the first frame; failures during later transformations use another failure.\",\"Each library stage has its own explicitly assigned failure.\"],\"default_guess\":\"Treat the initial image-library open as opening and every failure while loading or transforming the first frame as UNREADABLE_IMAGE.\",\"witness\":{\"initial\":\"A source has a recognised signature and the image library accepts its container and dimensions, but loading the first frame fails during conversion.\",\"events\":[\"The caller requests delivery.\",\"The deliverer opens the image container successfully.\",\"The library raises while loading or converting the first frame.\"],\"outcomes\":[\"The delivery fails with UNREADABLE_IMAGE because the source cannot be decoded.\",\"The failure is treated as a preparation or write failure and the delivery fails with UNREADABLE_FILE.\"],\"observer\":\"The calling flow sees a different PlacementFailure.\"}},{\"subject\":\"A2 rule 2 encoded result\",\"kind\":\"uncovered_failure\",\"text\":\"a result longer than the imported `MAX_OUTPUT_BYTES` constant, the Portal's read limit, with the TOO_LARGE member\",\"question\":\"What outcome is required if producing the encoded result fails before its length can be measured?\",\"options\":[\"Fail with UNREADABLE_IMAGE.\",\"Fail with UNREADABLE_FILE under A3 condition 5.\",\"Refuse the whole request with a RefusalCode.\",\"Propagate an internal error.\"],\"default_guess\":\"Fail with UNREADABLE_IMAGE when decoding or transformation caused the failure, and UNREADABLE_FILE only after encoded bytes exist and durable writing fails.\",\"witness\":{\"initial\":\"The first frame decodes and is within MAX_PIXELS, but the JPEG encoder raises before returning bytes.\",\"events\":[\"The caller requests delivery.\",\"The source passes signature, open, pixel-count and decode checks.\",\"JPEG encoding raises before an output length exists.\"],\"outcomes\":[\"The delivery returns FAILED with UNREADABLE_IMAGE.\",\"The delivery returns FAILED with UNREADABLE_FILE under A3 condition 5.\"],\"observer\":\"The calling flow sees a different PlacementFailure.\"}},{\"subject\":\"INV-01 meaning and proof\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-01: no operation creates, changes, moves or deletes anything in a source folder.\",\"question\":\"Does “changes” include access times, ownership, extended attributes and directory metadata, and must the Required tests show those facts for successful and failed variants of every operation?\",\"options\":[\"All filesystem metadata, including access times and directory metadata, is protected and tested.\",\"Only names, bytes, modification times and modes are protected.\",\"Reading-induced access-time changes are excluded explicitly, while all other named metadata is protected.\"],\"default_guess\":\"Interpret the guarantee as names, bytes, modification times and modes only, and explicitly exclude access-time changes caused by ordinary reads.\",\"witness\":{\"initial\":\"The filesystem updates a file's access time whenever its contents are read.\",\"events\":[\"A source file has a recorded access time.\",\"An actor runs a scan or delivery that reads it.\",\"The test compares only files, bytes, modification times and modes.\"],\"outcomes\":[\"INV-01 is violated because the access time changed although the required test passes.\",\"INV-01 is satisfied because “changes” excludes access time, and the required test passes.\"],\"observer\":\"An administrator inspecting source metadata sees the difference.\"}},{\"subject\":\"INV-01 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`)\",\"question\":\"What must demonstrate INV-01 for refused or failed scans, deliveries and marks, and for directories and metadata not named by this test?\",\"options\":[\"The test must cover every success, failure and refusal path and all filesystem state included by INV-01.\",\"The invariant is narrowed to the four successful calls and the listed file properties.\",\"Separate witness checks cover exceptional paths and remaining protected state.\"],\"default_guess\":\"Require parameterized checks for successful, failed and refused operation paths, comparing every filesystem property that the clarified invariant protects.\"},{\"subject\":\"INV-02 versus A3 condition 1\",\"kind\":\"contradiction\",\"text\":\"INV-02: a delivery opens no path that fails condition 1 of A3 rule 5.\",\"question\":\"May delivery open the valid prefix folders needed to discover that a later segment fails condition 1?\",\"options\":[\"Yes; it may open each valid prefix and must stop before opening the failing segment or anything beyond it.\",\"No path component may be opened when the complete requested path ultimately fails condition 1.\",\"The invariant concerns opening the last segment as a file, not opening directories.\"],\"default_guess\":\"Allow opening valid prefix directories and forbid opening the failing segment as a file, any later segment or any link target.\",\"witness\":{\"initial\":\"The requested name is `existing/missing/photo.jpg`; `existing` is a real directory and `missing` is absent.\",\"events\":[\"The caller requests delivery.\",\"The deliverer opens `existing` as A3 rule 5 requires in order to inspect the next segment.\",\"It discovers that `missing` is absent.\"],\"outcomes\":[\"A3 rule 5 permits and requires opening `existing`, then returns NOT_READY_OR_ABSENT.\",\"INV-02 read literally forbids opening any part of a path that ultimately fails condition 1.\"],\"observer\":\"A filesystem-open trace sees whether `existing` was opened.\"}},{\"subject\":\"INV-02 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"a trace of every file the process opens while the delivery runs shows no opening of the named file, of a folder past the segment that fails or of a link's target\",\"question\":\"Must the witness trace directory opens as well as regular-file opens, and where are absent segments, permission failures, failed metadata reads and other condition-1 branches required to be shown?\",\"options\":[\"Trace every file and directory open and exercise every condition-1 branch.\",\"Trace only regular-file opens and narrow INV-02 accordingly.\",\"Use separate checks for directory traversal and for last-segment file opening.\"],\"default_guess\":\"Trace both file and directory opens and parameterize the witness over every condition-1 refusal branch.\",\"witness\":{\"initial\":\"A requested path contains a directory that cannot be opened because of permissions.\",\"events\":[\"The caller requests delivery.\",\"The implementation attempts directory traversal and returns NOT_READY_OR_ABSENT.\",\"The named Required test does not include this failure and its trace records only regular files.\"],\"outcomes\":[\"The implementation opens no forbidden directory or later component.\",\"The implementation probes a later component or follows an unintended target, while the required test still passes.\"],\"observer\":\"A system-call trace sees the difference.\"}},{\"subject\":\"INV-06 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`)\",\"question\":\"What Required test must show that at most one placement exists when two first deliveries for the same project and content run concurrently?\",\"options\":[\"A concurrent witness starts both deliveries before either observes a placement and proves one durable placement and no replay writes.\",\"The invariant is only sequential and must say so.\",\"The project-lock implementation is inspected by a structural check instead of a concurrent test.\"],\"default_guess\":\"Add a concurrent witness that synchronizes two first deliveries and proves one placement record, one stored image and no duplicate durable write.\",\"witness\":{\"initial\":\"No placement exists for project P and source S.\",\"events\":[\"Caller A begins delivering P/S.\",\"Caller B begins delivering P/S before A commits its placement.\",\"Both calls check for an existing placement and continue.\"],\"outcomes\":[\"Project locking serializes the calls, leaving one placement and making the second a write-free replay.\",\"Both calls write independently, while the existing sequential repeated-placement test still passes.\"],\"observer\":\"The callers and the durable store see duplicate writes or references.\"}},{\"subject\":\"INV-13 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`)\",\"question\":\"What must show the clock counts for a mark refused before the reading point, every refusal after it and a replayed mark?\",\"options\":[\"The Required tests exercise each branch and assert zero or one reading as rule 2 specifies.\",\"The invariant covers only a successful new mark.\",\"A structural check proves all mark paths use one shared reading site.\"],\"default_guess\":\"Exercise early refusal, late refusal, new mark and replay separately with a counting clock.\",\"witness\":{\"initial\":\"The happy-path mark reads the clock once, but the replay branch calls the clock twice.\",\"events\":[\"A first mark is created and the named successful-mark tests pass.\",\"The same photo_id is submitted again.\",\"The replay branch performs two clock reads and writes nothing.\"],\"outcomes\":[\"The replay is required to read the clock once.\",\"The existing Required tests pass even though the replay reads it twice.\"],\"observer\":\"An instrumented clock or clock service sees the extra read.\"}},{\"subject\":\"A7 clock failure\",\"kind\":\"uncovered_failure\",\"text\":\"Only a mark reads it, once, after the token, the request form and the identifiers are accepted and before the connection is examined or the project lock is taken.\",\"question\":\"What result is required when `utc_now` cannot return a valid time or raises at this point?\",\"options\":[\"Refuse with the STATE_UNAVAILABLE member of = models.RefusalCode.\",\"Return a different specified refusal.\",\"Return an internal service error.\",\"The clock backend is declared infallible.\"],\"default_guess\":\"Refuse the mark with the STATE_UNAVAILABLE member of = models.RefusalCode and write nothing.\",\"witness\":{\"initial\":\"The request token, form and identifiers are valid, but the clock backend raises.\",\"events\":[\"The caller submits a mark.\",\"Validation reaches the prescribed clock-read point.\",\"`utc_now` raises before the connection or lock is examined.\"],\"outcomes\":[\"The operation returns a deterministic refusal and writes nothing.\",\"The exception escapes as an unspecified server error.\"],\"observer\":\"The calling flow sees a different response contract.\"}},{\"subject\":\"INV-19 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`)\",\"question\":\"What Required test proves that a new placement never reads the conflict copy, rather than merely proving the same failure and durable-state outcome?\",\"options\":[\"An open/read trace proves that the conflict-copy file is never opened for reading.\",\"The invariant is weakened to require only refusal and no durable change.\",\"A filesystem double fails the test if the conflict copy is read.\"],\"default_guess\":\"Require an open/read trace or a failing filesystem double that proves the conflict-copy file's bytes are never opened or read.\",\"witness\":{\"initial\":\"A conflict-copy file exists and no placement exists for its content.\",\"events\":[\"The caller asks to deliver the conflict-copy name.\",\"One implementation rejects the ignored name before opening it.\",\"Another reads and hashes the file, then rejects it and writes nothing.\"],\"outcomes\":[\"Both implementations return NOT_READY_OR_ABSENT with identical durable state, but only the first satisfies INV-19.\",\"The named Required test passes for both implementations.\"],\"observer\":\"A filesystem read trace sees the difference.\"}},{\"subject\":\"A1 status and reason table\",\"kind\":\"standard_violation\",\"text\":\"| Order | Condition | Status | Reason |\\n|---|---|---|---|\\n| 1 | empty | `rejected` | `empty` |\\n| 2 | larger than the source limit | `rejected` | `too_large` |\\n| 3 | opened in non-blocking mode without following a link, what it finds is not a regular file | `rejected` | `not_a_regular_file` |\\n| 4 | it grew past the source limit while being read | `rejected` | `too_large` |\\n| 5 | opening or reading it fails, which includes a file that disappeared or became a symbolic link after its metadata was read | `rejected` | `unreadable_file` |\\n| 6 | does not begin with the signature of a format of the imported `SOURCE_FORMATS` constant: for no format do all the rows of the imported `SOURCE_SIGNATURES` constant with that `format` find their `signature` bytes at their `offset` | `rejected` | `unsupported_format` |\\n| 7 | placed and marked | `published` | none |\\n| 8 | placed | `placed` | none |\\n| 9 | anything else | `ready` | none |\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Replace each status and reason value with its generated member name beside the address of = models.ScanStatus or = models.ObservationReason, as applicable.\"},{\"subject\":\"A1 ready status\",\"kind\":\"standard_violation\",\"text\":\"A signature does not prove that an image can be decoded: a `ready`\\nfile may still fail when it is delivered.\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не\\nявляется именем ни одного члена, генератор пишет только имена\\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\\n(`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Name the READY member beside the address of = models.ScanStatus instead of naming it only by its value.\"},{\"subject\":\"A2 rule 2 failure members\",\"kind\":\"standard_violation\",\"text\":\"a first frame whose width times height is above the imported\\n   `MAX_PIXELS` constant fails with the TOO_MANY_PIXELS member, a source that cannot be decoded with the\\n   UNREADABLE_IMAGE member, and a result longer than the imported `MAX_OUTPUT_BYTES` constant, the Portal's\\n   read limit, with the TOO_LARGE member.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name TOO_MANY_PIXELS, UNREADABLE_IMAGE and TOO_LARGE beside the address of = models.PlacementFailure.\"},{\"subject\":\"A3 replayed status\",\"kind\":\"standard_violation\",\"text\":\"Delivering content that already has a placement answers `replayed` with the stored placement and the\\n   current `photo_id` of its mark, if any, and writes nothing, whatever name the request carries and even\\n   when the source file has left the folder.\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не\\nявляется именем ни одного члена, генератор пишет только имена\\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\\n(`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Name the REPLAYED member beside the address of = models.PlacementStatus instead of naming it only by its value.\"},{\"subject\":\"INV-07 Required tests ready status\",\"kind\":\"standard_violation\",\"text\":\"a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`)\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не\\nявляется именем ни одного члена, генератор пишет только имена\\n(`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note\\n(`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Name the READY member beside the address of = models.ScanStatus instead of naming it only by its value.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,239 @@
+{
+ "open_points": [
+  {
+   "subject": "A2: Accepted decision A2 — What reaches the Portal store",
+   "kind": "undefined_failure_mapping",
+   "text": "A source it cannot open as one of them fails with the\n   UNREADABLE_IMAGE member of = models.PlacementFailure, whatever dimensions its header declares. For a source\n   it opens, checks run in this order: a first frame whose width times height is above the imported\n   `MAX_PIXELS` constant fails with the TOO_MANY_PIXELS member, a source that cannot be decoded with the\n   UNREADABLE_IMAGE member, and a result longer than the imported `MAX_OUTPUT_BYTES` constant, the Portal's\n   read limit, with the TOO_LARGE member.",
+   "question": "Which failure applies when the library opens the image and decoding succeeds, but a later preparation or JPEG-encoding operation raises an error before an output result exists?",
+   "options": [
+    "Treat every preparation or encoding error as UNREADABLE_IMAGE.",
+    "Treat an encoding or output-construction error as A3 condition 5 and return UNREADABLE_FILE.",
+    "Define separate mappings for each ImageOps.exif_transpose, convert, thumbnail, composite and save failure."
+   ],
+   "default_guess": "Treat failures before successful JPEG bytes exist as UNREADABLE_IMAGE unless the binary-store write itself fails.",
+   "witness": {
+    "initial": "A source has an allowed signature, opens, has dimensions below MAX_PIXELS and decodes its first frame, but Image.save raises while encoding the prepared JPEG.",
+    "events": [
+     "The calling flow requests delivery.",
+     "The deliverer opens and decodes the source.",
+     "The image library raises during JPEG encoding before any store write."
+    ],
+    "outcomes": [
+     "The delivery fails with UNREADABLE_IMAGE because no decodable-and-preparable result was produced.",
+     "The delivery reaches A3 condition 5 and fails with UNREADABLE_FILE because creation of the stored image failed."
+    ],
+    "observer": "The calling flow sees a different PlacementFailure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2: Accepted decision A2 — What reaches the Portal store",
+   "kind": "undefined_library_boundary",
+   "text": "A source it cannot open as one of them fails with the\n   UNREADABLE_IMAGE member of = models.PlacementFailure, whatever dimensions its header declares. For a source\n   it opens, checks run in this order: a first frame whose width times height is above the imported\n   `MAX_PIXELS` constant fails with the TOO_MANY_PIXELS member, a source that cannot be decoded with the\n   UNREADABLE_IMAGE member",
+   "question": "What exact image-library operation constitutes opening, what operation proves that the first frame can be decoded, and must library decompression-bomb limits or warnings be disabled so that MAX_PIXELS alone decides the stated precedence?",
+   "options": [
+    "Image.open is opening; read size immediately; a later load of frame zero proves decoding; configure the library so only MAX_PIXELS enforces the pixel limit.",
+    "Opening includes loading frame zero, so any error raised before loading finishes is UNREADABLE_IMAGE.",
+    "Use the library's own decompression-bomb policy and map its rejection to TOO_MANY_PIXELS."
+   ],
+   "default_guess": "Use Image.open as opening, inspect its size before a forced load of frame zero, and disable or override the library's independent pixel-limit policy.",
+   "witness": {
+    "initial": "An allowed-signature image has a header declaring more than MAX_PIXELS and compressed data that would fail when frame zero is loaded; the pinned library can inspect the header lazily.",
+    "events": [
+     "The calling flow requests delivery.",
+     "One implementation reads the dimensions immediately after Image.open.",
+     "Another implementation treats opening as successful only after forcing frame-zero decoding."
+    ],
+    "outcomes": [
+     "The first implementation returns TOO_MANY_PIXELS without decoding the pixels.",
+     "The second implementation returns UNREADABLE_IMAGE when the forced decode fails."
+    ],
+    "observer": "The calling flow sees a different PlacementFailure for the same bytes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).",
+   "question": "Must the required test also show that subfolders, symbolic links, other non-file entries, directory metadata and link metadata are unchanged, so that it demonstrates that no operation changes anything in the source folder as INV-01 requires?",
+   "options": [
+    "Compare the complete source tree, including every entry type and relevant metadata.",
+    "Limit INV-01 to regular files and rewrite the invariant accordingly.",
+    "Keep the stated test and treat unmentioned entry types and directory metadata as unchecked."
+   ],
+   "default_guess": "Compare the complete tree and its relevant metadata before and after all four operations.",
+   "witness": {
+    "initial": "The source folder contains a regular photo and an otherwise unused subfolder.",
+    "events": [
+     "A scan runs.",
+     "An implementation changes the unused subfolder's mode or modification time but leaves every regular file unchanged."
+    ],
+    "outcomes": [
+     "The described required test passes because the same files, bytes, file modification times and file modes remain.",
+     "INV-01 fails because an operation changed something in the source folder."
+    ],
+    "observer": "The owner or Syncthing sees the changed subfolder metadata."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1: Accepted decision A1 — What a file of the folder becomes",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock, and a trace of every file the process opens while the delivery runs shows no opening of the named file, of a folder past the segment that fails or of a link's target (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What must show INV-02 for the condition-1 cases this item does not name, including an absent last segment, an unreadable metadata operation, a non-link folder-opening failure and a last segment that is a non-regular object other than a folder?",
+   "options": [
+    "Add each remaining condition-1 branch to the traced-open test.",
+    "State that the listed cases are an exhaustive equivalence partition and identify which listed case covers each remaining branch.",
+    "Narrow INV-02 to only the cases listed by the required test."
+   ],
+   "default_guess": "Add traced-open cases for every distinct condition-1 refusal branch.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3: Accepted decision A3 — One placement per project and content",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).",
+   "question": "How must the Required tests demonstrate the 'at most one placement' part of INV-06 when two first deliveries for the same project and source content overlap?",
+   "options": [
+    "Run concurrent first deliveries and assert one placement identity, one record and no duplicate stored image.",
+    "State a storage uniqueness or locking check that the test exercises directly.",
+    "Restrict the invariant to sequential deliveries."
+   ],
+   "default_guess": "Test two synchronized concurrent first deliveries and assert that exactly one durable placement and its one stored image result.",
+   "witness": {
+    "initial": "No placement exists for a project and source_id.",
+    "events": [
+     "Caller A starts delivery and passes the existing-placement check.",
+     "Caller B starts the same delivery before A writes the placement record.",
+     "Both callers finish."
+    ],
+    "outcomes": [
+     "A locking or uniqueness implementation creates one placement and the other call replays it.",
+     "An implementation satisfying only the sequential test creates two stored images or two records."
+    ],
+    "observer": "The calling flows or a later scan sees duplicate or inconsistent durable state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3: Accepted decision A3 — One placement per project and content",
+   "kind": "incomplete_invariant_test",
+   "text": "leaves every stored image and placement record unchanged",
+   "question": "Must the Required test also assert that publication marks and every other durable store remain byte-for-byte unchanged, as the invariant and rule 2 say the repeated placement 'writes nothing'?",
+   "options": [
+    "Assert no write calls and no changes in any durable store, including publication marks.",
+    "Limit 'writes nothing' to stored images and placement records.",
+    "Permit idempotent rewrites whose final values are unchanged."
+   ],
+   "default_guess": "Assert that no durable backend write is invoked, including no rewrite of a publication mark.",
+   "witness": {
+    "initial": "A placement already has a publication mark.",
+    "events": [
+     "The calling flow repeats delivery.",
+     "The implementation rewrites the existing mark with identical values while leaving images and placement records unchanged."
+    ],
+    "outcomes": [
+     "The described test passes because its named durable objects are unchanged.",
+     "INV-06 fails because the repeated placement performed a durable write."
+    ],
+    "observer": "A storage audit, write counter or failure-injection backend sees the extra write."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3: Accepted decision A3 — One placement per project and content",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).",
+   "question": "What exact assertions must show that the earlier placement record, stored image and publication mark all remain unchanged in both the replacement and removal histories required by INV-07?",
+   "options": [
+    "For both histories, compare all three durable artifacts before and after.",
+    "Define 'keeps its delivery' explicitly as keeping those three artifacts unchanged.",
+    "Reduce INV-07 to only the artifacts expressly asserted in each test description."
+   ],
+   "default_guess": "Snapshot and compare the placement record, stored image and mark in both histories.",
+   "unit": "?"
+  },
+  {
+   "subject": "A3: Accepted decision A3 — One placement per project and content",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).",
+   "question": "What must the Required test observe to prove that the conflict copy was never read, rather than merely proving that reading it produced no placement?",
+   "options": [
+    "Trace file opens and reads and assert that the conflict-copy last segment is never opened for reading.",
+    "Use a file object that records or fails any read attempt.",
+    "Change INV-19 from 'never reads' to only 'never places'."
+   ],
+   "default_guess": "Trace opens and reads and assert that the conflict-copy file is never opened for reading.",
+   "witness": {
+    "initial": "A conflict-copy file has content with no existing placement.",
+    "events": [
+     "The calling flow requests delivery using its conflict-copy name.",
+     "An implementation opens and reads the whole file, then notices the ignored mark and returns NOT_READY_OR_ABSENT without writing anything."
+    ],
+    "outcomes": [
+     "The described Required test passes because the refusal and durable state are correct.",
+     "INV-19 fails because the new-placement attempt read the conflict copy."
+    ],
+    "observer": "A file-access trace or access-control monitor sees the read."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7: Accepted decision A7 — Time",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Which mark histories must be exercised to show the at-most-once invariant and rule 2's exact reading behavior for refusal before the clock point, refusal after it, a replayed mark and a publication conflict?",
+   "options": [
+    "Test each pre-clock and post-clock exit and assert respectively zero or exactly one reading.",
+    "State an exhaustive control-flow check that proves every mark path crosses the clock read at most once and at the required point.",
+    "Require the clock count only for a successful first mark."
+   ],
+   "default_guess": "Test every distinct mark exit: pre-validation refusals read zero; successful, post-clock-refused, replayed and conflicting marks read exactly once.",
+   "witness": {
+    "initial": "A placement already has a mark for photo_id A.",
+    "events": [
+     "The caller repeats the mark with photo_id A.",
+     "One implementation returns the stored mark before reading the clock.",
+     "Another follows rule 2 and reads the clock once before discovering the replay."
+    ],
+    "outcomes": [
+     "The replay reads zero times.",
+     "The replay reads once and writes nothing."
+    ],
+    "observer": "A counting clock sees the difference, although the caller receives the same replayed mark."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2: Accepted decision A2 — What reaches the Portal store",
+   "kind": "standard_violation",
+   "text": "the TOO_MANY_PIXELS member",
+   "rule": "Член перечисления note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must name the member beside its enumeration address, for example `the TOO_MANY_PIXELS member of = models.PlacementFailure`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2: Accepted decision A2 — What reaches the Portal store",
+   "kind": "standard_violation",
+   "text": "the\n   UNREADABLE_IMAGE member",
+   "rule": "Член перечисления note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must name the member beside its enumeration address, for example `the UNREADABLE_IMAGE member of = models.PlacementFailure`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2: Accepted decision A2 — What reaches the Portal store",
+   "kind": "standard_violation",
+   "text": "the TOO_LARGE member",
+   "rule": "Член перечисления note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "The passage must name the member beside its enumeration address, for example `the TOO_LARGE member of = models.PlacementFailure`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A2: Accepted decision A2 — What reaches the Portal store\",\"kind\":\"undefined_failure_mapping\",\"text\":\"A source it cannot open as one of them fails with the\\n   UNREADABLE_IMAGE member of = models.PlacementFailure, whatever dimensions its header declares. For a source\\n   it opens, checks run in this order: a first frame whose width times height is above the imported\\n   `MAX_PIXELS` constant fails with the TOO_MANY_PIXELS member, a source that cannot be decoded with the\\n   UNREADABLE_IMAGE member, and a result longer than the imported `MAX_OUTPUT_BYTES` constant, the Portal's\\n   read limit, with the TOO_LARGE member.\",\"question\":\"Which failure applies when the library opens the image and decoding succeeds, but a later preparation or JPEG-encoding operation raises an error before an output result exists?\",\"options\":[\"Treat every preparation or encoding error as UNREADABLE_IMAGE.\",\"Treat an encoding or output-construction error as A3 condition 5 and return UNREADABLE_FILE.\",\"Define separate mappings for each ImageOps.exif_transpose, convert, thumbnail, composite and save failure.\"],\"default_guess\":\"Treat failures before successful JPEG bytes exist as UNREADABLE_IMAGE unless the binary-store write itself fails.\",\"witness\":{\"initial\":\"A source has an allowed signature, opens, has dimensions below MAX_PIXELS and decodes its first frame, but Image.save raises while encoding the prepared JPEG.\",\"events\":[\"The calling flow requests delivery.\",\"The deliverer opens and decodes the source.\",\"The image library raises during JPEG encoding before any store write.\"],\"outcomes\":[\"The delivery fails with UNREADABLE_IMAGE because no decodable-and-preparable result was produced.\",\"The delivery reaches A3 condition 5 and fails with UNREADABLE_FILE because creation of the stored image failed.\"],\"observer\":\"The calling flow sees a different PlacementFailure.\"}},{\"subject\":\"A2: Accepted decision A2 — What reaches the Portal store\",\"kind\":\"undefined_library_boundary\",\"text\":\"A source it cannot open as one of them fails with the\\n   UNREADABLE_IMAGE member of = models.PlacementFailure, whatever dimensions its header declares. For a source\\n   it opens, checks run in this order: a first frame whose width times height is above the imported\\n   `MAX_PIXELS` constant fails with the TOO_MANY_PIXELS member, a source that cannot be decoded with the\\n   UNREADABLE_IMAGE member\",\"question\":\"What exact image-library operation constitutes opening, what operation proves that the first frame can be decoded, and must library decompression-bomb limits or warnings be disabled so that MAX_PIXELS alone decides the stated precedence?\",\"options\":[\"Image.open is opening; read size immediately; a later load of frame zero proves decoding; configure the library so only MAX_PIXELS enforces the pixel limit.\",\"Opening includes loading frame zero, so any error raised before loading finishes is UNREADABLE_IMAGE.\",\"Use the library's own decompression-bomb policy and map its rejection to TOO_MANY_PIXELS.\"],\"default_guess\":\"Use Image.open as opening, inspect its size before a forced load of frame zero, and disable or override the library's independent pixel-limit policy.\",\"witness\":{\"initial\":\"An allowed-signature image has a header declaring more than MAX_PIXELS and compressed data that would fail when frame zero is loaded; the pinned library can inspect the header lazily.\",\"events\":[\"The calling flow requests delivery.\",\"One implementation reads the dimensions immediately after Image.open.\",\"Another implementation treats opening as successful only after forcing frame-zero decoding.\"],\"outcomes\":[\"The first implementation returns TOO_MANY_PIXELS without decoding the pixels.\",\"The second implementation returns UNREADABLE_IMAGE when the forced decode fails.\"],\"observer\":\"The calling flow sees a different PlacementFailure for the same bytes.\"}},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).\",\"question\":\"Must the required test also show that subfolders, symbolic links, other non-file entries, directory metadata and link metadata are unchanged, so that it demonstrates that no operation changes anything in the source folder as INV-01 requires?\",\"options\":[\"Compare the complete source tree, including every entry type and relevant metadata.\",\"Limit INV-01 to regular files and rewrite the invariant accordingly.\",\"Keep the stated test and treat unmentioned entry types and directory metadata as unchecked.\"],\"default_guess\":\"Compare the complete tree and its relevant metadata before and after all four operations.\",\"witness\":{\"initial\":\"The source folder contains a regular photo and an otherwise unused subfolder.\",\"events\":[\"A scan runs.\",\"An implementation changes the unused subfolder's mode or modification time but leaves every regular file unchanged.\"],\"outcomes\":[\"The described required test passes because the same files, bytes, file modification times and file modes remain.\",\"INV-01 fails because an operation changed something in the source folder.\"],\"observer\":\"The owner or Syncthing sees the changed subfolder metadata.\"}},{\"subject\":\"A1: Accepted decision A1 — What a file of the folder becomes\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock, and a trace of every file the process opens while the delivery runs shows no opening of the named file, of a folder past the segment that fails or of a link's target (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What must show INV-02 for the condition-1 cases this item does not name, including an absent last segment, an unreadable metadata operation, a non-link folder-opening failure and a last segment that is a non-regular object other than a folder?\",\"options\":[\"Add each remaining condition-1 branch to the traced-open test.\",\"State that the listed cases are an exhaustive equivalence partition and identify which listed case covers each remaining branch.\",\"Narrow INV-02 to only the cases listed by the required test.\"],\"default_guess\":\"Add traced-open cases for every distinct condition-1 refusal branch.\"},{\"subject\":\"A3: Accepted decision A3 — One placement per project and content\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).\",\"question\":\"How must the Required tests demonstrate the 'at most one placement' part of INV-06 when two first deliveries for the same project and source content overlap?\",\"options\":[\"Run concurrent first deliveries and assert one placement identity, one record and no duplicate stored image.\",\"State a storage uniqueness or locking check that the test exercises directly.\",\"Restrict the invariant to sequential deliveries.\"],\"default_guess\":\"Test two synchronized concurrent first deliveries and assert that exactly one durable placement and its one stored image result.\",\"witness\":{\"initial\":\"No placement exists for a project and source_id.\",\"events\":[\"Caller A starts delivery and passes the existing-placement check.\",\"Caller B starts the same delivery before A writes the placement record.\",\"Both callers finish.\"],\"outcomes\":[\"A locking or uniqueness implementation creates one placement and the other call replays it.\",\"An implementation satisfying only the sequential test creates two stored images or two records.\"],\"observer\":\"The calling flows or a later scan sees duplicate or inconsistent durable state.\"}},{\"subject\":\"A3: Accepted decision A3 — One placement per project and content\",\"kind\":\"incomplete_invariant_test\",\"text\":\"leaves every stored image and placement record unchanged\",\"question\":\"Must the Required test also assert that publication marks and every other durable store remain byte-for-byte unchanged, as the invariant and rule 2 say the repeated placement 'writes nothing'?\",\"options\":[\"Assert no write calls and no changes in any durable store, including publication marks.\",\"Limit 'writes nothing' to stored images and placement records.\",\"Permit idempotent rewrites whose final values are unchanged.\"],\"default_guess\":\"Assert that no durable backend write is invoked, including no rewrite of a publication mark.\",\"witness\":{\"initial\":\"A placement already has a publication mark.\",\"events\":[\"The calling flow repeats delivery.\",\"The implementation rewrites the existing mark with identical values while leaving images and placement records unchanged.\"],\"outcomes\":[\"The described test passes because its named durable objects are unchanged.\",\"INV-06 fails because the repeated placement performed a durable write.\"],\"observer\":\"A storage audit, write counter or failure-injection backend sees the extra write.\"}},{\"subject\":\"A3: Accepted decision A3 — One placement per project and content\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-07: a replaced file is reported as a new `ready` photo while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).\",\"question\":\"What exact assertions must show that the earlier placement record, stored image and publication mark all remain unchanged in both the replacement and removal histories required by INV-07?\",\"options\":[\"For both histories, compare all three durable artifacts before and after.\",\"Define 'keeps its delivery' explicitly as keeping those three artifacts unchanged.\",\"Reduce INV-07 to only the artifacts expressly asserted in each test description.\"],\"default_guess\":\"Snapshot and compare the placement record, stored image and mark in both histories.\"},{\"subject\":\"A3: Accepted decision A3 — One placement per project and content\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`).\",\"question\":\"What must the Required test observe to prove that the conflict copy was never read, rather than merely proving that reading it produced no placement?\",\"options\":[\"Trace file opens and reads and assert that the conflict-copy last segment is never opened for reading.\",\"Use a file object that records or fails any read attempt.\",\"Change INV-19 from 'never reads' to only 'never places'.\"],\"default_guess\":\"Trace opens and reads and assert that the conflict-copy file is never opened for reading.\",\"witness\":{\"initial\":\"A conflict-copy file has content with no existing placement.\",\"events\":[\"The calling flow requests delivery using its conflict-copy name.\",\"An implementation opens and reads the whole file, then notices the ignored mark and returns NOT_READY_OR_ABSENT without writing anything.\"],\"outcomes\":[\"The described Required test passes because the refusal and durable state are correct.\",\"INV-19 fails because the new-placement attempt read the conflict copy.\"],\"observer\":\"A file-access trace or access-control monitor sees the read.\"}},{\"subject\":\"A7: Accepted decision A7 — Time\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Which mark histories must be exercised to show the at-most-once invariant and rule 2's exact reading behavior for refusal before the clock point, refusal after it, a replayed mark and a publication conflict?\",\"options\":[\"Test each pre-clock and post-clock exit and assert respectively zero or exactly one reading.\",\"State an exhaustive control-flow check that proves every mark path crosses the clock read at most once and at the required point.\",\"Require the clock count only for a successful first mark.\"],\"default_guess\":\"Test every distinct mark exit: pre-validation refusals read zero; successful, post-clock-refused, replayed and conflicting marks read exactly once.\",\"witness\":{\"initial\":\"A placement already has a mark for photo_id A.\",\"events\":[\"The caller repeats the mark with photo_id A.\",\"One implementation returns the stored mark before reading the clock.\",\"Another follows rule 2 and reads the clock once before discovering the replay.\"],\"outcomes\":[\"The replay reads zero times.\",\"The replay reads once and writes nothing.\"],\"observer\":\"A counting clock sees the difference, although the caller receives the same replayed mark.\"}},{\"subject\":\"A2: Accepted decision A2 — What reaches the Portal store\",\"kind\":\"standard_violation\",\"text\":\"the TOO_MANY_PIXELS member\",\"rule\":\"Член перечисления note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the member beside its enumeration address, for example `the TOO_MANY_PIXELS member of = models.PlacementFailure`.\"},{\"subject\":\"A2: Accepted decision A2 — What reaches the Portal store\",\"kind\":\"standard_violation\",\"text\":\"the\\n   UNREADABLE_IMAGE member\",\"rule\":\"Член перечисления note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the member beside its enumeration address, for example `the UNREADABLE_IMAGE member of = models.PlacementFailure`.\"},{\"subject\":\"A2: Accepted decision A2 — What reaches the Portal store\",\"kind\":\"standard_violation\",\"text\":\"the TOO_LARGE member\",\"rule\":\"Член перечисления note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the member beside its enumeration address, for example `the TOO_LARGE member of = models.PlacementFailure`.\"}]}",
+ "set_aside": []
+}
