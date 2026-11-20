@@ -634,7 +634,8 @@ answer_health
 
 ### Must not own
 
-- any check other than the request forms it reads by their models, or any delivery rule;
+- any check other than the request forms it reads by their models and the single `Authorization` field in
+  the Bearer scheme its extractor reads, or any delivery rule;
 - the content of an answer: every refusal is answered by `refusal_answer` of `deliverer_api`;
 - anything `http_router_backend` does not emit.
 
