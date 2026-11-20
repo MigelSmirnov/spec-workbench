@@ -52,7 +52,7 @@ The deployment asks whether the service is listening.
 
 ### Boundary
 
-`module:deliverer_router` passes the request to `module:deliverer_api`. No token, setting, file or project crosses.
+`module:deliverer_router` calls `module:deliverer_api` for the answer. No token, setting, file or project crosses.
 
 ### Steps
 
@@ -75,14 +75,14 @@ The calling agent asks what a project's folder holds.
 
 ### Boundary
 
-`module:deliverer_router` passes the request to `module:deliverer_api`, which accepts the token and the project id
-and calls `module:photo_delivery`, which decides
+`module:deliverer_router` accepts the token and the project id through `module:deliverer_api` and calls
+`module:photo_delivery`, which decides
 every later step. `module:object_connections` decides whether the folder may be used, `module:source_folder`
 reports `SourceFile` values and `module:delivery_store` supplies the records. M02 crosses back to the caller.
 
 ### Steps
 
-1. The scan route that `capability:deliverer_router.create_app` built passes the request to its handler in `module:deliverer_api`, which checks the token and the project id.
+1. The scan route that `capability:deliverer_router.create_app` built checks the token and then the project id with `module:deliverer_api`.
 2. `capability:photo_delivery.scan_project_photos` asks `capability:object_connections.confirmed_connection` for
    the project's connection, reading the connections file once.
 3. `capability:object_connections.available_photo_folder` checks the photo folder.
@@ -96,10 +96,10 @@ The caller receives one M02 for each reported file and the count of each status.
 
 ### Errors
 
-`module:deliverer_api` refuses a wrong token or project id. `module:object_connections` refuses with
+The route refuses a wrong token or project id through `module:deliverer_api`. `module:object_connections` refuses with
 `unknown_project`, `connection_not_confirmed` or `folder_unavailable`. `module:source_folder` refuses with
 `folder_unavailable` when a subfolder cannot be listed. `module:delivery_store` refuses with `state_unavailable`
-when a record cannot be used. `module:deliverer_api` turns a refusal into its answer. A file that cannot be read is an M02 with status `rejected`, not a refusal.
+when a record cannot be used. The router answers every refusal with the M08 `module:deliverer_api` builds. A file that cannot be read is an M02 with status `rejected`, not a refusal.
 
 ## `flow:deliver_one_photo`
 
@@ -109,16 +109,16 @@ The calling agent asks to deliver one photo by its name and source id.
 
 ### Boundary
 
-`module:deliverer_router` passes the request to `module:deliverer_api`, which accepts the token, the request form
-and the project id. `module:photo_delivery` owns the
+`module:deliverer_router` accepts the token through `module:deliverer_api` before it reads the body, the request
+form by = models.DeliverRequest, and the project id through `module:deliverer_api`. `module:photo_delivery` owns the
 order of every later step and holds the project lock. `module:source_folder` hands over one `SourceRead`, a `SourceFile` with the
 bytes it judged, `module:photo_preparation` returns M03 and M05, and `module:delivery_store` keeps the result. M06
 crosses back to the caller.
 
 ### Steps
 
-1. The delivery route that `capability:deliverer_router.create_app` built passes the request to its handler in `module:deliverer_api`, which checks the token, the request form and the
-   project id.
+1. The delivery route that `capability:deliverer_router.create_app` built checks the token with `module:deliverer_api`,
+   then reads the request form, then checks the project id with `module:deliverer_api`.
 2. `capability:photo_delivery.deliver_project_photo` asks `capability:object_connections.confirmed_connection`
    and `capability:object_connections.available_photo_folder`, then checks the form of the source id.
 3. It takes `capability:delivery_store.project_lock`.
@@ -139,7 +139,7 @@ reference and publication body, and a replayed photo carries its `photo_id` when
 
 ### Errors
 
-`module:deliverer_api` refuses a wrong token, request form or project id. After it, `module:object_connections`
+The route refuses a wrong token, request form or project id. After it, `module:object_connections`
 refuses the connection or folder, `module:photo_delivery` refuses a malformed source id, and `module:delivery_store`
 refuses with `state_unavailable` when the lock or a record cannot be used. `module:photo_delivery` turns every condition of A3 rule 5 into a `failed` M06. The lock is released on every path.
 A failed atomic write removes its temporary file, unless that removal fails too; the temporary file then stays, as A6 rule 3 decides. An image left by a failed record write is completed by a
@@ -153,15 +153,15 @@ The calling agent reports which Portal photo a delivered source became.
 
 ### Boundary
 
-`module:deliverer_router` passes the request to `module:deliverer_api`, which accepts the token, the request form,
-the project id and the `photo_id`, and calls
+`module:deliverer_router` accepts the token through `module:deliverer_api` before it reads the body, the request
+form and the `photo_id` by = models.PublishedRequest, and the project id through `module:deliverer_api`, and calls
 `module:photo_delivery`. `module:system_clock` supplies the time. `module:object_connections` decides
 the connection and `module:delivery_store` keeps the mark. M07 crosses back to the caller.
 
 ### Steps
 
-1. The mark route that `capability:deliverer_router.create_app` built passes the request to its handler in `module:deliverer_api`, which checks the token, the request form, the project id
-   and the `photo_id`.
+1. The mark route that `capability:deliverer_router.create_app` built checks the token with `module:deliverer_api`,
+   then reads the request form and the `photo_id`, then checks the project id with `module:deliverer_api`.
 2. `capability:photo_delivery.mark_photo_published` checks the form of the source id.
 3. It reads the clock once through `capability:system_clock.utc_now`.
 4. `capability:object_connections.confirmed_connection` checks the connection.
@@ -177,7 +177,7 @@ deliveries of that content carry its `photo_id`.
 
 ### Errors
 
-`module:deliverer_api` refuses a wrong token, request form, project id or `photo_id`. `module:photo_delivery` refuses
+The route refuses a wrong token, request form, project id or `photo_id`. `module:photo_delivery` refuses
 with `invalid_source_id`, `not_placed` or `publication_conflict`. `module:object_connections` refuses as in the scan,
 and `module:delivery_store` refuses with `state_unavailable` when the lock, a record or the write of the mark fails. A
 refused mark writes nothing, and the lock is released on every
@@ -192,8 +192,8 @@ The owner starts a delivery for one project in the workplace (R0-07).
 ### Boundary
 
 The calling agent is outside this service and organises the work (R0-15). It reads and publishes in the Portal with
-its own session. It reaches the deliverer only through the routes of `module:deliverer_router`, whose handlers in
-`module:deliverer_api` check the token and delegate to `module:photo_delivery`. The deliverer never calls the Portal. Showing a photo to the client is a later
+its own session. It reaches the deliverer only through the routes of `module:deliverer_router`, which check the
+token with `module:deliverer_api` and delegate to `module:photo_delivery`. The deliverer never calls the Portal. Showing a photo to the client is a later
 action of the owner in the Portal and is not part of this flow.
 
 ### Steps

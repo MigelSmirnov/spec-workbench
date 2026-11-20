@@ -1,0 +1,179 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "flow:service_start termination",
+   "kind": "missing outcome mapping",
+   "text": "The start has succeeded when the web server is listening. Otherwise the process ends without listening. A later failure of the web server ends the process, and the deployment decides what happens next.",
+   "question": "For every way run_service ends, which ServiceExit member does it choose and which status from EXIT_STATUSES becomes the process exit status?",
+   "options": [
+    "Before the listening boundary choose START_FAILED and status 1; after it choose SERVED and status 0 only for a clean SIGINT or SIGTERM shutdown, otherwise SERVER_FAILED and status 1.",
+    "Treat every end after listening as one generic later server outcome.",
+    "Let the web-server library or deployment choose the process status."
+   ],
+   "default_guess": "Apply A8 exactly: run_service classifies every termination as START_FAILED, SERVED or SERVER_FAILED and exits with that member's EXIT_STATUSES status.",
+   "witness": {
+    "initial": "The service process has started and may or may not have crossed the listening boundary.",
+    "events": [
+     "The deployment launches deliverer_service.run_service.",
+     "The process ends before listening, after a clean signal-driven shutdown, or after another failure."
+    ],
+    "outcomes": [
+     "run_service maps the end to START_FAILED, SERVED or SERVER_FAILED and uses status 1, 0 or 1 respectively.",
+     "run_service merely ends, leaving the web server or deployment to choose an exit status."
+    ],
+    "observer": "The deployment supervisor sees the process exit status and decides whether the service served successfully or failed."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "flow:scan_project_photos authenticated route handoff",
+   "kind": "contradictory owner and missing call",
+   "text": "module:deliverer_router passes the request to module:deliverer_api, which accepts the token and the project id and calls module:photo_delivery",
+   "question": "Does the scan route call an API handler that validates and delegates, or does the generated router call deliverer_api.check_token and deliverer_api.parse_project_id and then call photo_delivery.scan_project_photos itself?",
+   "options": [
+    "The generated router performs the route flow, using check_token and parse_project_id before calling scan_project_photos.",
+    "deliverer_api provides a scan handler that performs validation and calls scan_project_photos."
+   ],
+   "default_guess": "Follow the changed module design: the router calls check_token, parse_project_id and scan_project_photos directly.",
+   "witness": {
+    "initial": "The service is listening with a valid application token and context.",
+    "events": [
+     "The calling flow sends an authenticated scan request.",
+     "The scan route validates the token and project id.",
+     "The route invokes photo_delivery.scan_project_photos."
+    ],
+    "outcomes": [
+     "The generated router makes the validation and photo_delivery calls directly.",
+     "The router calls an unnamed deliverer_api handler, which makes those calls."
+    ],
+    "observer": "The backend generator and implementer see different required call graphs; the second outcome requires an API handler that the changed module design does not offer."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "flow:deliver_one_photo authenticated route handoff",
+   "kind": "contradictory owner and missing call",
+   "text": "The delivery route that capability:deliverer_router.create_app built passes the request to its handler in module:deliverer_api, which checks the token, the request form and the project id.",
+   "question": "Who reads and validates the delivery body and who calls photo_delivery.deliver_project_photo: an API route handler or the generated router using deliverer_api.check_token and parse_project_id?",
+   "options": [
+    "The generated router checks the token through check_token, reads DeliverRequest, parses the project id through parse_project_id, and calls deliver_project_photo.",
+    "An unnamed deliverer_api delivery handler checks the token, body and project id and delegates."
+   ],
+   "default_guess": "Use the generated-router sequence stated by the changed module design.",
+   "witness": {
+    "initial": "The service is listening and no placement exists for the requested content.",
+    "events": [
+     "The calling flow sends a delivery request with a valid token, body and project id.",
+     "The request is accepted.",
+     "photo_delivery.deliver_project_photo is invoked."
+    ],
+    "outcomes": [
+     "deliverer_router reads the DeliverRequest and directly invokes deliver_project_photo after API helper calls.",
+     "deliverer_router invokes an API delivery handler that reads the request and delegates."
+    ],
+    "observer": "The generator, implementer and route-level tests see which module must provide the handler and body-reading logic."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "flow:deliver_one_photo request-form refusal",
+   "kind": "contradictory failure owner",
+   "text": "module:deliverer_api refuses a wrong token, request form or project id.",
+   "question": "When the delivery body has the wrong form, does the router or framework catch that defect and call deliverer_api.refusal_answer, or does deliverer_api itself read and refuse the body?",
+   "options": [
+    "The generated router or framework detects the malformed DeliverRequest and calls refusal_answer to produce M08.",
+    "deliverer_api reads the body and raises or returns the refusal itself."
+   ],
+   "default_guess": "The router or framework detects the malformed body and uses deliverer_api.refusal_answer, because deliverer_api must not read request bodies.",
+   "witness": {
+    "initial": "The service is listening and the request carries the correct token.",
+    "events": [
+     "The caller submits a delivery body that is not DeliverRequest.",
+     "Body validation fails before photo_delivery is called."
+    ],
+    "outcomes": [
+     "The router handles the framework validation failure and obtains M08 from refusal_answer.",
+     "deliverer_api receives and refuses the malformed body."
+    ],
+    "observer": "The caller sees the same M08, but the generated router, API implementation and tests require different ownership and exception wiring."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "flow:record_publication authenticated route handoff",
+   "kind": "contradictory owner and missing call",
+   "text": "The mark route that capability:deliverer_router.create_app built passes the request to its handler in module:deliverer_api, which checks the token, the request form, the project id and the photo_id.",
+   "question": "Does the mark route delegate to an API handler, or does the generated router call check_token, read PublishedRequest including photo_id, call parse_project_id and then call photo_delivery.mark_photo_published itself?",
+   "options": [
+    "The generated router performs those calls and directly invokes mark_photo_published.",
+    "An unnamed deliverer_api mark handler performs the checks and delegates."
+   ],
+   "default_guess": "Follow the changed module design and make the generated router invoke the API helpers and mark_photo_published directly.",
+   "witness": {
+    "initial": "The service is listening and a placement exists without a publication mark.",
+    "events": [
+     "The calling flow sends a valid authenticated mark request.",
+     "The request form, project id and photo_id are accepted.",
+     "photo_delivery.mark_photo_published is invoked."
+    ],
+    "outcomes": [
+     "The generated router makes the helper and photo_delivery calls directly.",
+     "The router calls an API mark handler that validates and delegates."
+    ],
+    "observer": "The backend generator and implementer see whether an otherwise unplanned API handler is required."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "flow:record_publication request-form refusal",
+   "kind": "contradictory failure owner",
+   "text": "module:deliverer_api refuses a wrong token, request form, project id or photo_id.",
+   "question": "Who detects and routes a malformed PublishedRequest or photo_id to refusal_answer: the generated router or deliverer_api?",
+   "options": [
+    "The generated router or framework detects the malformed request and invokes deliverer_api.refusal_answer.",
+    "deliverer_api reads and validates the mark request itself."
+   ],
+   "default_guess": "The router validates the request form and photo_id and uses refusal_answer; deliverer_api only compares the token, parses the project id and constructs refusal answers.",
+   "witness": {
+    "initial": "The service is listening and the request carries the correct token.",
+    "events": [
+     "The caller submits a mark body with a malformed photo_id.",
+     "Validation fails before the clock or connection is read."
+    ],
+    "outcomes": [
+     "The router converts the validation failure through refusal_answer.",
+     "deliverer_api reads the body and refuses it."
+    ],
+    "observer": "The route generator, API implementer and ordering tests see different validation ownership."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "flow:owner_delivery route architecture",
+   "kind": "contradictory delegation",
+   "text": "It reaches the deliverer only through the routes of module:deliverer_router, whose handlers in module:deliverer_api check the token and delegate to module:photo_delivery.",
+   "question": "Should the owner flow depend on API route handlers, or on generated router routes that use API helper capabilities and delegate directly to photo_delivery?",
+   "options": [
+    "The generated router owns each authenticated route and directly calls photo_delivery after using deliverer_api helpers.",
+    "deliverer_api owns scan, delivery and mark handlers that validate and delegate."
+   ],
+   "default_guess": "Describe the owner flow as reaching generated router routes that call check_token, parse_project_id or refusal_answer as needed and then invoke photo_delivery directly.",
+   "witness": {
+    "initial": "The owner starts a delivery run against a listening service.",
+    "events": [
+     "The calling agent invokes scan, delivery and mark routes in order.",
+     "Each route authenticates the request and invokes the corresponding photo_delivery operation."
+    ],
+    "outcomes": [
+     "The generated router is the route delegate for all three operations.",
+     "Three deliverer_api handlers are the route delegates."
+    ],
+    "observer": "The calling-flow integration and generated service wiring see different route ownership and required capabilities."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"flow:service_start termination\",\"kind\":\"missing outcome mapping\",\"text\":\"The start has succeeded when the web server is listening. Otherwise the process ends without listening. A later failure of the web server ends the process, and the deployment decides what happens next.\",\"question\":\"For every way run_service ends, which ServiceExit member does it choose and which status from EXIT_STATUSES becomes the process exit status?\",\"options\":[\"Before the listening boundary choose START_FAILED and status 1; after it choose SERVED and status 0 only for a clean SIGINT or SIGTERM shutdown, otherwise SERVER_FAILED and status 1.\",\"Treat every end after listening as one generic later server outcome.\",\"Let the web-server library or deployment choose the process status.\"],\"default_guess\":\"Apply A8 exactly: run_service classifies every termination as START_FAILED, SERVED or SERVER_FAILED and exits with that member's EXIT_STATUSES status.\",\"witness\":{\"initial\":\"The service process has started and may or may not have crossed the listening boundary.\",\"events\":[\"The deployment launches deliverer_service.run_service.\",\"The process ends before listening, after a clean signal-driven shutdown, or after another failure.\"],\"outcomes\":[\"run_service maps the end to START_FAILED, SERVED or SERVER_FAILED and uses status 1, 0 or 1 respectively.\",\"run_service merely ends, leaving the web server or deployment to choose an exit status.\"],\"observer\":\"The deployment supervisor sees the process exit status and decides whether the service served successfully or failed.\"}},{\"unit\":\"context\",\"subject\":\"flow:scan_project_photos authenticated route handoff\",\"kind\":\"contradictory owner and missing call\",\"text\":\"module:deliverer_router passes the request to module:deliverer_api, which accepts the token and the project id and calls module:photo_delivery\",\"question\":\"Does the scan route call an API handler that validates and delegates, or does the generated router call deliverer_api.check_token and deliverer_api.parse_project_id and then call photo_delivery.scan_project_photos itself?\",\"options\":[\"The generated router performs the route flow, using check_token and parse_project_id before calling scan_project_photos.\",\"deliverer_api provides a scan handler that performs validation and calls scan_project_photos.\"],\"default_guess\":\"Follow the changed module design: the router calls check_token, parse_project_id and scan_project_photos directly.\",\"witness\":{\"initial\":\"The service is listening with a valid application token and context.\",\"events\":[\"The calling flow sends an authenticated scan request.\",\"The scan route validates the token and project id.\",\"The route invokes photo_delivery.scan_project_photos.\"],\"outcomes\":[\"The generated router makes the validation and photo_delivery calls directly.\",\"The router calls an unnamed deliverer_api handler, which makes those calls.\"],\"observer\":\"The backend generator and implementer see different required call graphs; the second outcome requires an API handler that the changed module design does not offer.\"}},{\"unit\":\"context\",\"subject\":\"flow:deliver_one_photo authenticated route handoff\",\"kind\":\"contradictory owner and missing call\",\"text\":\"The delivery route that capability:deliverer_router.create_app built passes the request to its handler in module:deliverer_api, which checks the token, the request form and the project id.\",\"question\":\"Who reads and validates the delivery body and who calls photo_delivery.deliver_project_photo: an API route handler or the generated router using deliverer_api.check_token and parse_project_id?\",\"options\":[\"The generated router checks the token through check_token, reads DeliverRequest, parses the project id through parse_project_id, and calls deliver_project_photo.\",\"An unnamed deliverer_api delivery handler checks the token, body and project id and delegates.\"],\"default_guess\":\"Use the generated-router sequence stated by the changed module design.\",\"witness\":{\"initial\":\"The service is listening and no placement exists for the requested content.\",\"events\":[\"The calling flow sends a delivery request with a valid token, body and project id.\",\"The request is accepted.\",\"photo_delivery.deliver_project_photo is invoked.\"],\"outcomes\":[\"deliverer_router reads the DeliverRequest and directly invokes deliver_project_photo after API helper calls.\",\"deliverer_router invokes an API delivery handler that reads the request and delegates.\"],\"observer\":\"The generator, implementer and route-level tests see which module must provide the handler and body-reading logic.\"}},{\"unit\":\"context\",\"subject\":\"flow:deliver_one_photo request-form refusal\",\"kind\":\"contradictory failure owner\",\"text\":\"module:deliverer_api refuses a wrong token, request form or project id.\",\"question\":\"When the delivery body has the wrong form, does the router or framework catch that defect and call deliverer_api.refusal_answer, or does deliverer_api itself read and refuse the body?\",\"options\":[\"The generated router or framework detects the malformed DeliverRequest and calls refusal_answer to produce M08.\",\"deliverer_api reads the body and raises or returns the refusal itself.\"],\"default_guess\":\"The router or framework detects the malformed body and uses deliverer_api.refusal_answer, because deliverer_api must not read request bodies.\",\"witness\":{\"initial\":\"The service is listening and the request carries the correct token.\",\"events\":[\"The caller submits a delivery body that is not DeliverRequest.\",\"Body validation fails before photo_delivery is called.\"],\"outcomes\":[\"The router handles the framework validation failure and obtains M08 from refusal_answer.\",\"deliverer_api receives and refuses the malformed body.\"],\"observer\":\"The caller sees the same M08, but the generated router, API implementation and tests require different ownership and exception wiring.\"}},{\"unit\":\"context\",\"subject\":\"flow:record_publication authenticated route handoff\",\"kind\":\"contradictory owner and missing call\",\"text\":\"The mark route that capability:deliverer_router.create_app built passes the request to its handler in module:deliverer_api, which checks the token, the request form, the project id and the photo_id.\",\"question\":\"Does the mark route delegate to an API handler, or does the generated router call check_token, read PublishedRequest including photo_id, call parse_project_id and then call photo_delivery.mark_photo_published itself?\",\"options\":[\"The generated router performs those calls and directly invokes mark_photo_published.\",\"An unnamed deliverer_api mark handler performs the checks and delegates.\"],\"default_guess\":\"Follow the changed module design and make the generated router invoke the API helpers and mark_photo_published directly.\",\"witness\":{\"initial\":\"The service is listening and a placement exists without a publication mark.\",\"events\":[\"The calling flow sends a valid authenticated mark request.\",\"The request form, project id and photo_id are accepted.\",\"photo_delivery.mark_photo_published is invoked.\"],\"outcomes\":[\"The generated router makes the helper and photo_delivery calls directly.\",\"The router calls an API mark handler that validates and delegates.\"],\"observer\":\"The backend generator and implementer see whether an otherwise unplanned API handler is required.\"}},{\"unit\":\"context\",\"subject\":\"flow:record_publication request-form refusal\",\"kind\":\"contradictory failure owner\",\"text\":\"module:deliverer_api refuses a wrong token, request form, project id or photo_id.\",\"question\":\"Who detects and routes a malformed PublishedRequest or photo_id to refusal_answer: the generated router or deliverer_api?\",\"options\":[\"The generated router or framework detects the malformed request and invokes deliverer_api.refusal_answer.\",\"deliverer_api reads and validates the mark request itself.\"],\"default_guess\":\"The router validates the request form and photo_id and uses refusal_answer; deliverer_api only compares the token, parses the project id and constructs refusal answers.\",\"witness\":{\"initial\":\"The service is listening and the request carries the correct token.\",\"events\":[\"The caller submits a mark body with a malformed photo_id.\",\"Validation fails before the clock or connection is read.\"],\"outcomes\":[\"The router converts the validation failure through refusal_answer.\",\"deliverer_api reads the body and refuses it.\"],\"observer\":\"The route generator, API implementer and ordering tests see different validation ownership.\"}},{\"unit\":\"context\",\"subject\":\"flow:owner_delivery route architecture\",\"kind\":\"contradictory delegation\",\"text\":\"It reaches the deliverer only through the routes of module:deliverer_router, whose handlers in module:deliverer_api check the token and delegate to module:photo_delivery.\",\"question\":\"Should the owner flow depend on API route handlers, or on generated router routes that use API helper capabilities and delegate directly to photo_delivery?\",\"options\":[\"The generated router owns each authenticated route and directly calls photo_delivery after using deliverer_api helpers.\",\"deliverer_api owns scan, delivery and mark handlers that validate and delegate.\"],\"default_guess\":\"Describe the owner flow as reaching generated router routes that call check_token, parse_project_id or refusal_answer as needed and then invoke photo_delivery directly.\",\"witness\":{\"initial\":\"The owner starts a delivery run against a listening service.\",\"events\":[\"The calling agent invokes scan, delivery and mark routes in order.\",\"Each route authenticates the request and invokes the corresponding photo_delivery operation.\"],\"outcomes\":[\"The generated router is the route delegate for all three operations.\",\"Three deliverer_api handlers are the route delegates.\"],\"observer\":\"The calling-flow integration and generated service wiring see different route ownership and required capabilities.\"}}]}",
+ "set_aside": []
+}
