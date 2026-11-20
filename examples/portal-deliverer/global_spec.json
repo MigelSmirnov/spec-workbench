@@ -85,7 +85,7 @@
     "load_runtime_settings: [VALIDATION_ERROR] MUST read every variable of the runtime environment variable table once from the process environment, normalise it, apply the default its row declares for the environment field when it is absent and validate it exactly as its row declares, and return RuntimeSettings with each value in the field its row targets; a required variable that is absent or a value of the wrong form MUST raise ValueError that names the variable and never its value, and it MUST NOT read a file or log a raw value.",
     "read_token: [SECURITY_BOUNDARY] MUST open the last component of path once without following a link, resolving the folders above it as they stand, and judge only that opened file: it MUST raise ValueError when the opening fails or meets a link, when the opened file is not a regular file, when its mode gives the group or others any permission, when its content does not decode in the encoding of the imported TOKEN_ENCODING constant, or when what remains after removing the characters of the imported TOKEN_TRIM_CHARACTERS constant at both ends, and no other character, is shorter than the imported TOKEN_MIN_LENGTH constant or holds a character outside the imported TOKEN_ALPHABET constant; otherwise it MUST return that remaining text. No message, log line or exception it raises MAY carry the content of the file.",
     "load_config: [VALIDATION_ERROR] MUST raise ValueError when the port of the settings is one TCP cannot address or when the time zone database does not know their timezone, then MUST call the imported load_connections once with the connections_file of the settings as a Path, letting its DelivererError end the start, and MUST return DeliveryContext with binary_root, state_dir and connections_file of the settings as Path values and their timezone unchanged; it MUST NOT read the credential file.",
-    "run_service: [ORCHESTRATION] MUST call load_runtime_settings, then load_config with those settings, then read_token with the credential_file of the settings as a Path, then the imported create_app with that context and token, in that order, and serve the application with the imported uvicorn on the host of the imported BIND_HOST constant and the port of the settings, trusting no forwarded or proxy header; a failure of any of these steps before listening MUST write one line naming the failed step to standard error, never the token, and return the status of the row of the imported EXIT_STATUSES constant for the START_FAILED member of = models.ServiceExit, a stop by a signal after serving MUST return the status of its row for the SERVED member of = models.ServiceExit, and a failure of the web server after it listened MUST return a status other than that of SERVED.",
+    "run_service: [ORCHESTRATION] MUST call load_runtime_settings, then load_config with those settings, then read_token with the credential_file of the settings as a Path, then the imported create_app with that context and token, in that order, and serve the application with the imported uvicorn on the host of the imported BIND_HOST constant and the port of the settings, trusting no forwarded or proxy header. It MUST return the status of the row of the imported EXIT_STATUSES constant for the member of = models.ServiceExit the way the process ends: the START_FAILED member when any step or a signal ends it before the web server listens, after writing one line naming the failed step to standard error and never the token; the SERVED member when its web server returns after a SIGINT or SIGTERM stopped it; and the SERVER_FAILED member for any other end after the web server has begun listening.",
     "_subfolder: [VALIDATION_ERROR] MUST return the value unchanged only when it is a string holding a relative path whose written segments, taken as written, name a folder strictly below the root without ever leaving it or naming the root itself, and MUST raise ValueError for any other value.",
     "confirmed_connection: [VALIDATION_ERROR] MUST call load_connections exactly once with connections_file and decide only from that reading, in this order: its DelivererError passes on unchanged; a reading with no record for project_id MUST raise DelivererError with the UNKNOWN_PROJECT member of = models.RefusalCode; a record whose assignment_confirmed is false MUST raise DelivererError with the CONNECTION_NOT_CONFIRMED member of = models.RefusalCode; otherwise it MUST return that ObjectConnection. It MUST NOT consult any folder.",
     "available_photo_folder: [PATH_OR_ARTIFACT_POLICY] MUST return the photo folder of the connection, resolved through every link, only when the root of the connection and that folder both exist as folders and the folder lies strictly below the resolved root; a missing root or folder, one that is not a folder, a loop of links, any failure to resolve or inspect them, or a photo folder equal to or outside the resolved root MUST raise DelivererError with the FOLDER_UNAVAILABLE member of = models.RefusalCode. It MUST NOT list the folder or touch the invoice_subfolder.",
@@ -565,8 +565,9 @@
     "ServiceExit": {
       "kind": "enum",
       "values": [
+        "start_failed",
         "served",
-        "start_failed"
+        "server_failed"
       ]
     },
     "ExitStatusRule": {
@@ -890,11 +891,15 @@
           "total": true,
           "value": [
             {
+              "outcome": "start_failed",
+              "status": 1
+            },
+            {
               "outcome": "served",
               "status": 0
             },
             {
-              "outcome": "start_failed",
+              "outcome": "server_failed",
               "status": 1
             }
           ]

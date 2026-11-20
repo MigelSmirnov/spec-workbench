@@ -1,0 +1,197 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_source",
+   "text": "`marked_at: datetime`",
+   "question": "Which authority supplies the fresh instant written when a publication mark is created?",
+   "options": [
+    "an injected clock port backed by the system wall clock",
+    "a direct system-clock call in the marking operation",
+    "a declared authority module shared by mutating operations"
+   ],
+   "default_guess": "Use an injected clock port backed by the system UTC wall clock.",
+   "witness": {
+    "initial": "No publication mark exists, and the injected/test clock differs from the host wall clock.",
+    "events": [
+     "The owner's calling flow records a publication and the deliverer creates its mark."
+    ],
+    "outcomes": [
+     "The mark receives the instant supplied by the injected authority.",
+     "The mark receives the host wall-clock instant read directly by the implementation."
+    ],
+    "observer": "The caller or a test reading the persisted mark sees a different `marked_at`."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_representation",
+   "text": "`marked_at: datetime`",
+   "question": "In which representation is `marked_at` written and compared: offset-aware UTC, UTC without an offset, local time, or another form?",
+   "options": [
+    "offset-aware UTC datetime",
+    "UTC datetime without an offset",
+    "local datetime in the configured `timezone`"
+   ],
+   "default_guess": "Write and compare UTC without an offset, matching the product's other persisted UTC datetime convention.",
+   "witness": {
+    "initial": "The service creates a mark at 2026-11-20T12:00:00Z.",
+    "events": [
+     "The owner's calling flow records the publication.",
+     "The deliverer persists and returns the new mark."
+    ],
+    "outcomes": [
+     "`marked_at` is represented as `2026-11-20T12:00:00+00:00`.",
+     "`marked_at` is represented as `2026-11-20T12:00:00`."
+    ],
+    "observer": "The caller, persistence reader, or equality check sees different datetime values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "publication-mark creation operation",
+   "kind": "missing_clock_read_count",
+   "text": "The deliverer creates the mark.",
+   "question": "How many readings of the decided time source may one mark-creation operation take, and which reading becomes `marked_at`?",
+   "options": [
+    "exactly one reading for the whole operation",
+    "a reading before validation and another immediately before persistence",
+    "any number of readings, with the last successful one stored"
+   ],
+   "default_guess": "Take exactly one reading after the operation is known to create a new mark and use it throughout that operation.",
+   "witness": {
+    "initial": "No mark exists, and a controllable clock returns instant T1 on its first read and T2 on its second.",
+    "events": [
+     "The owner's calling flow submits a valid mark request.",
+     "The deliverer validates and persists the mark."
+    ],
+    "outcomes": [
+     "An implementation reading once stores T1.",
+     "An implementation reading during validation and again before writing stores T2."
+    ],
+    "observer": "The caller or witness check reading `marked_at` sees T1 versus T2."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "EXIT_STATUSES",
+   "kind": "missing_application_rule",
+   "text": "`EXIT_STATUSES` holds exactly one row for each member of = models.ServiceExit, keyed by `outcome`; a\nmember without its row stops the build.",
+   "question": "Must the running process choose its exit status from this constant, and which component imports and applies the matching row?",
+   "options": [
+    "the service entry point must return the matching row's `status`",
+    "the process supervisor applies the mapping outside the generated service",
+    "the table is build-time metadata and does not control process exit"
+   ],
+   "default_guess": "Require the service entry point to import `EXIT_STATUSES` and exit with the row matching its `ServiceExit` outcome.",
+   "witness": {
+    "initial": "Startup fails before the server listens.",
+    "events": [
+     "The process detects the startup failure.",
+     "The service entry point terminates."
+    ],
+    "outcomes": [
+     "The entry point applies `START_FAILED` and exits with status 1.",
+     "The implementation treats the table as descriptive only and uses its framework's different failure status."
+    ],
+    "observer": "The process supervisor sees a different exit status."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ServiceExit.SERVED",
+   "kind": "ambiguous_exit_condition",
+   "text": "a stop by a signal\nafter the service has served",
+   "question": "What exactly establishes that the service “has served”: beginning to listen, completing one health request, or completing any non-health request?",
+   "options": [
+    "the listening socket was successfully established",
+    "at least one request, including health, completed",
+    "at least one non-health operation completed"
+   ],
+   "default_guess": "Treat successful establishment of the listening socket as the point after which a signal stop is `SERVED`.",
+   "witness": {
+    "initial": "The service is listening but has not received a request.",
+    "events": [
+     "The process receives a handled termination signal."
+    ],
+    "outcomes": [
+     "Listening counts as having served, so the outcome is `SERVED` and the status is 0.",
+     "No request has completed, so `SERVED` does not apply and the text supplies no outcome."
+    ],
+    "observer": "The process supervisor sees either status 0 or an implementation-chosen failure status."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ServiceExit.SERVED",
+   "kind": "unspecified_signal_set",
+   "text": "a stop by a signal",
+   "question": "Which signals are handled as a `SERVED` stop, and what happens for every other catchable signal?",
+   "options": [
+    "only SIGTERM",
+    "SIGTERM and SIGINT",
+    "every catchable signal handled by the web server"
+   ],
+   "default_guess": "Classify graceful SIGTERM and SIGINT shutdowns after listening as `SERVED`; leave unhandled signals to the operating system.",
+   "witness": {
+    "initial": "The service has begun listening normally.",
+    "events": [
+     "An operator sends SIGINT to the process."
+    ],
+    "outcomes": [
+     "SIGINT is a service-stop signal, so the process selects `SERVED` and exits with status 0.",
+     "Only SIGTERM is treated as the specified signal, so SIGINT follows framework or operating-system behavior and exits with another status."
+    ],
+    "observer": "The operator or process supervisor sees a different exit status."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ServiceExit and EXIT_STATUSES",
+   "kind": "uncovered_exit_case",
+   "text": "`ServiceExit` is SERVED, value `served`, a stop by a signal\nafter the service has served, and START_FAILED, value `start_failed`, a start that fails before listening.",
+   "question": "Which outcome and status apply when the process terminates after listening for a reason other than a handled signal, or when shutdown occurs after listening but before the chosen meaning of “has served”?",
+   "options": [
+    "classify every post-listen termination as `SERVED`",
+    "classify abnormal post-listen termination as `START_FAILED`",
+    "add a distinct runtime-failure outcome and status",
+    "leave such termination to the underlying runtime"
+   ],
+   "default_guess": "Add a distinct runtime-failure outcome with a nonzero status; reserve `SERVED` for graceful handled-signal shutdown and `START_FAILED` for pre-listen failure.",
+   "witness": {
+    "initial": "The service is listening.",
+    "events": [
+     "The serving loop terminates because of an unexpected runtime error rather than a signal."
+    ],
+    "outcomes": [
+     "The implementation broadens `SERVED` and exits with status 0.",
+     "The implementation treats the unlisted case as a failure and exits nonzero."
+    ],
+    "observer": "The process supervisor sees success versus failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 INTAKE_ID_SEPARATOR",
+   "kind": "standard_violation",
+   "text": "| `INTAKE_ID_SEPARATOR` | `str` | `-` |",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Make the separator have one home: either make generated intake-id behavior consume the imported `INTAKE_ID_SEPARATOR` constant instead of the literal separators in M05, or remove this constant from the generated specification.",
+   "unit": "?"
+  },
+  {
+   "subject": "A8 OBSERVATION_FAILURES",
+   "kind": "standard_violation",
+   "text": "| `EMPTY` | `EMPTY` |\n| `TOO_LARGE` | `TOO_LARGE` |\n| `NOT_A_REGULAR_FILE` | `NOT_A_REGULAR_FILE` |\n| `UNREADABLE_FILE` | `UNREADABLE_FILE` |\n| `UNSUPPORTED_FORMAT` | `UNSUPPORTED_FORMAT` |",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "Make this reason-to-failure mapping have one home: have A1 and A3 behavior consume the imported `OBSERVATION_FAILURES` constant instead of independently fixing the same pairs, or remove the duplicate constant table.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_source\",\"text\":\"`marked_at: datetime`\",\"question\":\"Which authority supplies the fresh instant written when a publication mark is created?\",\"options\":[\"an injected clock port backed by the system wall clock\",\"a direct system-clock call in the marking operation\",\"a declared authority module shared by mutating operations\"],\"default_guess\":\"Use an injected clock port backed by the system UTC wall clock.\",\"witness\":{\"initial\":\"No publication mark exists, and the injected/test clock differs from the host wall clock.\",\"events\":[\"The owner's calling flow records a publication and the deliverer creates its mark.\"],\"outcomes\":[\"The mark receives the instant supplied by the injected authority.\",\"The mark receives the host wall-clock instant read directly by the implementation.\"],\"observer\":\"The caller or a test reading the persisted mark sees a different `marked_at`.\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_representation\",\"text\":\"`marked_at: datetime`\",\"question\":\"In which representation is `marked_at` written and compared: offset-aware UTC, UTC without an offset, local time, or another form?\",\"options\":[\"offset-aware UTC datetime\",\"UTC datetime without an offset\",\"local datetime in the configured `timezone`\"],\"default_guess\":\"Write and compare UTC without an offset, matching the product's other persisted UTC datetime convention.\",\"witness\":{\"initial\":\"The service creates a mark at 2026-11-20T12:00:00Z.\",\"events\":[\"The owner's calling flow records the publication.\",\"The deliverer persists and returns the new mark.\"],\"outcomes\":[\"`marked_at` is represented as `2026-11-20T12:00:00+00:00`.\",\"`marked_at` is represented as `2026-11-20T12:00:00`.\"],\"observer\":\"The caller, persistence reader, or equality check sees different datetime values.\"}},{\"subject\":\"publication-mark creation operation\",\"kind\":\"missing_clock_read_count\",\"text\":\"The deliverer creates the mark.\",\"question\":\"How many readings of the decided time source may one mark-creation operation take, and which reading becomes `marked_at`?\",\"options\":[\"exactly one reading for the whole operation\",\"a reading before validation and another immediately before persistence\",\"any number of readings, with the last successful one stored\"],\"default_guess\":\"Take exactly one reading after the operation is known to create a new mark and use it throughout that operation.\",\"witness\":{\"initial\":\"No mark exists, and a controllable clock returns instant T1 on its first read and T2 on its second.\",\"events\":[\"The owner's calling flow submits a valid mark request.\",\"The deliverer validates and persists the mark.\"],\"outcomes\":[\"An implementation reading once stores T1.\",\"An implementation reading during validation and again before writing stores T2.\"],\"observer\":\"The caller or witness check reading `marked_at` sees T1 versus T2.\"}},{\"subject\":\"EXIT_STATUSES\",\"kind\":\"missing_application_rule\",\"text\":\"`EXIT_STATUSES` holds exactly one row for each member of = models.ServiceExit, keyed by `outcome`; a\\nmember without its row stops the build.\",\"question\":\"Must the running process choose its exit status from this constant, and which component imports and applies the matching row?\",\"options\":[\"the service entry point must return the matching row's `status`\",\"the process supervisor applies the mapping outside the generated service\",\"the table is build-time metadata and does not control process exit\"],\"default_guess\":\"Require the service entry point to import `EXIT_STATUSES` and exit with the row matching its `ServiceExit` outcome.\",\"witness\":{\"initial\":\"Startup fails before the server listens.\",\"events\":[\"The process detects the startup failure.\",\"The service entry point terminates.\"],\"outcomes\":[\"The entry point applies `START_FAILED` and exits with status 1.\",\"The implementation treats the table as descriptive only and uses its framework's different failure status.\"],\"observer\":\"The process supervisor sees a different exit status.\"}},{\"subject\":\"ServiceExit.SERVED\",\"kind\":\"ambiguous_exit_condition\",\"text\":\"a stop by a signal\\nafter the service has served\",\"question\":\"What exactly establishes that the service “has served”: beginning to listen, completing one health request, or completing any non-health request?\",\"options\":[\"the listening socket was successfully established\",\"at least one request, including health, completed\",\"at least one non-health operation completed\"],\"default_guess\":\"Treat successful establishment of the listening socket as the point after which a signal stop is `SERVED`.\",\"witness\":{\"initial\":\"The service is listening but has not received a request.\",\"events\":[\"The process receives a handled termination signal.\"],\"outcomes\":[\"Listening counts as having served, so the outcome is `SERVED` and the status is 0.\",\"No request has completed, so `SERVED` does not apply and the text supplies no outcome.\"],\"observer\":\"The process supervisor sees either status 0 or an implementation-chosen failure status.\"}},{\"subject\":\"ServiceExit.SERVED\",\"kind\":\"unspecified_signal_set\",\"text\":\"a stop by a signal\",\"question\":\"Which signals are handled as a `SERVED` stop, and what happens for every other catchable signal?\",\"options\":[\"only SIGTERM\",\"SIGTERM and SIGINT\",\"every catchable signal handled by the web server\"],\"default_guess\":\"Classify graceful SIGTERM and SIGINT shutdowns after listening as `SERVED`; leave unhandled signals to the operating system.\",\"witness\":{\"initial\":\"The service has begun listening normally.\",\"events\":[\"An operator sends SIGINT to the process.\"],\"outcomes\":[\"SIGINT is a service-stop signal, so the process selects `SERVED` and exits with status 0.\",\"Only SIGTERM is treated as the specified signal, so SIGINT follows framework or operating-system behavior and exits with another status.\"],\"observer\":\"The operator or process supervisor sees a different exit status.\"}},{\"subject\":\"ServiceExit and EXIT_STATUSES\",\"kind\":\"uncovered_exit_case\",\"text\":\"`ServiceExit` is SERVED, value `served`, a stop by a signal\\nafter the service has served, and START_FAILED, value `start_failed`, a start that fails before listening.\",\"question\":\"Which outcome and status apply when the process terminates after listening for a reason other than a handled signal, or when shutdown occurs after listening but before the chosen meaning of “has served”?\",\"options\":[\"classify every post-listen termination as `SERVED`\",\"classify abnormal post-listen termination as `START_FAILED`\",\"add a distinct runtime-failure outcome and status\",\"leave such termination to the underlying runtime\"],\"default_guess\":\"Add a distinct runtime-failure outcome with a nonzero status; reserve `SERVED` for graceful handled-signal shutdown and `START_FAILED` for pre-listen failure.\",\"witness\":{\"initial\":\"The service is listening.\",\"events\":[\"The serving loop terminates because of an unexpected runtime error rather than a signal.\"],\"outcomes\":[\"The implementation broadens `SERVED` and exits with status 0.\",\"The implementation treats the unlisted case as a failure and exits nonzero.\"],\"observer\":\"The process supervisor sees success versus failure.\"}},{\"subject\":\"A8 INTAKE_ID_SEPARATOR\",\"kind\":\"standard_violation\",\"text\":\"| `INTAKE_ID_SEPARATOR` | `str` | `-` |\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Make the separator have one home: either make generated intake-id behavior consume the imported `INTAKE_ID_SEPARATOR` constant instead of the literal separators in M05, or remove this constant from the generated specification.\"},{\"subject\":\"A8 OBSERVATION_FAILURES\",\"kind\":\"standard_violation\",\"text\":\"| `EMPTY` | `EMPTY` |\\n| `TOO_LARGE` | `TOO_LARGE` |\\n| `NOT_A_REGULAR_FILE` | `NOT_A_REGULAR_FILE` |\\n| `UNREADABLE_FILE` | `UNREADABLE_FILE` |\\n| `UNSUPPORTED_FORMAT` | `UNSUPPORTED_FORMAT` |\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"Make this reason-to-failure mapping have one home: have A1 and A3 behavior consume the imported `OBSERVATION_FAILURES` constant instead of independently fixing the same pairs, or remove the duplicate constant table.\"}]}",
+ "set_aside": []
+}

@@ -563,13 +563,17 @@ gives a source whose reading fails with that `failure` that `reason`.
 | `UNSUPPORTED_FORMAT` | `UNSUPPORTED_FORMAT` |
 
 `EXIT_STATUSES` holds exactly one row for each member of = models.ServiceExit, keyed by `outcome`; a
-member without its row stops the build. `ServiceExit` is SERVED, value `served`, a stop by a signal
-after the service has served, and START_FAILED, value `start_failed`, a start that fails before listening.
+member without its row stops the build. The service has served once its web server has begun
+listening. `ServiceExit` is START_FAILED, value `start_failed`: the process ends before it listens,
+whatever ends it, a signal included; SERVED, value `served`: after it has served, the web server
+returns because a SIGINT or SIGTERM stopped it; and SERVER_FAILED, value `server_failed`: after it has
+served, the process ends in any other way.
 
 | `outcome` | `status` |
 |---|---|
-| `SERVED` | 0 |
 | `START_FAILED` | 1 |
+| `SERVED` | 0 |
+| `SERVER_FAILED` | 1 |
 
 `MAX_OUTPUT_BYTES` equals the Portal's `BINARY_MAX_READ_BYTES`. A change of that Portal value is
 released together with a change of this constant. The deliverer does not ask the Portal for it.
