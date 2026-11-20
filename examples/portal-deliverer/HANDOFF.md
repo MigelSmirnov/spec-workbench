@@ -7,13 +7,13 @@ what those tools cannot know.
 ## Factory root for rounds and diagnosis
 
 The State 7 prompts and the Factory spec check need `fastapi_sync_v2` with the credential checked
-before the body (code-factory #227, merged, and #228, open). Until #228 is merged and the main
-`code_factory` checkout is on `main`, run every round and `design_diagnose` with
+before the body (code-factory #227 and #228, both merged). The main `code_factory` checkout stays on
+`docs/portal-deliverer-prototype` with someone else's uncommitted work, so run every round and
+`design_diagnose` with a checkout of Factory `main`:
 
-    SPEC_WORKBENCH_FACTORY_ROOT=<code_factory_worktrees>/router-guard
+    SPEC_WORKBENCH_FACTORY_ROOT=<code_factory_worktrees>/main-check   # detached at origin/main
 
-Notes propagation needs spec-workbench #196 (open): without it propagation reports a false
-`factory_coverage_regression`, because it counts the callables the router emitter lowers.
+Notes propagation needs spec-workbench #196 (merged).
 
 ## Next
 
@@ -28,7 +28,6 @@ Notes propagation needs spec-workbench #196 (open): without it propagation repor
 
 - `imports_factory_unavailable`: the imports gate blocks a case whose Factory project has no
   specification yet. A tools change (`not_applicable` before the first spec) or another route.
-- code-factory #228 and spec-workbench #196: merge.
 
 ## What changed on 2026-11-20
 
