@@ -2,7 +2,7 @@
 
 ## Status
 
-Written from the accepted States 0 to 3. No kernel flow exists yet.
+Written from the accepted States 0 to 3.
 
 Refusal codes and failure members are those of States 1 and 2. The exact answers are decided in State 6.
 
