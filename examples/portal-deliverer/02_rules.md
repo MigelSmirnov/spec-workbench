@@ -158,9 +158,8 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
 
 1. A placement is identified by the project and the SHA-256 of the source content (R0-10).
 2. Delivering content that already has a placement answers the REPLAYED member of = models.PlacementStatus with
-   the stored placement and the current `photo_id` of its mark, if any, and writes nothing except the project
-   lock on its first use (A6 rule 4), whatever name the request carries and even
-   when the source file has left the folder. A mark record of that placement that is damaged refuses the
+   the stored placement and the current `photo_id` of its mark, if any, whatever name the request carries and
+   even when the source file has left the folder. A replay creates or changes no placement, stored image or mark. A mark record of that placement that is damaged refuses the
    delivery under A6 rule 5.
 3. One call delivers one photo, named by `name`, a relative path in the form a scan reports, and
    `source_id`. The service keeps no memory of earlier scans: it judges the name and the file when the call
