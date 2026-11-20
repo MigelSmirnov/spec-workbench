@@ -88,8 +88,11 @@ READY member of = models.ScanStatus may still fail when it is delivered.
 ### Required tests
 
 - INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).
+  [witness: verification:deliverer_a01_no_operation_changes_the_source_folder]
 - INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock, and a trace of every file the process opens while the delivery runs shows no opening of the named file, of a folder past the segment that fails or of a link's target (`test_a_name_a_scan_would_not_report_is_not_delivered`).
+  [witness: verification:deliverer_a01_a_name_a_scan_would_not_report_is_not_delivered]
 - INV-18: a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Only the letters A to Z are folded (`test_only_ascii_letters_fold_in_the_conflict_mark`). A real Syncthing conflict leaves its copy unreported while the photo itself is still reported (`e2e_local_syncthing.py`, `a real Syncthing conflict copy is not offered`).
+  [witness: verification:deliverer_a01_a_syncthing_conflict_copy_is_neither_offered_nor_placed]
 
 ### Consequence
 
@@ -145,8 +148,11 @@ A replaced file is scanned again by its new content (A3).
 ### Required tests
 
 - INV-03: a source holding GPS, EXIF, XMP and a comment is stored with none of them, by the unit test `test_a_placed_photo_keeps_no_metadata_and_the_source_is_untouched` and by the E2E check that the client's download has no EXIF.
+  [witness: verification:deliverer_a02_a_placed_photo_keeps_no_metadata_and_the_source_is_untouched]
 - INV-04: camera times with an offset, without one, implausible or absent give the expected UTC value (`test_the_photo_date_is_naive_utc`).
+  [witness: verification:deliverer_a02_the_photo_date_is_naive_utc]
 - INV-05: every publication body returned by a placement has `client_visible` exactly false, and a published delivery is absent from the client's overview until the owner shows it (E2E, `a delivered photo stays hidden from the client`).
+  [witness: verification:deliverer_a02_publication_body_is_not_client_visible]
 
 ### Consequence
 
@@ -213,8 +219,11 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
 ### Required tests
 
 - INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`). When no refusal of A6 rule 5 applies, a delivery repeated after a failed record write completes the placement (`test_a_delivery_repeated_after_a_failed_record_write_completes`).
+  [witness: verification:deliverer_a03_a_repeated_placement_writes_no_durable_state]
 - INV-07: after a file is replaced, the earlier placement, its stored image and its mark stay unchanged, and the new content is judged by A1 and A3 as any other file is (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).
+  [witness: verification:deliverer_a03_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays]
 - INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Placed content replays when only a conflict copy still holds it (`test_placed_content_replays_when_only_a_conflict_copy_still_holds_it`), and an ordinary file with the content of a conflict copy is delivered (`test_an_ordinary_file_is_placed_when_a_conflict_copy_has_the_same_content`).
+  [witness: verification:deliverer_a03_a_syncthing_conflict_copy_is_neither_offered_nor_placed]
 
 ### Consequence
 
@@ -248,6 +257,7 @@ The same content in two projects is two deliveries.
 ### Required tests
 
 - INV-08: a repeated mark keeps the first `marked_at`, and another `photo_id` is refused (`test_marking_again_changes_nothing_and_another_photo_is_refused`). A mark for a source placed only in another project is refused (`test_a_photo_that_was_not_placed_cannot_be_marked`).
+  [witness: verification:deliverer_a04_marking_again_changes_nothing_and_another_photo_is_refused]
 
 ### Consequence
 
@@ -334,8 +344,11 @@ A published photo is recognised without any change to the Portal.
 ### Required tests
 
 - INV-09: every declared route except the health answer refuses a request without the token (`test_every_route_except_health_requires_the_token`); a wrong token, another scheme, a value without its single space and two `Authorization` fields are each refused with 401 and the UNAUTHORIZED member of = models.RefusalCode, while the scheme written `bearer` is accepted (`test_the_api_requires_the_token`); a request without the token and with a malformed project id or body is still refused with the UNAUTHORIZED member of = models.RefusalCode (`test_the_token_is_checked_before_the_request_form`).
+  [witness: verification:deliverer_a05_every_route_except_health_requires_the_token]
 - INV-10: scan, placement and mark each answer the CONNECTION_NOT_CONFIRMED member of = models.RefusalCode for an unconfirmed connection whose photo folder does not exist, so the folder is never consulted, and no stored image, placement record or mark record is written (`test_an_unconfirmed_connection_delivers_nothing`). After a scan has succeeded on the running service, clearing the confirmation makes scan, placement and mark each answer the CONNECTION_NOT_CONFIRMED member of = models.RefusalCode and write nothing (`test_a_cleared_confirmation_stops_the_running_service`). For a valid file with no record for the project, scan, placement and mark each answer the UNKNOWN_PROJECT member of = models.RefusalCode and write nothing (`test_a_project_without_a_connection_delivers_nothing`). For an absent file, a file that cannot be opened, a file that is not UTF-8 or JSON, a file of another form and a record that breaks the form of rule 8, also when that record is unconfirmed or belongs to another project, scan, placement and mark each answer the FOLDER_UNAVAILABLE member of = models.RefusalCode and write nothing (`test_unreadable_connections_deliver_nothing`), and the service does not start (`test_the_service_does_not_start_with_an_unreadable_connection_record`). A scan, placement or mark that reaches its connection check reads the file exactly once (`test_each_operation_reads_the_connection_record_once`), a request refused earlier reads it zero times (`test_a_request_refused_before_the_connection_check_does_not_read_the_file`), and a file replaced after the reading does not change the running operation (`test_an_operation_finishes_on_the_reading_it_made`). A connection leaving its root is not loaded (`test_a_connection_cannot_leave_the_object_root`), and a linked folder outside the root is refused (`test_a_photo_folder_linked_out_of_the_root_is_refused`).
+  [witness: verification:deliverer_a05_an_unconfirmed_connection_delivers_nothing]
 - INV-11: answers of scan, place, mark and a refusal contain neither the folder path, the store path nor the state path (`test_the_api_scans_and_places_without_showing_server_paths`), and the generated service has no Portal client, no outbound HTTP dependency and no Portal credential setting. With every outbound network connection of the process trapped, a scan, a delivery and a mark succeed and none is attempted (`test_no_operation_opens_a_network_connection`). An uppercase or unhyphenated project id and a body that is not the request form each answer 422 with the INVALID_REQUEST member of = models.RefusalCode, and no refusal repeats what the caller sent (`test_a_malformed_request_is_refused_as_invalid_request`), and every refusal code answers the `status` and `detail` of its row of `REFUSAL_ANSWERS` (`test_each_refusal_answers_its_status_and_detail`).
+  [witness: verification:deliverer_a05_the_api_scans_and_places_without_showing_server_paths]
 
 ### Consequence
 
@@ -393,7 +406,9 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 ### Required tests
 
 - INV-12: concurrent placements of one source, in one process and in separate processes, answer the PLACED member of = models.PlacementStatus once and otherwise its REPLAYED member, and leave one placement record and one stored image (`test_separate_processes_leave_one_placement`), and marks of two `photo_id` values, in one process and in separate processes, answer the MARKED member of = models.MarkStatus once, its REPLAYED member for the same value and the PUBLICATION_CONFLICT member of = models.RefusalCode for the other, and leave one mark record holding the `photo_id` whose call answered MARKED (`test_concurrent_calls_leave_one_placement_and_one_mark`, `test_separate_processes_leave_one_mark`).
+  [witness: verification:deliverer_a06_separate_processes_leave_one_placement]
 - INV-20: with a damaged placement or mark record, scan, delivery and mark each answer M08 with the STATE_UNAVAILABLE member of = models.RefusalCode, the record stays as it was and no placement record, mark record or stored image is added or changed (`test_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one`), a damaged mark without a placement stops a new placement (`test_a_damaged_mark_without_a_placement_stops_a_new_placement`), a mark that cannot be written is refused (`test_a_mark_that_cannot_be_written_is_refused`), and a record that is a link, dangling or not, or that names another source is refused the same way (`test_a_record_not_written_at_its_address_is_refused`).
+  [witness: verification:deliverer_a06_a_damaged_record_refuses_and_is_never_taken_for_an_absent_one]
 
 ### Consequence
 
@@ -424,6 +439,7 @@ A repeated action from the workplace cannot duplicate a delivery.
 ### Required tests
 
 - INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).
+  [witness: verification:deliverer_a07_only_the_mark_reads_the_clock]
 
 ### Consequence
 
@@ -537,6 +553,7 @@ released together with a change of this constant. The deliverer does not ask the
 ### Required tests
 
 - INV-14: a prepared image above the stored image limit fails with `too_large` and nothing is stored (`test_an_image_above_the_portal_read_limit_is_not_stored`).
+  [witness: verification:deliverer_a08_an_image_above_the_portal_read_limit_is_not_stored]
 
 ### Consequence
 
@@ -561,6 +578,7 @@ A stored image can always be read back by the Portal.
 ### Required tests
 
 - INV-15: the deployment route refuses an image holding a distribution with a known vulnerability, and refuses when the check cannot complete.
+  [witness: verification:deliverer_a09_deployment_refuses_a_vulnerable_image]
 
 ### Consequence
 
@@ -585,6 +603,7 @@ The prototype's `requirements.txt` already pins these libraries. The OSV check i
 ### Required tests
 
 - INV-17: a project holding a date with an offset is detected before delivery, and a project holding only UTC dates passes (E2E, `the flow can see an old date before it delivers`, `a project with UTC dates passes that check`). The calling flow's own stop is shown when that flow exists.
+  [witness: verification:deliverer_a11_an_offset_date_is_detected_before_delivery]
 
 ### Consequence
 
@@ -604,6 +623,7 @@ owned by a decision above.
 ### Required tests
 
 - INV-16: `python tools/design_lint.py examples/portal-deliverer --state 2` reports no security finding. The closed list of categories is `SECURITY_REVIEW_EVIDENCE.md`.
+  [witness: workbench:state2_rules_decisions]
 
 ### Consequence
 
