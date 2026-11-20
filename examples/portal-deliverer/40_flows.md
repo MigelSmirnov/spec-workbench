@@ -57,7 +57,7 @@ The deployment asks whether the service is listening.
 ### Steps
 
 1. The health route that `capability:deliverer_router.create_app` built calls `capability:deliverer_api.answer_health`.
-2. `capability:deliverer_api.answer_health` returns the health answer with the status `ok`.
+2. `capability:deliverer_api.answer_health` returns the health answer with the OK member of = models.HealthStatus.
 
 ### Outcomes
 

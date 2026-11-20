@@ -214,7 +214,7 @@ None.
 
 ### Outputs
 
-The health answer with the status `ok`.
+The health answer with the OK member of = models.HealthStatus.
 
 ### Observable effect
 
@@ -520,7 +520,7 @@ The context of the operations, the project id, the source id and the image bytes
 
 ### Outputs
 
-The reference `photos/<project_id>/<source_id>.jpg`.
+The reference A6 rule 1 composes from the project id and the source id.
 
 ### Observable effect
 

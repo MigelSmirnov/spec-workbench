@@ -26,30 +26,30 @@ cycles, and `domain_models` names no other module.
 
 | Consumer | Provider | Symbols |
 |---|---|---|
-| `data_provider` | `domain_models` | `RefusalAnswerRule`, `RefusalCode` |
+| `data_provider` | `domain_models` | `RefusalAnswerRule`, `RefusalCode`, `SourceSignatureRule` |
 | `refusals` | `domain_models` | `PlacementFailure`, `RefusalCode` |
 | `runtime_settings` | `domain_models` | `RuntimeEnvironment`, `RuntimeSettings` |
-| `object_connections` | `domain_models` | `ObjectConnection`, `RefusalCode` |
+| `object_connections` | `domain_models` | `ConnectionEntry`, `ConnectionsFile`, `ObjectConnection`, `RefusalCode` |
 | `object_connections` | `refusals` | `DelivererError` |
-| `source_folder` | `domain_models` | `ObservationReason`, `PlacementFailure`, `RefusalCode`, `ScanStatus`, `SourceFile`, `SourceRead` |
+| `source_folder` | `domain_models` | `ObservationReason`, `PlacementFailure`, `RefusalCode`, `ScanStatus`, `SourceFile`, `SourceRead`, `SourceSignatureRule` |
 | `source_folder` | `refusals` | `DelivererError`, `Rejected` |
-| `source_folder` | `data_provider` | `CONFLICT_COPY_MARK`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `MAX_SOURCE_BYTES` |
+| `source_folder` | `data_provider` | `CONFLICT_COPY_MARK`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `MAX_SOURCE_BYTES`, `SOURCE_FORMATS`, `SOURCE_SIGNATURES` |
 | `photo_preparation` | `domain_models` | `DateSource`, `PhotoPublication`, `PlacementFailure`, `PreparedPhoto` |
 | `photo_preparation` | `refusals` | `Rejected` |
-| `photo_preparation` | `data_provider` | `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_BACKGROUND`, `PHOTO_MAX_SIDE`, `PHOTO_OPTIMIZE`, `PHOTO_PROGRESSIVE`, `PHOTO_QUALITY`, `PHOTO_SUBSAMPLING` |
-| `delivery_store` | `data_provider` | `LOCK_FILE_MODE`, `RECORD_MODE`, `STATE_FOLDER_MODE`, `STORE_FOLDER_MODE`, `STORED_IMAGE_MODE`, `TEMPORARY_FILE_MODE`, `TEMPORARY_NAME_PREFIX`, `LOCKS_FOLDER`, `PLACEMENTS_FOLDER`, `MARKS_FOLDER`, `LOCK_FILE_SUFFIX`, `RECORD_FILE_SUFFIX` |
+| `photo_preparation` | `data_provider` | `INTAKE_ID_PREFIX`, `INTAKE_SOURCE`, `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_BACKGROUND`, `PHOTO_MAX_SIDE`, `PHOTO_OPTIMIZE`, `PHOTO_PROGRESSIVE`, `PHOTO_QUALITY`, `PHOTO_SUBSAMPLING`, `SOURCE_FORMATS`, `CAMERA_EARLIEST_YEAR`, `CAMERA_LATEST_AFTER_MODIFIED_HOURS`, `CAMERA_OFFSET_MAX_HOURS` |
+| `delivery_store` | `data_provider` | `LOCK_FILE_MODE`, `RECORD_MODE`, `STATE_FOLDER_MODE`, `STORE_FOLDER_MODE`, `STORED_IMAGE_MODE`, `TEMPORARY_FILE_MODE`, `TEMPORARY_NAME_PREFIX`, `LOCKS_FOLDER`, `PLACEMENTS_FOLDER`, `MARKS_FOLDER`, `LOCK_FILE_SUFFIX`, `RECORD_FILE_SUFFIX`, `STORED_IMAGES_FOLDER`, `STORED_IMAGE_SUFFIX` |
 | `delivery_store` | `domain_models` | `DeliveryContext`, `PhotoPlacement`, `PublicationMark`, `RefusalCode` |
 | `delivery_store` | `refusals` | `DelivererError` |
 | `photo_delivery` | `domain_models` | `DeliveryContext`, `MarkOutcome`, `MarkStatus`, `PhotoPlacement`, `PlacementFailure`, `PlacementOutcome`, `PlacementStatus`, `PublicationMark`, `RefusalCode`, `ScanResult`, `ScanStatus`, `SourceFile`, `SourcePhotoObservation` |
 | `photo_delivery` | `refusals` | `DelivererError`, `Rejected` |
-| `photo_delivery` | `data_provider` | `SOURCE_ID_PATTERN` |
+| `photo_delivery` | `data_provider` | `SOURCE_ID_PATTERN`, `STORED_MEDIA_TYPE` |
 | `photo_delivery` | `object_connections` | `available_photo_folder`, `confirmed_connection` |
 | `photo_delivery` | `source_folder` | `observe_source_files`, `read_named_source` |
 | `photo_delivery` | `photo_preparation` | `build_publication`, `prepare_photo` |
 | `photo_delivery` | `delivery_store` | `project_lock`, `read_mark`, `read_placement`, `store_image`, `write_mark`, `write_placement` |
 | `photo_delivery` | `system_clock` | `utc_now` |
 | `deliverer_api` | `data_provider` | `REFUSAL_ANSWERS` |
-| `deliverer_api` | `domain_models` | `DeliverRequest`, `DeliveryContext`, `HealthAnswer`, `MarkOutcome`, `PlacementOutcome`, `PublishedRequest`, `Refusal`, `RefusalCode`, `ScanResult` |
+| `deliverer_api` | `domain_models` | `DeliverRequest`, `DeliveryContext`, `HealthAnswer`, `HealthStatus`, `MarkOutcome`, `PlacementOutcome`, `PublishedRequest`, `Refusal`, `RefusalCode`, `ScanResult` |
 | `deliverer_api` | `refusals` | `DelivererError` |
 | `deliverer_api` | `photo_delivery` | `deliver_project_photo`, `mark_photo_published`, `scan_project_photos` |
 | `deliverer_router` | `domain_models` | `DeliveryContext`, `HealthAnswer` |
@@ -278,6 +278,14 @@ PLACEMENTS_FOLDER
 MARKS_FOLDER
 LOCK_FILE_SUFFIX
 RECORD_FILE_SUFFIX
+SOURCE_FORMATS
+SOURCE_SIGNATURES
+CAMERA_EARLIEST_YEAR
+CAMERA_LATEST_AFTER_MODIFIED_HOURS
+CAMERA_OFFSET_MAX_HOURS
+STORED_IMAGES_FOLDER
+STORED_IMAGE_SUFFIX
+STORED_MEDIA_TYPE
 ```
 
 ### Trace inputs

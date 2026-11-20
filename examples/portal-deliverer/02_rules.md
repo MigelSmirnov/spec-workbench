@@ -26,7 +26,7 @@ applies decides:
 | 3 | opened in non-blocking mode without following a link, what it finds is not a regular file | `rejected` | `not_a_regular_file` |
 | 4 | it grew past the source limit while being read | `rejected` | `too_large` |
 | 5 | opening or reading it fails, which includes a file that disappeared or became a symbolic link after its metadata was read | `rejected` | `unreadable_file` |
-| 6 | does not begin with a JPEG, PNG or WEBP signature | `rejected` | `unsupported_format` |
+| 6 | does not begin with the signature of a format of the imported `SOURCE_FORMATS` constant: for no format do all the rows of the imported `SOURCE_SIGNATURES` constant with that `format` find their `signature` bytes at their `offset` | `rejected` | `unsupported_format` |
 | 7 | placed and marked | `published` | none |
 | 8 | placed | `placed` | none |
 | 9 | anything else | `ready` | none |
@@ -113,15 +113,16 @@ A replaced file is scanned again by its new content (A3).
    `PHOTO_SUBSAMPLING` as `subsampling`, with no EXIF, colour profile or other metadata. With one library version one source gives the same bytes. `sha256`
    and `size` of M04 describe the bytes that were stored, and a repeated delivery returns that placement
    without encoding again (A3 rule 2).
-2. The source may be JPEG, PNG or WEBP. Checks run in this order: a first frame above the pixel
+2. The source may be of a format of the imported `SOURCE_FORMATS` constant, and only those formats are decoded. Checks run in this order: a first frame above the pixel
    limit (width times height) fails with `too_many_pixels`, a source that cannot be decoded with
    `unreadable_image`, and a result above the Portal's read limit with `too_large`. A value equal
    to a limit passes. Only the first frame of an animated image is delivered.
 3. The photo moment is the first usable value of: EXIF `DateTimeOriginal`, EXIF `DateTime`, then
    the file's modification time. `DateTimeOriginal` uses `OffsetTimeOriginal` when that offset has
-   the form `+HH:MM` or `-HH:MM` with hours up to 14 and minutes up to 59; otherwise it is read in the time zone of the `timezone` field of the run settings (A8), and so is
+   the form `+HH:MM` or `-HH:MM` with hours up to the imported `CAMERA_OFFSET_MAX_HOURS` constant and minutes up to 59; otherwise it is read in the time zone of the `timezone` field of the run settings (A8), and so is
    `DateTime`. A camera value is unusable when it is malformed, when its UTC year
-   is before 2000, or when it is more than 24 hours after the file's modification time.
+   is before the imported `CAMERA_EARLIEST_YEAR` constant, or when it is more than the imported
+   `CAMERA_LATEST_AFTER_MODIFIED_HOURS` constant of hours after the file's modification time.
 4. The photo date is delivered as UTC without an offset, as the Client Portal stores it. A camera
    time with no offset is read in the time zone of that `timezone` field. A local time that occurs twice is the
    first occurrence, and a local time that does not exist is read with the offset in force before
@@ -281,12 +282,15 @@ A published photo is recognised without any change to the Portal.
    operation without a restart, and an operation that has already read the file finishes on that
    reading. A request refused before its connection check does not read the file. The agent replaces
    the file by writing a complete new file in the same folder and renaming it, so a reading sees the
-   complete old file or the complete new one. The file is judged whole before any project is looked
+   complete old file or the complete new one. The file has the form of = models.ConnectionsFile: one JSON object whose
+   only field `objects` maps the canonical spelling of each project id (rule 9) to a = models.ConnectionEntry,
+   which holds the fields of M01 other than `project_id`, each of its type. A missing or extra field, a value of
+   another type, or a key that is not the canonical spelling of a UUID breaks that form. The file is judged whole before any project is looked
    up, so the first condition that applies decides:
 
    | Order | Condition | Answer |
    |---|---|---|
-   | 1 | the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the record form, or the subfolders of any record break the form of rule 8 | the FOLDER_UNAVAILABLE member of = models.RefusalCode |
+   | 1 | the file is absent or cannot be read, is not UTF-8 or valid JSON, does not have the form of = models.ConnectionsFile, or the subfolders of any record break the form of rule 8 | the FOLDER_UNAVAILABLE member of = models.RefusalCode |
    | 2 | the file holds no record for the project | the UNKNOWN_PROJECT member of = models.RefusalCode |
    | 3 | the project's record is unconfirmed | the CONNECTION_NOT_CONFIRMED member of = models.RefusalCode |
 
@@ -334,8 +338,9 @@ A wrong folder cannot deliver photos of another client until the owner confirms 
 
 ### Normative rules
 
-1. A stored image is named only from the project id and the source hash:
-   `photos/<project_id>/<source_id>.jpg`. The reference must stay inside the binary store: its path,
+1. A stored image is named only from the project id and the source hash: its reference is the imported
+   `STORED_IMAGES_FOLDER` constant, the project id as one folder, and the source id followed by the imported
+   `STORED_IMAGE_SUFFIX` constant. The reference must stay inside the binary store: its path,
    resolved with the links of the binary store, must lie below the resolved store. When it does not, or when a link in the store cannot be resolved,
    the delivery is refused as a whole with the UNSAFE_REFERENCE member of = models.RefusalCode, an M08
    and not a failed photo, and no stored image and no record is written. A name built that way cannot
@@ -471,6 +476,14 @@ Policy values are constants of the data provider:
 | `PHOTO_PROGRESSIVE` | `bool` | false |
 | `PHOTO_SUBSAMPLING` | `str` | `4:2:0` |
 | `PHOTO_BACKGROUND` | `str` | `#ffffff` |
+| `SOURCE_FORMATS` | `tuple[str, ...]` | `JPEG`, `PNG`, `WEBP`, the format names of the image library |
+| `SOURCE_SIGNATURES` | `tuple[SourceSignatureRule, ...]` | the rows below |
+| `CAMERA_EARLIEST_YEAR` | `int` | 2000 |
+| `CAMERA_LATEST_AFTER_MODIFIED_HOURS` | `int` | 24 |
+| `CAMERA_OFFSET_MAX_HOURS` | `int` | 14 |
+| `STORED_IMAGES_FOLDER` | `str` | `photos` |
+| `STORED_IMAGE_SUFFIX` | `str` | `.jpg` |
+| `STORED_MEDIA_TYPE` | `str` | `image/jpeg` |
 | `REFUSAL_ANSWERS` | `tuple[RefusalAnswerRule, ...]` | one row per member of = models.RefusalCode, below |
 
 `REFUSAL_ANSWERS` holds exactly one row for each member of = models.RefusalCode, keyed by `code`; a
@@ -491,9 +504,21 @@ member without its row stops the build.
 
 Closed lists are enumerations: `= models.ScanStatus`, `= models.ObservationReason`,
 `= models.DateSource`, `= models.PlacementStatus`, `= models.PlacementFailure`,
-`= models.MarkStatus` and `= models.RefusalCode`. `RefusalCode` is `unauthorized`, `invalid_request`,
+`= models.MarkStatus`, `= models.RefusalCode` and `= models.HealthStatus`. `RefusalCode` is `unauthorized`, `invalid_request`,
 `unknown_project`, `connection_not_confirmed`, `folder_unavailable`, `state_unavailable`,
-`invalid_source_id`, `unsafe_reference`, `not_placed` and `publication_conflict`.
+`invalid_source_id`, `unsafe_reference`, `not_placed` and `publication_conflict`. `HealthStatus` is `ok`, the one
+answer of the health operation.
+
+`SOURCE_SIGNATURES` holds the signature of each format of `SOURCE_FORMATS`, keyed by `format` and `offset`; a
+format's signature is found when every row of that format finds its `signature`, written in lowercase
+hexadecimal, at its byte `offset` from the start of the file.
+
+| `format` | `offset` | `signature` |
+|---|---|---|
+| `JPEG` | 0 | `ffd8ff` |
+| `PNG` | 0 | `89504e470d0a1a0a` |
+| `WEBP` | 0 | `52494646` |
+| `WEBP` | 8 | `57454250` |
 
 `MAX_OUTPUT_BYTES` equals the Portal's `BINARY_MAX_READ_BYTES`. A change of that Portal value is
 released together with a change of this constant. The deliverer does not ask the Portal for it.
