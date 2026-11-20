@@ -115,8 +115,8 @@ A replaced file is scanned again by its new content (A3).
    without encoding again (A3 rule 2).
 2. The source may be of a format of the imported `SOURCE_FORMATS` constant. A scan decides membership by the
    signature alone (A1 order 6). Decoding is the image library's, restricted to the formats of that constant:
-   which of them it detects is the library's decision, and a source it cannot open as one of them is
-   `unreadable_image`. Checks run in this order: a first frame above the pixel
+   which of them it detects is the library's decision. A source it cannot open as one of them is
+   `unreadable_image`, whatever dimensions its header declares; for a source it opens the checks below apply. Checks run in this order: a first frame above the pixel
    limit (width times height) fails with `too_many_pixels`, a source that cannot be decoded with
    `unreadable_image`, and a result above the Portal's read limit with `too_large`. A value equal
    to a limit passes. Only the first frame of an animated image is delivered.
