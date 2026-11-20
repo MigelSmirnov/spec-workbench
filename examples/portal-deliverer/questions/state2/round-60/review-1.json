@@ -1,0 +1,130 @@
+{
+ "open_points": [
+  {
+   "subject": "A8 SOURCE_FORMATS and SOURCE_SIGNATURES",
+   "kind": "ambiguous_closed_set",
+   "text": "| `SOURCE_FORMATS` | `tuple[str, ...]` | `JPEG`, `PNG`, `WEBP`, the format names of the image library |",
+   "question": "Does `SOURCE_FORMATS` contain exactly JPEG, PNG and WEBP, or every format name known to the pinned image library; and must every member have at least one `SOURCE_SIGNATURES` row?",
+   "options": [
+    "Exactly JPEG, PNG and WEBP, each with one or more signature rows",
+    "Every format known to the image library, requiring additional signature rows",
+    "Every library format, with a format having no rows treated as not matched"
+   ],
+   "default_guess": "Use exactly JPEG, PNG and WEBP and require at least one signature row for every member.",
+   "witness": {
+    "initial": "A small non-empty BMP file is present in the photo folder; the image library knows BMP, but `SOURCE_SIGNATURES` has no BMP row.",
+    "events": [
+     "The owner asks the calling flow to scan the project.",
+     "The deliverer evaluates A1 order 6."
+    ],
+    "outcomes": [
+     "An implementation reading the value as exactly JPEG, PNG and WEBP reports `rejected` with `unsupported_format`.",
+     "An implementation reading it as all image-library formats includes BMP; with no BMP rows, it may treat “every row” as vacuously satisfied and report the file `ready`."
+    ],
+    "observer": "The owner through the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 allowed decoded formats",
+   "kind": "missing_refusal_condition",
+   "text": "The source may be of a format of the imported `SOURCE_FORMATS` constant, and only those formats are decoded.",
+   "question": "How is the decoded format determined and what exact outcome applies when a file passes A1's signature check but the image library identifies or successfully decodes it as a format outside `SOURCE_FORMATS`?",
+   "options": [
+    "Fail the photo with `unreadable_image`",
+    "Fail the photo with `unsupported_format`",
+    "Treat the signature match as the format decision and accept any successful decode"
+   ],
+   "default_guess": "Check the image library's identified format against `SOURCE_FORMATS` and fail with `unreadable_image`, because A2 exposes no `unsupported_format` result.",
+   "witness": {
+    "initial": "A crafted polyglot begins with an allowed signature but the pinned image library identifies and decodes it as a format outside `SOURCE_FORMATS`.",
+    "events": [
+     "The owner selects the file for delivery.",
+     "A1 order 6 accepts its leading signature.",
+     "The image library identifies and decodes the source."
+    ],
+    "outcomes": [
+     "One implementation refuses the photo because its decoded format is outside `SOURCE_FORMATS`.",
+     "Another implementation accepts it because the signature admission check passed and decoding succeeded."
+    ],
+    "observer": "The calling flow, and ultimately the Portal binary store"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "models.ConnectionsFile and models.ConnectionEntry",
+   "kind": "undefined_model_reference",
+   "text": "The file has the form of = models.ConnectionsFile: one JSON object whose\n   only field `objects` maps the canonical spelling of each project id (rule 9) to a = models.ConnectionEntry,\n   which holds the fields of M01 other than `project_id`, each of its type.",
+   "question": "Where are `ConnectionsFile` and `ConnectionEntry` defined, and what exact JSON representation does each non-JSON domain type—especially M01's `root: path`—use?",
+   "options": [
+    "Introduce the two named model schemas and encode paths as JSON strings",
+    "Validate a raw JSON mapping directly against M01-derived fields without creating those schemas",
+    "Use a structured path representation rather than a string"
+   ],
+   "default_guess": "Introduce the two named schemas and represent every path as a JSON string.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 connections-file parsing",
+   "kind": "duplicate_key_policy",
+   "text": "one JSON object whose\n   only field `objects` maps the canonical spelling of each project id (rule 9) to a = models.ConnectionEntry",
+   "question": "Are duplicate JSON member names—including duplicate `objects` fields or duplicate project-id keys—rejected as a broken `ConnectionsFile`, or does normal JSON parsing choose one value?",
+   "options": [
+    "Reject every duplicate member name with `FOLDER_UNAVAILABLE`",
+    "Keep the last occurrence",
+    "Keep the first occurrence"
+   ],
+   "default_guess": "Reject every duplicate member name as a malformed connections file.",
+   "witness": {
+    "initial": "The connections file contains the same canonical project-id key twice, once with a confirmed connection and once with an unconfirmed connection.",
+    "events": [
+     "The owner requests a scan for that project.",
+     "The service reads and validates the connections file at the connection check."
+    ],
+    "outcomes": [
+     "A duplicate-rejecting implementation answers `FOLDER_UNAVAILABLE`.",
+     "A last-value implementation loads the unconfirmed record and answers `CONNECTION_NOT_CONFIRMED`; reversing the entries can instead allow the scan."
+    ],
+    "observer": "The calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 STORED_MEDIA_TYPE and M04 media_type",
+   "kind": "unwired_decided_value",
+   "text": "| `STORED_MEDIA_TYPE` | `str` | `image/jpeg` |",
+   "question": "Must every new M04 `PhotoPlacement.media_type` be set from the imported `STORED_MEDIA_TYPE` constant, and must replay validate or merely return the stored value?",
+   "options": [
+    "Set every new placement's `media_type` from the imported constant and validate persisted records normally",
+    "Derive the media type independently from the encoded bytes or filename",
+    "Leave the constant unused and let later contracts choose the value"
+   ],
+   "default_guess": "Set every new placement's `media_type` to the imported `STORED_MEDIA_TYPE` constant; replay returns the validated stored placement.",
+   "witness": {
+    "initial": "A valid source is delivered and encoded as JPEG.",
+    "events": [
+     "The deliverer constructs M04 after storing the prepared image.",
+     "The calling flow reads the returned placement."
+    ],
+    "outcomes": [
+     "One implementation writes `media_type` as `image/jpeg` from `STORED_MEDIA_TYPE`.",
+     "Another derives a different spelling such as `image/jpg`, or has no specified value to put in the required field."
+    ],
+    "observer": "The calling flow and the Portal publication integration"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 OffsetTimeOriginal validation",
+   "kind": "standard_violation",
+   "text": "`DateTimeOriginal` uses `OffsetTimeOriginal` when that offset has\n   the form `+HH:MM` or `-HH:MM` with hours up to the imported `CAMERA_OFFSET_MAX_HOURS` constant and minutes up to 59; otherwise it is read in the time zone of the `timezone` field of the run settings (A8), and so is\n   `DateTime`.",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The minute threshold `59` must become a value delivered through one of the three permitted paths, such as an imported data-provider constant named by this rule.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A8 SOURCE_FORMATS and SOURCE_SIGNATURES\",\"kind\":\"ambiguous_closed_set\",\"text\":\"| `SOURCE_FORMATS` | `tuple[str, ...]` | `JPEG`, `PNG`, `WEBP`, the format names of the image library |\",\"question\":\"Does `SOURCE_FORMATS` contain exactly JPEG, PNG and WEBP, or every format name known to the pinned image library; and must every member have at least one `SOURCE_SIGNATURES` row?\",\"options\":[\"Exactly JPEG, PNG and WEBP, each with one or more signature rows\",\"Every format known to the image library, requiring additional signature rows\",\"Every library format, with a format having no rows treated as not matched\"],\"default_guess\":\"Use exactly JPEG, PNG and WEBP and require at least one signature row for every member.\",\"witness\":{\"initial\":\"A small non-empty BMP file is present in the photo folder; the image library knows BMP, but `SOURCE_SIGNATURES` has no BMP row.\",\"events\":[\"The owner asks the calling flow to scan the project.\",\"The deliverer evaluates A1 order 6.\"],\"outcomes\":[\"An implementation reading the value as exactly JPEG, PNG and WEBP reports `rejected` with `unsupported_format`.\",\"An implementation reading it as all image-library formats includes BMP; with no BMP rows, it may treat “every row” as vacuously satisfied and report the file `ready`.\"],\"observer\":\"The owner through the calling flow\"}},{\"subject\":\"A2 allowed decoded formats\",\"kind\":\"missing_refusal_condition\",\"text\":\"The source may be of a format of the imported `SOURCE_FORMATS` constant, and only those formats are decoded.\",\"question\":\"How is the decoded format determined and what exact outcome applies when a file passes A1's signature check but the image library identifies or successfully decodes it as a format outside `SOURCE_FORMATS`?\",\"options\":[\"Fail the photo with `unreadable_image`\",\"Fail the photo with `unsupported_format`\",\"Treat the signature match as the format decision and accept any successful decode\"],\"default_guess\":\"Check the image library's identified format against `SOURCE_FORMATS` and fail with `unreadable_image`, because A2 exposes no `unsupported_format` result.\",\"witness\":{\"initial\":\"A crafted polyglot begins with an allowed signature but the pinned image library identifies and decodes it as a format outside `SOURCE_FORMATS`.\",\"events\":[\"The owner selects the file for delivery.\",\"A1 order 6 accepts its leading signature.\",\"The image library identifies and decodes the source.\"],\"outcomes\":[\"One implementation refuses the photo because its decoded format is outside `SOURCE_FORMATS`.\",\"Another implementation accepts it because the signature admission check passed and decoding succeeded.\"],\"observer\":\"The calling flow, and ultimately the Portal binary store\"}},{\"subject\":\"models.ConnectionsFile and models.ConnectionEntry\",\"kind\":\"undefined_model_reference\",\"text\":\"The file has the form of = models.ConnectionsFile: one JSON object whose\\n   only field `objects` maps the canonical spelling of each project id (rule 9) to a = models.ConnectionEntry,\\n   which holds the fields of M01 other than `project_id`, each of its type.\",\"question\":\"Where are `ConnectionsFile` and `ConnectionEntry` defined, and what exact JSON representation does each non-JSON domain type—especially M01's `root: path`—use?\",\"options\":[\"Introduce the two named model schemas and encode paths as JSON strings\",\"Validate a raw JSON mapping directly against M01-derived fields without creating those schemas\",\"Use a structured path representation rather than a string\"],\"default_guess\":\"Introduce the two named schemas and represent every path as a JSON string.\"},{\"subject\":\"A5 connections-file parsing\",\"kind\":\"duplicate_key_policy\",\"text\":\"one JSON object whose\\n   only field `objects` maps the canonical spelling of each project id (rule 9) to a = models.ConnectionEntry\",\"question\":\"Are duplicate JSON member names—including duplicate `objects` fields or duplicate project-id keys—rejected as a broken `ConnectionsFile`, or does normal JSON parsing choose one value?\",\"options\":[\"Reject every duplicate member name with `FOLDER_UNAVAILABLE`\",\"Keep the last occurrence\",\"Keep the first occurrence\"],\"default_guess\":\"Reject every duplicate member name as a malformed connections file.\",\"witness\":{\"initial\":\"The connections file contains the same canonical project-id key twice, once with a confirmed connection and once with an unconfirmed connection.\",\"events\":[\"The owner requests a scan for that project.\",\"The service reads and validates the connections file at the connection check.\"],\"outcomes\":[\"A duplicate-rejecting implementation answers `FOLDER_UNAVAILABLE`.\",\"A last-value implementation loads the unconfirmed record and answers `CONNECTION_NOT_CONFIRMED`; reversing the entries can instead allow the scan.\"],\"observer\":\"The calling flow\"}},{\"subject\":\"A8 STORED_MEDIA_TYPE and M04 media_type\",\"kind\":\"unwired_decided_value\",\"text\":\"| `STORED_MEDIA_TYPE` | `str` | `image/jpeg` |\",\"question\":\"Must every new M04 `PhotoPlacement.media_type` be set from the imported `STORED_MEDIA_TYPE` constant, and must replay validate or merely return the stored value?\",\"options\":[\"Set every new placement's `media_type` from the imported constant and validate persisted records normally\",\"Derive the media type independently from the encoded bytes or filename\",\"Leave the constant unused and let later contracts choose the value\"],\"default_guess\":\"Set every new placement's `media_type` to the imported `STORED_MEDIA_TYPE` constant; replay returns the validated stored placement.\",\"witness\":{\"initial\":\"A valid source is delivered and encoded as JPEG.\",\"events\":[\"The deliverer constructs M04 after storing the prepared image.\",\"The calling flow reads the returned placement.\"],\"outcomes\":[\"One implementation writes `media_type` as `image/jpeg` from `STORED_MEDIA_TYPE`.\",\"Another derives a different spelling such as `image/jpg`, or has no specified value to put in the required field.\"],\"observer\":\"The calling flow and the Portal publication integration\"}},{\"subject\":\"A2 OffsetTimeOriginal validation\",\"kind\":\"standard_violation\",\"text\":\"`DateTimeOriginal` uses `OffsetTimeOriginal` when that offset has\\n   the form `+HH:MM` or `-HH:MM` with hours up to the imported `CAMERA_OFFSET_MAX_HOURS` constant and minutes up to 59; otherwise it is read in the time zone of the `timezone` field of the run settings (A8), and so is\\n   `DateTime`.\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь\\nвыбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The minute threshold `59` must become a value delivered through one of the three permitted paths, such as an imported data-provider constant named by this rule.\"}]}",
+ "set_aside": []
+}

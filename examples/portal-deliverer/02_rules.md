@@ -88,7 +88,7 @@ file may still fail when it is delivered.
 ### Required tests
 
 - INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).
-- INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).
+- INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock, and a trace of every file the process opens while the delivery runs shows no opening of the named file, of a folder past the segment that fails or of a link's target (`test_a_name_a_scan_would_not_report_is_not_delivered`).
 - INV-18: a conflict copy in the folder and in a subfolder, each with the mark in lower, upper and mixed case, is absent from the scan (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Only the letters A to Z are folded (`test_only_ascii_letters_fold_in_the_conflict_mark`). A real Syncthing conflict leaves its copy unreported while the photo itself is still reported (`e2e_local_syncthing.py`, `a real Syncthing conflict copy is not offered`).
 
 ### Consequence
@@ -111,9 +111,12 @@ A replaced file is scanned again by its new content (A3).
    colour; and `Image.save` writes a JPEG with the imported constants `PHOTO_QUALITY` as
    `quality`, `PHOTO_OPTIMIZE` as `optimize`, `PHOTO_PROGRESSIVE` as `progressive` and
    `PHOTO_SUBSAMPLING` as `subsampling`, with no EXIF, colour profile or other metadata. With one library version one source gives the same bytes. `sha256`
-   and `size` of M04 describe the bytes that were stored, and a repeated delivery returns that placement
+   and `size` of M04 describe the bytes that were stored, its `media_type` is the imported `STORED_MEDIA_TYPE` constant, and a repeated delivery returns that placement
    without encoding again (A3 rule 2).
-2. The source may be of a format of the imported `SOURCE_FORMATS` constant, and only those formats are decoded. Checks run in this order: a first frame above the pixel
+2. The source may be of a format of the imported `SOURCE_FORMATS` constant. A scan decides membership by the
+   signature alone (A1 order 6). Decoding is the image library's, restricted to the formats of that constant:
+   which of them it detects is the library's decision, and a source it cannot open as one of them is
+   `unreadable_image`. Checks run in this order: a first frame above the pixel
    limit (width times height) fails with `too_many_pixels`, a source that cannot be decoded with
    `unreadable_image`, and a result above the Portal's read limit with `too_large`. A value equal
    to a limit passes. Only the first frame of an animated image is delivered.
@@ -285,7 +288,8 @@ A published photo is recognised without any change to the Portal.
    complete old file or the complete new one. The file has the form of = models.ConnectionsFile: one JSON object whose
    only field `objects` maps the canonical spelling of each project id (rule 9) to a = models.ConnectionEntry,
    which holds the fields of M01 other than `project_id`, each of its type. A missing or extra field, a value of
-   another type, or a key that is not the canonical spelling of a UUID breaks that form. The file is judged whole before any project is looked
+   another type, a key that is not the canonical spelling of a UUID, or a member name repeated within one JSON
+   object anywhere in the file breaks that form. The file is judged whole before any project is looked
    up, so the first condition that applies decides:
 
    | Order | Condition | Answer |
@@ -506,8 +510,8 @@ Closed lists are enumerations: `= models.ScanStatus`, `= models.ObservationReaso
 `= models.DateSource`, `= models.PlacementStatus`, `= models.PlacementFailure`,
 `= models.MarkStatus`, `= models.RefusalCode` and `= models.HealthStatus`. `RefusalCode` is `unauthorized`, `invalid_request`,
 `unknown_project`, `connection_not_confirmed`, `folder_unavailable`, `state_unavailable`,
-`invalid_source_id`, `unsafe_reference`, `not_placed` and `publication_conflict`. `HealthStatus` is `ok`, the one
-answer of the health operation.
+`invalid_source_id`, `unsafe_reference`, `not_placed` and `publication_conflict`. `HealthStatus` has the one member
+OK, value `ok`, the answer of the health operation.
 
 `SOURCE_SIGNATURES` holds the signature of each format of `SOURCE_FORMATS`, keyed by `format` and `offset`; a
 format's signature is found when every row of that format finds its `signature`, written in lowercase

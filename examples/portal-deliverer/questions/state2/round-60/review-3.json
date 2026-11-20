@@ -1,0 +1,155 @@
+{
+ "open_points": [
+  {
+   "subject": "A2 source-format enforcement",
+   "kind": "undefined_check",
+   "text": "The source may be of a format of the imported `SOURCE_FORMATS` constant, and only those formats are decoded.",
+   "question": "Is membership decided from the signatures matched under A1, from the image library's detected format, or from both, and what failure is returned when they disagree?",
+   "options": [
+    "A1 signature membership alone authorizes decoding",
+    "The decoder-reported format must also belong to SOURCE_FORMATS; disagreement fails with UNREADABLE_IMAGE",
+    "Signature and decoder format must agree; disagreement fails with UNSUPPORTED_FORMAT"
+   ],
+   "default_guess": "Require an A1 signature match and a decoder-reported format in SOURCE_FORMATS, treating a mismatch as UNREADABLE_IMAGE.",
+   "witness": {
+    "initial": "A file begins with all signature bytes required for an allowed format, but the pinned image library identifies and can decode it as a different format not in SOURCE_FORMATS.",
+    "events": [
+     "The owner requests delivery of the file after it was reported ready.",
+     "The deliverer opens the image and the library reports the different format."
+    ],
+    "outcomes": [
+     "The file is decoded and placed because its A1 signature matched an allowed format.",
+     "The delivery fails because the decoder-reported format is not allowed."
+    ],
+    "observer": "The owner sees PLACED in one implementation and a failed delivery in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 ConnectionsFile JSON form",
+   "kind": "duplicate_key_policy",
+   "text": "one JSON object whose only field `objects` maps the canonical spelling of each project id (rule 9) to a = models.ConnectionEntry",
+   "question": "Must JSON containing duplicate `objects` fields or duplicate project-id keys be rejected, or may ordinary JSON parsing resolve duplicates before the form is validated?",
+   "options": [
+    "Reject every duplicate JSON object key as FOLDER_UNAVAILABLE",
+    "Accept the parser's last occurrence",
+    "Accept the parser's first occurrence"
+   ],
+   "default_guess": "Reject duplicate keys and treat the whole connections file as unavailable.",
+   "witness": {
+    "initial": "The connections file is valid JSON text containing the same canonical project-id key twice, once confirmed and once unconfirmed.",
+    "events": [
+     "The agent replaces the connections file with that text.",
+     "The owner starts a scan for the duplicated project."
+    ],
+    "outcomes": [
+     "The whole file is refused with FOLDER_UNAVAILABLE because its mapping is not unambiguous.",
+     "The JSON parser keeps one occurrence, and the scan either proceeds or answers CONNECTION_NOT_CONFIRMED."
+    ],
+    "observer": "The owner and calling flow see different refusal or success results."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A6 stored-image reference",
+   "kind": "representation_unspecified",
+   "text": "its reference is the imported `STORED_IMAGES_FOLDER` constant, the project id as one folder, and the source id followed by the imported `STORED_IMAGE_SUFFIX` constant",
+   "question": "What exact string representation is stored in M04.file_ref and returned to the Portal: is it a relative POSIX reference with `/` separators, may it use host path separators, and may it have a leading separator?",
+   "options": [
+    "`photos/<project_id>/<source_id>.jpg` with `/` separators and no leading slash",
+    "A host-native relative path",
+    "An absolute or root-prefixed store path"
+   ],
+   "default_guess": "Use a relative POSIX reference with `/` separators and no leading slash.",
+   "witness": {
+    "initial": "A placement is made on a host whose native path separator is not `/`.",
+    "events": [
+     "The deliverer stores the prepared image.",
+     "The calling flow sends the returned file_ref to the Portal."
+    ],
+    "outcomes": [
+     "file_ref is `photos/<project_id>/<source_id>.jpg` and the Portal resolves it as a binary-store reference.",
+     "file_ref contains host-native separators and the Portal treats it as a different or invalid reference."
+    ],
+    "observer": "The calling flow and Portal see whether the placed binary can be read."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M04 media_type",
+   "kind": "value_not_connected",
+   "text": "| `STORED_MEDIA_TYPE` | `str` | `image/jpeg` |",
+   "question": "Does M04.media_type have to be populated from the imported STORED_MEDIA_TYPE constant, or is the implementation expected to infer or hard-code a value from A2's JPEG encoding rule?",
+   "options": [
+    "Always use the imported STORED_MEDIA_TYPE constant",
+    "Hard-code `image/jpeg` from the JPEG rule",
+    "Derive the media type from the encoder or stored suffix"
+   ],
+   "default_guess": "Populate M04.media_type from the imported STORED_MEDIA_TYPE constant.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-01 Required tests",
+   "kind": "invariant_test_scope",
+   "text": "INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).",
+   "question": "Does INV-01 protect only file membership, bytes, modification times and modes, or must its Required tests also show that directories and other metadata covered by “anything” are unchanged?",
+   "options": [
+    "Narrow INV-01 to the properties named by the Required tests item",
+    "Expand the Required tests item to cover directories and all protected metadata",
+    "Define an explicit closed list of source-folder properties that operations may not change"
+   ],
+   "default_guess": "Define a closed list including entries, bytes, modification times and modes, and word INV-01 to match it.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-02 Required tests",
+   "kind": "invariant_test_observation",
+   "text": "INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).",
+   "question": "What must the test observe to prove that no failing path is opened, rather than merely proving the returned failure and lack of durable writes?",
+   "options": [
+    "Instrument path opening and assert that the prohibited target is never opened",
+    "Make the invariant only about the failure result and durable writes",
+    "Use an external target whose read would produce an independently observable effect"
+   ],
+   "default_guess": "Instrument filesystem opening and assert that no segment or target forbidden by condition 1 is opened for reading.",
+   "witness": {
+    "initial": "A requested name traverses a symbolic link to a readable regular file outside the photo folder, and no placement exists.",
+    "events": [
+     "The owner requests delivery by that name.",
+     "One implementation opens and reads the external target before returning NOT_READY_OR_ABSENT; another rejects before opening it."
+    ],
+    "outcomes": [
+     "The stated Required test passes because the answer is NOT_READY_OR_ABSENT and only the lock was added, despite the external read.",
+     "The same test passes and no external path was opened."
+    ],
+    "observer": "A filesystem-open probe or the owner of the external file can see the difference; the currently described assertions cannot."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13 Required tests",
+   "kind": "invariant_test_paths",
+   "text": "INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).",
+   "question": "Must the Required tests cover the clock count for marks refused before the reading point, marks refused after it, replayed marks and conflicting marks, so that “at most once” is shown on every mark path?",
+   "options": [
+    "Test only a successful new mark",
+    "Test zero reads for every pre-read refusal and exactly one for successful, post-read-refused and replayed mark paths",
+    "Test only that no individual mark path reads more than once, without enforcing the specified zero-versus-one boundary"
+   ],
+   "default_guess": "Add boundary-path tests: zero before the specified point and exactly one after it, including replay and post-read refusals.",
+   "unit": "?"
+  },
+  {
+   "subject": "A8 HealthStatus member",
+   "kind": "standard_violation",
+   "text": "`HealthStatus` is `ok`, the one\nanswer of the health operation.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Name the answer as the OK member of = models.HealthStatus, optionally adding its value `ok`, instead of naming the member only by its value.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A2 source-format enforcement\",\"kind\":\"undefined_check\",\"text\":\"The source may be of a format of the imported `SOURCE_FORMATS` constant, and only those formats are decoded.\",\"question\":\"Is membership decided from the signatures matched under A1, from the image library's detected format, or from both, and what failure is returned when they disagree?\",\"options\":[\"A1 signature membership alone authorizes decoding\",\"The decoder-reported format must also belong to SOURCE_FORMATS; disagreement fails with UNREADABLE_IMAGE\",\"Signature and decoder format must agree; disagreement fails with UNSUPPORTED_FORMAT\"],\"default_guess\":\"Require an A1 signature match and a decoder-reported format in SOURCE_FORMATS, treating a mismatch as UNREADABLE_IMAGE.\",\"witness\":{\"initial\":\"A file begins with all signature bytes required for an allowed format, but the pinned image library identifies and can decode it as a different format not in SOURCE_FORMATS.\",\"events\":[\"The owner requests delivery of the file after it was reported ready.\",\"The deliverer opens the image and the library reports the different format.\"],\"outcomes\":[\"The file is decoded and placed because its A1 signature matched an allowed format.\",\"The delivery fails because the decoder-reported format is not allowed.\"],\"observer\":\"The owner sees PLACED in one implementation and a failed delivery in the other.\"}},{\"subject\":\"A5 ConnectionsFile JSON form\",\"kind\":\"duplicate_key_policy\",\"text\":\"one JSON object whose only field `objects` maps the canonical spelling of each project id (rule 9) to a = models.ConnectionEntry\",\"question\":\"Must JSON containing duplicate `objects` fields or duplicate project-id keys be rejected, or may ordinary JSON parsing resolve duplicates before the form is validated?\",\"options\":[\"Reject every duplicate JSON object key as FOLDER_UNAVAILABLE\",\"Accept the parser's last occurrence\",\"Accept the parser's first occurrence\"],\"default_guess\":\"Reject duplicate keys and treat the whole connections file as unavailable.\",\"witness\":{\"initial\":\"The connections file is valid JSON text containing the same canonical project-id key twice, once confirmed and once unconfirmed.\",\"events\":[\"The agent replaces the connections file with that text.\",\"The owner starts a scan for the duplicated project.\"],\"outcomes\":[\"The whole file is refused with FOLDER_UNAVAILABLE because its mapping is not unambiguous.\",\"The JSON parser keeps one occurrence, and the scan either proceeds or answers CONNECTION_NOT_CONFIRMED.\"],\"observer\":\"The owner and calling flow see different refusal or success results.\"}},{\"subject\":\"A6 stored-image reference\",\"kind\":\"representation_unspecified\",\"text\":\"its reference is the imported `STORED_IMAGES_FOLDER` constant, the project id as one folder, and the source id followed by the imported `STORED_IMAGE_SUFFIX` constant\",\"question\":\"What exact string representation is stored in M04.file_ref and returned to the Portal: is it a relative POSIX reference with `/` separators, may it use host path separators, and may it have a leading separator?\",\"options\":[\"`photos/<project_id>/<source_id>.jpg` with `/` separators and no leading slash\",\"A host-native relative path\",\"An absolute or root-prefixed store path\"],\"default_guess\":\"Use a relative POSIX reference with `/` separators and no leading slash.\",\"witness\":{\"initial\":\"A placement is made on a host whose native path separator is not `/`.\",\"events\":[\"The deliverer stores the prepared image.\",\"The calling flow sends the returned file_ref to the Portal.\"],\"outcomes\":[\"file_ref is `photos/<project_id>/<source_id>.jpg` and the Portal resolves it as a binary-store reference.\",\"file_ref contains host-native separators and the Portal treats it as a different or invalid reference.\"],\"observer\":\"The calling flow and Portal see whether the placed binary can be read.\"}},{\"subject\":\"M04 media_type\",\"kind\":\"value_not_connected\",\"text\":\"| `STORED_MEDIA_TYPE` | `str` | `image/jpeg` |\",\"question\":\"Does M04.media_type have to be populated from the imported STORED_MEDIA_TYPE constant, or is the implementation expected to infer or hard-code a value from A2's JPEG encoding rule?\",\"options\":[\"Always use the imported STORED_MEDIA_TYPE constant\",\"Hard-code `image/jpeg` from the JPEG rule\",\"Derive the media type from the encoder or stored suffix\"],\"default_guess\":\"Populate M04.media_type from the imported STORED_MEDIA_TYPE constant.\"},{\"subject\":\"INV-01 Required tests\",\"kind\":\"invariant_test_scope\",\"text\":\"INV-01: after a scan, a placement, a repeated placement and a mark, the source folder holds the same files with the same bytes, modification times and modes (`test_no_operation_changes_the_source_folder`).\",\"question\":\"Does INV-01 protect only file membership, bytes, modification times and modes, or must its Required tests also show that directories and other metadata covered by “anything” are unchanged?\",\"options\":[\"Narrow INV-01 to the properties named by the Required tests item\",\"Expand the Required tests item to cover directories and all protected metadata\",\"Define an explicit closed list of source-folder properties that operations may not change\"],\"default_guess\":\"Define a closed list including entries, bytes, modification times and modes, and word INV-01 to match it.\"},{\"subject\":\"INV-02 Required tests\",\"kind\":\"invariant_test_observation\",\"text\":\"INV-02: for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure and add no file except the project lock (`test_a_name_a_scan_would_not_report_is_not_delivered`).\",\"question\":\"What must the test observe to prove that no failing path is opened, rather than merely proving the returned failure and lack of durable writes?\",\"options\":[\"Instrument path opening and assert that the prohibited target is never opened\",\"Make the invariant only about the failure result and durable writes\",\"Use an external target whose read would produce an independently observable effect\"],\"default_guess\":\"Instrument filesystem opening and assert that no segment or target forbidden by condition 1 is opened for reading.\",\"witness\":{\"initial\":\"A requested name traverses a symbolic link to a readable regular file outside the photo folder, and no placement exists.\",\"events\":[\"The owner requests delivery by that name.\",\"One implementation opens and reads the external target before returning NOT_READY_OR_ABSENT; another rejects before opening it.\"],\"outcomes\":[\"The stated Required test passes because the answer is NOT_READY_OR_ABSENT and only the lock was added, despite the external read.\",\"The same test passes and no external path was opened.\"],\"observer\":\"A filesystem-open probe or the owner of the external file can see the difference; the currently described assertions cannot.\"}},{\"subject\":\"INV-13 Required tests\",\"kind\":\"invariant_test_paths\",\"text\":\"INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer (`test_only_the_mark_reads_the_clock`), and `marked_at` equals that reading (`test_a_marked_photo_is_reported_as_published`).\",\"question\":\"Must the Required tests cover the clock count for marks refused before the reading point, marks refused after it, replayed marks and conflicting marks, so that “at most once” is shown on every mark path?\",\"options\":[\"Test only a successful new mark\",\"Test zero reads for every pre-read refusal and exactly one for successful, post-read-refused and replayed mark paths\",\"Test only that no individual mark path reads more than once, without enforcing the specified zero-versus-one boundary\"],\"default_guess\":\"Add boundary-path tests: zero before the specified point and exactly one after it, including replay and post-read refusals.\"},{\"subject\":\"A8 HealthStatus member\",\"kind\":\"standard_violation\",\"text\":\"`HealthStatus` is `ok`, the one\\nanswer of the health operation.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Name the answer as the OK member of = models.HealthStatus, optionally adding its value `ok`, instead of naming the member only by its value.\"}]}",
+ "set_aside": []
+}
