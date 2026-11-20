@@ -1,0 +1,173 @@
+{
+ "open_points": [
+  {
+   "subject": "A4 rule 2 ownership",
+   "kind": "missing_owner",
+   "text": "| A4 | rule 2, the form of `photo_id` and its lowercase hyphenated spelling | `deliverer_router` |\n| A4 | every other rule | `photo_delivery` |",
+   "question": "Which module owns the remaining decisions of A4 rule 2, including the ordering of the connection and placement checks?",
+   "options": [
+    "`photo_delivery` owns the remainder of A4 rule 2",
+    "`deliverer_router` owns all of A4 rule 2",
+    "Split the remainder among the modules that perform each check"
+   ],
+   "default_guess": "Make `photo_delivery` own every part of A4 rule 2 after the router has validated the request form and `photo_id`.",
+   "unit": "?"
+  },
+  {
+   "subject": "request-form ownership known by photo_delivery",
+   "kind": "contradiction",
+   "text": "- `system_clock` as its source of the current time, A3 and A4 without the two request forms given to `deliverer_api` above, rule 4 of A6, rule 2 of A7,\n  orders 7 to 9 of A1, and the parts of rules 9 and 10 of A5 given to it above.",
+   "question": "Are the two request forms given to `deliverer_router`, as the changed ownership sections say, or to `deliverer_api` as this passage says?",
+   "options": [
+    "The forms belong to `deliverer_router`",
+    "The forms belong to `deliverer_api`"
+   ],
+   "default_guess": "Replace `deliverer_api` with `deliverer_router`.",
+   "witness": {
+    "initial": "A delivery request has a malformed body.",
+    "events": [
+     "`deliverer_router` receives the request and must decide which module owns validation of its form."
+    ],
+    "outcomes": [
+     "The router validates the form and asks `deliverer_api` only to check the token and project id.",
+     "The router passes the request to `deliverer_api`, which validates the form despite its stated prohibition on reading a request body."
+    ],
+    "observer": "The caller sees which component produces the INVALID_REQUEST refusal, and dependency generation sees different imports."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "scope of M08 refusal conversion",
+   "kind": "contradiction",
+   "text": "`AuthenticationRequired`, every `DelivererError` and a request whose\nbody or form the framework refuses are each answered by `refusal_answer` of `deliverer_api`, so every refusal\nleaves as M08 (A5 rules 1, 9 and 10).",
+   "question": "Does “every refusal” mean only whole-operation and framework refusals, or does it include `Rejected`, which the module text and A3 turn into an M06 per-photo failure?",
+   "options": [
+    "Only `AuthenticationRequired`, `DelivererError`, and framework request refusals become M08; `Rejected` becomes M06",
+    "Every exception described as a refusal, including `Rejected`, becomes M08"
+   ],
+   "default_guess": "Limit the sentence to whole-operation and framework refusals; keep `Rejected` as an M06 failure.",
+   "witness": {
+    "initial": "An authenticated delivery names a source that passes its signature check but cannot be decoded.",
+    "events": [
+     "`photo_preparation` rejects the file.",
+     "`photo_delivery` catches or propagates that rejection."
+    ],
+    "outcomes": [
+     "The delivery returns M06 with status `failed` and reason `unreadable_image`.",
+     "The router treats the rejection as a refusal and returns M08."
+    ],
+    "observer": "The calling flow sees a per-photo failure in one implementation and a whole-operation refusal in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public surface of deliverer_api",
+   "kind": "undeclared_exports",
+   "text": "| `deliverer_router` | `deliverer_api` | `AuthenticationRequired`, `answer_health`, `check_token`, `parse_project_id`, `refusal_answer` |",
+   "question": "Must `check_token`, `parse_project_id`, and `refusal_answer` be declared public capabilities of `deliverer_api`, or is some other export mechanism intended despite its candidate capability list containing only `answer_health`?",
+   "options": [
+    "Add the three functions to `deliverer_api`'s public capabilities and export `AuthenticationRequired`",
+    "Keep only `answer_health` public and move the other behavior behind another declared capability",
+    "Treat dependency-table symbols as implicitly public even when absent from Candidate public capabilities"
+   ],
+   "default_guess": "Declare all three functions as public capabilities and `AuthenticationRequired` as an exported exception.",
+   "witness": {
+    "initial": "The generated router module is compiled against the declared module surfaces.",
+    "events": [
+     "The router imports `check_token`, `parse_project_id`, and `refusal_answer` from `deliverer_api`."
+    ],
+    "outcomes": [
+     "Generation exposes the dependency-table symbols and the router imports successfully.",
+     "Generation exposes only the listed candidate capability `answer_health`, so the router cannot import its required helpers."
+    ],
+    "observer": "The generator or service startup sees an import success versus an import failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-11 ownership after routes moved to deliverer_router",
+   "kind": "owner_cannot_enforce",
+   "text": "`deliverer_api` owns INV-11 because every refusal answer is built by its `refusal_answer`: a refusal carries\nonly its code and a fixed message. `photo_delivery` supplies path-free results, and no module holds a client for any\noutbound call.",
+   "question": "Which module owns the whole of INV-11 now that successful results go directly from `photo_delivery` through `deliverer_router` and only refusal answers pass through `deliverer_api`?",
+   "options": [
+    "Move the answer-boundary ownership to `deliverer_router` and retain contributing obligations in `deliverer_api` and `photo_delivery`",
+    "Route successful answers through `deliverer_api` so it can remain the owner",
+    "Split INV-11 into separately owned refusal-content, successful-result, and outbound-client invariants"
+   ],
+   "default_guess": "Split INV-11 into separately owned obligations, with the router owning the complete response boundary.",
+   "witness": {
+    "initial": "A successful delivery result accidentally contains a server path.",
+    "events": [
+     "`deliverer_router` calls `photo_delivery` directly.",
+     "The successful result is serialized without calling `refusal_answer` or another `deliverer_api` capability."
+    ],
+    "outcomes": [
+     "Treating `deliverer_api` as owner implies the result must pass through an undeclared API boundary that removes the path.",
+     "Following the declared dependencies returns the result directly and relies solely on `photo_delivery` to have removed the path."
+    ],
+    "observer": "The calling flow either receives or does not receive the server path."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ServiceExit outcome and process exit status",
+   "kind": "missing_owner",
+   "text": "- the start of the service: the context of the operations and the token file;\n- listening on the loopback interface only.",
+   "question": "Which module owns observing process termination, choosing START_FAILED, SERVED, or SERVER_FAILED, looking up `EXIT_STATUSES`, and returning that status?",
+   "options": [
+    "`deliverer_service` owns the complete ServiceExit lifecycle and exit-status selection",
+    "A generated server/backend module owns termination classification and reports it to `deliverer_service`",
+    "Another explicit process-runner module owns it"
+   ],
+   "default_guess": "Make `deliverer_service` own termination classification and applying `EXIT_STATUSES`.",
+   "witness": {
+    "initial": "The server has reported startup complete and is accepting connections.",
+    "events": [
+     "A SIGTERM begins shutdown.",
+     "The web server reports an error during shutdown."
+    ],
+    "outcomes": [
+     "The process is classified SERVER_FAILED and exits with status 1.",
+     "The signal-driven shutdown is classified SERVED and exits with status 0 because no module was assigned the later-failure precedence rule."
+    ],
+    "observer": "The process supervisor sees a different exit status."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "data_provider dependency for EXIT_STATUSES",
+   "kind": "import_surface_ambiguity",
+   "text": "| `data_provider` | `domain_models` | `ExitStatusRule`, `ObservationFailure`, `ObservationReason`, `PlacementFailure`, `RefusalAnswerRule`, `RefusalCode`, `SourceSignatureRule` |",
+   "question": "Does `data_provider` construct `EXIT_STATUSES` with `ServiceExit` enum members, requiring a direct `ServiceExit` dependency, or construct the rows from strings and rely on `ExitStatusRule` validation?",
+   "options": [
+    "Import and name `ServiceExit` directly",
+    "Construct `ExitStatusRule` rows from strings without importing `ServiceExit`"
+   ],
+   "default_guess": "Import `ServiceExit` and construct the rows with its enum members.",
+   "witness": {
+    "initial": "Strict imports are enabled while `data_provider` initializes `EXIT_STATUSES`.",
+    "events": [
+     "The module constructs the START_FAILED row."
+    ],
+    "outcomes": [
+     "It evaluates `ServiceExit.START_FAILED` and requires the missing direct import.",
+     "It passes `start_failed` to `ExitStatusRule` and needs no direct import."
+    ],
+    "observer": "The generator sees either an undeclared import failure or a successful initialization with a different dependency surface."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "deliverer_service dependency on ServiceExit",
+   "kind": "standard_violation",
+   "text": "| `deliverer_service` | `domain_models` | `DeliveryContext`, `RuntimeSettings`, `ServiceExit` |",
+   "rule": "Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider.",
+   "section": "7",
+   "question": "The passage must either make `domain_models` explicitly own and export `ServiceExit`, or name the module that actually owns `ServiceExit` as its provider.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A4 rule 2 ownership\",\"kind\":\"missing_owner\",\"text\":\"| A4 | rule 2, the form of `photo_id` and its lowercase hyphenated spelling | `deliverer_router` |\\n| A4 | every other rule | `photo_delivery` |\",\"question\":\"Which module owns the remaining decisions of A4 rule 2, including the ordering of the connection and placement checks?\",\"options\":[\"`photo_delivery` owns the remainder of A4 rule 2\",\"`deliverer_router` owns all of A4 rule 2\",\"Split the remainder among the modules that perform each check\"],\"default_guess\":\"Make `photo_delivery` own every part of A4 rule 2 after the router has validated the request form and `photo_id`.\"},{\"subject\":\"request-form ownership known by photo_delivery\",\"kind\":\"contradiction\",\"text\":\"- `system_clock` as its source of the current time, A3 and A4 without the two request forms given to `deliverer_api` above, rule 4 of A6, rule 2 of A7,\\n  orders 7 to 9 of A1, and the parts of rules 9 and 10 of A5 given to it above.\",\"question\":\"Are the two request forms given to `deliverer_router`, as the changed ownership sections say, or to `deliverer_api` as this passage says?\",\"options\":[\"The forms belong to `deliverer_router`\",\"The forms belong to `deliverer_api`\"],\"default_guess\":\"Replace `deliverer_api` with `deliverer_router`.\",\"witness\":{\"initial\":\"A delivery request has a malformed body.\",\"events\":[\"`deliverer_router` receives the request and must decide which module owns validation of its form.\"],\"outcomes\":[\"The router validates the form and asks `deliverer_api` only to check the token and project id.\",\"The router passes the request to `deliverer_api`, which validates the form despite its stated prohibition on reading a request body.\"],\"observer\":\"The caller sees which component produces the INVALID_REQUEST refusal, and dependency generation sees different imports.\"}},{\"subject\":\"scope of M08 refusal conversion\",\"kind\":\"contradiction\",\"text\":\"`AuthenticationRequired`, every `DelivererError` and a request whose\\nbody or form the framework refuses are each answered by `refusal_answer` of `deliverer_api`, so every refusal\\nleaves as M08 (A5 rules 1, 9 and 10).\",\"question\":\"Does “every refusal” mean only whole-operation and framework refusals, or does it include `Rejected`, which the module text and A3 turn into an M06 per-photo failure?\",\"options\":[\"Only `AuthenticationRequired`, `DelivererError`, and framework request refusals become M08; `Rejected` becomes M06\",\"Every exception described as a refusal, including `Rejected`, becomes M08\"],\"default_guess\":\"Limit the sentence to whole-operation and framework refusals; keep `Rejected` as an M06 failure.\",\"witness\":{\"initial\":\"An authenticated delivery names a source that passes its signature check but cannot be decoded.\",\"events\":[\"`photo_preparation` rejects the file.\",\"`photo_delivery` catches or propagates that rejection.\"],\"outcomes\":[\"The delivery returns M06 with status `failed` and reason `unreadable_image`.\",\"The router treats the rejection as a refusal and returns M08.\"],\"observer\":\"The calling flow sees a per-photo failure in one implementation and a whole-operation refusal in the other.\"}},{\"subject\":\"public surface of deliverer_api\",\"kind\":\"undeclared_exports\",\"text\":\"| `deliverer_router` | `deliverer_api` | `AuthenticationRequired`, `answer_health`, `check_token`, `parse_project_id`, `refusal_answer` |\",\"question\":\"Must `check_token`, `parse_project_id`, and `refusal_answer` be declared public capabilities of `deliverer_api`, or is some other export mechanism intended despite its candidate capability list containing only `answer_health`?\",\"options\":[\"Add the three functions to `deliverer_api`'s public capabilities and export `AuthenticationRequired`\",\"Keep only `answer_health` public and move the other behavior behind another declared capability\",\"Treat dependency-table symbols as implicitly public even when absent from Candidate public capabilities\"],\"default_guess\":\"Declare all three functions as public capabilities and `AuthenticationRequired` as an exported exception.\",\"witness\":{\"initial\":\"The generated router module is compiled against the declared module surfaces.\",\"events\":[\"The router imports `check_token`, `parse_project_id`, and `refusal_answer` from `deliverer_api`.\"],\"outcomes\":[\"Generation exposes the dependency-table symbols and the router imports successfully.\",\"Generation exposes only the listed candidate capability `answer_health`, so the router cannot import its required helpers.\"],\"observer\":\"The generator or service startup sees an import success versus an import failure.\"}},{\"subject\":\"INV-11 ownership after routes moved to deliverer_router\",\"kind\":\"owner_cannot_enforce\",\"text\":\"`deliverer_api` owns INV-11 because every refusal answer is built by its `refusal_answer`: a refusal carries\\nonly its code and a fixed message. `photo_delivery` supplies path-free results, and no module holds a client for any\\noutbound call.\",\"question\":\"Which module owns the whole of INV-11 now that successful results go directly from `photo_delivery` through `deliverer_router` and only refusal answers pass through `deliverer_api`?\",\"options\":[\"Move the answer-boundary ownership to `deliverer_router` and retain contributing obligations in `deliverer_api` and `photo_delivery`\",\"Route successful answers through `deliverer_api` so it can remain the owner\",\"Split INV-11 into separately owned refusal-content, successful-result, and outbound-client invariants\"],\"default_guess\":\"Split INV-11 into separately owned obligations, with the router owning the complete response boundary.\",\"witness\":{\"initial\":\"A successful delivery result accidentally contains a server path.\",\"events\":[\"`deliverer_router` calls `photo_delivery` directly.\",\"The successful result is serialized without calling `refusal_answer` or another `deliverer_api` capability.\"],\"outcomes\":[\"Treating `deliverer_api` as owner implies the result must pass through an undeclared API boundary that removes the path.\",\"Following the declared dependencies returns the result directly and relies solely on `photo_delivery` to have removed the path.\"],\"observer\":\"The calling flow either receives or does not receive the server path.\"}},{\"subject\":\"ServiceExit outcome and process exit status\",\"kind\":\"missing_owner\",\"text\":\"- the start of the service: the context of the operations and the token file;\\n- listening on the loopback interface only.\",\"question\":\"Which module owns observing process termination, choosing START_FAILED, SERVED, or SERVER_FAILED, looking up `EXIT_STATUSES`, and returning that status?\",\"options\":[\"`deliverer_service` owns the complete ServiceExit lifecycle and exit-status selection\",\"A generated server/backend module owns termination classification and reports it to `deliverer_service`\",\"Another explicit process-runner module owns it\"],\"default_guess\":\"Make `deliverer_service` own termination classification and applying `EXIT_STATUSES`.\",\"witness\":{\"initial\":\"The server has reported startup complete and is accepting connections.\",\"events\":[\"A SIGTERM begins shutdown.\",\"The web server reports an error during shutdown.\"],\"outcomes\":[\"The process is classified SERVER_FAILED and exits with status 1.\",\"The signal-driven shutdown is classified SERVED and exits with status 0 because no module was assigned the later-failure precedence rule.\"],\"observer\":\"The process supervisor sees a different exit status.\"}},{\"subject\":\"data_provider dependency for EXIT_STATUSES\",\"kind\":\"import_surface_ambiguity\",\"text\":\"| `data_provider` | `domain_models` | `ExitStatusRule`, `ObservationFailure`, `ObservationReason`, `PlacementFailure`, `RefusalAnswerRule`, `RefusalCode`, `SourceSignatureRule` |\",\"question\":\"Does `data_provider` construct `EXIT_STATUSES` with `ServiceExit` enum members, requiring a direct `ServiceExit` dependency, or construct the rows from strings and rely on `ExitStatusRule` validation?\",\"options\":[\"Import and name `ServiceExit` directly\",\"Construct `ExitStatusRule` rows from strings without importing `ServiceExit`\"],\"default_guess\":\"Import `ServiceExit` and construct the rows with its enum members.\",\"witness\":{\"initial\":\"Strict imports are enabled while `data_provider` initializes `EXIT_STATUSES`.\",\"events\":[\"The module constructs the START_FAILED row.\"],\"outcomes\":[\"It evaluates `ServiceExit.START_FAILED` and requires the missing direct import.\",\"It passes `start_failed` to `ExitStatusRule` and needs no direct import.\"],\"observer\":\"The generator sees either an undeclared import failure or a successful initialization with a different dependency surface.\"}},{\"subject\":\"deliverer_service dependency on ServiceExit\",\"kind\":\"standard_violation\",\"text\":\"| `deliverer_service` | `domain_models` | `DeliveryContext`, `RuntimeSettings`, `ServiceExit` |\",\"rule\":\"Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider.\",\"section\":\"7\",\"question\":\"The passage must either make `domain_models` explicitly own and export `ServiceExit`, or name the module that actually owns `ServiceExit` as its provider.\"}]}",
+ "set_aside": []
+}

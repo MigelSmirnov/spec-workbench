@@ -1,0 +1,146 @@
+{
+ "open_points": [
+  {
+   "subject": "`photo_delivery` knowledge of request-form ownership",
+   "kind": "contradictory_owner",
+   "text": "- `system_clock` as its source of the current time, A3 and A4 without the two request forms given to `deliverer_api` above, rule 4 of A6, rule 2 of A7,\n  orders 7 to 9 of A1, and the parts of rules 9 and 10 of A5 given to it above.",
+   "question": "Are the delivery and mark request forms given to `deliverer_router`, as the changed ownership tables say, or to `deliverer_api`, as this passage says?",
+   "options": [
+    "The two request forms belong to `deliverer_router`.",
+    "The two request forms belong to `deliverer_api`.",
+    "Split their transport parsing and semantic validation explicitly between the two modules."
+   ],
+   "default_guess": "Treat both request forms as owned by `deliverer_router` and replace the stale `deliverer_api` reference.",
+   "witness": {
+    "initial": "A delivery request has a malformed body.",
+    "events": [
+     "`deliverer_router` receives the request.",
+     "The implementation assigns request-form validation according to one of the two ownership passages."
+    ],
+    "outcomes": [
+     "The router rejects the malformed body as INVALID_REQUEST before calling `photo_delivery`.",
+     "The router delegates the malformed body to `deliverer_api`, or cannot validate it without adding an undeclared dependency or responsibility."
+    ],
+    "observer": "The caller and the generated module dependency graph."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "`deliverer_api` exported surface",
+   "kind": "contradictory_public_surface",
+   "text": "### Candidate public capabilities\n\n```text\nanswer_health\n```",
+   "question": "Must `deliverer_api` also publicly export `AuthenticationRequired`, `check_token`, `parse_project_id` and `refusal_answer`, which the complete dependency table says `deliverer_router` imports, or must those dependencies and responsibilities be redesigned?",
+   "options": [
+    "Export all five symbols named by the dependency table.",
+    "Keep only `answer_health` public and move token, project-id and refusal behavior elsewhere.",
+    "Declare separate public functions and exception/type exports, with the complete surface listed explicitly."
+   ],
+   "default_guess": "Export every symbol named in the dependency table and update the candidate public surface to match.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 rule 1 request-header responsibility",
+   "kind": "split_owner_undefined",
+   "text": "| A5 | rule 1, the `Authorization` field and the comparison of the token | `deliverer_api` |",
+   "question": "Which module reads the raw headers, enforces exactly one `Authorization` field and separates its scheme and token, given that `deliverer_api` must not own reading a request while `deliverer_router` owns the routes and request reading?",
+   "options": [
+    "`deliverer_router` reads and counts raw fields, then `deliverer_api.check_token` validates the complete value.",
+    "`deliverer_api` receives the request or raw header collection and performs the whole rule.",
+    "The generated backend guarantees header cardinality and passes one value to `deliverer_api`."
+   ],
+   "default_guess": "Have `deliverer_router` preserve and count raw `Authorization` fields, then pass the single value and expected token to `deliverer_api.check_token`.",
+   "witness": {
+    "initial": "A request contains two `Authorization` fields, one correct and one incorrect.",
+    "events": [
+     "The web framework exposes either the raw field list or a normalized/combined value.",
+     "`deliverer_router` and `deliverer_api` divide A5 rule 1 according to an unstated boundary."
+    ],
+    "outcomes": [
+     "The router detects more than one field and returns the UNAUTHORIZED refusal.",
+     "A normalized correct value reaches `check_token` and the request is accepted, or a combined value is rejected for a different reason."
+    ],
+    "observer": "The authenticated caller."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "service termination classification and exit status",
+   "kind": "missing_owner",
+   "text": "- the start of the service: the context of the operations and the token file;\n- listening on the loopback interface only.",
+   "question": "Which module owns observing the startup-complete boundary, signals and server failures, choosing `ServiceExit`, looking it up in `EXIT_STATUSES`, and returning the process status?",
+   "options": [
+    "`deliverer_service` owns the complete server lifecycle and exit classification.",
+    "The generated web-server backend owns exit classification and reports a `ServiceExit` to `deliverer_service`.",
+    "A separate process-runner module owns termination and status selection."
+   ],
+   "default_guess": "Make `deliverer_service` own the complete lifecycle and use `ServiceExit` with `EXIT_STATUSES`.",
+   "unit": "?"
+  },
+  {
+   "subject": "`data_provider` dependency on `ServiceExit`",
+   "kind": "incomplete_dependency_surface",
+   "text": "| `data_provider` | `domain_models` | `ExitStatusRule`, `ObservationFailure`, `ObservationReason`, `PlacementFailure`, `RefusalAnswerRule`, `RefusalCode`, `SourceSignatureRule` |",
+   "question": "When constructing `EXIT_STATUSES`, does `data_provider` directly name `ServiceExit` members, requiring `ServiceExit` in this dependency row, or must it construct the rows from untyped values without naming that enum?",
+   "options": [
+    "Add `ServiceExit` to the direct imports and construct rows with its members.",
+    "Keep the row unchanged and require construction through values that `ExitStatusRule` coerces or validates.",
+    "Move construction of `EXIT_STATUSES` to a module that already owns or imports `ServiceExit`."
+   ],
+   "default_guess": "Add `ServiceExit` to the `data_provider` → `domain_models` symbols, matching the explicit enum imports used for the other typed policy tables.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-09 authentication coverage",
+   "kind": "owner_cannot_enforce",
+   "text": "| INV-09, INV-11 | `deliverer_api` |",
+   "question": "How can `deliverer_api` own the guarantee that every non-health route invokes authentication when `deliverer_router` alone owns and knows the route table and `deliverer_api` cannot import the router back?",
+   "options": [
+    "Assign route-coverage ownership of INV-09 to `deliverer_router`, leaving token comparison in `deliverer_api`.",
+    "Give `deliverer_api` a declarative route manifest that it can validate without importing the router.",
+    "Make authenticated wrapping a structural guarantee of the backend and state that as the enforcement mechanism."
+   ],
+   "default_guess": "Assign INV-09 route coverage to `deliverer_router` while retaining the comparison algorithm in `deliverer_api`.",
+   "witness": {
+    "initial": "A non-health route exists in the generated route table.",
+    "events": [
+     "The backend binds the route to an operation.",
+     "A careful implementation treats either the invariant-owner table or the route-owner text as the authority for adding `check_token`."
+    ],
+    "outcomes": [
+     "Every non-health binding is wrapped by `check_token`.",
+     "The operation is reachable without `check_token` because `deliverer_api` cannot see or govern the binding."
+    ],
+    "observer": "A caller without the bearer token."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-11 path-free successful answers",
+   "kind": "contradictory_owner",
+   "text": "`deliverer_api` owns INV-11 because every refusal answer is built by its `refusal_answer`: a refusal carries\nonly its code and a fixed message. `photo_delivery` supplies path-free results, and no module holds a client for any\noutbound call.",
+   "question": "Does `deliverer_api` own only the refusal-answer part of INV-11, or the whole invariant including successful results and absence of outbound clients, which are assigned to other modules it may not depend on?",
+   "options": [
+    "Split INV-11 into separately owned refusal, successful-result and outbound-client invariants.",
+    "Keep one owner but give `deliverer_api` an explicit architectural verification mechanism over the other modules.",
+    "Move ownership of the complete externally observable answer invariant to `deliverer_router` and retain lower-level obligations in providers."
+   ],
+   "default_guess": "Split INV-11 into explicit obligations owned by `deliverer_api`, `photo_delivery` and an architecture/dependency check.",
+   "witness": {
+    "initial": "A successful delivery result accidentally contains a server path while every refusal remains sanitized.",
+    "events": [
+     "`photo_delivery` creates the result.",
+     "`deliverer_router` returns it without passing it through `deliverer_api.refusal_answer`."
+    ],
+    "outcomes": [
+     "INV-11 fails because its owner is responsible for all answers, although that owner cannot inspect this result path.",
+     "The implementation treats INV-11 ownership as refusal-only and accepts the result unless a separate `photo_delivery` check catches it."
+    ],
+    "observer": "The calling flow receiving the successful result."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"`photo_delivery` knowledge of request-form ownership\",\"kind\":\"contradictory_owner\",\"text\":\"- `system_clock` as its source of the current time, A3 and A4 without the two request forms given to `deliverer_api` above, rule 4 of A6, rule 2 of A7,\\n  orders 7 to 9 of A1, and the parts of rules 9 and 10 of A5 given to it above.\",\"question\":\"Are the delivery and mark request forms given to `deliverer_router`, as the changed ownership tables say, or to `deliverer_api`, as this passage says?\",\"options\":[\"The two request forms belong to `deliverer_router`.\",\"The two request forms belong to `deliverer_api`.\",\"Split their transport parsing and semantic validation explicitly between the two modules.\"],\"default_guess\":\"Treat both request forms as owned by `deliverer_router` and replace the stale `deliverer_api` reference.\",\"witness\":{\"initial\":\"A delivery request has a malformed body.\",\"events\":[\"`deliverer_router` receives the request.\",\"The implementation assigns request-form validation according to one of the two ownership passages.\"],\"outcomes\":[\"The router rejects the malformed body as INVALID_REQUEST before calling `photo_delivery`.\",\"The router delegates the malformed body to `deliverer_api`, or cannot validate it without adding an undeclared dependency or responsibility.\"],\"observer\":\"The caller and the generated module dependency graph.\"}},{\"subject\":\"`deliverer_api` exported surface\",\"kind\":\"contradictory_public_surface\",\"text\":\"### Candidate public capabilities\\n\\n```text\\nanswer_health\\n```\",\"question\":\"Must `deliverer_api` also publicly export `AuthenticationRequired`, `check_token`, `parse_project_id` and `refusal_answer`, which the complete dependency table says `deliverer_router` imports, or must those dependencies and responsibilities be redesigned?\",\"options\":[\"Export all five symbols named by the dependency table.\",\"Keep only `answer_health` public and move token, project-id and refusal behavior elsewhere.\",\"Declare separate public functions and exception/type exports, with the complete surface listed explicitly.\"],\"default_guess\":\"Export every symbol named in the dependency table and update the candidate public surface to match.\"},{\"subject\":\"A5 rule 1 request-header responsibility\",\"kind\":\"split_owner_undefined\",\"text\":\"| A5 | rule 1, the `Authorization` field and the comparison of the token | `deliverer_api` |\",\"question\":\"Which module reads the raw headers, enforces exactly one `Authorization` field and separates its scheme and token, given that `deliverer_api` must not own reading a request while `deliverer_router` owns the routes and request reading?\",\"options\":[\"`deliverer_router` reads and counts raw fields, then `deliverer_api.check_token` validates the complete value.\",\"`deliverer_api` receives the request or raw header collection and performs the whole rule.\",\"The generated backend guarantees header cardinality and passes one value to `deliverer_api`.\"],\"default_guess\":\"Have `deliverer_router` preserve and count raw `Authorization` fields, then pass the single value and expected token to `deliverer_api.check_token`.\",\"witness\":{\"initial\":\"A request contains two `Authorization` fields, one correct and one incorrect.\",\"events\":[\"The web framework exposes either the raw field list or a normalized/combined value.\",\"`deliverer_router` and `deliverer_api` divide A5 rule 1 according to an unstated boundary.\"],\"outcomes\":[\"The router detects more than one field and returns the UNAUTHORIZED refusal.\",\"A normalized correct value reaches `check_token` and the request is accepted, or a combined value is rejected for a different reason.\"],\"observer\":\"The authenticated caller.\"}},{\"subject\":\"service termination classification and exit status\",\"kind\":\"missing_owner\",\"text\":\"- the start of the service: the context of the operations and the token file;\\n- listening on the loopback interface only.\",\"question\":\"Which module owns observing the startup-complete boundary, signals and server failures, choosing `ServiceExit`, looking it up in `EXIT_STATUSES`, and returning the process status?\",\"options\":[\"`deliverer_service` owns the complete server lifecycle and exit classification.\",\"The generated web-server backend owns exit classification and reports a `ServiceExit` to `deliverer_service`.\",\"A separate process-runner module owns termination and status selection.\"],\"default_guess\":\"Make `deliverer_service` own the complete lifecycle and use `ServiceExit` with `EXIT_STATUSES`.\"},{\"subject\":\"`data_provider` dependency on `ServiceExit`\",\"kind\":\"incomplete_dependency_surface\",\"text\":\"| `data_provider` | `domain_models` | `ExitStatusRule`, `ObservationFailure`, `ObservationReason`, `PlacementFailure`, `RefusalAnswerRule`, `RefusalCode`, `SourceSignatureRule` |\",\"question\":\"When constructing `EXIT_STATUSES`, does `data_provider` directly name `ServiceExit` members, requiring `ServiceExit` in this dependency row, or must it construct the rows from untyped values without naming that enum?\",\"options\":[\"Add `ServiceExit` to the direct imports and construct rows with its members.\",\"Keep the row unchanged and require construction through values that `ExitStatusRule` coerces or validates.\",\"Move construction of `EXIT_STATUSES` to a module that already owns or imports `ServiceExit`.\"],\"default_guess\":\"Add `ServiceExit` to the `data_provider` → `domain_models` symbols, matching the explicit enum imports used for the other typed policy tables.\"},{\"subject\":\"INV-09 authentication coverage\",\"kind\":\"owner_cannot_enforce\",\"text\":\"| INV-09, INV-11 | `deliverer_api` |\",\"question\":\"How can `deliverer_api` own the guarantee that every non-health route invokes authentication when `deliverer_router` alone owns and knows the route table and `deliverer_api` cannot import the router back?\",\"options\":[\"Assign route-coverage ownership of INV-09 to `deliverer_router`, leaving token comparison in `deliverer_api`.\",\"Give `deliverer_api` a declarative route manifest that it can validate without importing the router.\",\"Make authenticated wrapping a structural guarantee of the backend and state that as the enforcement mechanism.\"],\"default_guess\":\"Assign INV-09 route coverage to `deliverer_router` while retaining the comparison algorithm in `deliverer_api`.\",\"witness\":{\"initial\":\"A non-health route exists in the generated route table.\",\"events\":[\"The backend binds the route to an operation.\",\"A careful implementation treats either the invariant-owner table or the route-owner text as the authority for adding `check_token`.\"],\"outcomes\":[\"Every non-health binding is wrapped by `check_token`.\",\"The operation is reachable without `check_token` because `deliverer_api` cannot see or govern the binding.\"],\"observer\":\"A caller without the bearer token.\"}},{\"subject\":\"INV-11 path-free successful answers\",\"kind\":\"contradictory_owner\",\"text\":\"`deliverer_api` owns INV-11 because every refusal answer is built by its `refusal_answer`: a refusal carries\\nonly its code and a fixed message. `photo_delivery` supplies path-free results, and no module holds a client for any\\noutbound call.\",\"question\":\"Does `deliverer_api` own only the refusal-answer part of INV-11, or the whole invariant including successful results and absence of outbound clients, which are assigned to other modules it may not depend on?\",\"options\":[\"Split INV-11 into separately owned refusal, successful-result and outbound-client invariants.\",\"Keep one owner but give `deliverer_api` an explicit architectural verification mechanism over the other modules.\",\"Move ownership of the complete externally observable answer invariant to `deliverer_router` and retain lower-level obligations in providers.\"],\"default_guess\":\"Split INV-11 into explicit obligations owned by `deliverer_api`, `photo_delivery` and an architecture/dependency check.\",\"witness\":{\"initial\":\"A successful delivery result accidentally contains a server path while every refusal remains sanitized.\",\"events\":[\"`photo_delivery` creates the result.\",\"`deliverer_router` returns it without passing it through `deliverer_api.refusal_answer`.\"],\"outcomes\":[\"INV-11 fails because its owner is responsible for all answers, although that owner cannot inspect this result path.\",\"The implementation treats INV-11 ownership as refusal-only and accepts the result unless a separate `photo_delivery` check catches it.\"],\"observer\":\"The calling flow receiving the successful result.\"}}]}",
+ "set_aside": []
+}

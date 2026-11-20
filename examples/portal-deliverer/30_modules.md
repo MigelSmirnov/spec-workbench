@@ -103,7 +103,8 @@ names the owner of each rule.
 |---|---|---|
 | A1 | orders 1 to 6, ignored names, walking order | `source_folder` |
 | A1 | orders 7 to 9, placed and published status | `photo_delivery` |
-| A5 | rule 1, the `Authorization` field and the comparison of the token | `deliverer_api` |
+| A5 | rule 1, reading the single `Authorization` field in the Bearer scheme, before the identifiers and the body | `deliverer_router` |
+| A5 | rule 1, the comparison of the token | `deliverer_api` |
 | A5 | rules 2 to 4, the token file, its replacement and the listening address | `deliverer_service` |
 | A3 | rule 4, the request form of a placement | `deliverer_router` |
 | A3 | rule 5, condition 1, whether a name is a path that may be opened | `source_folder` |
@@ -537,7 +538,7 @@ write_mark
 
 ### Knows
 
-- `system_clock` as its source of the current time, A3 and A4 without the two request forms given to `deliverer_api` above, rule 4 of A6, rule 2 of A7,
+- `system_clock` as its source of the current time, A3 and A4 without the two request forms given to `deliverer_router` above, rule 4 of A6, rule 2 of A7,
   orders 7 to 9 of A1, and the parts of rules 9 and 10 of A5 given to it above.
 
 ### Hides
@@ -618,8 +619,9 @@ answer_health
 
 ### Owns
 
-- the routes of the service, the request forms of a delivery and a mark, and the context and token the routes
-  read from the application.
+- the routes of the service, the request forms of a delivery and a mark, the reading of the single
+  `Authorization` field in the Bearer scheme by the extractor the backend emits, and the context and token the
+  routes read from the application.
 
 ### Knows
 

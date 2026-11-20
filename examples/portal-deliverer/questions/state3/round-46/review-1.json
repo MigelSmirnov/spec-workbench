@@ -1,0 +1,218 @@
+{
+ "open_points": [
+  {
+   "subject": "A3 rule 4 check order",
+   "kind": "conflicting_owner",
+   "text": "| A3 | rule 4, the request form of a placement | `deliverer_router` |\n| A3 | rule 4, every other check and its order; rules 2, 3, 6 to 10 and the rest of rule 5 | `photo_delivery` |",
+   "question": "Does `deliverer_router` own all ordering through request-form and project-id validation while `photo_delivery` owns only steps 3 and later, or does `photo_delivery` own the order of the token and project-id checks too?",
+   "options": [
+    "`deliverer_router` owns steps 1 and 2 and `photo_delivery` owns steps 3 and later",
+    "`photo_delivery` owns the complete A3 rule 4 order",
+    "Split token and project-id ordering further between `deliverer_api` and `deliverer_router`"
+   ],
+   "default_guess": "`deliverer_router` owns steps 1 and 2 and `photo_delivery` owns steps 3 and later",
+   "unit": "?"
+  },
+  {
+   "subject": "Authorization field extraction and validation",
+   "kind": "missing_owner",
+   "text": "- the comparison of the token in constant time and the one principal of A5 rule 5;\n\n- the routes, the reading of a request or its body, or the order of the checks of `photo_delivery`;",
+   "question": "Which module reads the raw `Authorization` fields and decides that there is exactly one field with the valid Bearer scheme before `check_token` compares the token?",
+   "options": [
+    "`deliverer_router` extracts all header occurrences and `deliverer_api.check_token` validates and compares them",
+    "`http_router_backend` performs extraction and multiplicity validation before calling `deliverer_api`",
+    "`deliverer_api` receives and reads the framework request"
+   ],
+   "default_guess": "`deliverer_router` extracts all header occurrences and passes them to `deliverer_api.check_token`",
+   "witness": {
+    "initial": "A protected route receives two Authorization fields, one carrying the correct token.",
+    "events": [
+     "The caller sends the request.",
+     "The router or framework either preserves both fields or collapses them before `check_token` is called."
+    ],
+    "outcomes": [
+     "The request is refused as UNAUTHORIZED because more than one field was supplied.",
+     "The collapsed correct value is accepted and the operation runs."
+    ],
+    "observer": "the authenticated caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-09",
+   "kind": "owner_cannot_enforce",
+   "text": "| INV-09, INV-11 | `deliverer_api` |\n\n- the routes, the reading of a request or its body, or the order of the checks of `photo_delivery`;",
+   "question": "How can `deliverer_api` own the invariant that every non-health route requires authentication when it may not know or own the routes and the router calls `photo_delivery` directly?",
+   "options": [
+    "Make `deliverer_router` the owner of route coverage and `deliverer_api` the owner only of token validation",
+    "Keep `deliverer_api` as owner but route every protected operation through it",
+    "Define a generated route-table proof that makes `deliverer_api` responsible without knowing routes"
+   ],
+   "default_guess": "Make `deliverer_router` own authentication coverage and `deliverer_api` own token validation",
+   "witness": {
+    "initial": "The scan route exists and directly calls `scan_project_photos`.",
+    "events": [
+     "A request without Authorization reaches the route.",
+     "An implementation either treats route coverage as the router's duty or assumes the INV-09 owner wraps the operation."
+    ],
+    "outcomes": [
+     "The router invokes `check_token` first and returns UNAUTHORIZED.",
+     "The direct operation call runs without a token because `deliverer_api` is not on the call path."
+    ],
+    "observer": "an unauthenticated caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-11",
+   "kind": "owner_cannot_enforce",
+   "text": "| INV-09, INV-11 | `deliverer_api` |\n\n`deliverer_api` owns INV-11 because every refusal answer is built by its `refusal_answer`: a refusal carries\nonly its code and a fixed message. `photo_delivery` supplies path-free results, and no module holds a client for any\noutbound call.",
+   "question": "Who owns the successful-result, no-outbound-call and no-Portal-credential parts of INV-11 now that successful scan, delivery and mark results bypass `deliverer_api`?",
+   "options": [
+    "Split INV-11 among `photo_delivery`, `deliverer_router` and the service-wide dependency boundary",
+    "Make `deliverer_router` the primary boundary owner",
+    "Route every successful and refused answer through `deliverer_api`"
+   ],
+   "default_guess": "Split INV-11, with `photo_delivery` owning path-free results and a service-wide architecture check owning absence of Portal clients and outbound calls",
+   "unit": "?"
+  },
+  {
+   "subject": "deliverer_api public surface",
+   "kind": "incomplete_public_surface",
+   "text": "### Candidate public capabilities\n\n```text\nanswer_health\n```",
+   "question": "Are `AuthenticationRequired`, `check_token`, `parse_project_id` and `refusal_answer` exported capabilities of `deliverer_api`, as the dependency table requires, and what are their contracts?",
+   "options": [
+    "Add all four to the public surface with explicit contracts",
+    "Move the functions or exception to modules whose public surfaces already include them",
+    "Treat them as a generated private bridge despite the cross-module imports"
+   ],
+   "default_guess": "Add all four to the public surface with explicit contracts",
+   "witness": {
+    "initial": "The generated router imports the symbols listed in the dependency table.",
+    "events": [
+     "The API module is generated from its declared candidate public capabilities.",
+     "The router module is then imported."
+    ],
+    "outcomes": [
+     "The API generator exports the unlisted symbols because the dependency table is treated as authoritative, and the router loads.",
+     "Only `answer_health` is exported from the stated capability list, and router generation or import fails."
+    ],
+    "observer": "the build or service starter"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "photo_delivery request-form knowledge",
+   "kind": "contradiction",
+   "text": "- `system_clock` as its source of the current time, A3 and A4 without the two request forms given to `deliverer_api` above, rule 4 of A6, rule 2 of A7,\n  orders 7 to 9 of A1, and the parts of rules 9 and 10 of A5 given to it above.",
+   "question": "Must this passage say that the two request forms are given to `deliverer_router`, or are they still intended to belong to `deliverer_api`?",
+   "options": [
+    "Replace `deliverer_api` with `deliverer_router`",
+    "Return request-form ownership to `deliverer_api`"
+   ],
+   "default_guess": "Replace `deliverer_api` with `deliverer_router`",
+   "unit": "?"
+  },
+  {
+   "subject": "deliverer_router delivery-rule boundary",
+   "kind": "contradiction",
+   "text": "- the routes of the service, the request forms of a delivery and a mark, and the context and token the routes\n  read from the application.\n\n- any check other than the request forms it reads by their models, or any delivery rule;",
+   "question": "Are the A3 request form and A4 `photo_id` form permitted request-boundary rules owned by `deliverer_router`, or does the prohibition on owning any delivery rule include them?",
+   "options": [
+    "Exclude request-boundary form rules from the phrase `any delivery rule`",
+    "Move the A3 and A4 form rules out of `deliverer_router`",
+    "Remove the prohibition on owning delivery rules"
+   ],
+   "default_guess": "Exclude request-boundary form rules explicitly from the prohibition",
+   "unit": "?"
+  },
+  {
+   "subject": "successful HTTP answers",
+   "kind": "missing_owner",
+   "text": "- the content of an answer: every refusal is answered by `refusal_answer` of `deliverer_api`;",
+   "question": "Which module decides the HTTP status, serialization and response model for successful scan, delivery and mark answers?",
+   "options": [
+    "The generated `deliverer_router` owns success-response transport mapping",
+    "`deliverer_api` becomes a facade for successful answers too",
+    "`photo_delivery` owns both domain outcomes and their HTTP representation"
+   ],
+   "default_guess": "The generated `deliverer_router` owns success-response transport mapping",
+   "witness": {
+    "initial": "A delivery returns a `PlacementOutcome`.",
+    "events": [
+     "`deliverer_router` receives the outcome from `deliver_project_photo`.",
+     "An implementation must turn it into an HTTP response."
+    ],
+    "outcomes": [
+     "The router returns the model directly with the backend's declared success status.",
+     "The router wraps it or chooses a different success status because no owner or mapping is stated."
+    ],
+    "observer": "the calling flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ServiceExit classification and exit status",
+   "kind": "missing_owner",
+   "text": "### Owns\n\n- the start of the service: the context of the operations and the token file;\n- listening on the loopback interface only.",
+   "question": "Which module observes the server startup boundary, classifies START_FAILED, SERVED or SERVER_FAILED, selects the row of `EXIT_STATUSES` and returns the process exit status?",
+   "options": [
+    "`deliverer_service` owns the complete lifecycle classification",
+    "The generated web-server backend owns classification and reports a `ServiceExit` to `deliverer_service`",
+    "A separate process-lifecycle module owns it"
+   ],
+   "default_guess": "`deliverer_service` owns the complete lifecycle classification",
+   "witness": {
+    "initial": "The server reports startup complete and later stops cleanly after SIGTERM.",
+    "events": [
+     "The process receives SIGTERM.",
+     "The web server returns without an error.",
+     "The process entry point chooses how to terminate."
+    ],
+    "outcomes": [
+     "The event is classified as SERVED and the process exits with status 0.",
+     "No module applies `EXIT_STATUSES`, so the backend's generic termination status is used."
+    ],
+    "observer": "the process supervisor or deployment route"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "refusal status and detail",
+   "kind": "overlapping_owners",
+   "text": "- the policy constants of A8, as typed values.\n\n- the status and the content of every refusal answer;",
+   "question": "Does `data_provider` own the status and fixed detail values in `REFUSAL_ANSWERS` while `deliverer_api` only applies them, or does `deliverer_api` also own those values?",
+   "options": [
+    "`data_provider` owns the values and `deliverer_api` owns lookup and response construction",
+    "`deliverer_api` owns the values and `data_provider` merely stores them",
+    "Move `REFUSAL_ANSWERS` into `deliverer_api`"
+   ],
+   "default_guess": "`data_provider` owns the values and `deliverer_api` owns lookup and response construction",
+   "witness": {
+    "initial": "The UNAUTHORIZED row in `REFUSAL_ANSWERS` is changed to a different status during a later accepted policy change.",
+    "events": [
+     "`deliverer_api` constructs an unauthorized refusal.",
+     "The implementation either reads the row or uses values it regards as API-owned."
+    ],
+    "outcomes": [
+     "The response uses the changed row's status and detail.",
+     "The response keeps values hard-coded by `deliverer_api`."
+    ],
+    "observer": "the refused caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "data_provider dependency on ServiceExit",
+   "kind": "standard_violation",
+   "text": "| `data_provider` | `domain_models` | `ExitStatusRule`, `ObservationFailure`, `ObservationReason`, `PlacementFailure`, `RefusalAnswerRule`, `RefusalCode`, `SourceSignatureRule` |",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\nruntime import surface consumer-модуля, а не копия публичного API\nprovider-а: ровно те символы, которые код consumer-а называет напрямую —\nвызывает, конструирует, проверяет (членство в enum, тип), пишет в\nаннотации.",
+   "section": "7",
+   "question": "Add `ServiceExit` to this dependency surface because `data_provider` constructs the typed `EXIT_STATUSES` rows keyed by its members, or explicitly specify a construction that never directly names `ServiceExit`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A3 rule 4 check order\",\"kind\":\"conflicting_owner\",\"text\":\"| A3 | rule 4, the request form of a placement | `deliverer_router` |\\n| A3 | rule 4, every other check and its order; rules 2, 3, 6 to 10 and the rest of rule 5 | `photo_delivery` |\",\"question\":\"Does `deliverer_router` own all ordering through request-form and project-id validation while `photo_delivery` owns only steps 3 and later, or does `photo_delivery` own the order of the token and project-id checks too?\",\"options\":[\"`deliverer_router` owns steps 1 and 2 and `photo_delivery` owns steps 3 and later\",\"`photo_delivery` owns the complete A3 rule 4 order\",\"Split token and project-id ordering further between `deliverer_api` and `deliverer_router`\"],\"default_guess\":\"`deliverer_router` owns steps 1 and 2 and `photo_delivery` owns steps 3 and later\"},{\"subject\":\"Authorization field extraction and validation\",\"kind\":\"missing_owner\",\"text\":\"- the comparison of the token in constant time and the one principal of A5 rule 5;\\n\\n- the routes, the reading of a request or its body, or the order of the checks of `photo_delivery`;\",\"question\":\"Which module reads the raw `Authorization` fields and decides that there is exactly one field with the valid Bearer scheme before `check_token` compares the token?\",\"options\":[\"`deliverer_router` extracts all header occurrences and `deliverer_api.check_token` validates and compares them\",\"`http_router_backend` performs extraction and multiplicity validation before calling `deliverer_api`\",\"`deliverer_api` receives and reads the framework request\"],\"default_guess\":\"`deliverer_router` extracts all header occurrences and passes them to `deliverer_api.check_token`\",\"witness\":{\"initial\":\"A protected route receives two Authorization fields, one carrying the correct token.\",\"events\":[\"The caller sends the request.\",\"The router or framework either preserves both fields or collapses them before `check_token` is called.\"],\"outcomes\":[\"The request is refused as UNAUTHORIZED because more than one field was supplied.\",\"The collapsed correct value is accepted and the operation runs.\"],\"observer\":\"the authenticated caller\"}},{\"subject\":\"INV-09\",\"kind\":\"owner_cannot_enforce\",\"text\":\"| INV-09, INV-11 | `deliverer_api` |\\n\\n- the routes, the reading of a request or its body, or the order of the checks of `photo_delivery`;\",\"question\":\"How can `deliverer_api` own the invariant that every non-health route requires authentication when it may not know or own the routes and the router calls `photo_delivery` directly?\",\"options\":[\"Make `deliverer_router` the owner of route coverage and `deliverer_api` the owner only of token validation\",\"Keep `deliverer_api` as owner but route every protected operation through it\",\"Define a generated route-table proof that makes `deliverer_api` responsible without knowing routes\"],\"default_guess\":\"Make `deliverer_router` own authentication coverage and `deliverer_api` own token validation\",\"witness\":{\"initial\":\"The scan route exists and directly calls `scan_project_photos`.\",\"events\":[\"A request without Authorization reaches the route.\",\"An implementation either treats route coverage as the router's duty or assumes the INV-09 owner wraps the operation.\"],\"outcomes\":[\"The router invokes `check_token` first and returns UNAUTHORIZED.\",\"The direct operation call runs without a token because `deliverer_api` is not on the call path.\"],\"observer\":\"an unauthenticated caller\"}},{\"subject\":\"INV-11\",\"kind\":\"owner_cannot_enforce\",\"text\":\"| INV-09, INV-11 | `deliverer_api` |\\n\\n`deliverer_api` owns INV-11 because every refusal answer is built by its `refusal_answer`: a refusal carries\\nonly its code and a fixed message. `photo_delivery` supplies path-free results, and no module holds a client for any\\noutbound call.\",\"question\":\"Who owns the successful-result, no-outbound-call and no-Portal-credential parts of INV-11 now that successful scan, delivery and mark results bypass `deliverer_api`?\",\"options\":[\"Split INV-11 among `photo_delivery`, `deliverer_router` and the service-wide dependency boundary\",\"Make `deliverer_router` the primary boundary owner\",\"Route every successful and refused answer through `deliverer_api`\"],\"default_guess\":\"Split INV-11, with `photo_delivery` owning path-free results and a service-wide architecture check owning absence of Portal clients and outbound calls\"},{\"subject\":\"deliverer_api public surface\",\"kind\":\"incomplete_public_surface\",\"text\":\"### Candidate public capabilities\\n\\n```text\\nanswer_health\\n```\",\"question\":\"Are `AuthenticationRequired`, `check_token`, `parse_project_id` and `refusal_answer` exported capabilities of `deliverer_api`, as the dependency table requires, and what are their contracts?\",\"options\":[\"Add all four to the public surface with explicit contracts\",\"Move the functions or exception to modules whose public surfaces already include them\",\"Treat them as a generated private bridge despite the cross-module imports\"],\"default_guess\":\"Add all four to the public surface with explicit contracts\",\"witness\":{\"initial\":\"The generated router imports the symbols listed in the dependency table.\",\"events\":[\"The API module is generated from its declared candidate public capabilities.\",\"The router module is then imported.\"],\"outcomes\":[\"The API generator exports the unlisted symbols because the dependency table is treated as authoritative, and the router loads.\",\"Only `answer_health` is exported from the stated capability list, and router generation or import fails.\"],\"observer\":\"the build or service starter\"}},{\"subject\":\"photo_delivery request-form knowledge\",\"kind\":\"contradiction\",\"text\":\"- `system_clock` as its source of the current time, A3 and A4 without the two request forms given to `deliverer_api` above, rule 4 of A6, rule 2 of A7,\\n  orders 7 to 9 of A1, and the parts of rules 9 and 10 of A5 given to it above.\",\"question\":\"Must this passage say that the two request forms are given to `deliverer_router`, or are they still intended to belong to `deliverer_api`?\",\"options\":[\"Replace `deliverer_api` with `deliverer_router`\",\"Return request-form ownership to `deliverer_api`\"],\"default_guess\":\"Replace `deliverer_api` with `deliverer_router`\"},{\"subject\":\"deliverer_router delivery-rule boundary\",\"kind\":\"contradiction\",\"text\":\"- the routes of the service, the request forms of a delivery and a mark, and the context and token the routes\\n  read from the application.\\n\\n- any check other than the request forms it reads by their models, or any delivery rule;\",\"question\":\"Are the A3 request form and A4 `photo_id` form permitted request-boundary rules owned by `deliverer_router`, or does the prohibition on owning any delivery rule include them?\",\"options\":[\"Exclude request-boundary form rules from the phrase `any delivery rule`\",\"Move the A3 and A4 form rules out of `deliverer_router`\",\"Remove the prohibition on owning delivery rules\"],\"default_guess\":\"Exclude request-boundary form rules explicitly from the prohibition\"},{\"subject\":\"successful HTTP answers\",\"kind\":\"missing_owner\",\"text\":\"- the content of an answer: every refusal is answered by `refusal_answer` of `deliverer_api`;\",\"question\":\"Which module decides the HTTP status, serialization and response model for successful scan, delivery and mark answers?\",\"options\":[\"The generated `deliverer_router` owns success-response transport mapping\",\"`deliverer_api` becomes a facade for successful answers too\",\"`photo_delivery` owns both domain outcomes and their HTTP representation\"],\"default_guess\":\"The generated `deliverer_router` owns success-response transport mapping\",\"witness\":{\"initial\":\"A delivery returns a `PlacementOutcome`.\",\"events\":[\"`deliverer_router` receives the outcome from `deliver_project_photo`.\",\"An implementation must turn it into an HTTP response.\"],\"outcomes\":[\"The router returns the model directly with the backend's declared success status.\",\"The router wraps it or chooses a different success status because no owner or mapping is stated.\"],\"observer\":\"the calling flow\"}},{\"subject\":\"ServiceExit classification and exit status\",\"kind\":\"missing_owner\",\"text\":\"### Owns\\n\\n- the start of the service: the context of the operations and the token file;\\n- listening on the loopback interface only.\",\"question\":\"Which module observes the server startup boundary, classifies START_FAILED, SERVED or SERVER_FAILED, selects the row of `EXIT_STATUSES` and returns the process exit status?\",\"options\":[\"`deliverer_service` owns the complete lifecycle classification\",\"The generated web-server backend owns classification and reports a `ServiceExit` to `deliverer_service`\",\"A separate process-lifecycle module owns it\"],\"default_guess\":\"`deliverer_service` owns the complete lifecycle classification\",\"witness\":{\"initial\":\"The server reports startup complete and later stops cleanly after SIGTERM.\",\"events\":[\"The process receives SIGTERM.\",\"The web server returns without an error.\",\"The process entry point chooses how to terminate.\"],\"outcomes\":[\"The event is classified as SERVED and the process exits with status 0.\",\"No module applies `EXIT_STATUSES`, so the backend's generic termination status is used.\"],\"observer\":\"the process supervisor or deployment route\"}},{\"subject\":\"refusal status and detail\",\"kind\":\"overlapping_owners\",\"text\":\"- the policy constants of A8, as typed values.\\n\\n- the status and the content of every refusal answer;\",\"question\":\"Does `data_provider` own the status and fixed detail values in `REFUSAL_ANSWERS` while `deliverer_api` only applies them, or does `deliverer_api` also own those values?\",\"options\":[\"`data_provider` owns the values and `deliverer_api` owns lookup and response construction\",\"`deliverer_api` owns the values and `data_provider` merely stores them\",\"Move `REFUSAL_ANSWERS` into `deliverer_api`\"],\"default_guess\":\"`data_provider` owns the values and `deliverer_api` owns lookup and response construction\",\"witness\":{\"initial\":\"The UNAUTHORIZED row in `REFUSAL_ANSWERS` is changed to a different status during a later accepted policy change.\",\"events\":[\"`deliverer_api` constructs an unauthorized refusal.\",\"The implementation either reads the row or uses values it regards as API-owned.\"],\"outcomes\":[\"The response uses the changed row's status and detail.\",\"The response keeps values hard-coded by `deliverer_api`.\"],\"observer\":\"the refused caller\"}},{\"subject\":\"data_provider dependency on ServiceExit\",\"kind\":\"standard_violation\",\"text\":\"| `data_provider` | `domain_models` | `ExitStatusRule`, `ObservationFailure`, `ObservationReason`, `PlacementFailure`, `RefusalAnswerRule`, `RefusalCode`, `SourceSignatureRule` |\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\nruntime import surface consumer-модуля, а не копия публичного API\\nprovider-а: ровно те символы, которые код consumer-а называет напрямую —\\nвызывает, конструирует, проверяет (членство в enum, тип), пишет в\\nаннотации.\",\"section\":\"7\",\"question\":\"Add `ServiceExit` to this dependency surface because `data_provider` constructs the typed `EXIT_STATUSES` rows keyed by its members, or explicitly specify a construction that never directly names `ServiceExit`.\"}]}",
+ "set_aside": []
+}
