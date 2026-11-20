@@ -614,7 +614,7 @@ The OSV check is not built for this service yet.
 
 ### Required tests
 
-- INV-17: a project holding a date with an offset is detected before delivery, and a project holding only dates without an offset passes. The calling flow's own stop is shown when that flow exists.
+- INV-17: a project holding an old date of rule 1 is detected before delivery, and a project holding none passes that check. The calling flow's own stop is shown when that flow exists.
   [witness: verification:deliverer_a11_an_offset_date_is_detected_before_delivery]
 
 ### Consequence
