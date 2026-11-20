@@ -217,18 +217,68 @@ def _has_state_source(project: Path, state: int) -> bool:
     return False
 
 
-def next_step(project: Path, *, display_path: str | None = None) -> dict[str, Any]:
-    """Return the first not-ready phase for one materialized project case."""
+def next_step(project: Path, *, display_path: str | None = None, with_diagnosis: bool = False) -> dict[str, Any]:
+    """Return the first not-ready phase for one materialized project case.
+
+    The phase is the first transition that does not hold; it says nothing of
+    what is open elsewhere. ``with_diagnosis`` adds ``diagnosis``: every check
+    of the standard and the Factory's validator at once (design_diagnose), so
+    an author who follows the phases one by one still sees the whole case.
+    """
     project = project.resolve()
     if not project.is_dir():
         raise AuthoringSequenceError(f"project directory not found: {project}")
     sequence = load_sequence()
     project_text = display_path or project.as_posix()
-    pending = _promoted_states_step(sequence, project, project_text)
-    if pending is not None:
-        return pending
-    step = _post_state5_step(sequence, project, project_text)
-    return _question_gate(sequence, project, project_text, step["phase"]) or step
+    step = _promoted_states_step(sequence, project, project_text)
+    if step is None:
+        step = _post_state5_step(sequence, project, project_text)
+        step = _question_gate(sequence, project, project_text, step["phase"]) or step
+    if with_diagnosis:
+        step["diagnosis"] = diagnosis(project, project_text)
+    return step
+
+
+def diagnosis(project: Path, project_text: str) -> dict[str, Any]:
+    """The design_diagnose report of the case in brief: what is open per owning
+    state and the Factory's spec check. A diagnosis that cannot run is an
+    ``error`` with its reason, never a missing field: no picture is not a clean one."""
+    command = shlex.join(["python", "tools/design_diagnose.py", "--case", project_text])
+    try:
+        import design_diagnose
+
+        report = design_diagnose.diagnose(project, "case")
+    except Exception as exc:  # the phase still stands; the gap in the picture is said
+        return {"outcome": "error", "reason": f"{type(exc).__name__}: {exc}", "command": command}
+    open_by_owner = {owner: max(row["open"].values()) for owner, row in report["summary"].items()
+                     if any(row["open"].values())}
+    unchecked = {owner: [*row["not_checkable"], *row["error"]] for owner, row in report["summary"].items()
+                 if row["not_checkable"] or row["error"]}
+    spec_check = report["factory"]["spec"]
+    factory = {"outcome": spec_check.get("outcome"), "errors": spec_check.get("errors", 0)}
+    if spec_check.get("reason"):
+        factory["reason"] = spec_check["reason"]
+    clean = not open_by_owner and not unchecked and factory["outcome"] == "closed"
+    return {"outcome": "closed" if clean else "open", "open": open_by_owner, "unchecked": unchecked,
+            "factory_spec": factory, "command": command}
+
+
+def diagnosis_line(payload: dict[str, Any]) -> str | None:
+    found = payload.get("diagnosis")
+    if not isinstance(found, dict):
+        return None
+    if found["outcome"] == "error":
+        return f"diagnosis: error — {found['reason']}; the whole picture is unknown: {found['command']}"
+    factory = found["factory_spec"]
+    parts = [f"{owner} {count}" for owner, count in found["open"].items()]
+    parts += [f"{owner} not checked ({', '.join(checks)})" for owner, checks in found["unchecked"].items()]
+    if factory["outcome"] == "open":
+        parts.append(f"Factory spec check {factory['errors']} error(s)")
+    elif factory["outcome"] != "closed":
+        parts.append(f"Factory spec check {factory['outcome']}" + (f" ({factory['reason']})" if factory.get("reason") else ""))
+    if not parts:
+        return "diagnosis: closed — every check of the standard and the Factory spec check"
+    return f"diagnosis: open — {' · '.join(parts)}; see: {found['command']}"
 
 
 def _question_gate(sequence: dict[str, Any], project: Path, project_text: str, reached: str) -> dict[str, Any] | None:
@@ -729,7 +779,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     try:
-        payload = next_step(args.project, display_path=args.display_path)
+        payload = next_step(args.project, display_path=args.display_path, with_diagnosis=True)
     except (
         AuthoringSequenceError,
         ValueError,
@@ -755,6 +805,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ask: {question}")
         if payload.get("question_round"):
             print(f"questions: {payload['question_round']}")
+        line = diagnosis_line(payload)
+        if line:
+            print(line)
     return 1 if payload["blocked"] else 0
 
 

@@ -73,7 +73,7 @@ def materialized_project(
             _remove_worktree(repo_root, target)
 
 
-def project_next(repo_root: Path, project_query: str) -> dict[str, Any]:
+def project_next(repo_root: Path, project_query: str, *, with_diagnosis: bool = False) -> dict[str, Any]:
     """Resolve one logical project and return its next authoring phase.
 
     The materialized project checkout is read-only from the pipeline's point of
@@ -84,6 +84,7 @@ def project_next(repo_root: Path, project_query: str) -> dict[str, Any]:
         payload = design_authoring_next.next_step(
             case_root,
             display_path=view.path,
+            with_diagnosis=with_diagnosis,
         )
 
     action = payload.get("action")

@@ -147,8 +147,11 @@ def test_transport_api_delegates_to_same_sequencer(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(authoring_pipeline, "_materialize", lambda root, ref, target: target.mkdir(parents=True))
     monkeypatch.setattr(authoring_pipeline, "_remove_worktree", lambda root, target: None)
 
-    def next_step(case_root, *, display_path=None):
+    asked = []
+
+    def next_step(case_root, *, display_path=None, with_diagnosis=False):
         assert display_path == "examples/demo"
+        asked.append(with_diagnosis)
         return {
             "schema_version": design_authoring_next.SCHEMA,
             "phase": "state1_models",
@@ -165,6 +168,8 @@ def test_transport_api_delegates_to_same_sequencer(tmp_path: Path, monkeypatch):
     assert result["authoring"]["phase"] == "state1_models"
     assert result["authoring"]["action"]["execution"] == "pipeline_managed_project_checkout"
     assert result["authoring"]["action"]["command"] is None
+    authoring_pipeline.project_next(tmp_path, "demo", with_diagnosis=True)
+    assert asked == [False, True]  # the CLI asks for the whole case; the API by default does not
 
 
 def _report(ready: bool, codes=()):
