@@ -19,6 +19,9 @@ from router_workbench.refs import validate_argument_refs
 
 SCHEMA = "spec_workbench_router_context.v1"
 REPORT_SCHEMA = "spec_workbench_router_context_coverage.v1"
+BACKENDS = ({"framework": "fastapi", "emitter": "fastapi_sync_v1"}, {"framework": "fastapi", "emitter": "fastapi_sync_v2"})
+ANSWER_BACKEND = BACKENDS[1]
+ANSWER_REF_KINDS = frozenset({"enum", "literal", "exception"})
 FILE = "70_router_context.json"
 
 
@@ -66,8 +69,8 @@ def coverage(project: Path) -> dict[str, Any]:
         findings.append({"severity":"error","code":"route_catalog_not_ready","message":"Contract-aware per-route closure must be ready before global Router context closure."})
 
     backend = payload.get("backend")
-    if backend != {"framework": "fastapi", "emitter": "fastapi_sync_v1"}:
-        findings.append({"severity":"error","code":"invalid_backend","message":"backend must select the accepted fastapi_sync_v1 deterministic emitter."})
+    if backend not in BACKENDS:
+        findings.append({"severity":"error","code":"invalid_backend","message":"backend must select an accepted deterministic emitter: fastapi_sync_v1, or fastapi_sync_v2 for error answers."})
     wiring = payload.get("wiring")
     if not isinstance(wiring, dict):
         findings.append({"severity":"error","code":"invalid_wiring","message":"wiring must be an object."})
@@ -126,11 +129,19 @@ def coverage(project: Path) -> dict[str, Any]:
     if not isinstance(error_policy, dict):
         findings.append({"severity":"error","code":"invalid_error_policy","message":"error_policy must be an object."})
         error_policy = {}
-    if error_policy.get("body") != "empty":
-        findings.append({"severity":"error","code":"invalid_error_body","message":"http_router_backend/v1 uses body='empty'."})
+    body = error_policy.get("body")
+    if body not in ("empty", "answer"):
+        findings.append({"severity":"error","code":"invalid_error_body","message":"error_policy.body is 'empty' or, with fastapi_sync_v2, 'answer'."})
+    elif body == "answer" and backend != ANSWER_BACKEND:
+        findings.append({"severity":"error","code":"invalid_error_body","message":"error answers need the fastapi_sync_v2 emitter."})
     mapping = error_policy.get("mapping")
     if not isinstance(mapping, list) or not mapping:
         findings.append({"severity":"error","code":"missing_error_mapping","message":"error_policy.mapping must be non-empty before Router IR handoff."})
+    elif body == "answer":
+        answers = [(f"error_policy.mapping[{i}]", (e or {}).get("answer"), (e or {}).get("exception")) for i, e in enumerate(mapping)]
+        answers.append(("error_policy.request_validation", error_policy.get("request_validation"), None))
+        for location, answer, exception in answers:
+            findings.extend(_answer_findings(answer, exception, contract_map, location))
 
     unresolved = payload.get("unresolved")
     if not isinstance(unresolved, list):
@@ -146,6 +157,20 @@ def coverage(project: Path) -> dict[str, Any]:
         "unresolved_topics": topics,
         "findings": findings,
     }
+
+
+def _answer_findings(answer: object, exception: object, contract_map: dict, location: str) -> list[dict]:
+    """An error answer of fastapi_sync_v2: a declared function and enum, literal or exception-field
+    arguments; the Factory validator judges the rest (return type, imports, field names)."""
+    if not isinstance(answer, dict) or answer.get("function") not in contract_map or not isinstance(answer.get("args"), list):
+        return [{"severity":"error","code":"invalid_error_answer","message":f"{location}: an answer is a declared function and its args."}]
+    found = []
+    for index, ref in enumerate(answer["args"]):
+        kind = ref.get("ref") if isinstance(ref, dict) else None
+        if kind not in ANSWER_REF_KINDS or (kind == "exception" and exception is None):
+            found.append({"severity":"error","code":"invalid_error_answer_ref",
+                          "message":f"{location}.args[{index}]: an answer takes enum, literal or (for a mapped exception) exception refs."})
+    return found
 
 
 def main(argv: list[str] | None = None) -> int:
