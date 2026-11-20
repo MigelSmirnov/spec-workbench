@@ -508,6 +508,9 @@ Policy values are constants of the data provider:
 | `STORED_IMAGE_SUFFIX` | `str` | `.jpg` |
 | `STORED_MEDIA_TYPE` | `str` | `image/jpeg` |
 | `INTAKE_ID_SEPARATOR` | `str` | `-` |
+| `EXIF_DATETIME_PATTERN` | `str` | `[0-9]{4}:[0-9]{2}:[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}`, the EXIF DateTime form |
+| `EXIF_OFFSET_PATTERN` | `str` | `[+-][0-9]{2}:[0-9]{2}`, the EXIF OffsetTime form |
+| `STOP_SIGNALS` | `tuple[str, ...]` | `SIGINT`, `SIGTERM` |
 | `TOKEN_ENCODING` | `str` | `utf-8` |
 | `TOKEN_ALPHABET` | `str` | the visible ASCII characters, `!` to `~`, in code point order |
 | `BIND_HOST` | `str` | `127.0.0.1`, the loopback interface |
@@ -566,7 +569,7 @@ gives a source whose reading fails with that `failure` that `reason`.
 member without its row stops the build. The service has begun listening once its web server reports
 its startup complete, its socket accepting connections; that report is the boundary. = models.ServiceExit
 is START_FAILED, value `start_failed`: the process ends before that boundary, whatever ends it, a signal
-included; SERVED, value `served`: after it, a SIGINT or SIGTERM stops the web server, which returns without
+included; SERVED, value `served`: after it, a signal of the imported `STOP_SIGNALS` constant stops the web server, which returns without
 an error, and nothing fails until the process ends; and SERVER_FAILED, value `server_failed`: after it, the
 process ends in any other way, a failure during or after the shutdown of a stopped server included, so any
 failure after the boundary outranks the signal. The outcome is fixed by the first event that ends the

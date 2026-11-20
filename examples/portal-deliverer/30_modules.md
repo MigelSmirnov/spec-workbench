@@ -36,7 +36,7 @@ cycles, and `domain_models` names no other module.
 | `source_folder` | `data_provider` | `CONFLICT_COPY_MARK`, `IGNORED_NAME_PREFIXES`, `IGNORED_NAME_SUFFIXES`, `MAX_SOURCE_BYTES`, `OBSERVATION_FAILURES`, `SOURCE_FORMATS`, `SOURCE_SIGNATURES` |
 | `photo_preparation` | `domain_models` | `DateSource`, `PhotoPublication`, `PlacementFailure`, `PreparedPhoto` |
 | `photo_preparation` | `refusals` | `Rejected` |
-| `photo_preparation` | `data_provider` | `INTAKE_ID_PREFIX`, `INTAKE_ID_SEPARATOR`, `INTAKE_SOURCE`, `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_BACKGROUND`, `PHOTO_MAX_SIDE`, `PHOTO_OPTIMIZE`, `PHOTO_PROGRESSIVE`, `PHOTO_QUALITY`, `PHOTO_SUBSAMPLING`, `SOURCE_FORMATS`, `CAMERA_EARLIEST_YEAR`, `CAMERA_LATEST_AFTER_MODIFIED_HOURS`, `CAMERA_OFFSET_MAX_HOURS` |
+| `photo_preparation` | `data_provider` | `EXIF_DATETIME_PATTERN`, `EXIF_OFFSET_PATTERN`, `INTAKE_ID_PREFIX`, `INTAKE_ID_SEPARATOR`, `INTAKE_SOURCE`, `MAX_OUTPUT_BYTES`, `MAX_PIXELS`, `PHOTO_BACKGROUND`, `PHOTO_MAX_SIDE`, `PHOTO_OPTIMIZE`, `PHOTO_PROGRESSIVE`, `PHOTO_QUALITY`, `PHOTO_SUBSAMPLING`, `SOURCE_FORMATS`, `CAMERA_EARLIEST_YEAR`, `CAMERA_LATEST_AFTER_MODIFIED_HOURS`, `CAMERA_OFFSET_MAX_HOURS` |
 | `delivery_store` | `data_provider` | `LOCK_FILE_MODE`, `RECORD_MODE`, `STATE_FOLDER_MODE`, `STORE_FOLDER_MODE`, `STORED_IMAGE_MODE`, `TEMPORARY_FILE_MODE`, `TEMPORARY_NAME_PREFIX`, `LOCKS_FOLDER`, `PLACEMENTS_FOLDER`, `MARKS_FOLDER`, `LOCK_FILE_SUFFIX`, `RECORD_FILE_SUFFIX`, `STORED_IMAGES_FOLDER`, `STORED_IMAGE_SUFFIX` |
 | `delivery_store` | `domain_models` | `DeliveryContext`, `PhotoPlacement`, `PublicationMark`, `RefusalCode` |
 | `delivery_store` | `refusals` | `DelivererError` |
@@ -53,9 +53,9 @@ cycles, and `domain_models` names no other module.
 | `deliverer_api` | `refusals` | `DelivererError` |
 | `deliverer_router` | `domain_models` | `DeliverRequest`, `DeliveryContext`, `HealthAnswer`, `MarkOutcome`, `PlacementOutcome`, `PublishedRequest`, `RefusalCode`, `ScanResult` |
 | `deliverer_router` | `refusals` | `DelivererError` |
-| `deliverer_router` | `deliverer_api` | `AuthenticationRequired`, `answer_health`, `check_token`, `parse_project_id`, `refusal_answer` |
+| `deliverer_router` | `deliverer_api` | `AuthenticationRejected`, `answer_health`, `check_token`, `parse_project_id`, `refusal_answer` |
 | `deliverer_router` | `photo_delivery` | `deliver_project_photo`, `mark_photo_published`, `scan_project_photos` |
-| `deliverer_service` | `data_provider` | `BIND_HOST`, `EXIT_STATUSES`, `TOKEN_ALPHABET`, `TOKEN_ENCODING`, `TOKEN_MIN_LENGTH`, `TOKEN_TRIM_CHARACTERS` |
+| `deliverer_service` | `data_provider` | `BIND_HOST`, `EXIT_STATUSES`, `STOP_SIGNALS`, `TOKEN_ALPHABET`, `TOKEN_ENCODING`, `TOKEN_MIN_LENGTH`, `TOKEN_TRIM_CHARACTERS` |
 | `deliverer_service` | `domain_models` | `DeliveryContext`, `RuntimeSettings`, `ServiceExit` |
 | `deliverer_service` | `runtime_settings` | `load_runtime_settings` |
 | `deliverer_service` | `object_connections` | `load_connections` |
@@ -68,7 +68,7 @@ reads the record itself at its connection check, so no module keeps connections 
 holds only what that backend emits. It serves every route as a table route: the body of a delivery and of a mark
 is read as = models.DeliverRequest and = models.PublishedRequest, the token is compared by `check_token` of
 `deliverer_api` before the body is read, the project id is judged by its `parse_project_id`, and the route
-then calls one operation of `photo_delivery`. `AuthenticationRequired`, every `DelivererError` and a request whose
+then calls one operation of `photo_delivery`. `AuthenticationRejected`, every `DelivererError` and a request whose
 body or form the framework refuses are each answered by `refusal_answer` of `deliverer_api`, so every refusal
 leaves as M08 (A5 rules 1, 9 and 10). `deliverer_api` therefore cannot import the router back.
 
@@ -292,6 +292,9 @@ TOKEN_ENCODING
 TOKEN_ALPHABET
 BIND_HOST
 EXIT_STATUSES
+EXIF_DATETIME_PATTERN
+EXIF_OFFSET_PATTERN
+STOP_SIGNALS
 OBSERVATION_FAILURES
 ```
 
@@ -582,7 +585,7 @@ mark_photo_published
 - the comparison of the token in constant time and the one principal of A5 rule 5;
 - the form of a project id (A5 rule 9);
 - the status and the content of every refusal answer;
-- `AuthenticationRequired`, the refusal of a request that does not carry the token.
+- `AuthenticationRejected`, the refusal of a request that does not carry the token.
 
 ### Knows
 
