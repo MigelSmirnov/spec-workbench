@@ -6,10 +6,21 @@ signatures; the projector needs every edge. Each row of 30_modules.md
 "author: 30_modules.md Dependencies"; generated modules are skipped.
 
     python -I experiments/portal-deliverer/fill_imports_from_state3.py examples/portal-deliverer
+
+Once 80_notes.md exists the script refuses: from then on the imports closure
+is the Workbench's step (tools/design_imports.py --draft, then the author's
+decisions and --coverage), and this script would accept its pending
+candidates for the author. On 2026-11-20 it was run after the notes and the
+closure stayed open with 207 findings nobody saw.
 """
 import json,re,sys
 from pathlib import Path
 case=Path(sys.argv[1])
+if (case/'80_notes.md').is_file():
+    raise SystemExit(
+        f"fill_imports_from_state3: refused: {case/'80_notes.md'} exists, so the State 3 table is no longer "
+        f"the imports decision. Run: python tools/design_imports.py {case} --draft, decide its pending "
+        f"candidates, then python tools/design_imports.py {case} --coverage")
 p=case/'65_imports.json'; d=json.loads(p.read_text())
 text=(case/'30_modules.md').read_text()
 table=text.split("## Dependencies",1)[1].split("\n## ",1)[0]

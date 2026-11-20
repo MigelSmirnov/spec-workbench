@@ -19,8 +19,12 @@ Differences from the kernel script:
   stands, plus every model named by the signature of a callable a consumer
   imports. After the notes it is rebuilt from the Factory's import hygiene, as
   the kernel does.
-- stdlib and third_party stay empty: the imports closure (65_imports.json)
-  comes after State 7.
+- stdlib and third_party are the author's full import lines (SPEC_STANDARD
+  §7) and no design state holds them: the script keeps the lines the current
+  global_spec.json carries. Once 60_contracts.json exists their signatures
+  name stdlib and third-party types, so empty lists are refused rather than
+  written: on 2026-11-20 they stayed empty and the Factory's validator found
+  94 types without an origin, seen only by design_diagnose.
 """
 from __future__ import annotations
 
@@ -151,6 +155,18 @@ if router_ir.get("ready"):
 else:
     raise SystemExit(f"router IR is not ready: {router.stderr or router.stdout}")
 
+# --- the author's import lines: kept, never reset
+current_path = CASE / "global_spec.json"
+current_imports = (json.loads(current_path.read_text(encoding="utf-8")).get("imports") or {}) if current_path.is_file() else {}
+stdlib = list(current_imports.get("stdlib") or [])
+third_party = list(current_imports.get("third_party") or [])
+if (CASE / "60_contracts.json").is_file() and not stdlib and not third_party:
+    raise SystemExit(
+        "build_global_spec_skeleton: refused: imports.stdlib and imports.third_party of global_spec.json are "
+        "empty while 60_contracts.json names types. Write the full import lines that bind them (SPEC_STANDARD §7, "
+        "e.g. 'from uuid import UUID') into global_spec.json; the skeleton keeps them. To see which types lack "
+        f"an origin: python tools/design_diagnose.py --case {CASE}")
+
 default_module = owner["run_service"]
 skeleton = {
     "standard_version": 2,
@@ -161,7 +177,7 @@ skeleton = {
     "models": {},
     "rules": rules,
     "implementation_obligations": {},
-    "imports": {"stdlib": [], "third_party": [], "internal": internal, "module_internal": module_internal},
+    "imports": {"stdlib": stdlib, "third_party": third_party, "internal": internal, "module_internal": module_internal},
     "module_functions": module_functions,
     "module_order": module_order,
     "module_paths": module_paths,
