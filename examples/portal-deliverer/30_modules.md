@@ -163,7 +163,8 @@ outbound call.
   `MarkOutcome`, M07 with its `MarkStatus`; `DeliverRequest` and `PublishedRequest`, the bodies of two routes; and
   `HealthAnswer`, the body of the health route;
 - `RefusalAnswerRule`, the row form of the refusal answers that `data_provider` holds: a refusal code with its
-  status and `detail`;
+  status and `detail`; and `SourceSignatureRule`, the row form of the format signatures that `data_provider`
+  holds: a format, a byte offset and the signature bytes;
 - no exception type: those belong to `refusals` and `deliverer_api`.
 
 ### Knows
@@ -396,7 +397,7 @@ available_photo_folder
 
 - directory traversal and the handling of files that disappear during it;
 - how a partial listing becomes `folder_unavailable`;
-- the signatures of accepted formats.
+- how the rows of `SOURCE_SIGNATURES` are matched against the first bytes of a file.
 
 ### Must not own
 
