@@ -163,8 +163,12 @@ def load_assembled_spec(project: Path) -> dict[str, Any]:
     return payload
 
 
-def factory_coverage(spec: dict[str, Any]) -> list[dict[str, Any]]:
-    """Findings for callables the Factory will refuse to generate."""
+def factory_coverage(spec: dict[str, Any], deterministic: frozenset[str] | set[str] = frozenset()) -> list[dict[str, Any]]:
+    """Findings for callables the Factory will refuse to generate.
+
+    ``deterministic`` names the callables an emitter lowers from closed IR
+    (gate._load_deterministic_callable_scopes): the Factory never asks a note
+    of them, so they are not counted."""
     required, _drift = semantic_classes()
     module_functions = spec.get("module_functions")
     contracts = spec.get("contracts")
@@ -181,7 +185,7 @@ def factory_coverage(spec: dict[str, Any]) -> list[dict[str, Any]]:
         owned = module_functions[module]
         if not isinstance(owned, list):
             continue
-        for name in sorted(item for item in owned if isinstance(item, str)):
+        for name in sorted(item for item in owned if isinstance(item, str) and item not in deterministic):
             signature = contracts.get(name)
             if not is_function_contract(name, signature):
                 continue
@@ -469,7 +473,9 @@ def report(project: Path) -> dict[str, Any]:
     spec = load_assembled_spec(project)
     _required, drift = semantic_classes()
 
-    findings = factory_coverage(spec)
+    from notes_workbench import gate  # gate imports language; read lazily
+
+    findings = factory_coverage(spec, gate._load_deterministic_callable_scopes(project))
     repair_sites, note_files = authored_repair_sites(project)
     findings.extend(repair_sites)
     findings.extend(dependency_bindings(spec))
