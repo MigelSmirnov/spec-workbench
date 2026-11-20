@@ -1,0 +1,363 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 order 3 and scan eligibility",
+   "kind": "contradiction",
+   "text": "A scan gives each regular file of the photo folder exactly one status. The first rule that applies decides: [...] | 3 | what its name leads to, without following a link, is not a regular file | REJECTED | NOT_A_REGULAR_FILE | [...] and an entry the listing shows as a symbolic link is neither reported nor followed.",
+   "question": "Which non-regular entries receive a rejected observation under order 3, rather than being omitted or treated as subfolders?",
+   "options": [
+    "Only an entry initially classified as a file that becomes non-regular before opening receives order 3",
+    "Every listed non-directory, non-link entry that is not a regular file receives order 3",
+    "No such entry is reported; order 3 is unreachable during a scan"
+   ],
+   "default_guess": "Use order 3 only when an entry classified as a regular file is safely opened and the opened object proves non-regular.",
+   "witness": {
+    "initial": "A directory listing contains an entry named photo.jpg which is a FIFO, or a regular file is replaced by a FIFO before it is opened.",
+    "events": [
+     "The calling flow requests a scan.",
+     "The deliverer reaches photo.jpg without following a symbolic link."
+    ],
+    "outcomes": [
+     "The scan reports photo.jpg as REJECTED with NOT_A_REGULAR_FILE.",
+     "The scan omits photo.jpg because only regular files are reported."
+    ],
+    "observer": "The calling flow sees a different scan result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 single-read semantics",
+   "kind": "vague operation",
+   "text": "A file is read once, and the bytes read are the bytes judged.",
+   "question": "Does “read once” mean one operating-system read call or one complete pass that continues through short reads, and where exactly must reading stop when the source limit is crossed?",
+   "options": [
+    "Continue after short reads until EOF or one byte beyond the limit",
+    "Issue one read operation and judge whatever bytes it returns",
+    "Continue until EOF even after the limit, then reject"
+   ],
+   "default_guess": "Perform one sequential pass, continuing after short reads and stopping immediately after reading one byte beyond MAX_SOURCE_BYTES.",
+   "witness": {
+    "initial": "A valid image is served by a file-like source whose first read returns a short prefix without EOF.",
+    "events": [
+     "The calling flow starts a scan.",
+     "The first underlying read returns only part of the file."
+    ],
+    "outcomes": [
+     "The deliverer continues reading, hashes the complete file and reports READY.",
+     "The deliverer treats the short prefix as the whole read and reports a different size, source id or rejection."
+    ],
+    "observer": "The calling flow sees a different observation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 metadata used for size and modification time",
+   "kind": "missing source and instant",
+   "text": "Orders 1 and 2 are first decided from the size the folder lists, before the file is read. A file's modification time is that of the file whose bytes were read; A7 rule 4 gives its form, and a delivery uses it under A2 rule 3.",
+   "question": "Which metadata operation supplies the listed size and the modification time, when is each read, and what happens if metadata fails or the directory entry is replaced between listing, metadata inspection and opening?",
+   "options": [
+    "Read no-follow metadata from the directory entry, then read metadata again from the opened file for modification time",
+    "Use one no-follow metadata reading for both size and modification time",
+    "Use metadata from the opened file for size and modification time"
+   ],
+   "default_guess": "Use no-follow entry metadata for orders 1 and 2, then obtain modification time from the safely opened file immediately before reading it; classify failures according to the explicitly decided race stage.",
+   "witness": {
+    "initial": "The listing reports a small regular file; before opening, it is replaced by another regular file with a different size and modification time.",
+    "events": [
+     "The calling flow starts a scan.",
+     "The deliverer obtains the directory listing.",
+     "Syncthing replaces the entry.",
+     "The deliverer reads the replacement's bytes."
+    ],
+    "outcomes": [
+     "Orders 1 and 2 use the old listed size while the delivered date uses metadata from the opened replacement.",
+     "Size and modification time both come from the opened replacement."
+    ],
+    "observer": "The calling flow can see a different status, size or source id, and a later placement can carry a different photo date."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 no-follow race guarantee",
+   "kind": "missing atomicity rule",
+   "text": "a folder or file replaced by a link after it was checked is not followed instead",
+   "question": "What operation or handle relationship makes the no-follow guarantee hold across the check-to-open race for every folder and file?",
+   "options": [
+    "Open every component relative to an already opened parent with no-follow semantics",
+    "Resolve or inspect a path and then open it by pathname",
+    "Reject the operation whenever identity cannot be proved stable between inspection and opening"
+   ],
+   "default_guess": "Use parent directory handles and no-follow opens for each component, and verify the opened object's type.",
+   "witness": {
+    "initial": "photo.jpg is a regular file inside the photo folder.",
+    "events": [
+     "The deliverer checks photo.jpg.",
+     "Syncthing replaces it with a symbolic link to a readable file outside the photo folder.",
+     "The deliverer opens what the name now denotes."
+    ],
+    "outcomes": [
+     "The link is never followed and the entry is rejected, omitted or treated as unreadable according to a decided rule.",
+     "The link target is opened and its bytes are judged."
+    ],
+    "observer": "The owner can see foreign content offered or delivered, and the link target is read."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 condition 1 versus A1 order 5",
+   "kind": "conflicting refusal conditions",
+   "text": "| 1 | `name` is not non-empty segments joined by single `/` characters, or a segment is `.` or `..`, or a segment is ignored under A1, or a folder on its path is absent, a symbolic link or not a folder, or cannot be reached, or the last segment is absent, a symbolic link or not a regular file, or cannot be inspected. Names are compared exactly, without Unicode normalisation | `NOT_READY_OR_ABSENT` | [...] | 2 | A1 orders 1 to 6 reject the file | `EMPTY` for order 1, `TOO_LARGE` for orders 2 and 4, `NOT_A_REGULAR_FILE` for order 3, `UNREADABLE_FILE` for order 5, `UNSUPPORTED_FORMAT` for order 6 |",
+   "question": "Which failures belong to “cannot be reached” or “cannot be inspected” under condition 1, and which opening or metadata failures reach A1 order 5 and return UNREADABLE_FILE?",
+   "options": [
+    "All failures before a verified open are NOT_READY_OR_ABSENT; only failures while reading an opened file are UNREADABLE_FILE",
+    "Failure to inspect the path is NOT_READY_OR_ABSENT, but failure to open the final inspected file is UNREADABLE_FILE",
+    "Every final-file access failure is UNREADABLE_FILE unless absence or a link is positively observed"
+   ],
+   "default_guess": "Return NOT_READY_OR_ABSENT for invalid path components, absence, links and non-regular final entries; after the final entry has been validated, return UNREADABLE_FILE for an open, opened-file metadata or read failure.",
+   "witness": {
+    "initial": "A valid named regular file exists but becomes unreadable or disappears after its path is inspected and before it is opened.",
+    "events": [
+     "The calling flow requests placement.",
+     "Condition 1 inspects the path successfully.",
+     "Opening the final file fails."
+    ],
+    "outcomes": [
+     "The placement fails with NOT_READY_OR_ABSENT because the final segment can no longer be reached or inspected.",
+     "The placement fails with UNREADABLE_FILE under A1 order 5."
+    ],
+    "observer": "The calling flow receives a different PlacementFailure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 camera-time conversion",
+   "kind": "uncovered conversion failure",
+   "text": "A camera value is unusable when it does not match the imported `EXIF_DATETIME_PATTERN` constant whole or is no valid calendar date and time, when its UTC year is before the imported `CAMERA_EARLIEST_YEAR` constant, or when it is more than the imported `CAMERA_LATEST_AFTER_MODIFIED_HOURS` constant of hours after the file's modification time.",
+   "question": "Is a syntactically valid calendar value unusable when applying its offset, time zone, UTC conversion or comparison cannot be represented by the datetime implementation?",
+   "options": [
+    "Treat every conversion or comparison failure as making that camera value unusable",
+    "Reject the placement as UNREADABLE_IMAGE",
+    "Clamp or otherwise normalize the value into the supported range"
+   ],
+   "default_guess": "Treat any failure to construct, localize, convert or compare the camera instant as making that camera value unusable, then try the next photo-moment source.",
+   "witness": {
+    "initial": "DateTimeOriginal is 9999:12:31 23:59:59 with OffsetTimeOriginal -14:00, so the local calendar value is valid but its UTC conversion exceeds the datetime range.",
+    "events": [
+     "The calling flow requests placement.",
+     "The deliverer parses the EXIF values.",
+     "The deliverer converts the camera value to UTC."
+    ],
+    "outcomes": [
+     "The camera value is unusable and the deliverer falls back to DateTime or file modification time.",
+     "The conversion raises and the delivery fails or the operation is refused."
+    ],
+    "observer": "The calling flow sees either a placement with a fallback date or a failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 credential-file identity",
+   "kind": "missing atomicity rule",
+   "text": "At the start it is read once; its last component must not be a link, while the folders above it belong to the installation and are taken as they stand, and the permissions judged are those of the file that is read.",
+   "question": "How is it guaranteed that the file whose link status and permissions are judged is the same file whose token bytes are read?",
+   "options": [
+    "Open the final component with no-follow semantics and inspect permissions on the opened handle",
+    "Inspect the pathname and then open it normally",
+    "Read first, then re-inspect the path and reject if its identity changed"
+   ],
+   "default_guess": "Open the last component once with no-follow semantics, verify regular-file type and permissions on that opened handle, and read the token from the same handle.",
+   "witness": {
+    "initial": "credential_file initially names a private regular file.",
+    "events": [
+     "The service checks the final component.",
+     "An installer or local actor replaces it with a symbolic link to a permissive token file.",
+     "The service reads the credential."
+    ],
+    "outcomes": [
+     "Startup fails because the replacement link is not followed.",
+     "The service starts using the linked token."
+    ],
+    "observer": "A caller possessing only the linked token can either authenticate or cannot."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 resolved photo-folder path",
+   "kind": "vague path semantics",
+   "text": "The folder that is read is the folder whose containment was checked: no link on its resolved path is followed (A1), so a folder on that path replaced after the check by a link or by anything that is not a folder is not read",
+   "question": "What is meant by not following a link on a path that was obtained by resolving links, are links that resolve inside the root allowed, and how is identity preserved between containment checking and opening?",
+   "options": [
+    "Resolve links for containment, then open the resulting canonical components with no-follow semantics",
+    "Reject every link encountered in the configured root-to-photo path, even if it resolves inside the root",
+    "Allow links that resolve inside the root and reopen the original linked pathname"
+   ],
+   "default_guess": "Resolve the configured paths for the containment decision, then open the canonical resolved path component-by-component without following any component that changed into a link.",
+   "witness": {
+    "initial": "The configured photo subfolder contains a symbolic link that resolves to a folder strictly inside the configured root.",
+    "events": [
+     "The calling flow requests a scan.",
+     "The deliverer resolves the photo folder and checks containment.",
+     "The deliverer attempts to enter the linked component."
+    ],
+    "outcomes": [
+     "The internal link is allowed because its resolved target is inside the root.",
+     "The operation is refused because no link on the path may be followed."
+    ],
+    "observer": "The calling flow either receives a scan or FOLDER_UNAVAILABLE."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A7 clock reading and replayed marks",
+   "kind": "ambiguous test expectation",
+   "text": "A mark refused after it, and a replayed mark, have read it and write nothing. [...] INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer, and `marked_at` equals that reading.",
+   "question": "For a replayed mark, must the returned existing `marked_at` equal the new clock reading made by the replay, or does the equality assertion apply only to the call that creates the mark?",
+   "options": [
+    "The equality applies only to a newly created mark; replay still performs and discards a new reading",
+    "A replay must return the new reading, contradicting the rule that the first mark never changes",
+    "A replay should not read the clock"
+   ],
+   "default_guess": "Apply the equality assertion only to the mark-creating call; a replay reads the clock once as required but returns the original `marked_at`.",
+   "witness": {
+    "initial": "A placement already has a mark with marked_at T1, and the clock now returns T2.",
+    "events": [
+     "The calling flow repeats the mark with the same photo_id.",
+     "The deliverer reads the clock and obtains T2."
+    ],
+    "outcomes": [
+     "The replay returns the original mark with marked_at T1.",
+     "The replay returns or requires marked_at T2 to equal the new reading."
+    ],
+    "observer": "The calling flow sees a different marked_at value or the test gives a different result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13 Required tests",
+   "kind": "incomplete invariant test",
+   "text": "INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer, and `marked_at` equals that reading.",
+   "question": "Which successful, replayed and refused mark paths must be exercised to show that every mark reads the clock at most once and that refusals before the stated boundary read it zero times?",
+   "options": [
+    "Test a creating mark, a replay, every refusal before the clock boundary and representative refusals after it",
+    "Test only one successful creating mark",
+    "Test a creating mark and a replay only"
+   ],
+   "default_guess": "Require tests for a creating mark, a replayed mark, a refusal before the read boundary and a refusal after it, asserting zero or one readings as the normative rules require.",
+   "unit": "?"
+  },
+  {
+   "subject": "A8 ServiceExit listening boundary",
+   "kind": "missing event definition",
+   "text": "the process ends before its web server listens, whatever ends it; SERVED, value `served`: after it listens",
+   "question": "What exact observable event makes the server count as listening?",
+   "options": [
+    "Successful socket bind",
+    "The socket begins accepting connections",
+    "The web server reports application startup complete",
+    "The first accepted connection"
+   ],
+   "default_guess": "Use the web server's startup-complete event after the listening socket is accepting connections.",
+   "witness": {
+    "initial": "The server binds its socket, but application startup fails before the server reports startup complete or accepts a connection.",
+    "events": [
+     "The process binds the configured socket.",
+     "Application startup then fails and the process exits."
+    ],
+    "outcomes": [
+     "The outcome is START_FAILED because the listening boundary was not reached.",
+     "The outcome is SERVER_FAILED because binding the socket counted as listening."
+    ],
+    "observer": "The process supervisor sees a potentially different classified outcome and exit-status rule."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 ServiceExit signal and failure precedence",
+   "kind": "vague precedence",
+   "text": "SERVED, value `served`: after it listens, a signal of the imported `STOP_SIGNALS` constant stops it and the process ends without a failure; and SERVER_FAILED, value `server_failed`: after it listens, the process ends in any other way.",
+   "question": "What counts as a failure, and which outcome wins when a stop signal and a shutdown or server failure both occur during the same termination?",
+   "options": [
+    "Any exception, nonzero server result or shutdown failure makes SERVER_FAILED and outranks the signal",
+    "The first termination event decides, so a stop signal makes SERVED even if shutdown later fails",
+    "Any receipt of a stop signal makes SERVED regardless of later failures"
+   ],
+   "default_guess": "Treat an exception, nonzero server termination or failure during shutdown as SERVER_FAILED; SERVED requires a stop signal followed by completely successful shutdown.",
+   "witness": {
+    "initial": "The server is listening normally.",
+    "events": [
+     "The owner sends SIGTERM.",
+     "The server begins shutdown.",
+     "A shutdown hook fails and the process exits nonzero."
+    ],
+    "outcomes": [
+     "The outcome is SERVED because the stop signal initiated termination.",
+     "The outcome is SERVER_FAILED because shutdown did not end without a failure."
+    ],
+    "observer": "The process supervisor sees a different ServiceExit classification."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-19 Required tests",
+   "kind": "incomplete invariant test",
+   "text": "INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file. Placed content replays when only a conflict copy still holds it, and an ordinary file with the content of a conflict copy is delivered.",
+   "question": "What test must demonstrate the formal invariant that a new placement never reads a conflict copy, rather than only demonstrating its returned result and durable effects?",
+   "options": [
+    "Trace opened files and assert that the conflict-copy path and its target are never opened for reading",
+    "Allow the implementation to read the conflict copy as long as it later rejects it",
+    "Assert only the failure code and lack of writes"
+   ],
+   "default_guess": "Add an open/read trace proving that an unplaced conflict-copy path is rejected from its name before its contents are opened.",
+   "witness": {
+    "initial": "An unplaced conflict copy contains readable valid image bytes.",
+    "events": [
+     "The calling flow requests delivery using the conflict-copy name.",
+     "The deliverer either rejects from the name or reads the file before rejecting."
+    ],
+    "outcomes": [
+     "The request fails without opening the conflict copy.",
+     "The request fails with the same code and writes nothing, but the conflict copy was read."
+    ],
+    "observer": "A file-access tracer sees the invariant violation although the API result is identical."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-17 Required tests",
+   "kind": "conditional required test",
+   "text": "INV-17: a project holding a date with an offset is detected before delivery, and a project holding only UTC dates passes. The calling flow's own stop is shown when that flow exists.",
+   "question": "What must be shown now to establish that the calling flow publishes no delivered photo when an old date exists, rather than making the decisive assertion conditional on the flow existing later?",
+   "options": [
+    "A test flow must now show that neither placement nor publication is invoked for an old-date project",
+    "A detector-only test is sufficient until the calling flow exists",
+    "The invariant must be carried to the state that owns the calling flow instead of being declared closed here"
+   ],
+   "default_guess": "Require a test double or contract-level flow test now that asserts zero placement and publication calls when the list contains an old date or cannot be read.",
+   "witness": {
+    "initial": "The Portal staff list contains a photo_date ending in +02:00.",
+    "events": [
+     "The calling flow reads the list and detects the old date.",
+     "A buggy flow nevertheless invokes placement and publication."
+    ],
+    "outcomes": [
+     "The required test fails because it asserts that the flow stops before either call.",
+     "The required test passes because it asserts only that the date was detected."
+    ],
+    "observer": "The owner may see a photo published to a project that should have been stopped."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 RefusalCode member list",
+   "kind": "standard_violation",
+   "text": "`RefusalCode` is `unauthorized`, `invalid_request`,\n`unknown_project`, `connection_not_confirmed`, `folder_unavailable`, `state_unavailable`,\n`invalid_source_id`, `unsafe_reference`, `not_placed` and `publication_conflict`.",
+   "rule": "**Член перечисления** note называет его именем рядом с адресом перечисления:\n`the EXPENSE_CREATE member of = models.AuditAction`.",
+   "section": "15.3.1",
+   "question": "Replace the value-only list with member names beside `= models.RefusalCode`, adding each lowercase value only as an optional value annotation.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 order 3 and scan eligibility\",\"kind\":\"contradiction\",\"text\":\"A scan gives each regular file of the photo folder exactly one status. The first rule that applies decides: [...] | 3 | what its name leads to, without following a link, is not a regular file | REJECTED | NOT_A_REGULAR_FILE | [...] and an entry the listing shows as a symbolic link is neither reported nor followed.\",\"question\":\"Which non-regular entries receive a rejected observation under order 3, rather than being omitted or treated as subfolders?\",\"options\":[\"Only an entry initially classified as a file that becomes non-regular before opening receives order 3\",\"Every listed non-directory, non-link entry that is not a regular file receives order 3\",\"No such entry is reported; order 3 is unreachable during a scan\"],\"default_guess\":\"Use order 3 only when an entry classified as a regular file is safely opened and the opened object proves non-regular.\",\"witness\":{\"initial\":\"A directory listing contains an entry named photo.jpg which is a FIFO, or a regular file is replaced by a FIFO before it is opened.\",\"events\":[\"The calling flow requests a scan.\",\"The deliverer reaches photo.jpg without following a symbolic link.\"],\"outcomes\":[\"The scan reports photo.jpg as REJECTED with NOT_A_REGULAR_FILE.\",\"The scan omits photo.jpg because only regular files are reported.\"],\"observer\":\"The calling flow sees a different scan result.\"}},{\"subject\":\"A1 single-read semantics\",\"kind\":\"vague operation\",\"text\":\"A file is read once, and the bytes read are the bytes judged.\",\"question\":\"Does “read once” mean one operating-system read call or one complete pass that continues through short reads, and where exactly must reading stop when the source limit is crossed?\",\"options\":[\"Continue after short reads until EOF or one byte beyond the limit\",\"Issue one read operation and judge whatever bytes it returns\",\"Continue until EOF even after the limit, then reject\"],\"default_guess\":\"Perform one sequential pass, continuing after short reads and stopping immediately after reading one byte beyond MAX_SOURCE_BYTES.\",\"witness\":{\"initial\":\"A valid image is served by a file-like source whose first read returns a short prefix without EOF.\",\"events\":[\"The calling flow starts a scan.\",\"The first underlying read returns only part of the file.\"],\"outcomes\":[\"The deliverer continues reading, hashes the complete file and reports READY.\",\"The deliverer treats the short prefix as the whole read and reports a different size, source id or rejection.\"],\"observer\":\"The calling flow sees a different observation.\"}},{\"subject\":\"A1 metadata used for size and modification time\",\"kind\":\"missing source and instant\",\"text\":\"Orders 1 and 2 are first decided from the size the folder lists, before the file is read. A file's modification time is that of the file whose bytes were read; A7 rule 4 gives its form, and a delivery uses it under A2 rule 3.\",\"question\":\"Which metadata operation supplies the listed size and the modification time, when is each read, and what happens if metadata fails or the directory entry is replaced between listing, metadata inspection and opening?\",\"options\":[\"Read no-follow metadata from the directory entry, then read metadata again from the opened file for modification time\",\"Use one no-follow metadata reading for both size and modification time\",\"Use metadata from the opened file for size and modification time\"],\"default_guess\":\"Use no-follow entry metadata for orders 1 and 2, then obtain modification time from the safely opened file immediately before reading it; classify failures according to the explicitly decided race stage.\",\"witness\":{\"initial\":\"The listing reports a small regular file; before opening, it is replaced by another regular file with a different size and modification time.\",\"events\":[\"The calling flow starts a scan.\",\"The deliverer obtains the directory listing.\",\"Syncthing replaces the entry.\",\"The deliverer reads the replacement's bytes.\"],\"outcomes\":[\"Orders 1 and 2 use the old listed size while the delivered date uses metadata from the opened replacement.\",\"Size and modification time both come from the opened replacement.\"],\"observer\":\"The calling flow can see a different status, size or source id, and a later placement can carry a different photo date.\"}},{\"subject\":\"A1 no-follow race guarantee\",\"kind\":\"missing atomicity rule\",\"text\":\"a folder or file replaced by a link after it was checked is not followed instead\",\"question\":\"What operation or handle relationship makes the no-follow guarantee hold across the check-to-open race for every folder and file?\",\"options\":[\"Open every component relative to an already opened parent with no-follow semantics\",\"Resolve or inspect a path and then open it by pathname\",\"Reject the operation whenever identity cannot be proved stable between inspection and opening\"],\"default_guess\":\"Use parent directory handles and no-follow opens for each component, and verify the opened object's type.\",\"witness\":{\"initial\":\"photo.jpg is a regular file inside the photo folder.\",\"events\":[\"The deliverer checks photo.jpg.\",\"Syncthing replaces it with a symbolic link to a readable file outside the photo folder.\",\"The deliverer opens what the name now denotes.\"],\"outcomes\":[\"The link is never followed and the entry is rejected, omitted or treated as unreadable according to a decided rule.\",\"The link target is opened and its bytes are judged.\"],\"observer\":\"The owner can see foreign content offered or delivered, and the link target is read.\"}},{\"subject\":\"A3 condition 1 versus A1 order 5\",\"kind\":\"conflicting refusal conditions\",\"text\":\"| 1 | `name` is not non-empty segments joined by single `/` characters, or a segment is `.` or `..`, or a segment is ignored under A1, or a folder on its path is absent, a symbolic link or not a folder, or cannot be reached, or the last segment is absent, a symbolic link or not a regular file, or cannot be inspected. Names are compared exactly, without Unicode normalisation | `NOT_READY_OR_ABSENT` | [...] | 2 | A1 orders 1 to 6 reject the file | `EMPTY` for order 1, `TOO_LARGE` for orders 2 and 4, `NOT_A_REGULAR_FILE` for order 3, `UNREADABLE_FILE` for order 5, `UNSUPPORTED_FORMAT` for order 6 |\",\"question\":\"Which failures belong to “cannot be reached” or “cannot be inspected” under condition 1, and which opening or metadata failures reach A1 order 5 and return UNREADABLE_FILE?\",\"options\":[\"All failures before a verified open are NOT_READY_OR_ABSENT; only failures while reading an opened file are UNREADABLE_FILE\",\"Failure to inspect the path is NOT_READY_OR_ABSENT, but failure to open the final inspected file is UNREADABLE_FILE\",\"Every final-file access failure is UNREADABLE_FILE unless absence or a link is positively observed\"],\"default_guess\":\"Return NOT_READY_OR_ABSENT for invalid path components, absence, links and non-regular final entries; after the final entry has been validated, return UNREADABLE_FILE for an open, opened-file metadata or read failure.\",\"witness\":{\"initial\":\"A valid named regular file exists but becomes unreadable or disappears after its path is inspected and before it is opened.\",\"events\":[\"The calling flow requests placement.\",\"Condition 1 inspects the path successfully.\",\"Opening the final file fails.\"],\"outcomes\":[\"The placement fails with NOT_READY_OR_ABSENT because the final segment can no longer be reached or inspected.\",\"The placement fails with UNREADABLE_FILE under A1 order 5.\"],\"observer\":\"The calling flow receives a different PlacementFailure.\"}},{\"subject\":\"A2 camera-time conversion\",\"kind\":\"uncovered conversion failure\",\"text\":\"A camera value is unusable when it does not match the imported `EXIF_DATETIME_PATTERN` constant whole or is no valid calendar date and time, when its UTC year is before the imported `CAMERA_EARLIEST_YEAR` constant, or when it is more than the imported `CAMERA_LATEST_AFTER_MODIFIED_HOURS` constant of hours after the file's modification time.\",\"question\":\"Is a syntactically valid calendar value unusable when applying its offset, time zone, UTC conversion or comparison cannot be represented by the datetime implementation?\",\"options\":[\"Treat every conversion or comparison failure as making that camera value unusable\",\"Reject the placement as UNREADABLE_IMAGE\",\"Clamp or otherwise normalize the value into the supported range\"],\"default_guess\":\"Treat any failure to construct, localize, convert or compare the camera instant as making that camera value unusable, then try the next photo-moment source.\",\"witness\":{\"initial\":\"DateTimeOriginal is 9999:12:31 23:59:59 with OffsetTimeOriginal -14:00, so the local calendar value is valid but its UTC conversion exceeds the datetime range.\",\"events\":[\"The calling flow requests placement.\",\"The deliverer parses the EXIF values.\",\"The deliverer converts the camera value to UTC.\"],\"outcomes\":[\"The camera value is unusable and the deliverer falls back to DateTime or file modification time.\",\"The conversion raises and the delivery fails or the operation is refused.\"],\"observer\":\"The calling flow sees either a placement with a fallback date or a failure.\"}},{\"subject\":\"A5 credential-file identity\",\"kind\":\"missing atomicity rule\",\"text\":\"At the start it is read once; its last component must not be a link, while the folders above it belong to the installation and are taken as they stand, and the permissions judged are those of the file that is read.\",\"question\":\"How is it guaranteed that the file whose link status and permissions are judged is the same file whose token bytes are read?\",\"options\":[\"Open the final component with no-follow semantics and inspect permissions on the opened handle\",\"Inspect the pathname and then open it normally\",\"Read first, then re-inspect the path and reject if its identity changed\"],\"default_guess\":\"Open the last component once with no-follow semantics, verify regular-file type and permissions on that opened handle, and read the token from the same handle.\",\"witness\":{\"initial\":\"credential_file initially names a private regular file.\",\"events\":[\"The service checks the final component.\",\"An installer or local actor replaces it with a symbolic link to a permissive token file.\",\"The service reads the credential.\"],\"outcomes\":[\"Startup fails because the replacement link is not followed.\",\"The service starts using the linked token.\"],\"observer\":\"A caller possessing only the linked token can either authenticate or cannot.\"}},{\"subject\":\"A5 resolved photo-folder path\",\"kind\":\"vague path semantics\",\"text\":\"The folder that is read is the folder whose containment was checked: no link on its resolved path is followed (A1), so a folder on that path replaced after the check by a link or by anything that is not a folder is not read\",\"question\":\"What is meant by not following a link on a path that was obtained by resolving links, are links that resolve inside the root allowed, and how is identity preserved between containment checking and opening?\",\"options\":[\"Resolve links for containment, then open the resulting canonical components with no-follow semantics\",\"Reject every link encountered in the configured root-to-photo path, even if it resolves inside the root\",\"Allow links that resolve inside the root and reopen the original linked pathname\"],\"default_guess\":\"Resolve the configured paths for the containment decision, then open the canonical resolved path component-by-component without following any component that changed into a link.\",\"witness\":{\"initial\":\"The configured photo subfolder contains a symbolic link that resolves to a folder strictly inside the configured root.\",\"events\":[\"The calling flow requests a scan.\",\"The deliverer resolves the photo folder and checks containment.\",\"The deliverer attempts to enter the linked component.\"],\"outcomes\":[\"The internal link is allowed because its resolved target is inside the root.\",\"The operation is refused because no link on the path may be followed.\"],\"observer\":\"The calling flow either receives a scan or FOLDER_UNAVAILABLE.\"}},{\"subject\":\"A7 clock reading and replayed marks\",\"kind\":\"ambiguous test expectation\",\"text\":\"A mark refused after it, and a replayed mark, have read it and write nothing. [...] INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer, and `marked_at` equals that reading.\",\"question\":\"For a replayed mark, must the returned existing `marked_at` equal the new clock reading made by the replay, or does the equality assertion apply only to the call that creates the mark?\",\"options\":[\"The equality applies only to a newly created mark; replay still performs and discards a new reading\",\"A replay must return the new reading, contradicting the rule that the first mark never changes\",\"A replay should not read the clock\"],\"default_guess\":\"Apply the equality assertion only to the mark-creating call; a replay reads the clock once as required but returns the original `marked_at`.\",\"witness\":{\"initial\":\"A placement already has a mark with marked_at T1, and the clock now returns T2.\",\"events\":[\"The calling flow repeats the mark with the same photo_id.\",\"The deliverer reads the clock and obtains T2.\"],\"outcomes\":[\"The replay returns the original mark with marked_at T1.\",\"The replay returns or requires marked_at T2 to equal the new reading.\"],\"observer\":\"The calling flow sees a different marked_at value or the test gives a different result.\"}},{\"subject\":\"INV-13 Required tests\",\"kind\":\"incomplete invariant test\",\"text\":\"INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer, and `marked_at` equals that reading.\",\"question\":\"Which successful, replayed and refused mark paths must be exercised to show that every mark reads the clock at most once and that refusals before the stated boundary read it zero times?\",\"options\":[\"Test a creating mark, a replay, every refusal before the clock boundary and representative refusals after it\",\"Test only one successful creating mark\",\"Test a creating mark and a replay only\"],\"default_guess\":\"Require tests for a creating mark, a replayed mark, a refusal before the read boundary and a refusal after it, asserting zero or one readings as the normative rules require.\"},{\"subject\":\"A8 ServiceExit listening boundary\",\"kind\":\"missing event definition\",\"text\":\"the process ends before its web server listens, whatever ends it; SERVED, value `served`: after it listens\",\"question\":\"What exact observable event makes the server count as listening?\",\"options\":[\"Successful socket bind\",\"The socket begins accepting connections\",\"The web server reports application startup complete\",\"The first accepted connection\"],\"default_guess\":\"Use the web server's startup-complete event after the listening socket is accepting connections.\",\"witness\":{\"initial\":\"The server binds its socket, but application startup fails before the server reports startup complete or accepts a connection.\",\"events\":[\"The process binds the configured socket.\",\"Application startup then fails and the process exits.\"],\"outcomes\":[\"The outcome is START_FAILED because the listening boundary was not reached.\",\"The outcome is SERVER_FAILED because binding the socket counted as listening.\"],\"observer\":\"The process supervisor sees a potentially different classified outcome and exit-status rule.\"}},{\"subject\":\"A8 ServiceExit signal and failure precedence\",\"kind\":\"vague precedence\",\"text\":\"SERVED, value `served`: after it listens, a signal of the imported `STOP_SIGNALS` constant stops it and the process ends without a failure; and SERVER_FAILED, value `server_failed`: after it listens, the process ends in any other way.\",\"question\":\"What counts as a failure, and which outcome wins when a stop signal and a shutdown or server failure both occur during the same termination?\",\"options\":[\"Any exception, nonzero server result or shutdown failure makes SERVER_FAILED and outranks the signal\",\"The first termination event decides, so a stop signal makes SERVED even if shutdown later fails\",\"Any receipt of a stop signal makes SERVED regardless of later failures\"],\"default_guess\":\"Treat an exception, nonzero server termination or failure during shutdown as SERVER_FAILED; SERVED requires a stop signal followed by completely successful shutdown.\",\"witness\":{\"initial\":\"The server is listening normally.\",\"events\":[\"The owner sends SIGTERM.\",\"The server begins shutdown.\",\"A shutdown hook fails and the process exits nonzero.\"],\"outcomes\":[\"The outcome is SERVED because the stop signal initiated termination.\",\"The outcome is SERVER_FAILED because shutdown did not end without a failure.\"],\"observer\":\"The process supervisor sees a different ServiceExit classification.\"}},{\"subject\":\"INV-19 Required tests\",\"kind\":\"incomplete invariant test\",\"text\":\"INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file. Placed content replays when only a conflict copy still holds it, and an ordinary file with the content of a conflict copy is delivered.\",\"question\":\"What test must demonstrate the formal invariant that a new placement never reads a conflict copy, rather than only demonstrating its returned result and durable effects?\",\"options\":[\"Trace opened files and assert that the conflict-copy path and its target are never opened for reading\",\"Allow the implementation to read the conflict copy as long as it later rejects it\",\"Assert only the failure code and lack of writes\"],\"default_guess\":\"Add an open/read trace proving that an unplaced conflict-copy path is rejected from its name before its contents are opened.\",\"witness\":{\"initial\":\"An unplaced conflict copy contains readable valid image bytes.\",\"events\":[\"The calling flow requests delivery using the conflict-copy name.\",\"The deliverer either rejects from the name or reads the file before rejecting.\"],\"outcomes\":[\"The request fails without opening the conflict copy.\",\"The request fails with the same code and writes nothing, but the conflict copy was read.\"],\"observer\":\"A file-access tracer sees the invariant violation although the API result is identical.\"}},{\"subject\":\"INV-17 Required tests\",\"kind\":\"conditional required test\",\"text\":\"INV-17: a project holding a date with an offset is detected before delivery, and a project holding only UTC dates passes. The calling flow's own stop is shown when that flow exists.\",\"question\":\"What must be shown now to establish that the calling flow publishes no delivered photo when an old date exists, rather than making the decisive assertion conditional on the flow existing later?\",\"options\":[\"A test flow must now show that neither placement nor publication is invoked for an old-date project\",\"A detector-only test is sufficient until the calling flow exists\",\"The invariant must be carried to the state that owns the calling flow instead of being declared closed here\"],\"default_guess\":\"Require a test double or contract-level flow test now that asserts zero placement and publication calls when the list contains an old date or cannot be read.\",\"witness\":{\"initial\":\"The Portal staff list contains a photo_date ending in +02:00.\",\"events\":[\"The calling flow reads the list and detects the old date.\",\"A buggy flow nevertheless invokes placement and publication.\"],\"outcomes\":[\"The required test fails because it asserts that the flow stops before either call.\",\"The required test passes because it asserts only that the date was detected.\"],\"observer\":\"The owner may see a photo published to a project that should have been stopped.\"}},{\"subject\":\"A8 RefusalCode member list\",\"kind\":\"standard_violation\",\"text\":\"`RefusalCode` is `unauthorized`, `invalid_request`,\\n`unknown_project`, `connection_not_confirmed`, `folder_unavailable`, `state_unavailable`,\\n`invalid_source_id`, `unsafe_reference`, `not_placed` and `publication_conflict`.\",\"rule\":\"**Член перечисления** note называет его именем рядом с адресом перечисления:\\n`the EXPENSE_CREATE member of = models.AuditAction`.\",\"section\":\"15.3.1\",\"question\":\"Replace the value-only list with member names beside `= models.RefusalCode`, adding each lowercase value only as an optional value annotation.\"}]}",
+ "set_aside": []
+}

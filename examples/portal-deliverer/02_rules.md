@@ -7,7 +7,7 @@ dependency policy of A9 and the absence of removal in the first version (A3).
 
 OQ-07 is the one earlier question still open: A5 decides the HTTPS rule, and the host and route are
 carried to deployment.
-Each Required tests item is bound to the check that witnesses it in the generated service.
+Each Required tests item is bound to the check that witnesses it.
 
 ## Accepted decision A1 — What a file of the folder becomes
 
@@ -614,7 +614,7 @@ The OSV check is not built for this service yet.
 
 ### Required tests
 
-- INV-17: a project holding a date with an offset is detected before delivery, and a project holding only UTC dates passes. The calling flow's own stop is shown when that flow exists.
+- INV-17: a project holding a date with an offset is detected before delivery, and a project holding only dates without an offset passes. The calling flow's own stop is shown when that flow exists.
   [witness: verification:deliverer_a11_an_offset_date_is_detected_before_delivery]
 
 ### Consequence

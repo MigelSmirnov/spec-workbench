@@ -1,0 +1,376 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 order 3 and A3 rule 5 condition 1",
+   "kind": "contradictory_failure",
+   "text": "what its name leads to, without following a link, is not a regular file\n`name` is not non-empty segments joined by single `/` characters, or a segment is `.` or `..`, or a segment is ignored under A1, or a folder on its path is absent, a symbolic link or not a folder, or cannot be reached, or the last segment is absent, a symbolic link or not a regular file, or cannot be inspected.",
+   "question": "When the last segment exists but is not a regular file, does delivery fail under condition 1 with NOT_READY_OR_ABSENT or under A1 order 3 with NOT_A_REGULAR_FILE?",
+   "options": [
+    "Condition 1 takes precedence and answers NOT_READY_OR_ABSENT",
+    "A1 order 3 takes precedence and answers NOT_A_REGULAR_FILE",
+    "Condition 1 covers the initial inspection, while A1 order 3 covers replacement after that inspection"
+   ],
+   "default_guess": "Use condition 1 for the initial object and A1 order 3 only when the opened object differs after a successful initial inspection.",
+   "witness": {
+    "initial": "The requested last segment is a FIFO, or a regular file is replaced by a FIFO during delivery.",
+    "events": [
+     "The calling flow requests delivery of that name.",
+     "The deliverer inspects or opens the last segment without following links."
+    ],
+    "outcomes": [
+     "The call returns FAILED with NOT_READY_OR_ABSENT under A3 condition 1.",
+     "The call returns FAILED with NOT_A_REGULAR_FILE under A1 order 3."
+    ],
+    "observer": "The calling flow sees a different PlacementFailure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 subfolder entry",
+   "kind": "overlapping_refusal_conditions",
+   "text": "A subfolder found to be a link or not a folder when it is entered is skipped and the scan goes on; one that is gone or cannot be entered refuses the scan as a subfolder that cannot be listed.",
+   "question": "If opening a listed subfolder fails because it has become a symbolic link or a non-folder, is it skipped or does inability to enter it refuse the scan?",
+   "options": [
+    "Classify the object after a no-follow open attempt and skip links and non-folders",
+    "Treat every failed open as cannot be entered and refuse",
+    "Inspect metadata first: skip a detected link or non-folder, but refuse other open failures"
+   ],
+   "default_guess": "Inspect without following links; skip an object positively identified as a link or non-folder and refuse other failures.",
+   "witness": {
+    "initial": "A listed directory is replaced by a symbolic link before the scan enters it.",
+    "events": [
+     "The scan lists the parent directory.",
+     "Syncthing replaces the subfolder with a symbolic link.",
+     "The scan attempts to enter the listed name without following the link."
+    ],
+    "outcomes": [
+     "The link is classified as a link and skipped; the scan succeeds.",
+     "The no-follow open fails, so the subfolder cannot be entered and the whole scan is refused with FOLDER_UNAVAILABLE."
+    ],
+    "observer": "The calling flow sees either a complete scan or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 file reading",
+   "kind": "undefined_read_protocol",
+   "text": "A file is read once, and the bytes read are the bytes judged.",
+   "question": "What exactly constitutes one read: must short reads be continued to EOF, how many bytes may be consumed when the source limit is crossed, and when must reading stop?",
+   "options": [
+    "One sequential open and a loop to EOF or exactly one byte beyond MAX_SOURCE_BYTES",
+    "One operating-system read call",
+    "One sequential open but the implementation may read the entire file after the limit is crossed"
+   ],
+   "default_guess": "Use one sequential open, continue after short reads, and stop after reading one byte beyond MAX_SOURCE_BYTES.",
+   "unit": "?"
+  },
+  {
+   "subject": "A1 file metadata",
+   "kind": "undefined_instant_source",
+   "text": "Orders 1 and 2 are first decided from the size the folder lists, before the file is read. A file's modification time is that of the file whose bytes were read; A7 rule 4 gives its form, and a delivery uses it under A2 rule 3.",
+   "question": "Which metadata operation supplies the listed size and modification time, when is each value sampled, and how is it guaranteed that the modification time belongs to the same opened object whose bytes were read?",
+   "options": [
+    "Read directory-entry metadata, then read modification time from the opened file before reading bytes",
+    "Read both size and modification time from the directory entry",
+    "Read modification time from the opened file after reading bytes",
+    "Permit either pre-read or post-read metadata from the pathname"
+   ],
+   "default_guess": "Use directory-entry metadata for the initial size checks and descriptor metadata from the opened file immediately before reading for modification time.",
+   "witness": {
+    "initial": "A regular file is listed, then replaced by another regular file, and its modification time is changed while it is read.",
+    "events": [
+     "The scan obtains the directory listing and its size.",
+     "Syncthing replaces or modifies the file.",
+     "The scan opens and reads a file and obtains a modification time at an implementation-chosen point."
+    ],
+    "outcomes": [
+     "The observation or delivered photo date uses the pre-read modification time.",
+     "It uses the post-read modification time or the time of the earlier pathname object."
+    ],
+    "observer": "The calling flow sees a different photo date, and a later placement record persists it."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 condition 1",
+   "kind": "undefined_check_open_binding",
+   "text": "Condition 1 is decided from the name and from the path it names, without following a link at any folder or at the file, and the file that is read is the one at the path that was checked; no file of a folder on the path is read (INV-02).",
+   "question": "By what required sequence or handle-based rule must the implementation ensure that the file and ancestor folders read are the same objects that passed the checks when names are replaced concurrently?",
+   "options": [
+    "Open every ancestor and the final file relative to retained directory handles with no-follow semantics",
+    "Check a resolved pathname and reopen it by name",
+    "Recheck the pathname after opening and accept if its metadata appears equal"
+   ],
+   "default_guess": "Retain opened directory handles and open each next segment relative to its parent with no-follow semantics.",
+   "witness": {
+    "initial": "A checked directory is renamed away and replaced by another directory containing a different regular file of the same name.",
+    "events": [
+     "Delivery checks the original path.",
+     "Syncthing replaces an ancestor directory.",
+     "Delivery opens the pathname for reading."
+    ],
+    "outcomes": [
+     "Handle-relative opening reads the originally checked file.",
+     "Pathname reopening reads the replacement file."
+    ],
+    "observer": "The calling flow sees a placement for different bytes or a SOURCE_CHANGED failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 credential file",
+   "kind": "undefined_secure_open",
+   "text": "At the start it is read once; its last component must not be a link, while the folders above it belong to the installation and are taken as they stand, and the permissions judged are those of the file that is read.",
+   "question": "How must the implementation establish that the final component is not a link and that the permissions and token bytes come from the same opened file despite replacement races?",
+   "options": [
+    "Open the final component with no-follow semantics and inspect permissions through that open handle",
+    "Inspect the pathname, then open and read it normally",
+    "Open normally and reject only if post-open metadata identifies a symbolic link"
+   ],
+   "default_guess": "Open the final component once with no-follow semantics, then obtain permissions and bytes through that same handle.",
+   "witness": {
+    "initial": "The credential path initially names a protected regular file.",
+    "events": [
+     "Startup checks that the final component is not a link.",
+     "Another actor replaces it with a link to a permissive token file.",
+     "Startup reads the credential."
+    ],
+    "outcomes": [
+     "A no-follow open rejects startup.",
+     "A check-then-open implementation follows the replacement link and starts with its token."
+    ],
+    "observer": "A caller possessing the replacement token can authenticate only in the second implementation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 photo-folder containment",
+   "kind": "contradictory_path_semantics",
+   "text": "the photo folder of the requested project must be a folder whose resolved path is strictly below the resolved root\nThe folder that is read is the folder whose containment was checked: no link on its resolved path is followed (A1)",
+   "question": "Are symbolic links followed while resolving the root and photo folder for containment, and are links already present inside an otherwise contained path accepted or refused?",
+   "options": [
+    "Resolve links for containment, then open the resulting canonical path without following any later replacement link",
+    "Reject every path containing a symbolic link",
+    "Follow links while resolving and again while opening, provided the final result remains below the root"
+   ],
+   "default_guess": "Resolve links for containment, retain the resolved object or canonical components, and refuse any replacement link encountered while opening it.",
+   "witness": {
+    "initial": "The configured photo subfolder contains a symbolic link to a directory that is still strictly inside the resolved root.",
+    "events": [
+     "A scan resolves the configured root and photo folder.",
+     "It attempts to open the path described by the resolved result."
+    ],
+    "outcomes": [
+     "The contained link is followed during resolution and the scan proceeds.",
+     "The rule that no link is followed causes FOLDER_UNAVAILABLE."
+    ],
+    "observer": "The calling flow sees either scan results or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 image transformation",
+   "kind": "underspecified_library_operations",
+   "text": "its EXIF transposition applies the camera orientation; its conversion to RGBA converts the decoded samples, without colour management and without a colour profile; its thumbnail reduction with the LANCZOS filter to a box of the imported `PHOTO_MAX_SIDE` constant on each side reduces the image when a side is larger than that box, keeping its proportion; the result is pasted onto an RGB image of the same size filled with the colour of the imported `PHOTO_BACKGROUND` constant, with its own alpha channel as the mask, so transparent areas take that colour; and its JPEG encoding writes the image with quality the imported `PHOTO_QUALITY` constant, optimize the imported `PHOTO_OPTIMIZE` constant, progressive the imported `PHOTO_PROGRESSIVE` constant and subsampling the imported `PHOTO_SUBSAMPLING` constant",
+   "question": "Which exact library functions, object methods, defaults and arguments implement each named operation so that generated implementations produce the same pixels and JPEG bytes?",
+   "options": [
+    "Require the Pillow calls ImageOps.exif_transpose, Image.convert, Image.thumbnail, Image.paste and Image.save with fully stated arguments",
+    "Allow any library APIs that appear to perform the described transformations",
+    "Provide one backend function that owns the complete deterministic recipe"
+   ],
+   "default_guess": "Require the explicit Pillow calls and arguments formerly stated, or expose the whole recipe as one named backend function.",
+   "witness": {
+    "initial": "A source image has orientation metadata, transparency and dimensions requiring a non-integral thumbnail size.",
+    "events": [
+     "Two implementers translate the semantic operation names into different Pillow APIs or default arguments.",
+     "Each delivers the source."
+    ],
+    "outcomes": [
+     "One implementation produces one set of resized pixels and JPEG bytes.",
+     "The other produces different pixels or JPEG bytes while still satisfying the prose descriptions."
+    ],
+    "observer": "The Portal and the caller see different stored hashes, sizes or rendered images."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 camera time usability",
+   "kind": "incomplete_refusal_conditions",
+   "text": "A camera value is unusable when it does not match the imported `EXIF_DATETIME_PATTERN` constant whole or is no valid calendar date and time, when its UTC year is before the imported `CAMERA_EARLIEST_YEAR` constant, or when it is more than the imported `CAMERA_LATEST_AFTER_MODIFIED_HOURS` constant of hours after the file's modification time.",
+   "question": "Is a syntactically valid calendar value unusable when constructing its datetime or converting it to UTC overflows or otherwise cannot be represented, and at what stage are the year and plausibility checks applied?",
+   "options": [
+    "Any construction or UTC-conversion failure makes the camera value unusable",
+    "Only invalid calendar fields are unusable; conversion failures fail the whole delivery",
+    "Clamp or otherwise normalize an unrepresentable UTC result"
+   ],
+   "default_guess": "Treat every construction or UTC-conversion failure as making that camera value unusable and fall back to the next source.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2 EXIF offset",
+   "kind": "undefined_time_meaning",
+   "text": "`DateTimeOriginal` uses `OffsetTimeOriginal` when that offset matches the imported `EXIF_OFFSET_PATTERN` constant whole, with hours up to the imported `CAMERA_OFFSET_MAX_HOURS` constant and minutes that are a minute of the hour",
+   "question": "What exact sign semantics and UTC conversion does “uses” require, and is an otherwise matching offset unusable or ignored when applying it would produce an unrepresentable instant?",
+   "options": [
+    "Interpret the offset as local-minus-UTC and subtract it from DateTimeOriginal; ignore it and use the configured timezone if conversion fails",
+    "Interpret it according to the image library's EXIF parser",
+    "Make the camera value unusable if the matching offset cannot be converted"
+   ],
+   "default_guess": "Interpret the EXIF offset as local-minus-UTC, convert to UTC, and make the camera value unusable if conversion cannot be represented.",
+   "unit": "?"
+  },
+  {
+   "subject": "A8 direct dependencies",
+   "kind": "missing_decided_values",
+   "text": "The direct libraries are pinned to exact versions: pillow, fastapi, pydantic and uvicorn.",
+   "question": "What exact version is pinned for each library now that the prototype requirements file is no longer a stated source?",
+   "options": [
+    "State four exact version numbers in A9",
+    "Name an imported dependency-lock artifact that supplies the versions",
+    "Leave the generator to choose current versions"
+   ],
+   "default_guess": "State exact versions in A9 and generate the dependency lock from them.",
+   "witness": {
+    "initial": "No dependency file or version numbers have yet been written.",
+    "events": [
+     "One later agent selects the current Pillow and framework releases.",
+     "Another later agent selects older compatible exact releases.",
+     "Both implement A2 and the web service."
+    ],
+    "outcomes": [
+     "The first build uses one image arithmetic, API surface and transitive dependency set.",
+     "The second build uses another while both claim to have pinned exact versions."
+    ],
+    "observer": "Deployment, generated code and stored JPEG bytes can differ."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 ServiceExit boundary",
+   "kind": "undefined_boundary",
+   "text": "the process ends before its web server listens, whatever ends it; SERVED, value `served`: after it listens, a signal of the imported `STOP_SIGNALS` constant stops it and the process ends without a failure",
+   "question": "What exact observable event means that the web server “listens”: creation of the socket, completion of bind/listen, acceptance of the first connection, or the server's startup-complete report?",
+   "options": [
+    "The server's startup-complete report is the boundary",
+    "Successful operating-system listen is the boundary",
+    "The first accepted connection is the boundary"
+   ],
+   "default_guess": "Use the web server's startup-complete report, with its socket already accepting connections, as the boundary.",
+   "witness": {
+    "initial": "The server has bound and begun listening on its socket but has not yet emitted its startup-complete report.",
+    "events": [
+     "A startup task fails and the process ends."
+    ],
+    "outcomes": [
+     "The process is SERVER_FAILED because the socket had begun listening.",
+     "The process is START_FAILED because startup completion had not been reported."
+    ],
+    "observer": "The process supervisor sees a different exit status classification."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 ServiceExit precedence",
+   "kind": "undefined_event_precedence",
+   "text": "SERVED, value `served`: after it listens, a signal of the imported `STOP_SIGNALS` constant stops it and the process ends without a failure; and SERVER_FAILED, value `server_failed`: after it listens, the process ends in any other way.",
+   "question": "When a stop signal and a failure both occur during shutdown, which event determines the outcome, and what counts as a failure before the process finally ends?",
+   "options": [
+    "Any failure during or after signalled shutdown makes the outcome SERVER_FAILED",
+    "The stop signal fixes SERVED even if shutdown later fails",
+    "Whichever event first begins termination fixes the outcome"
+   ],
+   "default_guess": "Classify as SERVER_FAILED if any failure occurs after listening, including during or after signal-driven shutdown.",
+   "witness": {
+    "initial": "The server is listening normally.",
+    "events": [
+     "SIGTERM requests shutdown.",
+     "A shutdown hook or server cleanup fails before the process exits."
+    ],
+    "outcomes": [
+     "The outcome is SERVED because a listed signal stopped the server.",
+     "The outcome is SERVER_FAILED because the process did not end without a failure."
+    ],
+    "observer": "The process supervisor sees exit status 0 or 1."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Status and external invariants",
+   "kind": "contradictory_witness_scope",
+   "text": "Each Required tests item is bound to the check that witnesses it in the generated service.\nINV-15: the deployment route refuses an image holding a distribution with a known vulnerability, and refuses when the check cannot complete.\nINV-17: a project holding a date with an offset is detected before delivery, and a project holding only UTC dates passes. The calling flow's own stop is shown when that flow exists.",
+   "question": "Must every Required tests witness execute against the generated deliverer service, or may INV-15 and INV-17 bind to checks of the deployment route and calling flow outside that service?",
+   "options": [
+    "Permit witnesses in the component that owns the invariant",
+    "Require the generated service's test suite to exercise or simulate those external components",
+    "Remove external-component invariants from this State 2 document"
+   ],
+   "default_guess": "Bind each invariant to a check in the component that owns the behavior and change the Status sentence accordingly.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13 Required tests",
+   "kind": "incomplete_invariant_test",
+   "text": "INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer, and `marked_at` equals that reading.",
+   "question": "What must the test show for marks refused before the clock point, marks refused after it, and replayed marks, which the normative rule assigns different clock-reading behavior?",
+   "options": [
+    "Test a successful mark, an early refusal, a late refusal and a replay separately",
+    "Test only one successful mark and the non-mark operations",
+    "State that the counting-clock assertion is parameterized over every mark outcome"
+   ],
+   "default_guess": "Require separate assertions that early refusals read zero times and successful, late-refused and replayed marks each read exactly once.",
+   "unit": "?"
+  },
+  {
+   "subject": "A11 old date classification",
+   "kind": "contradictory_time_classification",
+   "text": "A `photo_date` ending in `Z` or in an offset `+HH:MM` or `-HH:MM` is an old date.\nINV-17: a project holding a date with an offset is detected before delivery, and a project holding only UTC dates passes.",
+   "question": "Does a UTC value ending in `Z` count as an old date that stops delivery, or as a UTC date that passes the Required test?",
+   "options": [
+    "A `Z` suffix is old and must stop delivery; only naive UTC text passes",
+    "Every UTC instant, including `Z`, passes; only nonzero or explicit numeric offsets are old",
+    "The test must distinguish naive UTC, `Z`, `+00:00` and nonzero offsets"
+   ],
+   "default_guess": "Treat `Z` and every explicit offset, including `+00:00`, as old; only the Portal's required UTC-without-offset form passes.",
+   "witness": {
+    "initial": "A project's staff photo list contains only a date ending in `Z`.",
+    "events": [
+     "The calling flow performs the A11 pre-delivery check."
+    ],
+    "outcomes": [
+     "The `Z` suffix is classified as old and the flow places and publishes nothing.",
+     "The date is classified as UTC and the project passes."
+    ],
+    "observer": "The owner sees either a repair stop or delivery proceeding."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-17 Required tests",
+   "kind": "conditional_required_evidence",
+   "text": "The calling flow's own stop is shown when that flow exists.",
+   "question": "What must be shown now for INV-17, rather than conditionally after a calling flow happens to exist?",
+   "options": [
+    "Require an executable calling-flow check that proves no placement or publication call occurs",
+    "Require a contract-level fake caller test now and replace it with an integration check later",
+    "Carry INV-17 explicitly to the state that creates the calling flow instead of claiming it is presently bound"
+   ],
+   "default_guess": "Require a caller-level test that records attempted placement and publication calls and asserts that none occur when an old date or list-read failure is found.",
+   "witness": {
+    "initial": "The Portal photo list contains an old date, but no calling-flow implementation exists yet.",
+    "events": [
+     "The current witness check tests only detection of the date.",
+     "A later calling flow is implemented."
+    ],
+    "outcomes": [
+     "The later flow stops before every placement and publication call.",
+     "The later flow detects the date but still places or publishes because the stop behavior was never bound to a check."
+    ],
+    "observer": "The owner and Portal see whether a new photo was published."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 order 3 and A3 rule 5 condition 1\",\"kind\":\"contradictory_failure\",\"text\":\"what its name leads to, without following a link, is not a regular file\\n`name` is not non-empty segments joined by single `/` characters, or a segment is `.` or `..`, or a segment is ignored under A1, or a folder on its path is absent, a symbolic link or not a folder, or cannot be reached, or the last segment is absent, a symbolic link or not a regular file, or cannot be inspected.\",\"question\":\"When the last segment exists but is not a regular file, does delivery fail under condition 1 with NOT_READY_OR_ABSENT or under A1 order 3 with NOT_A_REGULAR_FILE?\",\"options\":[\"Condition 1 takes precedence and answers NOT_READY_OR_ABSENT\",\"A1 order 3 takes precedence and answers NOT_A_REGULAR_FILE\",\"Condition 1 covers the initial inspection, while A1 order 3 covers replacement after that inspection\"],\"default_guess\":\"Use condition 1 for the initial object and A1 order 3 only when the opened object differs after a successful initial inspection.\",\"witness\":{\"initial\":\"The requested last segment is a FIFO, or a regular file is replaced by a FIFO during delivery.\",\"events\":[\"The calling flow requests delivery of that name.\",\"The deliverer inspects or opens the last segment without following links.\"],\"outcomes\":[\"The call returns FAILED with NOT_READY_OR_ABSENT under A3 condition 1.\",\"The call returns FAILED with NOT_A_REGULAR_FILE under A1 order 3.\"],\"observer\":\"The calling flow sees a different PlacementFailure.\"}},{\"subject\":\"A1 subfolder entry\",\"kind\":\"overlapping_refusal_conditions\",\"text\":\"A subfolder found to be a link or not a folder when it is entered is skipped and the scan goes on; one that is gone or cannot be entered refuses the scan as a subfolder that cannot be listed.\",\"question\":\"If opening a listed subfolder fails because it has become a symbolic link or a non-folder, is it skipped or does inability to enter it refuse the scan?\",\"options\":[\"Classify the object after a no-follow open attempt and skip links and non-folders\",\"Treat every failed open as cannot be entered and refuse\",\"Inspect metadata first: skip a detected link or non-folder, but refuse other open failures\"],\"default_guess\":\"Inspect without following links; skip an object positively identified as a link or non-folder and refuse other failures.\",\"witness\":{\"initial\":\"A listed directory is replaced by a symbolic link before the scan enters it.\",\"events\":[\"The scan lists the parent directory.\",\"Syncthing replaces the subfolder with a symbolic link.\",\"The scan attempts to enter the listed name without following the link.\"],\"outcomes\":[\"The link is classified as a link and skipped; the scan succeeds.\",\"The no-follow open fails, so the subfolder cannot be entered and the whole scan is refused with FOLDER_UNAVAILABLE.\"],\"observer\":\"The calling flow sees either a complete scan or a refusal.\"}},{\"subject\":\"A1 file reading\",\"kind\":\"undefined_read_protocol\",\"text\":\"A file is read once, and the bytes read are the bytes judged.\",\"question\":\"What exactly constitutes one read: must short reads be continued to EOF, how many bytes may be consumed when the source limit is crossed, and when must reading stop?\",\"options\":[\"One sequential open and a loop to EOF or exactly one byte beyond MAX_SOURCE_BYTES\",\"One operating-system read call\",\"One sequential open but the implementation may read the entire file after the limit is crossed\"],\"default_guess\":\"Use one sequential open, continue after short reads, and stop after reading one byte beyond MAX_SOURCE_BYTES.\"},{\"subject\":\"A1 file metadata\",\"kind\":\"undefined_instant_source\",\"text\":\"Orders 1 and 2 are first decided from the size the folder lists, before the file is read. A file's modification time is that of the file whose bytes were read; A7 rule 4 gives its form, and a delivery uses it under A2 rule 3.\",\"question\":\"Which metadata operation supplies the listed size and modification time, when is each value sampled, and how is it guaranteed that the modification time belongs to the same opened object whose bytes were read?\",\"options\":[\"Read directory-entry metadata, then read modification time from the opened file before reading bytes\",\"Read both size and modification time from the directory entry\",\"Read modification time from the opened file after reading bytes\",\"Permit either pre-read or post-read metadata from the pathname\"],\"default_guess\":\"Use directory-entry metadata for the initial size checks and descriptor metadata from the opened file immediately before reading for modification time.\",\"witness\":{\"initial\":\"A regular file is listed, then replaced by another regular file, and its modification time is changed while it is read.\",\"events\":[\"The scan obtains the directory listing and its size.\",\"Syncthing replaces or modifies the file.\",\"The scan opens and reads a file and obtains a modification time at an implementation-chosen point.\"],\"outcomes\":[\"The observation or delivered photo date uses the pre-read modification time.\",\"It uses the post-read modification time or the time of the earlier pathname object.\"],\"observer\":\"The calling flow sees a different photo date, and a later placement record persists it.\"}},{\"subject\":\"A3 condition 1\",\"kind\":\"undefined_check_open_binding\",\"text\":\"Condition 1 is decided from the name and from the path it names, without following a link at any folder or at the file, and the file that is read is the one at the path that was checked; no file of a folder on the path is read (INV-02).\",\"question\":\"By what required sequence or handle-based rule must the implementation ensure that the file and ancestor folders read are the same objects that passed the checks when names are replaced concurrently?\",\"options\":[\"Open every ancestor and the final file relative to retained directory handles with no-follow semantics\",\"Check a resolved pathname and reopen it by name\",\"Recheck the pathname after opening and accept if its metadata appears equal\"],\"default_guess\":\"Retain opened directory handles and open each next segment relative to its parent with no-follow semantics.\",\"witness\":{\"initial\":\"A checked directory is renamed away and replaced by another directory containing a different regular file of the same name.\",\"events\":[\"Delivery checks the original path.\",\"Syncthing replaces an ancestor directory.\",\"Delivery opens the pathname for reading.\"],\"outcomes\":[\"Handle-relative opening reads the originally checked file.\",\"Pathname reopening reads the replacement file.\"],\"observer\":\"The calling flow sees a placement for different bytes or a SOURCE_CHANGED failure.\"}},{\"subject\":\"A5 credential file\",\"kind\":\"undefined_secure_open\",\"text\":\"At the start it is read once; its last component must not be a link, while the folders above it belong to the installation and are taken as they stand, and the permissions judged are those of the file that is read.\",\"question\":\"How must the implementation establish that the final component is not a link and that the permissions and token bytes come from the same opened file despite replacement races?\",\"options\":[\"Open the final component with no-follow semantics and inspect permissions through that open handle\",\"Inspect the pathname, then open and read it normally\",\"Open normally and reject only if post-open metadata identifies a symbolic link\"],\"default_guess\":\"Open the final component once with no-follow semantics, then obtain permissions and bytes through that same handle.\",\"witness\":{\"initial\":\"The credential path initially names a protected regular file.\",\"events\":[\"Startup checks that the final component is not a link.\",\"Another actor replaces it with a link to a permissive token file.\",\"Startup reads the credential.\"],\"outcomes\":[\"A no-follow open rejects startup.\",\"A check-then-open implementation follows the replacement link and starts with its token.\"],\"observer\":\"A caller possessing the replacement token can authenticate only in the second implementation.\"}},{\"subject\":\"A5 photo-folder containment\",\"kind\":\"contradictory_path_semantics\",\"text\":\"the photo folder of the requested project must be a folder whose resolved path is strictly below the resolved root\\nThe folder that is read is the folder whose containment was checked: no link on its resolved path is followed (A1)\",\"question\":\"Are symbolic links followed while resolving the root and photo folder for containment, and are links already present inside an otherwise contained path accepted or refused?\",\"options\":[\"Resolve links for containment, then open the resulting canonical path without following any later replacement link\",\"Reject every path containing a symbolic link\",\"Follow links while resolving and again while opening, provided the final result remains below the root\"],\"default_guess\":\"Resolve links for containment, retain the resolved object or canonical components, and refuse any replacement link encountered while opening it.\",\"witness\":{\"initial\":\"The configured photo subfolder contains a symbolic link to a directory that is still strictly inside the resolved root.\",\"events\":[\"A scan resolves the configured root and photo folder.\",\"It attempts to open the path described by the resolved result.\"],\"outcomes\":[\"The contained link is followed during resolution and the scan proceeds.\",\"The rule that no link is followed causes FOLDER_UNAVAILABLE.\"],\"observer\":\"The calling flow sees either scan results or a refusal.\"}},{\"subject\":\"A2 image transformation\",\"kind\":\"underspecified_library_operations\",\"text\":\"its EXIF transposition applies the camera orientation; its conversion to RGBA converts the decoded samples, without colour management and without a colour profile; its thumbnail reduction with the LANCZOS filter to a box of the imported `PHOTO_MAX_SIDE` constant on each side reduces the image when a side is larger than that box, keeping its proportion; the result is pasted onto an RGB image of the same size filled with the colour of the imported `PHOTO_BACKGROUND` constant, with its own alpha channel as the mask, so transparent areas take that colour; and its JPEG encoding writes the image with quality the imported `PHOTO_QUALITY` constant, optimize the imported `PHOTO_OPTIMIZE` constant, progressive the imported `PHOTO_PROGRESSIVE` constant and subsampling the imported `PHOTO_SUBSAMPLING` constant\",\"question\":\"Which exact library functions, object methods, defaults and arguments implement each named operation so that generated implementations produce the same pixels and JPEG bytes?\",\"options\":[\"Require the Pillow calls ImageOps.exif_transpose, Image.convert, Image.thumbnail, Image.paste and Image.save with fully stated arguments\",\"Allow any library APIs that appear to perform the described transformations\",\"Provide one backend function that owns the complete deterministic recipe\"],\"default_guess\":\"Require the explicit Pillow calls and arguments formerly stated, or expose the whole recipe as one named backend function.\",\"witness\":{\"initial\":\"A source image has orientation metadata, transparency and dimensions requiring a non-integral thumbnail size.\",\"events\":[\"Two implementers translate the semantic operation names into different Pillow APIs or default arguments.\",\"Each delivers the source.\"],\"outcomes\":[\"One implementation produces one set of resized pixels and JPEG bytes.\",\"The other produces different pixels or JPEG bytes while still satisfying the prose descriptions.\"],\"observer\":\"The Portal and the caller see different stored hashes, sizes or rendered images.\"}},{\"subject\":\"A2 camera time usability\",\"kind\":\"incomplete_refusal_conditions\",\"text\":\"A camera value is unusable when it does not match the imported `EXIF_DATETIME_PATTERN` constant whole or is no valid calendar date and time, when its UTC year is before the imported `CAMERA_EARLIEST_YEAR` constant, or when it is more than the imported `CAMERA_LATEST_AFTER_MODIFIED_HOURS` constant of hours after the file's modification time.\",\"question\":\"Is a syntactically valid calendar value unusable when constructing its datetime or converting it to UTC overflows or otherwise cannot be represented, and at what stage are the year and plausibility checks applied?\",\"options\":[\"Any construction or UTC-conversion failure makes the camera value unusable\",\"Only invalid calendar fields are unusable; conversion failures fail the whole delivery\",\"Clamp or otherwise normalize an unrepresentable UTC result\"],\"default_guess\":\"Treat every construction or UTC-conversion failure as making that camera value unusable and fall back to the next source.\"},{\"subject\":\"A2 EXIF offset\",\"kind\":\"undefined_time_meaning\",\"text\":\"`DateTimeOriginal` uses `OffsetTimeOriginal` when that offset matches the imported `EXIF_OFFSET_PATTERN` constant whole, with hours up to the imported `CAMERA_OFFSET_MAX_HOURS` constant and minutes that are a minute of the hour\",\"question\":\"What exact sign semantics and UTC conversion does “uses” require, and is an otherwise matching offset unusable or ignored when applying it would produce an unrepresentable instant?\",\"options\":[\"Interpret the offset as local-minus-UTC and subtract it from DateTimeOriginal; ignore it and use the configured timezone if conversion fails\",\"Interpret it according to the image library's EXIF parser\",\"Make the camera value unusable if the matching offset cannot be converted\"],\"default_guess\":\"Interpret the EXIF offset as local-minus-UTC, convert to UTC, and make the camera value unusable if conversion cannot be represented.\"},{\"subject\":\"A8 direct dependencies\",\"kind\":\"missing_decided_values\",\"text\":\"The direct libraries are pinned to exact versions: pillow, fastapi, pydantic and uvicorn.\",\"question\":\"What exact version is pinned for each library now that the prototype requirements file is no longer a stated source?\",\"options\":[\"State four exact version numbers in A9\",\"Name an imported dependency-lock artifact that supplies the versions\",\"Leave the generator to choose current versions\"],\"default_guess\":\"State exact versions in A9 and generate the dependency lock from them.\",\"witness\":{\"initial\":\"No dependency file or version numbers have yet been written.\",\"events\":[\"One later agent selects the current Pillow and framework releases.\",\"Another later agent selects older compatible exact releases.\",\"Both implement A2 and the web service.\"],\"outcomes\":[\"The first build uses one image arithmetic, API surface and transitive dependency set.\",\"The second build uses another while both claim to have pinned exact versions.\"],\"observer\":\"Deployment, generated code and stored JPEG bytes can differ.\"}},{\"subject\":\"A8 ServiceExit boundary\",\"kind\":\"undefined_boundary\",\"text\":\"the process ends before its web server listens, whatever ends it; SERVED, value `served`: after it listens, a signal of the imported `STOP_SIGNALS` constant stops it and the process ends without a failure\",\"question\":\"What exact observable event means that the web server “listens”: creation of the socket, completion of bind/listen, acceptance of the first connection, or the server's startup-complete report?\",\"options\":[\"The server's startup-complete report is the boundary\",\"Successful operating-system listen is the boundary\",\"The first accepted connection is the boundary\"],\"default_guess\":\"Use the web server's startup-complete report, with its socket already accepting connections, as the boundary.\",\"witness\":{\"initial\":\"The server has bound and begun listening on its socket but has not yet emitted its startup-complete report.\",\"events\":[\"A startup task fails and the process ends.\"],\"outcomes\":[\"The process is SERVER_FAILED because the socket had begun listening.\",\"The process is START_FAILED because startup completion had not been reported.\"],\"observer\":\"The process supervisor sees a different exit status classification.\"}},{\"subject\":\"A8 ServiceExit precedence\",\"kind\":\"undefined_event_precedence\",\"text\":\"SERVED, value `served`: after it listens, a signal of the imported `STOP_SIGNALS` constant stops it and the process ends without a failure; and SERVER_FAILED, value `server_failed`: after it listens, the process ends in any other way.\",\"question\":\"When a stop signal and a failure both occur during shutdown, which event determines the outcome, and what counts as a failure before the process finally ends?\",\"options\":[\"Any failure during or after signalled shutdown makes the outcome SERVER_FAILED\",\"The stop signal fixes SERVED even if shutdown later fails\",\"Whichever event first begins termination fixes the outcome\"],\"default_guess\":\"Classify as SERVER_FAILED if any failure occurs after listening, including during or after signal-driven shutdown.\",\"witness\":{\"initial\":\"The server is listening normally.\",\"events\":[\"SIGTERM requests shutdown.\",\"A shutdown hook or server cleanup fails before the process exits.\"],\"outcomes\":[\"The outcome is SERVED because a listed signal stopped the server.\",\"The outcome is SERVER_FAILED because the process did not end without a failure.\"],\"observer\":\"The process supervisor sees exit status 0 or 1.\"}},{\"subject\":\"Status and external invariants\",\"kind\":\"contradictory_witness_scope\",\"text\":\"Each Required tests item is bound to the check that witnesses it in the generated service.\\nINV-15: the deployment route refuses an image holding a distribution with a known vulnerability, and refuses when the check cannot complete.\\nINV-17: a project holding a date with an offset is detected before delivery, and a project holding only UTC dates passes. The calling flow's own stop is shown when that flow exists.\",\"question\":\"Must every Required tests witness execute against the generated deliverer service, or may INV-15 and INV-17 bind to checks of the deployment route and calling flow outside that service?\",\"options\":[\"Permit witnesses in the component that owns the invariant\",\"Require the generated service's test suite to exercise or simulate those external components\",\"Remove external-component invariants from this State 2 document\"],\"default_guess\":\"Bind each invariant to a check in the component that owns the behavior and change the Status sentence accordingly.\"},{\"subject\":\"INV-13 Required tests\",\"kind\":\"incomplete_invariant_test\",\"text\":\"INV-13: a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer, and `marked_at` equals that reading.\",\"question\":\"What must the test show for marks refused before the clock point, marks refused after it, and replayed marks, which the normative rule assigns different clock-reading behavior?\",\"options\":[\"Test a successful mark, an early refusal, a late refusal and a replay separately\",\"Test only one successful mark and the non-mark operations\",\"State that the counting-clock assertion is parameterized over every mark outcome\"],\"default_guess\":\"Require separate assertions that early refusals read zero times and successful, late-refused and replayed marks each read exactly once.\"},{\"subject\":\"A11 old date classification\",\"kind\":\"contradictory_time_classification\",\"text\":\"A `photo_date` ending in `Z` or in an offset `+HH:MM` or `-HH:MM` is an old date.\\nINV-17: a project holding a date with an offset is detected before delivery, and a project holding only UTC dates passes.\",\"question\":\"Does a UTC value ending in `Z` count as an old date that stops delivery, or as a UTC date that passes the Required test?\",\"options\":[\"A `Z` suffix is old and must stop delivery; only naive UTC text passes\",\"Every UTC instant, including `Z`, passes; only nonzero or explicit numeric offsets are old\",\"The test must distinguish naive UTC, `Z`, `+00:00` and nonzero offsets\"],\"default_guess\":\"Treat `Z` and every explicit offset, including `+00:00`, as old; only the Portal's required UTC-without-offset form passes.\",\"witness\":{\"initial\":\"A project's staff photo list contains only a date ending in `Z`.\",\"events\":[\"The calling flow performs the A11 pre-delivery check.\"],\"outcomes\":[\"The `Z` suffix is classified as old and the flow places and publishes nothing.\",\"The date is classified as UTC and the project passes.\"],\"observer\":\"The owner sees either a repair stop or delivery proceeding.\"}},{\"subject\":\"INV-17 Required tests\",\"kind\":\"conditional_required_evidence\",\"text\":\"The calling flow's own stop is shown when that flow exists.\",\"question\":\"What must be shown now for INV-17, rather than conditionally after a calling flow happens to exist?\",\"options\":[\"Require an executable calling-flow check that proves no placement or publication call occurs\",\"Require a contract-level fake caller test now and replace it with an integration check later\",\"Carry INV-17 explicitly to the state that creates the calling flow instead of claiming it is presently bound\"],\"default_guess\":\"Require a caller-level test that records attempted placement and publication calls and asserts that none occur when an old date or list-read failure is found.\",\"witness\":{\"initial\":\"The Portal photo list contains an old date, but no calling-flow implementation exists yet.\",\"events\":[\"The current witness check tests only detection of the date.\",\"A later calling flow is implemented.\"],\"outcomes\":[\"The later flow stops before every placement and publication call.\",\"The later flow detects the date but still places or publishes because the stop behavior was never bound to a check.\"],\"observer\":\"The owner and Portal see whether a new photo was published.\"}}]}",
+ "set_aside": []
+}

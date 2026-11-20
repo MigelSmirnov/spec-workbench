@@ -1,0 +1,374 @@
+{
+ "open_points": [
+  {
+   "subject": "A1 file modification time",
+   "kind": "unspecified_instant",
+   "text": "A file's modification time is that of the file whose bytes were read",
+   "question": "At what point is the modification time sampled, and how is it guaranteed to belong to the same opened file whose bytes are read?",
+   "options": [
+    "Read metadata from the opened file immediately before reading its bytes.",
+    "Read metadata from the opened file after reading its bytes.",
+    "Use the metadata obtained while listing the folder."
+   ],
+   "default_guess": "Read metadata from the opened file immediately before reading its bytes.",
+   "witness": {
+    "initial": "A regular file exists with modification time T1.",
+    "events": [
+     "The scan lists the file.",
+     "Syncthing changes the file's modification time to T2 while its bytes are being read."
+    ],
+    "outcomes": [
+     "The observation or delivery uses T1.",
+     "The observation or delivery uses T2."
+    ],
+    "observer": "The caller sees a different photo date."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 file reading",
+   "kind": "undefined_read_once",
+   "text": "A file is read once, and the bytes read are the bytes judged.",
+   "question": "Does one read mean one operating-system read call or one complete pass that continues after short reads until EOF or the size limit, and what happens after a short read?",
+   "options": [
+    "Continue reading the same opened file until EOF or one byte beyond the limit.",
+    "Make exactly one read call and judge only the bytes it returns.",
+    "Treat a short read as UNREADABLE_FILE."
+   ],
+   "default_guess": "Continue reading the same opened file until EOF or one byte beyond the limit.",
+   "witness": {
+    "initial": "A valid JPEG is available through a file or filesystem that returns a short first read before EOF.",
+    "events": [
+     "The scan opens the file.",
+     "The first read returns only part of the JPEG without an error."
+    ],
+    "outcomes": [
+     "The scan continues and judges the complete JPEG READY.",
+     "The scan judges the partial bytes and reports UNSUPPORTED_FORMAT or hashes incomplete content."
+    ],
+    "observer": "The calling flow sees a different status or source id."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A1 initial size checks",
+   "kind": "unspecified_metadata_source",
+   "text": "Orders 1 and 2 are first decided from the size the folder lists, before the file is read.",
+   "question": "What exact metadata operation supplies the listed size, when is it performed, and what outcome applies if that operation fails or the entry changes before it?",
+   "options": [
+    "Use one no-follow metadata read of the directory entry and refuse the scan on errors other than disappearance.",
+    "Use metadata returned by directory enumeration where available and otherwise inspect the path.",
+    "Open the file first and use metadata from the opened file."
+   ],
+   "default_guess": "Use one no-follow metadata read of the directory entry; omit an entry that disappeared and refuse the scan for other metadata errors.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2 image transformation",
+   "kind": "unspecified_library_operations",
+   "text": "exactly these operations of the image library at the version A9 pins, in this order, whose arithmetic (conversion formulas, resampling, rounding of sizes, alpha compositing and encoding) is that library's: its EXIF transposition applies the camera orientation; its conversion to RGBA converts the decoded samples",
+   "question": "Which concrete library functions, arguments, frame-selection operation and metadata handling constitute each named operation so that all implementations produce the promised same bytes?",
+   "options": [
+    "Use Pillow's ImageOps.exif_transpose, Image.convert, Image.thumbnail, Image.new/paste and Image.save with the stated arguments.",
+    "Allow any API of the pinned image library that implements the prose operations.",
+    "Put the transformation in a named deterministic backend and require its emitted symbol."
+   ],
+   "default_guess": "Use Pillow's ImageOps.exif_transpose, Image.convert, Image.thumbnail, Image.new/paste and Image.save with the stated arguments.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2 camera timestamp usability",
+   "kind": "undefined_conversion_failure",
+   "text": "A camera value is unusable when it does not match the imported `EXIF_DATETIME_PATTERN` constant whole or is no valid calendar date and time, when its UTC year is before the imported `CAMERA_EARLIEST_YEAR` constant, or when it is more than the imported `CAMERA_LATEST_AFTER_MODIFIED_HOURS` constant of hours after the file's modification time.",
+   "question": "Is a syntactically valid calendar value unusable when applying its offset or time zone cannot produce a representable UTC datetime, and which fallback is used?",
+   "options": [
+    "Treat every parsing, time-zone and UTC-conversion failure as unusable and try the next source.",
+    "Fail the delivery as UNREADABLE_IMAGE.",
+    "Let the datetime conversion error escape as an operation refusal or server failure."
+   ],
+   "default_guess": "Treat every conversion failure as unusable and try the next photo-moment source.",
+   "witness": {
+    "initial": "EXIF contains a valid extreme calendar datetime whose conversion with the selected offset overflows the runtime datetime range; file modification time is usable.",
+    "events": [
+     "The caller delivers the photo.",
+     "The service parses the EXIF value and converts it to UTC."
+    ],
+    "outcomes": [
+     "The EXIF value is unusable and the modification time is delivered.",
+     "The conversion raises an error and delivery fails."
+    ],
+    "observer": "The calling flow sees a placement in one implementation and a failure in another."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 condition 1 versus A1 order 5",
+   "kind": "ambiguous_refusal_boundary",
+   "text": "the last segment is absent, a symbolic link or not a regular file, or cannot be inspected",
+   "question": "Which failures count as inability to inspect the last segment under condition 1, and which count as an opening or reading failure under A1 order 5?",
+   "options": [
+    "Only a no-follow metadata failure is condition 1; a later open or read failure is A1 order 5.",
+    "Every failure before bytes are returned is condition 1.",
+    "Any failure after a valid name is accepted is A1 order 5."
+   ],
+   "default_guess": "A no-follow metadata failure is condition 1; an open or read failure after successful inspection is A1 order 5.",
+   "witness": {
+    "initial": "The requested last segment exists but its metadata or opening is denied by the filesystem.",
+    "events": [
+     "The caller requests placement of that name.",
+     "The implementation attempts to inspect or open the last segment."
+    ],
+    "outcomes": [
+     "Placement fails with NOT_READY_OR_ABSENT under condition 1.",
+     "Placement fails with UNREADABLE_FILE under A1 order 5."
+    ],
+    "observer": "The calling flow sees a different PlacementFailure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 and INV-02 path traversal",
+   "kind": "insufficient_required_test",
+   "text": "for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure",
+   "question": "What must the required test show for paths that fail condition 1 because a folder cannot be reached or the last segment cannot be inspected, rather than because of one of the listed path forms?",
+   "options": [
+    "Add permission, I/O-error and disappearance cases and prove no path beyond the failure is opened.",
+    "State that the listed cases exhaust condition 1.",
+    "Narrow INV-02 and condition 1 to the listed cases."
+   ],
+   "default_guess": "Add failure, disappearance and permission cases and trace that nothing beyond the failing segment is opened.",
+   "unit": "?"
+  },
+  {
+   "subject": "A5 credential file",
+   "kind": "unspecified_race_handling",
+   "text": "At the start it is read once; its last component must not be a link, while the folders above it belong to the installation and are taken as they stand, and the permissions judged are those of the file that is read.",
+   "question": "How must the service ensure that the link check, permission check and content read all concern the same file when the last component is replaced concurrently?",
+   "options": [
+    "Open the last component without following links and obtain permissions and content through that open handle.",
+    "Check the path for a link and then reopen it normally.",
+    "Read the path first and inspect its metadata afterwards."
+   ],
+   "default_guess": "Open without following links and inspect and read through the same open handle.",
+   "witness": {
+    "initial": "The credential path initially names a secure regular file and can be replaced with a symbolic link to another file.",
+    "events": [
+     "Service startup checks the path.",
+     "Another actor replaces the last component with the link.",
+     "Startup reads the credential."
+    ],
+    "outcomes": [
+     "Startup refuses the replacement and never reads the link target.",
+     "Startup follows the replacement and accepts the target's token."
+    ],
+    "observer": "A caller possessing the target token can authenticate only in the second implementation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A5 photo-folder containment",
+   "kind": "unspecified_identity_binding",
+   "text": "The folder that is read is the folder whose containment was checked: no link on its resolved path is followed (A1)",
+   "question": "What sequence of resolution and no-follow opens binds the containment check to the folder actually read, especially when a component is replaced after resolution?",
+   "options": [
+    "Open the resolved path component by component without following links and operate through those handles.",
+    "Resolve the path, compare it with the root, then open the resulting pathname normally.",
+    "Open the configured path first and compare the opened folder's canonical path afterwards."
+   ],
+   "default_guess": "Resolve for containment, then open every component of the resolved path without following links and use the resulting handles.",
+   "witness": {
+    "initial": "The checked photo folder is below the root, and one path component can be replaced concurrently by a link outside the root.",
+    "events": [
+     "A scan completes its containment check.",
+     "The component is replaced by the link.",
+     "The scan opens and lists the photo folder."
+    ],
+    "outcomes": [
+     "The replacement is refused with FOLDER_UNAVAILABLE.",
+     "The scan follows the new link and reads an outside folder."
+    ],
+    "observer": "The calling flow may receive names and hashes from another client's folder."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 ServiceExit listening boundary",
+   "kind": "undefined_boundary",
+   "text": "the process ends before its web server listens",
+   "question": "What exact observable event means that the web server listens: socket bind, the listen system call, acceptance of connections, or completion of the server's startup report?",
+   "options": [
+    "The web server's startup-complete report is the boundary, with its socket accepting connections.",
+    "Successful listen on the socket is the boundary.",
+    "The first accepted connection is the boundary."
+   ],
+   "default_guess": "Use the web server's startup-complete report while the socket is accepting connections.",
+   "witness": {
+    "initial": "The server has bound and begun listening on its socket but its application startup has not completed.",
+    "events": [
+     "Application startup then fails.",
+     "The process exits."
+    ],
+    "outcomes": [
+     "The outcome is START_FAILED because startup completion was the boundary.",
+     "The outcome is SERVER_FAILED because the socket was already listening."
+    ],
+    "observer": "The process supervisor sees a different exit classification, although both map to status 1."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 ServiceExit event precedence",
+   "kind": "undefined_precedence",
+   "text": "SERVED, value `served`: after it listens, a signal of the imported `STOP_SIGNALS` constant stops it and the process ends without a failure; and SERVER_FAILED, value `server_failed`: after it listens, the process ends in any other way.",
+   "question": "When a stop signal and a failure both occur during shutdown, which event determines the outcome, and what interval and events are included by “without a failure”?",
+   "options": [
+    "Any failure before process termination makes the outcome SERVER_FAILED, even after a stop signal.",
+    "The first event that initiates termination fixes the outcome, so a stop signal makes it SERVED.",
+    "Only a web-server return error changes SERVED to SERVER_FAILED; cleanup failures do not."
+   ],
+   "default_guess": "Any failure before process termination makes the outcome SERVER_FAILED.",
+   "witness": {
+    "initial": "The server is listening normally.",
+    "events": [
+     "SIGTERM requests shutdown.",
+     "A shutdown hook fails before the process exits."
+    ],
+    "outcomes": [
+     "The outcome is SERVER_FAILED because the process did not end without a failure.",
+     "The outcome is SERVED because the signal was the event that stopped the server."
+    ],
+    "observer": "The process supervisor sees exit status 1 or 0."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-04",
+   "kind": "underspecified_required_test",
+   "text": "camera times with an offset, without one, implausible or absent give the expected UTC value.",
+   "question": "Which concrete input timestamps, time zone, modification time and exact UTC outputs must the test assert, including ambiguous and nonexistent local times and the microsecond representation?",
+   "options": [
+    "Specify exact cases and expected serialized UTC values for every branch of A2 rules 3–4 and A7 rule 4.",
+    "Let the test author choose any values they regard as expected.",
+    "Limit the invariant to checking that returned datetimes have no offset."
+   ],
+   "default_guess": "Specify exact inputs and outputs for offset, local, ambiguous, nonexistent, implausible, absent and modification-time cases.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-13",
+   "kind": "incomplete_required_test",
+   "text": "a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer, and `marked_at` equals that reading.",
+   "question": "What must show the required clock behavior for a mark refused before the clock point, a mark refused after it, and a replayed mark?",
+   "options": [
+    "Add all three cases and assert respectively zero, one and one readings with no fresh timestamp written.",
+    "Treat the single successful mark case as sufficient for the invariant.",
+    "Narrow the normative clock rules to successful marks only."
+   ],
+   "default_guess": "Test refused-before, refused-after and replayed marks explicitly in addition to a successful mark.",
+   "unit": "?"
+  },
+  {
+   "subject": "A11 old UTC dates",
+   "kind": "contradiction",
+   "text": "A `photo_date` ending in `Z` or in an offset `+HH:MM` or `-HH:MM` is an old date.",
+   "question": "Does a project whose dates end in `Z` stop as holding old dates, or pass as a project holding only UTC dates as the Required tests item says?",
+   "options": [
+    "A `Z` suffix is an old representation and must stop the flow.",
+    "A `Z` suffix is a valid UTC date and must pass.",
+    "Only explicit `+HH:MM` and `-HH:MM` suffixes are old."
+   ],
+   "default_guess": "Treat `Z` as old because the normative rule explicitly lists it.",
+   "witness": {
+    "initial": "The Portal staff photo list contains only `photo_date` values ending in `Z`.",
+    "events": [
+     "The calling flow performs the A11 pre-delivery check."
+    ],
+    "outcomes": [
+     "Rule 1 classifies the dates as old and the flow places and publishes nothing.",
+     "The Required tests phrase “a project holding only UTC dates passes” is read to require the flow to continue."
+    ],
+    "observer": "The owner sees either a repair warning or a delivery."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "INV-17",
+   "kind": "incomplete_required_test",
+   "text": "The calling flow's own stop is shown when that flow exists.",
+   "question": "How is INV-17 witnessed now, given that State 2 owns the invariant and the item makes proof that the flow places and publishes nothing conditional on a future flow existing?",
+   "options": [
+    "Require an existing executable flow check that proves neither placement nor publication is called.",
+    "Replace the invariant with a contract-level check on a specified flow port before the flow exists.",
+    "Carry INV-17 explicitly to the later state that creates the flow instead of claiming it is closed here."
+   ],
+   "default_guess": "Require a testable flow or flow contract now that proves no placement or publication occurs.",
+   "unit": "?"
+  },
+  {
+   "subject": "Status and INV-17",
+   "kind": "contradiction",
+   "text": "Each Required tests item is bound to the check that witnesses it in the generated service.",
+   "question": "How can the unconditional generated-service binding be true for INV-17 when its Required tests item says the calling flow's stop is shown only “when that flow exists” and A11 says the deliverer does not perform the check?",
+   "options": [
+    "Provide and bind an existing generated calling-flow check.",
+    "Exclude caller-owned invariants from the Status claim.",
+    "Carry the binding to the state that generates the calling flow."
+   ],
+   "default_guess": "Provide an existing generated calling-flow check before declaring the item bound.",
+   "witness": {
+    "initial": "The generated deliverer exists but the calling flow does not.",
+    "events": [
+     "The INV-17 witness is resolved.",
+     "The generated service is tested."
+    ],
+    "outcomes": [
+     "The Status sentence requires a check that witnesses the stop.",
+     "The conditional Required tests sentence permits no check of the stop yet."
+    ],
+    "observer": "The design gate either closes or leaves INV-17 unproved."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Status and INV-15",
+   "kind": "contradiction",
+   "text": "Each Required tests item is bound to the check that witnesses it in the generated service.",
+   "question": "Is INV-15 witnessed by a check of the generated service, or is the required OSV deployment check absent as A9's consequence says?",
+   "options": [
+    "Build and bind the deployment-route check now.",
+    "Change the Status claim to allow a later deployment check.",
+    "Remove or carry INV-15 until the route exists."
+   ],
+   "default_guess": "Carry INV-15 to deployment until the route and its check exist.",
+   "witness": {
+    "initial": "The generated service image contains a distribution listed as vulnerable in the accepted OSV snapshot.",
+    "events": [
+     "The State 2 witness is evaluated.",
+     "A deployment is attempted."
+    ],
+    "outcomes": [
+     "The bound check refuses the image as the Required tests item requires.",
+     "No service-specific OSV check exists, as the consequence states, so the refusal is not demonstrated."
+    ],
+    "observer": "The deployment route and the design gate see different closure states."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Status and INV-16",
+   "kind": "contradiction",
+   "text": "Each Required tests item is bound to the check that witnesses it in the generated service.",
+   "question": "Is the workbench design-lint witness for INV-16 a check in the generated service, or is the Status sentence meant to include non-service design checks?",
+   "options": [
+    "Limit the Status sentence to product invariants and explicitly allow workbench witnesses.",
+    "Generate a service check for the closed security-category list.",
+    "Change INV-16's witness from workbench design lint to a generated-service check."
+   ],
+   "default_guess": "Clarify that design-only invariants may bind to workbench checks rather than generated-service checks.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A1 file modification time\",\"kind\":\"unspecified_instant\",\"text\":\"A file's modification time is that of the file whose bytes were read\",\"question\":\"At what point is the modification time sampled, and how is it guaranteed to belong to the same opened file whose bytes are read?\",\"options\":[\"Read metadata from the opened file immediately before reading its bytes.\",\"Read metadata from the opened file after reading its bytes.\",\"Use the metadata obtained while listing the folder.\"],\"default_guess\":\"Read metadata from the opened file immediately before reading its bytes.\",\"witness\":{\"initial\":\"A regular file exists with modification time T1.\",\"events\":[\"The scan lists the file.\",\"Syncthing changes the file's modification time to T2 while its bytes are being read.\"],\"outcomes\":[\"The observation or delivery uses T1.\",\"The observation or delivery uses T2.\"],\"observer\":\"The caller sees a different photo date.\"}},{\"subject\":\"A1 file reading\",\"kind\":\"undefined_read_once\",\"text\":\"A file is read once, and the bytes read are the bytes judged.\",\"question\":\"Does one read mean one operating-system read call or one complete pass that continues after short reads until EOF or the size limit, and what happens after a short read?\",\"options\":[\"Continue reading the same opened file until EOF or one byte beyond the limit.\",\"Make exactly one read call and judge only the bytes it returns.\",\"Treat a short read as UNREADABLE_FILE.\"],\"default_guess\":\"Continue reading the same opened file until EOF or one byte beyond the limit.\",\"witness\":{\"initial\":\"A valid JPEG is available through a file or filesystem that returns a short first read before EOF.\",\"events\":[\"The scan opens the file.\",\"The first read returns only part of the JPEG without an error.\"],\"outcomes\":[\"The scan continues and judges the complete JPEG READY.\",\"The scan judges the partial bytes and reports UNSUPPORTED_FORMAT or hashes incomplete content.\"],\"observer\":\"The calling flow sees a different status or source id.\"}},{\"subject\":\"A1 initial size checks\",\"kind\":\"unspecified_metadata_source\",\"text\":\"Orders 1 and 2 are first decided from the size the folder lists, before the file is read.\",\"question\":\"What exact metadata operation supplies the listed size, when is it performed, and what outcome applies if that operation fails or the entry changes before it?\",\"options\":[\"Use one no-follow metadata read of the directory entry and refuse the scan on errors other than disappearance.\",\"Use metadata returned by directory enumeration where available and otherwise inspect the path.\",\"Open the file first and use metadata from the opened file.\"],\"default_guess\":\"Use one no-follow metadata read of the directory entry; omit an entry that disappeared and refuse the scan for other metadata errors.\"},{\"subject\":\"A2 image transformation\",\"kind\":\"unspecified_library_operations\",\"text\":\"exactly these operations of the image library at the version A9 pins, in this order, whose arithmetic (conversion formulas, resampling, rounding of sizes, alpha compositing and encoding) is that library's: its EXIF transposition applies the camera orientation; its conversion to RGBA converts the decoded samples\",\"question\":\"Which concrete library functions, arguments, frame-selection operation and metadata handling constitute each named operation so that all implementations produce the promised same bytes?\",\"options\":[\"Use Pillow's ImageOps.exif_transpose, Image.convert, Image.thumbnail, Image.new/paste and Image.save with the stated arguments.\",\"Allow any API of the pinned image library that implements the prose operations.\",\"Put the transformation in a named deterministic backend and require its emitted symbol.\"],\"default_guess\":\"Use Pillow's ImageOps.exif_transpose, Image.convert, Image.thumbnail, Image.new/paste and Image.save with the stated arguments.\"},{\"subject\":\"A2 camera timestamp usability\",\"kind\":\"undefined_conversion_failure\",\"text\":\"A camera value is unusable when it does not match the imported `EXIF_DATETIME_PATTERN` constant whole or is no valid calendar date and time, when its UTC year is before the imported `CAMERA_EARLIEST_YEAR` constant, or when it is more than the imported `CAMERA_LATEST_AFTER_MODIFIED_HOURS` constant of hours after the file's modification time.\",\"question\":\"Is a syntactically valid calendar value unusable when applying its offset or time zone cannot produce a representable UTC datetime, and which fallback is used?\",\"options\":[\"Treat every parsing, time-zone and UTC-conversion failure as unusable and try the next source.\",\"Fail the delivery as UNREADABLE_IMAGE.\",\"Let the datetime conversion error escape as an operation refusal or server failure.\"],\"default_guess\":\"Treat every conversion failure as unusable and try the next photo-moment source.\",\"witness\":{\"initial\":\"EXIF contains a valid extreme calendar datetime whose conversion with the selected offset overflows the runtime datetime range; file modification time is usable.\",\"events\":[\"The caller delivers the photo.\",\"The service parses the EXIF value and converts it to UTC.\"],\"outcomes\":[\"The EXIF value is unusable and the modification time is delivered.\",\"The conversion raises an error and delivery fails.\"],\"observer\":\"The calling flow sees a placement in one implementation and a failure in another.\"}},{\"subject\":\"A3 condition 1 versus A1 order 5\",\"kind\":\"ambiguous_refusal_boundary\",\"text\":\"the last segment is absent, a symbolic link or not a regular file, or cannot be inspected\",\"question\":\"Which failures count as inability to inspect the last segment under condition 1, and which count as an opening or reading failure under A1 order 5?\",\"options\":[\"Only a no-follow metadata failure is condition 1; a later open or read failure is A1 order 5.\",\"Every failure before bytes are returned is condition 1.\",\"Any failure after a valid name is accepted is A1 order 5.\"],\"default_guess\":\"A no-follow metadata failure is condition 1; an open or read failure after successful inspection is A1 order 5.\",\"witness\":{\"initial\":\"The requested last segment exists but its metadata or opening is denied by the filesystem.\",\"events\":[\"The caller requests placement of that name.\",\"The implementation attempts to inspect or open the last segment.\"],\"outcomes\":[\"Placement fails with NOT_READY_OR_ABSENT under condition 1.\",\"Placement fails with UNREADABLE_FILE under A1 order 5.\"],\"observer\":\"The calling flow sees a different PlacementFailure.\"}},{\"subject\":\"A3 and INV-02 path traversal\",\"kind\":\"insufficient_required_test\",\"text\":\"for content with no placement, an empty or absolute name, a name with an empty, `.` or `..` segment, an ignored name at any level, a folder, and a path through a symbolic link each fail with the NOT_READY_OR_ABSENT member of = models.PlacementFailure\",\"question\":\"What must the required test show for paths that fail condition 1 because a folder cannot be reached or the last segment cannot be inspected, rather than because of one of the listed path forms?\",\"options\":[\"Add permission, I/O-error and disappearance cases and prove no path beyond the failure is opened.\",\"State that the listed cases exhaust condition 1.\",\"Narrow INV-02 and condition 1 to the listed cases.\"],\"default_guess\":\"Add failure, disappearance and permission cases and trace that nothing beyond the failing segment is opened.\"},{\"subject\":\"A5 credential file\",\"kind\":\"unspecified_race_handling\",\"text\":\"At the start it is read once; its last component must not be a link, while the folders above it belong to the installation and are taken as they stand, and the permissions judged are those of the file that is read.\",\"question\":\"How must the service ensure that the link check, permission check and content read all concern the same file when the last component is replaced concurrently?\",\"options\":[\"Open the last component without following links and obtain permissions and content through that open handle.\",\"Check the path for a link and then reopen it normally.\",\"Read the path first and inspect its metadata afterwards.\"],\"default_guess\":\"Open without following links and inspect and read through the same open handle.\",\"witness\":{\"initial\":\"The credential path initially names a secure regular file and can be replaced with a symbolic link to another file.\",\"events\":[\"Service startup checks the path.\",\"Another actor replaces the last component with the link.\",\"Startup reads the credential.\"],\"outcomes\":[\"Startup refuses the replacement and never reads the link target.\",\"Startup follows the replacement and accepts the target's token.\"],\"observer\":\"A caller possessing the target token can authenticate only in the second implementation.\"}},{\"subject\":\"A5 photo-folder containment\",\"kind\":\"unspecified_identity_binding\",\"text\":\"The folder that is read is the folder whose containment was checked: no link on its resolved path is followed (A1)\",\"question\":\"What sequence of resolution and no-follow opens binds the containment check to the folder actually read, especially when a component is replaced after resolution?\",\"options\":[\"Open the resolved path component by component without following links and operate through those handles.\",\"Resolve the path, compare it with the root, then open the resulting pathname normally.\",\"Open the configured path first and compare the opened folder's canonical path afterwards.\"],\"default_guess\":\"Resolve for containment, then open every component of the resolved path without following links and use the resulting handles.\",\"witness\":{\"initial\":\"The checked photo folder is below the root, and one path component can be replaced concurrently by a link outside the root.\",\"events\":[\"A scan completes its containment check.\",\"The component is replaced by the link.\",\"The scan opens and lists the photo folder.\"],\"outcomes\":[\"The replacement is refused with FOLDER_UNAVAILABLE.\",\"The scan follows the new link and reads an outside folder.\"],\"observer\":\"The calling flow may receive names and hashes from another client's folder.\"}},{\"subject\":\"A8 ServiceExit listening boundary\",\"kind\":\"undefined_boundary\",\"text\":\"the process ends before its web server listens\",\"question\":\"What exact observable event means that the web server listens: socket bind, the listen system call, acceptance of connections, or completion of the server's startup report?\",\"options\":[\"The web server's startup-complete report is the boundary, with its socket accepting connections.\",\"Successful listen on the socket is the boundary.\",\"The first accepted connection is the boundary.\"],\"default_guess\":\"Use the web server's startup-complete report while the socket is accepting connections.\",\"witness\":{\"initial\":\"The server has bound and begun listening on its socket but its application startup has not completed.\",\"events\":[\"Application startup then fails.\",\"The process exits.\"],\"outcomes\":[\"The outcome is START_FAILED because startup completion was the boundary.\",\"The outcome is SERVER_FAILED because the socket was already listening.\"],\"observer\":\"The process supervisor sees a different exit classification, although both map to status 1.\"}},{\"subject\":\"A8 ServiceExit event precedence\",\"kind\":\"undefined_precedence\",\"text\":\"SERVED, value `served`: after it listens, a signal of the imported `STOP_SIGNALS` constant stops it and the process ends without a failure; and SERVER_FAILED, value `server_failed`: after it listens, the process ends in any other way.\",\"question\":\"When a stop signal and a failure both occur during shutdown, which event determines the outcome, and what interval and events are included by “without a failure”?\",\"options\":[\"Any failure before process termination makes the outcome SERVER_FAILED, even after a stop signal.\",\"The first event that initiates termination fixes the outcome, so a stop signal makes it SERVED.\",\"Only a web-server return error changes SERVED to SERVER_FAILED; cleanup failures do not.\"],\"default_guess\":\"Any failure before process termination makes the outcome SERVER_FAILED.\",\"witness\":{\"initial\":\"The server is listening normally.\",\"events\":[\"SIGTERM requests shutdown.\",\"A shutdown hook fails before the process exits.\"],\"outcomes\":[\"The outcome is SERVER_FAILED because the process did not end without a failure.\",\"The outcome is SERVED because the signal was the event that stopped the server.\"],\"observer\":\"The process supervisor sees exit status 1 or 0.\"}},{\"subject\":\"INV-04\",\"kind\":\"underspecified_required_test\",\"text\":\"camera times with an offset, without one, implausible or absent give the expected UTC value.\",\"question\":\"Which concrete input timestamps, time zone, modification time and exact UTC outputs must the test assert, including ambiguous and nonexistent local times and the microsecond representation?\",\"options\":[\"Specify exact cases and expected serialized UTC values for every branch of A2 rules 3–4 and A7 rule 4.\",\"Let the test author choose any values they regard as expected.\",\"Limit the invariant to checking that returned datetimes have no offset.\"],\"default_guess\":\"Specify exact inputs and outputs for offset, local, ambiguous, nonexistent, implausible, absent and modification-time cases.\"},{\"subject\":\"INV-13\",\"kind\":\"incomplete_required_test\",\"text\":\"a counting clock is read once by a mark and not at all by a scan, a delivery or the health answer, and `marked_at` equals that reading.\",\"question\":\"What must show the required clock behavior for a mark refused before the clock point, a mark refused after it, and a replayed mark?\",\"options\":[\"Add all three cases and assert respectively zero, one and one readings with no fresh timestamp written.\",\"Treat the single successful mark case as sufficient for the invariant.\",\"Narrow the normative clock rules to successful marks only.\"],\"default_guess\":\"Test refused-before, refused-after and replayed marks explicitly in addition to a successful mark.\"},{\"subject\":\"A11 old UTC dates\",\"kind\":\"contradiction\",\"text\":\"A `photo_date` ending in `Z` or in an offset `+HH:MM` or `-HH:MM` is an old date.\",\"question\":\"Does a project whose dates end in `Z` stop as holding old dates, or pass as a project holding only UTC dates as the Required tests item says?\",\"options\":[\"A `Z` suffix is an old representation and must stop the flow.\",\"A `Z` suffix is a valid UTC date and must pass.\",\"Only explicit `+HH:MM` and `-HH:MM` suffixes are old.\"],\"default_guess\":\"Treat `Z` as old because the normative rule explicitly lists it.\",\"witness\":{\"initial\":\"The Portal staff photo list contains only `photo_date` values ending in `Z`.\",\"events\":[\"The calling flow performs the A11 pre-delivery check.\"],\"outcomes\":[\"Rule 1 classifies the dates as old and the flow places and publishes nothing.\",\"The Required tests phrase “a project holding only UTC dates passes” is read to require the flow to continue.\"],\"observer\":\"The owner sees either a repair warning or a delivery.\"}},{\"subject\":\"INV-17\",\"kind\":\"incomplete_required_test\",\"text\":\"The calling flow's own stop is shown when that flow exists.\",\"question\":\"How is INV-17 witnessed now, given that State 2 owns the invariant and the item makes proof that the flow places and publishes nothing conditional on a future flow existing?\",\"options\":[\"Require an existing executable flow check that proves neither placement nor publication is called.\",\"Replace the invariant with a contract-level check on a specified flow port before the flow exists.\",\"Carry INV-17 explicitly to the later state that creates the flow instead of claiming it is closed here.\"],\"default_guess\":\"Require a testable flow or flow contract now that proves no placement or publication occurs.\"},{\"subject\":\"Status and INV-17\",\"kind\":\"contradiction\",\"text\":\"Each Required tests item is bound to the check that witnesses it in the generated service.\",\"question\":\"How can the unconditional generated-service binding be true for INV-17 when its Required tests item says the calling flow's stop is shown only “when that flow exists” and A11 says the deliverer does not perform the check?\",\"options\":[\"Provide and bind an existing generated calling-flow check.\",\"Exclude caller-owned invariants from the Status claim.\",\"Carry the binding to the state that generates the calling flow.\"],\"default_guess\":\"Provide an existing generated calling-flow check before declaring the item bound.\",\"witness\":{\"initial\":\"The generated deliverer exists but the calling flow does not.\",\"events\":[\"The INV-17 witness is resolved.\",\"The generated service is tested.\"],\"outcomes\":[\"The Status sentence requires a check that witnesses the stop.\",\"The conditional Required tests sentence permits no check of the stop yet.\"],\"observer\":\"The design gate either closes or leaves INV-17 unproved.\"}},{\"subject\":\"Status and INV-15\",\"kind\":\"contradiction\",\"text\":\"Each Required tests item is bound to the check that witnesses it in the generated service.\",\"question\":\"Is INV-15 witnessed by a check of the generated service, or is the required OSV deployment check absent as A9's consequence says?\",\"options\":[\"Build and bind the deployment-route check now.\",\"Change the Status claim to allow a later deployment check.\",\"Remove or carry INV-15 until the route exists.\"],\"default_guess\":\"Carry INV-15 to deployment until the route and its check exist.\",\"witness\":{\"initial\":\"The generated service image contains a distribution listed as vulnerable in the accepted OSV snapshot.\",\"events\":[\"The State 2 witness is evaluated.\",\"A deployment is attempted.\"],\"outcomes\":[\"The bound check refuses the image as the Required tests item requires.\",\"No service-specific OSV check exists, as the consequence states, so the refusal is not demonstrated.\"],\"observer\":\"The deployment route and the design gate see different closure states.\"}},{\"subject\":\"Status and INV-16\",\"kind\":\"contradiction\",\"text\":\"Each Required tests item is bound to the check that witnesses it in the generated service.\",\"question\":\"Is the workbench design-lint witness for INV-16 a check in the generated service, or is the Status sentence meant to include non-service design checks?\",\"options\":[\"Limit the Status sentence to product invariants and explicitly allow workbench witnesses.\",\"Generate a service check for the closed security-category list.\",\"Change INV-16's witness from workbench design lint to a generated-service check.\"],\"default_guess\":\"Clarify that design-only invariants may bind to workbench checks rather than generated-service checks.\"}]}",
+ "set_aside": []
+}
