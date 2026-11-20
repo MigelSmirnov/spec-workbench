@@ -164,7 +164,7 @@ outbound call.
   `HealthAnswer`, the body of the health route;
 - `RefusalAnswerRule`, the row form of the refusal answers that `data_provider` holds: a refusal code with its
   status and `detail`; and `SourceSignatureRule`, the row form of the format signatures that `data_provider`
-  holds: a format, a byte offset and the signature bytes;
+  holds: a format, a byte offset and the signature written in lowercase hexadecimal (A8);
 - no exception type: those belong to `refusals` and `deliverer_api`.
 
 ### Knows
