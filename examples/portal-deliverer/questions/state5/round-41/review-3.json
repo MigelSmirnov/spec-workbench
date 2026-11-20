@@ -1,0 +1,131 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "caller_contradiction",
+   "text": "`module:deliverer_api`.",
+   "question": "Do `scan_project_photos`, `deliver_project_photo` and `mark_photo_published` have `module:deliverer_router` as their direct caller, as the changed route table and dependency graph say, or `module:deliverer_api`, as each operation's Callers passage says?",
+   "options": [
+    "Change all three photo-delivery Callers passages to `module:deliverer_router`.",
+    "Restore deliverer-api route handlers as the direct callers and remove the router-to-photo_delivery calls."
+   ],
+   "default_guess": "Make `module:deliverer_router` the direct caller of all three operations.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "responsibility_contradiction",
+   "text": "The token of A5 rules 1 and 5, the project id part of A5 rule 9, the\nrefusal answer of A5 rule 10 are checked by `module:deliverer_api`, and the request form of A3 rule 4 and the\n`photo_id` form of A4 rule 2 by the request models the router reads;",
+   "question": "Does `deliverer_router` enforce the existence of exactly one Authorization field and parse its Bearer scheme while `deliverer_api` only compares the token, as State 3 says, or does `deliverer_api` check all of A5 rule 1 as this passage says?",
+   "options": [
+    "The router validates field cardinality and Bearer syntax; deliverer_api performs only the constant-time token comparison.",
+    "Deliverer_api receives the raw Authorization fields and performs every A5 rule 1 check."
+   ],
+   "default_guess": "Split the work as State 3 specifies: extraction and Bearer syntax in the router, comparison in deliverer_api.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "success_response_unspecified",
+   "text": "Every other route checks the token with `module:deliverer_api` before it reads the body, reads\nthe body of a delivery or a mark by its request model, judges the project id with `module:deliverer_api`, calls one\noperation of `module:photo_delivery`, and answers every refusal through `module:deliverer_api`.",
+   "question": "For each successful health, scan, delivery and mark call, what HTTP status, serialized response body, media type and response headers must the route return?",
+   "options": [
+    "Return status 200 and the direct JSON serialization of HealthAnswer, ScanResult, PlacementOutcome or MarkOutcome.",
+    "Use route-specific statuses or a wrapper/envelope around the operation result.",
+    "Delegate the complete success response to framework defaults and state that delegation explicitly."
+   ],
+   "default_guess": "Return status 200 with the direct JSON serialization of the corresponding result model.",
+   "witness": {
+    "initial": "The service is listening and a project has a valid confirmed connection.",
+    "events": [
+     "The calling flow sends an authenticated scan request with a canonical project id.",
+     "The scan operation returns a ScanResult."
+    ],
+    "outcomes": [
+     "The route answers 200 with the ScanResult as the top-level JSON object.",
+     "The route answers 200 with an envelope such as `{\"result\": ...}` or uses another success status."
+    ],
+    "observer": "The calling flow parsing the HTTP response."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_router.create_app",
+   "kind": "redirect_unspecified",
+   "text": "a path with a trailing slash added is redirected to the route's path.",
+   "question": "Which redirect status, Location value, body and method-preservation behavior are required for a trailing-slash request?",
+   "options": [
+    "Use the framework-default 307 redirect to the same path without the trailing slash.",
+    "Use a 308 permanent redirect to the same path without the trailing slash.",
+    "Specify another redirect response explicitly."
+   ],
+   "default_guess": "Use a 307 redirect with Location set to the route path without the trailing slash.",
+   "witness": {
+    "initial": "The HTTP surface is being served.",
+    "events": [
+     "The calling flow sends `POST /v1/projects/p/photos/deliver/` with a valid token and body."
+    ],
+    "outcomes": [
+     "The service answers 307 and the client may repeat the POST at the canonical path.",
+     "The service answers 308, producing a different observable status and caching semantics."
+    ],
+    "observer": "The HTTP client or reverse proxy."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:deliverer_service.run_service",
+   "kind": "failure_effect_unspecified",
+   "text": "A failure is reported on the standard error stream; the text of that report is not part of the contract.",
+   "question": "Must every START_FAILED and SERVER_FAILED outcome produce a standard-error report, including a SIGINT or SIGTERM received before listening, or are signal-caused START_FAILED outcomes allowed to be silent?",
+   "options": [
+    "Every nonzero exit outcome writes a report to standard error.",
+    "Only exception or server-error failures write a report; a pre-listening termination signal may be silent."
+   ],
+   "default_guess": "Report every START_FAILED and SERVER_FAILED outcome to standard error.",
+   "witness": {
+    "initial": "The process has started but the web server has not reported startup complete.",
+    "events": [
+     "The deployment sends SIGTERM before the listening boundary.",
+     "The process classifies the outcome as START_FAILED and exits with status 1."
+    ],
+    "outcomes": [
+     "The process writes a failure report to standard error before exiting.",
+     "The process treats the signal as an orderly termination and exits without writing to standard error."
+    ],
+    "observer": "The deployment supervisor collecting process logs."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.scan_project_photos",
+   "kind": "standard_violation",
+   "text": "`module:deliverer_api`.",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\nruntime import surface consumer-модуля, а не копия публичного API\nprovider-а: ровно те символы, которые код consumer-а называет напрямую —\nвызывает, конструирует, проверяет (членство в enum, тип), пишет в\nаннотации. Само наличие символа в `models`, `imports.internal` или\n`module_functions[provider]` зависимостью не является. Недостающий символ —\nтакая же ошибка спеки, как лишний: в строгом режиме импортов (ниже)\nсгенерированный модуль без него отвергается",
+   "section": "7",
+   "question": "The Callers passage must name `module:deliverer_router`, or the authoritative module_internal graph must instead declare the direct deliverer_api-to-photo_delivery import.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.deliver_project_photo",
+   "kind": "standard_violation",
+   "text": "`module:deliverer_api`.",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\nruntime import surface consumer-модуля, а не копия публичного API\nprovider-а: ровно те символы, которые код consumer-а называет напрямую —\nвызывает, конструирует, проверяет (членство в enum, тип), пишет в\nаннотации. Само наличие символа в `models`, `imports.internal` или\n`module_functions[provider]` зависимостью не является. Недостающий символ —\nтакая же ошибка спеки, как лишний: в строгом режиме импортов (ниже)\nсгенерированный модуль без него отвергается",
+   "section": "7",
+   "question": "The Callers passage must name `module:deliverer_router`, or the authoritative module_internal graph must instead declare the direct deliverer_api-to-photo_delivery import.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:photo_delivery.mark_photo_published",
+   "kind": "standard_violation",
+   "text": "`module:deliverer_api`.",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\nruntime import surface consumer-модуля, а не копия публичного API\nprovider-а: ровно те символы, которые код consumer-а называет напрямую —\nвызывает, конструирует, проверяет (членство в enum, тип), пишет в\nаннотации. Само наличие символа в `models`, `imports.internal` или\n`module_functions[provider]` зависимостью не является. Недостающий символ —\nтакая же ошибка спеки, как лишний: в строгом режиме импортов (ниже)\nсгенерированный модуль без него отвергается",
+   "section": "7",
+   "question": "The Callers passage must name `module:deliverer_router`, or the authoritative module_internal graph must instead declare the direct deliverer_api-to-photo_delivery import.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"caller_contradiction\",\"text\":\"`module:deliverer_api`.\",\"question\":\"Do `scan_project_photos`, `deliver_project_photo` and `mark_photo_published` have `module:deliverer_router` as their direct caller, as the changed route table and dependency graph say, or `module:deliverer_api`, as each operation's Callers passage says?\",\"options\":[\"Change all three photo-delivery Callers passages to `module:deliverer_router`.\",\"Restore deliverer-api route handlers as the direct callers and remove the router-to-photo_delivery calls.\"],\"default_guess\":\"Make `module:deliverer_router` the direct caller of all three operations.\"},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"responsibility_contradiction\",\"text\":\"The token of A5 rules 1 and 5, the project id part of A5 rule 9, the\\nrefusal answer of A5 rule 10 are checked by `module:deliverer_api`, and the request form of A3 rule 4 and the\\n`photo_id` form of A4 rule 2 by the request models the router reads;\",\"question\":\"Does `deliverer_router` enforce the existence of exactly one Authorization field and parse its Bearer scheme while `deliverer_api` only compares the token, as State 3 says, or does `deliverer_api` check all of A5 rule 1 as this passage says?\",\"options\":[\"The router validates field cardinality and Bearer syntax; deliverer_api performs only the constant-time token comparison.\",\"Deliverer_api receives the raw Authorization fields and performs every A5 rule 1 check.\"],\"default_guess\":\"Split the work as State 3 specifies: extraction and Bearer syntax in the router, comparison in deliverer_api.\"},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"success_response_unspecified\",\"text\":\"Every other route checks the token with `module:deliverer_api` before it reads the body, reads\\nthe body of a delivery or a mark by its request model, judges the project id with `module:deliverer_api`, calls one\\noperation of `module:photo_delivery`, and answers every refusal through `module:deliverer_api`.\",\"question\":\"For each successful health, scan, delivery and mark call, what HTTP status, serialized response body, media type and response headers must the route return?\",\"options\":[\"Return status 200 and the direct JSON serialization of HealthAnswer, ScanResult, PlacementOutcome or MarkOutcome.\",\"Use route-specific statuses or a wrapper/envelope around the operation result.\",\"Delegate the complete success response to framework defaults and state that delegation explicitly.\"],\"default_guess\":\"Return status 200 with the direct JSON serialization of the corresponding result model.\",\"witness\":{\"initial\":\"The service is listening and a project has a valid confirmed connection.\",\"events\":[\"The calling flow sends an authenticated scan request with a canonical project id.\",\"The scan operation returns a ScanResult.\"],\"outcomes\":[\"The route answers 200 with the ScanResult as the top-level JSON object.\",\"The route answers 200 with an envelope such as `{\\\"result\\\": ...}` or uses another success status.\"],\"observer\":\"The calling flow parsing the HTTP response.\"}},{\"subject\":\"public_op:deliverer_router.create_app\",\"kind\":\"redirect_unspecified\",\"text\":\"a path with a trailing slash added is redirected to the route's path.\",\"question\":\"Which redirect status, Location value, body and method-preservation behavior are required for a trailing-slash request?\",\"options\":[\"Use the framework-default 307 redirect to the same path without the trailing slash.\",\"Use a 308 permanent redirect to the same path without the trailing slash.\",\"Specify another redirect response explicitly.\"],\"default_guess\":\"Use a 307 redirect with Location set to the route path without the trailing slash.\",\"witness\":{\"initial\":\"The HTTP surface is being served.\",\"events\":[\"The calling flow sends `POST /v1/projects/p/photos/deliver/` with a valid token and body.\"],\"outcomes\":[\"The service answers 307 and the client may repeat the POST at the canonical path.\",\"The service answers 308, producing a different observable status and caching semantics.\"],\"observer\":\"The HTTP client or reverse proxy.\"}},{\"subject\":\"public_op:deliverer_service.run_service\",\"kind\":\"failure_effect_unspecified\",\"text\":\"A failure is reported on the standard error stream; the text of that report is not part of the contract.\",\"question\":\"Must every START_FAILED and SERVER_FAILED outcome produce a standard-error report, including a SIGINT or SIGTERM received before listening, or are signal-caused START_FAILED outcomes allowed to be silent?\",\"options\":[\"Every nonzero exit outcome writes a report to standard error.\",\"Only exception or server-error failures write a report; a pre-listening termination signal may be silent.\"],\"default_guess\":\"Report every START_FAILED and SERVER_FAILED outcome to standard error.\",\"witness\":{\"initial\":\"The process has started but the web server has not reported startup complete.\",\"events\":[\"The deployment sends SIGTERM before the listening boundary.\",\"The process classifies the outcome as START_FAILED and exits with status 1.\"],\"outcomes\":[\"The process writes a failure report to standard error before exiting.\",\"The process treats the signal as an orderly termination and exits without writing to standard error.\"],\"observer\":\"The deployment supervisor collecting process logs.\"}},{\"subject\":\"public_op:photo_delivery.scan_project_photos\",\"kind\":\"standard_violation\",\"text\":\"`module:deliverer_api`.\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\nruntime import surface consumer-модуля, а не копия публичного API\\nprovider-а: ровно те символы, которые код consumer-а называет напрямую —\\nвызывает, конструирует, проверяет (членство в enum, тип), пишет в\\nаннотации. Само наличие символа в `models`, `imports.internal` или\\n`module_functions[provider]` зависимостью не является. Недостающий символ —\\nтакая же ошибка спеки, как лишний: в строгом режиме импортов (ниже)\\nсгенерированный модуль без него отвергается\",\"section\":\"7\",\"question\":\"The Callers passage must name `module:deliverer_router`, or the authoritative module_internal graph must instead declare the direct deliverer_api-to-photo_delivery import.\"},{\"subject\":\"public_op:photo_delivery.deliver_project_photo\",\"kind\":\"standard_violation\",\"text\":\"`module:deliverer_api`.\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\nruntime import surface consumer-модуля, а не копия публичного API\\nprovider-а: ровно те символы, которые код consumer-а называет напрямую —\\nвызывает, конструирует, проверяет (членство в enum, тип), пишет в\\nаннотации. Само наличие символа в `models`, `imports.internal` или\\n`module_functions[provider]` зависимостью не является. Недостающий символ —\\nтакая же ошибка спеки, как лишний: в строгом режиме импортов (ниже)\\nсгенерированный модуль без него отвергается\",\"section\":\"7\",\"question\":\"The Callers passage must name `module:deliverer_router`, or the authoritative module_internal graph must instead declare the direct deliverer_api-to-photo_delivery import.\"},{\"subject\":\"public_op:photo_delivery.mark_photo_published\",\"kind\":\"standard_violation\",\"text\":\"`module:deliverer_api`.\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\nruntime import surface consumer-модуля, а не копия публичного API\\nprovider-а: ровно те символы, которые код consumer-а называет напрямую —\\nвызывает, конструирует, проверяет (членство в enum, тип), пишет в\\nаннотации. Само наличие символа в `models`, `imports.internal` или\\n`module_functions[provider]` зависимостью не является. Недостающий символ —\\nтакая же ошибка спеки, как лишний: в строгом режиме импортов (ниже)\\nсгенерированный модуль без него отвергается\",\"section\":\"7\",\"question\":\"The Callers passage must name `module:deliverer_router`, or the authoritative module_internal graph must instead declare the direct deliverer_api-to-photo_delivery import.\"}]}",
+ "set_aside": []
+}

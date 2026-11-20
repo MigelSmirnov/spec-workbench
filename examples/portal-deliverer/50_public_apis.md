@@ -146,8 +146,9 @@ operation of `module:photo_delivery`, and answers every refusal through `module:
 
 ### Enforces
 
-The method and path of each route. The token of A5 rules 1 and 5, the project id part of A5 rule 9, the
-refusal answer of A5 rule 10 are checked by `module:deliverer_api`, and the request form of A3 rule 4 and the
+The method and path of each route. The single `Authorization` field in the Bearer scheme of A5 rule 1 is read by the router's own extractor
+before the identifiers and the body. The comparison of the token of A5 rules 1 and 5, the project id part of A5
+rule 9 and the refusal answer of A5 rule 10 are `module:deliverer_api`'s, and the request form of A3 rule 4 and the
 `photo_id` form of A4 rule 2 by the request models the router reads; every later check, the source id among them, is
 `module:photo_delivery`'s.
 
@@ -156,7 +157,8 @@ refusal answer of A5 rule 10 are checked by `module:deliverer_api`, and the requ
 Building the surface raises no refusal. A served route answers a wrong token, a malformed request and every M08 refusal.
 The surface serves nothing besides the four routes: no generated description of them and no documentation
 page. A path matches a route only as the table writes it, `{project_id}` and `{source_id}` each standing for
-one path segment, and a path with a trailing slash added is redirected to the route's path. Any other path
+one path segment, and a path with a trailing slash added is answered by the framework's own temporary redirect, status 307, to the
+route's path, which keeps the method and the body. Any other path
 answers 404, and a route's path with another method answers 405, both with the framework's own body and not
 M08.
 
@@ -682,7 +684,7 @@ Writes one mark record.
 
 ### Callers
 
-`module:deliverer_api`.
+`module:deliverer_router`.
 
 ### Inputs
 
@@ -716,7 +718,7 @@ Read-only.
 
 ### Callers
 
-`module:deliverer_api`.
+`module:deliverer_router`.
 
 ### Inputs
 
@@ -750,7 +752,7 @@ Creates at most one placement of a project and content, and the project lock fil
 
 ### Callers
 
-`module:deliverer_api`.
+`module:deliverer_router`.
 
 ### Inputs
 
