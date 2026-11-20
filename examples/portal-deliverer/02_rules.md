@@ -115,11 +115,13 @@ A replaced file is scanned again by its new content (A3).
    without encoding again (A3 rule 2).
 2. The source may be of a format of the imported `SOURCE_FORMATS` constant. A scan decides membership by the
    signature alone (A1 order 6). Decoding is the image library's, restricted to the formats of that constant:
-   which of them it detects is the library's decision. A source it cannot open as one of them is
-   `unreadable_image`, whatever dimensions its header declares; for a source it opens the checks below apply. Checks run in this order: a first frame above the pixel
-   limit (width times height) fails with `too_many_pixels`, a source that cannot be decoded with
-   `unreadable_image`, and a result above the Portal's read limit with `too_large`. A value equal
-   to a limit passes. Only the first frame of an animated image is delivered.
+   which of them it detects is the library's decision. A source it cannot open as one of them fails with the
+   UNREADABLE_IMAGE member of = models.PlacementFailure, whatever dimensions its header declares. For a source
+   it opens, checks run in this order: a first frame whose width times height is above the imported
+   `MAX_PIXELS` constant fails with the TOO_MANY_PIXELS member, a source that cannot be decoded with the
+   UNREADABLE_IMAGE member, and a result longer than the imported `MAX_OUTPUT_BYTES` constant, the Portal's
+   read limit, with the TOO_LARGE member. A value equal to a limit passes. Only the first frame of an animated
+   image is delivered.
 3. The photo moment is the first usable value of: EXIF `DateTimeOriginal`, EXIF `DateTime`, then
    the file's modification time. `DateTimeOriginal` uses `OffsetTimeOriginal` when that offset has
    the form `+HH:MM` or `-HH:MM` with hours up to the imported `CAMERA_OFFSET_MAX_HOURS` constant and minutes up to 59; otherwise it is read in the time zone of the `timezone` field of the run settings (A8), and so is
