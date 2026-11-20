@@ -118,9 +118,9 @@ A replaced file is scanned again by its new content (A3).
    which of them it detects is the library's decision. A source it cannot open as one of them fails with the
    UNREADABLE_IMAGE member of = models.PlacementFailure, whatever dimensions its header declares. For a source
    it opens, checks run in this order: a first frame whose width times height is above the imported
-   `MAX_PIXELS` constant fails with the TOO_MANY_PIXELS member, a source that cannot be decoded with the
-   UNREADABLE_IMAGE member, and a result longer than the imported `MAX_OUTPUT_BYTES` constant, the Portal's
-   read limit, with the TOO_LARGE member. A value equal to a limit passes. Only the first frame of an animated
+   `MAX_PIXELS` constant fails with the TOO_MANY_PIXELS member of = models.PlacementFailure, a source that cannot be decoded with the
+   UNREADABLE_IMAGE member of = models.PlacementFailure, and a result longer than the imported `MAX_OUTPUT_BYTES` constant, the Portal's
+   read limit, with the TOO_LARGE member of = models.PlacementFailure. A value equal to a limit passes. Only the first frame of an animated
    image is delivered.
 3. The photo moment is the first usable value of: EXIF `DateTimeOriginal`, EXIF `DateTime`, then
    the file's modification time. `DateTimeOriginal` uses `OffsetTimeOriginal` when that offset has
@@ -213,7 +213,7 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
 ### Required tests
 
 - INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`). When no refusal of A6 rule 5 applies, a delivery repeated after a failed record write completes the placement (`test_a_delivery_repeated_after_a_failed_record_write_completes`).
-- INV-07: a replaced file whose new content has no placement is reported as a new photo with the READY member of = models.ScanStatus while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).
+- INV-07: after a file is replaced, the earlier placement, its stored image and its mark stay unchanged, and the new content is judged by A1 and A3 as any other file is (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).
 - INV-19: delivering content that has no placement under the name of a conflict copy fails with the NOT_READY_OR_ABSENT member of = models.PlacementFailure, adds no file except the project lock and changes no existing file (`test_a_syncthing_conflict_copy_is_neither_offered_nor_placed`). Placed content replays when only a conflict copy still holds it (`test_placed_content_replays_when_only_a_conflict_copy_still_holds_it`), and an ordinary file with the content of a conflict copy is delivered (`test_an_ordinary_file_is_placed_when_a_conflict_copy_has_the_same_content`).
 
 ### Consequence
