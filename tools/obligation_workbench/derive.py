@@ -159,7 +159,7 @@ def _report_obligations(
                 if boundaries:
                     addresses = boundaries
                     required_from = (operation,)
-            elif code in {"invalid_error_policy", "invalid_error_body", "missing_error_mapping", "missing_credential_extractors", "invalid_principals", "invalid_auth_policies"}:
+            elif code in {"invalid_error_policy", "invalid_error_body", "invalid_error_answer", "invalid_error_answer_ref", "missing_error_mapping", "missing_credential_extractors", "invalid_principals", "invalid_auth_policies"}:
                 addresses = _all_routed_boundaries(graph)
         if rule.category == "tool":
             addresses = ()
