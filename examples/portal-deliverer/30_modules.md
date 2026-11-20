@@ -49,11 +49,12 @@ cycles, and `domain_models` names no other module.
 | `photo_delivery` | `delivery_store` | `project_lock`, `read_mark`, `read_placement`, `store_image`, `write_mark`, `write_placement` |
 | `photo_delivery` | `system_clock` | `utc_now` |
 | `deliverer_api` | `data_provider` | `REFUSAL_ANSWERS` |
-| `deliverer_api` | `domain_models` | `DeliverRequest`, `DeliveryContext`, `HealthAnswer`, `HealthStatus`, `MarkOutcome`, `PlacementOutcome`, `PublishedRequest`, `Refusal`, `RefusalCode`, `ScanResult` |
+| `deliverer_api` | `domain_models` | `HealthAnswer`, `HealthStatus`, `Refusal`, `RefusalAnswerRule`, `RefusalCode` |
 | `deliverer_api` | `refusals` | `DelivererError` |
-| `deliverer_api` | `photo_delivery` | `deliver_project_photo`, `mark_photo_published`, `scan_project_photos` |
-| `deliverer_router` | `domain_models` | `DeliveryContext`, `HealthAnswer` |
-| `deliverer_router` | `deliverer_api` | `AuthenticationRequired`, `answer_health`, `deliver_route`, `mark_route`, `scan_route` |
+| `deliverer_router` | `domain_models` | `DeliverRequest`, `DeliveryContext`, `HealthAnswer`, `MarkOutcome`, `PlacementOutcome`, `PublishedRequest`, `RefusalCode`, `ScanResult` |
+| `deliverer_router` | `refusals` | `DelivererError` |
+| `deliverer_router` | `deliverer_api` | `AuthenticationRequired`, `answer_health`, `check_token`, `parse_project_id`, `refusal_answer` |
+| `deliverer_router` | `photo_delivery` | `deliver_project_photo`, `mark_photo_published`, `scan_project_photos` |
 | `deliverer_service` | `data_provider` | `BIND_HOST`, `EXIT_STATUSES`, `TOKEN_ALPHABET`, `TOKEN_ENCODING`, `TOKEN_MIN_LENGTH`, `TOKEN_TRIM_CHARACTERS` |
 | `deliverer_service` | `domain_models` | `DeliveryContext`, `RuntimeSettings`, `ServiceExit` |
 | `deliverer_service` | `runtime_settings` | `load_runtime_settings` |
@@ -63,24 +64,20 @@ cycles, and `domain_models` names no other module.
 `deliverer_service` names `load_connections` only to refuse a start with a broken record. Each operation
 reads the record itself at its connection check, so no module keeps connections in memory.
 
-`deliverer_router` is the module that `http_router_backend/v1` generates, and it holds only what that
-backend emits. It imports the route handlers `scan_route`, `deliver_route` and `mark_route` of
-`deliverer_api`, which are not public capabilities: they are the handlers the route closure assigns to
-`deliverer_api` as the owner of irregular routes, and the router only registers them. So `deliverer_api`
-cannot import the router back. The router checks no token: the extractor of the `Authorization` field that the backend emits raises
-`AuthenticationRequired`, and the router maps that exception to 401 with an empty body, so it imports it from
-`deliverer_api`. No request ever gets that empty answer: the extractor is called by no route the router serves,
-and every handler of `deliverer_api` catches its own `AuthenticationRequired` and answers it as M08 (A5 rules 1
-and 10), since the health route needs no token and every route that does is a
-handler of `deliverer_api`, which reads the field and compares the token itself, before the project id
-or the body.
+`deliverer_router` is the module that `http_router_backend` generates with its `fastapi_sync_v2` backend, and it
+holds only what that backend emits. It serves every route as a table route: the body of a delivery and of a mark
+is read as = models.DeliverRequest and = models.PublishedRequest, the token is compared by `check_token` of
+`deliverer_api` before the body is read, the project id is judged by its `parse_project_id`, and the route
+then calls one operation of `photo_delivery`. `AuthenticationRequired`, every `DelivererError` and a request whose
+body or form the framework refuses are each answered by `refusal_answer` of `deliverer_api`, so every refusal
+leaves as M08 (A5 rules 1, 9 and 10). `deliverer_api` therefore cannot import the router back.
 
 `system_clock` is the module that `system_clock_backend` generates, and `photo_delivery` alone names it.
 
 ## Order of one operation
 
-`deliverer_api` performs the steps marked API and then calls `photo_delivery`, which performs the
-rest in the order shown. Only `photo_delivery` takes the project lock.
+`deliverer_router` performs the steps marked API, the token and the project id through `deliverer_api`, and
+then calls `photo_delivery`, which performs the rest in the order shown. Only `photo_delivery` takes the project lock.
 
 | Step | Scan | Delivery | Mark |
 |---|---|---|---|
@@ -108,10 +105,10 @@ names the owner of each rule.
 | A1 | orders 7 to 9, placed and published status | `photo_delivery` |
 | A5 | rule 1, the `Authorization` field and the comparison of the token | `deliverer_api` |
 | A5 | rules 2 to 4, the token file, its replacement and the listening address | `deliverer_service` |
-| A3 | rule 4, the request form of a placement | `deliverer_api` |
+| A3 | rule 4, the request form of a placement | `deliverer_router` |
 | A3 | rule 5, condition 1, whether a name is a path that may be opened | `source_folder` |
 | A3 | rule 4, every other check and its order; rules 2, 3, 6 to 10 and the rest of rule 5 | `photo_delivery` |
-| A4 | rule 2, the form of `photo_id` and its lowercase hyphenated spelling | `deliverer_api` |
+| A4 | rule 2, the form of `photo_id` and its lowercase hyphenated spelling | `deliverer_router` |
 | A4 | every other rule | `photo_delivery` |
 | A5 | rule 5, the single principal | `deliverer_api` |
 | A5 | rule 6, the write that clears a confirmation | the agent, outside this service (R0-11) |
@@ -145,8 +142,8 @@ names the owner of each rule.
 | INV-16 | security review record (A10) |
 | INV-17 | calling flow (A11), outside this service |
 
-`deliverer_api` owns INV-11 because every answer leaves through it: a refusal carries only its code and
-a fixed message. `photo_delivery` supplies path-free results, and no module holds a client for any
+`deliverer_api` owns INV-11 because every refusal answer is built by its `refusal_answer`: a refusal carries
+only its code and a fixed message. `photo_delivery` supplies path-free results, and no module holds a client for any
 outbound call.
 
 ## `domain_models`
@@ -580,25 +577,23 @@ mark_photo_published
 
 ### Owns
 
-- the answer of each route declared in the manifest: health, scan, delivery and mark;
-- steps 1 and 2 of "Order of one operation": the `Authorization` field, the comparison of the token in
-  constant time, the project id and the request form;
+- the answer of the health route;
+- the comparison of the token in constant time and the one principal of A5 rule 5;
+- the form of a project id (A5 rule 9);
 - the status and the content of every refusal answer;
-- `AuthenticationRequired`, the refusal of a request that does not carry the token;
-- the one principal of A5 rule 5.
+- `AuthenticationRequired`, the refusal of a request that does not carry the token.
 
 ### Knows
 
-- rules 1 and 5, the project id part of rule 9 and the refusal part of rule 10 of A5;
-- the request form of A3 rule 4 and the `photo_id` form of A4 rule 2.
+- rules 1 and 5, the project id part of rule 9 and the refusal part of rule 10 of A5.
 
 ### Hides
 
-- how a request is read and a refusal becomes an answer.
+- how a token is compared and how a refusal becomes an answer.
 
 ### Must not own
 
-- any delivery rule other than these two request forms, or the order of the checks of `photo_delivery`;
+- the routes, the reading of a request or its body, or the order of the checks of `photo_delivery`;
 - the token file, the run settings or the start of the service;
 - a Portal credential or client;
 - forwarded headers, which the service does not read.
@@ -611,8 +606,6 @@ answer_health
 
 ### Trace inputs
 
-- A3
-- A4
 - A5
 - A8
 
@@ -625,11 +618,13 @@ answer_health
 
 ### Owns
 
-- the routes of the service and the context and token the routes read from the application.
+- the routes of the service, the request forms of a delivery and a mark, and the context and token the routes
+  read from the application.
 
 ### Knows
 
-- the routes, their handlers and the token of the running service.
+- the routes, their operations, the order of A5 rule 1 (the token before the identifiers and the body), the
+  request form of A3 rule 4 and the `photo_id` form of A4 rule 2.
 
 ### Hides
 
@@ -637,9 +632,9 @@ answer_health
 
 ### Must not own
 
-- any check of a request or a delivery rule, and any answer a request receives: its empty 401 for
-  `AuthenticationRequired` is a mapping the backend emits that no request reaches;
-- anything `http_router_backend/v1` does not emit.
+- any check other than the request forms it reads by their models, or any delivery rule;
+- the content of an answer: every refusal is answered by `refusal_answer` of `deliverer_api`;
+- anything `http_router_backend` does not emit.
 
 ### Candidate public capabilities
 
@@ -649,12 +644,14 @@ create_app
 
 ### Trace inputs
 
+- A3
+- A4
 - A5
 
 ### Depth assessment
 
 - kind: deep
-- hidden mechanism: the binding of handlers to methods and paths, generated from the route closure.
+- hidden mechanism: the binding of operations to methods and paths, generated from the route closure.
 
 ## `deliverer_service`
 

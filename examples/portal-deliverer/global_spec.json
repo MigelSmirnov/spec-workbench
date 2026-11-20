@@ -56,32 +56,23 @@
     "extract_bearer_credential": "(request: Request) -> str",
     "health_handler": "(request: Request) -> HealthAnswer",
     "answer_health": "() -> HealthAnswer",
-    "bearer_credential": "(request: Request) -> str",
     "check_token": "(token: str, credential: str) -> None",
-    "_project_id": "(text: str) -> UUID",
+    "parse_project_id": "(text: str) -> UUID",
     "_refusal_row": "(code: RefusalCode) -> RefusalAnswerRule",
-    "_refusal_answer": "(code: RefusalCode) -> JSONResponse",
-    "_deliver_request": "(body: bytes) -> DeliverRequest",
-    "_published_request": "(body: bytes) -> PublishedRequest",
-    "scan_route": "(request: Request, project_id: str) -> JSONResponse",
-    "deliver_route": "(request: Request, project_id: str) -> JSONResponse",
-    "mark_route": "(request: Request, project_id: str, source_id: str) -> JSONResponse",
+    "refusal_answer": "(code: RefusalCode) -> JSONResponse",
+    "scan_route": "(request: Request, project_id: str) -> ScanResult",
+    "deliver_route": "(request: Request, project_id: str, body: DeliverRequest) -> PlacementOutcome",
+    "mark_route": "(request: Request, project_id: str, source_id: str, body: PublishedRequest) -> MarkOutcome",
     "utc_now": "() -> datetime",
     "DelivererError.__init__": "(self, code: RefusalCode) -> None",
     "Rejected.__init__": "(self, reason: PlacementFailure) -> None"
   },
   "notes": [
-    "bearer_credential: [SECURITY_BOUNDARY] MUST return the token of the request's single Authorization header in the Bearer scheme, the scheme compared without regard to case and separated from a non-empty token by exactly one space, and MUST raise AuthenticationRequired when that header is absent, appears more than once, or has any other form; it MUST NOT read the body or the path parameters.",
     "check_token: [SECURITY_BOUNDARY] MUST compare the presented credential with the service token whole and case-sensitively in constant time, so the time taken does not depend on where they differ, return None when they are equal, and raise AuthenticationRequired otherwise; a matching token authorizes the one principal of the service, the calling flow of the owner, for every confirmed connection, and it MUST NOT log or return either value.",
-    "_project_id: [VALIDATION_ERROR] MUST return the UUID the text spells only when the text is the canonical spelling of that UUID, lowercase hexadecimal digits in groups joined by hyphens exactly as str of the parsed UUID writes it, and MUST raise DelivererError with the INVALID_REQUEST member of = models.RefusalCode for any other text, including an uppercase, braced, URN or unhyphenated spelling.",
+    "parse_project_id: [VALIDATION_ERROR] MUST return the UUID the text spells only when the text is the canonical spelling of that UUID, lowercase hexadecimal digits in groups joined by hyphens exactly as str of the parsed UUID writes it, and MUST raise DelivererError with the INVALID_REQUEST member of = models.RefusalCode for any other text, including an uppercase, braced, URN or unhyphenated spelling.",
     "_refusal_row: [BEHAVIOR] MUST return the one row of the imported REFUSAL_ANSWERS constant whose code equals the given = models.RefusalCode member; the table is total, so every member has exactly one row.",
-    "_refusal_answer: [RETURN_SHAPE] MUST answer with a JSONResponse whose status is the status of the row _refusal_row returns for the code and whose body is the JSON form of a Refusal carrying that code and the detail of the same row, and nothing else.",
+    "refusal_answer: [RETURN_SHAPE] MUST answer with a JSONResponse whose status is the status of the row _refusal_row returns for the code and whose body is the JSON form of a Refusal carrying that code and the detail of the same row, and nothing else.",
     "answer_health: [RETURN_SHAPE] MUST return a HealthAnswer whose status is the OK member of = models.HealthStatus and nothing else; it reads no file, setting, token or project and raises nothing.",
-    "_deliver_request: [VALIDATION_ERROR] MUST return a DeliverRequest only when the body is one JSON text in the encoding the JSON standard requires, holding one object valid against = models.DeliverRequest with no extra field and no coercion, and MUST raise DelivererError with the INVALID_REQUEST member of = models.RefusalCode for any other body, an empty one among them; it MUST NOT check the form of source_id, which photo_delivery decides.",
-    "_published_request: [VALIDATION_ERROR] MUST return a PublishedRequest only when the body is one JSON text in the encoding the JSON standard requires, holding one object valid against = models.PublishedRequest with no extra field and no coercion, whose photo_id is written in the canonical lowercase hyphenated spelling of a UUID as _project_id accepts it, and MUST raise DelivererError with the INVALID_REQUEST member of = models.RefusalCode for any other body.",
-    "scan_route: [ORCHESTRATION] MUST call check_token with the token held in the application state and the credential bearer_credential takes from the request, then _project_id with the path project id, then the imported scan_project_photos with the context held in the application state, and MUST answer with a JSONResponse holding the JSON form of the ScanResult it returns and its default success status; AuthenticationRequired MUST be answered by _refusal_answer with the UNAUTHORIZED member of = models.RefusalCode and DelivererError by _refusal_answer with the code it carries. It MUST NOT read the body.",
-    "deliver_route: [ORCHESTRATION] MUST check the token as scan_route does before anything else, then read the request body once and pass it to _deliver_request and the path project id to _project_id, then run the imported deliver_project_photo with the context held in the application state and the name and source_id of the request off the server's event loop, because the project lock it takes waits without a time limit, and MUST answer with a JSONResponse holding the JSON form of the PlacementOutcome it returns and its default success status, whatever its status; AuthenticationRequired and DelivererError MUST be answered as in scan_route.",
-    "mark_route: [ORCHESTRATION] MUST check the token as scan_route does before anything else, then read the request body once and pass it to _published_request and the path project id to _project_id, then run the imported mark_photo_published with the context held in the application state, the path source id unchanged and the photo_id of the request off the server's event loop, and MUST answer with a JSONResponse holding the JSON form of the MarkOutcome it returns and its default success status; AuthenticationRequired and DelivererError MUST be answered as in scan_route.",
     "load_runtime_settings: [VALIDATION_ERROR] MUST read every variable of the runtime environment variable table once from the process environment, normalise it, apply the default its row declares for the environment field when it is absent and validate it exactly as its row declares, and return RuntimeSettings with each value in the field its row targets; a required variable that is absent or a value of the wrong form MUST raise ValueError that names the variable and never its value, and it MUST NOT read a file or log a raw value.",
     "read_token: [SECURITY_BOUNDARY] MUST open the last component of path once without following a link, resolving the folders above it as they stand, and judge only that opened file: it MUST raise ValueError when the opening fails or meets a link, when the opened file is not a regular file, when its mode gives the group or others any permission, when its content does not decode in the encoding of the imported TOKEN_ENCODING constant, or when what remains after removing the characters of the imported TOKEN_TRIM_CHARACTERS constant at both ends, and no other character, is shorter than the imported TOKEN_MIN_LENGTH constant or holds a character outside the imported TOKEN_ALPHABET constant; otherwise it MUST return that remaining text. No message, log line or exception it raises MAY carry the content of the file.",
     "load_config: [VALIDATION_ERROR] MUST raise ValueError when the port of the settings is one TCP cannot address or when the time zone database does not know their timezone, then MUST call the imported load_connections once with the connections_file of the settings as a Path, letting its DelivererError end the start, and MUST return DeliveryContext with binary_root, state_dir and connections_file of the settings as Path values and their timezone unchanged; it MUST NOT read the credential file.",
@@ -394,6 +385,21 @@
         "failure": "PlacementFailure"
       }
     },
+    "ServiceExit": {
+      "kind": "enum",
+      "values": [
+        "start_failed",
+        "served",
+        "server_failed"
+      ]
+    },
+    "ExitStatusRule": {
+      "identity": "value",
+      "fields": {
+        "outcome": "ServiceExit",
+        "status": "int"
+      }
+    },
     "ScanStatus": {
       "kind": "enum",
       "values": [
@@ -561,21 +567,6 @@
       "values": [
         "ok"
       ]
-    },
-    "ServiceExit": {
-      "kind": "enum",
-      "values": [
-        "start_failed",
-        "served",
-        "server_failed"
-      ]
-    },
-    "ExitStatusRule": {
-      "identity": "value",
-      "fields": {
-        "outcome": "ServiceExit",
-        "status": "int"
-      }
     }
   },
   "rules": {
@@ -927,20 +918,20 @@
       "schema_version": 1,
       "backend": {
         "framework": "fastapi",
-        "emitter": "fastapi_sync_v1"
+        "emitter": "fastapi_sync_v2"
       },
       "wiring": {
         "module": "deliverer_router",
         "app_factory": "create_app",
         "request_parameter": "request",
         "state_bindings": {
-          "context": {
-            "factory_parameter": "context",
-            "state_attribute": "context"
-          },
           "token": {
             "factory_parameter": "token",
             "state_attribute": "token"
+          },
+          "delivery": {
+            "factory_parameter": "context",
+            "state_attribute": "context"
           }
         },
         "credential_extractors": {
@@ -987,8 +978,50 @@
           "auth": "bearer",
           "success_status": 200,
           "response_mode": "json",
-          "emission": "irregular",
-          "irregular_reason": "http_router_backend/v1 answers every mapped exception with an empty body, while every refusal of this route is an M08 body with code and detail that the calling agent reads its failure reason from; the canonical handler in deliverer_api owns only turning a DelivererError into that M08 answer and delegates every decision to photo_delivery.scan_project_photos"
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "check_token",
+              "binds": false,
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "token"
+                },
+                {
+                  "ref": "credential",
+                  "name": "bearer"
+                }
+              ]
+            },
+            {
+              "function": "parse_project_id",
+              "binds": true,
+              "args": [
+                {
+                  "ref": "parameter",
+                  "path": [
+                    "project_id"
+                  ]
+                }
+              ]
+            }
+          ],
+          "delegate": {
+            "function": "scan_project_photos",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "delivery"
+              },
+              {
+                "ref": "slot",
+                "name": "context"
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
         },
         {
           "handler": "deliver_route",
@@ -997,8 +1030,64 @@
           "auth": "bearer",
           "success_status": 200,
           "response_mode": "json",
-          "emission": "irregular",
-          "irregular_reason": "http_router_backend/v1 answers every mapped exception with an empty body, while every refusal of this route is an M08 body with code and detail that the calling agent reads its failure reason from; the canonical handler in deliverer_api owns only turning a DelivererError into that M08 answer and delegates every decision to photo_delivery.deliver_project_photo"
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "check_token",
+              "binds": false,
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "token"
+                },
+                {
+                  "ref": "credential",
+                  "name": "bearer"
+                }
+              ]
+            },
+            {
+              "function": "parse_project_id",
+              "binds": true,
+              "args": [
+                {
+                  "ref": "parameter",
+                  "path": [
+                    "project_id"
+                  ]
+                }
+              ]
+            }
+          ],
+          "delegate": {
+            "function": "deliver_project_photo",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "delivery"
+              },
+              {
+                "ref": "slot",
+                "name": "context"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "body",
+                  "name"
+                ]
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "body",
+                  "source_id"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
         },
         {
           "handler": "mark_route",
@@ -1007,19 +1096,107 @@
           "auth": "bearer",
           "success_status": 200,
           "response_mode": "json",
-          "emission": "irregular",
-          "irregular_reason": "http_router_backend/v1 answers every mapped exception with an empty body, while every refusal of this route is an M08 body with code and detail that the calling agent reads its failure reason from; the canonical handler in deliverer_api owns only turning a DelivererError into that M08 answer and delegates every decision to photo_delivery.mark_photo_published"
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "check_token",
+              "binds": false,
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "token"
+                },
+                {
+                  "ref": "credential",
+                  "name": "bearer"
+                }
+              ]
+            },
+            {
+              "function": "parse_project_id",
+              "binds": true,
+              "args": [
+                {
+                  "ref": "parameter",
+                  "path": [
+                    "project_id"
+                  ]
+                }
+              ]
+            }
+          ],
+          "delegate": {
+            "function": "mark_photo_published",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "delivery"
+              },
+              {
+                "ref": "slot",
+                "name": "context"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "source_id"
+                ]
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "body",
+                  "photo_id"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
         }
       ],
       "error_policy": {
-        "body": "empty",
+        "body": "answer",
         "default_status": 500,
         "mapping": [
           {
             "exception": "AuthenticationRequired",
-            "status": 401
+            "answer": {
+              "function": "refusal_answer",
+              "args": [
+                {
+                  "ref": "enum",
+                  "type": "RefusalCode",
+                  "member": "UNAUTHORIZED"
+                }
+              ]
+            }
+          },
+          {
+            "exception": "DelivererError",
+            "answer": {
+              "function": "refusal_answer",
+              "args": [
+                {
+                  "ref": "exception",
+                  "path": [
+                    "code"
+                  ]
+                }
+              ]
+            }
           }
         ],
+        "request_validation": {
+          "function": "refusal_answer",
+          "args": [
+            {
+              "ref": "enum",
+              "type": "RefusalCode",
+              "member": "INVALID_REQUEST"
+            }
+          ]
+        },
         "unavailable_to_module": []
       },
       "irregular_ownership": {
@@ -1136,6 +1313,13 @@
         "read_mark",
         "write_mark"
       ],
+      "deliverer_api": [
+        "answer_health",
+        "AuthenticationRequired",
+        "check_token",
+        "parse_project_id",
+        "refusal_answer"
+      ],
       "system_clock": [
         "utc_now"
       ],
@@ -1143,13 +1327,6 @@
         "scan_project_photos",
         "deliver_project_photo",
         "mark_photo_published"
-      ],
-      "deliverer_api": [
-        "answer_health",
-        "AuthenticationRequired",
-        "deliver_route",
-        "mark_route",
-        "scan_route"
       ],
       "deliverer_router": [
         "create_app"
@@ -1174,6 +1351,8 @@
         "ConnectionsFile",
         "SourceSignatureRule",
         "ObservationFailure",
+        "ServiceExit",
+        "ExitStatusRule",
         "ScanStatus",
         "ObservationReason",
         "DateSource",
@@ -1190,9 +1369,7 @@
         "PublicationMark",
         "Refusal",
         "RuntimeEnvironment",
-        "HealthStatus",
-        "ServiceExit",
-        "ExitStatusRule"
+        "HealthStatus"
       ]
     },
     "module_internal": {
@@ -1204,6 +1381,7 @@
       },
       "data_provider": {
         "models": [
+          "ExitStatusRule",
           "ObservationFailure",
           "ObservationReason",
           "PlacementFailure",
@@ -1214,7 +1392,6 @@
       },
       "runtime_settings": {
         "models": [
-          "RuntimeEnvironment",
           "RuntimeSettings"
         ]
       },
@@ -1245,8 +1422,7 @@
           "RefusalCode",
           "ScanStatus",
           "SourceFile",
-          "SourceRead",
-          "SourceSignatureRule"
+          "SourceRead"
         ],
         "refusals": [
           "DelivererError",
@@ -1308,6 +1484,21 @@
           "DelivererError"
         ]
       },
+      "deliverer_api": {
+        "data_provider": [
+          "REFUSAL_ANSWERS"
+        ],
+        "models": [
+          "HealthAnswer",
+          "HealthStatus",
+          "Refusal",
+          "RefusalAnswerRule",
+          "RefusalCode"
+        ],
+        "refusals": [
+          "DelivererError"
+        ]
+      },
       "photo_delivery": {
         "data_provider": [
           "OBSERVATION_FAILURES",
@@ -1357,43 +1548,31 @@
           "utc_now"
         ]
       },
-      "deliverer_api": {
-        "data_provider": [
-          "REFUSAL_ANSWERS"
-        ],
+      "deliverer_router": {
         "models": [
           "DeliverRequest",
           "DeliveryContext",
           "HealthAnswer",
-          "HealthStatus",
           "MarkOutcome",
           "PlacementOutcome",
           "PublishedRequest",
-          "Refusal",
-          "RefusalAnswerRule",
           "RefusalCode",
           "ScanResult"
+        ],
+        "refusals": [
+          "DelivererError"
+        ],
+        "deliverer_api": [
+          "AuthenticationRequired",
+          "answer_health",
+          "check_token",
+          "parse_project_id",
+          "refusal_answer"
         ],
         "photo_delivery": [
           "deliver_project_photo",
           "mark_photo_published",
           "scan_project_photos"
-        ],
-        "refusals": [
-          "DelivererError"
-        ]
-      },
-      "deliverer_router": {
-        "models": [
-          "DeliveryContext",
-          "HealthAnswer"
-        ],
-        "deliverer_api": [
-          "AuthenticationRequired",
-          "answer_health",
-          "deliver_route",
-          "mark_route",
-          "scan_route"
         ]
       },
       "deliverer_service": {
@@ -1454,6 +1633,8 @@
       "ConnectionsFile",
       "SourceSignatureRule",
       "ObservationFailure",
+      "ServiceExit",
+      "ExitStatusRule",
       "ScanStatus",
       "ObservationReason",
       "DateSource",
@@ -1470,9 +1651,7 @@
       "PublicationMark",
       "Refusal",
       "RuntimeEnvironment",
-      "HealthStatus",
-      "ServiceExit",
-      "ExitStatusRule"
+      "HealthStatus"
     ],
     "refusals": [
       "DelivererError",
@@ -1572,6 +1751,14 @@
       "read_mark",
       "write_mark"
     ],
+    "deliverer_api": [
+      "AuthenticationRequired",
+      "answer_health",
+      "check_token",
+      "parse_project_id",
+      "_refusal_row",
+      "refusal_answer"
+    ],
     "system_clock": [
       "utc_now"
     ],
@@ -1586,24 +1773,13 @@
       "_mark_outcome",
       "mark_photo_published"
     ],
-    "deliverer_api": [
-      "AuthenticationRequired",
-      "answer_health",
-      "bearer_credential",
-      "check_token",
-      "_project_id",
-      "_refusal_row",
-      "_refusal_answer",
-      "_deliver_request",
-      "_published_request",
-      "scan_route",
-      "deliver_route",
-      "mark_route"
-    ],
     "deliverer_router": [
       "create_app",
       "extract_bearer_credential",
-      "health_handler"
+      "health_handler",
+      "scan_route",
+      "deliver_route",
+      "mark_route"
     ],
     "deliverer_service": [
       "read_token",
@@ -1620,9 +1796,9 @@
     "source_folder",
     "photo_preparation",
     "delivery_store",
+    "deliverer_api",
     "system_clock",
     "photo_delivery",
-    "deliverer_api",
     "deliverer_router",
     "deliverer_service"
   ],
@@ -1635,9 +1811,9 @@
     "source_folder": "portal_deliverer/source_folder",
     "photo_preparation": "portal_deliverer/photo_preparation",
     "delivery_store": "portal_deliverer/delivery_store",
+    "deliverer_api": "portal_deliverer/deliverer_api",
     "system_clock": "portal_deliverer/system_clock",
     "photo_delivery": "portal_deliverer/photo_delivery",
-    "deliverer_api": "portal_deliverer/deliverer_api",
     "deliverer_router": "portal_deliverer/deliverer_router",
     "deliverer_service": "portal_deliverer/deliverer_service"
   },
@@ -1710,13 +1886,10 @@
     "extract_bearer_credential",
     "health_handler",
     "answer_health",
-    "bearer_credential",
     "check_token",
-    "_project_id",
+    "parse_project_id",
     "_refusal_row",
-    "_refusal_answer",
-    "_deliver_request",
-    "_published_request",
+    "refusal_answer",
     "scan_route",
     "deliver_route",
     "mark_route",

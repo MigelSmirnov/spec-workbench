@@ -133,22 +133,22 @@ The HTTP surface with four routes, each bound to its handler:
 | Route | Method and path | Handler |
 |---|---|---|
 | health | `GET /health` | the router's own, calling `public_op:deliverer_api.answer_health` |
-| scan | `GET /v1/projects/{project_id}/photos` | `scan_route` of `module:deliverer_api` |
-| delivery | `POST /v1/projects/{project_id}/photos/deliver` | `deliver_route` of `module:deliverer_api` |
-| mark | `POST /v1/projects/{project_id}/photos/{source_id}/published` | `mark_route` of `module:deliverer_api` |
+| scan | `GET /v1/projects/{project_id}/photos` | the router's own `scan_route`, calling `public_op:photo_delivery.scan_project_photos` |
+| delivery | `POST /v1/projects/{project_id}/photos/deliver` | the router's own `deliver_route`, calling `public_op:photo_delivery.deliver_project_photo` |
+| mark | `POST /v1/projects/{project_id}/photos/{source_id}/published` | the router's own `mark_route`, calling `public_op:photo_delivery.mark_photo_published` |
 
 ### Observable effect
 
 None until the surface is served. The health route answers through `public_op:deliverer_api.answer_health`
-without a token. Every other route passes the request to its handler in `module:deliverer_api`, which checks the
-token, the project id and the form of its body when it has one, calls one operation of `module:photo_delivery` and
-turns its refusal into an answer.
+without a token. Every other route checks the token with `module:deliverer_api` before it reads the body, reads
+the body of a delivery or a mark by its request model, judges the project id with `module:deliverer_api`, calls one
+operation of `module:photo_delivery`, and answers every refusal through `module:deliverer_api`.
 
 ### Enforces
 
 The method and path of each route. The token of A5 rules 1 and 5, the project id part of A5 rule 9, the
-refusal answer of A5 rule 10, the request form of A3 rule 4 and the `photo_id` form of A4 rule 2 are checked
-in the handlers of `module:deliverer_api`; every later check, the source id among them, is
+refusal answer of A5 rule 10 are checked by `module:deliverer_api`, and the request form of A3 rule 4 and the
+`photo_id` form of A4 rule 2 by the request models the router reads; every later check, the source id among them, is
 `module:photo_delivery`'s.
 
 ### Errors
