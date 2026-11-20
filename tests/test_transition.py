@@ -155,6 +155,27 @@ def test_a_union_introduces_its_variants(tmp_path):
     assert transition.run_check(case, "model_closure")["findings"] == []
 
 
+def test_the_row_model_of_a_data_provider_table_is_introduced(tmp_path):
+    # portal-deliverer: SourceSignatureRule types the rows of SOURCE_SIGNATURES and
+    # no signature names it; the table, not a contract, is what carries it
+    case = _case(tmp_path)
+    _contracts(case, {"record_thing": ("things", "(name: str) -> Thing")})
+    _closure(case, {"Thing": {"identity": "entity", "fields": {"name": "str"}}})
+    _write(case / "60_model_closure_contract_types.json", {
+        "schema_version": "spec_workbench_model_closure.v1", "status": "closed", "identity_scope": "contract_only",
+        "models": {"SignatureRule": {"identity": "value", "fields": {"format": "str", "detail": "RuleDetail"}},
+                   "RuleDetail": {"identity": "value", "fields": {"offset": "int"}},
+                   "Orphan": {"identity": "value", "fields": {"x": "str"}}}})
+    _write(case / "70_data_provider_closure.json", {
+        "schema_version": "x", "status": "closed",
+        "backend_ir": {"kind": "data_provider_backend", "constants": {
+            "SIGNATURES": {"value_type": "record_tuple", "row_model": "SignatureRule", "key": ["format"],
+                           "value": [{"format": "JPEG", "detail": {"offset": 0}}]},
+            "LIMIT": {"value_type": "integer", "value": 3}}}})
+    findings = transition.run_check(case, "model_closure")["findings"]
+    assert {(f["code"], f["model"]) for f in findings} == {("contract_only_model_unintroduced", "Orphan")}
+
+
 def test_flow_reachability_without_readable_routes_is_not_checked(tmp_path):
     case = _flow_case(tmp_path, router=False)
     _write(case / "70_router_closure.json", {"schema_version": "x", "items": []})  # authored, not assemblable
