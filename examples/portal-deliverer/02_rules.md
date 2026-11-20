@@ -23,7 +23,7 @@ applies decides:
 |---|---|---|---|
 | 1 | empty | REJECTED | EMPTY |
 | 2 | larger than the source limit | REJECTED | TOO_LARGE |
-| 3 | opened in non-blocking mode without following a link, what it finds is not a regular file | REJECTED | NOT_A_REGULAR_FILE |
+| 3 | what its name leads to, without following a link, is not a regular file | REJECTED | NOT_A_REGULAR_FILE |
 | 4 | it grew past the source limit while being read | REJECTED | TOO_LARGE |
 | 5 | opening or reading it fails, which includes a file that disappeared or became a symbolic link after its metadata was read | REJECTED | UNREADABLE_FILE |
 | 6 | does not begin with the signature of a format of the imported `SOURCE_FORMATS` constant: for no format do all the rows of the imported `SOURCE_SIGNATURES` constant with that `format` find their `signature` bytes at their `offset` | REJECTED | UNSUPPORTED_FORMAT |
@@ -56,25 +56,13 @@ to what its step finds when it runs, and the next scan sees the folder as it the
 changes while it is read is judged by the bytes that were read, once, without a retry. Syncthing replaces
 a finished file by renaming a new one over it; a later delivery judges what it then reads under A3 rule 5.
 
-Every folder is opened without following a link: the photo folder one folder at a time along its
-resolved path (A5 rule 8), and each subfolder in the folder that holds it. A folder is listed, its entries
-are read and its files are opened only through the folder that was opened, so an entry replaced by a link
-after a check is never followed. A subfolder the listing showed is opened without following a link: when
-the opening finds a symbolic link, dangling or not, or an object that is not a folder, it is not entered
-and the scan goes on; when the subfolder is gone or the opening fails for any other reason, the scan is
-refused as for a subfolder that cannot be listed. When the listing reaches an entry, one metadata reading of that
-entry in its opened folder, without following a link, decides that it is a regular file and gives its
-listed size and modification time; an entry that reading does not show as a regular file is not
-reported, and a reading that fails other than for a file that disappeared refuses the scan with
-the FOLDER_UNAVAILABLE member of = models.RefusalCode. Orders 1 and 2 are first decided by that size, before the file is
-opened. A file is then opened in that same opened folder: an opening that fails, or a failed metadata reading of the opened file,
-is order 5, and an opened object that is not a regular file is order 3; either ends the work on that file
-before any byte is read. Otherwise it is read once, up to one byte past the imported `MAX_SOURCE_BYTES` constant: reaching
-that byte is order 4, and the read stops there. Read once means one pass over the opened file from its
-start, continued after a short read until the end of the file or that byte; the file is not opened or read
-again. A read that reaches the end of the file with no bytes is order 1. A file that is read takes its modification time from one metadata reading of the file that was
-opened, the one whose bytes are read, taken after the opening and before the read; A7 rule 4 gives its
-form, and a delivery uses that time under A2 rule 3.
+No symbolic link is followed at any level of the photo folder (A5 rule 8): an entry that is a link is
+neither reported nor entered, and a folder or file replaced by a link after it was checked is not followed
+instead, so what a scan judges is what it read. A subfolder found to be a link or not a folder when it is
+entered is skipped and the scan goes on; one that is gone or cannot be entered refuses the scan as a
+subfolder that cannot be listed. Orders 1 and 2 are first decided from the size the folder lists, before
+the file is read. A file is read once, and the bytes read are the bytes judged. A file's modification time
+is that of the file whose bytes were read; A7 rule 4 gives its form, and a delivery uses it under A2 rule 3.
 
 A scan only reads the source folder. A signature does not prove that an image can be decoded: a file with the
 READY member of = models.ScanStatus may still fail when it is delivered.
@@ -102,18 +90,18 @@ A replaced file is scanned again by its new content (A3).
 
 ### Normative rules
 
-1. A stored image is a newly encoded JPEG made from the decoded pixels of the source, by exactly these
-   operations of the image library at the version A9 pins, whose arithmetic (conversion formulas,
-   resampling, rounding of sizes, alpha compositing and encoding) is that library's:
-   `ImageOps.exif_transpose` applies the camera orientation to the first frame; `Image.convert` to
-   `RGBA` converts the decoded samples, without colour management and without a colour profile;
-   `Image.thumbnail` with the `LANCZOS` filter and a box of the imported `PHOTO_MAX_SIDE` constant on
-   each side reduces the image when a side is larger than that box, keeping its proportion; the result
-   is pasted onto an `RGB` image of the same size filled with the colour of the imported
-   `PHOTO_BACKGROUND` constant, with its own alpha channel as the mask, so transparent areas take that
-   colour; and `Image.save` writes a JPEG with the imported constants `PHOTO_QUALITY` as
-   `quality`, `PHOTO_OPTIMIZE` as `optimize`, `PHOTO_PROGRESSIVE` as `progressive` and
-   `PHOTO_SUBSAMPLING` as `subsampling`, with no EXIF, colour profile or other metadata. With one library version one source gives the same bytes. `sha256`
+1. A stored image is a newly encoded JPEG made from the decoded pixels of the first frame of the source by
+   exactly these operations of the image library at the version A9 pins, in this order, whose arithmetic
+   (conversion formulas, resampling, rounding of sizes, alpha compositing and encoding) is that library's:
+   its EXIF transposition applies the camera orientation; its conversion to RGBA converts the decoded
+   samples, without colour management and without a colour profile; its thumbnail reduction with the
+   LANCZOS filter to a box of the imported `PHOTO_MAX_SIDE` constant on each side reduces the image when a
+   side is larger than that box, keeping its proportion; the result is pasted onto an RGB image of the same
+   size filled with the colour of the imported `PHOTO_BACKGROUND` constant, with its own alpha channel as
+   the mask, so transparent areas take that colour; and its JPEG encoding writes the image with quality the
+   imported `PHOTO_QUALITY` constant, optimize the imported `PHOTO_OPTIMIZE` constant, progressive the
+   imported `PHOTO_PROGRESSIVE` constant and subsampling the imported `PHOTO_SUBSAMPLING` constant, with no
+   EXIF, colour profile or other metadata. With one library version one source gives the same bytes. `sha256`
    and `size` of M04 describe the bytes that were stored, its `media_type` is the imported `STORED_MEDIA_TYPE` constant, and a repeated delivery returns that placement
    without encoding again (A3 rule 2).
 2. The source may be of a format of the imported `SOURCE_FORMATS` constant. A scan decides membership by the
@@ -128,7 +116,7 @@ A replaced file is scanned again by its new content (A3).
 3. The photo moment is the first usable value of: EXIF `DateTimeOriginal`, EXIF `DateTime`, then
    the file's modification time. `DateTimeOriginal` uses `OffsetTimeOriginal` when that offset matches
    the imported `EXIF_OFFSET_PATTERN` constant whole, with hours up to the imported `CAMERA_OFFSET_MAX_HOURS` constant and minutes that are a minute of the hour; otherwise it is read in the time zone of the `timezone` field of the run settings (A8), and so is
-   `DateTime`. A camera value is unusable when it does not match the imported `EXIF_DATETIME_PATTERN` constant whole or is no date and time the standard library's datetime type can hold, so a leap second is unusable, when its conversion to UTC fails, a moment that type cannot hold among them, when its UTC year
+   `DateTime`. A camera value is unusable when it does not match the imported `EXIF_DATETIME_PATTERN` constant whole or is no valid calendar date and time, when its UTC year
    is before the imported `CAMERA_EARLIEST_YEAR` constant, or when it is more than the imported
    `CAMERA_LATEST_AFTER_MODIFIED_HOURS` constant of hours after the file's modification time.
 4. The photo date is delivered as UTC without an offset, as the Client Portal stores it. A camera
@@ -169,9 +157,8 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
    delivery under A6 rule 5.
 3. One call delivers one photo, named by `name`, a relative path in the form a scan reports, and
    `source_id`. The service keeps no memory of earlier scans: it judges the name and the file when the call
-   runs. A named file that passes condition 1 of rule 5 and that A1 orders 1 and 2 do not reject from its
-   metadata is opened, and unless the opening decides A1 order 3 or 5, read once; the bytes that were read
-   are the bytes judged, hashed and prepared.
+   runs. A named file that passes condition 1 of rule 5 is judged by A1 orders 1 to 6 and read once; the bytes
+   that were read are the bytes judged, hashed and prepared.
 4. Checks run in this order: token, request form and project id, connection, photo folder, source id,
    project lock, existing placement, named file. The request form is a body holding only `name` and
    `source_id`, both strings. A defect of that form or of the project id refuses the whole request with
@@ -179,20 +166,16 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
    `source_id` that does not match the imported `SOURCE_ID_PATTERN` constant in full is refused with
    the INVALID_SOURCE_ID member of = models.RefusalCode.
 5. A photo that cannot be delivered is answered with the FAILED member of = models.PlacementStatus and one member of
-   `= models.PlacementFailure`. Condition 1 is decided from the name, then by opening the photo folder and
-   each folder of the name in turn, each in the one before it and without following a link, and by one
-   metadata reading of the last segment in the last folder opened, without following a link; the file is
-   then opened in that folder, so it is read from the folders that were checked. Inspecting a folder of
-   the path is opening it as a folder, never reading a file of it; only the last segment is opened for
-   reading (INV-02). Condition 2 applies A1 as A1 decides it: orders 1 and 2 first from that same
-   metadata, before the file is opened, then the read. Conditions 3 and 4 follow the read. Conditions 1 to 4 write nothing except the
+   `= models.PlacementFailure`. Condition 1 is decided from the name and from the path it names, without following a link at any
+   folder or at the file, and the file that is read is the one at the path that was checked; no file of a
+   folder on the path is read (INV-02). Condition 2 applies A1 as A1 decides it. Conditions 3 and 4 follow the read. Conditions 1 to 4 write nothing except the
    project lock (A6 rule 4). After condition 5 a stored image may remain without a record: no caller has received
    its reference, and a repeated delivery of the same file writes it again and completes the placement,
    unless a refusal of A6 rule 5 applies.
 
    | Order | Condition | Member |
    |---|---|---|
-   | 1 | `name` is not non-empty segments joined by single `/` characters, or a segment is `.` or `..`, or a segment is ignored under A1, or a folder on its path cannot be opened as a folder without following a link, because it is absent, is a symbolic link, is not a folder or the opening fails, or the last segment is absent or is not a regular file, or its metadata cannot be read. Names are compared exactly, without Unicode normalisation | `NOT_READY_OR_ABSENT` |
+   | 1 | `name` is not non-empty segments joined by single `/` characters, or a segment is `.` or `..`, or a segment is ignored under A1, or a folder on its path is absent, a symbolic link or not a folder, or cannot be reached, or the last segment is absent, a symbolic link or not a regular file, or cannot be inspected. Names are compared exactly, without Unicode normalisation | `NOT_READY_OR_ABSENT` |
    | 2 | A1 orders 1 to 6 reject the file | `EMPTY` for order 1, `TOO_LARGE` for orders 2 and 4, `NOT_A_REGULAR_FILE` for order 3, `UNREADABLE_FILE` for order 5, `UNSUPPORTED_FORMAT` for order 6 |
    | 3 | the hash of the bytes differs from `source_id` | `SOURCE_CHANGED` |
    | 4 | A2 rule 2 fails | `TOO_MANY_PIXELS`, `UNREADABLE_IMAGE` or `TOO_LARGE`, as that rule decides |
@@ -274,9 +257,9 @@ A published photo is recognised without any change to the Portal.
    = models.RefusalCode before its identifiers or body are examined.
 2. The token is generated with 256 bits from a cryptographic random source and is kept in a
    file in the encoding of the imported `TOKEN_ENCODING` constant: the 32 random bytes in URL-safe Base64, 43 characters of `A`-`Z`, `a`-`z`, `0`-`9`, `-` and `_`.
-   The path is the `credential_file` run setting (A8). At the start it is opened once; its last component is
-   opened without following a link, while the folders above it belong to the installation and are
-   resolved as they stand. The permissions are those of the opened file and its content is read from it. The file is decoded in that encoding, a byte sequence it cannot
+   The path is the `credential_file` run setting (A8). At the start it is read once; its last component must not be a
+   link, while the folders above it belong to the installation and are taken as they stand, and the
+   permissions judged are those of the file that is read. The file is decoded in that encoding, a byte sequence it cannot
    decode ending the start, and the characters of the imported `TOKEN_TRIM_CHARACTERS` constant (the ASCII
    space, tab, line feed, carriage return, vertical tab and form feed) are removed at both ends; no other
    character is removed. The service does not start when
@@ -316,11 +299,9 @@ A published photo is recognised without any change to the Portal.
    `..` and are not the root itself. Separately, on each scan and placement the photo folder of the
    requested project must be a folder whose resolved path is strictly below the resolved root,
    otherwise the operation is refused with the FOLDER_UNAVAILABLE member of = models.RefusalCode; so is a root or photo folder that is
-   missing, lies in a loop of links or cannot be resolved or inspected for any other reason. The photo folder is then reached by that
-   resolved path, opened one folder at a time from the root of the file system without following a link
-   at any of them (A1), so the folder that is read is the folder whose containment was checked; a folder
-   on that path replaced after the check by a link or by anything that is not a folder cannot be opened,
-   and the scan is refused with the FOLDER_UNAVAILABLE member of = models.RefusalCode or the delivery fails under condition 1 of A3 rule 5.
+   missing, lies in a loop of links or cannot be resolved or inspected for any other reason. The folder that is read is the folder whose
+   containment was checked: no link on its resolved path is followed (A1), so a folder on that path
+   replaced after the check by a link or by anything that is not a folder is not read, and the scan is refused with the FOLDER_UNAVAILABLE member of = models.RefusalCode or the delivery fails under condition 1 of A3 rule 5.
    This second check does not run at the start of the service or for other projects. The deliverer never opens the invoice folder, so
    the resolved path of that folder is checked by the Cabinet Inbox when it moves to this record
    (R0-09).
@@ -566,15 +547,10 @@ gives a source whose reading fails with that `failure` that `reason`.
 | `UNSUPPORTED_FORMAT` | `UNSUPPORTED_FORMAT` |
 
 `EXIT_STATUSES` holds exactly one row for each member of = models.ServiceExit, keyed by `outcome`; a
-member without its row stops the build. The service has begun listening once its web server reports
-its startup complete, its socket accepting connections; that report is the boundary. = models.ServiceExit
-is START_FAILED, value `start_failed`: the process ends before that boundary, whatever ends it, a signal
-included; SERVED, value `served`: after it, a signal of the imported `STOP_SIGNALS` constant stops the web server, which returns without
-an error, and nothing fails until the process ends; and SERVER_FAILED, value `server_failed`: after it, the
-process ends in any other way, a failure during or after the shutdown of a stopped server included, so any
-failure after the boundary outranks the signal. The outcome is fixed by the first event that ends the
-process: it is START_FAILED when the boundary report has not been made at that moment, and is judged by the
-other two otherwise, whatever event follows.
+member without its row stops the build. = models.ServiceExit is START_FAILED, value `start_failed`: the
+process ends before its web server listens, whatever ends it; SERVED, value `served`: after it listens, a
+signal of the imported `STOP_SIGNALS` constant stops it and the process ends without a failure; and
+SERVER_FAILED, value `server_failed`: after it listens, the process ends in any other way.
 
 | `outcome` | `status` |
 |---|---|
