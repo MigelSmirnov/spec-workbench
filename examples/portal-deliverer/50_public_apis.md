@@ -158,7 +158,9 @@ Building the surface raises no refusal. A served route answers a wrong token, a 
 The surface serves nothing besides the four routes: no generated description of them and no documentation
 page. A path matches a route only as the table writes it, `{project_id}` and `{source_id}` each standing for
 one path segment, and a path with a trailing slash added is answered by the framework's own temporary redirect, status 307, to the
-route's path, which keeps the method and the body. Any other path
+route's path, which keeps the method and the body. The redirect is decided by the path alone, whatever the
+method and before any check of the route, the token and the body among them; the redirected request is then
+judged at the route's path, where a method the route does not have answers 405. Any other path
 answers 404, and a route's path with another method answers 405, both with the framework's own body and not
 M08.
 
