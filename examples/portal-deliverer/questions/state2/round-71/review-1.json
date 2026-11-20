@@ -1,0 +1,123 @@
+{
+ "open_points": [
+  {
+   "subject": "ServiceExit enumeration",
+   "kind": "contradiction",
+   "text": "Its members are exactly `start_failed`, `served` and `server_failed`; A8 decides what each means and its status.",
+   "question": "Are `start_failed`, `served` and `server_failed` member names, as the context says, or values of the `START_FAILED`, `SERVED` and `SERVER_FAILED` members, as A8 says?",
+   "options": [
+    "The member names are `START_FAILED`, `SERVED` and `SERVER_FAILED`, with the lowercase strings as their values.",
+    "The member names themselves are the lowercase strings.",
+    "Change the context to say “values” rather than “members” and retain A8's names."
+   ],
+   "default_guess": "Treat the uppercase identifiers in A8 as the member names and the lowercase strings as their values.",
+   "witness": {
+    "initial": "The model emitter must generate the ServiceExit enumeration consumed by the exit-status policy.",
+    "events": [
+     "The model generator reads the context declaration of the three lowercase members.",
+     "The service generator reads A8's references to `START_FAILED`, `SERVED` and `SERVER_FAILED`."
+    ],
+    "outcomes": [
+     "The emitter generates lowercase member identifiers, so A8's uppercase references do not resolve.",
+     "The emitter generates uppercase member identifiers with lowercase serialized values, so A8 resolves."
+    ],
+    "observer": "The generated service build and its implementer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ServiceExit listening boundary",
+   "kind": "vague event source",
+   "text": "The service has begun listening once its web server reports its startup complete, its socket accepting connections; that report is the boundary.",
+   "question": "Which exact web-server event or API report establishes the boundary, and does the report alone establish it or must socket acceptance be independently verified?",
+   "options": [
+    "Use the web server's documented startup-complete lifecycle event as the boundary without a separate probe.",
+    "Use the event only after independently confirming that the socket accepts connections.",
+    "Use the instant at which the listening socket becomes accepting, regardless of when the server reports startup complete."
+   ],
+   "default_guess": "Use the pinned web server's documented startup-complete lifecycle event as the boundary.",
+   "unit": "?"
+  },
+  {
+   "subject": "ServiceExit boundary ordering",
+   "kind": "uncovered ordering",
+   "text": "START_FAILED, value `start_failed`: the process ends before that boundary, whatever ends it, a signal included; SERVED, value `served`: after it, a SIGINT or SIGTERM stops the web server",
+   "question": "How is the outcome chosen when the startup-boundary report and a terminating signal or shutdown are concurrent, with no defined ordering between them?",
+   "options": [
+    "Linearize the boundary before signal handling, allowing `SERVED` after a clean shutdown.",
+    "Linearize signal handling or termination before the boundary, producing `START_FAILED`.",
+    "Define an atomic state transition whose winner decides the outcome."
+   ],
+   "default_guess": "Make the startup-boundary transition atomic and let the transition observed first decide.",
+   "witness": {
+    "initial": "The web server is completing startup while the process can receive SIGTERM.",
+    "events": [
+     "The web-server thread reports startup complete.",
+     "At the same time, the process receives SIGTERM and begins a clean shutdown.",
+     "The server returns without an error and the process ends."
+    ],
+    "outcomes": [
+     "The boundary wins, so the outcome is `SERVED` and the status is 0.",
+     "The signal or shutdown wins before the boundary, so the outcome is `START_FAILED` and the status is 1."
+    ],
+    "observer": "The process supervisor"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ServiceExit signal timing",
+   "kind": "ambiguous precedence",
+   "text": "SERVED, value `served`: after it, a SIGINT or SIGTERM stops the web server, which returns without an error",
+   "question": "Must SIGINT or SIGTERM be received after the boundary, or is `SERVED` also chosen when the signal is received before the boundary but stops the server only after the boundary?",
+   "options": [
+    "The signal must be received after the boundary.",
+    "Only the server's stopping and clean return must occur after the boundary; signal receipt may precede it.",
+    "Any signal received before the boundary makes the outcome `START_FAILED` even if startup subsequently completes."
+   ],
+   "default_guess": "Require the signal to be received after the boundary.",
+   "witness": {
+    "initial": "Startup has not yet crossed the declared boundary, but the server can finish startup before acting on a pending signal.",
+    "events": [
+     "The process receives SIGTERM before the startup-complete report.",
+     "The web server reports startup complete.",
+     "The pending SIGTERM stops the server cleanly.",
+     "The process ends without another failure."
+    ],
+    "outcomes": [
+     "Classifying by signal receipt gives `SERVER_FAILED` or `START_FAILED`, with status 1.",
+     "Classifying by when the signal stops the server gives `SERVED`, with status 0."
+    ],
+    "observer": "The process supervisor"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ServiceExit failure precedence",
+   "kind": "vague refusal condition",
+   "text": "and nothing fails until the process ends; and SERVER_FAILED, value `server_failed`: after it, the process ends in any other way, a failure during or after the shutdown of a stopped server included, so any failure after the boundary outranks the signal.",
+   "question": "What exact events count as a “failure” after the boundary and therefore override an otherwise clean signal shutdown?",
+   "options": [
+    "Only an uncaught exception or nonzero return from the web server or shutdown path counts.",
+    "Any exception, failed cleanup, failed hook, task error or nonzero component result counts, even if handled.",
+    "Only failures that change the process exit status count."
+   ],
+   "default_guess": "Count any uncaught exception or explicit nonzero failure result in the server, shutdown hooks or final cleanup.",
+   "witness": {
+    "initial": "The service has crossed the boundary and SIGTERM has stopped the web server without an error.",
+    "events": [
+     "A final cleanup hook reports an error that is logged and handled.",
+     "The process can still end normally."
+    ],
+    "outcomes": [
+     "Treating the handled cleanup error as a failure gives `SERVER_FAILED` and status 1.",
+     "Treating only uncaught or exit-changing errors as failures gives `SERVED` and status 0."
+    ],
+    "observer": "The process supervisor and service operator"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"ServiceExit enumeration\",\"kind\":\"contradiction\",\"text\":\"Its members are exactly `start_failed`, `served` and `server_failed`; A8 decides what each means and its status.\",\"question\":\"Are `start_failed`, `served` and `server_failed` member names, as the context says, or values of the `START_FAILED`, `SERVED` and `SERVER_FAILED` members, as A8 says?\",\"options\":[\"The member names are `START_FAILED`, `SERVED` and `SERVER_FAILED`, with the lowercase strings as their values.\",\"The member names themselves are the lowercase strings.\",\"Change the context to say “values” rather than “members” and retain A8's names.\"],\"default_guess\":\"Treat the uppercase identifiers in A8 as the member names and the lowercase strings as their values.\",\"witness\":{\"initial\":\"The model emitter must generate the ServiceExit enumeration consumed by the exit-status policy.\",\"events\":[\"The model generator reads the context declaration of the three lowercase members.\",\"The service generator reads A8's references to `START_FAILED`, `SERVED` and `SERVER_FAILED`.\"],\"outcomes\":[\"The emitter generates lowercase member identifiers, so A8's uppercase references do not resolve.\",\"The emitter generates uppercase member identifiers with lowercase serialized values, so A8 resolves.\"],\"observer\":\"The generated service build and its implementer\"}},{\"subject\":\"ServiceExit listening boundary\",\"kind\":\"vague event source\",\"text\":\"The service has begun listening once its web server reports its startup complete, its socket accepting connections; that report is the boundary.\",\"question\":\"Which exact web-server event or API report establishes the boundary, and does the report alone establish it or must socket acceptance be independently verified?\",\"options\":[\"Use the web server's documented startup-complete lifecycle event as the boundary without a separate probe.\",\"Use the event only after independently confirming that the socket accepts connections.\",\"Use the instant at which the listening socket becomes accepting, regardless of when the server reports startup complete.\"],\"default_guess\":\"Use the pinned web server's documented startup-complete lifecycle event as the boundary.\"},{\"subject\":\"ServiceExit boundary ordering\",\"kind\":\"uncovered ordering\",\"text\":\"START_FAILED, value `start_failed`: the process ends before that boundary, whatever ends it, a signal included; SERVED, value `served`: after it, a SIGINT or SIGTERM stops the web server\",\"question\":\"How is the outcome chosen when the startup-boundary report and a terminating signal or shutdown are concurrent, with no defined ordering between them?\",\"options\":[\"Linearize the boundary before signal handling, allowing `SERVED` after a clean shutdown.\",\"Linearize signal handling or termination before the boundary, producing `START_FAILED`.\",\"Define an atomic state transition whose winner decides the outcome.\"],\"default_guess\":\"Make the startup-boundary transition atomic and let the transition observed first decide.\",\"witness\":{\"initial\":\"The web server is completing startup while the process can receive SIGTERM.\",\"events\":[\"The web-server thread reports startup complete.\",\"At the same time, the process receives SIGTERM and begins a clean shutdown.\",\"The server returns without an error and the process ends.\"],\"outcomes\":[\"The boundary wins, so the outcome is `SERVED` and the status is 0.\",\"The signal or shutdown wins before the boundary, so the outcome is `START_FAILED` and the status is 1.\"],\"observer\":\"The process supervisor\"}},{\"subject\":\"ServiceExit signal timing\",\"kind\":\"ambiguous precedence\",\"text\":\"SERVED, value `served`: after it, a SIGINT or SIGTERM stops the web server, which returns without an error\",\"question\":\"Must SIGINT or SIGTERM be received after the boundary, or is `SERVED` also chosen when the signal is received before the boundary but stops the server only after the boundary?\",\"options\":[\"The signal must be received after the boundary.\",\"Only the server's stopping and clean return must occur after the boundary; signal receipt may precede it.\",\"Any signal received before the boundary makes the outcome `START_FAILED` even if startup subsequently completes.\"],\"default_guess\":\"Require the signal to be received after the boundary.\",\"witness\":{\"initial\":\"Startup has not yet crossed the declared boundary, but the server can finish startup before acting on a pending signal.\",\"events\":[\"The process receives SIGTERM before the startup-complete report.\",\"The web server reports startup complete.\",\"The pending SIGTERM stops the server cleanly.\",\"The process ends without another failure.\"],\"outcomes\":[\"Classifying by signal receipt gives `SERVER_FAILED` or `START_FAILED`, with status 1.\",\"Classifying by when the signal stops the server gives `SERVED`, with status 0.\"],\"observer\":\"The process supervisor\"}},{\"subject\":\"ServiceExit failure precedence\",\"kind\":\"vague refusal condition\",\"text\":\"and nothing fails until the process ends; and SERVER_FAILED, value `server_failed`: after it, the process ends in any other way, a failure during or after the shutdown of a stopped server included, so any failure after the boundary outranks the signal.\",\"question\":\"What exact events count as a “failure” after the boundary and therefore override an otherwise clean signal shutdown?\",\"options\":[\"Only an uncaught exception or nonzero return from the web server or shutdown path counts.\",\"Any exception, failed cleanup, failed hook, task error or nonzero component result counts, even if handled.\",\"Only failures that change the process exit status count.\"],\"default_guess\":\"Count any uncaught exception or explicit nonzero failure result in the server, shutdown hooks or final cleanup.\",\"witness\":{\"initial\":\"The service has crossed the boundary and SIGTERM has stopped the web server without an error.\",\"events\":[\"A final cleanup hook reports an error that is logged and handled.\",\"The process can still end normally.\"],\"outcomes\":[\"Treating the handled cleanup error as a failure gives `SERVER_FAILED` and status 1.\",\"Treating only uncaught or exit-changing errors as failures gives `SERVED` and status 0.\"],\"observer\":\"The process supervisor and service operator\"}}]}",
+ "set_aside": []
+}

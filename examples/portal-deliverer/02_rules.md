@@ -569,7 +569,9 @@ is START_FAILED, value `start_failed`: the process ends before that boundary, wh
 included; SERVED, value `served`: after it, a SIGINT or SIGTERM stops the web server, which returns without
 an error, and nothing fails until the process ends; and SERVER_FAILED, value `server_failed`: after it, the
 process ends in any other way, a failure during or after the shutdown of a stopped server included, so any
-failure after the boundary outranks the signal.
+failure after the boundary outranks the signal. The outcome is fixed by the first event that ends the
+process: it is START_FAILED when the boundary report has not been made at that moment, and is judged by the
+other two otherwise, whatever event follows.
 
 | `outcome` | `status` |
 |---|---|

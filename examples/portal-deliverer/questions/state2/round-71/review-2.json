@@ -1,0 +1,161 @@
+{
+ "open_points": [
+  {
+   "subject": "context",
+   "kind": "contradiction",
+   "text": "Its members are exactly `start_failed`, `served` and `server_failed`; A8 decides what each means and its status.",
+   "question": "Are `start_failed`, `served` and `server_failed` the enumeration member names, as this passage says, or are they values of the `START_FAILED`, `SERVED` and `SERVER_FAILED` members, as A8 says?",
+   "options": [
+    "The member names are `START_FAILED`, `SERVED` and `SERVER_FAILED`, with the stated lowercase values.",
+    "The member names themselves are lowercase.",
+    "Lowercase and uppercase names are aliases for the same members."
+   ],
+   "default_guess": "Use uppercase member names and lowercase serialized values, following A8.",
+   "witness": {
+    "initial": "State 6 must emit the ServiceExit enumeration and code must select an EXIT_STATUSES row.",
+    "events": [
+     "The model emitter defines ServiceExit from the context passage.",
+     "Generated service code follows A8 and accesses `ServiceExit.START_FAILED`."
+    ],
+    "outcomes": [
+     "The context yields lowercase member names, so the generated uppercase access is absent.",
+     "A8 yields uppercase member names with lowercase values, so the generated access succeeds."
+    ],
+    "observer": "The generator or build sees whether the generated service compiles and can select the exit rule."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "undefined_failure",
+   "text": "and nothing fails until the process ends",
+   "question": "What exactly counts as a failure for ServiceExit classification: only an uncaught exception or nonzero termination, any raised exception even if caught, a logged error, a failed cleanup task, or some other defined condition?",
+   "options": [
+    "Only an uncaught exception, unsuccessful server result, or nonzero process termination counts.",
+    "Any exception or failed task after the boundary counts, even if caught or recovered.",
+    "Only failures explicitly reported by the web-server authority count."
+   ],
+   "default_guess": "Count an uncaught exception, an unsuccessful server result, or another condition that makes termination unsuccessful; do not count a caught and recovered exception.",
+   "witness": {
+    "initial": "The server has crossed the boundary and is running normally.",
+    "events": [
+     "An operator sends SIGTERM.",
+     "The web server returns without an error.",
+     "A shutdown callback raises an exception that is caught and logged, after which the process can end normally."
+    ],
+    "outcomes": [
+     "Treat the caught exception as a failure, choose SERVER_FAILED, and exit with status 1.",
+     "Treat the recovered exception as not constituting process failure, choose SERVED, and exit with status 0."
+    ],
+    "observer": "The operator or service supervisor sees the exit status."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8",
+   "kind": "causation",
+   "text": "after it, a SIGINT or SIGTERM stops the web server, which returns without an error",
+   "question": "How must code decide that SIGINT or SIGTERM stopped the server when a signal overlaps a shutdown that was already requested or underway?",
+   "options": [
+    "SERVED requires the signal to initiate the shutdown.",
+    "SERVED applies whenever the signal is received before the clean server return and no failure follows.",
+    "SERVED applies whenever such a signal is received at any time after the boundary and the process later ends cleanly."
+   ],
+   "default_guess": "Require SIGINT or SIGTERM to initiate the clean shutdown.",
+   "witness": {
+    "initial": "The server has crossed the boundary and is accepting connections.",
+    "events": [
+     "An internal actor requests a graceful server shutdown.",
+     "While that shutdown is underway, the operator sends SIGTERM.",
+     "The server then returns without an error and no later failure occurs."
+    ],
+    "outcomes": [
+     "The overlapping SIGTERM is enough to satisfy SERVED, so the process exits with status 0.",
+     "The signal did not stop the already-stopping server, so the ending is SERVER_FAILED and the process exits with status 1."
+    ],
+    "observer": "The operator or service supervisor sees the exit status."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "missing_time_source",
+   "text": "`marked_at: datetime`",
+   "question": "Which authority supplies the fresh instant written to `PublicationMark.marked_at`, and in which datetime representation is it passed and stored?",
+   "options": [
+    "The declared system-clock backend supplies UTC and the value is stored as naive UTC.",
+    "The declared system-clock backend supplies and stores an offset-aware UTC datetime.",
+    "The mark operation receives a datetime parameter from its caller.",
+    "The mark repository reads the host wall clock directly."
+   ],
+   "default_guess": "Use the declared system-clock backend and store naive UTC, matching the product's other persisted datetime convention.",
+   "witness": {
+    "initial": "A placement exists without a publication mark, and the host is configured for Europe/Madrid.",
+    "events": [
+     "The caller marks the placement as published.",
+     "One implementation reads local wall time and removes its offset; another reads UTC from a clock authority."
+    ],
+    "outcomes": [
+     "The stored value represents Madrid wall time as if it were UTC.",
+     "The stored value represents the actual UTC instant."
+    ],
+    "observer": "A later scan or inspection of the publication-mark record sees different `marked_at` values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "undefined_timestamp_meaning",
+   "text": "`marked_at: datetime`",
+   "question": "Which event does `marked_at` denote: receipt of the mark request, successful validation, reservation of the record, or completion of its durable write?",
+   "options": [
+    "The instant the authenticated mark request begins.",
+    "The instant all checks succeed and creation is committed.",
+    "The instant the durable record write completes."
+   ],
+   "default_guess": "Use the instant at which all checks have succeeded and creation of the mark is committed.",
+   "witness": {
+    "initial": "A valid placement exists and no publication mark exists.",
+    "events": [
+     "A mark request begins.",
+     "Validation pauses for several seconds.",
+     "The record is then committed."
+    ],
+    "outcomes": [
+     "`marked_at` records the request-start instant.",
+     "`marked_at` records the later commit instant."
+    ],
+    "observer": "The caller or an inspector of the stored mark sees the different timestamp."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "undefined_clock_reads",
+   "text": "The first mark stands when it is sent again, and its `marked_at` does not change",
+   "question": "How many clock readings may the first mark operation and a replay take, and which reading supplies `marked_at` if an operation reads more than once?",
+   "options": [
+    "A creating mark reads the clock exactly once after validation; a replay reads it zero times.",
+    "Every mark call reads exactly once, but a replay discards the reading.",
+    "An operation may read repeatedly and uses the last reading before persistence."
+   ],
+   "default_guess": "Read exactly once after validation only when creating the first mark, and do not read the clock on replay.",
+   "witness": {
+    "initial": "A controllable clock returns a different instant on every read; a mark already exists before the replay case.",
+    "events": [
+     "A first mark operation validates and writes its record.",
+     "The same mark is submitted again as a replay."
+    ],
+    "outcomes": [
+     "The first call consumes one instant and the replay consumes none.",
+     "The implementation reads at several stages or also on replay, consuming additional instants and potentially choosing a different creation timestamp."
+    ],
+    "observer": "A deterministic contract test using the clock port sees the call count and the stored `marked_at`."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context\",\"kind\":\"contradiction\",\"text\":\"Its members are exactly `start_failed`, `served` and `server_failed`; A8 decides what each means and its status.\",\"question\":\"Are `start_failed`, `served` and `server_failed` the enumeration member names, as this passage says, or are they values of the `START_FAILED`, `SERVED` and `SERVER_FAILED` members, as A8 says?\",\"options\":[\"The member names are `START_FAILED`, `SERVED` and `SERVER_FAILED`, with the stated lowercase values.\",\"The member names themselves are lowercase.\",\"Lowercase and uppercase names are aliases for the same members.\"],\"default_guess\":\"Use uppercase member names and lowercase serialized values, following A8.\",\"witness\":{\"initial\":\"State 6 must emit the ServiceExit enumeration and code must select an EXIT_STATUSES row.\",\"events\":[\"The model emitter defines ServiceExit from the context passage.\",\"Generated service code follows A8 and accesses `ServiceExit.START_FAILED`.\"],\"outcomes\":[\"The context yields lowercase member names, so the generated uppercase access is absent.\",\"A8 yields uppercase member names with lowercase values, so the generated access succeeds.\"],\"observer\":\"The generator or build sees whether the generated service compiles and can select the exit rule.\"}},{\"subject\":\"A8\",\"kind\":\"undefined_failure\",\"text\":\"and nothing fails until the process ends\",\"question\":\"What exactly counts as a failure for ServiceExit classification: only an uncaught exception or nonzero termination, any raised exception even if caught, a logged error, a failed cleanup task, or some other defined condition?\",\"options\":[\"Only an uncaught exception, unsuccessful server result, or nonzero process termination counts.\",\"Any exception or failed task after the boundary counts, even if caught or recovered.\",\"Only failures explicitly reported by the web-server authority count.\"],\"default_guess\":\"Count an uncaught exception, an unsuccessful server result, or another condition that makes termination unsuccessful; do not count a caught and recovered exception.\",\"witness\":{\"initial\":\"The server has crossed the boundary and is running normally.\",\"events\":[\"An operator sends SIGTERM.\",\"The web server returns without an error.\",\"A shutdown callback raises an exception that is caught and logged, after which the process can end normally.\"],\"outcomes\":[\"Treat the caught exception as a failure, choose SERVER_FAILED, and exit with status 1.\",\"Treat the recovered exception as not constituting process failure, choose SERVED, and exit with status 0.\"],\"observer\":\"The operator or service supervisor sees the exit status.\"}},{\"subject\":\"A8\",\"kind\":\"causation\",\"text\":\"after it, a SIGINT or SIGTERM stops the web server, which returns without an error\",\"question\":\"How must code decide that SIGINT or SIGTERM stopped the server when a signal overlaps a shutdown that was already requested or underway?\",\"options\":[\"SERVED requires the signal to initiate the shutdown.\",\"SERVED applies whenever the signal is received before the clean server return and no failure follows.\",\"SERVED applies whenever such a signal is received at any time after the boundary and the process later ends cleanly.\"],\"default_guess\":\"Require SIGINT or SIGTERM to initiate the clean shutdown.\",\"witness\":{\"initial\":\"The server has crossed the boundary and is accepting connections.\",\"events\":[\"An internal actor requests a graceful server shutdown.\",\"While that shutdown is underway, the operator sends SIGTERM.\",\"The server then returns without an error and no later failure occurs.\"],\"outcomes\":[\"The overlapping SIGTERM is enough to satisfy SERVED, so the process exits with status 0.\",\"The signal did not stop the already-stopping server, so the ending is SERVER_FAILED and the process exits with status 1.\"],\"observer\":\"The operator or service supervisor sees the exit status.\"}},{\"subject\":\"context\",\"kind\":\"missing_time_source\",\"text\":\"`marked_at: datetime`\",\"question\":\"Which authority supplies the fresh instant written to `PublicationMark.marked_at`, and in which datetime representation is it passed and stored?\",\"options\":[\"The declared system-clock backend supplies UTC and the value is stored as naive UTC.\",\"The declared system-clock backend supplies and stores an offset-aware UTC datetime.\",\"The mark operation receives a datetime parameter from its caller.\",\"The mark repository reads the host wall clock directly.\"],\"default_guess\":\"Use the declared system-clock backend and store naive UTC, matching the product's other persisted datetime convention.\",\"witness\":{\"initial\":\"A placement exists without a publication mark, and the host is configured for Europe/Madrid.\",\"events\":[\"The caller marks the placement as published.\",\"One implementation reads local wall time and removes its offset; another reads UTC from a clock authority.\"],\"outcomes\":[\"The stored value represents Madrid wall time as if it were UTC.\",\"The stored value represents the actual UTC instant.\"],\"observer\":\"A later scan or inspection of the publication-mark record sees different `marked_at` values.\"}},{\"subject\":\"context\",\"kind\":\"undefined_timestamp_meaning\",\"text\":\"`marked_at: datetime`\",\"question\":\"Which event does `marked_at` denote: receipt of the mark request, successful validation, reservation of the record, or completion of its durable write?\",\"options\":[\"The instant the authenticated mark request begins.\",\"The instant all checks succeed and creation is committed.\",\"The instant the durable record write completes.\"],\"default_guess\":\"Use the instant at which all checks have succeeded and creation of the mark is committed.\",\"witness\":{\"initial\":\"A valid placement exists and no publication mark exists.\",\"events\":[\"A mark request begins.\",\"Validation pauses for several seconds.\",\"The record is then committed.\"],\"outcomes\":[\"`marked_at` records the request-start instant.\",\"`marked_at` records the later commit instant.\"],\"observer\":\"The caller or an inspector of the stored mark sees the different timestamp.\"}},{\"subject\":\"context\",\"kind\":\"undefined_clock_reads\",\"text\":\"The first mark stands when it is sent again, and its `marked_at` does not change\",\"question\":\"How many clock readings may the first mark operation and a replay take, and which reading supplies `marked_at` if an operation reads more than once?\",\"options\":[\"A creating mark reads the clock exactly once after validation; a replay reads it zero times.\",\"Every mark call reads exactly once, but a replay discards the reading.\",\"An operation may read repeatedly and uses the last reading before persistence.\"],\"default_guess\":\"Read exactly once after validation only when creating the first mark, and do not read the clock on replay.\",\"witness\":{\"initial\":\"A controllable clock returns a different instant on every read; a mark already exists before the replay case.\",\"events\":[\"A first mark operation validates and writes its record.\",\"The same mark is submitted again as a replay.\"],\"outcomes\":[\"The first call consumes one instant and the replay consumes none.\",\"The implementation reads at several stages or also on replay, consuming additional instants and potentially choosing a different creation timestamp.\"],\"observer\":\"A deterministic contract test using the clock port sees the call count and the stored `marked_at`.\"}}]}",
+ "set_aside": []
+}

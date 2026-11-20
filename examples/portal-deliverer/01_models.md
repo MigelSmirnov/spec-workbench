@@ -17,7 +17,8 @@ run settings, are startup configuration read from the environment of the process
 A8 decides them, and the State 6 model closure gives their fields and members.
 
 `ServiceExit` is the way the service process ends, which chooses its exit status; it is an enumeration of the
-process, not a model of this state. Its members are exactly `start_failed`, `served` and `server_failed`; A8
+process, not a model of this state. Its members are exactly START_FAILED (value `start_failed`), SERVED (value `served`) and SERVER_FAILED
+(value `server_failed`); A8
 decides what each means and its status.
 
 ## Model M01 — ObjectConnection
