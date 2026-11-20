@@ -126,9 +126,9 @@ A replaced file is scanned again by its new content (A3).
    read limit, with the TOO_LARGE member of = models.PlacementFailure. A value equal to a limit passes. Only the first frame of an animated
    image is delivered.
 3. The photo moment is the first usable value of: EXIF `DateTimeOriginal`, EXIF `DateTime`, then
-   the file's modification time. `DateTimeOriginal` uses `OffsetTimeOriginal` when that offset has
-   the form `+HH:MM` or `-HH:MM` with hours up to the imported `CAMERA_OFFSET_MAX_HOURS` constant and minutes up to 59; otherwise it is read in the time zone of the `timezone` field of the run settings (A8), and so is
-   `DateTime`. A camera value is unusable when it is malformed, when its UTC year
+   the file's modification time. `DateTimeOriginal` uses `OffsetTimeOriginal` when that offset matches
+   the imported `EXIF_OFFSET_PATTERN` constant whole, with hours up to the imported `CAMERA_OFFSET_MAX_HOURS` constant and minutes up to 59; otherwise it is read in the time zone of the `timezone` field of the run settings (A8), and so is
+   `DateTime`. A camera value is unusable when it does not match the imported `EXIF_DATETIME_PATTERN` constant whole or is no valid calendar date and time, when its UTC year
    is before the imported `CAMERA_EARLIEST_YEAR` constant, or when it is more than the imported
    `CAMERA_LATEST_AFTER_MODIFIED_HOURS` constant of hours after the file's modification time.
 4. The photo date is delivered as UTC without an offset, as the Client Portal stores it. A camera
