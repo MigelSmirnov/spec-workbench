@@ -1,0 +1,108 @@
+{
+ "open_points": [
+  {
+   "subject": "A8 — ServiceExit listening boundary",
+   "kind": "undefined transition",
+   "text": "The service has served once its web server has begun listening.",
+   "question": "Which observable event is the exact boundary between START_FAILED and a post-service outcome: completion of the socket listen operation, successful binding of every configured socket, the server's readiness notification, or some other event?",
+   "options": [
+    "The first socket has entered the kernel's listening state.",
+    "Every required socket is listening.",
+    "The web server has emitted its ready or startup-complete notification."
+   ],
+   "default_guess": "Use the web server's documented readiness or startup-complete event.",
+   "witness": {
+    "initial": "The server has created a listening socket, but its startup-complete notification has not run.",
+    "events": [
+     "The operating system accepts the listen operation.",
+     "SIGTERM arrives before the server emits its readiness notification, and the server stops."
+    ],
+    "outcomes": [
+     "The service had begun listening, so the outcome is SERVED with status 0.",
+     "Startup had not completed, so the outcome is START_FAILED with status 1."
+    ],
+    "observer": "The service supervisor observing the process status."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 — SERVED versus SERVER_FAILED",
+   "kind": "overlapping outcome rules",
+   "text": "SERVED, value `served`: after it has served, the web server returns because a SIGINT or SIGTERM stopped it; and SERVER_FAILED, value `server_failed`: after it has served, the process ends in any other way.",
+   "question": "When the named signal makes the web server return but a later shutdown or cleanup step fails, which condition has precedence?",
+   "options": [
+    "SERVED takes precedence whenever SIGINT or SIGTERM caused the web server to return.",
+    "SERVER_FAILED takes precedence whenever any later step makes the process end unsuccessfully.",
+    "SERVED applies only if the entire shutdown completes successfully after the signal."
+   ],
+   "default_guess": "Use SERVED only when the entire signal-initiated shutdown completes successfully; otherwise use SERVER_FAILED.",
+   "witness": {
+    "initial": "The service has begun listening and has a cleanup step that can fail.",
+    "events": [
+     "An operator sends SIGTERM.",
+     "The server handles it and returns normally.",
+     "A cleanup step raises an error and the process ends unsuccessfully."
+    ],
+    "outcomes": [
+     "The outcome is SERVED with status 0 because SIGTERM caused the web server to return.",
+     "The outcome is SERVER_FAILED with status 1 because the process ultimately ended through the cleanup failure."
+    ],
+    "observer": "The operator and service supervisor observing the exit status."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 — meaning of a signal stopping the server",
+   "kind": "ambiguous signal handling",
+   "text": "the web server returns because a SIGINT or SIGTERM stopped it",
+   "question": "Must the server call actually return normally for SERVED, or does any process termination caused by SIGINT or SIGTERM after listening count as SERVED?",
+   "options": [
+    "Only a normal return from the web-server call counts as SERVED.",
+    "Any SIGINT- or SIGTERM-caused termination after listening counts as SERVED.",
+    "Only signals handled through a specified graceful-shutdown path count as SERVED."
+   ],
+   "default_guess": "Count only the server's documented graceful SIGINT/SIGTERM shutdown path as SERVED.",
+   "witness": {
+    "initial": "The service is listening, but its server configuration does not catch SIGTERM.",
+    "events": [
+     "An operator sends SIGTERM.",
+     "The operating system terminates the process directly, so the web-server call never returns."
+    ],
+    "outcomes": [
+     "The outcome is SERVED because SIGTERM stopped a service that had served.",
+     "The outcome is SERVER_FAILED because the web server did not return as required by the SERVED clause."
+    ],
+    "observer": "The service supervisor observing whether the termination is reported as successful."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 — EXIT_STATUSES for signal termination",
+   "kind": "unimplementable or undefined status mapping",
+   "text": "the process ends before it listens, whatever ends it, a signal included",
+   "question": "Does the status 1 mapped to START_FAILED have to be the actual operating-system process exit status for every signal, including an uncatchable signal, or is EXIT_STATUSES used only when the process can return an outcome?",
+   "options": [
+    "Every pre-listening termination must be externally translated to START_FAILED and status 1.",
+    "EXIT_STATUSES applies only to terminations the service can handle; fatal signals retain their native operating-system status.",
+    "The outcome is recorded by a supervising process even when the service itself cannot return it."
+   ],
+   "default_guess": "Apply EXIT_STATUSES only when the service can return or handle the termination; leave uncatchable signals with their native operating-system status.",
+   "witness": {
+    "initial": "The service process is starting and has not begun listening.",
+    "events": [
+     "An external actor sends SIGKILL.",
+     "The operating system terminates the process before it can classify the outcome or choose an exit status."
+    ],
+    "outcomes": [
+     "The specification's inclusive signal rule makes this START_FAILED with status 1, requiring an external supervisor to translate it.",
+     "The process exposes the operating system's native signal-derived status because the service cannot produce START_FAILED or exit with 1."
+    ],
+    "observer": "The process supervisor or deployment system reading the exit status."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A8 — ServiceExit listening boundary\",\"kind\":\"undefined transition\",\"text\":\"The service has served once its web server has begun listening.\",\"question\":\"Which observable event is the exact boundary between START_FAILED and a post-service outcome: completion of the socket listen operation, successful binding of every configured socket, the server's readiness notification, or some other event?\",\"options\":[\"The first socket has entered the kernel's listening state.\",\"Every required socket is listening.\",\"The web server has emitted its ready or startup-complete notification.\"],\"default_guess\":\"Use the web server's documented readiness or startup-complete event.\",\"witness\":{\"initial\":\"The server has created a listening socket, but its startup-complete notification has not run.\",\"events\":[\"The operating system accepts the listen operation.\",\"SIGTERM arrives before the server emits its readiness notification, and the server stops.\"],\"outcomes\":[\"The service had begun listening, so the outcome is SERVED with status 0.\",\"Startup had not completed, so the outcome is START_FAILED with status 1.\"],\"observer\":\"The service supervisor observing the process status.\"}},{\"subject\":\"A8 — SERVED versus SERVER_FAILED\",\"kind\":\"overlapping outcome rules\",\"text\":\"SERVED, value `served`: after it has served, the web server returns because a SIGINT or SIGTERM stopped it; and SERVER_FAILED, value `server_failed`: after it has served, the process ends in any other way.\",\"question\":\"When the named signal makes the web server return but a later shutdown or cleanup step fails, which condition has precedence?\",\"options\":[\"SERVED takes precedence whenever SIGINT or SIGTERM caused the web server to return.\",\"SERVER_FAILED takes precedence whenever any later step makes the process end unsuccessfully.\",\"SERVED applies only if the entire shutdown completes successfully after the signal.\"],\"default_guess\":\"Use SERVED only when the entire signal-initiated shutdown completes successfully; otherwise use SERVER_FAILED.\",\"witness\":{\"initial\":\"The service has begun listening and has a cleanup step that can fail.\",\"events\":[\"An operator sends SIGTERM.\",\"The server handles it and returns normally.\",\"A cleanup step raises an error and the process ends unsuccessfully.\"],\"outcomes\":[\"The outcome is SERVED with status 0 because SIGTERM caused the web server to return.\",\"The outcome is SERVER_FAILED with status 1 because the process ultimately ended through the cleanup failure.\"],\"observer\":\"The operator and service supervisor observing the exit status.\"}},{\"subject\":\"A8 — meaning of a signal stopping the server\",\"kind\":\"ambiguous signal handling\",\"text\":\"the web server returns because a SIGINT or SIGTERM stopped it\",\"question\":\"Must the server call actually return normally for SERVED, or does any process termination caused by SIGINT or SIGTERM after listening count as SERVED?\",\"options\":[\"Only a normal return from the web-server call counts as SERVED.\",\"Any SIGINT- or SIGTERM-caused termination after listening counts as SERVED.\",\"Only signals handled through a specified graceful-shutdown path count as SERVED.\"],\"default_guess\":\"Count only the server's documented graceful SIGINT/SIGTERM shutdown path as SERVED.\",\"witness\":{\"initial\":\"The service is listening, but its server configuration does not catch SIGTERM.\",\"events\":[\"An operator sends SIGTERM.\",\"The operating system terminates the process directly, so the web-server call never returns.\"],\"outcomes\":[\"The outcome is SERVED because SIGTERM stopped a service that had served.\",\"The outcome is SERVER_FAILED because the web server did not return as required by the SERVED clause.\"],\"observer\":\"The service supervisor observing whether the termination is reported as successful.\"}},{\"subject\":\"A8 — EXIT_STATUSES for signal termination\",\"kind\":\"unimplementable or undefined status mapping\",\"text\":\"the process ends before it listens, whatever ends it, a signal included\",\"question\":\"Does the status 1 mapped to START_FAILED have to be the actual operating-system process exit status for every signal, including an uncatchable signal, or is EXIT_STATUSES used only when the process can return an outcome?\",\"options\":[\"Every pre-listening termination must be externally translated to START_FAILED and status 1.\",\"EXIT_STATUSES applies only to terminations the service can handle; fatal signals retain their native operating-system status.\",\"The outcome is recorded by a supervising process even when the service itself cannot return it.\"],\"default_guess\":\"Apply EXIT_STATUSES only when the service can return or handle the termination; leave uncatchable signals with their native operating-system status.\",\"witness\":{\"initial\":\"The service process is starting and has not begun listening.\",\"events\":[\"An external actor sends SIGKILL.\",\"The operating system terminates the process before it can classify the outcome or choose an exit status.\"],\"outcomes\":[\"The specification's inclusive signal rule makes this START_FAILED with status 1, requiring an external supervisor to translate it.\",\"The process exposes the operating system's native signal-derived status because the service cannot produce START_FAILED or exit with 1.\"],\"observer\":\"The process supervisor or deployment system reading the exit status.\"}}]}",
+ "set_aside": []
+}

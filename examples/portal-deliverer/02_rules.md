@@ -563,11 +563,13 @@ gives a source whose reading fails with that `failure` that `reason`.
 | `UNSUPPORTED_FORMAT` | `UNSUPPORTED_FORMAT` |
 
 `EXIT_STATUSES` holds exactly one row for each member of = models.ServiceExit, keyed by `outcome`; a
-member without its row stops the build. The service has served once its web server has begun
-listening. `ServiceExit` is START_FAILED, value `start_failed`: the process ends before it listens,
-whatever ends it, a signal included; SERVED, value `served`: after it has served, the web server
-returns because a SIGINT or SIGTERM stopped it; and SERVER_FAILED, value `server_failed`: after it has
-served, the process ends in any other way.
+member without its row stops the build. The service has begun listening once its web server reports
+its startup complete, its socket accepting connections; that report is the boundary. = models.ServiceExit
+is START_FAILED, value `start_failed`: the process ends before that boundary, whatever ends it, a signal
+included; SERVED, value `served`: after it, a SIGINT or SIGTERM stops the web server, which returns without
+an error, and nothing fails until the process ends; and SERVER_FAILED, value `server_failed`: after it, the
+process ends in any other way, a failure during or after the shutdown of a stopped server included, so any
+failure after the boundary outranks the signal.
 
 | `outcome` | `status` |
 |---|---|

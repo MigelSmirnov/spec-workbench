@@ -1,0 +1,169 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_policy",
+   "text": "`marked_at: datetime`",
+   "question": "What authority supplies `marked_at`, in what datetime representation is it stored, at what event is it sampled, and how many clock readings may one mark operation take?",
+   "options": [
+    "Read an injected system clock exactly once when the new mark is committed and store naive UTC.",
+    "Use an aware UTC datetime from an injected clock.",
+    "Accept the instant from the caller.",
+    "Let the persistence backend choose its own timestamp."
+   ],
+   "default_guess": "Read an injected clock exactly once immediately before committing a new mark, store naive UTC, and reuse that value throughout the operation and record.",
+   "witness": {
+    "initial": "A placement exists without a publication mark; the caller is about to report its Portal photo id.",
+    "events": [
+     "The caller sends the mark operation.",
+     "The system clock crosses a second boundary while the operation validates and writes the record.",
+     "The deliverer creates M07 and later returns or reads it."
+    ],
+    "outcomes": [
+     "An injected clock is read once and the same naive-UTC instant is stored and returned.",
+     "The clock or backend is read at another point, or the caller supplies the instant, producing a different value or representation."
+    ],
+    "observer": "The calling flow or any later scan that reads the publication mark."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 photo moment",
+   "kind": "unspecified_instant_read_count",
+   "text": "then\n   the file's modification time",
+   "question": "Is the file modification instant captured exactly once per placement and reused both for camera-time plausibility checks and as the fallback photo moment, or may it be read again?",
+   "options": [
+    "Read the modification instant once and reuse the snapshot for every comparison and fallback in the operation.",
+    "Read filesystem metadata separately whenever the modification time is needed."
+   ],
+   "default_guess": "Read the modification instant once after opening the source and reuse it throughout preparation.",
+   "witness": {
+    "initial": "A source has a camera time more than 24 hours after its initial modification time.",
+    "events": [
+     "The deliverer reads the initial modification time and judges the camera value implausible.",
+     "Another process changes the file's modification time before the fallback value is selected.",
+     "The deliverer chooses the fallback photo moment."
+    ],
+    "outcomes": [
+     "A single snapshot makes the delivered photo date the initial modification instant.",
+     "A second metadata reading makes the delivered photo date the changed modification instant."
+    ],
+    "observer": "The owner viewing the delivered photo date."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 ServiceExit serving boundary",
+   "kind": "vague_transition",
+   "text": "The service has served once its web server has begun\nlistening.",
+   "question": "Which observable event is the exact transition from START_FAILED to the post-serving outcomes: the operating-system socket entering listen state, successful bind, framework startup completion, entry into the accept loop, or another named event?",
+   "options": [
+    "The transition occurs when the socket successfully enters the operating-system listening state.",
+    "The transition occurs only when the web-server framework reports startup complete and is ready to accept requests."
+   ],
+   "default_guess": "Use the web server's documented startup-complete event, provided it guarantees that the listening socket is active.",
+   "witness": {
+    "initial": "The process has bound a socket but has not completed the web server's startup sequence.",
+    "events": [
+     "The socket enters the operating-system listening state.",
+     "Before the framework reports startup complete or accepts a request, SIGTERM arrives.",
+     "The process shuts down."
+    ],
+    "outcomes": [
+     "The socket event means the service had served, so the signal produces SERVED and exit status 0.",
+     "Framework readiness had not occurred, so the process produces START_FAILED and exit status 1."
+    ],
+    "observer": "The process supervisor or deployment system."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 post-serving exit classification",
+   "kind": "missing_precedence",
+   "text": "SERVED, value `served`: after it has served, the web server\nreturns because a SIGINT or SIGTERM stopped it; and SERVER_FAILED, value `server_failed`: after it has\nserved, the process ends in any other way.",
+   "question": "When a server failure and SIGINT or SIGTERM overlap, what determines whether the server returned because of the signal: the first event, the return value or exception, the presence of any received signal, or an explicit shutdown cause recorded by the signal handler?",
+   "options": [
+    "SERVED only when an explicit signal-triggered graceful-shutdown path is the primary return cause; an independently raised server error is SERVER_FAILED.",
+    "Any SIGINT or SIGTERM observed after listening makes the outcome SERVED, even if a server failure also occurs.",
+    "The first terminal event wins."
+   ],
+   "default_guess": "Record a single terminal cause; classify SERVED only when the signal handler initiated the graceful return, otherwise classify SERVER_FAILED.",
+   "witness": {
+    "initial": "The web server is listening normally.",
+    "events": [
+     "An internal server error begins terminating the server.",
+     "SIGTERM arrives before the process has finished terminating.",
+     "The server runner returns or raises."
+    ],
+    "outcomes": [
+     "The recorded server error is primary, so the outcome is SERVER_FAILED and the status is 1.",
+     "The observed SIGTERM is given precedence, so the outcome is SERVED and the status is 0."
+    ],
+    "observer": "The process supervisor."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 signal termination and exit status",
+   "kind": "unhandled_case",
+   "text": "START_FAILED, value `start_failed`: the process ends before it listens,\nwhatever ends it, a signal included",
+   "question": "Which signals are included, when must handlers be installed, and does the required status 1 replace the operating system's normal signal-derived status when a signal terminates the process before listening?",
+   "options": [
+    "Install handlers for the supported catchable signals before startup begins and translate pre-listening termination to START_FAILED/status 1; explicitly exclude uncatchable signals.",
+    "Apply EXIT_STATUSES only when application code regains control; a signal that directly terminates the process retains the operating system's signal-derived status.",
+    "Require status 1 for every signal, including signals the process cannot catch."
+   ],
+   "default_guess": "Install SIGINT and SIGTERM handlers before startup work, translate those pre-listening terminations to status 1, and state that uncatchable signals are outside the mapping.",
+   "witness": {
+    "initial": "The process has started but the web server has not begun listening.",
+    "events": [
+     "SIGTERM is delivered before server startup completes.",
+     "The operating system or an installed handler terminates the process."
+    ],
+    "outcomes": [
+     "An early handler classifies START_FAILED and exits with status 1.",
+     "No early handler applies, so the operating system reports a signal-derived status such as 143."
+    ],
+    "observer": "The process supervisor or deployment system."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "models.ServiceExit and A8 EXIT_STATUSES",
+   "kind": "missing_model_definition",
+   "text": "`EXIT_STATUSES` holds exactly one row for each member of = models.ServiceExit, keyed by `outcome`",
+   "question": "Where is the `models.ServiceExit` enumeration defined, and is its exhaustive member set exactly START_FAILED=`start_failed`, SERVED=`served`, and SERVER_FAILED=`server_failed`? The supplied model text defines no such enumeration, while A8 depends on it.",
+   "options": [
+    "Add `ServiceExit` to the models domain with exactly the three stated members and values; keep A8 as the policy table keyed by that enum.",
+    "Treat the prose in A8 as a rules-owned local enum despite the `= models.ServiceExit` reference.",
+    "Carry creation of the model enum explicitly to a named later state."
+   ],
+   "default_guess": "Define `models.ServiceExit` with exactly those three members and values, and type `ExitStatusRule.outcome` with that enumeration.",
+   "witness": {
+    "initial": "The generator receives the supplied models and the A8 data-provider specification.",
+    "events": [
+     "It resolves `= models.ServiceExit` to type the `EXIT_STATUSES` rows.",
+     "No `ServiceExit` model enumeration is present."
+    ],
+    "outcomes": [
+     "One implementation invents the three-member model enum from A8's prose.",
+     "Another rejects the unresolved model reference or creates a rules-local string field instead."
+    ],
+    "observer": "The build, generated type checker, or later code generator."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A8 ServiceExit",
+   "kind": "standard_violation",
+   "text": "`ServiceExit` is START_FAILED, value `start_failed`: the process ends before it listens,\nwhatever ends it, a signal included; SERVED, value `served`: after it has served, the web server\nreturns because a SIGINT or SIGTERM stopped it; and SERVER_FAILED, value `server_failed`: after it has\nserved, the process ends in any other way.",
+   "rule": "| закрытый список вариантов: статусы, виды, коды | `models`, перечисление | `= models.ИмяПеречисления` | перечисление как тип |",
+   "section": "15.3.1",
+   "question": "Make the three members and their values an actual `models.ServiceExit` enumeration; leave A8 to define the imported `EXIT_STATUSES` policy table and any behavioral meaning keyed by that model enum.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_policy\",\"text\":\"`marked_at: datetime`\",\"question\":\"What authority supplies `marked_at`, in what datetime representation is it stored, at what event is it sampled, and how many clock readings may one mark operation take?\",\"options\":[\"Read an injected system clock exactly once when the new mark is committed and store naive UTC.\",\"Use an aware UTC datetime from an injected clock.\",\"Accept the instant from the caller.\",\"Let the persistence backend choose its own timestamp.\"],\"default_guess\":\"Read an injected clock exactly once immediately before committing a new mark, store naive UTC, and reuse that value throughout the operation and record.\",\"witness\":{\"initial\":\"A placement exists without a publication mark; the caller is about to report its Portal photo id.\",\"events\":[\"The caller sends the mark operation.\",\"The system clock crosses a second boundary while the operation validates and writes the record.\",\"The deliverer creates M07 and later returns or reads it.\"],\"outcomes\":[\"An injected clock is read once and the same naive-UTC instant is stored and returned.\",\"The clock or backend is read at another point, or the caller supplies the instant, producing a different value or representation.\"],\"observer\":\"The calling flow or any later scan that reads the publication mark.\"}},{\"subject\":\"A2 photo moment\",\"kind\":\"unspecified_instant_read_count\",\"text\":\"then\\n   the file's modification time\",\"question\":\"Is the file modification instant captured exactly once per placement and reused both for camera-time plausibility checks and as the fallback photo moment, or may it be read again?\",\"options\":[\"Read the modification instant once and reuse the snapshot for every comparison and fallback in the operation.\",\"Read filesystem metadata separately whenever the modification time is needed.\"],\"default_guess\":\"Read the modification instant once after opening the source and reuse it throughout preparation.\",\"witness\":{\"initial\":\"A source has a camera time more than 24 hours after its initial modification time.\",\"events\":[\"The deliverer reads the initial modification time and judges the camera value implausible.\",\"Another process changes the file's modification time before the fallback value is selected.\",\"The deliverer chooses the fallback photo moment.\"],\"outcomes\":[\"A single snapshot makes the delivered photo date the initial modification instant.\",\"A second metadata reading makes the delivered photo date the changed modification instant.\"],\"observer\":\"The owner viewing the delivered photo date.\"}},{\"subject\":\"A8 ServiceExit serving boundary\",\"kind\":\"vague_transition\",\"text\":\"The service has served once its web server has begun\\nlistening.\",\"question\":\"Which observable event is the exact transition from START_FAILED to the post-serving outcomes: the operating-system socket entering listen state, successful bind, framework startup completion, entry into the accept loop, or another named event?\",\"options\":[\"The transition occurs when the socket successfully enters the operating-system listening state.\",\"The transition occurs only when the web-server framework reports startup complete and is ready to accept requests.\"],\"default_guess\":\"Use the web server's documented startup-complete event, provided it guarantees that the listening socket is active.\",\"witness\":{\"initial\":\"The process has bound a socket but has not completed the web server's startup sequence.\",\"events\":[\"The socket enters the operating-system listening state.\",\"Before the framework reports startup complete or accepts a request, SIGTERM arrives.\",\"The process shuts down.\"],\"outcomes\":[\"The socket event means the service had served, so the signal produces SERVED and exit status 0.\",\"Framework readiness had not occurred, so the process produces START_FAILED and exit status 1.\"],\"observer\":\"The process supervisor or deployment system.\"}},{\"subject\":\"A8 post-serving exit classification\",\"kind\":\"missing_precedence\",\"text\":\"SERVED, value `served`: after it has served, the web server\\nreturns because a SIGINT or SIGTERM stopped it; and SERVER_FAILED, value `server_failed`: after it has\\nserved, the process ends in any other way.\",\"question\":\"When a server failure and SIGINT or SIGTERM overlap, what determines whether the server returned because of the signal: the first event, the return value or exception, the presence of any received signal, or an explicit shutdown cause recorded by the signal handler?\",\"options\":[\"SERVED only when an explicit signal-triggered graceful-shutdown path is the primary return cause; an independently raised server error is SERVER_FAILED.\",\"Any SIGINT or SIGTERM observed after listening makes the outcome SERVED, even if a server failure also occurs.\",\"The first terminal event wins.\"],\"default_guess\":\"Record a single terminal cause; classify SERVED only when the signal handler initiated the graceful return, otherwise classify SERVER_FAILED.\",\"witness\":{\"initial\":\"The web server is listening normally.\",\"events\":[\"An internal server error begins terminating the server.\",\"SIGTERM arrives before the process has finished terminating.\",\"The server runner returns or raises.\"],\"outcomes\":[\"The recorded server error is primary, so the outcome is SERVER_FAILED and the status is 1.\",\"The observed SIGTERM is given precedence, so the outcome is SERVED and the status is 0.\"],\"observer\":\"The process supervisor.\"}},{\"subject\":\"A8 signal termination and exit status\",\"kind\":\"unhandled_case\",\"text\":\"START_FAILED, value `start_failed`: the process ends before it listens,\\nwhatever ends it, a signal included\",\"question\":\"Which signals are included, when must handlers be installed, and does the required status 1 replace the operating system's normal signal-derived status when a signal terminates the process before listening?\",\"options\":[\"Install handlers for the supported catchable signals before startup begins and translate pre-listening termination to START_FAILED/status 1; explicitly exclude uncatchable signals.\",\"Apply EXIT_STATUSES only when application code regains control; a signal that directly terminates the process retains the operating system's signal-derived status.\",\"Require status 1 for every signal, including signals the process cannot catch.\"],\"default_guess\":\"Install SIGINT and SIGTERM handlers before startup work, translate those pre-listening terminations to status 1, and state that uncatchable signals are outside the mapping.\",\"witness\":{\"initial\":\"The process has started but the web server has not begun listening.\",\"events\":[\"SIGTERM is delivered before server startup completes.\",\"The operating system or an installed handler terminates the process.\"],\"outcomes\":[\"An early handler classifies START_FAILED and exits with status 1.\",\"No early handler applies, so the operating system reports a signal-derived status such as 143.\"],\"observer\":\"The process supervisor or deployment system.\"}},{\"subject\":\"models.ServiceExit and A8 EXIT_STATUSES\",\"kind\":\"missing_model_definition\",\"text\":\"`EXIT_STATUSES` holds exactly one row for each member of = models.ServiceExit, keyed by `outcome`\",\"question\":\"Where is the `models.ServiceExit` enumeration defined, and is its exhaustive member set exactly START_FAILED=`start_failed`, SERVED=`served`, and SERVER_FAILED=`server_failed`? The supplied model text defines no such enumeration, while A8 depends on it.\",\"options\":[\"Add `ServiceExit` to the models domain with exactly the three stated members and values; keep A8 as the policy table keyed by that enum.\",\"Treat the prose in A8 as a rules-owned local enum despite the `= models.ServiceExit` reference.\",\"Carry creation of the model enum explicitly to a named later state.\"],\"default_guess\":\"Define `models.ServiceExit` with exactly those three members and values, and type `ExitStatusRule.outcome` with that enumeration.\",\"witness\":{\"initial\":\"The generator receives the supplied models and the A8 data-provider specification.\",\"events\":[\"It resolves `= models.ServiceExit` to type the `EXIT_STATUSES` rows.\",\"No `ServiceExit` model enumeration is present.\"],\"outcomes\":[\"One implementation invents the three-member model enum from A8's prose.\",\"Another rejects the unresolved model reference or creates a rules-local string field instead.\"],\"observer\":\"The build, generated type checker, or later code generator.\"}},{\"subject\":\"A8 ServiceExit\",\"kind\":\"standard_violation\",\"text\":\"`ServiceExit` is START_FAILED, value `start_failed`: the process ends before it listens,\\nwhatever ends it, a signal included; SERVED, value `served`: after it has served, the web server\\nreturns because a SIGINT or SIGTERM stopped it; and SERVER_FAILED, value `server_failed`: after it has\\nserved, the process ends in any other way.\",\"rule\":\"| закрытый список вариантов: статусы, виды, коды | `models`, перечисление | `= models.ИмяПеречисления` | перечисление как тип |\",\"section\":\"15.3.1\",\"question\":\"Make the three members and their values an actual `models.ServiceExit` enumeration; leave A8 to define the imported `EXIT_STATUSES` policy table and any behavioral meaning keyed by that model enum.\"}]}",
+ "set_aside": []
+}
