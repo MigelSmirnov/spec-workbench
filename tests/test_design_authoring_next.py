@@ -215,3 +215,88 @@ def test_the_empty_router_closure_named_by_the_sequencer_is_a_loadable_start(tmp
     (tmp_path / design_authoring_next.ROUTER_CLOSURE_FILE).write_text(start, encoding="utf-8")
 
     assert catalog.load(tmp_path) == {"schema_version": design_authoring_next.ROUTER_CLOSURE_SCHEMA, "items": []}
+
+
+# ------------------------------------------- the whole case beside the phase
+# portal-deliverer, 2026-11-20: the author followed the phases one by one; the
+# imports closure, State 2 witnesses and 102 Factory validator errors stayed
+# unseen until the notes were written, because only design_diagnose shows them.
+
+def _first_phase(monkeypatch) -> None:
+    step = {"phase": "state7_notes", "blocked": True, "reason": "r"}
+    monkeypatch.setattr(design_authoring_next, "_promoted_states_step", lambda *args: dict(step))
+
+
+def _report(open_by_owner: dict, factory: dict, unchecked: dict | None = None) -> dict:
+    unchecked = unchecked or {}
+    owners = set(open_by_owner) | set(unchecked) | {"State 1"}
+    return {"summary": {owner: {"open": {"assembly": open_by_owner.get(owner, 0), "transition": 0},
+                                "not_checkable": unchecked.get(owner, []), "error": []} for owner in owners},
+            "factory": {"spec": factory}}
+
+
+def test_the_phase_alone_carries_no_diagnosis(tmp_path, monkeypatch) -> None:
+    _first_phase(monkeypatch)
+    assert "diagnosis" not in design_authoring_next.next_step(tmp_path)
+
+
+def test_the_diagnosis_names_what_is_open_besides_the_phase(tmp_path, monkeypatch) -> None:
+    import design_diagnose
+
+    _first_phase(monkeypatch)
+    monkeypatch.setattr(design_diagnose, "diagnose", lambda project, kind: _report(
+        {"Imports closure (after State 7)": 207, "State 2": 11}, {"outcome": "open", "errors": 102}))
+    report = design_authoring_next.next_step(tmp_path, display_path="examples/x", with_diagnosis=True)
+    found = report["diagnosis"]
+    assert found["outcome"] == "open"
+    assert found["open"] == {"Imports closure (after State 7)": 207, "State 2": 11}
+    assert found["factory_spec"] == {"outcome": "open", "errors": 102}
+    line = design_authoring_next.diagnosis_line(report)
+    assert "Imports closure (after State 7) 207" in line and "Factory spec check 102 error(s)" in line
+    assert line.endswith("python tools/design_diagnose.py --case examples/x")
+
+
+def test_a_factory_spec_check_that_did_not_run_is_no_clean_diagnosis(tmp_path, monkeypatch) -> None:
+    import design_diagnose
+
+    _first_phase(monkeypatch)
+    monkeypatch.setattr(design_diagnose, "diagnose", lambda project, kind: _report(
+        {}, {"outcome": "not_checked", "reason": "no Factory checkout"}, {"State 2": ["witness"]}))
+    report = design_authoring_next.next_step(tmp_path, with_diagnosis=True)
+    assert report["diagnosis"]["outcome"] == "open"
+    line = design_authoring_next.diagnosis_line(report)
+    assert "Factory spec check not_checked (no Factory checkout)" in line
+    assert "State 2 not checked (witness)" in line
+
+
+def test_a_clean_case_says_so(tmp_path, monkeypatch) -> None:
+    import design_diagnose
+
+    _first_phase(monkeypatch)
+    monkeypatch.setattr(design_diagnose, "diagnose", lambda project, kind: _report({}, {"outcome": "closed", "errors": 0}))
+    report = design_authoring_next.next_step(tmp_path, with_diagnosis=True)
+    assert report["diagnosis"]["outcome"] == "closed"
+    assert design_authoring_next.diagnosis_line(report).startswith("diagnosis: closed")
+
+
+def test_a_diagnosis_that_fails_is_reported_not_dropped(tmp_path, monkeypatch) -> None:
+    import design_diagnose
+
+    def broken(project, kind):
+        raise RuntimeError("git is gone")
+
+    _first_phase(monkeypatch)
+    monkeypatch.setattr(design_diagnose, "diagnose", broken)
+    report = design_authoring_next.next_step(tmp_path, with_diagnosis=True)
+    assert report["diagnosis"]["outcome"] == "error"
+    assert "git is gone" in design_authoring_next.diagnosis_line(report)
+
+
+def test_the_cli_prints_the_diagnosis(tmp_path, monkeypatch, capsys) -> None:
+    import design_diagnose
+
+    _first_phase(monkeypatch)
+    monkeypatch.setattr(design_diagnose, "diagnose", lambda project, kind: _report(
+        {"State 2": 11}, {"outcome": "open", "errors": 3}))
+    design_authoring_next.main([str(tmp_path)])
+    assert "diagnosis: open — State 2 11 · Factory spec check 3 error(s)" in capsys.readouterr().out
