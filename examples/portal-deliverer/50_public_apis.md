@@ -2,12 +2,8 @@
 
 ## Status
 
-Written from the accepted States 0 to 4. These are the public operations of the modules, each with one owner.
-Inputs and outputs name their meaning, and the exact signatures are decided in State 6.
-
-`module:deliverer_router` also names `check_token`, `parse_project_id` and `refusal_answer` of
-`module:deliverer_api` (State 3, Dependencies): the routes and the refusal answers that `http_router_backend`
-generates call them. They are exports of `module:deliverer_api`, not public operations of this state.
+Written from the accepted States 0 to 4. Inputs and outputs name their meaning, and the exact signatures are
+decided in State 6.
 
 `boundary:deployment` is what launches the process. The calling agent
 reaches the service only through the routes that `public_op:deliverer_router.create_app` builds.
