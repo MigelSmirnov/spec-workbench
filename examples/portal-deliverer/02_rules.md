@@ -194,7 +194,8 @@ The owner decides what a client sees. Originals never leave the Syncthing folder
 
 6. The stored image is written before the placement record, so a crash between them repeats the
    placement and leaves no record without an image.
-7. A replaced source is a new photo. The earlier placement, its stored image and its mark stay.
+7. A replaced source is a new photo unless its content already has a placement, which then answers under
+   rule 2. The earlier placement, its stored image and its mark stay.
    Removing a source changes no placement (R0-10).
 8. The first version offers no removal of a placement, a mark or a stored image. Removal of a
    hidden photo is designed in the Portal (client-portal Q27).
