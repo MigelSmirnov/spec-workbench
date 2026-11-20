@@ -2,20 +2,7 @@
 
 ## Status
 
-Written on 2026-11-18 from the accepted States 0 to 2. The prototype was split into exactly these
-modules to test the boundaries. Evidence: `python3 -m pytest -q prototypes/portal_deliverer`,
-`python3 prototypes/portal_deliverer/e2e_local_portal.py` and
-`python3 prototypes/portal_deliverer/e2e_local_syncthing.py`, which runs two private Syncthing
-instances. The tests `test_modules_name_exactly_the_declared_symbols`,
-`test_each_hidden_mechanism_stays_inside_its_module` and `test_no_module_can_call_the_portal` read
-the imports of the prototype and fail when a boundary below is broken.
-
-The split found two defects of the prototype. A mark with a malformed source id was answered
-`unknown_project` after reading the clock, against A4 rule 2 and A7 rule 2; the section "Order of one
-operation" now decides that order, and
-`test_a_mark_with_a_malformed_source_id_is_refused_before_the_connection_and_the_clock` holds it. A
-confirmation cleared while the service ran did not stop delivery, against R0-11; A5 rule 7 now has
-the record read at each operation.
+Written from the accepted States 0 to 2.
 
 ## Dependencies
 
@@ -64,35 +51,12 @@ cycles, and `domain_models` names no other module.
 `deliverer_service` names `load_connections` only to refuse a start with a broken record. Each operation
 reads the record itself at its connection check, so no module keeps connections in memory.
 
-`deliverer_router` is the module that `http_router_backend` generates with its `fastapi_sync_v2` backend, and it
-holds only what that backend emits. It serves every route as a table route: the body of a delivery and of a mark
-is read as = models.DeliverRequest and = models.PublishedRequest, the token is compared by `check_token` of
-`deliverer_api` before the body is read, the project id is judged by its `parse_project_id`, and the route
-then calls one operation of `photo_delivery`. `AuthenticationRejected`, every `DelivererError` and a request whose
-body or form the framework refuses are each answered by `refusal_answer` of `deliverer_api`, so every refusal
-leaves as M08 (A5 rules 1, 9 and 10). `deliverer_api` therefore cannot import the router back.
+`deliverer_router` is the module that `http_router_backend` generates, and it holds only what that backend
+emits. The token and the project id are judged by `deliverer_api`, each route calls one operation of
+`photo_delivery`, and every refusal is answered by `refusal_answer` of `deliverer_api` (A5 rules 1, 9 and 10).
+`deliverer_api` therefore cannot import the router back.
 
 `system_clock` is the module that `system_clock_backend` generates, and `photo_delivery` alone names it.
-
-## Order of one operation
-
-`deliverer_router` performs the steps marked API, the token and the project id through `deliverer_api`, and
-then calls `photo_delivery`, which performs the rest in the order shown. Only `photo_delivery` takes the project lock.
-
-| Step | Scan | Delivery | Mark |
-|---|---|---|---|
-| 1, API | token | token | token |
-| 2, API | project id | request form, project id | request form, project id, `photo_id` |
-| 3 | connection | connection | source id |
-| 4 | photo folder | photo folder | clock |
-| 5 | observe the folder, read records | source id | connection |
-| 6 | | take the lock | take the lock |
-| 7 | | existing placement: replay | placement exists |
-| 8 | | read the named file once, check it, prepare, store the image, write the record | existing mark, or write the mark |
-| 9 | | release the lock | release the lock |
-
-A scan takes no lock. Only a mark reads the clock. The connections file is read once, at the connection
-step.
 
 ## Rules decided across modules
 
@@ -103,7 +67,7 @@ names the owner of each rule.
 |---|---|---|
 | A1 | orders 1 to 6, ignored names, walking order | `source_folder` |
 | A1 | orders 7 to 9, placed and published status | `photo_delivery` |
-| A5 | rule 1, reading the single `Authorization` field in the Bearer scheme, before the identifiers and the body | `deliverer_router` |
+| A5 | rule 1, reading the token from a request | `deliverer_router` |
 | A5 | rule 1, the comparison of the token | `deliverer_api` |
 | A5 | rules 2 to 4, the token file, its replacement and the listening address | `deliverer_service` |
 | A3 | rule 4, the request form of a placement | `deliverer_router` |
@@ -528,7 +492,7 @@ write_mark
 
 ### Owns
 
-- steps 3 and later of "Order of one operation";
+- the order of the checks of A3 rule 4 and A4 rule 2 after the token, the request form and the identifiers;
 - when an operation reads the clock;
 - completing a scan with placed and published status;
 - one placement per project and content, replay, and per-photo failure;
@@ -622,14 +586,13 @@ answer_health
 
 ### Owns
 
-- the routes of the service, the request forms of a delivery and a mark, the reading of the single
-  `Authorization` field in the Bearer scheme by the extractor the backend emits, and the context and token the
-  routes read from the application.
+- the routes of the service, the request forms of a delivery and a mark, reading the token from a request,
+  and the context the routes read from the application.
 
 ### Knows
 
-- the routes, their operations, the order of A5 rule 1 (the token before the identifiers and the body), the
-  request form of A3 rule 4 and the `photo_id` form of A4 rule 2.
+- the routes and their operations, A5 rule 1, the request form of A3 rule 4 and the `photo_id` form of
+  A4 rule 2.
 
 ### Hides
 
@@ -637,8 +600,7 @@ answer_health
 
 ### Must not own
 
-- any check other than the request forms it reads by their models and the single `Authorization` field in
-  the Bearer scheme its extractor reads, or any delivery rule;
+- any check other than the request forms and reading the token, or any delivery rule;
 - the content of an answer: every refusal is answered by `refusal_answer` of `deliverer_api`;
 - anything `http_router_backend` does not emit.
 

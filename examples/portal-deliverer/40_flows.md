@@ -2,11 +2,7 @@
 
 ## Status
 
-Written on 2026-11-18 from the accepted States 0 to 3. Evidence:
-`python3 -m pytest -q prototypes/portal_deliverer`, `python3 prototypes/portal_deliverer/e2e_local_portal.py`
-and `python3 prototypes/portal_deliverer/e2e_local_syncthing.py`. In `flow:owner_delivery` a script of the
-E2E run plays the calling agent against a real Client Portal process. No kernel flow exists yet, and no run
-has used the owner's devices or the VPS.
+Written from the accepted States 0 to 3. No kernel flow exists yet.
 
 Refusal codes and failure members are those of States 1 and 2. The exact answers are decided in State 6.
 

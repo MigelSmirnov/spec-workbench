@@ -2,10 +2,8 @@
 
 ## Status
 
-Written on 2026-11-18 from the accepted States 0 to 4. These are the operations another module or the boundary of the
-service may call. Inputs and outputs name their meaning, and the exact signatures are decided in State 6. The test
-`test_each_module_offers_exactly_its_public_operations` of `prototypes/portal_deliverer/test_deliverer.py` fails when a
-module of the prototype offers any other public function.
+Written from the accepted States 0 to 4. These are the operations another module or the boundary of the
+service may call. Inputs and outputs name their meaning, and the exact signatures are decided in State 6.
 
 `boundary:deployment` is what launches the process. The calling agent
 reaches the service only through the routes that `public_op:deliverer_router.create_app` builds.
@@ -140,29 +138,20 @@ The HTTP surface with four routes, each bound to its handler:
 ### Observable effect
 
 None until the surface is served. The health route answers through `public_op:deliverer_api.answer_health`
-without a token. Every other route checks the token with `module:deliverer_api` before it reads the body, reads
-the body of a delivery or a mark by its request model, judges the project id with `module:deliverer_api`, calls one
+without a token. Every other route has the token and the project id judged by `module:deliverer_api`, calls one
 operation of `module:photo_delivery`, and answers every refusal through `module:deliverer_api`.
 
 ### Enforces
 
-The method and path of each route. The single `Authorization` field in the Bearer scheme of A5 rule 1 is read by the router's own extractor
-before the identifiers and the body. The comparison of the token of A5 rules 1 and 5, the project id part of A5
-rule 9 and the refusal answer of A5 rule 10 are `module:deliverer_api`'s, and the request form of A3 rule 4 and the
-`photo_id` form of A4 rule 2 by the request models the router reads; every later check, the source id among them, is
-`module:photo_delivery`'s.
+The method and path of each route, reading the token of A5 rule 1, the request form of A3 rule 4 and the
+`photo_id` form of A4 rule 2. The comparison of the token of A5 rules 1 and 5, the project id part of A5 rule 9
+and the refusal answer of A5 rule 10 are `module:deliverer_api`'s; every later check, the source id among them,
+is `module:photo_delivery`'s.
 
 ### Errors
 
-Building the surface raises no refusal. A served route answers a wrong token, a malformed request and every M08 refusal.
-The surface serves nothing besides the four routes: no generated description of them and no documentation
-page. A path matches a route only as the table writes it, `{project_id}` and `{source_id}` each standing for
-one path segment, and a path with a trailing slash added is answered by the framework's own temporary redirect, status 307, to the
-route's path, which keeps the method and the body. The redirect is decided by the path alone, whatever the
-method and before any check of the route, the token and the body among them; the redirected request is then
-judged at the route's path, where a method the route does not have answers 405. Any other path
-answers 404, and a route's path with another method answers 405, both with the framework's own body and not
-M08.
+Building the surface raises no refusal. A served route answers a wrong token, a malformed request and every M08
+refusal. The surface serves only the four routes.
 
 ### State impact
 
@@ -188,7 +177,7 @@ The exit status of the process: the status of the row of the imported `EXIT_STAT
 
 ### Observable effect
 
-Calls `public_op:runtime_settings.load_runtime_settings`, `public_op:deliverer_service.load_config`, `public_op:deliverer_service.read_token` and `public_op:deliverer_router.create_app` in that order, then serves the surface on the loopback interface and the `port` of the run settings until it is stopped.
+Starts the service from the run settings, the context of the operations and the token, and serves the surface of `public_op:deliverer_router.create_app` on the loopback interface and the `port` of the run settings until it is stopped.
 
 ### Enforces
 

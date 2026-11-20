@@ -17,12 +17,13 @@ Notes propagation needs spec-workbench #196 (merged).
 
 ## Next
 
-1. State 2 question rounds on A1, A2, A3, A5 and A8 (changed by "State 2 keeps decisions, not their
-   execution"), then the cascade the sequencer names (States 3, 4, 5), then State 7 round 3.
-2. Owner 2026-11-20: State 2 holds decisions, never their execution. A round topic that asks how
-   something is done (opening, reading order, boundaries, framework behaviour) is disposed
-   `--carried 7`, not answered by editing State 2. Rounds 69-76 show the cost of the other way.
-3. The same pass over State 3 and State 5, which were written from the prototype as well.
+1. Owner 2026-11-20: the prototype is forgotten. R0-04 is withdrawn; States 0 to 5 hold no prototype
+   evidence, and no state is written or answered from `prototypes/portal_deliverer/`.
+2. Question rounds from State 0 in order (the sequencer names each), then States 1 to 5, then State 7.
+3. Each state holds only what its phase in `authoring_sequence.json` asks for, written by SPEC_STANDARD.
+   No mechanics in States 2, 3 and 5: a round topic that asks how something is done (opening, reading
+   order, boundaries, framework behaviour) is disposed `--carried 7`, not answered by editing the state.
+   Rounds 69-76 of State 2 show the cost of the other way.
 
 ## Open owner decisions
 

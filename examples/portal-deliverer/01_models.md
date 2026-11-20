@@ -2,24 +2,16 @@
 
 ## Status
 
-Written on 2026-11-18 from the accepted product frame and the running prototype. Each model
-states what the prototype proved.
+Written from the accepted product frame and the owner's decisions.
 
 Every identity is decided; the identity of a delivered photo is decision R0-10.
-
-Evidence for every model: `python3 -m pytest -q prototypes/portal_deliverer`,
-`python3 prototypes/portal_deliverer/e2e_local_portal.py` (a real Client Portal process and a stub
-Registry) and `python3 prototypes/portal_deliverer/e2e_local_syncthing.py` (two private Syncthing
-instances). No run has used the owner's own devices, the kernel or the VPS.
 
 The run settings and `RuntimeEnvironment`, the kind of installation that chooses the defaults of the optional
 run settings, are startup configuration read from the environment of the process, not models of this state.
 A8 decides them, and the State 6 model closure gives their fields and members.
 
 `ServiceExit` is the way the service process ends, which chooses its exit status; it is an enumeration of the
-process, not a model of this state. Its members are exactly START_FAILED (value `start_failed`), SERVED (value `served`) and SERVER_FAILED
-(value `server_failed`); A8
-decides what each means and its status.
+process, not a model of this state. A8 decides its outcomes, and the State 6 model closure gives its members.
 
 ## Model M01 — ObjectConnection
 
@@ -169,9 +161,8 @@ entity
 ### Identity evidence
 
 - Substitution: Equal photos of two projects are two deliveries with different references, so
-  one placement cannot replace the other (`test_the_same_photo_in_two_projects_stays_two_deliveries`).
-- Continuity: The same placement is returned after the source file has left the folder
-  (`test_placing_again_returns_the_same_result_without_writing`).
+  one placement cannot replace the other.
+- Continuity: The same placement is returned after the source file has left the folder.
 - Minted by: the deliverer, from `project_id` and `source_id`, the SHA-256 of the source content.
 - Issued: a placement is a fact about one observed content and is never rewritten.
 
@@ -212,8 +203,8 @@ value
 ### Identity evidence
 
 - Substitution: Two equal bodies ask the Portal for the same publication.
-- Continuity: It is not changed after it is built. The E2E run repeats the same body and the
-  Portal answers with the same photo while the photo is hidden.
+- Continuity: It is not changed after it is built. The same body sent again gets the same photo from
+  the Portal while the photo is hidden.
 
 ### Source of truth
 
@@ -293,8 +284,7 @@ entity
 
 - Substitution: Marks of two placements point at different Portal photos and cannot replace
   each other.
-- Continuity: The first mark stands when it is sent again, and its `marked_at` does not change
-  (`test_marking_again_changes_nothing_and_another_photo_is_refused`).
+- Continuity: The first mark stands when it is sent again, and its `marked_at` does not change.
 - Minted by: the deliverer, keyed by the placement it belongs to. The Portal mints `photo_id`.
 - Issued: a mark is written once.
 
