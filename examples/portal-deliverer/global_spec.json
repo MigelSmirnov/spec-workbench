@@ -10,12 +10,12 @@
     "available_photo_folder": "(connection: ObjectConnection) -> Path",
     "_is_ignored": "(name: str) -> bool",
     "_opened_folder": "(path: Path) -> Iterator[int]",
-    "_read_source_bytes": "(folder: int, entry: str) -> tuple[bytes, os.stat_result]",
+    "_read_source_bytes": "(folder: int, entry: str) -> tuple[bytes, stat_result]",
     "_signature_format": "(content: bytes) -> str | None",
     "_unlisted_folder": "(error: OSError) -> None",
-    "_modified_at": "(info: os.stat_result) -> datetime",
-    "_source_files": "(folder: int) -> Iterator[tuple[int, str, str, os.stat_result]]",
-    "_observed": "(folder: int, entry: str, name: str, info: os.stat_result) -> tuple[SourceFile, bytes | None]",
+    "_modified_at": "(info: stat_result) -> datetime",
+    "_source_files": "(folder: int) -> Iterator[tuple[int, str, str, stat_result]]",
+    "_observed": "(folder: int, entry: str, name: str, info: stat_result) -> tuple[SourceFile, bytes | None]",
     "observe_source_files": "(folder: Path) -> list[SourceFile]",
     "_name_parts": "(name: str) -> tuple[str, ...] | None",
     "read_named_source": "(folder: Path, name: str) -> SourceRead | None",
@@ -29,7 +29,7 @@
     "_make_folders": "(folder: Path, base: Path, mode: int, durable: bool) -> None",
     "_atomic_write": "(path: Path, base: Path, content: bytes, mode: int, folder_mode: int, durable_folder: bool) -> None",
     "_state_unavailable": "(error: Exception) -> DelivererError",
-    "_read_record": "(path: Path, model: type[Record], project_id: UUID, source_id: str) -> Record | None",
+    "_read_record": "(path: Path, model: type[BaseModel], project_id: UUID, source_id: str) -> BaseModel | None",
     "_write_record": "(path: Path, base: Path, record: BaseModel) -> None",
     "_placement_path": "(context: DeliveryContext, project_id: UUID, source_id: str) -> Path",
     "_mark_path": "(context: DeliveryContext, project_id: UUID, source_id: str) -> Path",
@@ -66,7 +66,9 @@
     "scan_route": "(request: Request, project_id: str) -> JSONResponse",
     "deliver_route": "(request: Request, project_id: str) -> JSONResponse",
     "mark_route": "(request: Request, project_id: str, source_id: str) -> JSONResponse",
-    "utc_now": "() -> datetime"
+    "utc_now": "() -> datetime",
+    "DelivererError.__init__": "(self, code: RefusalCode) -> None",
+    "Rejected.__init__": "(self, reason: PlacementFailure) -> None"
   },
   "notes": [
     "bearer_credential: [SECURITY_BOUNDARY] MUST return the token part of the request's single Authorization header whose value is the scheme Bearer, compared without regard to case, followed by exactly one space and a non-empty token, and MUST raise AuthenticationRequired when the header is absent, appears more than once, or has any other form; it MUST NOT read the body or the path parameters.",
@@ -90,14 +92,14 @@
     "_connections_file: [VALIDATION_ERROR] MUST decode content as UTF-8 JSON, with an object_pairs_hook of json.loads that rejects a member name repeated within one object anywhere in the file, and return it validated strictly against = models.ConnectionsFile: one object whose only field is objects, each key of objects the canonical lowercase hyphenated spelling of a UUID, equal to the str of the UUID it parses to, and each value a ConnectionEntry with exactly its fields, each of its declared type without coercion; it MUST raise ValueError for any other content.",
     "load_connections: [VALIDATION_ERROR] MUST read the file at path once and judge it whole before any project is looked up: a file that is absent or cannot be read, a ValueError of _connections_file for its bytes, or a ValueError of _subfolder for the photo_subfolder or invoice_subfolder of any entry MUST raise DelivererError with the FOLDER_UNAVAILABLE member of = models.RefusalCode; otherwise it MUST return a dict from the UUID of each key to an ObjectConnection with that project_id and the fields of its ConnectionEntry.",
     "_is_ignored: [PATH_OR_ARTIFACT_POLICY] MUST return True when the name, with only the letters A to Z lowered and no other character changed, begins with an item of the imported IGNORED_NAME_PREFIXES constant, ends with an item of the imported IGNORED_NAME_SUFFIXES constant, or contains the imported CONFLICT_COPY_MARK constant, and False otherwise; it MUST NOT use str.lower or casefold, which change letters beyond A to Z.",
-    "_opened_folder: [PATH_OR_ARTIFACT_POLICY] MUST be a contextlib.contextmanager generator that opens the absolute path one folder at a time from the root of the file system, each folder opened with os.open in the one before it through dir_fd with O_DIRECTORY and O_NOFOLLOW, yields the descriptor of the last folder and closes every descriptor it opened on every exit; an opening that fails for any reason, a symbolic link or an object that is not a folder among them, MUST raise DelivererError with the FOLDER_UNAVAILABLE member of = models.RefusalCode.",
+    "_opened_folder: [PATH_OR_ARTIFACT_POLICY] MUST be a contextlib.contextmanager generator that opens the absolute path one folder at a time from the root of the file system, each folder opened with os.open in the one before it through dir_fd with os.O_DIRECTORY and os.O_NOFOLLOW, yields the descriptor of the last folder and closes every descriptor it opened on every exit; an opening that fails for any reason, a symbolic link or an object that is not a folder among them, MUST raise DelivererError with the FOLDER_UNAVAILABLE member of = models.RefusalCode.",
     "_unlisted_folder: [VALIDATION_ERROR] MUST raise DelivererError with the FOLDER_UNAVAILABLE member of = models.RefusalCode chained from the given OSError and MUST never return; it is the one place a folder that cannot be listed or opened during a scan becomes a refusal.",
     "_modified_at: [FIELD_ASSIGNMENT] MUST return the st_mtime_ns of info as a naive datetime in UTC with microsecond precision, dropping any finer fraction toward the earlier instant, also before the epoch, and MUST NOT go through the float st_mtime or the local time zone.",
     "_read_source_bytes: [VALIDATION_ERROR] MUST open entry once in the folder descriptor with os.open through dir_fd, for reading only, in non-blocking mode and without following a link, take one os.fstat of the opened descriptor before reading, and raise Rejected with the NOT_A_REGULAR_FILE member of = models.PlacementFailure when that object is not a regular file, or with the UNREADABLE_FILE member when the opening, that fstat or a read fails; otherwise it MUST read in one pass from the start, continuing after short reads, until the end of the file or one byte past the imported MAX_SOURCE_BYTES constant, raise Rejected with the TOO_LARGE member when that byte is reached, and return the bytes read with that fstat result; the descriptor MUST be closed on every path and the file never opened again.",
-    "_source_files: [DETERMINISM_OR_ORDERING] MUST list the folder descriptor once with os.listdir, skip every name _is_ignored accepts, take one os.stat of each remaining entry in that folder with follow_symlinks False, skip an entry that disappeared and every entry that is neither a regular file nor a folder, call _unlisted_folder for a listing or reading that fails otherwise, then yield the folder descriptor, the entry, its name relative to the photo folder joined by slashes and its stat result for each regular file in Unicode code point order of the entries, and only then enter each folder entry in the same order; a folder entry is opened with os.open, O_DIRECTORY and O_NOFOLLOW through dir_fd, skipped when that opening meets a symbolic link or an object that is not a folder, refused through _unlisted_folder when it is gone or fails otherwise, walked the same way and closed when its walk ends.",
+    "_source_files: [DETERMINISM_OR_ORDERING] MUST list the folder descriptor once with os.listdir, skip every name _is_ignored accepts, take one os.stat of each remaining entry in that folder with follow_symlinks False, skip an entry that disappeared and every entry that is neither a regular file nor a folder, call _unlisted_folder for a listing or reading that fails otherwise, then yield the folder descriptor, the entry, its name relative to the photo folder joined by slashes and its stat result for each regular file in Unicode code point order of the entries, and only then enter each folder entry in the same order; a folder entry is opened with os.open, os.O_DIRECTORY and os.O_NOFOLLOW through dir_fd, skipped when that opening meets a symbolic link or an object that is not a folder, refused through _unlisted_folder when it is gone or fails otherwise, walked the same way and closed when its walk ends.",
     "observe_source_files: [ORCHESTRATION] MUST open the folder with _opened_folder, call _observed once for each file _source_files yields from that descriptor, and return the SourceFile of each in the order _source_files yields them, keeping no bytes; a DelivererError of the walk MUST pass on, so a partial scan is never returned, and it MUST NOT create, change, move or delete anything in the folder.",
     "_name_parts: [VALIDATION_ERROR] MUST return the segments of the name split on the slash character only when the name is non-empty and every segment is non-empty, is neither . nor .. and is not one _is_ignored accepts, compared exactly without Unicode normalisation, and MUST return None for any other name, an absolute name among them.",
-    "read_named_source: [PATH_OR_ARTIFACT_POLICY] MUST return None, opening nothing in the folder, when _name_parts returns None; otherwise it MUST open the folder with _opened_folder, then each folder segment of the name in the one before it with os.open, O_DIRECTORY and O_NOFOLLOW through dir_fd, and take one os.stat of the last segment in the last folder with follow_symlinks False, and MUST return None when an opening or that reading fails, the DelivererError of _opened_folder among them, or the last segment is not a regular file; otherwise it MUST return a SourceRead holding the SourceFile and bytes _observed gives for that last segment, its folder descriptor, the name and that reading, closing every descriptor it opened.",
+    "read_named_source: [PATH_OR_ARTIFACT_POLICY] MUST return None, opening nothing in the folder, when _name_parts returns None; otherwise it MUST open the folder with _opened_folder, then each folder segment of the name in the one before it with os.open, os.O_DIRECTORY and os.O_NOFOLLOW through dir_fd, and take one os.stat of the last segment in the last folder with follow_symlinks False, and MUST return None when an opening or that reading fails, the DelivererError of _opened_folder among them, or the last segment is not a regular file; otherwise it MUST return a SourceRead holding the SourceFile and bytes _observed gives for that last segment, its folder descriptor, the name and that reading, closing every descriptor it opened.",
     "_signature_format: [BEHAVIOR] MUST return the first format of the imported SOURCE_FORMATS constant, in its order, for which every row of the imported SOURCE_SIGNATURES constant whose format equals it finds the bytes its signature spells in hexadecimal at its offset from the start of content, and None when no format does; it reads only content.",
     "_observed: [VALIDATION_ERROR] MUST judge the rejection orders of A1 in their order: a listed st_size of info of zero is rejected with the EMPTY member of = models.ObservationReason and one above the imported MAX_SOURCE_BYTES constant with TOO_LARGE, both before the file is opened; then it MUST call _read_source_bytes once, and a Rejected it raises is rejected with the ObservationReason member whose value equals that reason, no bytes read is EMPTY, and _signature_format returning None is UNSUPPORTED_FORMAT. A rejected SourceFile carries the given name, the listed size, the time _modified_at gives for info, no source id and no bytes; otherwise it MUST return a READY SourceFile with the hashlib.sha256 hexdigest of the bytes as source_id, their length as size and the time _modified_at gives for the fstat result of the read, together with those bytes.",
     "_to_naive_utc: [FIELD_ASSIGNMENT] MUST return the same instant as the given aware datetime, converted to UTC with its tzinfo removed and its microseconds kept, and MUST raise ValueError for a naive datetime, which names no instant.",
@@ -116,7 +118,7 @@
     "_placement_path: [PATH_OR_ARTIFACT_POLICY] MUST return the state_dir of context joined with the imported PLACEMENTS_FOLDER constant, the canonical lowercase hyphenated project id as one folder and the source id followed by the imported RECORD_FILE_SUFFIX constant as the file name; no other received text becomes part of the path.",
     "_mark_path: [PATH_OR_ARTIFACT_POLICY] MUST return the state_dir of context joined with the imported MARKS_FOLDER constant, the canonical lowercase hyphenated project id as one folder and the source id followed by the imported RECORD_FILE_SUFFIX constant as the file name; no other received text becomes part of the path.",
     "_store_path: [PATH_OR_ARTIFACT_POLICY] MUST resolve the binary_root of context strictly, join the file_ref to that resolved root and resolve the result without requiring it to exist, so the part that exists is resolved following its links and the parts not yet created are joined as named, and MUST return that path only when it lies strictly below the resolved root; a path outside it, a loop of links or any OSError or RuntimeError of resolving MUST raise DelivererError with the UNSAFE_REFERENCE member of = models.RefusalCode before any folder or temporary file is created, so that refusal leaves the store as it was.",
-    "project_lock: [BEHAVIOR] MUST be a contextlib.contextmanager generator that makes the folder of the imported LOCKS_FOLDER constant exist below the state_dir of context with _make_folders, the imported STATE_FOLDER_MODE constant and durable false, then creates the lock file named by the canonical project id followed by the imported LOCK_FILE_SUFFIX constant exclusively, without following a link, with the imported LOCK_FILE_MODE constant, or, when it exists, opens it as it stands without following a link; it MUST take fcntl.flock with LOCK_EX on that descriptor, waiting without a time limit and with no retry of its own, yield once while holding it, and release and close it on every exit. Neither the lock file nor its folder is synchronised, a lock found partly created is completed and nothing created is removed.",
+    "project_lock: [BEHAVIOR] MUST be a contextlib.contextmanager generator that makes the folder of the imported LOCKS_FOLDER constant exist below the state_dir of context with _make_folders, the imported STATE_FOLDER_MODE constant and durable false, then creates the lock file named by the canonical project id followed by the imported LOCK_FILE_SUFFIX constant exclusively, without following a link, with the imported LOCK_FILE_MODE constant, or, when it exists, opens it as it stands without following a link; it MUST take fcntl.flock with fcntl.LOCK_EX on that descriptor, waiting without a time limit and with no retry of its own, yield once while holding it, and release and close it on every exit. Neither the lock file nor its folder is synchronised, a lock found partly created is completed and nothing created is removed.",
     "project_lock: [VALIDATION_ERROR] An entry at the lock address that is a link or not a regular file by os.fstat, and any failure to make the folder, open the file or take the lock other than waiting for another holder, MUST raise the DelivererError _state_unavailable returns, before the caller's block runs.",
     "read_placement: [ORCHESTRATION] MUST return what _read_record gives for _placement_path of the project id and source id with the PhotoPlacement model, None when the record does not exist, letting its DelivererError pass.",
     "read_mark: [ORCHESTRATION] MUST return what _read_record gives for _mark_path of the project id and source id with the PublicationMark model, None when the record does not exist, letting its DelivererError pass.",
@@ -133,7 +135,9 @@
     "_mark_outcome: [FIELD_PROJECTION] MUST return a MarkOutcome holding the project_id, source_id, photo_id and marked_at of the mark unchanged and the given = models.MarkStatus member.",
     "mark_photo_published: [ORCHESTRATION] MUST call _require_source_id, then read the imported utc_now exactly once, then the imported confirmed_connection with the connections_file of context and the project id, without consulting the photo folder, and then, inside the imported project_lock, which is released whenever it returns, call read_placement and then read_mark for the project id and source id, letting every DelivererError pass.",
     "mark_photo_published: [VALIDATION_ERROR] Without a placement it MUST raise DelivererError with the NOT_PLACED member of = models.RefusalCode; a mark with the same photo_id MUST be answered by _mark_outcome with the REPLAYED member of = models.MarkStatus and that first mark unchanged; a mark with another photo_id MUST raise DelivererError with the PUBLICATION_CONFLICT member; without a mark it MUST write a PublicationMark of the project id, source id, photo_id and the time read from utc_now with the imported write_mark and answer _mark_outcome with the MARKED member. A refused or replayed mark writes nothing.",
-    "_place: [FIELD_ASSIGNMENT] MUST call the imported prepare_photo with raw, the modified of source and the timezone of context, then the imported store_image with its content, then the imported build_publication, and write with the imported write_placement a PhotoPlacement of the project id and source id, the name of source, the reference store_image returned, the hashlib.sha256 hexdigest and the length of the stored bytes, the imported STORED_MEDIA_TYPE constant as media_type, the date_source of the prepared photo and the publication, returning that placement; an exception raised by any of these calls MUST pass to the caller unchanged."
+    "_place: [FIELD_ASSIGNMENT] MUST call the imported prepare_photo with raw, the modified of source and the timezone of context, then the imported store_image with its content, then the imported build_publication, and write with the imported write_placement a PhotoPlacement of the project id and source id, the name of source, the reference store_image returned, the hashlib.sha256 hexdigest and the length of the stored bytes, the imported STORED_MEDIA_TYPE constant as media_type, the date_source of the prepared photo and the publication, returning that placement; an exception raised by any of these calls MUST pass to the caller unchanged.",
+    "DelivererError.__init__: [BEHAVIOR] MUST keep the RefusalCode member it is given as its code attribute, unchanged, so that a caller answers the refusal from that attribute alone.",
+    "Rejected.__init__: [BEHAVIOR] MUST keep the PlacementFailure member it is given as its reason attribute, unchanged, so that the failure of that photo is read from that attribute alone."
   ],
   "config": {
     "role": "data",
@@ -747,7 +751,6 @@
             "format",
             "offset"
           ],
-          "total": false,
           "value": [
             {
               "format": "JPEG",
@@ -950,8 +953,21 @@
   },
   "implementation_obligations": {},
   "imports": {
-    "stdlib": [],
-    "third_party": [],
+    "stdlib": [
+      "from builtins import OSError",
+      "from collections.abc import Iterator",
+      "from datetime import datetime, timezone",
+      "from os import stat_result",
+      "from pathlib import Path",
+      "from uuid import UUID",
+      "from zoneinfo import ZoneInfo"
+    ],
+    "third_party": [
+      "from fastapi import FastAPI, Request",
+      "from fastapi.responses import JSONResponse",
+      "from PIL import Image",
+      "from pydantic import BaseModel"
+    ],
     "internal": {
       "refusals": [
         "DelivererError",
@@ -1566,6 +1582,8 @@
     "scan_route",
     "deliver_route",
     "mark_route",
-    "utc_now"
+    "utc_now",
+    "DelivererError.__init__",
+    "Rejected.__init__"
   ]
 }
