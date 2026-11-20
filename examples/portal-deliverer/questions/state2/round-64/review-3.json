@@ -1,0 +1,148 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "missing_time_source",
+   "text": "`marked_at: datetime`",
+   "question": "Which time authority supplies the instant written to `marked_at`?",
+   "options": [
+    "an injected system wall clock",
+    "a declared authority module",
+    "a timestamp obtained from the state filesystem"
+   ],
+   "default_guess": "Use an injected system wall clock.",
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "undefined_instant_meaning",
+   "text": "The calling flow reports the `photo_id` right after `photo.publish` answers, and the deliverer creates the mark.",
+   "question": "Which event does `marked_at` denote: receipt of the request, acquisition of the project lock, completion of validation, or creation of the durable mark record?",
+   "options": [
+    "request receipt",
+    "project-lock acquisition",
+    "the instant immediately before the mark record is committed",
+    "successful durable commit"
+   ],
+   "default_guess": "Read the clock once after validation while holding the project lock, immediately before creating the mark record.",
+   "witness": {
+    "initial": "A placement exists without a mark, and another call holds the project lock for ten minutes.",
+    "events": [
+     "The calling flow submits the mark request.",
+     "The request waits for the project lock.",
+     "The deliverer eventually writes the mark record."
+    ],
+    "outcomes": [
+     "`marked_at` is the request-arrival time.",
+     "`marked_at` is the time at which the mark is created under the lock."
+    ],
+    "observer": "A reader of the stored PublicationMark sees timestamps ten minutes apart."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark.marked_at",
+   "kind": "undefined_time_representation",
+   "text": "`marked_at: datetime`",
+   "question": "Must `marked_at` be naive UTC, offset-aware UTC, local time, or another representation?",
+   "options": [
+    "UTC without an offset",
+    "offset-aware UTC",
+    "local time using the run setting"
+   ],
+   "default_guess": "Store UTC without an offset, matching the explicitly defined representation used for photo instants.",
+   "witness": {
+    "initial": "The service runs in a time zone whose offset is not UTC.",
+    "events": [
+     "The calling flow records a publication mark.",
+     "The mark record is serialized and later read."
+    ],
+    "outcomes": [
+     "The record contains a naive UTC datetime.",
+     "The record contains an offset-aware or local datetime representing the same instant."
+    ],
+    "observer": "The record reader sees a different representation and may compare or serialize it differently."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "mark operation time readings",
+   "kind": "undefined_read_count",
+   "text": "The first mark stands when it is sent again, and its `marked_at` does not change",
+   "question": "How many readings of the time source does a mark operation take, and do replayed or refused mark calls read it at all?",
+   "options": [
+    "one reading only when a fresh mark will be written, and zero for replay or refusal",
+    "one reading for every mark request",
+    "multiple readings during a fresh mark, with the last one stored"
+   ],
+   "default_guess": "Take exactly one reading for a fresh mark after all refusal and replay checks; take none for a replay or refusal.",
+   "witness": {
+    "initial": "A controllable clock returns a different instant on every read; a placement exists without a mark.",
+    "events": [
+     "The caller submits a successful mark request.",
+     "The implementation validates and writes the mark."
+    ],
+    "outcomes": [
+     "The operation reads the clock once and stores that instant.",
+     "The operation reads the clock more than once and stores a later instant."
+    ],
+    "observer": "The caller inspecting the persisted mark sees which clock value was selected."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 INV-06 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).",
+   "question": "What must the INV-06 test show about the existing mark record and all other durable writes, given that rule 2 says a replay creates or changes no mark and the invariant says it writes nothing?",
+   "options": [
+    "assert that the mark record is byte-for-byte unchanged and that no durable address is written",
+    "check only stored images and placement records as the current item states"
+   ],
+   "default_guess": "Require the test to prove that the existing mark is unchanged and that the replay performs no durable write.",
+   "witness": {
+    "initial": "A project already has a placement, stored image and publication mark for the requested content.",
+    "events": [
+     "The caller repeats delivery of that content.",
+     "One implementation returns the existing result without writing.",
+     "Another implementation rewrites the mark with equivalent data while leaving every stored image and placement record unchanged."
+    ],
+    "outcomes": [
+     "No durable state is written, satisfying rule 2 and INV-06.",
+     "The stated Required tests assertions still pass, although the mark was written contrary to rule 2 and INV-06."
+    ],
+    "observer": "A filesystem write trace or observer of the mark record's filesystem metadata sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A3 replacement status and INV-07",
+   "kind": "contradiction",
+   "text": "INV-07: a replaced file is reported as a new photo with the READY member of = models.ScanStatus while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).",
+   "question": "When a file is replaced by content that already has a placement in the same project, must the scan report READY as this passage says, or PLACED or PUBLISHED under A1 orders 7 and 8 and A3's content identity?",
+   "options": [
+    "READY for every replaced file",
+    "PLACED when the replacement content already has a placement and no mark",
+    "PUBLISHED when the replacement content already has a placement and mark",
+    "READY only when the replacement content has no existing placement"
+   ],
+   "default_guess": "Interpret the Required tests statement as applying only to previously unplaced replacement content; otherwise report PLACED or PUBLISHED according to A1.",
+   "witness": {
+    "initial": "A project contains `a.jpg` with content X and `b.jpg` with content Y; Y already has a placement and publication mark.",
+    "events": [
+     "Syncthing replaces `a.jpg` with bytes identical to content Y.",
+     "The caller scans the project."
+    ],
+    "outcomes": [
+     "A1 orders 7 and 8 and content-based placement identity make `a.jpg` PUBLISHED.",
+     "The INV-07 Required tests statement makes the replaced `a.jpg` a new READY photo."
+    ],
+    "observer": "The calling flow sees a different scan status and either offers or suppresses another delivery."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"missing_time_source\",\"text\":\"`marked_at: datetime`\",\"question\":\"Which time authority supplies the instant written to `marked_at`?\",\"options\":[\"an injected system wall clock\",\"a declared authority module\",\"a timestamp obtained from the state filesystem\"],\"default_guess\":\"Use an injected system wall clock.\"},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"undefined_instant_meaning\",\"text\":\"The calling flow reports the `photo_id` right after `photo.publish` answers, and the deliverer creates the mark.\",\"question\":\"Which event does `marked_at` denote: receipt of the request, acquisition of the project lock, completion of validation, or creation of the durable mark record?\",\"options\":[\"request receipt\",\"project-lock acquisition\",\"the instant immediately before the mark record is committed\",\"successful durable commit\"],\"default_guess\":\"Read the clock once after validation while holding the project lock, immediately before creating the mark record.\",\"witness\":{\"initial\":\"A placement exists without a mark, and another call holds the project lock for ten minutes.\",\"events\":[\"The calling flow submits the mark request.\",\"The request waits for the project lock.\",\"The deliverer eventually writes the mark record.\"],\"outcomes\":[\"`marked_at` is the request-arrival time.\",\"`marked_at` is the time at which the mark is created under the lock.\"],\"observer\":\"A reader of the stored PublicationMark sees timestamps ten minutes apart.\"}},{\"subject\":\"M07 PublicationMark.marked_at\",\"kind\":\"undefined_time_representation\",\"text\":\"`marked_at: datetime`\",\"question\":\"Must `marked_at` be naive UTC, offset-aware UTC, local time, or another representation?\",\"options\":[\"UTC without an offset\",\"offset-aware UTC\",\"local time using the run setting\"],\"default_guess\":\"Store UTC without an offset, matching the explicitly defined representation used for photo instants.\",\"witness\":{\"initial\":\"The service runs in a time zone whose offset is not UTC.\",\"events\":[\"The calling flow records a publication mark.\",\"The mark record is serialized and later read.\"],\"outcomes\":[\"The record contains a naive UTC datetime.\",\"The record contains an offset-aware or local datetime representing the same instant.\"],\"observer\":\"The record reader sees a different representation and may compare or serialize it differently.\"}},{\"subject\":\"mark operation time readings\",\"kind\":\"undefined_read_count\",\"text\":\"The first mark stands when it is sent again, and its `marked_at` does not change\",\"question\":\"How many readings of the time source does a mark operation take, and do replayed or refused mark calls read it at all?\",\"options\":[\"one reading only when a fresh mark will be written, and zero for replay or refusal\",\"one reading for every mark request\",\"multiple readings during a fresh mark, with the last one stored\"],\"default_guess\":\"Take exactly one reading for a fresh mark after all refusal and replay checks; take none for a replay or refusal.\",\"witness\":{\"initial\":\"A controllable clock returns a different instant on every read; a placement exists without a mark.\",\"events\":[\"The caller submits a successful mark request.\",\"The implementation validates and writes the mark.\"],\"outcomes\":[\"The operation reads the clock once and stores that instant.\",\"The operation reads the clock more than once and stores a later instant.\"],\"observer\":\"The caller inspecting the persisted mark sees which clock value was selected.\"}},{\"subject\":\"A3 INV-06 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-06: a second placement returns the first publication and leaves every stored image and placement record unchanged, with one placement record in place (`test_a_repeated_placement_writes_no_durable_state`).\",\"question\":\"What must the INV-06 test show about the existing mark record and all other durable writes, given that rule 2 says a replay creates or changes no mark and the invariant says it writes nothing?\",\"options\":[\"assert that the mark record is byte-for-byte unchanged and that no durable address is written\",\"check only stored images and placement records as the current item states\"],\"default_guess\":\"Require the test to prove that the existing mark is unchanged and that the replay performs no durable write.\",\"witness\":{\"initial\":\"A project already has a placement, stored image and publication mark for the requested content.\",\"events\":[\"The caller repeats delivery of that content.\",\"One implementation returns the existing result without writing.\",\"Another implementation rewrites the mark with equivalent data while leaving every stored image and placement record unchanged.\"],\"outcomes\":[\"No durable state is written, satisfying rule 2 and INV-06.\",\"The stated Required tests assertions still pass, although the mark was written contrary to rule 2 and INV-06.\"],\"observer\":\"A filesystem write trace or observer of the mark record's filesystem metadata sees the difference.\"}},{\"subject\":\"A3 replacement status and INV-07\",\"kind\":\"contradiction\",\"text\":\"INV-07: a replaced file is reported as a new photo with the READY member of = models.ScanStatus while the earlier image and mark stay (`test_a_replaced_file_is_a_new_photo_and_the_first_delivery_stays`), and a removed file keeps its delivery (`test_removing_a_file_keeps_its_delivery`).\",\"question\":\"When a file is replaced by content that already has a placement in the same project, must the scan report READY as this passage says, or PLACED or PUBLISHED under A1 orders 7 and 8 and A3's content identity?\",\"options\":[\"READY for every replaced file\",\"PLACED when the replacement content already has a placement and no mark\",\"PUBLISHED when the replacement content already has a placement and mark\",\"READY only when the replacement content has no existing placement\"],\"default_guess\":\"Interpret the Required tests statement as applying only to previously unplaced replacement content; otherwise report PLACED or PUBLISHED according to A1.\",\"witness\":{\"initial\":\"A project contains `a.jpg` with content X and `b.jpg` with content Y; Y already has a placement and publication mark.\",\"events\":[\"Syncthing replaces `a.jpg` with bytes identical to content Y.\",\"The caller scans the project.\"],\"outcomes\":[\"A1 orders 7 and 8 and content-based placement identity make `a.jpg` PUBLISHED.\",\"The INV-07 Required tests statement makes the replaced `a.jpg` a new READY photo.\"],\"observer\":\"The calling flow sees a different scan status and either offers or suppresses another delivery.\"}}]}",
+ "set_aside": []
+}
