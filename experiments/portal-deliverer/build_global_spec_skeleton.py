@@ -19,7 +19,8 @@ Differences from the kernel script:
   stands, plus every model named by the signature of a callable a consumer
   imports. After the notes it is rebuilt from the Factory's import hygiene, as
   the kernel does.
-- stdlib and third_party are the author's full import lines (SPEC_STANDARD
+- stdlib and third_party, and the module-scoped stdlib_by_module and
+  third_party_by_module, are the author's full import lines (SPEC_STANDARD
   §7) and no design state holds them: the script keeps the lines the current
   global_spec.json carries. Once 60_contracts.json exists their signatures
   name stdlib and third-party types, so empty lists are refused rather than
@@ -177,7 +178,8 @@ skeleton = {
     "models": {},
     "rules": rules,
     "implementation_obligations": {},
-    "imports": {"stdlib": stdlib, "third_party": third_party, "internal": internal, "module_internal": module_internal},
+    "imports": {"stdlib": stdlib, "third_party": third_party, "internal": internal, "module_internal": module_internal,
+                **{key: current_imports[key] for key in ("stdlib_by_module", "third_party_by_module") if key in current_imports}},
     "module_functions": module_functions,
     "module_order": module_order,
     "module_paths": module_paths,
