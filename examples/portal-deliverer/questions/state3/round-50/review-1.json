@@ -1,0 +1,107 @@
+{
+ "open_points": [
+  {
+   "subject": "State 3 authority",
+   "kind": "undecided_status",
+   "text": "Written from the accepted States 0 to 2.",
+   "question": "Are the module split, ownership assignments and dependency graph accepted owner decisions, or must they be recorded as open questions under R0-04 before later states rely on them?",
+   "options": [
+    "The owner accepts the State 3 architecture",
+    "The architecture remains provisional and each unsupported claim is open"
+   ],
+   "default_guess": "Treat the architecture as provisional until the owner accepts it.",
+   "unit": "?"
+  },
+  {
+   "subject": "Authorization-field parsing",
+   "kind": "split_ownership",
+   "text": "| A5 | rule 1, reading the token from a request | `deliverer_router` |\n| A5 | rule 1, the comparison of the token | `deliverer_api` |",
+   "question": "Which module decides that there is exactly one Authorization field, parses the case-insensitive Bearer scheme and single space, and rejects every malformed representation?",
+   "options": [
+    "`deliverer_router` validates the field structure and passes the extracted token to `deliverer_api`",
+    "`deliverer_api` receives the raw header values and validates both structure and token",
+    "The generated backend performs some of the validation"
+   ],
+   "default_guess": "Make `deliverer_router` own field cardinality and Bearer extraction, and make `deliverer_api` own only constant-time token comparison.",
+   "unit": "?"
+  },
+  {
+   "subject": "AuthenticationRejected",
+   "kind": "conflicting_ownership",
+   "text": "- the routes of the service, the request forms of a delivery and a mark, reading the token from a request,\n  and the context the routes read from the application.\n\n- `AuthenticationRejected`, the refusal of a request that does not carry the token.",
+   "question": "Does `deliverer_router` decide that a request lacks an acceptable token and raise `AuthenticationRejected`, or does `deliverer_api` inspect the request and make that decision?",
+   "options": [
+    "The router detects extraction failures and raises the API-owned exception type",
+    "The API receives the request headers and decides whether authentication is absent or malformed"
+   ],
+   "default_guess": "Let the router detect extraction failures and raise the exception type owned by `deliverer_api`.",
+   "unit": "?"
+  },
+  {
+   "subject": "Expected bearer token",
+   "kind": "missing_data_owner",
+   "text": "- the routes of the service, the request forms of a delivery and a mark, reading the token from a request,\n  and the context the routes read from the application.",
+   "question": "Where is the expected token kept after `deliverer_service` reads the token file, and how does `deliverer_router` supply it to `check_token`?",
+   "options": [
+    "Store it in application state beside the delivery context",
+    "Capture it in route closures created by `create_app`",
+    "Pass it through another authentication dependency emitted by the backend"
+   ],
+   "default_guess": "Pass the expected token to `create_app` and capture it in the generated route closures.",
+   "unit": "?"
+  },
+  {
+   "subject": "placement check order",
+   "kind": "ambiguous_identifier_scope",
+   "text": "- the order of the checks of A3 rule 4 and A4 rule 2 after the token, the request form and the identifiers;",
+   "question": "For a placement, does “the identifiers” include `source_id`, or only the project identifier already parsed at the route boundary?",
+   "options": [
+    "It includes only `project_id`; `source_id` remains after the connection and photo-folder checks as A3 rule 4 requires",
+    "It includes `source_id`, so its form is checked before the connection and photo folder"
+   ],
+   "default_guess": "Interpret it as only the route-level project identifier and keep the source-id check after the photo-folder check.",
+   "witness": {
+    "initial": "The connections file is valid but has no record for the requested project, and the delivery body contains a malformed source_id.",
+    "events": [
+     "The calling flow sends an authenticated delivery request with a canonical project id and the malformed source_id.",
+     "The service reaches the placement checks."
+    ],
+    "outcomes": [
+     "A3 rule 4 checks the connection before source_id and answers UNKNOWN_PROJECT.",
+     "Reading “identifiers” to include source_id checks it first and answers INVALID_SOURCE_ID."
+    ],
+    "observer": "The calling flow sees a different refusal code and HTTP response."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "framework request rejection",
+   "kind": "missing_refusal_owner",
+   "text": "`deliverer_router` is the module that `http_router_backend` generates, and it holds only what that backend\nemits. The token and the project id are judged by `deliverer_api`, each route calls one operation of\n`photo_delivery`, and every refusal is answered by `refusal_answer` of `deliverer_api` (A5 rules 1, 9 and 10).",
+   "question": "Who intercepts a body or form rejected by the web framework and converts it to the fixed INVALID_REQUEST M08 through `refusal_answer`, before the framework emits its own response?",
+   "options": [
+    "`deliverer_router` installs a generated validation-error handler",
+    "`http_router_backend` guarantees this conversion as part of its emitted router",
+    "`deliverer_api` registers the framework handler"
+   ],
+   "default_guess": "Have `deliverer_router` install the backend-supported validation-error handler and delegate the answer body to `refusal_answer`.",
+   "unit": "?"
+  },
+  {
+   "subject": "checked photo-folder handoff",
+   "kind": "unclear_module_boundary",
+   "text": "- the written form of both subfolders, and the resolved containment of the photo folder of the requested\n  project. The resolved invoice folder is not checked here (A5 rule 8);\n- deciding whether the photo folder is available and strictly below the resolved root.\n\n- walking the photo folder in the decided order;",
+   "question": "What does `object_connections.available_photo_folder` hand to `source_folder` so that the folder walked is still the exact folder whose containment was checked if a path component changes concurrently?",
+   "options": [
+    "An already opened directory handle used for all traversal",
+    "A resolved path that `source_folder` reopens component by component without following links",
+    "Both the root and relative subfolder so `source_folder` repeats the containment-safe opening"
+   ],
+   "default_guess": "Return an opened directory handle, or an explicit capability equivalent to one, rather than an unchecked path.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"State 3 authority\",\"kind\":\"undecided_status\",\"text\":\"Written from the accepted States 0 to 2.\",\"question\":\"Are the module split, ownership assignments and dependency graph accepted owner decisions, or must they be recorded as open questions under R0-04 before later states rely on them?\",\"options\":[\"The owner accepts the State 3 architecture\",\"The architecture remains provisional and each unsupported claim is open\"],\"default_guess\":\"Treat the architecture as provisional until the owner accepts it.\"},{\"subject\":\"Authorization-field parsing\",\"kind\":\"split_ownership\",\"text\":\"| A5 | rule 1, reading the token from a request | `deliverer_router` |\\n| A5 | rule 1, the comparison of the token | `deliverer_api` |\",\"question\":\"Which module decides that there is exactly one Authorization field, parses the case-insensitive Bearer scheme and single space, and rejects every malformed representation?\",\"options\":[\"`deliverer_router` validates the field structure and passes the extracted token to `deliverer_api`\",\"`deliverer_api` receives the raw header values and validates both structure and token\",\"The generated backend performs some of the validation\"],\"default_guess\":\"Make `deliverer_router` own field cardinality and Bearer extraction, and make `deliverer_api` own only constant-time token comparison.\"},{\"subject\":\"AuthenticationRejected\",\"kind\":\"conflicting_ownership\",\"text\":\"- the routes of the service, the request forms of a delivery and a mark, reading the token from a request,\\n  and the context the routes read from the application.\\n\\n- `AuthenticationRejected`, the refusal of a request that does not carry the token.\",\"question\":\"Does `deliverer_router` decide that a request lacks an acceptable token and raise `AuthenticationRejected`, or does `deliverer_api` inspect the request and make that decision?\",\"options\":[\"The router detects extraction failures and raises the API-owned exception type\",\"The API receives the request headers and decides whether authentication is absent or malformed\"],\"default_guess\":\"Let the router detect extraction failures and raise the exception type owned by `deliverer_api`.\"},{\"subject\":\"Expected bearer token\",\"kind\":\"missing_data_owner\",\"text\":\"- the routes of the service, the request forms of a delivery and a mark, reading the token from a request,\\n  and the context the routes read from the application.\",\"question\":\"Where is the expected token kept after `deliverer_service` reads the token file, and how does `deliverer_router` supply it to `check_token`?\",\"options\":[\"Store it in application state beside the delivery context\",\"Capture it in route closures created by `create_app`\",\"Pass it through another authentication dependency emitted by the backend\"],\"default_guess\":\"Pass the expected token to `create_app` and capture it in the generated route closures.\"},{\"subject\":\"placement check order\",\"kind\":\"ambiguous_identifier_scope\",\"text\":\"- the order of the checks of A3 rule 4 and A4 rule 2 after the token, the request form and the identifiers;\",\"question\":\"For a placement, does “the identifiers” include `source_id`, or only the project identifier already parsed at the route boundary?\",\"options\":[\"It includes only `project_id`; `source_id` remains after the connection and photo-folder checks as A3 rule 4 requires\",\"It includes `source_id`, so its form is checked before the connection and photo folder\"],\"default_guess\":\"Interpret it as only the route-level project identifier and keep the source-id check after the photo-folder check.\",\"witness\":{\"initial\":\"The connections file is valid but has no record for the requested project, and the delivery body contains a malformed source_id.\",\"events\":[\"The calling flow sends an authenticated delivery request with a canonical project id and the malformed source_id.\",\"The service reaches the placement checks.\"],\"outcomes\":[\"A3 rule 4 checks the connection before source_id and answers UNKNOWN_PROJECT.\",\"Reading “identifiers” to include source_id checks it first and answers INVALID_SOURCE_ID.\"],\"observer\":\"The calling flow sees a different refusal code and HTTP response.\"}},{\"subject\":\"framework request rejection\",\"kind\":\"missing_refusal_owner\",\"text\":\"`deliverer_router` is the module that `http_router_backend` generates, and it holds only what that backend\\nemits. The token and the project id are judged by `deliverer_api`, each route calls one operation of\\n`photo_delivery`, and every refusal is answered by `refusal_answer` of `deliverer_api` (A5 rules 1, 9 and 10).\",\"question\":\"Who intercepts a body or form rejected by the web framework and converts it to the fixed INVALID_REQUEST M08 through `refusal_answer`, before the framework emits its own response?\",\"options\":[\"`deliverer_router` installs a generated validation-error handler\",\"`http_router_backend` guarantees this conversion as part of its emitted router\",\"`deliverer_api` registers the framework handler\"],\"default_guess\":\"Have `deliverer_router` install the backend-supported validation-error handler and delegate the answer body to `refusal_answer`.\"},{\"subject\":\"checked photo-folder handoff\",\"kind\":\"unclear_module_boundary\",\"text\":\"- the written form of both subfolders, and the resolved containment of the photo folder of the requested\\n  project. The resolved invoice folder is not checked here (A5 rule 8);\\n- deciding whether the photo folder is available and strictly below the resolved root.\\n\\n- walking the photo folder in the decided order;\",\"question\":\"What does `object_connections.available_photo_folder` hand to `source_folder` so that the folder walked is still the exact folder whose containment was checked if a path component changes concurrently?\",\"options\":[\"An already opened directory handle used for all traversal\",\"A resolved path that `source_folder` reopens component by component without following links\",\"Both the root and relative subfolder so `source_folder` repeats the containment-safe opening\"],\"default_guess\":\"Return an opened directory handle, or an explicit capability equivalent to one, rather than an unchecked path.\"}]}",
+ "set_aside": []
+}

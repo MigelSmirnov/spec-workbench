@@ -1,0 +1,159 @@
+{
+ "open_points": [
+  {
+   "subject": "30_modules.md:Dependencies — authentication responsibility",
+   "kind": "contradictory_owner",
+   "text": "The token and the project id are judged by `deliverer_api`",
+   "question": "Does `deliverer_api` judge the complete Authorization-field syntax and cardinality, or only compare a token already extracted and validated by `deliverer_router`?",
+   "options": [
+    "`deliverer_router` enforces exactly one field, the Bearer scheme and one-space syntax; `deliverer_api` only compares the extracted token",
+    "`deliverer_api` receives the raw Authorization fields and performs every A5 rule 1 check",
+    "The backend extractor performs the syntax and cardinality checks, while the router and API only consume its result"
+   ],
+   "default_guess": "Make `deliverer_router` own field cardinality and Bearer extraction and make `deliverer_api.check_token` own only constant-time comparison.",
+   "witness": {
+    "initial": "A request has two Authorization fields, one carrying the valid token and one carrying an invalid token.",
+    "events": [
+     "The calling flow sends the request.",
+     "The router reads the request and the API checks authentication."
+    ],
+    "outcomes": [
+     "The router enforces exactly one field and returns UNAUTHORIZED.",
+     "The router selects the valid field and the API accepts the request."
+    ],
+    "observer": "The calling flow sees refusal versus execution of the operation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`deliverer_router` — expected-token handoff",
+   "kind": "missing_owner",
+   "text": "and the context the routes read from the application.",
+   "question": "Who passes the startup token from `deliverer_service` to `deliverer_api.check_token`, where is it retained, and is it part of `create_app`'s contract, given that `DeliveryContext` does not contain the token?",
+   "options": [
+    "`create_app` receives the expected token separately and closes over it",
+    "`create_app` stores the expected token in application state beside `DeliveryContext`",
+    "The token is added to `DeliveryContext`"
+   ],
+   "default_guess": "Pass the token separately to `create_app` and retain it in private application state, without changing `DeliveryContext`.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`deliverer_router` — authentication order",
+   "kind": "unowned_order",
+   "text": "- the routes and their operations, A5 rule 1, the request form of A3 rule 4 and the `photo_id` form of\n  A4 rule 2.",
+   "question": "Which module owns and enforces the required order in which authentication completes before the framework parses the project id or request body?",
+   "options": [
+    "`deliverer_router` explicitly performs authentication before invoking any path or body validation",
+    "`http_router_backend` guarantees this ordering in generated code",
+    "`deliverer_api` receives the raw request and authenticates it before the router validates anything else"
+   ],
+   "default_guess": "Make the router own the orchestration and require the backend to emit an authentication-first route wrapper.",
+   "witness": {
+    "initial": "A request has no valid token, a malformed project id and a malformed body.",
+    "events": [
+     "The caller sends the request.",
+     "The web framework dispatches the route and performs authentication and validation in its chosen order."
+    ],
+    "outcomes": [
+     "Authentication runs first and the response is UNAUTHORIZED.",
+     "Framework validation runs first and the response is INVALID_REQUEST or a native framework error."
+    ],
+    "observer": "The caller sees a different refusal code and possibly a different response body."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`photo_delivery` — placement check order",
+   "kind": "ambiguous_boundary",
+   "text": "- the order of the checks of A3 rule 4 and A4 rule 2 after the token, the request form and the identifiers;",
+   "question": "Which identifiers are meant here, and specifically does `photo_delivery` own placing the source-id check after the connection and photo-folder checks as A3 rule 4 requires?",
+   "options": [
+    "“identifiers” means only the project id for delivery, so `photo_delivery` orders connection, photo folder, source id, lock, placement and file",
+    "“identifiers” includes source id, so source-id validation occurs before `photo_delivery`'s owned sequence",
+    "The router validates every identifier before calling `photo_delivery`"
+   ],
+   "default_guess": "Treat only the project id as prevalidated and keep source-id validation inside `photo_delivery` after the photo-folder check.",
+   "witness": {
+    "initial": "The project has a confirmed connection whose photo folder is unavailable, and the request carries a malformed source id.",
+    "events": [
+     "The calling flow requests delivery.",
+     "The router and `photo_delivery` perform their assigned checks."
+    ],
+    "outcomes": [
+     "The photo-folder check runs first and returns FOLDER_UNAVAILABLE.",
+     "The source id is treated as a prevalidated identifier and returns INVALID_SOURCE_ID first."
+    ],
+    "observer": "The calling flow sees a different refusal code."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Dependencies — framework refusals",
+   "kind": "missing_mapping",
+   "text": "and every refusal is answered by `refusal_answer` of `deliverer_api` (A5 rules 1, 9 and 10).",
+   "question": "Who catches request-body, path-parameter and form validation failures raised by the web framework and converts each one into `refusal_answer`, rather than allowing the framework's native response?",
+   "options": [
+    "`deliverer_router` installs explicit framework exception handlers",
+    "`http_router_backend` always emits the required handlers",
+    "Routes avoid framework validation and call explicit validators themselves"
+   ],
+   "default_guess": "Require the backend-generated router to install handlers that turn all framework validation failures into an INVALID_REQUEST `DelivererError` and then call `refusal_answer`.",
+   "witness": {
+    "initial": "The caller is authenticated but sends malformed JSON for a delivery.",
+    "events": [
+     "The framework attempts to parse the body.",
+     "The generated router handles or does not handle the framework exception."
+    ],
+    "outcomes": [
+     "The exception is converted to the fixed M08 INVALID_REQUEST answer.",
+     "The framework returns its native validation response, which can expose submitted values and has a different body."
+    ],
+    "observer": "The calling flow sees different response content; the privacy guarantee also differs."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Dependencies — router backend",
+   "kind": "unspecified_dependency",
+   "text": "`deliverer_router` is the module that `http_router_backend` generates, and it holds only what that backend\nemits.",
+   "question": "Which concrete backend and backend contract are required, including emitted extractors, validation ordering, exception handlers and synchronous/asynchronous route form?",
+   "options": [
+    "Select and specify the former `fastapi_sync_v2` backend contract",
+    "Define a backend-neutral contract that every permitted `http_router_backend` implementation must satisfy",
+    "Let the later generator select any backend and infer the missing behavior"
+   ],
+   "default_guess": "Select `fastapi_sync_v2` and state its emitted authentication-first validation and exception-mapping guarantees.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`deliverer_api` — public exports",
+   "kind": "public_surface_contradiction",
+   "text": "| `deliverer_router` | `deliverer_api` | `AuthenticationRejected`, `answer_health`, `check_token`, `parse_project_id`, `refusal_answer` |",
+   "question": "Are all five symbols exported by `deliverer_api`, despite its Candidate public capabilities listing only `answer_health`, or must the dependency surface and module API be redesigned?",
+   "options": [
+    "Export all five symbols named by the dependency table",
+    "Export only `answer_health` and move the other responsibilities into the router",
+    "Expose a smaller facade and replace the five direct imports with it"
+   ],
+   "default_guess": "Export all five symbols because the declared direct dependency surface already requires them.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`deliverer_service` — process outcome",
+   "kind": "missing_owner",
+   "text": "| `deliverer_service` | `domain_models` | `DeliveryContext`, `RuntimeSettings`, `ServiceExit` |",
+   "question": "Which module owns choosing `ServiceExit`, applying `EXIT_STATUSES`, handling `STOP_SIGNALS`, and deciding the exact transition at which the server counts as listening?",
+   "options": [
+    "`deliverer_service.run_service` owns the complete process-lifecycle decision",
+    "The generated web-server backend returns a `ServiceExit` already classified",
+    "The backend reports lifecycle events and `deliverer_service` classifies them"
+   ],
+   "default_guess": "Make `deliverer_service.run_service` own classification and exit status, with the backend reporting an explicit startup-complete boundary and shutdown result.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"30_modules.md:Dependencies — authentication responsibility\",\"kind\":\"contradictory_owner\",\"text\":\"The token and the project id are judged by `deliverer_api`\",\"question\":\"Does `deliverer_api` judge the complete Authorization-field syntax and cardinality, or only compare a token already extracted and validated by `deliverer_router`?\",\"options\":[\"`deliverer_router` enforces exactly one field, the Bearer scheme and one-space syntax; `deliverer_api` only compares the extracted token\",\"`deliverer_api` receives the raw Authorization fields and performs every A5 rule 1 check\",\"The backend extractor performs the syntax and cardinality checks, while the router and API only consume its result\"],\"default_guess\":\"Make `deliverer_router` own field cardinality and Bearer extraction and make `deliverer_api.check_token` own only constant-time comparison.\",\"witness\":{\"initial\":\"A request has two Authorization fields, one carrying the valid token and one carrying an invalid token.\",\"events\":[\"The calling flow sends the request.\",\"The router reads the request and the API checks authentication.\"],\"outcomes\":[\"The router enforces exactly one field and returns UNAUTHORIZED.\",\"The router selects the valid field and the API accepts the request.\"],\"observer\":\"The calling flow sees refusal versus execution of the operation.\"}},{\"subject\":\"30_modules.md:`deliverer_router` — expected-token handoff\",\"kind\":\"missing_owner\",\"text\":\"and the context the routes read from the application.\",\"question\":\"Who passes the startup token from `deliverer_service` to `deliverer_api.check_token`, where is it retained, and is it part of `create_app`'s contract, given that `DeliveryContext` does not contain the token?\",\"options\":[\"`create_app` receives the expected token separately and closes over it\",\"`create_app` stores the expected token in application state beside `DeliveryContext`\",\"The token is added to `DeliveryContext`\"],\"default_guess\":\"Pass the token separately to `create_app` and retain it in private application state, without changing `DeliveryContext`.\"},{\"subject\":\"30_modules.md:`deliverer_router` — authentication order\",\"kind\":\"unowned_order\",\"text\":\"- the routes and their operations, A5 rule 1, the request form of A3 rule 4 and the `photo_id` form of\\n  A4 rule 2.\",\"question\":\"Which module owns and enforces the required order in which authentication completes before the framework parses the project id or request body?\",\"options\":[\"`deliverer_router` explicitly performs authentication before invoking any path or body validation\",\"`http_router_backend` guarantees this ordering in generated code\",\"`deliverer_api` receives the raw request and authenticates it before the router validates anything else\"],\"default_guess\":\"Make the router own the orchestration and require the backend to emit an authentication-first route wrapper.\",\"witness\":{\"initial\":\"A request has no valid token, a malformed project id and a malformed body.\",\"events\":[\"The caller sends the request.\",\"The web framework dispatches the route and performs authentication and validation in its chosen order.\"],\"outcomes\":[\"Authentication runs first and the response is UNAUTHORIZED.\",\"Framework validation runs first and the response is INVALID_REQUEST or a native framework error.\"],\"observer\":\"The caller sees a different refusal code and possibly a different response body.\"}},{\"subject\":\"30_modules.md:`photo_delivery` — placement check order\",\"kind\":\"ambiguous_boundary\",\"text\":\"- the order of the checks of A3 rule 4 and A4 rule 2 after the token, the request form and the identifiers;\",\"question\":\"Which identifiers are meant here, and specifically does `photo_delivery` own placing the source-id check after the connection and photo-folder checks as A3 rule 4 requires?\",\"options\":[\"“identifiers” means only the project id for delivery, so `photo_delivery` orders connection, photo folder, source id, lock, placement and file\",\"“identifiers” includes source id, so source-id validation occurs before `photo_delivery`'s owned sequence\",\"The router validates every identifier before calling `photo_delivery`\"],\"default_guess\":\"Treat only the project id as prevalidated and keep source-id validation inside `photo_delivery` after the photo-folder check.\",\"witness\":{\"initial\":\"The project has a confirmed connection whose photo folder is unavailable, and the request carries a malformed source id.\",\"events\":[\"The calling flow requests delivery.\",\"The router and `photo_delivery` perform their assigned checks.\"],\"outcomes\":[\"The photo-folder check runs first and returns FOLDER_UNAVAILABLE.\",\"The source id is treated as a prevalidated identifier and returns INVALID_SOURCE_ID first.\"],\"observer\":\"The calling flow sees a different refusal code.\"}},{\"subject\":\"30_modules.md:Dependencies — framework refusals\",\"kind\":\"missing_mapping\",\"text\":\"and every refusal is answered by `refusal_answer` of `deliverer_api` (A5 rules 1, 9 and 10).\",\"question\":\"Who catches request-body, path-parameter and form validation failures raised by the web framework and converts each one into `refusal_answer`, rather than allowing the framework's native response?\",\"options\":[\"`deliverer_router` installs explicit framework exception handlers\",\"`http_router_backend` always emits the required handlers\",\"Routes avoid framework validation and call explicit validators themselves\"],\"default_guess\":\"Require the backend-generated router to install handlers that turn all framework validation failures into an INVALID_REQUEST `DelivererError` and then call `refusal_answer`.\",\"witness\":{\"initial\":\"The caller is authenticated but sends malformed JSON for a delivery.\",\"events\":[\"The framework attempts to parse the body.\",\"The generated router handles or does not handle the framework exception.\"],\"outcomes\":[\"The exception is converted to the fixed M08 INVALID_REQUEST answer.\",\"The framework returns its native validation response, which can expose submitted values and has a different body.\"],\"observer\":\"The calling flow sees different response content; the privacy guarantee also differs.\"}},{\"subject\":\"30_modules.md:Dependencies — router backend\",\"kind\":\"unspecified_dependency\",\"text\":\"`deliverer_router` is the module that `http_router_backend` generates, and it holds only what that backend\\nemits.\",\"question\":\"Which concrete backend and backend contract are required, including emitted extractors, validation ordering, exception handlers and synchronous/asynchronous route form?\",\"options\":[\"Select and specify the former `fastapi_sync_v2` backend contract\",\"Define a backend-neutral contract that every permitted `http_router_backend` implementation must satisfy\",\"Let the later generator select any backend and infer the missing behavior\"],\"default_guess\":\"Select `fastapi_sync_v2` and state its emitted authentication-first validation and exception-mapping guarantees.\"},{\"subject\":\"30_modules.md:`deliverer_api` — public exports\",\"kind\":\"public_surface_contradiction\",\"text\":\"| `deliverer_router` | `deliverer_api` | `AuthenticationRejected`, `answer_health`, `check_token`, `parse_project_id`, `refusal_answer` |\",\"question\":\"Are all five symbols exported by `deliverer_api`, despite its Candidate public capabilities listing only `answer_health`, or must the dependency surface and module API be redesigned?\",\"options\":[\"Export all five symbols named by the dependency table\",\"Export only `answer_health` and move the other responsibilities into the router\",\"Expose a smaller facade and replace the five direct imports with it\"],\"default_guess\":\"Export all five symbols because the declared direct dependency surface already requires them.\"},{\"subject\":\"30_modules.md:`deliverer_service` — process outcome\",\"kind\":\"missing_owner\",\"text\":\"| `deliverer_service` | `domain_models` | `DeliveryContext`, `RuntimeSettings`, `ServiceExit` |\",\"question\":\"Which module owns choosing `ServiceExit`, applying `EXIT_STATUSES`, handling `STOP_SIGNALS`, and deciding the exact transition at which the server counts as listening?\",\"options\":[\"`deliverer_service.run_service` owns the complete process-lifecycle decision\",\"The generated web-server backend returns a `ServiceExit` already classified\",\"The backend reports lifecycle events and `deliverer_service` classifies them\"],\"default_guess\":\"Make `deliverer_service.run_service` own classification and exit status, with the backend reporting an explicit startup-complete boundary and shutdown result.\"}]}",
+ "set_aside": []
+}
