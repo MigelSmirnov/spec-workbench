@@ -1,0 +1,245 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 trace-write failure boundary",
+   "kind": "undefined atomicity",
+   "text": "An execution during which the kernel stops because the store refused its record leaves none",
+   "question": "When the trace write is refused, which other kernel changes from that execution—output values, node or run status, approval consumption and scheduling of dependants—are committed, and which are rolled back?",
+   "options": [
+    "The trace and every associated kernel change are one atomic commit; refusal rolls them all back",
+    "Only the trace is absent; some output, status, approval or scheduling records may survive",
+    "The required atomic set differs between function and operation nodes"
+   ],
+   "default_guess": "Commit the trace, output and node-state transition atomically; roll all of them back on refusal, while acknowledging that an external effect cannot be rolled back.",
+   "witness": {
+    "initial": "A node has an approved input and no completed execution recorded.",
+    "events": [
+     "The kernel executes the node and obtains an output.",
+     "The store refuses the trace record.",
+     "The kernel later recovers the run."
+    ],
+    "outcomes": [
+     "No kernel result from the first attempt survives, so recovery treats the node as unexecuted.",
+     "The output or completion state survives without its trace, so recovery can either reuse it or create a second result."
+    ],
+    "observer": "The owner reading the run and its traces"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 output publication ordering",
+   "kind": "unspecified ordering",
+   "text": "leaves none, and recovery executes it again",
+   "question": "Must a trace record be durably accepted before a node's output can be delivered to dependants, or may dependants observe an output from the unrecorded execution?",
+   "options": [
+    "Record the trace before publishing the output or enabling dependants",
+    "Publish the output first and permit dependant work to precede the trace write",
+    "Allow concurrent publication and trace persistence with compensating recovery rules"
+   ],
+   "default_guess": "Do not publish the output or enable dependants until the trace and node completion are durable.",
+   "witness": {
+    "initial": "A function node feeds a dependant, and its implementation can return different outputs because purity is not enforced.",
+    "events": [
+     "The function returns output A.",
+     "Its trace record is refused.",
+     "Recovery executes the function again and it returns output B."
+    ],
+    "outcomes": [
+     "The dependant can have consumed A even though the surviving execution records B.",
+     "A was never published, so the dependant consumes only B."
+    ],
+    "observer": "The owner or a service reached by the dependant"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 recovery action",
+   "kind": "unnamed actor and trigger",
+   "text": "recovery executes it again",
+   "question": "What is recovery, who initiates it, and at what point does it re-execute the node?",
+   "options": [
+    "The kernel automatically recovers and re-executes on process startup",
+    "The owner or an agent invokes resume",
+    "An operator repairs the store and explicitly starts recovery",
+    "The kernel remains stopped until a separate recovery procedure acts"
+   ],
+   "default_guess": "On startup, the kernel reconstructs incomplete runs from durable state, but requires an explicit owner or agent resume before executing work."
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 meaning of kernel stop",
+   "kind": "vague failure state",
+   "text": "the kernel stops because the store refused its record",
+   "question": "Does “stops” mean terminating the process, stopping only that node, pausing the run, or refusing all new work, and what observable failure is returned to the caller?",
+   "options": [
+    "Terminate the entire kernel process",
+    "Pause only the affected run",
+    "Fail only the affected node execution",
+    "Enter a store-fault mode that refuses all work while remaining available"
+   ],
+   "default_guess": "Enter a store-fault mode, return a distinct storage failure to the active caller, and execute no further run work until recovery."
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 repeated trace refusal",
+   "kind": "missing failure policy",
+   "text": "recovery executes it again",
+   "question": "If the store refuses the replacement trace again, how many recovery attempts occur, with what pacing, and what terminal or operator-visible state results?",
+   "options": [
+    "Retry automatically without limit",
+    "Retry a bounded number of times and then leave the run paused",
+    "Never retry automatically; require an explicit resume for every attempt",
+    "Mark the run failed or cancelled after a defined threshold"
+   ],
+   "default_guess": "Make no automatic execution retry; keep the run durably incomplete and require an explicit resume after the store is healthy.",
+   "witness": {
+    "initial": "The store persistently refuses the node's trace record.",
+    "events": [
+     "The node executes and the trace is refused.",
+     "Recovery executes the node again.",
+     "The trace is refused again."
+    ],
+    "outcomes": [
+     "The kernel repeatedly executes and stops without a terminal state.",
+     "The kernel stops retrying and exposes a stable state requiring intervention."
+    ],
+    "observer": "The owner and the installation operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-08 and K-09 unknown external outcome",
+   "kind": "contradiction",
+   "text": "When the kernel cannot tell whether an effect happened, the run rests `pending` with reason `outcome_unknown` and only the owner's resolution moves it; recovery executes it again.",
+   "question": "After an operation may have produced an effect but its trace could not be stored, must recovery re-invoke it, or must the run wait for the owner's applied/not-applied resolution?",
+   "options": [
+    "Always enter `pending/outcome_unknown` and require owner resolution",
+    "Re-invoke automatically during recovery",
+    "Re-invoke only when durable service idempotency proves that doing so cannot repeat the effect"
+   ],
+   "default_guess": "Treat the outcome as unknown and require the owner's resolution before any re-invocation.",
+   "witness": {
+    "initial": "An effectful operation has exact owner approval and has not previously completed.",
+    "events": [
+     "The kernel invokes the service.",
+     "The service applies the effect.",
+     "The store refuses the execution's trace record and the kernel stops.",
+     "The kernel recovers."
+    ],
+    "outcomes": [
+     "K-09 recovery invokes the operation again without an owner resolution.",
+     "K-08 leaves the run pending until the owner resolves the first invocation as applied or not applied."
+    ],
+    "observer": "The owner and the affected external system"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-08 and K-09 approval reuse",
+   "kind": "contradiction",
+   "text": "The kernel supplies the declared idempotency key and never repeats an effect without a fresh approval; recovery executes it again.",
+   "question": "Does recovery re-execution require a fresh approval for an effectful node, and does the answer change for a standing approval?",
+   "options": [
+    "Require a fresh approval for every recovery re-invocation",
+    "Reuse the original exact approval when replaying the same attempt and idempotency key",
+    "Reuse a standing approval but not a one-time approval",
+    "Do not re-invoke until owner resolution determines that no effect was applied"
+   ],
+   "default_guess": "Do not re-invoke until owner resolution; if resolved not applied, require the fresh approval K-08 specifies even when a standing approval exists.",
+   "witness": {
+    "initial": "The owner gave one exact approval for an effectful node.",
+    "events": [
+     "The kernel invokes the operation.",
+     "Its trace record is refused and the kernel stops.",
+     "Recovery reaches the same node."
+    ],
+    "outcomes": [
+     "Recovery treats the original approval as sufficient and invokes again.",
+     "The prohibition on repeating an effect requires a fresh approval before another invocation."
+    ],
+    "observer": "The owner"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 operation replay identity",
+   "kind": "unspecified replay contract",
+   "text": "recovery executes it again",
+   "question": "For an operation node, must recovery use the identical invocation identity—including the same idempotency key, pinned binding, target and exact input—or create a new execution identity?",
+   "options": [
+    "Replay the identical invocation with the same idempotency key and pins",
+    "Create a new invocation and a fresh idempotency key",
+    "Use the same pins and input but a new attempt key linked to the old one"
+   ],
+   "default_guess": "Reconstruct and replay the identical invocation with the same durable idempotency key, pins, target and input.",
+   "witness": {
+    "initial": "An operation accepts an idempotency key and has already applied the first invocation.",
+    "events": [
+     "The service applies the invocation.",
+     "The trace write is refused.",
+     "Recovery invokes the operation again."
+    ],
+    "outcomes": [
+     "The same key makes the service return the original result without applying the effect again.",
+     "A new key makes the service treat recovery as a new effect."
+    ],
+    "observer": "The external service and the owner"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 unreachable-service wait",
+   "kind": "contradiction",
+   "text": "a run pending on an unreachable service continues only when the owner or an agent resumes it; recovery executes it again",
+   "question": "If an execution found its service unreachable and then its trace could not be stored, may recovery retry automatically, or must it reconstruct a pending wait that only resume can continue?",
+   "options": [
+    "Reconstruct `pending` and require owner or agent resume",
+    "Retry the operation automatically as part of recovery",
+    "Retry automatically only if no durable pending state was written"
+   ],
+   "default_guess": "Reconstruct the run as pending and require an explicit owner or agent resume.",
+   "witness": {
+    "initial": "An operation node is ready, but its service is unreachable.",
+    "events": [
+     "The invocation reports that the service is unreachable.",
+     "The store refuses the execution trace and the kernel stops.",
+     "The service becomes reachable before kernel recovery."
+    ],
+    "outcomes": [
+     "Recovery immediately executes the operation.",
+     "The run remains pending until the owner or an agent resumes it."
+    ],
+    "observer": "The owner or agent monitoring the run"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 canonical result after re-execution",
+   "kind": "undefined result selection",
+   "text": "recovery executes it again",
+   "question": "If the recovered execution returns a different output, verdict, failure or resource result from the unrecorded execution, which result is authoritative and must any evidence of the discarded attempt remain observable?",
+   "options": [
+    "Only the recovered execution is authoritative and the first attempt is intentionally invisible",
+    "The first result must be recovered from other durable state and reused",
+    "Both attempts must be represented in a recovery or audit record even though the first has no node trace"
+   ],
+   "default_guess": "Only the recovered execution determines node state, but record a separate durable recovery incident identifying that an earlier untraced attempt occurred.",
+   "witness": {
+    "initial": "A node implementation is not actually pure, which the kernel does not detect.",
+    "events": [
+     "The first execution returns success and output A, but its trace is refused.",
+     "Recovery executes it again and receives failure or output B."
+    ],
+    "outcomes": [
+     "The recovered failure or B becomes the sole authoritative result.",
+     "The first success or A remains authoritative despite having no trace."
+    ],
+    "observer": "The owner reading the run result"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 trace-write failure boundary\",\"kind\":\"undefined atomicity\",\"text\":\"An execution during which the kernel stops because the store refused its record leaves none\",\"question\":\"When the trace write is refused, which other kernel changes from that execution—output values, node or run status, approval consumption and scheduling of dependants—are committed, and which are rolled back?\",\"options\":[\"The trace and every associated kernel change are one atomic commit; refusal rolls them all back\",\"Only the trace is absent; some output, status, approval or scheduling records may survive\",\"The required atomic set differs between function and operation nodes\"],\"default_guess\":\"Commit the trace, output and node-state transition atomically; roll all of them back on refusal, while acknowledging that an external effect cannot be rolled back.\",\"witness\":{\"initial\":\"A node has an approved input and no completed execution recorded.\",\"events\":[\"The kernel executes the node and obtains an output.\",\"The store refuses the trace record.\",\"The kernel later recovers the run.\"],\"outcomes\":[\"No kernel result from the first attempt survives, so recovery treats the node as unexecuted.\",\"The output or completion state survives without its trace, so recovery can either reuse it or create a second result.\"],\"observer\":\"The owner reading the run and its traces\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 output publication ordering\",\"kind\":\"unspecified ordering\",\"text\":\"leaves none, and recovery executes it again\",\"question\":\"Must a trace record be durably accepted before a node's output can be delivered to dependants, or may dependants observe an output from the unrecorded execution?\",\"options\":[\"Record the trace before publishing the output or enabling dependants\",\"Publish the output first and permit dependant work to precede the trace write\",\"Allow concurrent publication and trace persistence with compensating recovery rules\"],\"default_guess\":\"Do not publish the output or enable dependants until the trace and node completion are durable.\",\"witness\":{\"initial\":\"A function node feeds a dependant, and its implementation can return different outputs because purity is not enforced.\",\"events\":[\"The function returns output A.\",\"Its trace record is refused.\",\"Recovery executes the function again and it returns output B.\"],\"outcomes\":[\"The dependant can have consumed A even though the surviving execution records B.\",\"A was never published, so the dependant consumes only B.\"],\"observer\":\"The owner or a service reached by the dependant\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 recovery action\",\"kind\":\"unnamed actor and trigger\",\"text\":\"recovery executes it again\",\"question\":\"What is recovery, who initiates it, and at what point does it re-execute the node?\",\"options\":[\"The kernel automatically recovers and re-executes on process startup\",\"The owner or an agent invokes resume\",\"An operator repairs the store and explicitly starts recovery\",\"The kernel remains stopped until a separate recovery procedure acts\"],\"default_guess\":\"On startup, the kernel reconstructs incomplete runs from durable state, but requires an explicit owner or agent resume before executing work.\"},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 meaning of kernel stop\",\"kind\":\"vague failure state\",\"text\":\"the kernel stops because the store refused its record\",\"question\":\"Does “stops” mean terminating the process, stopping only that node, pausing the run, or refusing all new work, and what observable failure is returned to the caller?\",\"options\":[\"Terminate the entire kernel process\",\"Pause only the affected run\",\"Fail only the affected node execution\",\"Enter a store-fault mode that refuses all work while remaining available\"],\"default_guess\":\"Enter a store-fault mode, return a distinct storage failure to the active caller, and execute no further run work until recovery.\"},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 repeated trace refusal\",\"kind\":\"missing failure policy\",\"text\":\"recovery executes it again\",\"question\":\"If the store refuses the replacement trace again, how many recovery attempts occur, with what pacing, and what terminal or operator-visible state results?\",\"options\":[\"Retry automatically without limit\",\"Retry a bounded number of times and then leave the run paused\",\"Never retry automatically; require an explicit resume for every attempt\",\"Mark the run failed or cancelled after a defined threshold\"],\"default_guess\":\"Make no automatic execution retry; keep the run durably incomplete and require an explicit resume after the store is healthy.\",\"witness\":{\"initial\":\"The store persistently refuses the node's trace record.\",\"events\":[\"The node executes and the trace is refused.\",\"Recovery executes the node again.\",\"The trace is refused again.\"],\"outcomes\":[\"The kernel repeatedly executes and stops without a terminal state.\",\"The kernel stops retrying and exposes a stable state requiring intervention.\"],\"observer\":\"The owner and the installation operator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-08 and K-09 unknown external outcome\",\"kind\":\"contradiction\",\"text\":\"When the kernel cannot tell whether an effect happened, the run rests `pending` with reason `outcome_unknown` and only the owner's resolution moves it; recovery executes it again.\",\"question\":\"After an operation may have produced an effect but its trace could not be stored, must recovery re-invoke it, or must the run wait for the owner's applied/not-applied resolution?\",\"options\":[\"Always enter `pending/outcome_unknown` and require owner resolution\",\"Re-invoke automatically during recovery\",\"Re-invoke only when durable service idempotency proves that doing so cannot repeat the effect\"],\"default_guess\":\"Treat the outcome as unknown and require the owner's resolution before any re-invocation.\",\"witness\":{\"initial\":\"An effectful operation has exact owner approval and has not previously completed.\",\"events\":[\"The kernel invokes the service.\",\"The service applies the effect.\",\"The store refuses the execution's trace record and the kernel stops.\",\"The kernel recovers.\"],\"outcomes\":[\"K-09 recovery invokes the operation again without an owner resolution.\",\"K-08 leaves the run pending until the owner resolves the first invocation as applied or not applied.\"],\"observer\":\"The owner and the affected external system\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-08 and K-09 approval reuse\",\"kind\":\"contradiction\",\"text\":\"The kernel supplies the declared idempotency key and never repeats an effect without a fresh approval; recovery executes it again.\",\"question\":\"Does recovery re-execution require a fresh approval for an effectful node, and does the answer change for a standing approval?\",\"options\":[\"Require a fresh approval for every recovery re-invocation\",\"Reuse the original exact approval when replaying the same attempt and idempotency key\",\"Reuse a standing approval but not a one-time approval\",\"Do not re-invoke until owner resolution determines that no effect was applied\"],\"default_guess\":\"Do not re-invoke until owner resolution; if resolved not applied, require the fresh approval K-08 specifies even when a standing approval exists.\",\"witness\":{\"initial\":\"The owner gave one exact approval for an effectful node.\",\"events\":[\"The kernel invokes the operation.\",\"Its trace record is refused and the kernel stops.\",\"Recovery reaches the same node.\"],\"outcomes\":[\"Recovery treats the original approval as sufficient and invokes again.\",\"The prohibition on repeating an effect requires a fresh approval before another invocation.\"],\"observer\":\"The owner\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 operation replay identity\",\"kind\":\"unspecified replay contract\",\"text\":\"recovery executes it again\",\"question\":\"For an operation node, must recovery use the identical invocation identity—including the same idempotency key, pinned binding, target and exact input—or create a new execution identity?\",\"options\":[\"Replay the identical invocation with the same idempotency key and pins\",\"Create a new invocation and a fresh idempotency key\",\"Use the same pins and input but a new attempt key linked to the old one\"],\"default_guess\":\"Reconstruct and replay the identical invocation with the same durable idempotency key, pins, target and input.\",\"witness\":{\"initial\":\"An operation accepts an idempotency key and has already applied the first invocation.\",\"events\":[\"The service applies the invocation.\",\"The trace write is refused.\",\"Recovery invokes the operation again.\"],\"outcomes\":[\"The same key makes the service return the original result without applying the effect again.\",\"A new key makes the service treat recovery as a new effect.\"],\"observer\":\"The external service and the owner\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 unreachable-service wait\",\"kind\":\"contradiction\",\"text\":\"a run pending on an unreachable service continues only when the owner or an agent resumes it; recovery executes it again\",\"question\":\"If an execution found its service unreachable and then its trace could not be stored, may recovery retry automatically, or must it reconstruct a pending wait that only resume can continue?\",\"options\":[\"Reconstruct `pending` and require owner or agent resume\",\"Retry the operation automatically as part of recovery\",\"Retry automatically only if no durable pending state was written\"],\"default_guess\":\"Reconstruct the run as pending and require an explicit owner or agent resume.\",\"witness\":{\"initial\":\"An operation node is ready, but its service is unreachable.\",\"events\":[\"The invocation reports that the service is unreachable.\",\"The store refuses the execution trace and the kernel stops.\",\"The service becomes reachable before kernel recovery.\"],\"outcomes\":[\"Recovery immediately executes the operation.\",\"The run remains pending until the owner or an agent resumes it.\"],\"observer\":\"The owner or agent monitoring the run\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 canonical result after re-execution\",\"kind\":\"undefined result selection\",\"text\":\"recovery executes it again\",\"question\":\"If the recovered execution returns a different output, verdict, failure or resource result from the unrecorded execution, which result is authoritative and must any evidence of the discarded attempt remain observable?\",\"options\":[\"Only the recovered execution is authoritative and the first attempt is intentionally invisible\",\"The first result must be recovered from other durable state and reused\",\"Both attempts must be represented in a recovery or audit record even though the first has no node trace\"],\"default_guess\":\"Only the recovered execution determines node state, but record a separate durable recovery incident identifying that an earlier untraced attempt occurred.\",\"witness\":{\"initial\":\"A node implementation is not actually pure, which the kernel does not detect.\",\"events\":[\"The first execution returns success and output A, but its trace is refused.\",\"Recovery executes it again and receives failure or output B.\"],\"outcomes\":[\"The recovered failure or B becomes the sole authoritative result.\",\"The first success or A remains authoritative despite having no trace.\"],\"observer\":\"The owner reading the run result\"}}]}",
+ "set_aside": []
+}
