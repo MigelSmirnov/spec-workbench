@@ -2075,6 +2075,42 @@ why.
       from the emitted models by the same rule on its own and compares it with
       the answer, so a model changed without the script fails that witness.
 
+## Decision closed for the runner channel's typed seam (2026-11-21)
+
+59. **The runner channel is read through one typed internal function.**
+    Decision 50 made the contract-only transport models the sole source of
+    the channel's shape, but named them only in notes: `read_runner_report`
+    took `message: bytes` and returned `RunnerReport`, so the typed protocol
+    between the two sides stood behind `bytes`, the uncertainty State 6
+    forbids. The State 1 → State 6 model-closure transition (Workbench #147)
+    found it: `RunnerWireMessage`, `RunnerWireOutput` and their eight
+    variants were introduced by no contract. The owner decided on 2026-11-21
+    that what crosses the sandbox boundary must be readable from the
+    signatures alone, transparent and unambiguous, rather than reconstructed
+    from prose.
+    - *The seam.* The internal function
+      `read_runner_messages(message: bytes) -> tuple[RunnerWireMessage, ...]`
+      of `sandbox_runner` owns everything decision 50 says about accepting a
+      message: line framing, UTF-8, strict JSON validation against the union,
+      base64 validity of the file variants, the second returned message and
+      the incomplete final line. It returns the messages accepted before the
+      first invalid line and never raises for channel content.
+    - *What stays with `read_runner_report`.* Its public signature and its
+      `RunnerReport` are unchanged. It projects the accepted messages: trap
+      order, resource hit, crashed flag and failure, the returned result, and
+      the base64 decoding into `ReturnedOutput`, which cannot fail on text the
+      seam has already validated.
+    - *What does not change.* Decision 50 in full (the models, the codec,
+      the framing, the failure semantics, Pydantic only in the kernel),
+      decision 32's ownership, A03 and A20, and the 70 public operations. The
+      writing side stays the program text `runner_source` returns: a string
+      run by another interpreter cannot be typed by a signature, so its notes
+      keep naming the same models, still the one source for both sides.
+    - *Closure.* `RunnerWireMessage` in a signature introduces its four
+      message variants; `RunnerReturnedMessage.outputs` introduces
+      `RunnerWireOutput` and its four output variants. The imports of both
+      runner scopes are decided again (`65_imports.json`).
+
 ## Texts of earlier states changed by State 6
 
 - State 4 (2026-10-22, decision 45 completed): the reviewed flows
