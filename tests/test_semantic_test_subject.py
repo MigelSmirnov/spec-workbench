@@ -7,7 +7,7 @@ import pytest
 
 import export_to_factory
 from factory_admission_workbench.model import CHECK_BLOCK, CHECK_PASS
-from factory_admission_workbench.service import _semantic_check
+from factory_admission_workbench.service import semantic_check
 
 
 DECISION = """# State 2
@@ -54,7 +54,7 @@ def test_flow_and_decision_subjects_export_and_carry_into_handoff(tmp_path: Path
 
     subjects = [{k: v for k, v in f.items() if k in ("flow_id", "decision_id")} for f in handoff["files"]]
     assert subjects == [{"flow_id": "flow:accept_upload"}, {"decision_id": "A05"}]
-    assert _semantic_check(case).status == CHECK_PASS
+    assert semantic_check(case).status == CHECK_PASS
 
 
 @pytest.mark.parametrize(
@@ -78,6 +78,6 @@ def test_entry_without_exactly_one_existing_subject_is_refused_by_export_and_adm
     with pytest.raises(SystemExit, match=reason):
         export_to_factory.semantic_export_plan(case / "global_spec.json", "case")
 
-    admission = _semantic_check(case)
+    admission = semantic_check(case)
     assert admission.status == CHECK_BLOCK
     assert any(reason in error for error in admission.evidence["errors"])

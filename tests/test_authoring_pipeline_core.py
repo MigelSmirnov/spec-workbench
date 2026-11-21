@@ -34,6 +34,7 @@ def test_machine_sequence_covers_promoted_state0_through_state5_tools():
         "deterministic_backend_binding",
         "state7_notes",
         "decision_witness_resolution",
+        "stage7_1_semantic_handoff",
         "imports_closure",
         "state8_assembly",
         "stage8_1_module_review",
@@ -205,3 +206,29 @@ def test_an_unreadable_case_blocks_the_imports_phase(tmp_path: Path, monkeypatch
     monkeypatch.setattr(design_authoring_next.imports_closure, "coverage", refuse)
     step = design_authoring_next._imports_step(design_authoring_next.load_sequence(), tmp_path, "x")
     assert step["blocked"] is True and "cannot read the case" in step["reason"]
+
+
+def _semantic_manifest(case: Path, status: str) -> None:
+    (case / "tests" / "semantic").mkdir(parents=True)
+    (case / "tests" / "semantic" / "test_a1.py").write_text("def test_a1():\n    pass\n", encoding="utf-8")
+    (case / "71_semantic_test_export.json").write_text(json.dumps({
+        "schema_version": "spec_workbench_semantic_test_export.v1",
+        "status": status,
+        "flows": [{"decision_id": "A1", "path": "tests/semantic/test_a1.py"}],
+    }), encoding="utf-8")
+
+
+def test_semantic_handoff_stands_between_witnesses_and_imports(tmp_path: Path, monkeypatch):
+    sequence = design_authoring_next.load_sequence()
+    assert design_authoring_next._semantic_handoff_step(sequence, tmp_path, "x") is None  # no manifest: not declared
+
+    _semantic_manifest(tmp_path, "authored_unbound")
+    step = design_authoring_next._semantic_handoff_step(sequence, tmp_path, "examples/case")
+    assert step["phase"] == "stage7_1_semantic_handoff" and step["blocked"] is True
+    assert step["action"]["tool"] == "tools/design_semantic_handoff.py"
+    assert "status is not semantic_closed" in [finding["message"] for finding in step["findings"]]
+
+    monkeypatch.setattr(design_authoring_next.design_semantic_handoff, "coverage",
+                        lambda project: {"manifest": "m", "summary": {"handoff_ready": True}, "findings": []})
+    assert design_authoring_next._semantic_handoff_step(sequence, tmp_path, "x") is None
+
