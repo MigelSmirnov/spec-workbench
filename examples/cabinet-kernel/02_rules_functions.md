@@ -254,7 +254,7 @@ A03-1: function_executed -> inside(fresh_bubblewrap_environment)
 
 A03-2: network(environment) = own_loopback_only AND env_vars(environment) = {PYTHONHASHSEED=0}
 
-A03-3: trap_raised -> outcome = sandbox_violation   (even if output conforms)
+A03-3: trap_raised AND NOT (timeout OR resource_exhausted) -> outcome = sandbox_violation   (even if output conforms)
 
 A03-4: outcome = first_of(timeout, resource_exhausted, sandbox_violation, crashed,
                           contract_violation, succeeded)
