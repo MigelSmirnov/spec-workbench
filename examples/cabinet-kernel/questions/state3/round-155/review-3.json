@@ -1,0 +1,85 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "startup probe execution after unconfirmed cleanup",
+   "kind": "missing record owner",
+   "text": "The module that called\n  `sandbox.execute_function` writes the execution's record in its usual store\n  call — `runs` the NodeExecution, `functions` the TrialExecution — then does\n  nothing more in that request",
+   "question": "When cleanup is unconfirmed during `sandbox.probe_sandbox`, which module writes the execution record required by A03 rule 7, and what record type does it write, given that neither `runs` nor `functions` called the execution?",
+   "options": [
+    "`sandbox` writes a separately defined durable probe-execution record before start stops",
+    "`surface` writes a separately defined durable startup record",
+    "Probe executions are not persisted, and the text must explicitly exempt them from the recording requirement"
+   ],
+   "default_guess": "Treat a probe cleanup failure as a start refusal with no persisted execution record and explicitly exempt probe executions.",
+   "witness": {
+    "initial": "The store is open and startup is running `sandbox.probe_sandbox`; the probe finishes with cleanup unconfirmed.",
+    "events": [
+     "`sandbox` reports `crashed` with `cleanup_failed`.",
+     "`surface` stops startup."
+    ],
+    "outcomes": [
+     "A durable crashed probe-execution record exists before the process stops.",
+     "No execution record exists because there is no NodeExecution or TrialExecution owner for the probe."
+    ],
+    "observer": "The owner inspecting the store after a later successful start"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "recording an unconfirmed-cleanup outcome when the store write fails",
+   "kind": "contradictory failure ordering",
+   "text": "the record comes first, so that\n  start-up recovery finds the element concluded and never executes it again.",
+   "question": "What must happen if the store call that should record `crashed` with `cleanup_failed` fails: must the kernel keep trying until the record is durable, stop without it and permit recovery to execute the element again, or use another durable mechanism?",
+   "options": [
+    "Stop immediately despite the missing record; recovery may execute the element again",
+    "Retry or otherwise make the conclusion durable before stopping",
+    "Persist a separate recovery barrier that prevents re-execution"
+   ],
+   "default_guess": "Stop immediately on the store failure and allow ordinary recovery to re-execute the unrecorded function, while removing the unconditional claim that it is never executed again.",
+   "witness": {
+    "initial": "A function execution has unconfirmed cleanup, and the next store change is forced to fail.",
+    "events": [
+     "`runs` attempts to write the concluding NodeExecution.",
+     "The store returns failure.",
+     "`surface` handles the resulting internal error and stops the process.",
+     "The kernel starts again and recovers the still-running run."
+    ],
+    "outcomes": [
+     "The conclusion is made durable before shutdown, so recovery never executes the element again.",
+     "The process stops without the conclusion, so recovery executes the element again."
+    ],
+    "observer": "The owner reading the trace and any observer of the repeated execution"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "SandboxResult and propagation of the mandatory process stop",
+   "kind": "unowned cross-module contract",
+   "text": "`sandbox` reports that outcome with `SandboxResult.stop_required` true and stops nothing.",
+   "question": "Which module owns and defines `SandboxResult`, and through what explicit return contracts do `functions` and `runs` propagate `stop_required` to `surface` after recording the execution, without treating an ordinary `crashed` execution as a process-stop request?",
+   "options": [
+    "Define `SandboxResult` in `models` and add an explicit stop flag to the internal results returned through `functions` and `runs`",
+    "Let `sandbox` own the result type and require callers to propagate that same typed result",
+    "Raise a dedicated control-flow exception after the record is written"
+   ],
+   "default_guess": "Define the shared result in `models` and propagate an explicit `stop_required` flag through the caller result to `surface`.",
+   "witness": {
+    "initial": "A run's function concludes `crashed`; in one history cleanup is confirmed and in another it is unconfirmed.",
+    "events": [
+     "`sandbox` returns the execution result to `runs`.",
+     "`runs` writes the NodeExecution.",
+     "Control returns toward `surface`."
+    ],
+    "outcomes": [
+     "The unconfirmed-cleanup history propagates the stop signal, performs no further run work, returns `internal_error`, and terminates the process; the ordinary crash continues normal run derivation.",
+     "Both histories use the ordinary crashed-result contract, so either both stop or neither stops."
+    ],
+    "observer": "The requester and the owner reading subsequent NodeExecutions"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"startup probe execution after unconfirmed cleanup\",\"kind\":\"missing record owner\",\"text\":\"The module that called\\n  `sandbox.execute_function` writes the execution's record in its usual store\\n  call — `runs` the NodeExecution, `functions` the TrialExecution — then does\\n  nothing more in that request\",\"question\":\"When cleanup is unconfirmed during `sandbox.probe_sandbox`, which module writes the execution record required by A03 rule 7, and what record type does it write, given that neither `runs` nor `functions` called the execution?\",\"options\":[\"`sandbox` writes a separately defined durable probe-execution record before start stops\",\"`surface` writes a separately defined durable startup record\",\"Probe executions are not persisted, and the text must explicitly exempt them from the recording requirement\"],\"default_guess\":\"Treat a probe cleanup failure as a start refusal with no persisted execution record and explicitly exempt probe executions.\",\"witness\":{\"initial\":\"The store is open and startup is running `sandbox.probe_sandbox`; the probe finishes with cleanup unconfirmed.\",\"events\":[\"`sandbox` reports `crashed` with `cleanup_failed`.\",\"`surface` stops startup.\"],\"outcomes\":[\"A durable crashed probe-execution record exists before the process stops.\",\"No execution record exists because there is no NodeExecution or TrialExecution owner for the probe.\"],\"observer\":\"The owner inspecting the store after a later successful start\"}},{\"unit\":\"context\",\"subject\":\"recording an unconfirmed-cleanup outcome when the store write fails\",\"kind\":\"contradictory failure ordering\",\"text\":\"the record comes first, so that\\n  start-up recovery finds the element concluded and never executes it again.\",\"question\":\"What must happen if the store call that should record `crashed` with `cleanup_failed` fails: must the kernel keep trying until the record is durable, stop without it and permit recovery to execute the element again, or use another durable mechanism?\",\"options\":[\"Stop immediately despite the missing record; recovery may execute the element again\",\"Retry or otherwise make the conclusion durable before stopping\",\"Persist a separate recovery barrier that prevents re-execution\"],\"default_guess\":\"Stop immediately on the store failure and allow ordinary recovery to re-execute the unrecorded function, while removing the unconditional claim that it is never executed again.\",\"witness\":{\"initial\":\"A function execution has unconfirmed cleanup, and the next store change is forced to fail.\",\"events\":[\"`runs` attempts to write the concluding NodeExecution.\",\"The store returns failure.\",\"`surface` handles the resulting internal error and stops the process.\",\"The kernel starts again and recovers the still-running run.\"],\"outcomes\":[\"The conclusion is made durable before shutdown, so recovery never executes the element again.\",\"The process stops without the conclusion, so recovery executes the element again.\"],\"observer\":\"The owner reading the trace and any observer of the repeated execution\"}},{\"unit\":\"context\",\"subject\":\"SandboxResult and propagation of the mandatory process stop\",\"kind\":\"unowned cross-module contract\",\"text\":\"`sandbox` reports that outcome with `SandboxResult.stop_required` true and stops nothing.\",\"question\":\"Which module owns and defines `SandboxResult`, and through what explicit return contracts do `functions` and `runs` propagate `stop_required` to `surface` after recording the execution, without treating an ordinary `crashed` execution as a process-stop request?\",\"options\":[\"Define `SandboxResult` in `models` and add an explicit stop flag to the internal results returned through `functions` and `runs`\",\"Let `sandbox` own the result type and require callers to propagate that same typed result\",\"Raise a dedicated control-flow exception after the record is written\"],\"default_guess\":\"Define the shared result in `models` and propagate an explicit `stop_required` flag through the caller result to `surface`.\",\"witness\":{\"initial\":\"A run's function concludes `crashed`; in one history cleanup is confirmed and in another it is unconfirmed.\",\"events\":[\"`sandbox` returns the execution result to `runs`.\",\"`runs` writes the NodeExecution.\",\"Control returns toward `surface`.\"],\"outcomes\":[\"The unconfirmed-cleanup history propagates the stop signal, performs no further run work, returns `internal_error`, and terminates the process; the ordinary crash continues normal run derivation.\",\"Both histories use the ordinary crashed-result contract, so either both stop or neither stops.\"],\"observer\":\"The requester and the owner reading subsequent NodeExecutions\"}}]}",
+ "set_aside": []
+}

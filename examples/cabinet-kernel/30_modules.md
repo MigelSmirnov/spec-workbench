@@ -295,7 +295,10 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   the first request (A03 rule 8, A14 rule 5, A18 rule 4).
 - **Unconfirmed cleanup.** A03 rule 7 records the execution `crashed` with
   `cleanup_failed` and then stops the kernel; the record comes first, so that
-  start-up recovery finds the element concluded and never executes it again.
+  start-up recovery finds the element concluded and does not execute it again.
+  If that record cannot be stored, the element has no concluded record and
+  recovery executes it again, which A14 rule 5 makes safe for a function
+  element: it has no effect.
   `sandbox` reports that outcome with `SandboxResult.stop_required` true and stops nothing. The module that called
   `sandbox.execute_function` writes the execution's record in its usual store
   call — `runs` the NodeExecution, `functions` the TrialExecution — then does

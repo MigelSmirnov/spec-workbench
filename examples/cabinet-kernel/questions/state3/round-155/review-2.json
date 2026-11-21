@@ -1,0 +1,84 @@
+{
+ "open_points": [
+  {
+   "subject": "probe execution with unconfirmed cleanup",
+   "kind": "contradictory record ownership",
+   "text": "A03 rule 7 records the execution `crashed` with `cleanup_failed` and then stops the kernel; the record comes first, so that start-up recovery finds the element concluded and never executes it again. `sandbox` reports that outcome with `SandboxResult.stop_required` true and stops nothing. The module that called `sandbox.execute_function` writes the execution's record in its usual store call — `runs` the NodeExecution, `functions` the TrialExecution — then does nothing more in that request: no further element, no further case, no verdict, no activation, no run status.",
+   "question": "When `sandbox.probe_sandbox` cannot confirm cleanup during start, which module writes which execution record before the start stops, given that neither `runs` nor `functions` called the probe and the probe has no named NodeExecution or TrialExecution?",
+   "options": [
+    "The probe writes no persistent execution record and the start simply fails",
+    "`sandbox` writes a separate probe-execution record",
+    "`surface` writes a crashed execution record",
+    "The probe is represented as a TrialExecution or NodeExecution through `functions` or `runs`"
+   ],
+   "default_guess": "The probe writes no persistent execution record; `surface` stops the start after receiving the failed probe result.",
+   "witness": {
+    "initial": "The store is open and `surface.serve_kernel` is performing the required start probe.",
+    "events": [
+     "`surface` calls `sandbox.probe_sandbox`.",
+     "The probe completes but removal of its exchange directory cannot be confirmed."
+    ],
+    "outcomes": [
+     "The start stops with no execution record because the probe belongs to no run, trial case or implementation.",
+     "A `crashed`/`cleanup_failed` record must be written before stopping, but an implementer must invent its record type and writer."
+    ],
+    "observer": "The owner inspecting the store and the next start's recovery logic"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "unconfirmed cleanup combined with failure to record it",
+   "kind": "contradictory failure handling",
+   "text": "the record comes first, so that start-up recovery finds the element concluded and never executes it again.",
+   "question": "What must happen if the store call that should record `crashed` with `cleanup_failed` itself fails, so the required record cannot come first?",
+   "options": [
+    "Stop after answering `internal_error`, leaving no conclusion record and allowing recovery to execute the element again",
+    "Retry or block until the conclusion record is durable, then stop",
+    "Keep the kernel running because stopping would violate the record-first guarantee"
+   ],
+   "default_guess": "Answer `internal_error` if possible and stop even without the record; recovery may execute the element again.",
+   "witness": {
+    "initial": "A function element is executing in a run and its cleanup becomes unconfirmed.",
+    "events": [
+     "`runs` attempts to write the required `NodeExecution` with status `crashed` and detail `cleanup_failed`.",
+     "The store call fails and, under A18, writes no record.",
+     "`surface` handles both the store failure and the unconfirmed cleanup."
+    ],
+    "outcomes": [
+     "The kernel stops without the record; on restart recovery sees the element unconcluded and executes it again.",
+     "The kernel retries or delays termination until the record is durable; recovery never executes the element again."
+    ],
+    "observer": "The owner reading the trace and any caller observing the recovered run"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "termination after an unconfirmed-cleanup response cannot be delivered",
+   "kind": "vague stop boundary",
+   "text": "It returns the stop to its caller, and `surface` ends the process: during a request after answering it as an internal error (A16 rule 7), during the start by stopping the start.",
+   "question": "Does `surface` end the process after one attempt to send the `internal_error`, only after confirmed delivery, or by some other boundary when the client disconnects or response transmission fails?",
+   "options": [
+    "Terminate after the response send is attempted, whether or not delivery succeeds",
+    "Terminate only after response delivery is confirmed",
+    "Treat response transmission failure as another internal error and apply a separately defined shutdown rule"
+   ],
+   "default_guess": "Terminate immediately after one response-send attempt, without requiring delivery confirmation.",
+   "witness": {
+    "initial": "The execution record for `cleanup_failed` is durable and the request's client connection is still open.",
+    "events": [
+     "The caller propagates the stop to `surface`.",
+     "The client disconnects while `surface` is sending the `internal_error` response."
+    ],
+    "outcomes": [
+     "`surface` treats the send attempt as answering and terminates the kernel.",
+     "`surface` waits for confirmed delivery or remains alive because the response was not answered."
+    ],
+    "observer": "A subsequent client and the owner monitoring whether the kernel restarts"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"probe execution with unconfirmed cleanup\",\"kind\":\"contradictory record ownership\",\"text\":\"A03 rule 7 records the execution `crashed` with `cleanup_failed` and then stops the kernel; the record comes first, so that start-up recovery finds the element concluded and never executes it again. `sandbox` reports that outcome with `SandboxResult.stop_required` true and stops nothing. The module that called `sandbox.execute_function` writes the execution's record in its usual store call — `runs` the NodeExecution, `functions` the TrialExecution — then does nothing more in that request: no further element, no further case, no verdict, no activation, no run status.\",\"question\":\"When `sandbox.probe_sandbox` cannot confirm cleanup during start, which module writes which execution record before the start stops, given that neither `runs` nor `functions` called the probe and the probe has no named NodeExecution or TrialExecution?\",\"options\":[\"The probe writes no persistent execution record and the start simply fails\",\"`sandbox` writes a separate probe-execution record\",\"`surface` writes a crashed execution record\",\"The probe is represented as a TrialExecution or NodeExecution through `functions` or `runs`\"],\"default_guess\":\"The probe writes no persistent execution record; `surface` stops the start after receiving the failed probe result.\",\"witness\":{\"initial\":\"The store is open and `surface.serve_kernel` is performing the required start probe.\",\"events\":[\"`surface` calls `sandbox.probe_sandbox`.\",\"The probe completes but removal of its exchange directory cannot be confirmed.\"],\"outcomes\":[\"The start stops with no execution record because the probe belongs to no run, trial case or implementation.\",\"A `crashed`/`cleanup_failed` record must be written before stopping, but an implementer must invent its record type and writer.\"],\"observer\":\"The owner inspecting the store and the next start's recovery logic\"}},{\"subject\":\"unconfirmed cleanup combined with failure to record it\",\"kind\":\"contradictory failure handling\",\"text\":\"the record comes first, so that start-up recovery finds the element concluded and never executes it again.\",\"question\":\"What must happen if the store call that should record `crashed` with `cleanup_failed` itself fails, so the required record cannot come first?\",\"options\":[\"Stop after answering `internal_error`, leaving no conclusion record and allowing recovery to execute the element again\",\"Retry or block until the conclusion record is durable, then stop\",\"Keep the kernel running because stopping would violate the record-first guarantee\"],\"default_guess\":\"Answer `internal_error` if possible and stop even without the record; recovery may execute the element again.\",\"witness\":{\"initial\":\"A function element is executing in a run and its cleanup becomes unconfirmed.\",\"events\":[\"`runs` attempts to write the required `NodeExecution` with status `crashed` and detail `cleanup_failed`.\",\"The store call fails and, under A18, writes no record.\",\"`surface` handles both the store failure and the unconfirmed cleanup.\"],\"outcomes\":[\"The kernel stops without the record; on restart recovery sees the element unconcluded and executes it again.\",\"The kernel retries or delays termination until the record is durable; recovery never executes the element again.\"],\"observer\":\"The owner reading the trace and any caller observing the recovered run\"}},{\"subject\":\"termination after an unconfirmed-cleanup response cannot be delivered\",\"kind\":\"vague stop boundary\",\"text\":\"It returns the stop to its caller, and `surface` ends the process: during a request after answering it as an internal error (A16 rule 7), during the start by stopping the start.\",\"question\":\"Does `surface` end the process after one attempt to send the `internal_error`, only after confirmed delivery, or by some other boundary when the client disconnects or response transmission fails?\",\"options\":[\"Terminate after the response send is attempted, whether or not delivery succeeds\",\"Terminate only after response delivery is confirmed\",\"Treat response transmission failure as another internal error and apply a separately defined shutdown rule\"],\"default_guess\":\"Terminate immediately after one response-send attempt, without requiring delivery confirmation.\",\"witness\":{\"initial\":\"The execution record for `cleanup_failed` is durable and the request's client connection is still open.\",\"events\":[\"The caller propagates the stop to `surface`.\",\"The client disconnects while `surface` is sending the `internal_error` response.\"],\"outcomes\":[\"`surface` treats the send attempt as answering and terminates the kernel.\",\"`surface` waits for confirmed delivery or remains alive because the response was not answered.\"],\"observer\":\"A subsequent client and the owner monitoring whether the kernel restarts\"}}]}",
+ "set_aside": []
+}
