@@ -1,17 +1,20 @@
 # Portal Deliverer witness binding
 
-These 19 tests are authored against the accepted A1–A9 and A11 decisions of
-`02_rules.md`, adapted from Factory `prototypes/portal_deliverer/test_deliverer.py`.
-They do not import that prototype or implement delivery logic. State 2 decisions
-are unchanged. A10 is witnessed separately by the Workbench security gate.
+These 19 semantic scenarios derive from the formal invariants and Required tests
+of accepted decisions A1–A9 and A11 in `02_rules.md`. Their semantic oracle is
+State 2. A10 is witnessed separately by the Workbench security gate.
+The per-decision review and State 4 behavior graphs are in
+`review/SEMANTIC_HANDOFF.md`. The test names preserve the accepted witness IDs;
+a name does not broaden the invariant a test is allowed to assert.
 
 ## Status
 
-Authored, collected, not executed against a generated service. No fixture is
-shipped here: Factory owns `semantic_runtime`, as in cabinet-kernel. Missing
-bindings must fail, never skip or return canned domain answers. The export
-manifest deliberately remains `authored_unbound`, not `semantic_closed`.
-Do not export until review and real runtime binding are complete.
+Stage 7.1 semantic scenario review is recorded separately from runtime execution.
+No fixture is shipped here: Factory owns `semantic_runtime`, as in cabinet-kernel.
+Missing bindings must fail, never skip or return canned domain answers.
+`semantic_closed` denotes the pre-code semantic handoff described by Stage 7.1,
+not a successful generated-service execution. `factory_execution_verified` stays
+false. Factory admission is checked separately and may still block export.
 
 A9 needs the actual deployment route (not built yet according to A9).
 A11 needs the actual calling flow and a Portal test instance. Those tests specify
@@ -48,16 +51,20 @@ Installation and observation capabilities:
   bytes, modes and nanosecond mtimes. It excludes project lock entries only;
   reads never create records. Compare snapshots directly without normalization
   that could hide changes.
-- `trace_source_opens()` is a context manager returning a list of attempted
-  source file opens (including symlink target reads), observed at the OS boundary.
-  Opening trusted traversal directories is excluded; opening a directory past
-  a rejected name segment must be included.
+- `trace_source_opens()` records every OS-level open during the delivery.
+  Its `forbidden_opens(name)` selects opens of the rejected named file, a link
+  target, or a folder beyond the first invalid segment. Valid traversal of a
+  prefix and unrelated connections/state reads are permitted (INV-02). The
+  selector uses recorded paths, not service internals or a claimed pass result.
 - `read_binary(file_ref)` reads the actual stored bytes; `binary_count()` counts
   stored JPEG objects. Neither operation prepares or repairs objects.
 - `record_bytes(kind, project_id, source_id)`, `write_record_bytes(...)`,
   `read_record(...)`, `record_count(...)` access actual ledger/published entries.
   Writing bytes is fault preparation only; it bypasses service validation.
 - `connection.set_confirmed(bool)` rewrites the installation connection file.
+  `connection.add_confirmed(project_id)` adds another isolated confirmed project.
+- `fail_next_placement_write()` injects one storage write failure and restores
+  normal storage on exit; it never synthesizes an operation result.
 - `clock.set(naive_utc_iso)`, `clock.reset_reads()`, `clock.reads` bind and observe
   the service clock. They must count all service reads, including HTTP handlers.
 - `bind_constant(name, value)` changes the generated data-provider constant
@@ -74,15 +81,20 @@ Installation and observation capabilities:
 - `portal.publish(project_id, publication)` returns the real Portal photo id;
   `portal.client_photo_ids(project_id)` observes its client-facing photo list;
   `portal.set_visible(project_id, photo_id, bool)` calls the staff operation.
+  `portal.download_staff_photo(project_id, photo_id)` returns the bytes of the
+  real Portal download, for the metadata invariant.
+  `portal.trace_publish_calls()` records actual publication attempts.
 - `portal.replace_staff_photo_dates(project_id, dates)` seeds an isolated Portal
   store, including legacy offset dates, without modifying production data.
 - `deployment.check(osv_outcome)` runs the actual deployment admission route
   without deploying; only the OSV source is controlled. `vulnerable` supplies
   an advisory matching an installed distribution, `unavailable` makes the scan
-  fail, and `clean` supplies a fresh empty snapshot. Returns `allowed` and
-  `deployment_started`; the latter must always be false in this check mode.
+  fail. Returns admission `allowed`; the witness requires refusal for both
+  outcomes, without inferring approval from a clean dependency check.
 - `calling_flow.deliver(project_id)` runs the real caller from its date preflight
-  through scan/delivery/Portal publication/mark, returns `allowed`.
+  through its normal work. It exposes the observed `preflight_passed` decision
+  and `repair_project_id` from its owner-facing report. Passing preflight does
+  not imply any particular photo was selected or published.
   `trace_delivery_calls()` observes actual deliverer invocation by that caller.
 
 ## Verification
