@@ -1076,3 +1076,13 @@ bytes under the value's digest; with both patched, 231 of 232 kernel tests passe
 read `required_headers` as a list. These are measurements of that generated code, not of code
 generated from these notes, which this review has not seen. Structural review: 0 blocks. All 19
 modules remain PASS.
+
+### Round 150 repairs (2026-11-21)
+
+Round 150 found two standard violations in the `store` note and a gap in the `bindings` note.
+`record_change`'s StoredValue note is back to its accepted text; a separate path-policy note says
+`record_change` publishes, rewrites and re-checks no bytes and writes only records — every scope
+that writes StoredValues already publishes their bytes with `put_value_bytes` in its own notes.
+`read_service_record` now projects an empty `required_headers` object to the empty tuple and an
+absent member to None. The `store` and `bindings` packets moved by these notes; the others only by
+global note indices. Structural review: 0 blocks. All 19 modules remain PASS.
