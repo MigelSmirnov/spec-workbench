@@ -1,0 +1,113 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 operation-node trace failure",
+   "kind": "missing behavior",
+   "text": "A function execution during which the kernel stops because the store refused its record leaves none",
+   "question": "What happens when the store refuses the trace record for an operation-node execution, especially after the service may have applied the operation?",
+   "options": [
+    "Do not invoke until a durable trace record can be established",
+    "If invocation may have occurred, rest pending with outcome_unknown for owner resolution",
+    "Treat the node as unexecuted and invoke it again under the normal approval rules",
+    "Fail the run without attempting to determine whether the operation occurred"
+   ],
+   "default_guess": "If the operation may have been invoked, put the run in pending with outcome_unknown and require owner resolution; never repeat it merely because its trace record was refused.",
+   "witness": {
+    "initial": "An approved external-effect node is ready, and its service is reachable.",
+    "events": [
+     "The kernel invokes the service and the service applies the effect.",
+     "The store refuses the node's trace record.",
+     "Recovery examines the run."
+    ],
+    "outcomes": [
+     "Recovery treats the missing record as no execution and invokes the operation again, duplicating the effect.",
+     "Recovery treats the outcome as unknown and waits for the owner's resolution without invoking again."
+    ],
+    "observer": "The owner and the external system receiving the effect"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 function re-execution effect",
+   "kind": "vague guarantee",
+   "text": "recovery executes the function again: it has no effect",
+   "question": "What exactly does “it has no effect” mean: no external service effect, no durable kernel-state change, no observable output from the abandoned attempt, or no difference between the abandoned execution and its retry?",
+   "options": [
+    "Only external side effects are excluded",
+    "The abandoned execution is completely unobservable and commits no kernel state or output",
+    "The retry is guaranteed to produce the same output",
+    "Only the function's resource consumption may differ"
+   ],
+   "default_guess": "The abandoned execution commits no kernel state, exposes no output, and causes no external effect; resource consumption may occur, and output equality is guaranteed only for implementations that actually depend solely on their inputs.",
+   "witness": {
+    "initial": "A function finishes computing an output, but its trace record is refused.",
+    "events": [
+     "The failed attempt consumes resources and produces an output in memory.",
+     "Recovery executes the function again."
+    ],
+    "outcomes": [
+     "“No effect” means only no external side effect, so the first output may already have been exposed internally.",
+     "“No effect” means the entire attempt was uncommitted, so only the retry's output may become observable."
+    ],
+    "observer": "A downstream node and the trace reader"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 trace commit and output publication",
+   "kind": "unspecified ordering",
+   "text": "input and output by digest, verdicts, status, failure, resources, time. A function execution during which the kernel stops because the store refused its record leaves none",
+   "question": "Must the function's output and node completion remain invisible until its immutable trace record is durably written, or may output be delivered to dependants before the trace write succeeds?",
+   "options": [
+    "Commit the trace before publishing the output or scheduling dependants",
+    "Publish the output first and compensate or rerun if the trace write fails",
+    "Atomically commit the trace, output value, and runnable dependant state"
+   ],
+   "default_guess": "Atomically commit the trace, bounded output value, and dependant readiness before making the result observable.",
+   "witness": {
+    "initial": "A function node has a dependant and has computed a valid output.",
+    "events": [
+     "The kernel makes the output available to the dependant.",
+     "The dependant executes.",
+     "The store then refuses the producer's trace record.",
+     "Recovery executes the producer again."
+    ],
+    "outcomes": [
+     "The dependant retains the first output while the recovered producer may yield another output.",
+     "No dependant can execute until the producer's trace and output are durably committed, so only the recovered result is visible."
+    ],
+    "observer": "The dependant, the owner reading results, and a trace auditor"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-02 and K-09 retry determinism",
+   "kind": "contradictory implication",
+   "text": "code written to get time or chance some other way is not detected and is judged by its outputs like any other; recovery executes the function again: it has no effect",
+   "question": "When an admitted function is actually nondeterministic, does a trace-store refusal permit recovery to produce and accept a different output, or must recovery detect or prevent that difference for the claim that the abandoned execution “has no effect” to hold?",
+   "options": [
+    "Accept the retry's output and discard the unrecorded output",
+    "Compare the retry with a retained digest of the first output and fail on a mismatch",
+    "Guarantee isolation prevents the first output from being observed, so differing discarded and retry outputs are allowed",
+    "Reject or quarantine implementations once nondeterminism is observed"
+   ],
+   "default_guess": "Discard the unrecorded output and accept the retry's output only if the first attempt was never observable; otherwise fail rather than allow two outputs for the same node execution.",
+   "witness": {
+    "initial": "An admitted function obtains chance through an undetected mechanism and has a downstream node.",
+    "events": [
+     "The first execution produces output A, but the store refuses its trace record.",
+     "Recovery executes the same function with the same declared input and it produces output B."
+    ],
+    "outcomes": [
+     "Output A was never published, so the run continues solely with B.",
+     "Output A had reached the downstream node, so the run contains consequences of A while its recovered trace records B."
+    ],
+    "observer": "The downstream consumer and an auditor comparing results with traces"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 operation-node trace failure\",\"kind\":\"missing behavior\",\"text\":\"A function execution during which the kernel stops because the store refused its record leaves none\",\"question\":\"What happens when the store refuses the trace record for an operation-node execution, especially after the service may have applied the operation?\",\"options\":[\"Do not invoke until a durable trace record can be established\",\"If invocation may have occurred, rest pending with outcome_unknown for owner resolution\",\"Treat the node as unexecuted and invoke it again under the normal approval rules\",\"Fail the run without attempting to determine whether the operation occurred\"],\"default_guess\":\"If the operation may have been invoked, put the run in pending with outcome_unknown and require owner resolution; never repeat it merely because its trace record was refused.\",\"witness\":{\"initial\":\"An approved external-effect node is ready, and its service is reachable.\",\"events\":[\"The kernel invokes the service and the service applies the effect.\",\"The store refuses the node's trace record.\",\"Recovery examines the run.\"],\"outcomes\":[\"Recovery treats the missing record as no execution and invokes the operation again, duplicating the effect.\",\"Recovery treats the outcome as unknown and waits for the owner's resolution without invoking again.\"],\"observer\":\"The owner and the external system receiving the effect\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 function re-execution effect\",\"kind\":\"vague guarantee\",\"text\":\"recovery executes the function again: it has no effect\",\"question\":\"What exactly does “it has no effect” mean: no external service effect, no durable kernel-state change, no observable output from the abandoned attempt, or no difference between the abandoned execution and its retry?\",\"options\":[\"Only external side effects are excluded\",\"The abandoned execution is completely unobservable and commits no kernel state or output\",\"The retry is guaranteed to produce the same output\",\"Only the function's resource consumption may differ\"],\"default_guess\":\"The abandoned execution commits no kernel state, exposes no output, and causes no external effect; resource consumption may occur, and output equality is guaranteed only for implementations that actually depend solely on their inputs.\",\"witness\":{\"initial\":\"A function finishes computing an output, but its trace record is refused.\",\"events\":[\"The failed attempt consumes resources and produces an output in memory.\",\"Recovery executes the function again.\"],\"outcomes\":[\"“No effect” means only no external side effect, so the first output may already have been exposed internally.\",\"“No effect” means the entire attempt was uncommitted, so only the retry's output may become observable.\"],\"observer\":\"A downstream node and the trace reader\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 trace commit and output publication\",\"kind\":\"unspecified ordering\",\"text\":\"input and output by digest, verdicts, status, failure, resources, time. A function execution during which the kernel stops because the store refused its record leaves none\",\"question\":\"Must the function's output and node completion remain invisible until its immutable trace record is durably written, or may output be delivered to dependants before the trace write succeeds?\",\"options\":[\"Commit the trace before publishing the output or scheduling dependants\",\"Publish the output first and compensate or rerun if the trace write fails\",\"Atomically commit the trace, output value, and runnable dependant state\"],\"default_guess\":\"Atomically commit the trace, bounded output value, and dependant readiness before making the result observable.\",\"witness\":{\"initial\":\"A function node has a dependant and has computed a valid output.\",\"events\":[\"The kernel makes the output available to the dependant.\",\"The dependant executes.\",\"The store then refuses the producer's trace record.\",\"Recovery executes the producer again.\"],\"outcomes\":[\"The dependant retains the first output while the recovered producer may yield another output.\",\"No dependant can execute until the producer's trace and output are durably committed, so only the recovered result is visible.\"],\"observer\":\"The dependant, the owner reading results, and a trace auditor\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-02 and K-09 retry determinism\",\"kind\":\"contradictory implication\",\"text\":\"code written to get time or chance some other way is not detected and is judged by its outputs like any other; recovery executes the function again: it has no effect\",\"question\":\"When an admitted function is actually nondeterministic, does a trace-store refusal permit recovery to produce and accept a different output, or must recovery detect or prevent that difference for the claim that the abandoned execution “has no effect” to hold?\",\"options\":[\"Accept the retry's output and discard the unrecorded output\",\"Compare the retry with a retained digest of the first output and fail on a mismatch\",\"Guarantee isolation prevents the first output from being observed, so differing discarded and retry outputs are allowed\",\"Reject or quarantine implementations once nondeterminism is observed\"],\"default_guess\":\"Discard the unrecorded output and accept the retry's output only if the first attempt was never observable; otherwise fail rather than allow two outputs for the same node execution.\",\"witness\":{\"initial\":\"An admitted function obtains chance through an undetected mechanism and has a downstream node.\",\"events\":[\"The first execution produces output A, but the store refuses its trace record.\",\"Recovery executes the same function with the same declared input and it produces output B.\"],\"outcomes\":[\"Output A was never published, so the run continues solely with B.\",\"Output A had reached the downstream node, so the run contains consequences of A while its recovered trace records B.\"],\"observer\":\"The downstream consumer and an auditor comparing results with traces\"}}]}",
+ "set_aside": []
+}

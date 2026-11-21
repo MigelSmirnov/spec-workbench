@@ -1,0 +1,163 @@
+{
+ "open_points": [
+  {
+   "subject": "K-09 and M23 NodeExecution",
+   "kind": "contradiction",
+   "text": "Every node execution writes one immutable trace record: run, node, pinned\nversions, input and output by digest, verdicts, status, failure, resources, time. A\nfunction execution during which the kernel stops because the store refused its\nrecord leaves none",
+   "question": "When the store refuses a function execution's record, is that execution an exception that creates no NodeExecution, or must every node execution still create one?",
+   "options": [
+    "The refused write is an explicit exception: the execution creates no NodeExecution.",
+    "Every execution must eventually have a NodeExecution, so the refused record must be recovered or reconstructed."
+   ],
+   "default_guess": "Treat the refused write as an explicit exception and create no NodeExecution for that execution.",
+   "witness": {
+    "initial": "A running run is executing a function node.",
+    "events": [
+     "The function executes and concludes.",
+     "The kernel tries to persist its trace record.",
+     "The store refuses the record."
+    ],
+    "outcomes": [
+     "A NodeExecution must exist because every node execution writes one record.",
+     "No NodeExecution exists because this function execution leaves none."
+    ],
+    "observer": "The owner or an agent reading the trace."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M23 NodeExecution identity",
+   "kind": "attempt_identity_gap",
+   "text": "function execution during which the kernel stops because the store refused its\nrecord leaves none, and recovery executes the function again",
+   "question": "Does the recordless execution consume an attempt_number, making the recovery execution a new attempt, or does recovery reuse the same attempt_number because no NodeExecution was minted?",
+   "options": [
+    "The recordless execution counts as an attempt; recovery uses the next attempt_number.",
+    "Only recorded attempts count; recovery reuses the unrecorded attempt_number."
+   ],
+   "default_guess": "Only recorded attempts count, so recovery uses the same attempt_number.",
+   "witness": {
+    "initial": "The next function execution would normally have attempt_number 1.",
+    "events": [
+     "The function executes, but its record is refused and absent.",
+     "Recovery executes the function again.",
+     "The recovery execution is recorded successfully."
+    ],
+    "outcomes": [
+     "The recorded NodeExecution has attempt_number 2.",
+     "The recorded NodeExecution has attempt_number 1."
+    ],
+    "observer": "The owner, repair logic, or trial-corpus capture reading the trace."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M19 Run lifecycle",
+   "kind": "missing_status_transition",
+   "text": "function execution during which the kernel stops because the store refused its\nrecord leaves none, and recovery executes the function again",
+   "question": "What Run status applies after the kernel stops on a refused trace write and before recovery, and which transition enters and leaves that condition?",
+   "options": [
+    "The Run remains `running` while execution is stopped.",
+    "The Run becomes `pending`.",
+    "The Run becomes `failed`.",
+    "A distinct recovery/interruption status is required."
+   ],
+   "default_guess": "Keep the Run `running` and treat recovery as internal kernel continuation.",
+   "witness": {
+    "initial": "A Run is `running` while a function node executes.",
+    "events": [
+     "The store refuses the function's trace record.",
+     "The kernel stops.",
+     "The owner inspects the Run before recovery."
+    ],
+    "outcomes": [
+     "The owner sees `running`, although the kernel is stopped.",
+     "The owner sees `pending` or `failed`, indicating that progress has stopped."
+    ],
+    "observer": "The owner or an inspecting agent."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M19 Run recovery action",
+   "kind": "unspecified_actor",
+   "text": "recovery executes the function again",
+   "question": "What product action initiates recovery, who may perform it, and does it read or change the existing Run?",
+   "options": [
+    "The kernel automatically recovers and mutates the existing Run.",
+    "The owner or an agent must invoke resume on the existing Run.",
+    "A separate recovery action or process reads and changes the Run."
+   ],
+   "default_guess": "The kernel automatically recovers the existing Run.",
+   "witness": {
+    "initial": "A function execution has no record because the store refused it, and the kernel has stopped.",
+    "events": [
+     "The store becomes available again.",
+     "No owner or agent has issued resume."
+    ],
+    "outcomes": [
+     "The kernel automatically re-executes the function.",
+     "The Run remains stopped until an owner or agent performs a recovery or resume action."
+    ],
+    "observer": "The owner waiting for the Run to progress."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "function execution effects and M19 outputs",
+   "kind": "ambiguous_effect_semantics",
+   "text": "recovery executes the function again: it has no effect",
+   "question": "What does `it has no effect` refer to, and are outputs or external effects from the recordless execution guaranteed absent, rolled back, ignored, or potentially still present when recovery re-executes the function?",
+   "options": [
+    "The recordless execution has no outputs or external effects.",
+    "The recovery execution has no effect.",
+    "Only the missing record has no effect on the logical Run; external effects from the first execution may remain.",
+    "Outputs are discarded, but external effects may remain."
+   ],
+   "default_guess": "Treat the recordless execution as producing no committed Run outputs, while requiring the text to state separately whether external effects can remain.",
+   "witness": {
+    "initial": "A function node can produce a Run output or affect an external service.",
+    "events": [
+     "The function performs its work.",
+     "The store refuses its trace record and the kernel stops.",
+     "Recovery executes the function again."
+    ],
+    "outcomes": [
+     "The first execution is guaranteed to have no observable output or external effect.",
+     "The first execution may already have affected the service, so recovery can repeat the effect even though no trace exists."
+    ],
+    "observer": "The owner or the affected external service."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M19 — Run fields",
+   "kind": "standard_violation",
+   "text": "Candidate fields:\n\n- `run_id`: minted at random by the kernel when the run starts;\n- `flow_version_id`: pinned at start;\n- `pinned_implementations`: for every function node, the implementation of the\n  contract version's current activation at start;\n- `inputs`: StoredValues (M21) by flow input port;\n- `outputs`: StoredValues by flow output port, as produced;\n- `status`: `running`, `awaiting_approval`, `pending`, `succeeded`, `failed`,\n  `refused` or `cancelled` — the last four final;\n- `cancelled_by`: the owner, present exactly when `cancelled`;\n- `waiting`: WaitingPoints (M20) while the run waits; a run may wait at several\n  nodes at once — its status is `awaiting_approval` when any of them waits for the\n  owner's approval, otherwise `pending`;\n- `started_by`, `started_at`, `ended_at`;\n- `resumptions`: each resume of the run — who resumed it and when (K-15);\n- `released_by`, `released_at`: for a `failed` run, who released its spool and\n  when; until then its spooled files stay (K-10).",
+   "rule": "Указывай все поля с типами",
+   "section": "5",
+   "question": "Replace every candidate field description with a field declaration that gives its type.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M20 — WaitingPoint fields",
+   "kind": "standard_violation",
+   "text": "Candidate fields:\n\n- `node_id`, `map_index`;\n- `reason`: `owner_approval`, `service_unreachable` or `outcome_unknown`.",
+   "rule": "Указывай все поля с типами",
+   "section": "5",
+   "question": "Replace every candidate field description with a field declaration that gives its type.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M23 — NodeExecution fields",
+   "kind": "standard_violation",
+   "text": "Candidate fields:\n\n- `run_id`, `node_id`, `map_index`, `attempt_number`;\n- `executed`: the implementation or the binding, absent for `skipped_by_guard`\n  and `upstream_failed`, which record a node that was not executed;\n- `inputs`, `outputs`: references to StoredValues by `value_id` and to\n  SpooledFiles by their facts, by port — the record holds no payload;\n- `status`: `succeeded`, `contract_violation`, `sandbox_violation`, `timeout`,\n  `resource_exhausted`, `crashed`, `refused_by_owner`, `operation_refused` (the\n  service refused), `operation_failed`,\n  `service_unreachable`, `outcome_unknown`, `skipped_by_guard` or\n  `upstream_failed` — `succeeded` only after output validation;\n- `failure_detail`: bounded, without secrets, when not succeeded;\n- `resources_used`: for a function node;\n- `started_at`, `ended_at`.",
+   "rule": "Указывай все поля с типами",
+   "section": "5",
+   "question": "Replace every candidate field description with a field declaration that gives its type.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"K-09 and M23 NodeExecution\",\"kind\":\"contradiction\",\"text\":\"Every node execution writes one immutable trace record: run, node, pinned\\nversions, input and output by digest, verdicts, status, failure, resources, time. A\\nfunction execution during which the kernel stops because the store refused its\\nrecord leaves none\",\"question\":\"When the store refuses a function execution's record, is that execution an exception that creates no NodeExecution, or must every node execution still create one?\",\"options\":[\"The refused write is an explicit exception: the execution creates no NodeExecution.\",\"Every execution must eventually have a NodeExecution, so the refused record must be recovered or reconstructed.\"],\"default_guess\":\"Treat the refused write as an explicit exception and create no NodeExecution for that execution.\",\"witness\":{\"initial\":\"A running run is executing a function node.\",\"events\":[\"The function executes and concludes.\",\"The kernel tries to persist its trace record.\",\"The store refuses the record.\"],\"outcomes\":[\"A NodeExecution must exist because every node execution writes one record.\",\"No NodeExecution exists because this function execution leaves none.\"],\"observer\":\"The owner or an agent reading the trace.\"}},{\"subject\":\"M23 NodeExecution identity\",\"kind\":\"attempt_identity_gap\",\"text\":\"function execution during which the kernel stops because the store refused its\\nrecord leaves none, and recovery executes the function again\",\"question\":\"Does the recordless execution consume an attempt_number, making the recovery execution a new attempt, or does recovery reuse the same attempt_number because no NodeExecution was minted?\",\"options\":[\"The recordless execution counts as an attempt; recovery uses the next attempt_number.\",\"Only recorded attempts count; recovery reuses the unrecorded attempt_number.\"],\"default_guess\":\"Only recorded attempts count, so recovery uses the same attempt_number.\",\"witness\":{\"initial\":\"The next function execution would normally have attempt_number 1.\",\"events\":[\"The function executes, but its record is refused and absent.\",\"Recovery executes the function again.\",\"The recovery execution is recorded successfully.\"],\"outcomes\":[\"The recorded NodeExecution has attempt_number 2.\",\"The recorded NodeExecution has attempt_number 1.\"],\"observer\":\"The owner, repair logic, or trial-corpus capture reading the trace.\"}},{\"subject\":\"M19 Run lifecycle\",\"kind\":\"missing_status_transition\",\"text\":\"function execution during which the kernel stops because the store refused its\\nrecord leaves none, and recovery executes the function again\",\"question\":\"What Run status applies after the kernel stops on a refused trace write and before recovery, and which transition enters and leaves that condition?\",\"options\":[\"The Run remains `running` while execution is stopped.\",\"The Run becomes `pending`.\",\"The Run becomes `failed`.\",\"A distinct recovery/interruption status is required.\"],\"default_guess\":\"Keep the Run `running` and treat recovery as internal kernel continuation.\",\"witness\":{\"initial\":\"A Run is `running` while a function node executes.\",\"events\":[\"The store refuses the function's trace record.\",\"The kernel stops.\",\"The owner inspects the Run before recovery.\"],\"outcomes\":[\"The owner sees `running`, although the kernel is stopped.\",\"The owner sees `pending` or `failed`, indicating that progress has stopped.\"],\"observer\":\"The owner or an inspecting agent.\"}},{\"subject\":\"M19 Run recovery action\",\"kind\":\"unspecified_actor\",\"text\":\"recovery executes the function again\",\"question\":\"What product action initiates recovery, who may perform it, and does it read or change the existing Run?\",\"options\":[\"The kernel automatically recovers and mutates the existing Run.\",\"The owner or an agent must invoke resume on the existing Run.\",\"A separate recovery action or process reads and changes the Run.\"],\"default_guess\":\"The kernel automatically recovers the existing Run.\",\"witness\":{\"initial\":\"A function execution has no record because the store refused it, and the kernel has stopped.\",\"events\":[\"The store becomes available again.\",\"No owner or agent has issued resume.\"],\"outcomes\":[\"The kernel automatically re-executes the function.\",\"The Run remains stopped until an owner or agent performs a recovery or resume action.\"],\"observer\":\"The owner waiting for the Run to progress.\"}},{\"subject\":\"function execution effects and M19 outputs\",\"kind\":\"ambiguous_effect_semantics\",\"text\":\"recovery executes the function again: it has no effect\",\"question\":\"What does `it has no effect` refer to, and are outputs or external effects from the recordless execution guaranteed absent, rolled back, ignored, or potentially still present when recovery re-executes the function?\",\"options\":[\"The recordless execution has no outputs or external effects.\",\"The recovery execution has no effect.\",\"Only the missing record has no effect on the logical Run; external effects from the first execution may remain.\",\"Outputs are discarded, but external effects may remain.\"],\"default_guess\":\"Treat the recordless execution as producing no committed Run outputs, while requiring the text to state separately whether external effects can remain.\",\"witness\":{\"initial\":\"A function node can produce a Run output or affect an external service.\",\"events\":[\"The function performs its work.\",\"The store refuses its trace record and the kernel stops.\",\"Recovery executes the function again.\"],\"outcomes\":[\"The first execution is guaranteed to have no observable output or external effect.\",\"The first execution may already have affected the service, so recovery can repeat the effect even though no trace exists.\"],\"observer\":\"The owner or the affected external service.\"}},{\"subject\":\"Model M19 — Run fields\",\"kind\":\"standard_violation\",\"text\":\"Candidate fields:\\n\\n- `run_id`: minted at random by the kernel when the run starts;\\n- `flow_version_id`: pinned at start;\\n- `pinned_implementations`: for every function node, the implementation of the\\n  contract version's current activation at start;\\n- `inputs`: StoredValues (M21) by flow input port;\\n- `outputs`: StoredValues by flow output port, as produced;\\n- `status`: `running`, `awaiting_approval`, `pending`, `succeeded`, `failed`,\\n  `refused` or `cancelled` — the last four final;\\n- `cancelled_by`: the owner, present exactly when `cancelled`;\\n- `waiting`: WaitingPoints (M20) while the run waits; a run may wait at several\\n  nodes at once — its status is `awaiting_approval` when any of them waits for the\\n  owner's approval, otherwise `pending`;\\n- `started_by`, `started_at`, `ended_at`;\\n- `resumptions`: each resume of the run — who resumed it and when (K-15);\\n- `released_by`, `released_at`: for a `failed` run, who released its spool and\\n  when; until then its spooled files stay (K-10).\",\"rule\":\"Указывай все поля с типами\",\"section\":\"5\",\"question\":\"Replace every candidate field description with a field declaration that gives its type.\"},{\"subject\":\"Model M20 — WaitingPoint fields\",\"kind\":\"standard_violation\",\"text\":\"Candidate fields:\\n\\n- `node_id`, `map_index`;\\n- `reason`: `owner_approval`, `service_unreachable` or `outcome_unknown`.\",\"rule\":\"Указывай все поля с типами\",\"section\":\"5\",\"question\":\"Replace every candidate field description with a field declaration that gives its type.\"},{\"subject\":\"Model M23 — NodeExecution fields\",\"kind\":\"standard_violation\",\"text\":\"Candidate fields:\\n\\n- `run_id`, `node_id`, `map_index`, `attempt_number`;\\n- `executed`: the implementation or the binding, absent for `skipped_by_guard`\\n  and `upstream_failed`, which record a node that was not executed;\\n- `inputs`, `outputs`: references to StoredValues by `value_id` and to\\n  SpooledFiles by their facts, by port — the record holds no payload;\\n- `status`: `succeeded`, `contract_violation`, `sandbox_violation`, `timeout`,\\n  `resource_exhausted`, `crashed`, `refused_by_owner`, `operation_refused` (the\\n  service refused), `operation_failed`,\\n  `service_unreachable`, `outcome_unknown`, `skipped_by_guard` or\\n  `upstream_failed` — `succeeded` only after output validation;\\n- `failure_detail`: bounded, without secrets, when not succeeded;\\n- `resources_used`: for a function node;\\n- `started_at`, `ended_at`.\",\"rule\":\"Указывай все поля с типами\",\"section\":\"5\",\"question\":\"Replace every candidate field description with a field declaration that gives its type.\"}]}",
+ "set_aside": []
+}

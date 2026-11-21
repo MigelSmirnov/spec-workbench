@@ -187,9 +187,10 @@ outcomes on its own. When the owner refuses an effect, the run ends `refused`.
 ### K-09 — The trace is data; waiting is truthful (narrows D0-041)
 
 Every node execution writes one immutable trace record: run, node, pinned
-versions, input and output by digest, verdicts, status, failure, resources, time. A
-function execution during which the kernel stops because the store refused its
-record leaves none, and recovery executes the function again: it has no effect.
+versions, input and output by digest, verdicts, status, failure, resources, time —
+except a function execution during which the kernel stops because the store
+refused that record: it leaves none, and recovery executes the function again,
+which has no effect.
 Nothing is successful by default. A failed node stops only its dependants. A run
 rests `awaiting_approval`, or `pending` when a service is unreachable or an
 outcome unknown, and ends `succeeded`, `failed`, `refused` or `cancelled`. No wait

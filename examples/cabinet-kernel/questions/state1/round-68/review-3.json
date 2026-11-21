@@ -1,0 +1,189 @@
+{
+ "open_points": [
+  {
+   "subject": "function execution effects after trace-store refusal",
+   "kind": "ambiguous effect semantics",
+   "text": "A function execution during which the kernel stops because the store refused its\nrecord leaves none, and recovery executes the function again: it has no effect.",
+   "question": "What does “it has no effect” mean: that the first function execution has no domain or external effects, that recovery has no additional effect, or only that no trace record is stored?",
+   "options": [
+    "The first execution is transactionally effect-free, so repeating it is safe.",
+    "Only the trace write has no effect; the function may already have produced external effects.",
+    "The repeated execution must detect or reconcile any effect of the first execution."
+   ],
+   "default_guess": "Treat the first execution as having no committed effect and require recovery to repeat it safely.",
+   "witness": {
+    "initial": "A running function node is about to perform a non-idempotent external charge.",
+    "events": [
+     "The function charges the customer.",
+     "The trace store refuses the NodeExecution record and the kernel stops.",
+     "Recovery executes the function again."
+    ],
+    "outcomes": [
+     "The first charge is guaranteed not to exist, so the customer is charged once.",
+     "Only the trace is absent; the first charge remains and recovery charges the customer a second time."
+    ],
+    "observer": "The owner and the charged customer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "model mutations when a NodeExecution record is refused",
+   "kind": "unclear atomic boundary",
+   "text": "leaves none",
+   "question": "Does “leaves none” mean only that no NodeExecution record remains, or that every model change produced by that execution—including Run outputs or status, StoredValues, and SpooledFiles—is absent or rolled back?",
+   "options": [
+    "Only the NodeExecution record is absent.",
+    "All kernel-owned model changes from the execution are rolled back atomically.",
+    "Some outputs or artifacts may remain and recovery must reuse or reconcile them."
+   ],
+   "default_guess": "Roll back all kernel-owned changes belonging to the unrecorded execution.",
+   "witness": {
+    "initial": "A function node has produced an output StoredValue but its trace record is not yet durable.",
+    "events": [
+     "The kernel stores the output value and associates it with the Run.",
+     "The trace store refuses the NodeExecution record.",
+     "Recovery reads the Run before executing the function again."
+    ],
+    "outcomes": [
+     "The output association and StoredValue are absent, so recovery starts from the pre-execution state.",
+     "The output remains despite there being no NodeExecution record, so recovery sees or duplicates it."
+    ],
+    "observer": "The recovering executor and anyone inspecting the Run"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Run and WaitingPoint lifecycle after trace-store refusal",
+   "kind": "missing status transition",
+   "text": "A function execution during which the kernel stops because the store refused its\nrecord leaves none, and recovery executes the function again",
+   "question": "What status does the Run have between the store refusal and recovery, and does it acquire a WaitingPoint with an existing reason or remain `running` without one?",
+   "options": [
+    "The Run becomes `pending` with `service_unreachable`.",
+    "The Run remains `running` while the kernel is stopped.",
+    "The Run becomes `failed`.",
+    "No persisted Run-state change occurs, so its prior status remains."
+   ],
+   "default_guess": "Persist the Run as `pending` with a `service_unreachable` WaitingPoint until recovery is requested.",
+   "witness": {
+    "initial": "A Run is `running` and has no WaitingPoints.",
+    "events": [
+     "A function finishes but the store refuses its trace record.",
+     "The kernel stops.",
+     "The owner inspects the Run before recovery."
+    ],
+    "outcomes": [
+     "The owner sees `pending` and a service-unreachable WaitingPoint.",
+     "The owner sees the Run still `running` with no WaitingPoint even though no executor is advancing it."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "action that starts recovery after trace-store refusal",
+   "kind": "unspecified product action",
+   "text": "recovery executes the function again",
+   "question": "Who initiates this recovery and through which product action: an automatic kernel restart, the existing owner-or-agent resume action, or a distinct recovery action?",
+   "options": [
+    "The kernel retries automatically during restart or failover.",
+    "The owner or an agent must invoke resume.",
+    "A separate recovery action initiates the retry."
+   ],
+   "default_guess": "Require the owner or an agent to invoke the existing resume action.",
+   "witness": {
+    "initial": "The kernel has stopped after the trace store refused a function record.",
+    "events": [
+     "The trace store becomes available again.",
+     "No owner or agent invokes resume."
+    ],
+    "outcomes": [
+     "Kernel recovery automatically executes the function again.",
+     "The Run remains stopped until an owner or agent resumes it."
+    ],
+    "observer": "The owner and the external service called by the function"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "NodeExecution attempt identity across an unrecorded execution",
+   "kind": "missing identity rule",
+   "text": "recovery executes the function again",
+   "question": "Does the unrecorded function execution consume an `attempt_number`, so that the recovered execution's NodeExecution uses the next number, or does recovery reuse the same number because no record exists?",
+   "options": [
+    "The unrecorded execution consumes an attempt number and recovery records the next one.",
+    "Recovery reuses the same attempt number because the refused record left no attempt in the model.",
+    "Attempt numbers are assigned only when a record is successfully stored."
+   ],
+   "default_guess": "Assign attempt numbers only to durable NodeExecution records, so recovery reuses the number that the refused record would have had.",
+   "witness": {
+    "initial": "A node's last durable NodeExecution has `attempt_number` 1.",
+    "events": [
+     "The next function execution completes but its record is refused.",
+     "Recovery executes the function again and successfully stores its record."
+    ],
+    "outcomes": [
+     "The new record has `attempt_number` 2 because the absent execution did not consume a model identity.",
+     "The new record has `attempt_number` 3 because the absent execution still counted as an attempt."
+    ],
+    "observer": "The owner, repair logic, and trial-corpus capture"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "creation of NodeExecution when persistence is refused",
+   "kind": "unclear creation semantics",
+   "text": "the store refused its\nrecord leaves none",
+   "question": "Was a NodeExecution value created transiently and then discarded, or does a NodeExecution come into existence only when the store accepts its immutable record?",
+   "options": [
+    "The kernel creates a transient NodeExecution before attempting persistence.",
+    "NodeExecution is minted only by successful durable storage.",
+    "The refused value remains observable to in-process recovery even though it is not durable."
+   ],
+   "default_guess": "Treat successful durable storage as the action that creates the NodeExecution model.",
+   "witness": {
+    "initial": "A function has concluded and the kernel has assembled all proposed trace facts.",
+    "events": [
+     "The kernel submits the proposed record to the store.",
+     "The store refuses it.",
+     "Recovery code examines in-memory state."
+    ],
+    "outcomes": [
+     "No NodeExecution exists and recovery reconstructs all facts from the pre-execution state.",
+     "A transient NodeExecution exists and recovery may inspect or reuse its facts."
+    ],
+    "observer": "The recovery implementation"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M19 — Run fields",
+   "kind": "standard_violation",
+   "text": "Candidate fields:\n\n- `run_id`: minted at random by the kernel when the run starts;\n- `flow_version_id`: pinned at start;\n- `pinned_implementations`: for every function node, the implementation of the\n  contract version's current activation at start;\n- `inputs`: StoredValues (M21) by flow input port;\n- `outputs`: StoredValues by flow output port, as produced;\n- `status`: `running`, `awaiting_approval`, `pending`, `succeeded`, `failed`,\n  `refused` or `cancelled` — the last four final;\n- `cancelled_by`: the owner, present exactly when `cancelled`;\n- `waiting`: WaitingPoints (M20) while the run waits; a run may wait at several\n  nodes at once — its status is `awaiting_approval` when any of them waits for the\n  owner's approval, otherwise `pending`;\n- `started_by`, `started_at`, `ended_at`;\n- `resumptions`: each resume of the run — who resumed it and when (K-15);\n- `released_by`, `released_at`: for a `failed` run, who released its spool and\n  when; until then its spooled files stay (K-10).",
+   "rule": "Указывай все поля с типами",
+   "section": "5",
+   "question": "Replace the candidate prose with a complete field declaration that gives an explicit type for every Run field.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M20 — WaitingPoint fields",
+   "kind": "standard_violation",
+   "text": "Candidate fields:\n\n- `node_id`, `map_index`;\n- `reason`: `owner_approval`, `service_unreachable` or `outcome_unknown`.",
+   "rule": "Указывай все поля с типами",
+   "section": "5",
+   "question": "Replace the candidate prose with a complete field declaration that gives an explicit type for every WaitingPoint field.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M23 — NodeExecution fields",
+   "kind": "standard_violation",
+   "text": "Candidate fields:\n\n- `run_id`, `node_id`, `map_index`, `attempt_number`;\n- `executed`: the implementation or the binding, absent for `skipped_by_guard`\n  and `upstream_failed`, which record a node that was not executed;\n- `inputs`, `outputs`: references to StoredValues by `value_id` and to\n  SpooledFiles by their facts, by port — the record holds no payload;\n- `status`: `succeeded`, `contract_violation`, `sandbox_violation`, `timeout`,\n  `resource_exhausted`, `crashed`, `refused_by_owner`, `operation_refused` (the\n  service refused), `operation_failed`,\n  `service_unreachable`, `outcome_unknown`, `skipped_by_guard` or\n  `upstream_failed` — `succeeded` only after output validation;\n- `failure_detail`: bounded, without secrets, when not succeeded;\n- `resources_used`: for a function node;\n- `started_at`, `ended_at`.",
+   "rule": "Указывай все поля с типами",
+   "section": "5",
+   "question": "Replace the candidate prose with a complete field declaration that gives an explicit type for every NodeExecution field.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"function execution effects after trace-store refusal\",\"kind\":\"ambiguous effect semantics\",\"text\":\"A function execution during which the kernel stops because the store refused its\\nrecord leaves none, and recovery executes the function again: it has no effect.\",\"question\":\"What does “it has no effect” mean: that the first function execution has no domain or external effects, that recovery has no additional effect, or only that no trace record is stored?\",\"options\":[\"The first execution is transactionally effect-free, so repeating it is safe.\",\"Only the trace write has no effect; the function may already have produced external effects.\",\"The repeated execution must detect or reconcile any effect of the first execution.\"],\"default_guess\":\"Treat the first execution as having no committed effect and require recovery to repeat it safely.\",\"witness\":{\"initial\":\"A running function node is about to perform a non-idempotent external charge.\",\"events\":[\"The function charges the customer.\",\"The trace store refuses the NodeExecution record and the kernel stops.\",\"Recovery executes the function again.\"],\"outcomes\":[\"The first charge is guaranteed not to exist, so the customer is charged once.\",\"Only the trace is absent; the first charge remains and recovery charges the customer a second time.\"],\"observer\":\"The owner and the charged customer\"}},{\"subject\":\"model mutations when a NodeExecution record is refused\",\"kind\":\"unclear atomic boundary\",\"text\":\"leaves none\",\"question\":\"Does “leaves none” mean only that no NodeExecution record remains, or that every model change produced by that execution—including Run outputs or status, StoredValues, and SpooledFiles—is absent or rolled back?\",\"options\":[\"Only the NodeExecution record is absent.\",\"All kernel-owned model changes from the execution are rolled back atomically.\",\"Some outputs or artifacts may remain and recovery must reuse or reconcile them.\"],\"default_guess\":\"Roll back all kernel-owned changes belonging to the unrecorded execution.\",\"witness\":{\"initial\":\"A function node has produced an output StoredValue but its trace record is not yet durable.\",\"events\":[\"The kernel stores the output value and associates it with the Run.\",\"The trace store refuses the NodeExecution record.\",\"Recovery reads the Run before executing the function again.\"],\"outcomes\":[\"The output association and StoredValue are absent, so recovery starts from the pre-execution state.\",\"The output remains despite there being no NodeExecution record, so recovery sees or duplicates it.\"],\"observer\":\"The recovering executor and anyone inspecting the Run\"}},{\"subject\":\"Run and WaitingPoint lifecycle after trace-store refusal\",\"kind\":\"missing status transition\",\"text\":\"A function execution during which the kernel stops because the store refused its\\nrecord leaves none, and recovery executes the function again\",\"question\":\"What status does the Run have between the store refusal and recovery, and does it acquire a WaitingPoint with an existing reason or remain `running` without one?\",\"options\":[\"The Run becomes `pending` with `service_unreachable`.\",\"The Run remains `running` while the kernel is stopped.\",\"The Run becomes `failed`.\",\"No persisted Run-state change occurs, so its prior status remains.\"],\"default_guess\":\"Persist the Run as `pending` with a `service_unreachable` WaitingPoint until recovery is requested.\",\"witness\":{\"initial\":\"A Run is `running` and has no WaitingPoints.\",\"events\":[\"A function finishes but the store refuses its trace record.\",\"The kernel stops.\",\"The owner inspects the Run before recovery.\"],\"outcomes\":[\"The owner sees `pending` and a service-unreachable WaitingPoint.\",\"The owner sees the Run still `running` with no WaitingPoint even though no executor is advancing it.\"],\"observer\":\"The owner\"}},{\"subject\":\"action that starts recovery after trace-store refusal\",\"kind\":\"unspecified product action\",\"text\":\"recovery executes the function again\",\"question\":\"Who initiates this recovery and through which product action: an automatic kernel restart, the existing owner-or-agent resume action, or a distinct recovery action?\",\"options\":[\"The kernel retries automatically during restart or failover.\",\"The owner or an agent must invoke resume.\",\"A separate recovery action initiates the retry.\"],\"default_guess\":\"Require the owner or an agent to invoke the existing resume action.\",\"witness\":{\"initial\":\"The kernel has stopped after the trace store refused a function record.\",\"events\":[\"The trace store becomes available again.\",\"No owner or agent invokes resume.\"],\"outcomes\":[\"Kernel recovery automatically executes the function again.\",\"The Run remains stopped until an owner or agent resumes it.\"],\"observer\":\"The owner and the external service called by the function\"}},{\"subject\":\"NodeExecution attempt identity across an unrecorded execution\",\"kind\":\"missing identity rule\",\"text\":\"recovery executes the function again\",\"question\":\"Does the unrecorded function execution consume an `attempt_number`, so that the recovered execution's NodeExecution uses the next number, or does recovery reuse the same number because no record exists?\",\"options\":[\"The unrecorded execution consumes an attempt number and recovery records the next one.\",\"Recovery reuses the same attempt number because the refused record left no attempt in the model.\",\"Attempt numbers are assigned only when a record is successfully stored.\"],\"default_guess\":\"Assign attempt numbers only to durable NodeExecution records, so recovery reuses the number that the refused record would have had.\",\"witness\":{\"initial\":\"A node's last durable NodeExecution has `attempt_number` 1.\",\"events\":[\"The next function execution completes but its record is refused.\",\"Recovery executes the function again and successfully stores its record.\"],\"outcomes\":[\"The new record has `attempt_number` 2 because the absent execution did not consume a model identity.\",\"The new record has `attempt_number` 3 because the absent execution still counted as an attempt.\"],\"observer\":\"The owner, repair logic, and trial-corpus capture\"}},{\"subject\":\"creation of NodeExecution when persistence is refused\",\"kind\":\"unclear creation semantics\",\"text\":\"the store refused its\\nrecord leaves none\",\"question\":\"Was a NodeExecution value created transiently and then discarded, or does a NodeExecution come into existence only when the store accepts its immutable record?\",\"options\":[\"The kernel creates a transient NodeExecution before attempting persistence.\",\"NodeExecution is minted only by successful durable storage.\",\"The refused value remains observable to in-process recovery even though it is not durable.\"],\"default_guess\":\"Treat successful durable storage as the action that creates the NodeExecution model.\",\"witness\":{\"initial\":\"A function has concluded and the kernel has assembled all proposed trace facts.\",\"events\":[\"The kernel submits the proposed record to the store.\",\"The store refuses it.\",\"Recovery code examines in-memory state.\"],\"outcomes\":[\"No NodeExecution exists and recovery reconstructs all facts from the pre-execution state.\",\"A transient NodeExecution exists and recovery may inspect or reuse its facts.\"],\"observer\":\"The recovery implementation\"}},{\"subject\":\"Model M19 — Run fields\",\"kind\":\"standard_violation\",\"text\":\"Candidate fields:\\n\\n- `run_id`: minted at random by the kernel when the run starts;\\n- `flow_version_id`: pinned at start;\\n- `pinned_implementations`: for every function node, the implementation of the\\n  contract version's current activation at start;\\n- `inputs`: StoredValues (M21) by flow input port;\\n- `outputs`: StoredValues by flow output port, as produced;\\n- `status`: `running`, `awaiting_approval`, `pending`, `succeeded`, `failed`,\\n  `refused` or `cancelled` — the last four final;\\n- `cancelled_by`: the owner, present exactly when `cancelled`;\\n- `waiting`: WaitingPoints (M20) while the run waits; a run may wait at several\\n  nodes at once — its status is `awaiting_approval` when any of them waits for the\\n  owner's approval, otherwise `pending`;\\n- `started_by`, `started_at`, `ended_at`;\\n- `resumptions`: each resume of the run — who resumed it and when (K-15);\\n- `released_by`, `released_at`: for a `failed` run, who released its spool and\\n  when; until then its spooled files stay (K-10).\",\"rule\":\"Указывай все поля с типами\",\"section\":\"5\",\"question\":\"Replace the candidate prose with a complete field declaration that gives an explicit type for every Run field.\"},{\"subject\":\"Model M20 — WaitingPoint fields\",\"kind\":\"standard_violation\",\"text\":\"Candidate fields:\\n\\n- `node_id`, `map_index`;\\n- `reason`: `owner_approval`, `service_unreachable` or `outcome_unknown`.\",\"rule\":\"Указывай все поля с типами\",\"section\":\"5\",\"question\":\"Replace the candidate prose with a complete field declaration that gives an explicit type for every WaitingPoint field.\"},{\"subject\":\"Model M23 — NodeExecution fields\",\"kind\":\"standard_violation\",\"text\":\"Candidate fields:\\n\\n- `run_id`, `node_id`, `map_index`, `attempt_number`;\\n- `executed`: the implementation or the binding, absent for `skipped_by_guard`\\n  and `upstream_failed`, which record a node that was not executed;\\n- `inputs`, `outputs`: references to StoredValues by `value_id` and to\\n  SpooledFiles by their facts, by port — the record holds no payload;\\n- `status`: `succeeded`, `contract_violation`, `sandbox_violation`, `timeout`,\\n  `resource_exhausted`, `crashed`, `refused_by_owner`, `operation_refused` (the\\n  service refused), `operation_failed`,\\n  `service_unreachable`, `outcome_unknown`, `skipped_by_guard` or\\n  `upstream_failed` — `succeeded` only after output validation;\\n- `failure_detail`: bounded, without secrets, when not succeeded;\\n- `resources_used`: for a function node;\\n- `started_at`, `ended_at`.\",\"rule\":\"Указывай все поля с типами\",\"section\":\"5\",\"question\":\"Replace the candidate prose with a complete field declaration that gives an explicit type for every NodeExecution field.\"}]}",
+ "set_aside": []
+}
