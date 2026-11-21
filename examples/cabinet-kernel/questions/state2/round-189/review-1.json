@@ -1,0 +1,184 @@
+{
+ "open_points": [
+  {
+   "subject": "context",
+   "kind": "time_source",
+   "text": "resources, time —",
+   "question": "What authority supplies every instant written for the original function execution, the stop, and the recovery execution?",
+   "options": [
+    "A clock port backed by the IR system_clock_backend",
+    "Ambient operating-system wall time",
+    "A store-generated timestamp"
+   ],
+   "default_guess": "Use an injected clock port backed by system_clock_backend; do not read ambient time directly.",
+   "witness": {
+    "initial": "A function is ready and the injected test clock differs from the host clock.",
+    "events": [
+     "The kernel executes the function.",
+     "The store accepts its NodeExecution."
+    ],
+    "outcomes": [
+     "The trace contains the injected clock's instant.",
+     "The trace contains the host or store clock's instant."
+    ],
+    "observer": "A trace reader and the time-source conformance test"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "time_representation",
+   "text": "resources, time —",
+   "question": "What does the trace's time field contain, and in what representation and precision is each instant stored and compared?",
+   "options": [
+    "UTC timezone-aware datetimes serialized canonically",
+    "RFC 3339 strings with a specified precision",
+    "Integer epoch values with a specified unit"
+   ],
+   "default_guess": "Use UTC timezone-aware datetimes with one canonical serialization and precision.",
+   "witness": {
+    "initial": "A recovered execution finishes at an instant with subsecond precision and a non-UTC host timezone.",
+    "events": [
+     "Recovery writes the function's NodeExecution.",
+     "A client reads and compares its time."
+    ],
+    "outcomes": [
+     "The client receives a normalized UTC instant with defined precision.",
+     "The client receives a local-time or differently rounded value."
+    ],
+    "observer": "A trace API client comparing execution order"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "clock_read_count",
+   "text": "recovery executes the function again",
+   "question": "How many clock readings does one function execution take, and are the recorded start and end separate readings or one shared instant?",
+   "options": [
+    "Read once at start and once at end",
+    "Read once and use the same instant for the whole execution",
+    "Let the store assign one or both instants"
+   ],
+   "default_guess": "Read the decided clock once at start and once at end, reusing each captured value for all writes that describe that boundary.",
+   "witness": {
+    "initial": "A function begins before the clock advances and finishes afterward.",
+    "events": [
+     "The kernel records the execution start.",
+     "The clock advances.",
+     "The kernel records the execution end."
+    ],
+    "outcomes": [
+     "The record has distinct start and end instants.",
+     "The record has the same instant for start and end."
+    ],
+    "observer": "A trace reader checking execution ordering and duration"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "refusal_conditions",
+   "text": "because the store refused that record",
+   "question": "Exactly which store results count as refusing the record: only a definite rejection known not to have committed, or also timeouts, lost acknowledgements, transaction failures, and unknown commit outcomes?",
+   "options": [
+    "Only a definite rejection with known non-commit",
+    "Any write that does not return success",
+    "An unknown result is resolved by reading the record before deciding whether to replay"
+   ],
+   "default_guess": "Treat only known non-commit as refusal; after an unknown result, recover by reading the durable record before deciding whether to replay.",
+   "witness": {
+    "initial": "A function has finished and the NodeExecution write reaches the store.",
+    "events": [
+     "The store commits the record but its acknowledgement is lost.",
+     "The kernel loses the connection and restarts."
+    ],
+    "outcomes": [
+     "The result is called a refusal and recovery attempts the function again.",
+     "The existing record is discovered and recovery does not execute the function again."
+    ],
+    "observer": "The function's operator and a trace reader"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "completion_boundary",
+   "text": "Every node execution writes one immutable trace record: run, node, pinned\nversions, input and output by digest, verdicts, status, failure, resources, time —\nexcept a function execution during which the kernel stops because the store\nrefused that record: it leaves none, and recovery executes the function again,\nwhich has no effect.",
+   "question": "If the function body returns but the process stops before attempting or completing the record write for a reason other than an explicit store refusal, was there a node execution that must have a record, or is record commit part of what makes it an execution?",
+   "options": [
+    "Record commit is the completion boundary, so the interrupted invocation is not a completed node execution and recovery reruns it",
+    "The returned invocation was a node execution, so the text must specify another permitted no-record case",
+    "The record must be durably reserved before the function runs"
+   ],
+   "default_guess": "Make durable NodeExecution commit the completion boundary; an invocation interrupted before that boundary is replayed and is not counted as a completed execution.",
+   "witness": {
+    "initial": "A function body has returned its output, but no NodeExecution has yet been written.",
+    "events": [
+     "The process loses power before the store is asked to write the record.",
+     "The kernel starts and applies A14 rule 5."
+    ],
+    "outcomes": [
+     "The first invocation counts as an execution, contradicting the promise that every such execution has a record.",
+     "The first invocation is treated as incomplete; recovery executes the function again and only the recorded invocation counts."
+    ],
+    "observer": "The function operator, who sees two invocations, and the trace reader, who sees one record"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "attempt_number_contradiction",
+   "text": "a position being the run, node,\n   `map_index`, attempt number, port and list index, which only a retry of\n   the same attempt number writes again, after a restart left that attempt\n   without a record",
+   "question": "How can recovery write the same attempt-numbered spool position when the carried rule says an execution that leaves no stored NodeExecution takes no attempt number?",
+   "options": [
+    "Reserve the next ordinal provisionally for the spool path without treating it as taken until the record commits",
+    "Use an unnumbered staging position and assign the ordinal only when the record commits",
+    "Give the failed execution an attempt number despite the carried rule"
+   ],
+   "default_guess": "Use the next ordinal as a provisional spool namespace, but make it a taken attempt number only when its NodeExecution commits; recovery reuses that provisional namespace.",
+   "witness": {
+    "initial": "The element has no stored NodeExecution, so its next stored-record ordinal is 1.",
+    "events": [
+     "A function writes file bytes into its spool position.",
+     "The store refuses its NodeExecution and the kernel stops.",
+     "Recovery executes the function again and writes different bytes."
+    ],
+    "outcomes": [
+     "Both invocations use provisional attempt position 1, and the replay replaces the first bytes.",
+     "The first invocation uses unnumbered staging and recovery creates the first numbered position only when record 1 commits."
+    ],
+    "observer": "The spool quota/accounting implementation and a storage operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "vague_effect_scope",
+   "text": "which has no effect",
+   "question": "Does “no effect” mean only that a function performs no Cabinet service effect, that it has no externally observable side effect of any kind, or that replay must also leave no additional internal artifacts such as logs, metrics, spooled bytes, or unnamed values?",
+   "options": [
+    "No external business or service effect; internal trace and storage artifacts are allowed by their rules",
+    "No externally observable side effect of any kind",
+    "Replay must be observationally identical, including internal artifacts"
+   ],
+   "default_guess": "Interpret it as no external business or service effect; govern trace, spool, unnamed values, logs, and metrics separately.",
+   "witness": {
+    "initial": "A function invocation increments an execution metric and produces bytes, but its NodeExecution write is refused.",
+    "events": [
+     "The kernel stops.",
+     "Recovery invokes the function again."
+    ],
+    "outcomes": [
+     "The metric records two invocations while the trace has one execution record.",
+     "The implementation suppresses or rolls back the first invocation's metric and internal artifacts so replay leaves no additional observation."
+    ],
+    "observer": "The system operator viewing metrics and storage usage"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context\",\"kind\":\"time_source\",\"text\":\"resources, time —\",\"question\":\"What authority supplies every instant written for the original function execution, the stop, and the recovery execution?\",\"options\":[\"A clock port backed by the IR system_clock_backend\",\"Ambient operating-system wall time\",\"A store-generated timestamp\"],\"default_guess\":\"Use an injected clock port backed by system_clock_backend; do not read ambient time directly.\",\"witness\":{\"initial\":\"A function is ready and the injected test clock differs from the host clock.\",\"events\":[\"The kernel executes the function.\",\"The store accepts its NodeExecution.\"],\"outcomes\":[\"The trace contains the injected clock's instant.\",\"The trace contains the host or store clock's instant.\"],\"observer\":\"A trace reader and the time-source conformance test\"}},{\"subject\":\"context\",\"kind\":\"time_representation\",\"text\":\"resources, time —\",\"question\":\"What does the trace's time field contain, and in what representation and precision is each instant stored and compared?\",\"options\":[\"UTC timezone-aware datetimes serialized canonically\",\"RFC 3339 strings with a specified precision\",\"Integer epoch values with a specified unit\"],\"default_guess\":\"Use UTC timezone-aware datetimes with one canonical serialization and precision.\",\"witness\":{\"initial\":\"A recovered execution finishes at an instant with subsecond precision and a non-UTC host timezone.\",\"events\":[\"Recovery writes the function's NodeExecution.\",\"A client reads and compares its time.\"],\"outcomes\":[\"The client receives a normalized UTC instant with defined precision.\",\"The client receives a local-time or differently rounded value.\"],\"observer\":\"A trace API client comparing execution order\"}},{\"subject\":\"context\",\"kind\":\"clock_read_count\",\"text\":\"recovery executes the function again\",\"question\":\"How many clock readings does one function execution take, and are the recorded start and end separate readings or one shared instant?\",\"options\":[\"Read once at start and once at end\",\"Read once and use the same instant for the whole execution\",\"Let the store assign one or both instants\"],\"default_guess\":\"Read the decided clock once at start and once at end, reusing each captured value for all writes that describe that boundary.\",\"witness\":{\"initial\":\"A function begins before the clock advances and finishes afterward.\",\"events\":[\"The kernel records the execution start.\",\"The clock advances.\",\"The kernel records the execution end.\"],\"outcomes\":[\"The record has distinct start and end instants.\",\"The record has the same instant for start and end.\"],\"observer\":\"A trace reader checking execution ordering and duration\"}},{\"subject\":\"context\",\"kind\":\"refusal_conditions\",\"text\":\"because the store refused that record\",\"question\":\"Exactly which store results count as refusing the record: only a definite rejection known not to have committed, or also timeouts, lost acknowledgements, transaction failures, and unknown commit outcomes?\",\"options\":[\"Only a definite rejection with known non-commit\",\"Any write that does not return success\",\"An unknown result is resolved by reading the record before deciding whether to replay\"],\"default_guess\":\"Treat only known non-commit as refusal; after an unknown result, recover by reading the durable record before deciding whether to replay.\",\"witness\":{\"initial\":\"A function has finished and the NodeExecution write reaches the store.\",\"events\":[\"The store commits the record but its acknowledgement is lost.\",\"The kernel loses the connection and restarts.\"],\"outcomes\":[\"The result is called a refusal and recovery attempts the function again.\",\"The existing record is discovered and recovery does not execute the function again.\"],\"observer\":\"The function's operator and a trace reader\"}},{\"subject\":\"context\",\"kind\":\"completion_boundary\",\"text\":\"Every node execution writes one immutable trace record: run, node, pinned\\nversions, input and output by digest, verdicts, status, failure, resources, time —\\nexcept a function execution during which the kernel stops because the store\\nrefused that record: it leaves none, and recovery executes the function again,\\nwhich has no effect.\",\"question\":\"If the function body returns but the process stops before attempting or completing the record write for a reason other than an explicit store refusal, was there a node execution that must have a record, or is record commit part of what makes it an execution?\",\"options\":[\"Record commit is the completion boundary, so the interrupted invocation is not a completed node execution and recovery reruns it\",\"The returned invocation was a node execution, so the text must specify another permitted no-record case\",\"The record must be durably reserved before the function runs\"],\"default_guess\":\"Make durable NodeExecution commit the completion boundary; an invocation interrupted before that boundary is replayed and is not counted as a completed execution.\",\"witness\":{\"initial\":\"A function body has returned its output, but no NodeExecution has yet been written.\",\"events\":[\"The process loses power before the store is asked to write the record.\",\"The kernel starts and applies A14 rule 5.\"],\"outcomes\":[\"The first invocation counts as an execution, contradicting the promise that every such execution has a record.\",\"The first invocation is treated as incomplete; recovery executes the function again and only the recorded invocation counts.\"],\"observer\":\"The function operator, who sees two invocations, and the trace reader, who sees one record\"}},{\"subject\":\"context\",\"kind\":\"attempt_number_contradiction\",\"text\":\"a position being the run, node,\\n   `map_index`, attempt number, port and list index, which only a retry of\\n   the same attempt number writes again, after a restart left that attempt\\n   without a record\",\"question\":\"How can recovery write the same attempt-numbered spool position when the carried rule says an execution that leaves no stored NodeExecution takes no attempt number?\",\"options\":[\"Reserve the next ordinal provisionally for the spool path without treating it as taken until the record commits\",\"Use an unnumbered staging position and assign the ordinal only when the record commits\",\"Give the failed execution an attempt number despite the carried rule\"],\"default_guess\":\"Use the next ordinal as a provisional spool namespace, but make it a taken attempt number only when its NodeExecution commits; recovery reuses that provisional namespace.\",\"witness\":{\"initial\":\"The element has no stored NodeExecution, so its next stored-record ordinal is 1.\",\"events\":[\"A function writes file bytes into its spool position.\",\"The store refuses its NodeExecution and the kernel stops.\",\"Recovery executes the function again and writes different bytes.\"],\"outcomes\":[\"Both invocations use provisional attempt position 1, and the replay replaces the first bytes.\",\"The first invocation uses unnumbered staging and recovery creates the first numbered position only when record 1 commits.\"],\"observer\":\"The spool quota/accounting implementation and a storage operator\"}},{\"subject\":\"context\",\"kind\":\"vague_effect_scope\",\"text\":\"which has no effect\",\"question\":\"Does “no effect” mean only that a function performs no Cabinet service effect, that it has no externally observable side effect of any kind, or that replay must also leave no additional internal artifacts such as logs, metrics, spooled bytes, or unnamed values?\",\"options\":[\"No external business or service effect; internal trace and storage artifacts are allowed by their rules\",\"No externally observable side effect of any kind\",\"Replay must be observationally identical, including internal artifacts\"],\"default_guess\":\"Interpret it as no external business or service effect; govern trace, spool, unnamed values, logs, and metrics separately.\",\"witness\":{\"initial\":\"A function invocation increments an execution metric and produces bytes, but its NodeExecution write is refused.\",\"events\":[\"The kernel stops.\",\"Recovery invokes the function again.\"],\"outcomes\":[\"The metric records two invocations while the trace has one execution record.\",\"The implementation suppresses or rolls back the first invocation's metric and internal artifacts so replay leaves no additional observation.\"],\"observer\":\"The system operator viewing metrics and storage usage\"}}]}",
+ "set_aside": []
+}

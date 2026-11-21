@@ -1,0 +1,174 @@
+{
+ "open_points": [
+  {
+   "subject": "trace record persistence",
+   "kind": "missing_ownership",
+   "text": "Every node execution writes one immutable trace record",
+   "question": "Which module owns constructing and atomically persisting the trace record?",
+   "options": [
+    "the kernel owns construction and persistence",
+    "the kernel constructs it and a store module owns persistence",
+    "a trace module owns both through the store"
+   ],
+   "default_guess": "the kernel constructs the record and depends on a store module for atomic persistence",
+   "unit": "?"
+  },
+  {
+   "subject": "kernel and store boundary",
+   "kind": "unclear_dependency",
+   "text": "the kernel stops because the store refused that record",
+   "question": "What is the dependency direction and interface between the kernel and the store, and which module classifies a store response as refusal?",
+   "options": [
+    "the kernel synchronously calls the store and interprets its result",
+    "the store reports an asynchronous failure to the kernel",
+    "a recovery or trace module mediates between them"
+   ],
+   "default_guess": "the kernel depends synchronously on the store and interprets a typed refusal result",
+   "unit": "?"
+  },
+  {
+   "subject": "recovery execution",
+   "kind": "missing_ownership",
+   "text": "recovery executes the function again",
+   "question": "Which module owns recovery, selects the function execution to repeat, and commands its re-execution?",
+   "options": [
+    "the kernel owns recovery",
+    "a recovery module owns retry orchestration",
+    "the run owner or an agent initiates recovery"
+   ],
+   "default_guess": "the kernel owns retry orchestration after an authorized resume",
+   "unit": "?"
+  },
+  {
+   "subject": "recovery trigger",
+   "kind": "ambiguous_retry_trigger",
+   "text": "recovery executes the function again",
+   "question": "Does recovery retry automatically after the store becomes usable, or only after the owner, an agent, or the owner’s resolution resumes the run?",
+   "options": [
+    "retry automatically",
+    "wait for the owner or an agent to resume",
+    "wait for the owner’s explicit resolution"
+   ],
+   "default_guess": "place the run in pending and retry only after the owner or an agent resumes it",
+   "witness": {
+    "initial": "A function finishes, but the trace store is unreachable and refuses the record.",
+    "events": [
+     "The kernel stops after the refusal.",
+     "The trace store later becomes reachable without anyone acting."
+    ],
+    "outcomes": [
+     "Recovery automatically executes the function again.",
+     "The run remains pending until the owner or an agent resumes it."
+    ],
+    "observer": "the run owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "effect safety of repeated functions",
+   "kind": "ambiguous_effect_semantics",
+   "text": "which has no effect",
+   "question": "What has no effect: the unrecorded first execution, the repeated execution, or repeating an execution because functions are pure or idempotent; and which module enforces that property?",
+   "options": [
+    "the first execution is transactionally rolled back before retry",
+    "all retryable functions are side-effect-free",
+    "functions may have effects but must be idempotent or deduplicated",
+    "only the missing trace record has no effect on product state"
+   ],
+   "default_guess": "permit retry only for functions whose effects are transactionally rolled back or protected by an idempotency key",
+   "witness": {
+    "initial": "A function sends a notification and then the store refuses its trace record.",
+    "events": [
+     "The recipient receives the first notification.",
+     "Recovery executes the function again."
+    ],
+    "outcomes": [
+     "The effect guarantee prevents or deduplicates the second notification, so the recipient receives one.",
+     "The phrase refers only to trace state, so the recipient receives two notifications."
+    ],
+    "observer": "the notification recipient"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "scope of stopping",
+   "kind": "ambiguous_action_scope",
+   "text": "the kernel stops",
+   "question": "Does the kernel stop only the current function execution, its node, the whole run scheduler, or all runs handled by that kernel?",
+   "options": [
+    "stop only the current function execution",
+    "fail or suspend the current node and its dependants",
+    "stop the entire run",
+    "stop the kernel process and all runs"
+   ],
+   "default_guess": "suspend the current node and its dependants while unrelated nodes and runs continue",
+   "witness": {
+    "initial": "Two independent nodes in one run are executing concurrently.",
+    "events": [
+     "The first node’s function finishes.",
+     "The store refuses the first node’s trace record."
+    ],
+    "outcomes": [
+     "Only the first node and its dependants stop; the independent node continues.",
+     "The whole kernel or run stops; the independent node does not continue."
+    ],
+    "observer": "the owner watching the independent node"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "run status after trace refusal",
+   "kind": "missing_decision",
+   "text": "except a function execution during which the kernel stops because the store refused that record",
+   "question": "What node and run statuses are assigned after this refusal, particularly when it is caused by unreachability, validation, authorization, or an unknown commit outcome?",
+   "options": [
+    "pending for every trace-store refusal",
+    "pending only for unreachability or unknown outcome and failed for definitive rejection",
+    "failed for every refusal",
+    "refused even though no owner refused an effect"
+   ],
+   "default_guess": "use pending for unreachability or unknown commit outcome and failed for a definitive store rejection",
+   "witness": {
+    "initial": "The store definitively rejects a trace record as invalid while other independent nodes remain.",
+    "events": [
+     "The kernel receives the rejection.",
+     "The status projector determines the node and run status."
+    ],
+    "outcomes": [
+     "The node and run are marked failed because the rejection is definitive.",
+     "The run is marked pending because recovery is expected to retry the function."
+    ],
+    "observer": "the run owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "identity of recovered execution",
+   "kind": "ambiguous_replay_identity",
+   "text": "executes the function again",
+   "question": "Must recovery use the same pinned function version, inputs, configuration, and execution identity, or may it resolve current values when it retries?",
+   "options": [
+    "replay exactly the original pinned version and inputs under the same logical execution identity",
+    "replay the original inputs but create a new attempt identity",
+    "resolve the latest function version and current configuration"
+   ],
+   "default_guess": "replay the same pinned version and inputs with a new attempt identity under the same logical node execution",
+   "witness": {
+    "initial": "A run pins function version 1; its trace write is refused; version 2 is deployed before recovery.",
+    "events": [
+     "Recovery selects the function to execute again.",
+     "The function produces version-dependent output."
+    ],
+    "outcomes": [
+     "Recovery runs version 1 and produces the original output.",
+     "Recovery resolves version 2 and produces different output."
+    ],
+    "observer": "the run owner and downstream dependants"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"trace record persistence\",\"kind\":\"missing_ownership\",\"text\":\"Every node execution writes one immutable trace record\",\"question\":\"Which module owns constructing and atomically persisting the trace record?\",\"options\":[\"the kernel owns construction and persistence\",\"the kernel constructs it and a store module owns persistence\",\"a trace module owns both through the store\"],\"default_guess\":\"the kernel constructs the record and depends on a store module for atomic persistence\"},{\"subject\":\"kernel and store boundary\",\"kind\":\"unclear_dependency\",\"text\":\"the kernel stops because the store refused that record\",\"question\":\"What is the dependency direction and interface between the kernel and the store, and which module classifies a store response as refusal?\",\"options\":[\"the kernel synchronously calls the store and interprets its result\",\"the store reports an asynchronous failure to the kernel\",\"a recovery or trace module mediates between them\"],\"default_guess\":\"the kernel depends synchronously on the store and interprets a typed refusal result\"},{\"subject\":\"recovery execution\",\"kind\":\"missing_ownership\",\"text\":\"recovery executes the function again\",\"question\":\"Which module owns recovery, selects the function execution to repeat, and commands its re-execution?\",\"options\":[\"the kernel owns recovery\",\"a recovery module owns retry orchestration\",\"the run owner or an agent initiates recovery\"],\"default_guess\":\"the kernel owns retry orchestration after an authorized resume\"},{\"subject\":\"recovery trigger\",\"kind\":\"ambiguous_retry_trigger\",\"text\":\"recovery executes the function again\",\"question\":\"Does recovery retry automatically after the store becomes usable, or only after the owner, an agent, or the owner’s resolution resumes the run?\",\"options\":[\"retry automatically\",\"wait for the owner or an agent to resume\",\"wait for the owner’s explicit resolution\"],\"default_guess\":\"place the run in pending and retry only after the owner or an agent resumes it\",\"witness\":{\"initial\":\"A function finishes, but the trace store is unreachable and refuses the record.\",\"events\":[\"The kernel stops after the refusal.\",\"The trace store later becomes reachable without anyone acting.\"],\"outcomes\":[\"Recovery automatically executes the function again.\",\"The run remains pending until the owner or an agent resumes it.\"],\"observer\":\"the run owner\"}},{\"subject\":\"effect safety of repeated functions\",\"kind\":\"ambiguous_effect_semantics\",\"text\":\"which has no effect\",\"question\":\"What has no effect: the unrecorded first execution, the repeated execution, or repeating an execution because functions are pure or idempotent; and which module enforces that property?\",\"options\":[\"the first execution is transactionally rolled back before retry\",\"all retryable functions are side-effect-free\",\"functions may have effects but must be idempotent or deduplicated\",\"only the missing trace record has no effect on product state\"],\"default_guess\":\"permit retry only for functions whose effects are transactionally rolled back or protected by an idempotency key\",\"witness\":{\"initial\":\"A function sends a notification and then the store refuses its trace record.\",\"events\":[\"The recipient receives the first notification.\",\"Recovery executes the function again.\"],\"outcomes\":[\"The effect guarantee prevents or deduplicates the second notification, so the recipient receives one.\",\"The phrase refers only to trace state, so the recipient receives two notifications.\"],\"observer\":\"the notification recipient\"}},{\"subject\":\"scope of stopping\",\"kind\":\"ambiguous_action_scope\",\"text\":\"the kernel stops\",\"question\":\"Does the kernel stop only the current function execution, its node, the whole run scheduler, or all runs handled by that kernel?\",\"options\":[\"stop only the current function execution\",\"fail or suspend the current node and its dependants\",\"stop the entire run\",\"stop the kernel process and all runs\"],\"default_guess\":\"suspend the current node and its dependants while unrelated nodes and runs continue\",\"witness\":{\"initial\":\"Two independent nodes in one run are executing concurrently.\",\"events\":[\"The first node’s function finishes.\",\"The store refuses the first node’s trace record.\"],\"outcomes\":[\"Only the first node and its dependants stop; the independent node continues.\",\"The whole kernel or run stops; the independent node does not continue.\"],\"observer\":\"the owner watching the independent node\"}},{\"subject\":\"run status after trace refusal\",\"kind\":\"missing_decision\",\"text\":\"except a function execution during which the kernel stops because the store refused that record\",\"question\":\"What node and run statuses are assigned after this refusal, particularly when it is caused by unreachability, validation, authorization, or an unknown commit outcome?\",\"options\":[\"pending for every trace-store refusal\",\"pending only for unreachability or unknown outcome and failed for definitive rejection\",\"failed for every refusal\",\"refused even though no owner refused an effect\"],\"default_guess\":\"use pending for unreachability or unknown commit outcome and failed for a definitive store rejection\",\"witness\":{\"initial\":\"The store definitively rejects a trace record as invalid while other independent nodes remain.\",\"events\":[\"The kernel receives the rejection.\",\"The status projector determines the node and run status.\"],\"outcomes\":[\"The node and run are marked failed because the rejection is definitive.\",\"The run is marked pending because recovery is expected to retry the function.\"],\"observer\":\"the run owner\"}},{\"subject\":\"identity of recovered execution\",\"kind\":\"ambiguous_replay_identity\",\"text\":\"executes the function again\",\"question\":\"Must recovery use the same pinned function version, inputs, configuration, and execution identity, or may it resolve current values when it retries?\",\"options\":[\"replay exactly the original pinned version and inputs under the same logical execution identity\",\"replay the original inputs but create a new attempt identity\",\"resolve the latest function version and current configuration\"],\"default_guess\":\"replay the same pinned version and inputs with a new attempt identity under the same logical node execution\",\"witness\":{\"initial\":\"A run pins function version 1; its trace write is refused; version 2 is deployed before recovery.\",\"events\":[\"Recovery selects the function to execute again.\",\"The function produces version-dependent output.\"],\"outcomes\":[\"Recovery runs version 1 and produces the original output.\",\"Recovery resolves version 2 and produces different output.\"],\"observer\":\"the run owner and downstream dependants\"}}]}",
+ "set_aside": []
+}

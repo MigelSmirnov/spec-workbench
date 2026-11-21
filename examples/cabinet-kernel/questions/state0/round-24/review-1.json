@@ -1,0 +1,229 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 store-refusal failure",
+   "kind": "undefined observable failure",
+   "text": "the kernel stops because the store refused that record",
+   "question": "Does “the kernel stops” mean the process terminates, the node attempt aborts, or the run call returns a refusal, and what observable run status and response does the caller receive?",
+   "options": [
+    "Terminate the process and leave the call without a response",
+    "Abort the node attempt and keep the run recoverable",
+    "Return a coded refusal and end or pause the run"
+   ],
+   "default_guess": "Abort the attempt, leave the run recoverable, and return a distinct storage-failure response.",
+   "witness": {
+    "initial": "A function node is executing in an active run.",
+    "events": [
+     "The store refuses the node's trace record.",
+     "The owner inspects the call result and the run."
+    ],
+    "outcomes": [
+     "The kernel process has stopped and the caller received no response.",
+     "The process remains available and the caller receives a refusal or recoverable run status."
+    ],
+    "observer": "The owner or agent that invoked or inspects the run."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 and K-17 call outcome",
+   "kind": "contradiction",
+   "text": "the kernel stops because the store refused that record; other operations are plain calls that succeed or refuse",
+   "question": "How can the call satisfy K-17's succeed-or-refuse rule when K-09 says the kernel stops, and which passage governs the caller-visible outcome?",
+   "options": [
+    "Stopping is a refusal and must return a reason",
+    "The process may stop without returning, creating an exception to K-17",
+    "K-17 does not apply to execution triggered by run or resume"
+   ],
+   "default_guess": "Treat the storage failure as a refusal with a distinct reason and make clear that stopping only aborts the attempt.",
+   "witness": {
+    "initial": "An agent calls run and a function executes.",
+    "events": [
+     "The store refuses the trace record during the function execution.",
+     "The agent waits for the run call's result."
+    ],
+    "outcomes": [
+     "Under K-09, the kernel stops and the agent may receive no call outcome.",
+     "Under K-17, the call must either succeed or refuse."
+    ],
+    "observer": "The calling agent."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 recovery trigger",
+   "kind": "unnamed action",
+   "text": "recovery executes the function again",
+   "question": "What concrete recovery action starts the re-execution, who performs or requests it, and when may it occur?",
+   "options": [
+    "The kernel automatically re-executes on process restart",
+    "The owner or an agent must invoke resume",
+    "The original run call retries immediately",
+    "An operator performs an out-of-band store recovery and then restarts the kernel"
+   ],
+   "default_guess": "After the store is usable, kernel startup automatically finds the incomplete node and re-executes it."
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 recovery state",
+   "kind": "unnamed stored fact",
+   "text": "it leaves none, and recovery executes the function again",
+   "question": "If the execution leaves no trace record, what durable fact identifies that this particular run and node require recovery rather than having never started or already completed?",
+   "options": [
+    "A durable pre-execution attempt marker outside the trace",
+    "The run's node state records incomplete execution",
+    "Recovery replays every node lacking a trace",
+    "The caller must resubmit because the kernel cannot identify it"
+   ],
+   "default_guess": "Persist an incomplete node state before execution and clear it atomically when the trace and output commit.",
+   "witness": {
+    "initial": "A run contains two ready function nodes, one never started and one whose trace write was refused.",
+    "events": [
+     "The kernel restarts.",
+     "Recovery examines the store, where neither node has an execution trace."
+    ],
+    "outcomes": [
+     "Recovery re-executes only the previously attempted node using another durable marker.",
+     "Recovery cannot distinguish the nodes and either executes both or neither."
+    ],
+    "observer": "The owner reading the resulting traces and outputs."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 meaning of no record",
+   "kind": "ambiguous scope",
+   "text": "it leaves none",
+   "question": "Does “none” mean only that no trace record exists, or that the failed attempt leaves no output value, node state, resource accounting, trial evidence, or other durable record of any kind?",
+   "options": [
+    "Only the trace record is absent",
+    "No durable state from the attempt remains",
+    "Outputs remain but execution metadata does not"
+   ],
+   "default_guess": "No output or completion state from the attempt remains, while a pre-existing durable incomplete marker may remain for recovery."
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 output commitment",
+   "kind": "undefined atomicity",
+   "text": "input and output by digest, verdicts, status, failure, resources, time — except a function execution during which the kernel stops because the store refused that record",
+   "question": "Are the function output, node completion, trace record, and release of data to dependants committed atomically, so that no dependant can consume the first attempt's output before its trace is refused?",
+   "options": [
+    "Commit trace, output and completion atomically before releasing dependants",
+    "Store or release the output before attempting the trace write",
+    "Discard the first output on refusal even if a dependant has already received it"
+   ],
+   "default_guess": "Commit the trace, output digest and node completion atomically, and release dependants only after that commit succeeds.",
+   "witness": {
+    "initial": "Function A produces an output consumed by function B.",
+    "events": [
+     "A finishes and its output is available.",
+     "The store refuses A's trace record.",
+     "Before or during recovery, the scheduler considers B."
+    ],
+    "outcomes": [
+     "B cannot run because A's output was never committed or released.",
+     "B runs on the first output even though recovery later executes A again and may produce a different output."
+    ],
+    "observer": "The owner reading B's result and the run trace."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 replay result",
+   "kind": "undefined replay semantics",
+   "text": "recovery executes the function again",
+   "question": "Because K-02 does not enforce that implementations depend only on inputs, which attempt's output is authoritative if the unrecorded execution and the recovery execution produce different values?",
+   "options": [
+    "Discard the first attempt and accept the recovery output",
+    "Retain and use the first output",
+    "Compare both outputs and fail on disagreement",
+    "Refuse recovery for implementations whose determinism was not established"
+   ],
+   "default_guess": "Discard every uncommitted artifact of the first attempt and accept the recovery execution as the sole authoritative attempt.",
+   "witness": {
+    "initial": "A function obtains chance through a method the kernel does not detect.",
+    "events": [
+     "The first execution produces output X.",
+     "Its trace record is refused.",
+     "Recovery executes the same function with the same declared input and produces Y."
+    ],
+    "outcomes": [
+     "The run continues with X.",
+     "The run continues with Y."
+    ],
+    "observer": "The owner or a downstream node receiving the value."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 meaning of effect",
+   "kind": "ambiguous promise",
+   "text": "recovery executes the function again, which has no effect",
+   "question": "What exactly “has no effect”: the failed first execution, the act of recovery, or the recovery execution's external side effects, and does the recovery execution still publish its declared output?",
+   "options": [
+    "The first unrecorded execution has no committed kernel or external effect",
+    "The recovery execution has no external effect but its output is committed",
+    "The recovery execution has no effect at all and its output is ignored"
+   ],
+   "default_guess": "The first attempt has no committed effect; the recovery execution has no external effect but does commit its declared output and trace.",
+   "witness": {
+    "initial": "A function's first trace write is refused and recovery later succeeds.",
+    "events": [
+     "Recovery executes the function and obtains an output.",
+     "A downstream node becomes ready if that output is published."
+    ],
+    "outcomes": [
+     "“No effect” means no external side effect, so the output is published and the downstream node runs.",
+     "“No effect” includes the declared output, so nothing is published and the downstream node cannot run."
+    ],
+    "observer": "The owner and the downstream node."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 repeated store refusal",
+   "kind": "missing failure policy",
+   "text": "recovery executes the function again",
+   "question": "What happens if the store refuses the recovery execution's trace record as well: repeated automatic recovery, a pending run, a failed run, or a caller-visible refusal?",
+   "options": [
+    "Retry on every recovery without a limit",
+    "Place the run in pending with a storage-specific reason",
+    "End the run as failed",
+    "Refuse the recovery call while retaining resumable state"
+   ],
+   "default_guess": "Retain resumable incomplete state and refuse the current recovery attempt with a storage-specific reason; do not spin automatically."
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "K-09 operation-node trace refusal",
+   "kind": "unhandled failure",
+   "text": "except a function execution during which the kernel stops because the store refused that record",
+   "question": "What prevents or handles the same trace-record refusal for an operation node, especially after its external effect may have happened?",
+   "options": [
+    "Reserve or durably create the operation trace before invoking the service so post-effect refusal is impossible",
+    "Stop and mark the outcome unknown without repeating the effect",
+    "Apply the same recovery rule but require fresh approval before any repeat",
+    "Treat operation trace refusal as an installation-fatal condition with a separately specified recovery record"
+   ],
+   "default_guess": "Durably record the operation attempt before invocation; if completion cannot be recorded after invocation, place the run in outcome_unknown and never repeat without owner resolution.",
+   "witness": {
+    "initial": "An approved operation node invokes a service that applies an external effect.",
+    "events": [
+     "The service applies the effect and returns success.",
+     "The store refuses the operation node's trace record.",
+     "The kernel recovers without a trace proving whether the effect happened."
+    ],
+    "outcomes": [
+     "The kernel repeats the operation, potentially duplicating the effect.",
+     "The kernel does not repeat it and waits for the owner's outcome resolution."
+    ],
+    "observer": "The owner and the external system affected by the operation."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 store-refusal failure\",\"kind\":\"undefined observable failure\",\"text\":\"the kernel stops because the store refused that record\",\"question\":\"Does “the kernel stops” mean the process terminates, the node attempt aborts, or the run call returns a refusal, and what observable run status and response does the caller receive?\",\"options\":[\"Terminate the process and leave the call without a response\",\"Abort the node attempt and keep the run recoverable\",\"Return a coded refusal and end or pause the run\"],\"default_guess\":\"Abort the attempt, leave the run recoverable, and return a distinct storage-failure response.\",\"witness\":{\"initial\":\"A function node is executing in an active run.\",\"events\":[\"The store refuses the node's trace record.\",\"The owner inspects the call result and the run.\"],\"outcomes\":[\"The kernel process has stopped and the caller received no response.\",\"The process remains available and the caller receives a refusal or recoverable run status.\"],\"observer\":\"The owner or agent that invoked or inspects the run.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 and K-17 call outcome\",\"kind\":\"contradiction\",\"text\":\"the kernel stops because the store refused that record; other operations are plain calls that succeed or refuse\",\"question\":\"How can the call satisfy K-17's succeed-or-refuse rule when K-09 says the kernel stops, and which passage governs the caller-visible outcome?\",\"options\":[\"Stopping is a refusal and must return a reason\",\"The process may stop without returning, creating an exception to K-17\",\"K-17 does not apply to execution triggered by run or resume\"],\"default_guess\":\"Treat the storage failure as a refusal with a distinct reason and make clear that stopping only aborts the attempt.\",\"witness\":{\"initial\":\"An agent calls run and a function executes.\",\"events\":[\"The store refuses the trace record during the function execution.\",\"The agent waits for the run call's result.\"],\"outcomes\":[\"Under K-09, the kernel stops and the agent may receive no call outcome.\",\"Under K-17, the call must either succeed or refuse.\"],\"observer\":\"The calling agent.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 recovery trigger\",\"kind\":\"unnamed action\",\"text\":\"recovery executes the function again\",\"question\":\"What concrete recovery action starts the re-execution, who performs or requests it, and when may it occur?\",\"options\":[\"The kernel automatically re-executes on process restart\",\"The owner or an agent must invoke resume\",\"The original run call retries immediately\",\"An operator performs an out-of-band store recovery and then restarts the kernel\"],\"default_guess\":\"After the store is usable, kernel startup automatically finds the incomplete node and re-executes it.\"},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 recovery state\",\"kind\":\"unnamed stored fact\",\"text\":\"it leaves none, and recovery executes the function again\",\"question\":\"If the execution leaves no trace record, what durable fact identifies that this particular run and node require recovery rather than having never started or already completed?\",\"options\":[\"A durable pre-execution attempt marker outside the trace\",\"The run's node state records incomplete execution\",\"Recovery replays every node lacking a trace\",\"The caller must resubmit because the kernel cannot identify it\"],\"default_guess\":\"Persist an incomplete node state before execution and clear it atomically when the trace and output commit.\",\"witness\":{\"initial\":\"A run contains two ready function nodes, one never started and one whose trace write was refused.\",\"events\":[\"The kernel restarts.\",\"Recovery examines the store, where neither node has an execution trace.\"],\"outcomes\":[\"Recovery re-executes only the previously attempted node using another durable marker.\",\"Recovery cannot distinguish the nodes and either executes both or neither.\"],\"observer\":\"The owner reading the resulting traces and outputs.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 meaning of no record\",\"kind\":\"ambiguous scope\",\"text\":\"it leaves none\",\"question\":\"Does “none” mean only that no trace record exists, or that the failed attempt leaves no output value, node state, resource accounting, trial evidence, or other durable record of any kind?\",\"options\":[\"Only the trace record is absent\",\"No durable state from the attempt remains\",\"Outputs remain but execution metadata does not\"],\"default_guess\":\"No output or completion state from the attempt remains, while a pre-existing durable incomplete marker may remain for recovery.\"},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 output commitment\",\"kind\":\"undefined atomicity\",\"text\":\"input and output by digest, verdicts, status, failure, resources, time — except a function execution during which the kernel stops because the store refused that record\",\"question\":\"Are the function output, node completion, trace record, and release of data to dependants committed atomically, so that no dependant can consume the first attempt's output before its trace is refused?\",\"options\":[\"Commit trace, output and completion atomically before releasing dependants\",\"Store or release the output before attempting the trace write\",\"Discard the first output on refusal even if a dependant has already received it\"],\"default_guess\":\"Commit the trace, output digest and node completion atomically, and release dependants only after that commit succeeds.\",\"witness\":{\"initial\":\"Function A produces an output consumed by function B.\",\"events\":[\"A finishes and its output is available.\",\"The store refuses A's trace record.\",\"Before or during recovery, the scheduler considers B.\"],\"outcomes\":[\"B cannot run because A's output was never committed or released.\",\"B runs on the first output even though recovery later executes A again and may produce a different output.\"],\"observer\":\"The owner reading B's result and the run trace.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 replay result\",\"kind\":\"undefined replay semantics\",\"text\":\"recovery executes the function again\",\"question\":\"Because K-02 does not enforce that implementations depend only on inputs, which attempt's output is authoritative if the unrecorded execution and the recovery execution produce different values?\",\"options\":[\"Discard the first attempt and accept the recovery output\",\"Retain and use the first output\",\"Compare both outputs and fail on disagreement\",\"Refuse recovery for implementations whose determinism was not established\"],\"default_guess\":\"Discard every uncommitted artifact of the first attempt and accept the recovery execution as the sole authoritative attempt.\",\"witness\":{\"initial\":\"A function obtains chance through a method the kernel does not detect.\",\"events\":[\"The first execution produces output X.\",\"Its trace record is refused.\",\"Recovery executes the same function with the same declared input and produces Y.\"],\"outcomes\":[\"The run continues with X.\",\"The run continues with Y.\"],\"observer\":\"The owner or a downstream node receiving the value.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 meaning of effect\",\"kind\":\"ambiguous promise\",\"text\":\"recovery executes the function again, which has no effect\",\"question\":\"What exactly “has no effect”: the failed first execution, the act of recovery, or the recovery execution's external side effects, and does the recovery execution still publish its declared output?\",\"options\":[\"The first unrecorded execution has no committed kernel or external effect\",\"The recovery execution has no external effect but its output is committed\",\"The recovery execution has no effect at all and its output is ignored\"],\"default_guess\":\"The first attempt has no committed effect; the recovery execution has no external effect but does commit its declared output and trace.\",\"witness\":{\"initial\":\"A function's first trace write is refused and recovery later succeeds.\",\"events\":[\"Recovery executes the function and obtains an output.\",\"A downstream node becomes ready if that output is published.\"],\"outcomes\":[\"“No effect” means no external side effect, so the output is published and the downstream node runs.\",\"“No effect” includes the declared output, so nothing is published and the downstream node cannot run.\"],\"observer\":\"The owner and the downstream node.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 repeated store refusal\",\"kind\":\"missing failure policy\",\"text\":\"recovery executes the function again\",\"question\":\"What happens if the store refuses the recovery execution's trace record as well: repeated automatic recovery, a pending run, a failed run, or a caller-visible refusal?\",\"options\":[\"Retry on every recovery without a limit\",\"Place the run in pending with a storage-specific reason\",\"End the run as failed\",\"Refuse the recovery call while retaining resumable state\"],\"default_guess\":\"Retain resumable incomplete state and refuse the current recovery attempt with a storage-specific reason; do not spin automatically.\"},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"K-09 operation-node trace refusal\",\"kind\":\"unhandled failure\",\"text\":\"except a function execution during which the kernel stops because the store refused that record\",\"question\":\"What prevents or handles the same trace-record refusal for an operation node, especially after its external effect may have happened?\",\"options\":[\"Reserve or durably create the operation trace before invoking the service so post-effect refusal is impossible\",\"Stop and mark the outcome unknown without repeating the effect\",\"Apply the same recovery rule but require fresh approval before any repeat\",\"Treat operation trace refusal as an installation-fatal condition with a separately specified recovery record\"],\"default_guess\":\"Durably record the operation attempt before invocation; if completion cannot be recorded after invocation, place the run in outcome_unknown and never repeat without owner resolution.\",\"witness\":{\"initial\":\"An approved operation node invokes a service that applies an external effect.\",\"events\":[\"The service applies the effect and returns success.\",\"The store refuses the operation node's trace record.\",\"The kernel recovers without a trace proving whether the effect happened.\"],\"outcomes\":[\"The kernel repeats the operation, potentially duplicating the effect.\",\"The kernel does not repeat it and waits for the owner's outcome resolution.\"],\"observer\":\"The owner and the external system affected by the operation.\"}}]}",
+ "set_aside": []
+}

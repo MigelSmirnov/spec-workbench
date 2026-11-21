@@ -1,0 +1,220 @@
+{
+ "open_points": [
+  {
+   "subject": "context — function-execution classification",
+   "kind": "undefined scope",
+   "text": "except a function execution",
+   "question": "Which node executions count as function executions and therefore qualify for the no-trace recovery exception?",
+   "options": [
+    "Every node execution is a function execution",
+    "Only a defined subset of node executions is a function execution",
+    "Qualification depends on declared function metadata"
+   ],
+   "default_guess": "Treat only explicitly declared function nodes as function executions.",
+   "witness": {
+    "initial": "A node executes successfully, but its trace record is refused by the store.",
+    "events": [
+     "The kernel classifies the node under its implementation's interpretation of “function execution”."
+    ],
+    "outcomes": [
+     "The node qualifies for the exception, leaves no trace, and is executed again.",
+     "The node does not qualify, so the ordinary requirement that every execution write a trace still applies."
+    ],
+    "observer": "The run owner and trace auditor"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context — trace refusal responsibility",
+   "kind": "missing module owner",
+   "text": "the kernel stops because the store refused that record",
+   "question": "Which module owns detecting and classifying a trace-record refusal, and which module commands the kernel to stop?",
+   "options": [
+    "The trace store reports refusal and the kernel owns the stop decision",
+    "The trace subsystem owns both refusal handling and stopping",
+    "The kernel owns the write, detects refusal directly, and stops itself"
+   ],
+   "default_guess": "Make the kernel consume a structured refusal from the trace-store module and own the stop decision.",
+   "unit": "?"
+  },
+  {
+   "subject": "context — stop scope",
+   "kind": "ambiguous action",
+   "text": "the kernel stops",
+   "question": "What stops when the trace store refuses the record: only the function attempt, the node, the run, or the entire kernel service?",
+   "options": [
+    "Stop only the current function attempt",
+    "Stop the node and suspend its run",
+    "Stop the entire kernel service"
+   ],
+   "default_guess": "Suspend the affected run after stopping the current node attempt.",
+   "witness": {
+    "initial": "Two runs are executing concurrently when one trace write is refused.",
+    "events": [
+     "The store refuses the record for a function in the first run.",
+     "The kernel applies its interpretation of “stops”."
+    ],
+    "outcomes": [
+     "Only the affected run stops; the second run continues.",
+     "The kernel service stops; both runs cease executing."
+    ],
+    "observer": "The owner of the second run"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context — state after trace refusal",
+   "kind": "missing state transition",
+   "text": "it leaves none, and recovery executes the function again",
+   "question": "What run and node statuses apply after the refusal and before recovery, and is the condition `pending`, `failed`, or an unlisted recovery state?",
+   "options": [
+    "Set the run to `pending` because the store is an unreachable service",
+    "Set the node or run to `failed`",
+    "Keep an internal recovery state without changing the listed run status"
+   ],
+   "default_guess": "Set the run to `pending` and record the trace-store failure in separately durable recovery state.",
+   "witness": {
+    "initial": "A running function finishes, but its trace record is refused and recovery cannot begin immediately.",
+    "events": [
+     "The kernel stops the affected work.",
+     "A client reads the run before recovery."
+    ],
+    "outcomes": [
+     "The client sees `pending`.",
+     "The client sees `failed` or the previous running status."
+    ],
+    "observer": "The run owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context — recovery trigger",
+   "kind": "unclear control flow",
+   "text": "recovery executes the function again",
+   "question": "Who initiates recovery, and does re-execution happen automatically after restart or only after the owner or an agent resumes the run?",
+   "options": [
+    "Recovery automatically re-executes after restart",
+    "The owner or an agent must resume it under the existing pending-run rule",
+    "A recovery operator explicitly authorizes re-execution through a separate path"
+   ],
+   "default_guess": "Require the owner or an agent to resume the pending run before re-execution.",
+   "witness": {
+    "initial": "The trace store refuses a record and later becomes available without anyone acting.",
+    "events": [
+     "The kernel or recovery service restarts.",
+     "No owner or agent sends a resume command."
+    ],
+    "outcomes": [
+     "Recovery automatically executes the function again.",
+     "The run remains pending until the owner or an agent resumes it."
+    ],
+    "observer": "The run owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context — recovery ownership and dependency",
+   "kind": "missing module owner",
+   "text": "recovery executes the function again",
+   "question": "Which module owns recovery and re-execution, and what is its dependency direction relative to the kernel, scheduler, and trace store?",
+   "options": [
+    "The kernel owns recovery and calls the trace store",
+    "A recovery module calls the kernel and reads the trace store",
+    "A scheduler owns recovery and invokes both kernel and store interfaces"
+   ],
+   "default_guess": "Use a recovery module that reads durable scheduler state and requests re-execution through the kernel.",
+   "unit": "?"
+  },
+  {
+   "subject": "context — effect semantics of re-execution",
+   "kind": "ambiguous guarantee",
+   "text": "which has no effect",
+   "question": "Does this mean the function is effect-free, the repeated execution produces no additional externally visible effect, or only that recovery ignores its returned result?",
+   "options": [
+    "Eligible functions are pure and have no external effects",
+    "Re-execution is idempotent and causes no additional effect",
+    "The repeated result is discarded, although external effects may still occur"
+   ],
+   "default_guess": "Require eligible functions to be idempotent so re-execution causes no additional externally visible effect.",
+   "witness": {
+    "initial": "A function sends a payment, then its trace record is refused.",
+    "events": [
+     "The first invocation sends the payment.",
+     "Recovery invokes the function again."
+    ],
+    "outcomes": [
+     "Idempotency suppresses the second payment, so the customer is charged once.",
+     "Only the recovered result is ignored, so the customer may be charged twice."
+    ],
+    "observer": "The customer and run owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context — ownership of the no-effect guarantee",
+   "kind": "missing knowledge owner",
+   "text": "recovery executes the function again, which has no effect",
+   "question": "Which module owns and verifies the fact that re-execution has no effect, and how can recovery know that a function satisfies it?",
+   "options": [
+    "The function contract declares purity or idempotency and a registry owns that metadata",
+    "The kernel enforces effect deduplication using an idempotency key",
+    "The recovery module assumes every function is safe to repeat"
+   ],
+   "default_guess": "Put an explicit idempotency guarantee in the function contract and have the kernel enforce an idempotency key for effects.",
+   "unit": "?"
+  },
+  {
+   "subject": "context — durable recovery evidence",
+   "kind": "missing record owner",
+   "text": "it leaves none, and recovery executes the function again",
+   "question": "If the refused execution leaves no trace record, what durable record tells recovery that this function must be executed again, and which module owns that record?",
+   "options": [
+    "A scheduler journal distinct from the immutable trace records",
+    "The trace store durably records the refusal without recording the execution",
+    "Recovery infers unfinished work from the absence of a trace record"
+   ],
+   "default_guess": "Use a scheduler-owned durable attempt journal distinct from the trace record.",
+   "witness": {
+    "initial": "The function completes, its trace record is refused, and the kernel process then crashes.",
+    "events": [
+     "The process restarts.",
+     "Recovery inspects the remaining durable data."
+    ],
+    "outcomes": [
+     "A separate attempt journal identifies the function and recovery executes it again.",
+     "No record identifies the completed attempt, so recovery either misses it or re-executes every trace-less node."
+    ],
+    "observer": "The run owner and trace auditor"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context — trace identity after recovery",
+   "kind": "underspecified record semantics",
+   "text": "it leaves none, and recovery executes the function again",
+   "question": "When the recovered invocation succeeds, does its trace describe a new execution attempt or replace the missing attempt as the single trace of the logical node execution?",
+   "options": [
+    "Write a trace for a distinct recovery attempt",
+    "Write one trace representing the logical node execution without exposing the lost attempt",
+    "Record recovery metadata in the new trace while keeping one immutable record"
+   ],
+   "default_guess": "Write a trace for a distinct recovery attempt and mark it as recovery, while retaining separate durable evidence that the earlier attempt had no trace.",
+   "witness": {
+    "initial": "The first invocation has no trace because its record was refused; the recovered invocation writes successfully.",
+    "events": [
+     "An auditor queries the run's trace.",
+     "The auditor counts execution attempts."
+    ],
+    "outcomes": [
+     "The trace identifies a recovery attempt and reveals that another attempt preceded it.",
+     "The trace presents the recovered invocation as the sole execution, concealing the earlier invocation."
+    ],
+    "observer": "The trace auditor"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context — function-execution classification\",\"kind\":\"undefined scope\",\"text\":\"except a function execution\",\"question\":\"Which node executions count as function executions and therefore qualify for the no-trace recovery exception?\",\"options\":[\"Every node execution is a function execution\",\"Only a defined subset of node executions is a function execution\",\"Qualification depends on declared function metadata\"],\"default_guess\":\"Treat only explicitly declared function nodes as function executions.\",\"witness\":{\"initial\":\"A node executes successfully, but its trace record is refused by the store.\",\"events\":[\"The kernel classifies the node under its implementation's interpretation of “function execution”.\"],\"outcomes\":[\"The node qualifies for the exception, leaves no trace, and is executed again.\",\"The node does not qualify, so the ordinary requirement that every execution write a trace still applies.\"],\"observer\":\"The run owner and trace auditor\"}},{\"subject\":\"context — trace refusal responsibility\",\"kind\":\"missing module owner\",\"text\":\"the kernel stops because the store refused that record\",\"question\":\"Which module owns detecting and classifying a trace-record refusal, and which module commands the kernel to stop?\",\"options\":[\"The trace store reports refusal and the kernel owns the stop decision\",\"The trace subsystem owns both refusal handling and stopping\",\"The kernel owns the write, detects refusal directly, and stops itself\"],\"default_guess\":\"Make the kernel consume a structured refusal from the trace-store module and own the stop decision.\"},{\"subject\":\"context — stop scope\",\"kind\":\"ambiguous action\",\"text\":\"the kernel stops\",\"question\":\"What stops when the trace store refuses the record: only the function attempt, the node, the run, or the entire kernel service?\",\"options\":[\"Stop only the current function attempt\",\"Stop the node and suspend its run\",\"Stop the entire kernel service\"],\"default_guess\":\"Suspend the affected run after stopping the current node attempt.\",\"witness\":{\"initial\":\"Two runs are executing concurrently when one trace write is refused.\",\"events\":[\"The store refuses the record for a function in the first run.\",\"The kernel applies its interpretation of “stops”.\"],\"outcomes\":[\"Only the affected run stops; the second run continues.\",\"The kernel service stops; both runs cease executing.\"],\"observer\":\"The owner of the second run\"}},{\"subject\":\"context — state after trace refusal\",\"kind\":\"missing state transition\",\"text\":\"it leaves none, and recovery executes the function again\",\"question\":\"What run and node statuses apply after the refusal and before recovery, and is the condition `pending`, `failed`, or an unlisted recovery state?\",\"options\":[\"Set the run to `pending` because the store is an unreachable service\",\"Set the node or run to `failed`\",\"Keep an internal recovery state without changing the listed run status\"],\"default_guess\":\"Set the run to `pending` and record the trace-store failure in separately durable recovery state.\",\"witness\":{\"initial\":\"A running function finishes, but its trace record is refused and recovery cannot begin immediately.\",\"events\":[\"The kernel stops the affected work.\",\"A client reads the run before recovery.\"],\"outcomes\":[\"The client sees `pending`.\",\"The client sees `failed` or the previous running status.\"],\"observer\":\"The run owner\"}},{\"subject\":\"context — recovery trigger\",\"kind\":\"unclear control flow\",\"text\":\"recovery executes the function again\",\"question\":\"Who initiates recovery, and does re-execution happen automatically after restart or only after the owner or an agent resumes the run?\",\"options\":[\"Recovery automatically re-executes after restart\",\"The owner or an agent must resume it under the existing pending-run rule\",\"A recovery operator explicitly authorizes re-execution through a separate path\"],\"default_guess\":\"Require the owner or an agent to resume the pending run before re-execution.\",\"witness\":{\"initial\":\"The trace store refuses a record and later becomes available without anyone acting.\",\"events\":[\"The kernel or recovery service restarts.\",\"No owner or agent sends a resume command.\"],\"outcomes\":[\"Recovery automatically executes the function again.\",\"The run remains pending until the owner or an agent resumes it.\"],\"observer\":\"The run owner\"}},{\"subject\":\"context — recovery ownership and dependency\",\"kind\":\"missing module owner\",\"text\":\"recovery executes the function again\",\"question\":\"Which module owns recovery and re-execution, and what is its dependency direction relative to the kernel, scheduler, and trace store?\",\"options\":[\"The kernel owns recovery and calls the trace store\",\"A recovery module calls the kernel and reads the trace store\",\"A scheduler owns recovery and invokes both kernel and store interfaces\"],\"default_guess\":\"Use a recovery module that reads durable scheduler state and requests re-execution through the kernel.\"},{\"subject\":\"context — effect semantics of re-execution\",\"kind\":\"ambiguous guarantee\",\"text\":\"which has no effect\",\"question\":\"Does this mean the function is effect-free, the repeated execution produces no additional externally visible effect, or only that recovery ignores its returned result?\",\"options\":[\"Eligible functions are pure and have no external effects\",\"Re-execution is idempotent and causes no additional effect\",\"The repeated result is discarded, although external effects may still occur\"],\"default_guess\":\"Require eligible functions to be idempotent so re-execution causes no additional externally visible effect.\",\"witness\":{\"initial\":\"A function sends a payment, then its trace record is refused.\",\"events\":[\"The first invocation sends the payment.\",\"Recovery invokes the function again.\"],\"outcomes\":[\"Idempotency suppresses the second payment, so the customer is charged once.\",\"Only the recovered result is ignored, so the customer may be charged twice.\"],\"observer\":\"The customer and run owner\"}},{\"subject\":\"context — ownership of the no-effect guarantee\",\"kind\":\"missing knowledge owner\",\"text\":\"recovery executes the function again, which has no effect\",\"question\":\"Which module owns and verifies the fact that re-execution has no effect, and how can recovery know that a function satisfies it?\",\"options\":[\"The function contract declares purity or idempotency and a registry owns that metadata\",\"The kernel enforces effect deduplication using an idempotency key\",\"The recovery module assumes every function is safe to repeat\"],\"default_guess\":\"Put an explicit idempotency guarantee in the function contract and have the kernel enforce an idempotency key for effects.\"},{\"subject\":\"context — durable recovery evidence\",\"kind\":\"missing record owner\",\"text\":\"it leaves none, and recovery executes the function again\",\"question\":\"If the refused execution leaves no trace record, what durable record tells recovery that this function must be executed again, and which module owns that record?\",\"options\":[\"A scheduler journal distinct from the immutable trace records\",\"The trace store durably records the refusal without recording the execution\",\"Recovery infers unfinished work from the absence of a trace record\"],\"default_guess\":\"Use a scheduler-owned durable attempt journal distinct from the trace record.\",\"witness\":{\"initial\":\"The function completes, its trace record is refused, and the kernel process then crashes.\",\"events\":[\"The process restarts.\",\"Recovery inspects the remaining durable data.\"],\"outcomes\":[\"A separate attempt journal identifies the function and recovery executes it again.\",\"No record identifies the completed attempt, so recovery either misses it or re-executes every trace-less node.\"],\"observer\":\"The run owner and trace auditor\"}},{\"subject\":\"context — trace identity after recovery\",\"kind\":\"underspecified record semantics\",\"text\":\"it leaves none, and recovery executes the function again\",\"question\":\"When the recovered invocation succeeds, does its trace describe a new execution attempt or replace the missing attempt as the single trace of the logical node execution?\",\"options\":[\"Write a trace for a distinct recovery attempt\",\"Write one trace representing the logical node execution without exposing the lost attempt\",\"Record recovery metadata in the new trace while keeping one immutable record\"],\"default_guess\":\"Write a trace for a distinct recovery attempt and mark it as recovery, while retaining separate durable evidence that the earlier attempt had no trace.\",\"witness\":{\"initial\":\"The first invocation has no trace because its record was refused; the recovered invocation writes successfully.\",\"events\":[\"An auditor queries the run's trace.\",\"The auditor counts execution attempts.\"],\"outcomes\":[\"The trace identifies a recovery attempt and reveals that another attempt preceded it.\",\"The trace presents the recovered invocation as the sole execution, concealing the earlier invocation.\"],\"observer\":\"The trace auditor\"}}]}",
+ "set_aside": []
+}

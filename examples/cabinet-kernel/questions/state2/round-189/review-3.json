@@ -1,0 +1,166 @@
+{
+ "open_points": [
+  {
+   "subject": "time authority and meaning",
+   "kind": "missing decision",
+   "text": "resources, time —",
+   "question": "What is the authoritative source and meaning of every instant written or compared, including instants written by a recovered execution, and what formal invariant and Required tests item demonstrate that rule?",
+   "options": [
+    "An injected wall-clock authority supplies UTC civil instants.",
+    "The persistent store supplies authoritative transaction instants.",
+    "A monotonic source determines ordering and is mapped separately to civil timestamps."
+   ],
+   "default_guess": "Use one injected UTC wall-clock authority for persisted instants and a monotonic clock only for elapsed-time enforcement.",
+   "witness": {
+    "initial": "A function begins, the host wall clock moves backward, its trace record is then stored, and recovery later compares or displays its times.",
+    "events": [
+     "The kernel reads the time used for the execution.",
+     "An administrator moves the host clock backward.",
+     "The kernel stores the execution record and later orders or compares it with another record."
+    ],
+    "outcomes": [
+     "Using the host wall clock directly can produce a recorded instant earlier than an already recorded event.",
+     "Using a store clock or monotonic ordering authority preserves event order."
+    ],
+    "observer": "The owner inspecting the trace or any component comparing recorded instants."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "time representation",
+   "kind": "missing representation",
+   "text": "records who and when",
+   "question": "In what exact representation are persisted instants carried—type, timezone, precision, and serialization—and what formal invariant and Required tests item demonstrate canonical representation?",
+   "options": [
+    "Timezone-aware UTC datetime serialized as canonical RFC 3339 text.",
+    "Integer Unix epoch microseconds.",
+    "Store-native timestamp normalized only when returned."
+   ],
+   "default_guess": "Use timezone-aware UTC datetimes with one canonical microsecond-precision RFC 3339 serialization.",
+   "witness": {
+    "initial": "A release is performed at an instant with a non-UTC local offset and subsecond precision.",
+    "events": [
+     "The owner releases a failed run.",
+     "The kernel records when it was released.",
+     "The trace is read on a host in another timezone."
+    ],
+    "outcomes": [
+     "The record contains a normalized UTC timestamp with fixed precision.",
+     "The record contains a local or store-native timestamp whose offset or precision differs."
+    ],
+    "observer": "The owner reading the release record and code comparing it with other instants."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "instant sampling within one operation",
+   "kind": "missing read-count rule",
+   "text": "starts and ends at the time of the check.",
+   "question": "Does this operation take one clock reading and use it for both start and end, or take separate readings, and how many readings does every other mutating operation take?",
+   "options": [
+    "Take one reading and assign the identical instant to both fields.",
+    "Take distinct start and end readings around the check.",
+    "Let each persistence write obtain its own instant."
+   ],
+   "default_guess": "Take one reading for an instantaneous check and use it for both start and end; specify explicit read counts for all other operations.",
+   "witness": {
+    "initial": "A receiving value fails validation while the clock advances between two possible reads.",
+    "events": [
+     "The kernel starts the validation check.",
+     "The validation fails.",
+     "The kernel constructs the NodeExecution."
+    ],
+    "outcomes": [
+     "The record has identical start and end instants from one reading.",
+     "The record has different start and end instants from two readings."
+    ],
+    "observer": "The owner inspecting the NodeExecution trace."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "function NodeExecution storage refusal",
+   "kind": "vague refusal condition",
+   "text": "except a function execution during which the kernel stops because the store\nrefused that record: it leaves none, and recovery executes the function again,\nwhich has no effect.",
+   "question": "Which store results count as having “refused” the record—only a definitive non-commit, or also a timeout, lost acknowledgement, uniqueness conflict, validation failure, or other outcome whose commit status is unknown?",
+   "options": [
+    "Replay only after a definitive non-commit; resolve an unknown commit outcome by reading the store.",
+    "Treat every unsuccessful store response as refusal and replay.",
+    "Classify specific store errors into definitive refusal, committed, and outcome-unknown cases."
+   ],
+   "default_guess": "Classify store outcomes and replay only after a definitive non-commit; probe durable state when commit outcome is unknown.",
+   "witness": {
+    "initial": "A function finishes and the store commits its NodeExecution, but the acknowledgement is lost.",
+    "events": [
+     "The kernel submits the immutable record.",
+     "The store commits it.",
+     "The connection times out before the kernel receives the acknowledgement.",
+     "The kernel restarts."
+    ],
+    "outcomes": [
+     "If the timeout counts as refusal, recovery executes the function again.",
+     "If refusal requires a definitive non-commit, recovery finds the committed record and does not execute the function again."
+    ],
+    "observer": "The function's telemetry observer and the owner inspecting which function result was retained."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "function effect boundary during replay",
+   "kind": "vague invariant",
+   "text": "which has no effect.",
+   "question": "What observable actions are excluded by “has no effect,” and is this guaranteed by the function contract, enforced by the sandbox, or merely assumed when recovery re-executes it?",
+   "options": [
+    "A function is pure and may perform no externally observable I/O.",
+    "A function may read external state and emit telemetry but may not mutate domain state.",
+    "A function may perform only idempotent effects, so replay is permitted."
+   ],
+   "default_guess": "Define functions as unable to perform externally observable mutations and enforce that boundary through their available ports and sandbox.",
+   "witness": {
+    "initial": "A function has no stored NodeExecution because its record write was refused, but during execution it emitted an external telemetry event.",
+    "events": [
+     "The function emits the telemetry event.",
+     "The record write is refused and the kernel stops.",
+     "Recovery executes the function again.",
+     "The function emits the event again."
+    ],
+    "outcomes": [
+     "If every observable action is an effect, the first execution must have been prevented from emitting the event.",
+     "If only domain mutations count as effects, two telemetry events are allowed."
+    ],
+    "observer": "The external telemetry consumer."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "attempt_number and the spool position of an unrecorded execution",
+   "kind": "contradiction",
+   "text": "which only a retry of\n   the same attempt number writes again, after a restart left that attempt\n   without a record.",
+   "question": "How can recovery reuse the same attempt number when the received obligation says an execution that leaves no record takes no number; is a provisional number allocated before persistence, or must unrecorded artifacts use an unnumbered temporary position?",
+   "options": [
+    "Allocate the next ordinal provisionally and reuse it after restart even though the failed execution is not counted as having taken it.",
+    "Give the failed execution no number or numbered spool position; recovery receives the next ordinal only when its record is stored.",
+    "Define attempt_number for artifact addressing separately from the ordinal of stored NodeExecution records."
+   ],
+   "default_guess": "Use an unnumbered temporary spool position until the NodeExecution is durable; the recovered execution receives the next stored-record ordinal.",
+   "witness": {
+    "initial": "A function element has no stored NodeExecution and spools bytes before its first record write is refused.",
+    "events": [
+     "The function writes bytes intended for its first attempt.",
+     "The store refuses the NodeExecution and the kernel stops.",
+     "Recovery executes the function and writes different bytes.",
+     "The recovery record is stored."
+    ],
+    "outcomes": [
+     "The quoted State 2 rule assigns both executions the same numbered position, so recovery replaces the earlier bytes.",
+     "The carried ordinal rule gives the first execution no number, so its bytes occupy an unnumbered temporary position and recovery's durable record is the first numbered attempt."
+    ],
+    "observer": "The spool-ceiling accounting and cleanup logic, and an operator inspecting retained spool artifacts."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"time authority and meaning\",\"kind\":\"missing decision\",\"text\":\"resources, time —\",\"question\":\"What is the authoritative source and meaning of every instant written or compared, including instants written by a recovered execution, and what formal invariant and Required tests item demonstrate that rule?\",\"options\":[\"An injected wall-clock authority supplies UTC civil instants.\",\"The persistent store supplies authoritative transaction instants.\",\"A monotonic source determines ordering and is mapped separately to civil timestamps.\"],\"default_guess\":\"Use one injected UTC wall-clock authority for persisted instants and a monotonic clock only for elapsed-time enforcement.\",\"witness\":{\"initial\":\"A function begins, the host wall clock moves backward, its trace record is then stored, and recovery later compares or displays its times.\",\"events\":[\"The kernel reads the time used for the execution.\",\"An administrator moves the host clock backward.\",\"The kernel stores the execution record and later orders or compares it with another record.\"],\"outcomes\":[\"Using the host wall clock directly can produce a recorded instant earlier than an already recorded event.\",\"Using a store clock or monotonic ordering authority preserves event order.\"],\"observer\":\"The owner inspecting the trace or any component comparing recorded instants.\"}},{\"subject\":\"time representation\",\"kind\":\"missing representation\",\"text\":\"records who and when\",\"question\":\"In what exact representation are persisted instants carried—type, timezone, precision, and serialization—and what formal invariant and Required tests item demonstrate canonical representation?\",\"options\":[\"Timezone-aware UTC datetime serialized as canonical RFC 3339 text.\",\"Integer Unix epoch microseconds.\",\"Store-native timestamp normalized only when returned.\"],\"default_guess\":\"Use timezone-aware UTC datetimes with one canonical microsecond-precision RFC 3339 serialization.\",\"witness\":{\"initial\":\"A release is performed at an instant with a non-UTC local offset and subsecond precision.\",\"events\":[\"The owner releases a failed run.\",\"The kernel records when it was released.\",\"The trace is read on a host in another timezone.\"],\"outcomes\":[\"The record contains a normalized UTC timestamp with fixed precision.\",\"The record contains a local or store-native timestamp whose offset or precision differs.\"],\"observer\":\"The owner reading the release record and code comparing it with other instants.\"}},{\"subject\":\"instant sampling within one operation\",\"kind\":\"missing read-count rule\",\"text\":\"starts and ends at the time of the check.\",\"question\":\"Does this operation take one clock reading and use it for both start and end, or take separate readings, and how many readings does every other mutating operation take?\",\"options\":[\"Take one reading and assign the identical instant to both fields.\",\"Take distinct start and end readings around the check.\",\"Let each persistence write obtain its own instant.\"],\"default_guess\":\"Take one reading for an instantaneous check and use it for both start and end; specify explicit read counts for all other operations.\",\"witness\":{\"initial\":\"A receiving value fails validation while the clock advances between two possible reads.\",\"events\":[\"The kernel starts the validation check.\",\"The validation fails.\",\"The kernel constructs the NodeExecution.\"],\"outcomes\":[\"The record has identical start and end instants from one reading.\",\"The record has different start and end instants from two readings.\"],\"observer\":\"The owner inspecting the NodeExecution trace.\"}},{\"subject\":\"function NodeExecution storage refusal\",\"kind\":\"vague refusal condition\",\"text\":\"except a function execution during which the kernel stops because the store\\nrefused that record: it leaves none, and recovery executes the function again,\\nwhich has no effect.\",\"question\":\"Which store results count as having “refused” the record—only a definitive non-commit, or also a timeout, lost acknowledgement, uniqueness conflict, validation failure, or other outcome whose commit status is unknown?\",\"options\":[\"Replay only after a definitive non-commit; resolve an unknown commit outcome by reading the store.\",\"Treat every unsuccessful store response as refusal and replay.\",\"Classify specific store errors into definitive refusal, committed, and outcome-unknown cases.\"],\"default_guess\":\"Classify store outcomes and replay only after a definitive non-commit; probe durable state when commit outcome is unknown.\",\"witness\":{\"initial\":\"A function finishes and the store commits its NodeExecution, but the acknowledgement is lost.\",\"events\":[\"The kernel submits the immutable record.\",\"The store commits it.\",\"The connection times out before the kernel receives the acknowledgement.\",\"The kernel restarts.\"],\"outcomes\":[\"If the timeout counts as refusal, recovery executes the function again.\",\"If refusal requires a definitive non-commit, recovery finds the committed record and does not execute the function again.\"],\"observer\":\"The function's telemetry observer and the owner inspecting which function result was retained.\"}},{\"subject\":\"function effect boundary during replay\",\"kind\":\"vague invariant\",\"text\":\"which has no effect.\",\"question\":\"What observable actions are excluded by “has no effect,” and is this guaranteed by the function contract, enforced by the sandbox, or merely assumed when recovery re-executes it?\",\"options\":[\"A function is pure and may perform no externally observable I/O.\",\"A function may read external state and emit telemetry but may not mutate domain state.\",\"A function may perform only idempotent effects, so replay is permitted.\"],\"default_guess\":\"Define functions as unable to perform externally observable mutations and enforce that boundary through their available ports and sandbox.\",\"witness\":{\"initial\":\"A function has no stored NodeExecution because its record write was refused, but during execution it emitted an external telemetry event.\",\"events\":[\"The function emits the telemetry event.\",\"The record write is refused and the kernel stops.\",\"Recovery executes the function again.\",\"The function emits the event again.\"],\"outcomes\":[\"If every observable action is an effect, the first execution must have been prevented from emitting the event.\",\"If only domain mutations count as effects, two telemetry events are allowed.\"],\"observer\":\"The external telemetry consumer.\"}},{\"subject\":\"attempt_number and the spool position of an unrecorded execution\",\"kind\":\"contradiction\",\"text\":\"which only a retry of\\n   the same attempt number writes again, after a restart left that attempt\\n   without a record.\",\"question\":\"How can recovery reuse the same attempt number when the received obligation says an execution that leaves no record takes no number; is a provisional number allocated before persistence, or must unrecorded artifacts use an unnumbered temporary position?\",\"options\":[\"Allocate the next ordinal provisionally and reuse it after restart even though the failed execution is not counted as having taken it.\",\"Give the failed execution no number or numbered spool position; recovery receives the next ordinal only when its record is stored.\",\"Define attempt_number for artifact addressing separately from the ordinal of stored NodeExecution records.\"],\"default_guess\":\"Use an unnumbered temporary spool position until the NodeExecution is durable; the recovered execution receives the next stored-record ordinal.\",\"witness\":{\"initial\":\"A function element has no stored NodeExecution and spools bytes before its first record write is refused.\",\"events\":[\"The function writes bytes intended for its first attempt.\",\"The store refuses the NodeExecution and the kernel stops.\",\"Recovery executes the function and writes different bytes.\",\"The recovery record is stored.\"],\"outcomes\":[\"The quoted State 2 rule assigns both executions the same numbered position, so recovery replaces the earlier bytes.\",\"The carried ordinal rule gives the first execution no number, so its bytes occupy an unnumbered temporary position and recovery's durable record is the first numbered attempt.\"],\"observer\":\"The spool-ceiling accounting and cleanup logic, and an operator inspecting retained spool artifacts.\"}}]}",
+ "set_aside": []
+}

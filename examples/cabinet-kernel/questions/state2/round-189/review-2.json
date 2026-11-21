@@ -1,0 +1,124 @@
+{
+ "open_points": [
+  {
+   "subject": "context",
+   "kind": "missing_time_policy",
+   "text": "resources, time —\nexcept a function execution during which the kernel stops because the store\nrefused that record: it leaves none, and recovery executes the function again",
+   "question": "What clock supplies the original execution and recovery-replay instants, what each instant means, what representation is stored, and how many clock readings each execution takes?",
+   "options": [
+    "Use an injected UTC clock, store timezone-aware datetimes, and read separately at execution start and end.",
+    "Use the host wall clock and store a single completion timestamp.",
+    "Give the failed unrecorded execution no instants and give its replay one shared instant for start and end."
+   ],
+   "default_guess": "Use an injected UTC clock and timezone-aware UTC datetimes; take separate start and end readings, except where a rule explicitly requires start and end to share the instant of one check.",
+   "witness": {
+    "initial": "A function begins in response to a start request; its trace-record write is refused, and startup recovery later executes it successfully.",
+    "events": [
+     "The function executes and the store refuses its NodeExecution record.",
+     "The kernel stops.",
+     "Startup recovery executes the function again and stores its NodeExecution."
+    ],
+    "outcomes": [
+     "The replay record contains instants obtained from an injected UTC clock, with distinct start and end readings.",
+     "The replay record contains host-local or completion-only time; alternatively its start and end share one reading."
+    ],
+    "observer": "The owner or any trace reader comparing the replay record's timestamps."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "unspecified_response",
+   "text": "except a function execution during which the kernel stops because the store\nrefused that record",
+   "question": "What exactly does the surface return to the request whose function finished but whose trace record the store refused, and must that response be sent before the kernel stops?",
+   "options": [
+    "Return `internal_error`, send it completely, then stop.",
+    "Terminate the request connection without a response, then stop.",
+    "Retry the record write within the request before deciding whether to return `internal_error`."
+   ],
+   "default_guess": "Return `internal_error`; after the response has been sent, stop the kernel without retrying the record write in-process.",
+   "witness": {
+    "initial": "A start request reaches a function, the function returns an output, and the store refuses the corresponding immutable trace record.",
+    "events": [
+     "The client keeps the request connection open.",
+     "The store reports refusal of the record.",
+     "The kernel performs the required stop."
+    ],
+    "outcomes": [
+     "The client receives an `internal_error` response before shutdown.",
+     "The connection closes without an application response when shutdown begins."
+    ],
+    "observer": "The client that issued the start request."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "vague_effect_boundary",
+   "text": "recovery executes the function again,\nwhich has no effect.",
+   "question": "What counts as an “effect” here: only externally applied service effects, or every durable mutation including output publication, spool writes and trace writes?",
+   "options": [
+    "It means the function has no externally applied service effect; ordinary output, content-addressed, spool and trace writes are allowed.",
+    "It means replay must cause no durable mutation other than the final trace record.",
+    "It means the replay must reproduce identical output bytes and storage mutations."
+   ],
+   "default_guess": "Interpret “no effect” as no externally applied service effect; allow the kernel-managed output, spool and trace writes required to execute and record the function.",
+   "witness": {
+    "initial": "A function produces a file and value, but its NodeExecution write is refused.",
+    "events": [
+     "The first execution writes output bytes into kernel-managed content or spool storage.",
+     "The kernel stops with no NodeExecution.",
+     "Recovery executes the function and publishes its outputs again."
+    ],
+    "outcomes": [
+     "The replay is permitted because kernel-managed output storage is not an effect.",
+     "The replay is rejected or must suppress output writes because any durable write is considered an effect."
+    ],
+    "observer": "The owner inspecting the recovered run's outputs and spool."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "contradictory_trace_requirement",
+   "text": "Every node execution writes one immutable trace record: run, node, pinned\nversions, input and output by digest, verdicts, status, failure, resources, time —\nexcept a function execution during which the kernel stops because the store\nrefused that record: it leaves none, and recovery executes the function again,\nwhich has no effect.",
+   "question": "Does the mapped-node failure caused by an oversized or over-deep delivered result list require an immutable node trace record under this rule, or may A13 rule 6 leave the failure represented only by element records and reader-side derivation?",
+   "options": [
+    "Write a mapped-node failure record; the newly stated function/store-refusal case is the only recordless execution.",
+    "Write no aggregate record and derive the mapped-node failure from its element records and ceilings as A13 rule 6 says.",
+    "Declare that a non-empty mapped node has only element executions, so the aggregate failure is not a node execution covered by K-09."
+   ],
+   "default_guess": "Keep A13's derived representation and explicitly define the non-empty mapped aggregate as not being a separate node execution.",
+   "witness": {
+    "initial": "Every element of a mapped node has a successful NodeExecution, but the canonical bytes of its delivered value list exceed `stored_value_bytes_max`.",
+    "events": [
+     "The mapped elements finish and store their records.",
+     "The kernel measures the complete list before delivery.",
+     "The list exceeds the ceiling and the run ends failed."
+    ],
+    "outcomes": [
+     "K-09 is read to require an immutable mapped-node failure record because no store refusal occurred.",
+     "A13 rule 6 is followed: no record states the mapped-node failure, which every reader derives."
+    ],
+    "observer": "A trace reader enumerating records and determining why the mapped node failed."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "contradictory_attempt_number",
+   "text": "a position being the run, node,\n   `map_index`, attempt number, port and list index, which only a retry of\n   the same attempt number writes again, after a restart left that attempt\n   without a record.",
+   "question": "How can recovery write the same attempt-numbered spool position when the received obligation says that an execution leaving no NodeExecution takes no attempt number?",
+   "options": [
+    "The failed write uses a tentative ordinal as a storage slot, but it is not an `attempt_number` unless a NodeExecution is stored; recovery reuses that slot.",
+    "The unrecorded execution does take an attempt number, contrary to the received obligation.",
+    "Recovery receives the next stored-record ordinal and therefore writes a different spool position."
+   ],
+   "default_guess": "Treat the position component as a tentative next-record ordinal that becomes `attempt_number` only when the replay's NodeExecution is stored, and revise the text so it does not say the recordless execution had that attempt number.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context\",\"kind\":\"missing_time_policy\",\"text\":\"resources, time —\\nexcept a function execution during which the kernel stops because the store\\nrefused that record: it leaves none, and recovery executes the function again\",\"question\":\"What clock supplies the original execution and recovery-replay instants, what each instant means, what representation is stored, and how many clock readings each execution takes?\",\"options\":[\"Use an injected UTC clock, store timezone-aware datetimes, and read separately at execution start and end.\",\"Use the host wall clock and store a single completion timestamp.\",\"Give the failed unrecorded execution no instants and give its replay one shared instant for start and end.\"],\"default_guess\":\"Use an injected UTC clock and timezone-aware UTC datetimes; take separate start and end readings, except where a rule explicitly requires start and end to share the instant of one check.\",\"witness\":{\"initial\":\"A function begins in response to a start request; its trace-record write is refused, and startup recovery later executes it successfully.\",\"events\":[\"The function executes and the store refuses its NodeExecution record.\",\"The kernel stops.\",\"Startup recovery executes the function again and stores its NodeExecution.\"],\"outcomes\":[\"The replay record contains instants obtained from an injected UTC clock, with distinct start and end readings.\",\"The replay record contains host-local or completion-only time; alternatively its start and end share one reading.\"],\"observer\":\"The owner or any trace reader comparing the replay record's timestamps.\"}},{\"subject\":\"context\",\"kind\":\"unspecified_response\",\"text\":\"except a function execution during which the kernel stops because the store\\nrefused that record\",\"question\":\"What exactly does the surface return to the request whose function finished but whose trace record the store refused, and must that response be sent before the kernel stops?\",\"options\":[\"Return `internal_error`, send it completely, then stop.\",\"Terminate the request connection without a response, then stop.\",\"Retry the record write within the request before deciding whether to return `internal_error`.\"],\"default_guess\":\"Return `internal_error`; after the response has been sent, stop the kernel without retrying the record write in-process.\",\"witness\":{\"initial\":\"A start request reaches a function, the function returns an output, and the store refuses the corresponding immutable trace record.\",\"events\":[\"The client keeps the request connection open.\",\"The store reports refusal of the record.\",\"The kernel performs the required stop.\"],\"outcomes\":[\"The client receives an `internal_error` response before shutdown.\",\"The connection closes without an application response when shutdown begins.\"],\"observer\":\"The client that issued the start request.\"}},{\"subject\":\"context\",\"kind\":\"vague_effect_boundary\",\"text\":\"recovery executes the function again,\\nwhich has no effect.\",\"question\":\"What counts as an “effect” here: only externally applied service effects, or every durable mutation including output publication, spool writes and trace writes?\",\"options\":[\"It means the function has no externally applied service effect; ordinary output, content-addressed, spool and trace writes are allowed.\",\"It means replay must cause no durable mutation other than the final trace record.\",\"It means the replay must reproduce identical output bytes and storage mutations.\"],\"default_guess\":\"Interpret “no effect” as no externally applied service effect; allow the kernel-managed output, spool and trace writes required to execute and record the function.\",\"witness\":{\"initial\":\"A function produces a file and value, but its NodeExecution write is refused.\",\"events\":[\"The first execution writes output bytes into kernel-managed content or spool storage.\",\"The kernel stops with no NodeExecution.\",\"Recovery executes the function and publishes its outputs again.\"],\"outcomes\":[\"The replay is permitted because kernel-managed output storage is not an effect.\",\"The replay is rejected or must suppress output writes because any durable write is considered an effect.\"],\"observer\":\"The owner inspecting the recovered run's outputs and spool.\"}},{\"subject\":\"context\",\"kind\":\"contradictory_trace_requirement\",\"text\":\"Every node execution writes one immutable trace record: run, node, pinned\\nversions, input and output by digest, verdicts, status, failure, resources, time —\\nexcept a function execution during which the kernel stops because the store\\nrefused that record: it leaves none, and recovery executes the function again,\\nwhich has no effect.\",\"question\":\"Does the mapped-node failure caused by an oversized or over-deep delivered result list require an immutable node trace record under this rule, or may A13 rule 6 leave the failure represented only by element records and reader-side derivation?\",\"options\":[\"Write a mapped-node failure record; the newly stated function/store-refusal case is the only recordless execution.\",\"Write no aggregate record and derive the mapped-node failure from its element records and ceilings as A13 rule 6 says.\",\"Declare that a non-empty mapped node has only element executions, so the aggregate failure is not a node execution covered by K-09.\"],\"default_guess\":\"Keep A13's derived representation and explicitly define the non-empty mapped aggregate as not being a separate node execution.\",\"witness\":{\"initial\":\"Every element of a mapped node has a successful NodeExecution, but the canonical bytes of its delivered value list exceed `stored_value_bytes_max`.\",\"events\":[\"The mapped elements finish and store their records.\",\"The kernel measures the complete list before delivery.\",\"The list exceeds the ceiling and the run ends failed.\"],\"outcomes\":[\"K-09 is read to require an immutable mapped-node failure record because no store refusal occurred.\",\"A13 rule 6 is followed: no record states the mapped-node failure, which every reader derives.\"],\"observer\":\"A trace reader enumerating records and determining why the mapped node failed.\"}},{\"subject\":\"context\",\"kind\":\"contradictory_attempt_number\",\"text\":\"a position being the run, node,\\n   `map_index`, attempt number, port and list index, which only a retry of\\n   the same attempt number writes again, after a restart left that attempt\\n   without a record.\",\"question\":\"How can recovery write the same attempt-numbered spool position when the received obligation says that an execution leaving no NodeExecution takes no attempt number?\",\"options\":[\"The failed write uses a tentative ordinal as a storage slot, but it is not an `attempt_number` unless a NodeExecution is stored; recovery reuses that slot.\",\"The unrecorded execution does take an attempt number, contrary to the received obligation.\",\"Recovery receives the next stored-record ordinal and therefore writes a different spool position.\"],\"default_guess\":\"Treat the position component as a tentative next-record ordinal that becomes `attempt_number` only when the replay's NodeExecution is stored, and revise the text so it does not say the recordless execution had that attempt number.\"}]}",
+ "set_aside": []
+}

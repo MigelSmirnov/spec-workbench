@@ -1,0 +1,179 @@
+{
+ "open_points": [
+  {
+   "subject": "00_product.md:Decisions",
+   "kind": "stop scope",
+   "text": "the kernel stops because the store refused that record",
+   "question": "What exactly stops when the trace record is refused, and what observable failure is returned to an active caller?",
+   "options": [
+    "Abort only this node execution and keep the process serving other runs",
+    "Abort the affected run but keep the process alive",
+    "Stop the entire kernel process"
+   ],
+   "default_guess": "Stop the entire kernel process and terminate the active request with an infrastructure error.",
+   "witness": {
+    "initial": "Two runs are executing concurrently in the one kernel process.",
+    "events": [
+     "The kernel finishes a function in the first run.",
+     "The store refuses that function's trace record.",
+     "An agent requests traces for the second run."
+    ],
+    "outcomes": [
+     "Only the first node or run stops, so the agent can still use the kernel and inspect the second run.",
+     "The whole process stops, so the agent cannot use the kernel until recovery."
+    ],
+    "observer": "The agent using the second run"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "00_product.md:Decisions",
+   "kind": "recovery trigger",
+   "text": "recovery executes the function again",
+   "question": "Who or what starts recovery, when does it run, and how does it identify the unrecorded function execution that must be repeated?",
+   "options": [
+    "The kernel automatically recovers on process restart from persisted run and scheduling state",
+    "The owner or an agent explicitly resumes the run",
+    "The same request performs immediate recovery before returning"
+   ],
+   "default_guess": "On restart, the kernel automatically derives unfinished nodes from persisted run state and re-executes them.",
+   "unit": "?"
+  },
+  {
+   "subject": "00_product.md:Decisions",
+   "kind": "missing run state",
+   "text": "except a function execution during which the kernel stops because the store refused that record: it leaves none",
+   "question": "What persisted and surface-visible state does the run have between the refused trace write and successful recovery?",
+   "options": [
+    "The node remains running and the run exposes an interrupted or recovering condition",
+    "The run rests pending with a new trace-store reason",
+    "No state change is persisted, so the run appears as it did before dispatch"
+   ],
+   "default_guess": "Persist no post-dispatch state; after restart, treat the node as unfinished and expose the run as recovering until repetition completes.",
+   "witness": {
+    "initial": "A run has dispatched a function node and has a persisted pre-execution state.",
+    "events": [
+     "The function returns an output.",
+     "The store refuses its trace record and the kernel stops.",
+     "The owner inspects the run after the kernel returns."
+    ],
+    "outcomes": [
+     "The run is visibly pending or interrupted and explains the trace-store failure.",
+     "The run still appears to be running or not yet dispatched, with no visible explanation."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "00_product.md:Decisions",
+   "kind": "atomicity",
+   "text": "it leaves none",
+   "question": "Does the failed trace write leave only no trace record, or must the function's output value, digest, scheduling changes and any other execution artifacts also be absent or removed atomically?",
+   "options": [
+    "Trace, output value and node-state changes are one atomic commit, so none remain",
+    "Only the trace is absent; output values or execution state may remain as unreachable artifacts",
+    "Artifacts may remain and recovery must detect and clean or replace them"
+   ],
+   "default_guess": "Commit the trace, output value and completed-node state atomically; a refusal leaves none of them.",
+   "witness": {
+    "initial": "A function has produced a bounded output that the kernel is preparing to store with its trace.",
+    "events": [
+     "The output value is written.",
+     "The store refuses the trace record.",
+     "Recovery executes the function again and obtains another output."
+    ],
+    "outcomes": [
+     "The first output was rolled back, leaving only the recovered execution's output and trace.",
+     "The first output remains in the store without its trace, alongside or instead of the recovered output."
+    ],
+    "observer": "An operator inspecting storage and any caller that later reads the run output"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "00_product.md:Decisions",
+   "kind": "repeat refusal",
+   "text": "recovery executes the function again",
+   "question": "What happens if the store refuses the recovered execution's trace record again, including when the refusal is permanent rather than transient?",
+   "options": [
+    "Retry recovery indefinitely",
+    "Retry under a defined limit and then end the run failed",
+    "Leave the run recoverable but require an owner or agent to resume after each refusal",
+    "Treat a permanent record refusal as an immediate terminal failure"
+   ],
+   "default_guess": "Keep the run non-terminal and require an explicit resume after reporting a trace-store failure; never spin automatically without a limit.",
+   "witness": {
+    "initial": "The store deterministically rejects this node's trace record because it exceeds a store constraint.",
+    "events": [
+     "The first execution's record is refused.",
+     "Recovery executes the function again.",
+     "The store refuses the same record again."
+    ],
+    "outcomes": [
+     "The kernel repeatedly executes and attempts to record the node without termination.",
+     "The run stops retrying and exposes a stable failure or resumable state."
+    ],
+    "observer": "The owner and the operator observing resource use"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "00_product.md:Decisions",
+   "kind": "nondeterministic replay",
+   "text": "recovery executes the function again, which has no effect",
+   "question": "What does \"has no effect\" promise when K-02 permits admitted function code whose outputs may depend on undisclosed time or chance: only no external side effect, or also no observable difference from the lost execution?",
+   "options": [
+    "It means only that repeating a function causes no external side effect; the recovered output may differ",
+    "It means the repeated execution must reproduce the lost output",
+    "If the two executions differ, recovery must refuse or fail the node"
+   ],
+   "default_guess": "Interpret it only as absence of external side effects and make the recovered execution the authoritative result.",
+   "witness": {
+    "initial": "An admitted function obtains time through an undetected path and returns it.",
+    "events": [
+     "The function executes at time T1 and produces T1.",
+     "The store refuses its trace record and the kernel stops.",
+     "Recovery executes the function at time T2 and successfully records T2.",
+     "A downstream node receives the recovered output."
+    ],
+    "outcomes": [
+     "T2 is authoritative because repetition promises only freedom from external effects.",
+     "The kernel must preserve or reproduce T1 because repetition is promised to have no observable effect."
+    ],
+    "observer": "The downstream node and the owner reading the run output"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "00_product.md:Decisions",
+   "kind": "downstream ordering",
+   "text": "except a function execution during which the kernel stops because the store refused that record",
+   "question": "May a function output be delivered to dependent nodes before its immutable trace record is successfully stored?",
+   "options": [
+    "No; trace persistence is a commit barrier before any dependent can run",
+    "Yes; dependants may already have consumed the output when the trace is refused",
+    "Delivery and trace storage are atomic"
+   ],
+   "default_guess": "Treat successful trace persistence as a commit barrier and do not release the output to dependants beforehand.",
+   "witness": {
+    "initial": "Function A feeds function B in one run.",
+    "events": [
+     "A produces output X.",
+     "The kernel makes X available to B.",
+     "The store refuses A's trace record.",
+     "Recovery executes A again and produces Y."
+    ],
+    "outcomes": [
+     "B never saw X because A was not committed; it runs once with Y.",
+     "B already ran with X and must either remain as recorded or be invalidated and repeated with Y."
+    ],
+    "observer": "The owner reading B's trace and final run output"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"00_product.md:Decisions\",\"kind\":\"stop scope\",\"text\":\"the kernel stops because the store refused that record\",\"question\":\"What exactly stops when the trace record is refused, and what observable failure is returned to an active caller?\",\"options\":[\"Abort only this node execution and keep the process serving other runs\",\"Abort the affected run but keep the process alive\",\"Stop the entire kernel process\"],\"default_guess\":\"Stop the entire kernel process and terminate the active request with an infrastructure error.\",\"witness\":{\"initial\":\"Two runs are executing concurrently in the one kernel process.\",\"events\":[\"The kernel finishes a function in the first run.\",\"The store refuses that function's trace record.\",\"An agent requests traces for the second run.\"],\"outcomes\":[\"Only the first node or run stops, so the agent can still use the kernel and inspect the second run.\",\"The whole process stops, so the agent cannot use the kernel until recovery.\"],\"observer\":\"The agent using the second run\"}},{\"subject\":\"00_product.md:Decisions\",\"kind\":\"recovery trigger\",\"text\":\"recovery executes the function again\",\"question\":\"Who or what starts recovery, when does it run, and how does it identify the unrecorded function execution that must be repeated?\",\"options\":[\"The kernel automatically recovers on process restart from persisted run and scheduling state\",\"The owner or an agent explicitly resumes the run\",\"The same request performs immediate recovery before returning\"],\"default_guess\":\"On restart, the kernel automatically derives unfinished nodes from persisted run state and re-executes them.\"},{\"subject\":\"00_product.md:Decisions\",\"kind\":\"missing run state\",\"text\":\"except a function execution during which the kernel stops because the store refused that record: it leaves none\",\"question\":\"What persisted and surface-visible state does the run have between the refused trace write and successful recovery?\",\"options\":[\"The node remains running and the run exposes an interrupted or recovering condition\",\"The run rests pending with a new trace-store reason\",\"No state change is persisted, so the run appears as it did before dispatch\"],\"default_guess\":\"Persist no post-dispatch state; after restart, treat the node as unfinished and expose the run as recovering until repetition completes.\",\"witness\":{\"initial\":\"A run has dispatched a function node and has a persisted pre-execution state.\",\"events\":[\"The function returns an output.\",\"The store refuses its trace record and the kernel stops.\",\"The owner inspects the run after the kernel returns.\"],\"outcomes\":[\"The run is visibly pending or interrupted and explains the trace-store failure.\",\"The run still appears to be running or not yet dispatched, with no visible explanation.\"],\"observer\":\"The owner\"}},{\"subject\":\"00_product.md:Decisions\",\"kind\":\"atomicity\",\"text\":\"it leaves none\",\"question\":\"Does the failed trace write leave only no trace record, or must the function's output value, digest, scheduling changes and any other execution artifacts also be absent or removed atomically?\",\"options\":[\"Trace, output value and node-state changes are one atomic commit, so none remain\",\"Only the trace is absent; output values or execution state may remain as unreachable artifacts\",\"Artifacts may remain and recovery must detect and clean or replace them\"],\"default_guess\":\"Commit the trace, output value and completed-node state atomically; a refusal leaves none of them.\",\"witness\":{\"initial\":\"A function has produced a bounded output that the kernel is preparing to store with its trace.\",\"events\":[\"The output value is written.\",\"The store refuses the trace record.\",\"Recovery executes the function again and obtains another output.\"],\"outcomes\":[\"The first output was rolled back, leaving only the recovered execution's output and trace.\",\"The first output remains in the store without its trace, alongside or instead of the recovered output.\"],\"observer\":\"An operator inspecting storage and any caller that later reads the run output\"}},{\"subject\":\"00_product.md:Decisions\",\"kind\":\"repeat refusal\",\"text\":\"recovery executes the function again\",\"question\":\"What happens if the store refuses the recovered execution's trace record again, including when the refusal is permanent rather than transient?\",\"options\":[\"Retry recovery indefinitely\",\"Retry under a defined limit and then end the run failed\",\"Leave the run recoverable but require an owner or agent to resume after each refusal\",\"Treat a permanent record refusal as an immediate terminal failure\"],\"default_guess\":\"Keep the run non-terminal and require an explicit resume after reporting a trace-store failure; never spin automatically without a limit.\",\"witness\":{\"initial\":\"The store deterministically rejects this node's trace record because it exceeds a store constraint.\",\"events\":[\"The first execution's record is refused.\",\"Recovery executes the function again.\",\"The store refuses the same record again.\"],\"outcomes\":[\"The kernel repeatedly executes and attempts to record the node without termination.\",\"The run stops retrying and exposes a stable failure or resumable state.\"],\"observer\":\"The owner and the operator observing resource use\"}},{\"subject\":\"00_product.md:Decisions\",\"kind\":\"nondeterministic replay\",\"text\":\"recovery executes the function again, which has no effect\",\"question\":\"What does \\\"has no effect\\\" promise when K-02 permits admitted function code whose outputs may depend on undisclosed time or chance: only no external side effect, or also no observable difference from the lost execution?\",\"options\":[\"It means only that repeating a function causes no external side effect; the recovered output may differ\",\"It means the repeated execution must reproduce the lost output\",\"If the two executions differ, recovery must refuse or fail the node\"],\"default_guess\":\"Interpret it only as absence of external side effects and make the recovered execution the authoritative result.\",\"witness\":{\"initial\":\"An admitted function obtains time through an undetected path and returns it.\",\"events\":[\"The function executes at time T1 and produces T1.\",\"The store refuses its trace record and the kernel stops.\",\"Recovery executes the function at time T2 and successfully records T2.\",\"A downstream node receives the recovered output.\"],\"outcomes\":[\"T2 is authoritative because repetition promises only freedom from external effects.\",\"The kernel must preserve or reproduce T1 because repetition is promised to have no observable effect.\"],\"observer\":\"The downstream node and the owner reading the run output\"}},{\"subject\":\"00_product.md:Decisions\",\"kind\":\"downstream ordering\",\"text\":\"except a function execution during which the kernel stops because the store refused that record\",\"question\":\"May a function output be delivered to dependent nodes before its immutable trace record is successfully stored?\",\"options\":[\"No; trace persistence is a commit barrier before any dependent can run\",\"Yes; dependants may already have consumed the output when the trace is refused\",\"Delivery and trace storage are atomic\"],\"default_guess\":\"Treat successful trace persistence as a commit barrier and do not release the output to dependants beforehand.\",\"witness\":{\"initial\":\"Function A feeds function B in one run.\",\"events\":[\"A produces output X.\",\"The kernel makes X available to B.\",\"The store refuses A's trace record.\",\"Recovery executes A again and produces Y.\"],\"outcomes\":[\"B never saw X because A was not committed; it runs once with Y.\",\"B already ran with X and must either remain as recorded or be invalidated and repeated with Y.\"],\"observer\":\"The owner reading B's trace and final run output\"}}]}",
+ "set_aside": []
+}
