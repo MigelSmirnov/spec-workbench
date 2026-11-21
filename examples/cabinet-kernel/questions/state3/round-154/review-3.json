@@ -1,0 +1,212 @@
+{
+ "open_points": [
+  {
+   "subject": "context",
+   "kind": "dependency_contradiction",
+   "text": "`surface`, which may know every\n  module",
+   "question": "May `surface` depend directly on `store_persistence` and `store_spool`, or are those modules accessible only through `store`?",
+   "options": [
+    "`surface` may know every module, including both companions",
+    "`surface` may know every module except `store_persistence` and `store_spool`"
+   ],
+   "default_guess": "Exclude both companions and require all access through `store`.",
+   "unit": "?"
+  },
+  {
+   "subject": "store",
+   "kind": "missing_owner",
+   "text": "Every read and write of a row goes through one typed record port,\n`StoreRepository`: an interface whose operations are the typed row operations\nof the closed record types",
+   "question": "Which module owns the `StoreRepository` interface definition so that both `store` and the lower `store_persistence` module may know it without reversing the dependency graph?",
+   "options": [
+    "`models` owns the interface",
+    "`store_persistence` owns both the interface and its implementation",
+    "`store` owns the interface, requiring an exception to the dependency direction"
+   ],
+   "default_guess": "Put the interface in `models` and its implementation in `store_persistence`.",
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "ownership_conflict",
+   "text": "`sandbox_runner` owns the program that runs\n  inside the environment, its text, its command line and the reading of the\n  report it sends to the parent; `sandbox` owns the environment's launch, the\n  exchange directory and every judgement from outside.",
+   "question": "Which module authoritatively enforces the A03 output-byte count when `sandbox_runner` “pre-counts the outputs” but `sandbox` keeps the output count from outside?",
+   "options": [
+    "The runner computes the authoritative count and the parent trusts its report",
+    "The parent independently counts all received output bytes",
+    "Both count, with an explicit rule for disagreement or an incomplete report"
+   ],
+   "default_guess": "Have `sandbox` independently enforce the bound; treat the runner's count only as framing metadata.",
+   "witness": {
+    "initial": "An implementation returns output larger than `output_bytes`, and its runner report is truncated or reports an incorrect count.",
+    "events": [
+     "`sandbox_runner` pre-counts the output and starts sending its report",
+     "`sandbox` observes the report from outside"
+    ],
+    "outcomes": [
+     "The runner's reported count is trusted and the execution can be classified `succeeded` or `crashed`",
+     "The parent counts received output and classifies it `resource_exhausted`"
+    ],
+    "observer": "The caller and the recorded TrialExecution or NodeExecution"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "sandbox_runner",
+   "kind": "ownership_overlap",
+   "text": "The inside of an execution (decision 32): the program that runs in the\nenvironment — it sets the environment variables",
+   "question": "Does `sandbox` construct the process with exactly `PYTHONHASHSEED=0`, or may the child inherit host variables and have `sandbox_runner` clear or replace them after interpreter startup?",
+   "options": [
+    "`sandbox` supplies the complete environment at process creation",
+    "`sandbox_runner` clears and sets the environment after startup",
+    "Both act, with `sandbox` enforcing the external invariant and the runner reasserting it"
+   ],
+   "default_guess": "Make `sandbox` launch the process with exactly the declared environment and let the runner only verify or reassert it.",
+   "witness": {
+    "initial": "The kernel process has `SECRET=x` in its host environment.",
+    "events": [
+     "`sandbox` launches the isolated interpreter",
+     "`sandbox_runner` starts and sets environment variables",
+     "The implementation returns `dict(os.environ)`"
+    ],
+    "outcomes": [
+     "Only `PYTHONHASHSEED=0` ever exists in the execution environment",
+     "`SECRET` is inherited during interpreter startup and is removed only when the runner begins"
+    ],
+    "observer": "The sandbox conformance test and any startup code able to observe the inherited environment"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "run_values",
+   "kind": "writer_contradiction",
+   "text": "the empty list of a mapped\n  node over an empty list is built by `run_values.empty_list_outputs` and\n  written by `runs` with the node's one NodeExecution (A13 rule 6).",
+   "question": "Who performs the store write for empty-list StoredValues: `runs`, as this passage says, or `run_values`, which says it writes every value it derives through `store.record_change`?",
+   "options": [
+    "`runs` atomically writes the empty values with the NodeExecution",
+    "`run_values` writes the values before `runs` writes the NodeExecution",
+    "`run_values` returns drafts and `runs` submits one atomic store change"
+   ],
+   "default_guess": "Have `run_values` build typed drafts and `runs` submit one atomic change containing the values and NodeExecution.",
+   "witness": {
+    "initial": "A mapped node receives an empty list and has two output ports.",
+    "events": [
+     "`run_values.empty_list_outputs` constructs the empty output values",
+     "The store call that should conclude the node fails partway or is refused"
+    ],
+    "outcomes": [
+     "No empty value exists because `runs` writes values and NodeExecution atomically",
+     "Empty StoredValues can be published by `run_values` before the NodeExecution write fails"
+    ],
+    "observer": "A trace reader after restart and the start-time orphan cleanup"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "attempt_number_contradiction",
+   "text": "A file spooled before its record is written — a function output, a `read`\n  send's file — is named by the element's next ordinal, which the spooling\n  module reads as the count of the element's NodeExecutions plus one; `store`\n  writes the record under that ordinal only while it is still the next one,\n  refusing the change otherwise, and passes no number of its own choosing.",
+   "question": "Does the spooling caller pass an expected `attempt_number`, or does `store` compute and return the ordinal used to name the spool position?",
+   "options": [
+    "The caller reads and passes the expected next ordinal",
+    "`store.spool_file` computes and returns the ordinal",
+    "A store-issued spool handle hides the ordinal until the concluding change"
+   ],
+   "default_guess": "Have `store` issue an opaque spool handle containing its computed ordinal and validate that handle in the concluding change.",
+   "witness": {
+    "initial": "An element has one NodeExecution and is producing several files for its next attempt.",
+    "events": [
+     "The producing module determines the next ordinal",
+     "It spools the files",
+     "The concluding record is submitted"
+    ],
+    "outcomes": [
+     "The caller passes ordinal 2 even though the text says callers pass no attempt number",
+     "The store chooses ordinal 2, requiring an unspecified return value or handle to correlate all files with the later record"
+    ],
+    "observer": "The store API implementer and trace records naming the spooled files"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "deferred_decision",
+   "text": "the exact filter\n  forms are State 5's.",
+   "question": "What exact filter forms must `store.page_records` support in this state, given that no decision is declared as carried to State 5?",
+   "options": [
+    "One equality predicate",
+    "One field with equality or membership in a set",
+    "Multiple predicates with defined conjunction and ordering semantics"
+   ],
+   "default_guess": "Support exactly one field whose value is either one value or a finite set, with membership semantics.",
+   "unit": "?"
+  },
+  {
+   "subject": "store",
+   "kind": "deferred_interface",
+   "text": "`record_change` stands for the closed set of one-transaction calls the other\nmodules make; State 5 names each one.",
+   "question": "What is the closed set of store changes and their owning callers, since later states are not declared to own this decision?",
+   "options": [
+    "One generic typed `record_change` union",
+    "Separate public capability for every transaction shape",
+    "A repository unit-of-work object assembled by callers"
+   ],
+   "default_guess": "Define a closed discriminated union of transaction commands owned by `store`, with one variant for each atomic change described in State 3.",
+   "unit": "?"
+  },
+  {
+   "subject": "data_provider",
+   "kind": "deferred_decision",
+   "text": "So are the\nrecord types `list_records` lists and the filter fields each may be listed by\n(A16 rule 6, the State 5 table of `list_records`): a table keyed by the record\ntype and total over its members, and a relation between record types and filter\nfields.",
+   "question": "Which record types are listable and which filter fields belong to each type, since this state assigns ownership to `data_provider` but supplies no table and carries no decision to State 5?",
+   "options": [
+    "List every durable record type with every scalar field",
+    "List only inspection record types with a specified field allowlist",
+    "Let `surface` decide the mapping dynamically"
+   ],
+   "default_guess": "Use an explicit total allowlist constant in `data_provider`, limited to the record types and fields exposed by the fixed inspection surface.",
+   "unit": "?"
+  },
+  {
+   "subject": "data_provider",
+   "kind": "ownership_conflict",
+   "text": "MCP_CATALOGUE_OPERATIONS\nMCP_TOOL_INPUT_SCHEMAS",
+   "question": "Does `data_provider` own the catalogue and schema definitions named here, or does `surface` own them under its statement that it owns the operation schemas and their bounds?",
+   "options": [
+    "`data_provider` owns schema data and `surface` only applies it",
+    "`surface` owns and defines the schemas; remove these exports from `data_provider`",
+    "Split ownership by assigning structural schema data to `data_provider` and validation/order rules to `surface`"
+   ],
+   "default_guess": "Let `data_provider` own immutable generated schema data and `surface` own validation, bounds enforcement, and exposure rules.",
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "missing_model_owner",
+   "text": "`sandbox` reports that outcome with `SandboxResult.stop_required` true and stops nothing.",
+   "question": "Which module owns the `SandboxResult` type and the meaning of its `stop_required` field?",
+   "options": [
+    "`models` owns the shared result type",
+    "`sandbox` owns a private return type imported structurally by its callers",
+    "Each caller receives separate outcome and stop values without a shared model"
+   ],
+   "default_guess": "Define `SandboxResult` in `models`, with `sandbox` solely responsible for setting `stop_required`.",
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "missing_type_owner",
+   "text": "StoredValuesRef and\n   SpooledFilesRef continue through the existing fit, size and copy checks.",
+   "question": "Which module owns the `FileFactsRef`, `StoredValuesRef`, and `SpooledFilesRef` discriminated reference types used across `runs` and `functions`?",
+   "options": [
+    "`models` owns the shared reference union",
+    "`functions` owns the capture input union",
+    "`runs` owns it and translates before calling `functions`"
+   ],
+   "default_guess": "Place the shared reference union and its variants in `models`; keep validation order in `functions`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context\",\"kind\":\"dependency_contradiction\",\"text\":\"`surface`, which may know every\\n  module\",\"question\":\"May `surface` depend directly on `store_persistence` and `store_spool`, or are those modules accessible only through `store`?\",\"options\":[\"`surface` may know every module, including both companions\",\"`surface` may know every module except `store_persistence` and `store_spool`\"],\"default_guess\":\"Exclude both companions and require all access through `store`.\"},{\"subject\":\"store\",\"kind\":\"missing_owner\",\"text\":\"Every read and write of a row goes through one typed record port,\\n`StoreRepository`: an interface whose operations are the typed row operations\\nof the closed record types\",\"question\":\"Which module owns the `StoreRepository` interface definition so that both `store` and the lower `store_persistence` module may know it without reversing the dependency graph?\",\"options\":[\"`models` owns the interface\",\"`store_persistence` owns both the interface and its implementation\",\"`store` owns the interface, requiring an exception to the dependency direction\"],\"default_guess\":\"Put the interface in `models` and its implementation in `store_persistence`.\"},{\"subject\":\"context\",\"kind\":\"ownership_conflict\",\"text\":\"`sandbox_runner` owns the program that runs\\n  inside the environment, its text, its command line and the reading of the\\n  report it sends to the parent; `sandbox` owns the environment's launch, the\\n  exchange directory and every judgement from outside.\",\"question\":\"Which module authoritatively enforces the A03 output-byte count when `sandbox_runner` “pre-counts the outputs” but `sandbox` keeps the output count from outside?\",\"options\":[\"The runner computes the authoritative count and the parent trusts its report\",\"The parent independently counts all received output bytes\",\"Both count, with an explicit rule for disagreement or an incomplete report\"],\"default_guess\":\"Have `sandbox` independently enforce the bound; treat the runner's count only as framing metadata.\",\"witness\":{\"initial\":\"An implementation returns output larger than `output_bytes`, and its runner report is truncated or reports an incorrect count.\",\"events\":[\"`sandbox_runner` pre-counts the output and starts sending its report\",\"`sandbox` observes the report from outside\"],\"outcomes\":[\"The runner's reported count is trusted and the execution can be classified `succeeded` or `crashed`\",\"The parent counts received output and classifies it `resource_exhausted`\"],\"observer\":\"The caller and the recorded TrialExecution or NodeExecution\"}},{\"subject\":\"sandbox_runner\",\"kind\":\"ownership_overlap\",\"text\":\"The inside of an execution (decision 32): the program that runs in the\\nenvironment — it sets the environment variables\",\"question\":\"Does `sandbox` construct the process with exactly `PYTHONHASHSEED=0`, or may the child inherit host variables and have `sandbox_runner` clear or replace them after interpreter startup?\",\"options\":[\"`sandbox` supplies the complete environment at process creation\",\"`sandbox_runner` clears and sets the environment after startup\",\"Both act, with `sandbox` enforcing the external invariant and the runner reasserting it\"],\"default_guess\":\"Make `sandbox` launch the process with exactly the declared environment and let the runner only verify or reassert it.\",\"witness\":{\"initial\":\"The kernel process has `SECRET=x` in its host environment.\",\"events\":[\"`sandbox` launches the isolated interpreter\",\"`sandbox_runner` starts and sets environment variables\",\"The implementation returns `dict(os.environ)`\"],\"outcomes\":[\"Only `PYTHONHASHSEED=0` ever exists in the execution environment\",\"`SECRET` is inherited during interpreter startup and is removed only when the runner begins\"],\"observer\":\"The sandbox conformance test and any startup code able to observe the inherited environment\"}},{\"subject\":\"run_values\",\"kind\":\"writer_contradiction\",\"text\":\"the empty list of a mapped\\n  node over an empty list is built by `run_values.empty_list_outputs` and\\n  written by `runs` with the node's one NodeExecution (A13 rule 6).\",\"question\":\"Who performs the store write for empty-list StoredValues: `runs`, as this passage says, or `run_values`, which says it writes every value it derives through `store.record_change`?\",\"options\":[\"`runs` atomically writes the empty values with the NodeExecution\",\"`run_values` writes the values before `runs` writes the NodeExecution\",\"`run_values` returns drafts and `runs` submits one atomic store change\"],\"default_guess\":\"Have `run_values` build typed drafts and `runs` submit one atomic change containing the values and NodeExecution.\",\"witness\":{\"initial\":\"A mapped node receives an empty list and has two output ports.\",\"events\":[\"`run_values.empty_list_outputs` constructs the empty output values\",\"The store call that should conclude the node fails partway or is refused\"],\"outcomes\":[\"No empty value exists because `runs` writes values and NodeExecution atomically\",\"Empty StoredValues can be published by `run_values` before the NodeExecution write fails\"],\"observer\":\"A trace reader after restart and the start-time orphan cleanup\"}},{\"subject\":\"context\",\"kind\":\"attempt_number_contradiction\",\"text\":\"A file spooled before its record is written — a function output, a `read`\\n  send's file — is named by the element's next ordinal, which the spooling\\n  module reads as the count of the element's NodeExecutions plus one; `store`\\n  writes the record under that ordinal only while it is still the next one,\\n  refusing the change otherwise, and passes no number of its own choosing.\",\"question\":\"Does the spooling caller pass an expected `attempt_number`, or does `store` compute and return the ordinal used to name the spool position?\",\"options\":[\"The caller reads and passes the expected next ordinal\",\"`store.spool_file` computes and returns the ordinal\",\"A store-issued spool handle hides the ordinal until the concluding change\"],\"default_guess\":\"Have `store` issue an opaque spool handle containing its computed ordinal and validate that handle in the concluding change.\",\"witness\":{\"initial\":\"An element has one NodeExecution and is producing several files for its next attempt.\",\"events\":[\"The producing module determines the next ordinal\",\"It spools the files\",\"The concluding record is submitted\"],\"outcomes\":[\"The caller passes ordinal 2 even though the text says callers pass no attempt number\",\"The store chooses ordinal 2, requiring an unspecified return value or handle to correlate all files with the later record\"],\"observer\":\"The store API implementer and trace records naming the spooled files\"}},{\"subject\":\"context\",\"kind\":\"deferred_decision\",\"text\":\"the exact filter\\n  forms are State 5's.\",\"question\":\"What exact filter forms must `store.page_records` support in this state, given that no decision is declared as carried to State 5?\",\"options\":[\"One equality predicate\",\"One field with equality or membership in a set\",\"Multiple predicates with defined conjunction and ordering semantics\"],\"default_guess\":\"Support exactly one field whose value is either one value or a finite set, with membership semantics.\"},{\"subject\":\"store\",\"kind\":\"deferred_interface\",\"text\":\"`record_change` stands for the closed set of one-transaction calls the other\\nmodules make; State 5 names each one.\",\"question\":\"What is the closed set of store changes and their owning callers, since later states are not declared to own this decision?\",\"options\":[\"One generic typed `record_change` union\",\"Separate public capability for every transaction shape\",\"A repository unit-of-work object assembled by callers\"],\"default_guess\":\"Define a closed discriminated union of transaction commands owned by `store`, with one variant for each atomic change described in State 3.\"},{\"subject\":\"data_provider\",\"kind\":\"deferred_decision\",\"text\":\"So are the\\nrecord types `list_records` lists and the filter fields each may be listed by\\n(A16 rule 6, the State 5 table of `list_records`): a table keyed by the record\\ntype and total over its members, and a relation between record types and filter\\nfields.\",\"question\":\"Which record types are listable and which filter fields belong to each type, since this state assigns ownership to `data_provider` but supplies no table and carries no decision to State 5?\",\"options\":[\"List every durable record type with every scalar field\",\"List only inspection record types with a specified field allowlist\",\"Let `surface` decide the mapping dynamically\"],\"default_guess\":\"Use an explicit total allowlist constant in `data_provider`, limited to the record types and fields exposed by the fixed inspection surface.\"},{\"subject\":\"data_provider\",\"kind\":\"ownership_conflict\",\"text\":\"MCP_CATALOGUE_OPERATIONS\\nMCP_TOOL_INPUT_SCHEMAS\",\"question\":\"Does `data_provider` own the catalogue and schema definitions named here, or does `surface` own them under its statement that it owns the operation schemas and their bounds?\",\"options\":[\"`data_provider` owns schema data and `surface` only applies it\",\"`surface` owns and defines the schemas; remove these exports from `data_provider`\",\"Split ownership by assigning structural schema data to `data_provider` and validation/order rules to `surface`\"],\"default_guess\":\"Let `data_provider` own immutable generated schema data and `surface` own validation, bounds enforcement, and exposure rules.\"},{\"subject\":\"context\",\"kind\":\"missing_model_owner\",\"text\":\"`sandbox` reports that outcome with `SandboxResult.stop_required` true and stops nothing.\",\"question\":\"Which module owns the `SandboxResult` type and the meaning of its `stop_required` field?\",\"options\":[\"`models` owns the shared result type\",\"`sandbox` owns a private return type imported structurally by its callers\",\"Each caller receives separate outcome and stop values without a shared model\"],\"default_guess\":\"Define `SandboxResult` in `models`, with `sandbox` solely responsible for setting `stop_required`.\"},{\"subject\":\"context\",\"kind\":\"missing_type_owner\",\"text\":\"StoredValuesRef and\\n   SpooledFilesRef continue through the existing fit, size and copy checks.\",\"question\":\"Which module owns the `FileFactsRef`, `StoredValuesRef`, and `SpooledFilesRef` discriminated reference types used across `runs` and `functions`?\",\"options\":[\"`models` owns the shared reference union\",\"`functions` owns the capture input union\",\"`runs` owns it and translates before calling `functions`\"],\"default_guess\":\"Place the shared reference union and its variants in `models`; keep validation order in `functions`.\"}]}",
+ "set_aside": []
+}
