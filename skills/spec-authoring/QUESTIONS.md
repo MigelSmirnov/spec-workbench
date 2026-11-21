@@ -708,6 +708,74 @@ A disposition may name one unit (`--unit`) or none, when it covers every unit
 the topic concerns. `fixed` and `accepted` close the topic; `carried` closes it
 here and opens it where it was carried.
 
+### Instructions at the point of disposition
+
+`ask`, `rejudge` and `status` return `author_guidance` when topics still need a
+disposition or a blocking contradiction/standard violation needs repair. The
+same instructions reach a new session through `authoring next` for a phase
+with question rounds, in JSON and in human-readable output. A refused repeat
+round on unchanged text also includes them.
+
+Before editing, identify the owning state from the phase purpose,
+`question_scope` and layer obligations, then choose among the existing
+dispositions. A `fixed` must not import later-layer choices just to remove a
+question. In a `carried` topic, `--what` preserves the choice, options,
+consequences and guarantee every option must keep, not only its title. If the
+guarantee itself belongs here and is undecided, decide it here first. An
+`accepted` reason explains permitted freedom; an absent requirement quote does
+not settle a missing product choice for the owner.
+
+These are author instructions, not a semantic validator of a fix.
+Contradictions and `standard_violation` still take no disposition, and
+deterministic transition findings still require their own checks to close.
+
+### Decision owner before consequence (States 2 and 5)
+
+These phases declare `gap_needs_requirement` in `authoring_sequence.json`.
+Their reviewers still notice where the generator must choose, but distinguish
+the current stage's missing decision from a later layer's choice. The latter
+is reported with its owner, options, consequences and any already accepted
+requirement every implementation must preserve; it does not demand the
+implementation here. Words such as "order", "lock" or a technical name do
+not determine ownership. Refusal or authorization precedence may express a
+required guarantee of State 2. State 5 judges obligations between modules;
+exact contract forms and hidden procedures are left to later layers.
+
+The judge first identifies the owner, then asks whether the outcomes must be
+distinguished. A current-stage `consequential_gap` needs a verbatim
+`requirement` and a `divergence` explaining which outcome violates it. An
+observer alone is insufficient. A gap without that requirement stays an
+unresolved `hypothesis` requiring an author disposition; it is neither proof
+of freedom nor automatically deferred to State 6/7. An absent product choice
+is a hypothesis with `owner_question`, options and consequences for the
+owner, shown in round and status output. An `indifferent` verdict that itself
+names an owner question is also kept unresolved. The instructions require
+incompatible obligations for a contradiction: different detail alone does
+not establish one. Whether obligations actually conflict remains a semantic
+judgement; checking quotes does not prove it.
+
+`later_state` may name a later state through 8, `generation`, `factory_checks`
+or `deploy`. Under this policy it needs a disposition so the choice is handed
+on rather than silently dropped. A `carried` disposition automatically
+preserves a verified judge requirement in `keeps`, with its options and
+consequences. The author may add repeatable `--keeps` clauses from accepted
+text, including on older rounds. Every clause is checked verbatim (code marks
+and whitespace aside); the receiving round reads it with `--what`. It does
+not prove that the quotation is relevant or the proposed option safe.
+
+The policy is recorded as `judge_rules.decision_boundary`. Old observer-only
+verdicts are not offered as precedents under it; earlier closed units are not
+automatically reopened. A followed guarantee-bearing precedent preserves
+its guarantee and disposition obligation. State 7 retains its existing
+mechanical rules.
+
+Scripted tests verify routing, quote checks and preservation, not the semantic
+quality of a model. Before promoting the changed judge, compare old and new
+probes at fixed tool and case revisions, separately for State 2 and State 5.
+Read every softened verdict for missed required results, missing product
+decisions and real incompatibilities; include known contradictions and
+standard violations. Do not infer fewer future rounds from a replay.
+
 ## Closing a question
 
 Ask first who uses what the question is about.

@@ -1500,4 +1500,5 @@ def check(
         "checks": [item.to_dict() for item in checks],
         "factory_validation": validation_report,
         "factory_inspector": inspector_report,
+        "author_guidance": question_rounds.author_guidance(factory_return=True) if blocks else [],
     }

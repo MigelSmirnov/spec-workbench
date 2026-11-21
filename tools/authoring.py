@@ -33,6 +33,8 @@ def _print_next(payload: dict[str, object]) -> None:
         print(f"Read:    {where}")
     for question in authoring.get("ask") or []:
         print(f"Ask:     {question}")
+    for line in authoring.get("author_guidance") or []:
+        print(f"Author:  {line}")
     line = design_authoring_next.diagnosis_line(authoring)
     if line:
         print(line)

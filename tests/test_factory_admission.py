@@ -147,6 +147,7 @@ def test_explicit_spec_is_ready_when_factory_accepts_it(tmp_path: Path) -> None:
     assert report["stage"] == "9"
     assert report["status"] == "READY_TO_EXPORT"
     assert report["ready"] is True
+    assert report["author_guidance"] == []
     assert report["source"]["standard_version"] == 2
     assert report["admission_target"] == {
         "case": None,
@@ -312,6 +313,9 @@ def test_factory_validator_findings_block_admission(tmp_path: Path) -> None:
     assert validation["evidence"]["findings"] == [
         {"id": "SV-TEST", "severity": "error"}
     ]
+    guidance = " ".join(report["author_guidance"])
+    assert "exact diagnostic" in guidance and "establish the defect's owner" in guidance
+    assert "State 6" in guidance and "dict.items" in guidance
 
 
 def test_factory_inspector_findings_block_admission(tmp_path: Path) -> None:
