@@ -42,7 +42,7 @@ cycles, and `domain_models` names no other module.
 | `deliverer_router` | `refusals` | `DelivererError` |
 | `deliverer_router` | `deliverer_api` | `AuthenticationRejected`, `answer_health`, `check_token`, `parse_project_id`, `refusal_answer` |
 | `deliverer_router` | `photo_delivery` | `deliver_project_photo`, `mark_photo_published`, `scan_project_photos` |
-| `deliverer_service` | `data_provider` | `BIND_HOST`, `EXIT_STATUSES`, `STOP_SIGNALS`, `TOKEN_ALPHABET`, `TOKEN_ENCODING`, `TOKEN_MIN_LENGTH`, `TOKEN_TRIM_CHARACTERS` |
+| `deliverer_service` | `data_provider` | `BIND_HOST`, `MAX_PORT`, `EXIT_STATUSES`, `STOP_SIGNALS`, `TOKEN_ALPHABET`, `TOKEN_ENCODING`, `TOKEN_MIN_LENGTH`, `TOKEN_TRIM_CHARACTERS` |
 | `deliverer_service` | `domain_models` | `DeliveryContext`, `RuntimeSettings`, `ServiceExit` |
 | `deliverer_service` | `runtime_settings` | `load_runtime_settings` |
 | `deliverer_service` | `object_connections` | `load_connections` |
@@ -216,6 +216,7 @@ Rejected
 MAX_SOURCE_BYTES
 MAX_OUTPUT_BYTES
 MAX_PIXELS
+MAX_PORT
 PHOTO_MAX_SIDE
 PHOTO_QUALITY
 INTAKE_ID_PREFIX

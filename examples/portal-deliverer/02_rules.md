@@ -431,7 +431,7 @@ Each run setting is a row of the start-up table that only the runtime settings m
 reads, into a field of the settings object; that module decides how a value is read. A required setting that
 is absent ends the start, and an optional one that is absent takes its default. `environment` chooses which
 default applies; the defaults of this table are the same for every member of = models.RuntimeEnvironment.
-The port is a whole number from 1 to 65535, and a time zone the time zone database does not know ends the
+The port is a whole number from 1 to the imported `MAX_PORT` constant, and a time zone the time zone database does not know ends the
 start:
 
 | Field | Type | Environment variable | Decided |
@@ -492,6 +492,7 @@ Policy values are constants of the data provider:
 | `TOKEN_ENCODING` | `str` | `utf-8` |
 | `TOKEN_ALPHABET` | `str` | the visible ASCII characters, `!` to `~`, in code point order |
 | `BIND_HOST` | `str` | `127.0.0.1`, the loopback interface |
+| `MAX_PORT` | `int` | 65535, the highest port TCP can address |
 | `EXIT_STATUSES` | `tuple[ExitStatusRule, ...]` | one row per member of = models.ServiceExit, below |
 | `OBSERVATION_FAILURES` | `tuple[ObservationFailure, ...]` | one row per member of = models.ObservationReason, below |
 | `REFUSAL_ANSWERS` | `tuple[RefusalAnswerRule, ...]` | one row per member of = models.RefusalCode, below |
