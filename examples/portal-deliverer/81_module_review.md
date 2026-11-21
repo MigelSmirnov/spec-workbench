@@ -38,6 +38,17 @@ unchanged. State 7 round 7 on the new text was clear. Packet review: `None`, a r
 each contradicts the `_unlisted_folder` note, and a walk failure that is not raised contradicts
 `_source_files`. PASS; the ledger holds the new slice hash.
 
+## Re-review after A9 rule 3 (2026-11-21)
+
+Route B on accepted spec `3895f883` rejected `source_folder` again for `getattr(os, 'O_DIRECTORY', 0)` and
+`getattr(os, 'O_NONBLOCK', 0)`: no decision named the host, so the generator guarded the flags. A9 rule 3 now
+names Linux, no version named, as cabinet-kernel A20 rule 3. The nine notes that open a file or folder in
+`source_folder`, `delivery_store` and `deliverer_service` say which flags each opening uses, in prose
+(SPEC_STANDARD 2 forbids dotted names in a note), used unconditionally and never tested for. Rounds: State 2
+81, State 3 52, State 4 36, State 5 49, State 7 8 and 9; all closed. Packet review of the three modules:
+a probed or guarded flag, or an opening that follows a link the note forbids, contradicts its note. PASS;
+the ledger holds the new slice hashes.
+
 ## Open for the Workbench tools
 
 The packet of `runtime_settings` does not carry `config.runtime_environment_variables`, the 6.11 table the

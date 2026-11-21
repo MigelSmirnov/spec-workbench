@@ -1,0 +1,177 @@
+Module: delivery_store
+Target path: portal_deliverer/delivery_store.py
+Target file: delivery_store.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from builtins import OSError
+from collections.abc import Iterator
+from datetime import datetime
+from pathlib import Path
+from uuid import UUID
+
+from pydantic import BaseModel
+
+from portal_deliverer.data_provider import LOCKS_FOLDER, LOCK_FILE_MODE, LOCK_FILE_SUFFIX, MARKS_FOLDER, PLACEMENTS_FOLDER, RECORD_FILE_SUFFIX, RECORD_MODE, STATE_FOLDER_MODE, STORED_IMAGES_FOLDER, STORED_IMAGE_MODE, STORED_IMAGE_SUFFIX, STORE_FOLDER_MODE, TEMPORARY_FILE_MODE, TEMPORARY_NAME_PREFIX
+from portal_deliverer.models import DateSource, DeliveryContext, PhotoPlacement, PhotoPublication, PublicationMark, Refusal, RefusalCode
+from portal_deliverer.refusals import DelivererError
+
+CONTRACTS (function signatures — follow exactly):
+def _atomic_write(path: Path, base: Path, content: bytes, mode: int, folder_mode: int, durable_folder: bool) -> None
+def _make_folders(folder: Path, base: Path, mode: int, durable: bool) -> None
+def _mark_path(context: DeliveryContext, project_id: UUID, source_id: str) -> Path
+def _placement_path(context: DeliveryContext, project_id: UUID, source_id: str) -> Path
+def _read_record(path: Path) -> bytes | None
+def _state_unavailable(error: Exception) -> DelivererError
+def _store_path(context: DeliveryContext, file_ref: str) -> Path
+def _sync_folder(folder: Path) -> None
+def _write_record(path: Path, base: Path, record: BaseModel) -> None
+def project_lock(context: DeliveryContext, project_id: UUID) -> Iterator[None]
+def read_mark(context: DeliveryContext, project_id: UUID, source_id: str) -> PublicationMark | None
+def read_placement(context: DeliveryContext, project_id: UUID, source_id: str) -> PhotoPlacement | None
+def store_image(context: DeliveryContext, project_id: UUID, source_id: str, content: bytes) -> str
+def write_mark(context: DeliveryContext, mark: PublicationMark) -> None
+def write_placement(context: DeliveryContext, placement: PhotoPlacement) -> None
+# DelivererError
+def __init__(self, code: RefusalCode) -> None
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+LOCKS_FOLDER: str
+LOCK_FILE_MODE: int
+LOCK_FILE_SUFFIX: str
+MARKS_FOLDER: str
+PLACEMENTS_FOLDER: str
+RECORD_FILE_SUFFIX: str
+RECORD_MODE: int
+STATE_FOLDER_MODE: int
+STORED_IMAGES_FOLDER: str
+STORED_IMAGE_MODE: int
+STORED_IMAGE_SUFFIX: str
+STORE_FOLDER_MODE: int
+TEMPORARY_FILE_MODE: int
+TEMPORARY_NAME_PREFIX: str
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _atomic_write: (path: Path, base: Path, content: bytes, mode: int, folder_mode: int, durable_folder: bool) -> None
+- _make_folders: (folder: Path, base: Path, mode: int, durable: bool) -> None
+- _mark_path: (context: DeliveryContext, project_id: UUID, source_id: str) -> Path
+- _placement_path: (context: DeliveryContext, project_id: UUID, source_id: str) -> Path
+- _read_record: (path: Path) -> bytes | None
+- _state_unavailable: (error: Exception) -> DelivererError
+- _store_path: (context: DeliveryContext, file_ref: str) -> Path
+- _sync_folder: (folder: Path) -> None
+- _write_record: (path: Path, base: Path, record: BaseModel) -> None
+- project_lock: (context: DeliveryContext, project_id: UUID) -> Iterator[None]
+- read_mark: (context: DeliveryContext, project_id: UUID, source_id: str) -> PublicationMark | None
+- read_placement: (context: DeliveryContext, project_id: UUID, source_id: str) -> PhotoPlacement | None
+- store_image: (context: DeliveryContext, project_id: UUID, source_id: str, content: bytes) -> str
+- write_mark: (context: DeliveryContext, mark: PublicationMark) -> None
+- write_placement: (context: DeliveryContext, placement: PhotoPlacement) -> None
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _atomic_write: [PATH_OR_ARTIFACT_POLICY] MUST make the folder of path exist below base by calling _make_folders with folder_mode as its mode and durable_folder as its durable, creating only the folders of this address and nothing ahead of use, then write content to a fresh temporary file in that folder whose name is the imported TEMPORARY_NAME_PREFIX constant followed by an unpredictable name, created exclusively, without following a link and with the imported TEMPORARY_FILE_MODE constant, a name already taken being passed over for another; the temporary file MUST hold all of content with mode, be durable on storage and closed before it atomically replaces path, so an existing file at path is never absent to a reader. When durable_folder is true the folder of path MUST then be made durable with _sync_folder and any failure fails the write; when it is false that folder is made durable after the replacement and a failure there is neither raised nor undoes the file in place. A failure before the replacement MUST remove the temporary file, leave it when that removal fails too, and raise the original OSError; a temporary file a crash leaves stays and is never read. The exclusive-creation and no-follow flags of the temporary file's creation are used unconditionally; their presence is never tested.
+- _make_folders: [PATH_OR_ARTIFACT_POLICY] MUST make every folder from base down to folder exist, outermost first, creating only the folders on that path below base: base itself is used as it stands, also through a link; a folder found, created by any call of any process and whatever its mode, is accepted as it stands, and a creation that loses the race to another process is accepted when the entry is then a folder; a folder this call creates MUST end with exactly mode, whatever the process umask; an entry on the path that is a symbolic link or not a folder, judged without following a link, MUST raise OSError. When durable is true, each folder this call creates MUST be made durable in its parent with _sync_folder before the next one is made. It removes nothing. The folder-only and no-follow flags of the openings below base are used unconditionally; their presence is never tested.
+- _mark_path: [PATH_OR_ARTIFACT_POLICY] MUST return the state_dir of context joined with the imported MARKS_FOLDER constant, the canonical lowercase hyphenated project id as one folder and the source id followed by the imported RECORD_FILE_SUFFIX constant as the file name; no other received text becomes part of the path.
+- _placement_path: [PATH_OR_ARTIFACT_POLICY] MUST return the state_dir of context joined with the imported PLACEMENTS_FOLDER constant, the canonical lowercase hyphenated project id as one folder and the source id followed by the imported RECORD_FILE_SUFFIX constant as the file name; no other received text becomes part of the path.
+- _read_record: [PATH_OR_ARTIFACT_POLICY] MUST reach the record from the state folder, the third folder above path, opened as it stands, also through a link, through the two folders below it, each opened relative to the one before without following a link, and open the record file in the last of them for reading only, without blocking and without following a link; it MUST return None only when a folder on that path or the record file does not exist. A folder on the path that is a link or not a folder, a record that is a link or not a regular file, or a failed opening or reading MUST raise the DelivererError _state_unavailable returns; otherwise it MUST return every byte of the record. Everything it opened is closed on every path and nothing is written. The folder-only and no-follow flags of the openings below the state folder, and the no-follow and non-blocking flags of the record's opening, are used unconditionally; their presence is never tested.
+- _state_unavailable: [RETURN_SHAPE] MUST return, not raise, a DelivererError with the STATE_UNAVAILABLE member of = models.RefusalCode for the given error, so its caller raises it from that error.
+- _store_path: [PATH_OR_ARTIFACT_POLICY] MUST return the path file_ref names below the binary_root of context, resolved through every link of the part that exists while the parts not yet created are taken as named, only when it lies strictly below the resolved root; a path outside it, a loop of links or any failure to resolve MUST raise DelivererError with the UNSAFE_REFERENCE member of = models.RefusalCode before any folder or temporary file is created, so that refusal leaves the store as it was.
+- _sync_folder: [BEHAVIOR] MUST make the entries of the folder durable on storage, opening it read-only as a folder for that and closing it on every path, and MUST let any OSError pass to its caller.
+- _write_record: [ORCHESTRATION] MUST write the JSON form the model of record gives, every datetime in it naive in UTC, with _atomic_write at path below base with the imported RECORD_MODE constant, the imported STATE_FOLDER_MODE constant for folders and durable_folder false, letting its OSError pass.
+- project_lock: [BEHAVIOR] MUST be a context manager that holds the exclusive lock the operating system keeps per open file of the project's lock file, so another thread of the process waits as another process does, for the whole of the caller's block, waiting for another holder without a time limit and with no retry of its own, and releases and closes it on every exit. The lock file MUST be named by the canonical project id followed by the imported LOCK_FILE_SUFFIX constant in the folder of the imported LOCKS_FOLDER constant below the state_dir of context, which it makes exist with _make_folders, the imported STATE_FOLDER_MODE constant and durable false; it is created exclusively, without following a link, with the imported LOCK_FILE_MODE constant, or, when it exists, opened as it stands without following a link. Neither the lock file nor its folder is made durable, a lock found partly created is completed and nothing created is removed. The exclusive-creation and no-follow flags of creating the lock file, and the no-follow flag of opening one that exists, are used unconditionally; their presence is never tested.
+- project_lock: [VALIDATION_ERROR] An entry at the lock address that is a link or not a regular file, and any failure to make the folder, open the file or take the lock other than waiting for another holder, MUST raise the DelivererError _state_unavailable returns, before the caller's block runs.
+- read_mark: [VALIDATION_ERROR] MUST return None when _read_record gives None for _mark_path of the project id and source id, letting its DelivererError pass; otherwise it MUST return the PublicationMark those bytes hold only when they are the JSON form of = models.PublicationMark with no extra field, whose project_id and source_id are the given ones, and MUST raise the DelivererError _state_unavailable returns for any other content.
+- read_placement: [VALIDATION_ERROR] MUST return None when _read_record gives None for _placement_path of the project id and source id, letting its DelivererError pass; otherwise it MUST return the PhotoPlacement those bytes hold only when they are the JSON form of = models.PhotoPlacement with no extra field, whose project_id and source_id are the given ones, and MUST raise the DelivererError _state_unavailable returns for any other content.
+- store_image: [PATH_OR_ARTIFACT_POLICY] MUST build the reference as the relative Portal file reference whose segments are the imported STORED_IMAGES_FOLDER constant, the canonical lowercase hyphenated project id and the source id followed by the imported STORED_IMAGE_SUFFIX constant, take its path from _store_path before anything is written, write content there with _atomic_write below the resolved binary_root of context with the imported STORED_IMAGE_MODE constant, the imported STORE_FOLDER_MODE constant for folders and durable_folder true, and return the reference; a DelivererError of _store_path and an OSError of the write MUST pass to the caller.
+- write_mark: [VALIDATION_ERROR] MUST write mark with _write_record at _mark_path of its own project_id and source_id below the state_dir of context and MUST raise the DelivererError _state_unavailable returns from any OSError of that write, so a mark that cannot be written is refused.
+- write_placement: [ORCHESTRATION] MUST write placement with _write_record at _placement_path of its own project_id and source_id below the state_dir of context, so the address and the record cannot disagree, and MUST let its OSError pass for the caller to turn into the failure of that photo.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- PhotoPlacement: omitted because it is an imported runtime model schema
+- PublicationMark: omitted because it is an imported runtime model schema
+- RefusalCode: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not portal_deliverer.models imports.
+Only import runtime model symbols from portal_deliverer.models when they are explicitly listed in IMPORTS.
+- models.PhotoPlacement: runtime model schema omitted from non-model prompt; exported from portal_deliverer.models by IMPORTS.
+- models.PublicationMark: runtime model schema omitted from non-model prompt; exported from portal_deliverer.models by IMPORTS.
+- models.RefusalCode: runtime model schema omitted from non-model prompt; exported from portal_deliverer.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from portal_deliverer.models. Use the listed enum member names and model fields exactly.
+- DateSource enum members: EXIF='exif', FILE_MODIFIED='file_modified'
+- DeliveryContext fields (exact, no others exist): binary_root: Path, connections_file: Path, state_dir: Path, timezone: str
+- PhotoPlacement fields (exact, no others exist): date_source: DateSource, file_ref: str, media_type: str, name: str, project_id: UUID, publication: PhotoPublication, sha256: str, size: int, source_id: str
+- PhotoPublication fields (exact, no others exist): caption: str | None, client_visible: bool, file_ref: str, intake_id: str, intake_source: str, photo_date: datetime, project_id: UUID, section_id: UUID | None
+- PublicationMark fields (exact, no others exist): marked_at: datetime, photo_id: UUID, project_id: UUID, source_id: str
+- Refusal fields (exact, no others exist): code: RefusalCode, detail: str
+- RefusalCode enum members: CONNECTION_NOT_CONFIRMED='connection_not_confirmed', FOLDER_UNAVAILABLE='folder_unavailable', INVALID_REQUEST='invalid_request', INVALID_SOURCE_ID='invalid_source_id', NOT_PLACED='not_placed', PUBLICATION_CONFLICT='publication_conflict', STATE_UNAVAILABLE='state_unavailable', UNAUTHORIZED='unauthorized', UNKNOWN_PROJECT='unknown_project', UNSAFE_REFERENCE='unsafe_reference'
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+_atomic_write, _make_folders, _mark_path, _placement_path, _read_record, _state_unavailable, _store_path, _sync_folder, _write_record, project_lock, read_mark, read_placement, store_image, write_mark, write_placement
+
+MODELS CONTEXT:
+Runtime models live in portal_deliverer.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete delivery_store.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in portal_deliverer.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and portal_deliverer.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
