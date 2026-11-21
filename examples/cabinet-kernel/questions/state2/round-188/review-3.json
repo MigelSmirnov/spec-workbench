@@ -1,0 +1,138 @@
+{
+ "open_points": [
+  {
+   "subject": "A03 rule 7 and A04 admission recovery",
+   "kind": "scope_conflict",
+   "text": "If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.",
+   "question": "Does automatic start-up recovery apply only to function elements of runs, or also to failed-to-record TrialExecutions performed by admission; and if it applies to admission, how does that agree with A04's requirement that after restart a submission runs admission afresh?",
+   "options": [
+    "Only run elements are recovered automatically; admission waits for another submission and then starts afresh.",
+    "The interrupted admission execution is recovered automatically before any new submission.",
+    "The entire admission is recovered automatically from its first case."
+   ],
+   "default_guess": "Recover only run elements automatically; leave admission without a verdict until a later submission reruns the whole corpus.",
+   "witness": {
+    "initial": "An admission is executing a function on a trial case and has no AdmissionVerdict yet.",
+    "events": [
+     "The sandbox cannot confirm cleanup.",
+     "The kernel also cannot store the crashed cleanup_failed TrialExecution and stops.",
+     "The kernel is restarted without another submission."
+    ],
+    "outcomes": [
+     "A03 is read to require recovery to execute the trial element again automatically.",
+     "A04 is read to require no admission execution until a later submission runs admission afresh."
+    ],
+    "observer": "The submitting agent and a trace reader see whether a new TrialExecution appears before another submission."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03 rule 7 for explicit try executions",
+   "kind": "uncovered_recovery_case",
+   "text": "If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.",
+   "question": "What happens when the unstorable cleanup_failed record belongs to an explicit try rather than to a run element: is the trial execution repeated after restart, abandoned, or repeated only by a new try request?",
+   "options": [
+    "Abandon the interrupted try; the caller must issue another try request.",
+    "Repeat the interrupted trial execution automatically during start-up recovery.",
+    "Persist enough request intent to repeat the whole explicit try after restart."
+   ],
+   "default_guess": "Do not replay an explicit try automatically; report no durable TrialExecution and require a new try request.",
+   "witness": {
+    "initial": "An agent explicitly tries an implementation on one case.",
+    "events": [
+     "The execution finishes its code but cleanup cannot be confirmed.",
+     "The TrialExecution record cannot be stored, so the kernel stops.",
+     "The kernel restarts."
+    ],
+    "outcomes": [
+     "Recovery repeats the trial execution because A03 applies to every function execution.",
+     "Recovery does nothing because a trial case is not a run element and the original request no longer exists."
+    ],
+    "observer": "The agent and repair-trace readers see whether a TrialExecution appears after restart."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03 conclusion and A15 trace invariant",
+   "kind": "contradiction",
+   "text": "A03: \"If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.\" A15: \"Every concluded attempt at an element, every skipped node and every `upstream_failed` node writes exactly one NodeExecution M23\"",
+   "question": "Is the cleanup_failed execution whose NodeExecution could not be stored a concluded attempt, in which case A15 is false, or an unconcluded attempt that recovery repeats under the same attempt number?",
+   "options": [
+    "It is not concluded until the NodeExecution commits; recovery repeats the same attempt number.",
+    "It concluded despite having no record; A15 must state an explicit storage-failure exception.",
+    "Recovery creates a synthetic cleanup_failed NodeExecution for the first attempt before executing a new attempt number."
+   ],
+   "default_guess": "Treat conclusion and the NodeExecution commit as atomic: the failed write leaves the attempt unconcluded, and recovery repeats the same attempt number.",
+   "witness": {
+    "initial": "A run has a ready function element with no NodeExecution for its next attempt number.",
+    "events": [
+     "The function runs and cleanup becomes unconfirmed.",
+     "The kernel determines crashed with cleanup_failed.",
+     "Writing its NodeExecution fails and the kernel stops.",
+     "Start-up recovery revisits the element."
+    ],
+    "outcomes": [
+     "The first attempt is concluded without the exactly-one record required by A15.",
+     "The first attempt never concluded durably, so recovery repeats that same attempt and only the successful commit establishes its conclusion."
+    ],
+    "observer": "A trace reader and the retry logic see different attempt counts and different satisfaction of the trace invariant."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03 recovery after unconfirmed cleanup",
+   "kind": "missing_precondition",
+   "text": "If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.",
+   "question": "Before executing the element again, must start-up recovery prove that the old sandbox processes and exchange directory are gone, clean them itself, or may it retry while the earlier environment remains unconfirmed?",
+   "options": [
+    "Refuse start or recovery until absence of the old processes and exchange directory is confirmed.",
+    "Perform a specified start-up cleanup and retry only after that cleanup is confirmed.",
+    "Retry immediately in a new environment even if the old environment or exchange directory may remain."
+   ],
+   "default_guess": "Do not retry until start-up recovery has confirmed that the prior environment is gone; otherwise refuse to start and identify the cleanup failure.",
+   "witness": {
+    "initial": "A function execution has created an exchange directory and may still have a sandbox process.",
+    "events": [
+     "Reaping or directory removal cannot be confirmed.",
+     "The cleanup_failed record cannot be stored and the kernel stops.",
+     "The host starts the kernel again."
+    ],
+    "outcomes": [
+     "Recovery immediately runs the element in another fresh sandbox while the earlier process or directory may still exist.",
+     "Recovery refuses to execute anything until it has proved or completed cleanup of the earlier environment."
+    ],
+    "observer": "The owner sees either successful restart and retry or a start refusal; the host may also retain a process or files in the first outcome."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03 formal invariants and Required tests",
+   "kind": "missing_invariant_test",
+   "text": "If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.",
+   "question": "What formal invariant states the required behavior when storing the cleanup_failed record fails, and which Required tests item must show both that the kernel stops and that the correct element is executed again after restart without creating a duplicate or skipping it?",
+   "options": [
+    "Extend A03-5 and Required test 11 with the record-write-failure and recovery branch.",
+    "Add a separate invariant and witness test for atomic record failure, stop, and same-attempt recovery.",
+    "Remove the automatic-recovery promise from A03 and leave recovery entirely to A14."
+   ],
+   "default_guess": "Add a separate invariant and witness test covering failed persistence, kernel termination, restart recovery, retry identity, and absence of a concluded record for the interrupted attempt.",
+   "witness": {
+    "initial": "A run function element has executed, cleanup is unconfirmed, and no concluded record exists.",
+    "events": [
+     "Storing the cleanup_failed record is forced to fail.",
+     "The kernel stops.",
+     "The kernel restarts and performs recovery."
+    ],
+    "outcomes": [
+     "An implementation stops but never retries the element; all existing A03 Required tests can still pass.",
+     "Another implementation retries the element once during recovery; all existing A03 Required tests can also pass."
+    ],
+    "observer": "The run caller sees the run remain stuck in one implementation and advance after restart in the other."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A03 rule 7 and A04 admission recovery\",\"kind\":\"scope_conflict\",\"text\":\"If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.\",\"question\":\"Does automatic start-up recovery apply only to function elements of runs, or also to failed-to-record TrialExecutions performed by admission; and if it applies to admission, how does that agree with A04's requirement that after restart a submission runs admission afresh?\",\"options\":[\"Only run elements are recovered automatically; admission waits for another submission and then starts afresh.\",\"The interrupted admission execution is recovered automatically before any new submission.\",\"The entire admission is recovered automatically from its first case.\"],\"default_guess\":\"Recover only run elements automatically; leave admission without a verdict until a later submission reruns the whole corpus.\",\"witness\":{\"initial\":\"An admission is executing a function on a trial case and has no AdmissionVerdict yet.\",\"events\":[\"The sandbox cannot confirm cleanup.\",\"The kernel also cannot store the crashed cleanup_failed TrialExecution and stops.\",\"The kernel is restarted without another submission.\"],\"outcomes\":[\"A03 is read to require recovery to execute the trial element again automatically.\",\"A04 is read to require no admission execution until a later submission runs admission afresh.\"],\"observer\":\"The submitting agent and a trace reader see whether a new TrialExecution appears before another submission.\"}},{\"subject\":\"A03 rule 7 for explicit try executions\",\"kind\":\"uncovered_recovery_case\",\"text\":\"If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.\",\"question\":\"What happens when the unstorable cleanup_failed record belongs to an explicit try rather than to a run element: is the trial execution repeated after restart, abandoned, or repeated only by a new try request?\",\"options\":[\"Abandon the interrupted try; the caller must issue another try request.\",\"Repeat the interrupted trial execution automatically during start-up recovery.\",\"Persist enough request intent to repeat the whole explicit try after restart.\"],\"default_guess\":\"Do not replay an explicit try automatically; report no durable TrialExecution and require a new try request.\",\"witness\":{\"initial\":\"An agent explicitly tries an implementation on one case.\",\"events\":[\"The execution finishes its code but cleanup cannot be confirmed.\",\"The TrialExecution record cannot be stored, so the kernel stops.\",\"The kernel restarts.\"],\"outcomes\":[\"Recovery repeats the trial execution because A03 applies to every function execution.\",\"Recovery does nothing because a trial case is not a run element and the original request no longer exists.\"],\"observer\":\"The agent and repair-trace readers see whether a TrialExecution appears after restart.\"}},{\"subject\":\"A03 conclusion and A15 trace invariant\",\"kind\":\"contradiction\",\"text\":\"A03: \\\"If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.\\\" A15: \\\"Every concluded attempt at an element, every skipped node and every `upstream_failed` node writes exactly one NodeExecution M23\\\"\",\"question\":\"Is the cleanup_failed execution whose NodeExecution could not be stored a concluded attempt, in which case A15 is false, or an unconcluded attempt that recovery repeats under the same attempt number?\",\"options\":[\"It is not concluded until the NodeExecution commits; recovery repeats the same attempt number.\",\"It concluded despite having no record; A15 must state an explicit storage-failure exception.\",\"Recovery creates a synthetic cleanup_failed NodeExecution for the first attempt before executing a new attempt number.\"],\"default_guess\":\"Treat conclusion and the NodeExecution commit as atomic: the failed write leaves the attempt unconcluded, and recovery repeats the same attempt number.\",\"witness\":{\"initial\":\"A run has a ready function element with no NodeExecution for its next attempt number.\",\"events\":[\"The function runs and cleanup becomes unconfirmed.\",\"The kernel determines crashed with cleanup_failed.\",\"Writing its NodeExecution fails and the kernel stops.\",\"Start-up recovery revisits the element.\"],\"outcomes\":[\"The first attempt is concluded without the exactly-one record required by A15.\",\"The first attempt never concluded durably, so recovery repeats that same attempt and only the successful commit establishes its conclusion.\"],\"observer\":\"A trace reader and the retry logic see different attempt counts and different satisfaction of the trace invariant.\"}},{\"subject\":\"A03 recovery after unconfirmed cleanup\",\"kind\":\"missing_precondition\",\"text\":\"If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.\",\"question\":\"Before executing the element again, must start-up recovery prove that the old sandbox processes and exchange directory are gone, clean them itself, or may it retry while the earlier environment remains unconfirmed?\",\"options\":[\"Refuse start or recovery until absence of the old processes and exchange directory is confirmed.\",\"Perform a specified start-up cleanup and retry only after that cleanup is confirmed.\",\"Retry immediately in a new environment even if the old environment or exchange directory may remain.\"],\"default_guess\":\"Do not retry until start-up recovery has confirmed that the prior environment is gone; otherwise refuse to start and identify the cleanup failure.\",\"witness\":{\"initial\":\"A function execution has created an exchange directory and may still have a sandbox process.\",\"events\":[\"Reaping or directory removal cannot be confirmed.\",\"The cleanup_failed record cannot be stored and the kernel stops.\",\"The host starts the kernel again.\"],\"outcomes\":[\"Recovery immediately runs the element in another fresh sandbox while the earlier process or directory may still exist.\",\"Recovery refuses to execute anything until it has proved or completed cleanup of the earlier environment.\"],\"observer\":\"The owner sees either successful restart and retry or a start refusal; the host may also retain a process or files in the first outcome.\"}},{\"subject\":\"A03 formal invariants and Required tests\",\"kind\":\"missing_invariant_test\",\"text\":\"If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.\",\"question\":\"What formal invariant states the required behavior when storing the cleanup_failed record fails, and which Required tests item must show both that the kernel stops and that the correct element is executed again after restart without creating a duplicate or skipping it?\",\"options\":[\"Extend A03-5 and Required test 11 with the record-write-failure and recovery branch.\",\"Add a separate invariant and witness test for atomic record failure, stop, and same-attempt recovery.\",\"Remove the automatic-recovery promise from A03 and leave recovery entirely to A14.\"],\"default_guess\":\"Add a separate invariant and witness test covering failed persistence, kernel termination, restart recovery, retry identity, and absence of a concluded record for the interrupted attempt.\",\"witness\":{\"initial\":\"A run function element has executed, cleanup is unconfirmed, and no concluded record exists.\",\"events\":[\"Storing the cleanup_failed record is forced to fail.\",\"The kernel stops.\",\"The kernel restarts and performs recovery.\"],\"outcomes\":[\"An implementation stops but never retries the element; all existing A03 Required tests can still pass.\",\"Another implementation retries the element once during recovery; all existing A03 Required tests can also pass.\"],\"observer\":\"The run caller sees the run remain stuck in one implementation and advance after restart in the other.\"}}]}",
+ "set_aside": []
+}

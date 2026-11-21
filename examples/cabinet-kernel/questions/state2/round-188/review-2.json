@@ -1,0 +1,169 @@
+{
+ "open_points": [
+  {
+   "subject": "A03 rule 7 and A04 admission recovery",
+   "kind": "ambiguous_scope",
+   "text": "If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.\nAdmission executes the implementation on every case of the corpus, in corpus order, each as one TrialExecution M07, and never stops early — save for an execution whose cleanup cannot be confirmed: it is recorded `crashed` with `cleanup_failed` and the kernel stops (A03 rule 7), with no verdict recorded; after the restart a submission runs admission afresh.",
+   "question": "Does start-up recovery automatically repeat an admission TrialExecution whose cleanup-failure record could not be stored, or are trial executions outside “element” recovery and repeated only by a later submission?",
+   "options": [
+    "Recovery automatically resumes and repeats the interrupted admission case.",
+    "Recovery applies only to run elements; admission remains stopped until an implementation is submitted again.",
+    "Recovery repeats the run element automatically but restarts an admission only if its admission request was durably recorded."
+   ],
+   "default_guess": "Treat “element” as a run element only and require a new submission to rerun admission, following A04's explicit admission rule.",
+   "witness": {
+    "initial": "The corpus contains case c1, no verdict exists for the submitted implementation, and the store can retain the existing corpus but fails when the cleanup_failed TrialExecution is written.",
+    "events": [
+     "An agent submits the implementation.",
+     "The kernel executes c1 and cannot confirm cleanup.",
+     "Writing the `crashed(cleanup_failed)` TrialExecution fails, so the kernel stops.",
+     "The kernel restarts without another submission."
+    ],
+    "outcomes": [
+     "A03 is read to make recovery execute c1 again automatically.",
+     "A04 is read to leave admission stopped until an agent submits the implementation again."
+    ],
+    "observer": "The submitting agent, who either sees a new TrialExecution appear after restart or sees no admission activity."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03 rule 7, K-09 and A15 rule 1",
+   "kind": "contradiction",
+   "text": "If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.\nEvery node execution writes one immutable trace record: run, node, pinned versions, input and output by digest, verdicts, status, failure, resources, time.\nEvery concluded attempt at an element, every skipped node and every `upstream_failed` node writes exactly one NodeExecution M23",
+   "question": "When cleanup is unconfirmed but the cleanup_failed record cannot be stored, is the completed sandbox execution a concluded attempt that must have its own NodeExecution, or is it declared not concluded and replaced by the recovered execution under the same attempt number?",
+   "options": [
+    "The first execution is concluded, so storage failure cannot be represented consistently with the exactly-one-record invariant.",
+    "The first execution is not a concluded attempt until its NodeExecution commits; recovery repeats the same attempt number and only the successful commit counts.",
+    "The first execution is a distinct concluded attempt whose missing record is reconstructed before any replay."
+   ],
+   "default_guess": "Define conclusion as the atomic commit of the NodeExecution, and replay the same attempt number when that commit did not occur.",
+   "witness": {
+    "initial": "A running function element has no concluded NodeExecution yet.",
+    "events": [
+     "The function process finishes and cleanup cannot be confirmed.",
+     "The kernel determines `crashed` with `cleanup_failed`.",
+     "The store rejects the NodeExecution write and the kernel stops.",
+     "Recovery executes the element again and successfully writes a NodeExecution."
+    ],
+    "outcomes": [
+     "Under A03, the first execution may leave no record and only the replay is visible.",
+     "Under K-09 and A15, the first concluded execution must itself have exactly one immutable record."
+    ],
+    "observer": "An owner or agent reading the trace and counting executions and resource use."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03 cleanup-record failure branch",
+   "kind": "missing_invariant_test",
+   "text": "If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.",
+   "question": "What formal invariant and Required tests item show the required stop, absence of a concluded record, recovery replay, attempt-number treatment, and eventual result when the cleanup_failed record cannot be stored?",
+   "options": [
+    "Add an invariant and witness test for failed record storage followed by recovery replay.",
+    "Extend A03-5 and Required test 11 with an explicit record-write-failure branch.",
+    "Remove the replay promise and leave record-storage failure as a kernel start/store failure."
+   ],
+   "default_guess": "Extend A03-5 and add a witnessed test proving that no concluded record exists, the kernel stops, and recovery retries the same attempt number exactly once per recovery pass.",
+   "unit": "?"
+  },
+  {
+   "subject": "A03 Required test 11",
+   "kind": "underspecified_test_precondition",
+   "text": "A03-5: When removal of the exchange directory cannot be confirmed, the execution is recorded `crashed` with detail `cleanup_failed`, its output is discarded and the kernel process stops.",
+   "question": "Must this test assume that the record can be stored, or must it also exercise the newly specified branch where the record cannot be stored?",
+   "options": [
+    "State that record storage succeeds in this test and add a separate failed-storage test.",
+    "Make this test cover both successful and failed record storage.",
+    "Require recording to succeed before the cleanup-failure outcome is considered concluded."
+   ],
+   "default_guess": "Add an explicit successful-record-storage precondition here and a separate witnessed test for failed storage.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 wall-clock timestamps",
+   "kind": "unspecified_representation",
+   "text": "Every timestamp the kernel records comes from one clock module; no other part of the kernel reads the wall clock.",
+   "question": "What exact representation does `clock_module.now` return and records use: timezone, UTC normalization, precision, resolution, serialization form, and treatment of leap seconds or ambiguous local times?",
+   "options": [
+    "A timezone-aware UTC `datetime` normalized to a fixed precision.",
+    "An integer count of UTC milliseconds from the Unix epoch.",
+    "A canonical RFC 3339 UTC string supplied by the clock module."
+   ],
+   "default_guess": "Use a timezone-aware UTC `datetime`, normalize it to integer microseconds, and serialize it canonically as UTC.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 monotonic instants",
+   "kind": "unspecified_representation",
+   "text": "Deadlines of one sandbox execution and one HTTP request are measured with the monotonic clock of the same module; a monotonic reading is never stored.",
+   "question": "What type, unit and arithmetic represent monotonic readings and deadlines, and which comparison decides that a deadline has passed?",
+   "options": [
+    "Integer nanoseconds with expiration when `now >= deadline`.",
+    "Integer milliseconds with expiration when `now > deadline`.",
+    "Opaque comparable instants plus a duration operation defined by the clock port."
+   ],
+   "default_guess": "Use integer nanoseconds and treat the deadline as passed when the current reading is greater than or equal to the computed deadline.",
+   "witness": {
+    "initial": "A sandbox execution has a 30000 ms wall-time bound and the monotonic clock can return exactly the computed deadline.",
+    "events": [
+     "The parent reads the monotonic clock to establish the deadline.",
+     "At its next check the clock returns exactly that deadline."
+    ],
+    "outcomes": [
+     "With `now >= deadline`, the execution is classified `timeout`.",
+     "With `now > deadline`, the execution is allowed to continue until a later reading."
+    ],
+    "observer": "The caller sees either a timeout at the boundary or a later execution outcome."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19 timestamp reading policy",
+   "kind": "unspecified_read_count",
+   "text": "With an injected fixed clock, the same test sequence writes the same timestamps.",
+   "question": "How many wall-clock readings may one operation take, and which records or fields created by the same operation must reuse one reading rather than call `now` independently?",
+   "options": [
+    "Exactly one wall-clock reading per surface operation, reused for every timestamp it writes.",
+    "One reading per atomic store change, reused within that transaction.",
+    "One reading per timestamp field or event, including separate start and end readings."
+   ],
+   "default_guess": "Take one wall-clock reading per atomic store change and reuse it for all timestamps written by that change.",
+   "witness": {
+    "initial": "An admitted submission will create trial evidence, an AdmissionVerdict and an Activation, and the injected clock advances on every call.",
+    "events": [
+     "An agent submits an implementation that passes its corpus.",
+     "The kernel records the trial execution, verdict and activation during that request.",
+     "The agent inspects their timestamp fields."
+    ],
+    "outcomes": [
+     "A single-reading interpretation gives all records created by the operation the same instant.",
+     "A per-event interpretation gives the execution, verdict and activation different increasing instants."
+    ],
+    "observer": "The agent inspecting admission and activation records."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19 clock source",
+   "kind": "standard_violation",
+   "text": "Every timestamp the kernel records comes from one clock module; no other part of the kernel reads the wall clock.",
+   "rule": "Иначе устроена `time_source_policy` (§6.8): её тоже проверяет гейт фабрики, но до кода она доходит через IR `system_clock_backend` (ниже, «Что считается достижимостью листа»), и декларация ей не нужна.",
+   "section": "15.3.1",
+   "question": "Replace the generic “one clock module” delivery statement with an explicit `time_source_policy` delivered through the IR `system_clock_backend`, while retaining the behavioral rule that no other module reads wall time.",
+   "unit": "?"
+  },
+  {
+   "subject": "A03 trapped-entry-point policy",
+   "kind": "standard_violation",
+   "text": "- Release build: the frozen list of trapped standard-library entry points —\n  closed: A03 rule 4 lists them, and the release passes them as data (A20).",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Name the frozen trap list as a specific imported data-provider constant, with one declared value home, instead of saying only that the release passes it “as data”.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A03 rule 7 and A04 admission recovery\",\"kind\":\"ambiguous_scope\",\"text\":\"If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.\\nAdmission executes the implementation on every case of the corpus, in corpus order, each as one TrialExecution M07, and never stops early — save for an execution whose cleanup cannot be confirmed: it is recorded `crashed` with `cleanup_failed` and the kernel stops (A03 rule 7), with no verdict recorded; after the restart a submission runs admission afresh.\",\"question\":\"Does start-up recovery automatically repeat an admission TrialExecution whose cleanup-failure record could not be stored, or are trial executions outside “element” recovery and repeated only by a later submission?\",\"options\":[\"Recovery automatically resumes and repeats the interrupted admission case.\",\"Recovery applies only to run elements; admission remains stopped until an implementation is submitted again.\",\"Recovery repeats the run element automatically but restarts an admission only if its admission request was durably recorded.\"],\"default_guess\":\"Treat “element” as a run element only and require a new submission to rerun admission, following A04's explicit admission rule.\",\"witness\":{\"initial\":\"The corpus contains case c1, no verdict exists for the submitted implementation, and the store can retain the existing corpus but fails when the cleanup_failed TrialExecution is written.\",\"events\":[\"An agent submits the implementation.\",\"The kernel executes c1 and cannot confirm cleanup.\",\"Writing the `crashed(cleanup_failed)` TrialExecution fails, so the kernel stops.\",\"The kernel restarts without another submission.\"],\"outcomes\":[\"A03 is read to make recovery execute c1 again automatically.\",\"A04 is read to leave admission stopped until an agent submits the implementation again.\"],\"observer\":\"The submitting agent, who either sees a new TrialExecution appear after restart or sees no admission activity.\"}},{\"subject\":\"A03 rule 7, K-09 and A15 rule 1\",\"kind\":\"contradiction\",\"text\":\"If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.\\nEvery node execution writes one immutable trace record: run, node, pinned versions, input and output by digest, verdicts, status, failure, resources, time.\\nEvery concluded attempt at an element, every skipped node and every `upstream_failed` node writes exactly one NodeExecution M23\",\"question\":\"When cleanup is unconfirmed but the cleanup_failed record cannot be stored, is the completed sandbox execution a concluded attempt that must have its own NodeExecution, or is it declared not concluded and replaced by the recovered execution under the same attempt number?\",\"options\":[\"The first execution is concluded, so storage failure cannot be represented consistently with the exactly-one-record invariant.\",\"The first execution is not a concluded attempt until its NodeExecution commits; recovery repeats the same attempt number and only the successful commit counts.\",\"The first execution is a distinct concluded attempt whose missing record is reconstructed before any replay.\"],\"default_guess\":\"Define conclusion as the atomic commit of the NodeExecution, and replay the same attempt number when that commit did not occur.\",\"witness\":{\"initial\":\"A running function element has no concluded NodeExecution yet.\",\"events\":[\"The function process finishes and cleanup cannot be confirmed.\",\"The kernel determines `crashed` with `cleanup_failed`.\",\"The store rejects the NodeExecution write and the kernel stops.\",\"Recovery executes the element again and successfully writes a NodeExecution.\"],\"outcomes\":[\"Under A03, the first execution may leave no record and only the replay is visible.\",\"Under K-09 and A15, the first concluded execution must itself have exactly one immutable record.\"],\"observer\":\"An owner or agent reading the trace and counting executions and resource use.\"}},{\"subject\":\"A03 cleanup-record failure branch\",\"kind\":\"missing_invariant_test\",\"text\":\"If that record cannot be stored, the kernel process stops all the same, and recovery executes the element again, as it does every function element without a concluded record.\",\"question\":\"What formal invariant and Required tests item show the required stop, absence of a concluded record, recovery replay, attempt-number treatment, and eventual result when the cleanup_failed record cannot be stored?\",\"options\":[\"Add an invariant and witness test for failed record storage followed by recovery replay.\",\"Extend A03-5 and Required test 11 with an explicit record-write-failure branch.\",\"Remove the replay promise and leave record-storage failure as a kernel start/store failure.\"],\"default_guess\":\"Extend A03-5 and add a witnessed test proving that no concluded record exists, the kernel stops, and recovery retries the same attempt number exactly once per recovery pass.\"},{\"subject\":\"A03 Required test 11\",\"kind\":\"underspecified_test_precondition\",\"text\":\"A03-5: When removal of the exchange directory cannot be confirmed, the execution is recorded `crashed` with detail `cleanup_failed`, its output is discarded and the kernel process stops.\",\"question\":\"Must this test assume that the record can be stored, or must it also exercise the newly specified branch where the record cannot be stored?\",\"options\":[\"State that record storage succeeds in this test and add a separate failed-storage test.\",\"Make this test cover both successful and failed record storage.\",\"Require recording to succeed before the cleanup-failure outcome is considered concluded.\"],\"default_guess\":\"Add an explicit successful-record-storage precondition here and a separate witnessed test for failed storage.\"},{\"subject\":\"A19 wall-clock timestamps\",\"kind\":\"unspecified_representation\",\"text\":\"Every timestamp the kernel records comes from one clock module; no other part of the kernel reads the wall clock.\",\"question\":\"What exact representation does `clock_module.now` return and records use: timezone, UTC normalization, precision, resolution, serialization form, and treatment of leap seconds or ambiguous local times?\",\"options\":[\"A timezone-aware UTC `datetime` normalized to a fixed precision.\",\"An integer count of UTC milliseconds from the Unix epoch.\",\"A canonical RFC 3339 UTC string supplied by the clock module.\"],\"default_guess\":\"Use a timezone-aware UTC `datetime`, normalize it to integer microseconds, and serialize it canonically as UTC.\"},{\"subject\":\"A19 monotonic instants\",\"kind\":\"unspecified_representation\",\"text\":\"Deadlines of one sandbox execution and one HTTP request are measured with the monotonic clock of the same module; a monotonic reading is never stored.\",\"question\":\"What type, unit and arithmetic represent monotonic readings and deadlines, and which comparison decides that a deadline has passed?\",\"options\":[\"Integer nanoseconds with expiration when `now >= deadline`.\",\"Integer milliseconds with expiration when `now > deadline`.\",\"Opaque comparable instants plus a duration operation defined by the clock port.\"],\"default_guess\":\"Use integer nanoseconds and treat the deadline as passed when the current reading is greater than or equal to the computed deadline.\",\"witness\":{\"initial\":\"A sandbox execution has a 30000 ms wall-time bound and the monotonic clock can return exactly the computed deadline.\",\"events\":[\"The parent reads the monotonic clock to establish the deadline.\",\"At its next check the clock returns exactly that deadline.\"],\"outcomes\":[\"With `now >= deadline`, the execution is classified `timeout`.\",\"With `now > deadline`, the execution is allowed to continue until a later reading.\"],\"observer\":\"The caller sees either a timeout at the boundary or a later execution outcome.\"}},{\"subject\":\"A19 timestamp reading policy\",\"kind\":\"unspecified_read_count\",\"text\":\"With an injected fixed clock, the same test sequence writes the same timestamps.\",\"question\":\"How many wall-clock readings may one operation take, and which records or fields created by the same operation must reuse one reading rather than call `now` independently?\",\"options\":[\"Exactly one wall-clock reading per surface operation, reused for every timestamp it writes.\",\"One reading per atomic store change, reused within that transaction.\",\"One reading per timestamp field or event, including separate start and end readings.\"],\"default_guess\":\"Take one wall-clock reading per atomic store change and reuse it for all timestamps written by that change.\",\"witness\":{\"initial\":\"An admitted submission will create trial evidence, an AdmissionVerdict and an Activation, and the injected clock advances on every call.\",\"events\":[\"An agent submits an implementation that passes its corpus.\",\"The kernel records the trial execution, verdict and activation during that request.\",\"The agent inspects their timestamp fields.\"],\"outcomes\":[\"A single-reading interpretation gives all records created by the operation the same instant.\",\"A per-event interpretation gives the execution, verdict and activation different increasing instants.\"],\"observer\":\"The agent inspecting admission and activation records.\"}},{\"subject\":\"A19 clock source\",\"kind\":\"standard_violation\",\"text\":\"Every timestamp the kernel records comes from one clock module; no other part of the kernel reads the wall clock.\",\"rule\":\"Иначе устроена `time_source_policy` (§6.8): её тоже проверяет гейт фабрики, но до кода она доходит через IR `system_clock_backend` (ниже, «Что считается достижимостью листа»), и декларация ей не нужна.\",\"section\":\"15.3.1\",\"question\":\"Replace the generic “one clock module” delivery statement with an explicit `time_source_policy` delivered through the IR `system_clock_backend`, while retaining the behavioral rule that no other module reads wall time.\"},{\"subject\":\"A03 trapped-entry-point policy\",\"kind\":\"standard_violation\",\"text\":\"- Release build: the frozen list of trapped standard-library entry points —\\n  closed: A03 rule 4 lists them, and the release passes them as data (A20).\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Name the frozen trap list as a specific imported data-provider constant, with one declared value home, instead of saying only that the release passes it “as data”.\"}]}",
+ "set_aside": []
+}
