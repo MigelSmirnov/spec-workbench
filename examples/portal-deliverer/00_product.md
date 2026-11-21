@@ -3,7 +3,7 @@
 ## Status
 
 Accepted by the owner on 2026-11-18, with decisions R0-06 to R0-15. R0-04 was withdrawn on
-2026-11-20. Question OQ-07 stays open.
+2026-11-20. OQ-07 was decided by the owner on 2026-11-21 as R0-16; no question stays open.
 
 ## Product statement
 
@@ -172,6 +172,13 @@ is removed, only a confirmed folder is used, a repeated delivery creates nothing
 operation on a project needs the token. A file still arriving lies under Syncthing's temporary name,
 so delivery does not wait for a file to settle.
 
+### R0-16 — The service runs beside the Client Portal (owner, 2026-11-21, OQ-07)
+
+The deliverer runs on the VPS that holds the Client Portal, where it sees the Syncthing folders and
+the Portal store. The kernel reaches it over HTTPS through the Portal's own front, under a route of
+its own, with the deliverer's own credential; the deliverer is not reachable from the network in
+any other way. How the route and the credential are installed belongs to the deployment.
+
 ## Accepted guarantees (owner, 2026-11-18)
 
 - **P-01** The deliverer holds no Portal credential and never calls the Portal.
@@ -186,7 +193,4 @@ so delivery does not wait for a file to settle.
 
 ## Open questions
 
-### OQ-07 — Where does the service run and how does the kernel reach it?
-
-It must see the Syncthing folders and the Portal store on the VPS, while the kernel needs an
-HTTPS route and its own credential for the service.
+None. OQ-07 is decided as R0-16.

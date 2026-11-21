@@ -5,8 +5,8 @@
 Written from the accepted product frame and the models. The owner accepted on 2026-11-18 the single principal and HTTPS rules of A5, the values of A8, the
 dependency policy of A9 and the absence of removal in the first version (A3).
 
-OQ-07 is the one earlier question still open: A5 decides the HTTPS rule, and the host and route are
-carried to deployment.
+OQ-07 is decided as R0-16 (owner, 2026-11-21): A5 decides the HTTPS rule, and how the host's route and
+the credential are installed belongs to the deployment.
 Each Required tests item is bound to the check that witnesses it.
 
 ## Accepted decision A1 — What a file of the folder becomes
@@ -600,7 +600,8 @@ A stored image can always be read back by the Portal.
 
 ### Consequence
 
-The OSV check is not built for this service yet.
+A deployment of this service is admitted only through the Factory's deployment route for it, the route
+the Client Portal follows, with this service's own advisory policy.
 
 ## Accepted decision A11 — Old photo dates stop a delivery
 
