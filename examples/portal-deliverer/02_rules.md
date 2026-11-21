@@ -583,6 +583,11 @@ A stored image can always be read back by the Portal.
    as current. That route owns the age limit, and no code of this service reads it. Any known vulnerability listed for an installed version
    blocks the deployment, whatever its severity, and a check that cannot complete does not pass.
    This is the policy the Client Portal already follows.
+3. The service runs on Linux and on no other host, no version named (owner, 2026-11-21). Another
+   system, or a Linux or file system on which a call these rules rely on — opening without following a
+   link, opening a folder as a folder, opening without blocking, creating exclusively, locking, renaming,
+   flushing — does not act as Linux documents it, is unsupported: the service neither tests for it nor
+   defines what it does there.
 
 ### Formal invariants
 
